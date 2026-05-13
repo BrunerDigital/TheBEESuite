@@ -1,0 +1,743 @@
+<!-- Kid City USA Inquiry Form Replacement for Avada / WordPress -->
+<!-- Sends inquiries to The Bee Suite CRM at https://the-bee-suite-beta.vercel.app/api/inquiries -->
+
+<style>
+/* Kid City USA Avada landing page + inquiry form styles.
+   Add in Avada > Options > Custom CSS, or in the child theme stylesheet. */
+
+.kcusa-home,
+.kcusa-inquiry-form {
+  --kcusa-white: #ffffff;
+  --kcusa-ink: #10294b;
+  --kcusa-muted: #536274;
+  --kcusa-yellow: #ffc92f;
+  --kcusa-green: #1f8a59;
+  --kcusa-green-soft: #e9f7ef;
+  --kcusa-blue-soft: #eef7ff;
+  --kcusa-line: #d9e2ec;
+  --kcusa-shadow: 0 22px 50px rgba(16, 41, 75, 0.14);
+  --kcusa-radius: 8px;
+  color: var(--kcusa-ink);
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.kcusa-home *,
+.kcusa-inquiry-form * {
+  box-sizing: border-box;
+}
+
+.kcusa-home img {
+  display: block;
+  max-width: 100%;
+}
+
+.kcusa-hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(380px, 0.95fr) minmax(280px, 0.62fr) minmax(360px, 430px);
+  gap: clamp(22px, 3vw, 42px);
+  align-items: center;
+  min-height: 720px;
+  padding: clamp(44px, 7vw, 92px) clamp(20px, 5vw, 72px) 56px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.kcusa-hero:before {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: min(45vw, 640px);
+  height: min(45vw, 640px);
+  background: radial-gradient(circle, rgba(255, 201, 47, 0.3), rgba(255, 255, 255, 0) 68%);
+  content: "";
+  pointer-events: none;
+}
+
+.kcusa-hero-copy,
+.kcusa-hero-photo,
+.kcusa-hero-panel {
+  position: relative;
+}
+
+.kcusa-hero h1,
+.kcusa-section h2 {
+  margin: 0;
+  color: var(--kcusa-ink);
+  font-family: Nunito, Inter, system-ui, sans-serif;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.kcusa-hero h1 {
+  max-width: 760px;
+  font-size: clamp(3.4rem, 7vw, 7.4rem);
+  line-height: 0.88;
+}
+
+.kcusa-hero-copy p {
+  max-width: 660px;
+  margin: 28px 0 0;
+  color: var(--kcusa-muted);
+  font-size: clamp(1.08rem, 1.6vw, 1.36rem);
+  line-height: 1.58;
+}
+
+.kcusa-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.kcusa-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 2px solid transparent;
+  border-radius: var(--kcusa-radius);
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 0.96rem;
+  font-weight: 800;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.kcusa-button:hover,
+.kcusa-button:focus {
+  transform: translateY(-1px);
+  text-decoration: none;
+}
+
+.kcusa-button-primary {
+  background: var(--kcusa-green);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgba(31, 138, 89, 0.22);
+}
+
+.kcusa-button-secondary {
+  background: var(--kcusa-yellow);
+  color: var(--kcusa-ink);
+}
+
+.kcusa-hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 38px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kcusa-hero-points li {
+  padding: 10px 14px;
+  border: 1px solid var(--kcusa-line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #253f60;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.kcusa-hero-photo {
+  align-self: stretch;
+  min-height: 560px;
+}
+
+.kcusa-hero-photo:before {
+  position: absolute;
+  inset: 8% auto auto -8%;
+  z-index: 2;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: var(--kcusa-yellow);
+  box-shadow: 0 18px 38px rgba(255, 201, 47, 0.28);
+  content: "";
+}
+
+.kcusa-hero-photo img {
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: var(--kcusa-radius);
+  box-shadow: var(--kcusa-shadow);
+}
+
+.kcusa-hero-panel {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.kcusa-inquiry-form {
+  width: 100%;
+  padding: 28px;
+  border: 1px solid rgba(217, 226, 236, 0.9);
+  border-top: 8px solid var(--kcusa-yellow);
+  border-radius: var(--kcusa-radius);
+  background: #ffffff;
+  box-shadow: var(--kcusa-shadow);
+}
+
+.kcusa-form-head h2 {
+  margin: 0;
+  color: var(--kcusa-ink);
+  font-family: Nunito, Inter, system-ui, sans-serif;
+  font-size: 1.65rem;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.kcusa-form-head p {
+  margin: 8px 0 20px;
+  color: var(--kcusa-muted);
+  font-size: 0.94rem;
+  line-height: 1.45;
+}
+
+.kcusa-inquiry-form label {
+  display: grid;
+  gap: 7px;
+  margin: 0 0 15px;
+}
+
+.kcusa-inquiry-form span {
+  color: #31435a;
+  font-size: 0.8rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.kcusa-inquiry-form input,
+.kcusa-inquiry-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 13px;
+  border: 1px solid #c9d4df;
+  border-radius: var(--kcusa-radius);
+  background: #ffffff;
+  color: var(--kcusa-ink);
+  font: 600 0.96rem/1 Inter, system-ui, sans-serif;
+}
+
+.kcusa-inquiry-form input:focus,
+.kcusa-inquiry-form select:focus {
+  border-color: var(--kcusa-green);
+  box-shadow: 0 0 0 4px rgba(31, 138, 89, 0.14);
+  outline: none;
+}
+
+.kcusa-inquiry-form button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.kcusa-form-note,
+.kcusa-form-status {
+  margin: 12px 0 0;
+  color: var(--kcusa-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.kcusa-form-status:not(:empty) {
+  color: var(--kcusa-green);
+  font-weight: 800;
+}
+
+.kcusa-section {
+  padding: clamp(58px, 8vw, 104px) clamp(20px, 5vw, 72px);
+}
+
+.kcusa-section-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(280px, 0.7fr);
+  gap: 38px;
+  align-items: end;
+  margin-bottom: 36px;
+}
+
+.kcusa-section h2 {
+  font-size: clamp(2.1rem, 4.4vw, 4rem);
+  line-height: 0.98;
+}
+
+.kcusa-section-heading p,
+.kcusa-trust-copy p,
+.kcusa-locations p {
+  margin: 0;
+  color: var(--kcusa-muted);
+  font-size: 1.05rem;
+  line-height: 1.65;
+}
+
+.kcusa-program-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.kcusa-program-card {
+  overflow: hidden;
+  border: 1px solid var(--kcusa-line);
+  border-radius: var(--kcusa-radius);
+  background: #ffffff;
+  box-shadow: 0 16px 38px rgba(16, 41, 75, 0.08);
+}
+
+.kcusa-program-card img {
+  width: 100%;
+  aspect-ratio: 1.28;
+  object-fit: cover;
+}
+
+.kcusa-program-card div {
+  padding: 24px;
+}
+
+.kcusa-program-card h3 {
+  margin: 0 0 10px;
+  color: var(--kcusa-ink);
+  font-family: Nunito, Inter, system-ui, sans-serif;
+  font-size: 1.55rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.kcusa-program-card p {
+  margin: 0;
+  color: var(--kcusa-muted);
+  font-size: 0.96rem;
+  line-height: 1.55;
+}
+
+.kcusa-trust {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1fr);
+  gap: clamp(34px, 6vw, 82px);
+  align-items: center;
+  background: linear-gradient(90deg, var(--kcusa-green-soft), var(--kcusa-blue-soft));
+}
+
+.kcusa-trust-media img {
+  width: 100%;
+  aspect-ratio: 1.05;
+  object-fit: cover;
+  border-radius: var(--kcusa-radius);
+  box-shadow: var(--kcusa-shadow);
+}
+
+.kcusa-trust-copy p {
+  margin-top: 22px;
+  max-width: 660px;
+}
+
+.kcusa-trust-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.kcusa-trust-list span {
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+  padding: 12px 16px;
+  border-left: 6px solid var(--kcusa-yellow);
+  border-radius: var(--kcusa-radius);
+  background: rgba(255, 255, 255, 0.8);
+  color: #213958;
+  font-weight: 800;
+}
+
+.kcusa-locations {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  background: var(--kcusa-ink);
+  color: #ffffff;
+}
+
+.kcusa-locations div {
+  max-width: 780px;
+}
+
+.kcusa-locations h2 {
+  color: #ffffff;
+}
+
+.kcusa-locations p {
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.kcusa-locations .kcusa-button-primary {
+  flex: 0 0 auto;
+  background: var(--kcusa-yellow);
+  color: var(--kcusa-ink);
+  box-shadow: none;
+}
+
+@media (max-width: 1100px) {
+  .kcusa-hero,
+  .kcusa-section-heading,
+  .kcusa-trust {
+    grid-template-columns: 1fr;
+  }
+
+  .kcusa-hero {
+    min-height: auto;
+  }
+
+  .kcusa-hero-panel {
+    align-self: auto;
+  }
+
+  .kcusa-hero-photo {
+    order: 3;
+    min-height: 300px;
+  }
+
+  .kcusa-hero-photo img {
+    min-height: 300px;
+    max-height: 360px;
+  }
+
+  .kcusa-program-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kcusa-program-card {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+  }
+
+  .kcusa-program-card img {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .kcusa-hero {
+    padding-top: 36px;
+  }
+
+  .kcusa-hero h1 {
+    font-size: clamp(3.15rem, 18vw, 4.7rem);
+  }
+
+  .kcusa-hero-actions,
+  .kcusa-locations {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kcusa-button {
+    width: 100%;
+  }
+
+  .kcusa-hero-points {
+    display: grid;
+  }
+
+  .kcusa-inquiry-form {
+    padding: 22px;
+  }
+
+  .kcusa-hero-photo {
+    min-height: 220px;
+  }
+
+  .kcusa-hero-photo img {
+    min-height: 220px;
+  }
+
+  .kcusa-program-card {
+    display: block;
+  }
+
+  .kcusa-program-card img {
+    height: auto;
+    aspect-ratio: 1.28;
+  }
+}
+
+</style>
+
+<form class="kcusa-inquiry-form" data-crm-endpoint="https://the-bee-suite-beta.vercel.app/api/inquiries" novalidate>
+  <div class="kcusa-form-head">
+    <h2>Start an inquiry</h2>
+    <p>Tell us where you would like care and a Kid City USA team member will follow up.</p>
+  </div>
+
+  <label>
+    <span>Parent's Name</span>
+    <input name="parentName" type="text" autocomplete="name" required>
+  </label>
+
+  <label>
+    <span>Email</span>
+    <input name="email" type="email" autocomplete="email" required>
+  </label>
+
+  <label>
+    <span>Phone Number</span>
+    <input name="phone" type="tel" autocomplete="tel" required>
+  </label>
+
+  <label>
+    <span>Program</span>
+    <select name="program" required>
+      <option value="">Choose a program</option>
+      <option value="Daycare">Daycare</option>
+      <option value="Preschool">Preschool</option>
+      <option value="Before & After School Care">Before &amp; After School Care</option>
+      <option value="Summer Camp">Summer Camp</option>
+    </select>
+  </label>
+
+  <label>
+    <span>Location</span>
+    <select name="locationId" required>
+      <option value="">Choose a location</option>
+    <optgroup label="CO">
+      <option value="Kid City USA - Cordera (Colorado Springs)" data-city="Colorado Springs" data-state="CO" data-address="10085 Pearl Pass View" data-postal-code="80924" data-location-phone="719-301-0049">Kid City USA - Cordera (Colorado Springs)</option>
+      <option value="Kid City USA - Grand Junction" data-city="Grand Junction" data-state="CO" data-address="3170 D ½ Road" data-postal-code="81504" data-location-phone="970-837-3211">Grand Junction, CO - Grand Junction</option>
+      <option value="Kid City USA - Highlands Ranch" data-city="Highlands Ranch" data-state="CO" data-address="8373 Burnley Court" data-postal-code="80126" data-location-phone="303-791-5547">Highlands Ranch, CO - Highlands Ranch</option>
+      <option value="Kid City USA - Longmont" data-city="Longmont" data-state="CO" data-address="1941 Terry St." data-postal-code="80501" data-location-phone="303-651-3780">Longmont, CO - Longmont</option>
+      <option value="Kid City USA - Forest Edge" data-city="Woodland Park" data-state="CO" data-address="501 Forest Edge Rd." data-postal-code="80863" data-location-phone="719-687-8513">Woodland Park, CO - Forest Edge</option>
+      <option value="Kid City USA - Woodland Park" data-city="Woodland Park" data-state="CO" data-address="520 E. Midland Ave" data-postal-code="80863" data-location-phone="719-687-8123">Woodland Park, CO - Woodland Park</option>
+    </optgroup>
+    <optgroup label="FL">
+      <option value="Kid City USA - Altamonte - Fruitland Street" data-city="Altamonte Springs" data-state="FL" data-address="480 Fruitland St." data-postal-code="32714" data-location-phone="407-339-2337">Altamonte FL - Altamonte - Fruitland Street</option>
+      <option value="Kid City USA - Altamonte - Douglas Avenue" data-city="Altamonte Springs" data-state="FL" data-address="841 Douglas Ave." data-postal-code="32714" data-location-phone="407-682-5437">Altamonte Springs, FL - Altamonte - Douglas Avenue</option>
+      <option value="Kid City USA - Altamonte - Maitland Avenue" data-city="Altamonte Springs" data-state="FL" data-address="290 Maitland Ave." data-postal-code="32701" data-location-phone="407-767-5437">Altamonte Springs, FL - Altamonte - Maitland Avenue</option>
+      <option value="Kid City USA - Apopka" data-city="Apopka" data-state="FL" data-address="204 S Central Ave." data-postal-code="32703" data-location-phone="407-814-0444">Apopka FL - Apopka</option>
+      <option value="Kid City USA - Clearwater" data-city="Clearwater" data-state="FL" data-address="3130 N McMullen Booth Rd" data-postal-code="33761" data-location-phone="727-797-0382">Clearwater FL - Clearwater</option>
+      <option value="Kid City USA - College Park" data-city="College Park" data-state="FL" data-address="2828 Edgewater Dr." data-postal-code="32804" data-location-phone="407-985-5464">Orlando FL - College Park</option>
+      <option value="Kid City USA - Crystal River" data-city="Crystal River" data-state="FL" data-address="243 N.E. 7th Terrace" data-postal-code="34428" data-location-phone="352-794-3415">Crystal River FL - Crystal River</option>
+      <option value="Kid City USA - Daytona Beach East" data-city="Daytona Beach" data-state="FL" data-address="1122 Dr Mary McLeod Bethune Blvd," data-postal-code="32114" data-location-phone="386-281-3445">Daytona Beach, FL - Daytona Beach East</option>
+      <option value="Kid City USA - DeLand 1" data-city="Deland" data-state="FL" data-address="404 N. Orange Ave." data-postal-code="32720" data-location-phone="386-736-0000">DeLand  FL - DeLand 1</option>
+      <option value="Kid City USA - DeLand 2" data-city="Deland" data-state="FL" data-address="238 S Amelia Ave." data-postal-code="32724" data-location-phone="386-279-7553">DeLand FL - DeLand 2</option>
+      <option value="Kid City USA - Deltona 1" data-city="Deltona" data-state="FL" data-address="1382 Howland Blvd. #126" data-postal-code="32738" data-location-phone="386-860-7979">Deltona FL - Deltona 1</option>
+      <option value="Kid City USA - Deltona 2" data-city="Deltona" data-state="FL" data-address="1859 Providence Blvd." data-postal-code="32738" data-location-phone="386-960-7628">Deltona FL - Deltona 2</option>
+      <option value="Kid City USA - Edgewater" data-city="Edgewater" data-state="FL" data-address="2311 S. Ridgewood Ave." data-postal-code="32141" data-location-phone="386-410-2924">Edgewater FL - Edgewater</option>
+      <option value="Kid City USA - Gainesville" data-city="Gainesville" data-state="FL" data-address="1127 NW 7th Ave." data-postal-code="32601" data-location-phone="352-756-4867">Gainesville, FL - Gainesville</option>
+      <option value="Kid City USA - Glen St. Mary" data-city="Glen St. Mary" data-state="FL" data-address="10274 N. Sherman Ave." data-postal-code="32040" data-location-phone="904-259-4899">Glen St. Mary, FL - Glen St. Mary</option>
+      <option value="Kid City USA - Hampton" data-city="Hampton" data-state="FL" data-address="10228 N Division Street" data-postal-code="32044" data-location-phone="352-468-1008">Hampton, FL - Hampton</option>
+      <option value="Kid City USA - Heathrow" data-city="Heathrow" data-state="FL" data-address="1032 AAA Drive." data-postal-code="32746" data-location-phone="407-732-4413">Lake Mary FL - Heathrow</option>
+      <option value="Kid City USA - Holly Hill" data-city="Holly Hill" data-state="FL" data-address="1501 N. Nova Rd." data-postal-code="32117" data-location-phone="386-265-4016">Holly Hill, FL - Holly Hill</option>
+      <option value="Kid City USA - Abbess" data-city="Jacksonville" data-state="FL" data-address="12750 Abess Blvd." data-postal-code="32225" data-location-phone="904-220-7737">Jacksonville, FL - Abbess</option>
+      <option value="Kid City USA - Beach Blvd" data-city="Jacksonville" data-state="FL" data-address="7044 Beach Blvd." data-postal-code="32216" data-location-phone="904-575-9649">Jacksonville, FL - Beach Blvd</option>
+      <option value="Kid City USA - Durbin" data-city="Jacksonville" data-state="FL" data-address="14985 Old St. Augustine Rd Suite 120" data-postal-code="32258" data-location-phone="904-672-7616">Jacksonville, FL - Durbin</option>
+      <option value="Kid City USA - Global Leadership Academy" data-city="Jacksonville" data-state="FL" data-address="8985 Lonestar Rd." data-postal-code="32211" data-location-phone="904-916-3639">Jacksonville, FL - Global Leadership Academy</option>
+      <option value="Kid City USA - Jacksonville Heights" data-city="Jacksonville" data-state="FL" data-address="4056 Fouraker Rd" data-postal-code="32210" data-location-phone="904-902-4152">Jacksonville, FL - Jacksonville Heights</option>
+      <option value="Kid City USA - Oakleaf" data-city="Jacksonville" data-state="FL" data-address="8720 Collins Rd." data-postal-code="32244" data-location-phone="904-717-9166">Jacksonville, FL - Oakleaf</option>
+      <option value="Kid City USA - Lake City" data-city="Lake City" data-state="FL" data-address="1290 SE Baya Drive," data-postal-code="32025" data-location-phone="386-269-4607">Lake City, Florida - Lake City</option>
+      <option value="Kid City USA - Lake Mary" data-city="Lake Mary" data-state="FL" data-address="2720 W. Lake Mary Blvd." data-postal-code="32746" data-location-phone="407-323-1221">Lake Mary FL - Lake Mary</option>
+      <option value="Kid City USA - Lake Wales" data-city="Lake Wales" data-state="FL" data-address="712 N. Scenic Hwy" data-postal-code="33853" data-location-phone="863-676-2351">Lake Wales, FL - Lake Wales</option>
+      <option value="Kid City USA - Leesburg" data-city="Leesburg" data-state="FL" data-address="710 Carpenter Ave." data-postal-code="34748" data-location-phone="352-460-0627">Leesburg, FL - Leesburg</option>
+      <option value="Kid City USA - Wekiva" data-city="Longwood" data-state="FL" data-address="935 Wekiva Springs Rd." data-postal-code="32779" data-location-phone="407-786-4023">Longwood FL - Wekiva</option>
+      <option value="Kid City USA - Longwood East" data-city="Longwood" data-state="FL" data-address="382 W SR 434" data-postal-code="32750" data-location-phone="407-539-2337">Longwood, FL - Longwood East</option>
+      <option value="Kid City USA - MacClenny" data-city="Macclenny" data-state="FL" data-address="5418 County Rd 23B" data-postal-code="32063" data-location-phone="904-259-5438">Macclenny, FL - MacClenny</option>
+      <option value="Kid City USA - Melbourne" data-city="Melbourne" data-state="FL" data-address="4950 Dairy Rd." data-postal-code="32904" data-location-phone="855-543-2489">Melbourne, FL - Melbourne</option>
+      <option value="Kid City USA - Middleburg" data-city="Middleburg" data-state="FL" data-address="29 Cinnamon St." data-postal-code="32068" data-location-phone="904-923-2909">Middleburg, FL - Middleburg</option>
+      <option value="Kid City USA - New Smyrna Beach" data-city="New Smyrna Beach" data-state="FL" data-address="1890 S.R. 44" data-postal-code="32168" data-location-phone="855-543-2489">New Smyrna Beach, FL - New Smyrna Beach</option>
+      <option value="Kid City USA - Ocala (2nd St)" data-city="Ocala" data-state="FL" data-address="2125 NE 2nd St." data-postal-code="34470" data-location-phone="352-622-6481">Ocala, FL - Ocala (2nd St)</option>
+      <option value="Kid City USA - Ormond Beach" data-city="Ormond Beach" data-state="FL" data-address="50 Coolidge Ave." data-postal-code="32174" data-location-phone="386-492-7228">Ormond Beach FL - Ormond Beach</option>
+      <option value="Kid City USA - Oviedo" data-city="Oviedo" data-state="FL" data-address="204 Alexandria Blvd." data-postal-code="" data-location-phone="407-542-0030">Oviedo FL - Oviedo</option>
+      <option value="Kid City USA - Palatka" data-city="Palatka" data-state="FL" data-address="3420 St. Johns Ave." data-postal-code="32177" data-location-phone="386-385-3054">Palatka, FL - Palatka</option>
+      <option value="Kid City USA - Palm Bay" data-city="Palm Bay" data-state="FL" data-address="1516 Norman Street NE" data-postal-code="32907" data-location-phone="321-728-5503">Palm Bay, FL - Palm Bay</option>
+      <option value="Kid City USA - Panama City" data-city="Panama City" data-state="FL" data-address="7221 Patronis Dr." data-postal-code="32408" data-location-phone="850-233-3884">Panama City, FL - Panama City</option>
+      <option value="Kid City USA - Port Orange" data-city="Port Orange" data-state="FL" data-address="3911 S. Nova Rd." data-postal-code="32127" data-location-phone="386-317-2337">Port Orange FL - Port Orange</option>
+      <option value="Kid City USA - Riverview" data-city="Riverview" data-state="FL" data-address="11329 Big Bend Rd." data-postal-code="33579" data-location-phone="813-415-3988">Riverview, FL - Riverview</option>
+      <option value="Kid City USA - South Daytona" data-city="S. Daytona" data-state="FL" data-address="712 Reed Canal Rd." data-postal-code="32119" data-location-phone="386-322-0103">S. Daytona, FL - South Daytona</option>
+      <option value="Kid City USA - Fruit Cove" data-city="Saint Johns" data-state="FL" data-address="1461 Fruit Cove Rd S," data-postal-code="32259" data-location-phone="904-615-1595">Saint Johns, FL - Fruit Cove</option>
+      <option value="Kid City USA - Sanford" data-city="Sanford" data-state="FL" data-address="1320 Hickory Ave" data-postal-code="32771" data-location-phone="407-942-3242">Sanford FL - Sanford</option>
+      <option value="Kid City USA - Sarasota" data-city="Sarasota" data-state="FL" data-address="374 Scott Ave" data-postal-code="34243" data-location-phone="941-210-4482">Sarasota, FL - Sarasota</option>
+      <option value="Kid City USA - St. Cloud" data-city="St. Cloud" data-state="FL" data-address="1422 Virginia Ave." data-postal-code="34769" data-location-phone="321-805-4780">St. Cloud FL - St. Cloud</option>
+      <option value="Kid City USA - Starke" data-city="Starke" data-state="FL" data-address="202 West Market Road" data-postal-code="32091" data-location-phone="855-543-2489">Starke, FL - Starke</option>
+      <option value="Kid City USA - Vero Beach" data-city="Vero Beach" data-state="FL" data-address="760 20th Avenue" data-postal-code="32962" data-location-phone="772-778-2262">Vero Beach, FL - Vero Beach</option>
+      <option value="Kid City USA - Winter Park" data-city="Winter Park" data-state="FL" data-address="3650 Howell Branch Rd." data-postal-code="32792" data-location-phone="407-671-2882">Winter Park FL - Winter Park</option>
+      <option value="Kid City USA - Winter Springs" data-city="Winter Springs" data-state="FL" data-address="1015 Willa Springs Dr." data-postal-code="32708" data-location-phone="407-695-7737">Winter Springs FL - Winter Springs</option>
+    </optgroup>
+    <optgroup label="GA">
+      <option value="Kid City USA - Duluth" data-city="Duluth" data-state="GA" data-address="4278 Abbotts Bridge Rd" data-postal-code="30097" data-location-phone="855-543-2489">Duluth, GA - Duluth</option>
+    </optgroup>
+    <optgroup label="IN">
+      <option value="Kid City USA - Bargersville" data-city="Bargersville" data-state="IN" data-address="2805 South Grove Blvd." data-postal-code="46106" data-location-phone="855-543-2489">Bargersville, IN - Bargersville</option>
+      <option value="Kid City USA - Beech Grove" data-city="Beech Grove" data-state="IN" data-address="4545 Independence Sq." data-postal-code="46203" data-location-phone="317-781-0577">4545 Independence Sq. Indianapolis, IN - Beech Grove</option>
+      <option value="Kid City USA - Brownsburg" data-city="Brownsburg" data-state="IN" data-address="1570 East US Highway 136" data-postal-code="46112" data-location-phone="855-543-2489">Brownsburg, IN - Brownsburg</option>
+      <option value="Kid City USA - Elkhart" data-city="Elkhart" data-state="IN" data-address="631 Simpson Ave." data-postal-code="46516" data-location-phone="574-444-3543">Elkhart, IN - Elkhart</option>
+      <option value="Kid City USA - Evansville" data-city="Evansville" data-state="IN" data-address="240 S Rosenberger Avenue" data-postal-code="47712" data-location-phone="812-425-8687">Evansville, IN - Evansville</option>
+      <option value="Kid City USA - Fishers" data-city="Fishers" data-state="IN" data-address="9000 Fitness Lane" data-postal-code="46038" data-location-phone="317-863-8220">Fishers, IN - Fishers</option>
+      <option value="Kid City USA - Greenwood" data-city="Greenwood" data-state="IN" data-address="1111 South Park Drive" data-postal-code="46143" data-location-phone="317-300-0108">Greenwood, IN - Greenwood</option>
+      <option value="Kid City USA - Avon" data-city="Indianapolis" data-state="IN" data-address="55 N Raceway Road" data-postal-code="46234" data-location-phone="855-543-2489">Indianapolis, IN - Avon</option>
+      <option value="Kid City USA - Franklin Township" data-city="Indianapolis" data-state="IN" data-address="8046 E Southport Road" data-postal-code="46259" data-location-phone="463-800-3443">Indianapolis, IN - Franklin Township</option>
+      <option value="Kid City USA - Meridian Park" data-city="Indianapolis" data-state="IN" data-address="130 E 30th Street" data-postal-code="46205" data-location-phone="317-220-8879">Indianapolis, IN - Meridian Park</option>
+      <option value="Kid City USA - Southpointe" data-city="Indianapolis" data-state="IN" data-address="8830 Southpointe Drive" data-postal-code="46227" data-location-phone="463-634-4044">Indianapolis, IN - Southpointe</option>
+      <option value="Kid City USA - Jasper 1 (Truman)" data-city="Jasper" data-state="IN" data-address="600 N. Truman Rd." data-postal-code="47546" data-location-phone="812-848-2273">Jasper, IN - Jasper 1 (Truman)</option>
+      <option value="Kid City USA - Jasper 2 (Baden Strasse)" data-city="Jasper" data-state="IN" data-address="4312 Baden Strasse Rd." data-postal-code="47546" data-location-phone="812-481-8230">Jasper, IN - Jasper 2 (Baden Strasse)</option>
+      <option value="Kid City USA - Kokomo" data-city="Kokomo" data-state="IN" data-address="1998 Bent Creek Road" data-postal-code="46901" data-location-phone="855-543-2489">Kokomo, Indiana - Kokomo</option>
+      <option value="Kid City USA - Lebanon" data-city="Lebanon" data-state="IN" data-address="924 S Meridian Street" data-postal-code="46052" data-location-phone="765-335-0162">Lebanon, IN - Lebanon</option>
+      <option value="Kid City USA - McCordsville" data-city="McCordsville" data-state="IN" data-address="7409 N 600 W." data-postal-code="46055" data-location-phone="463-999-9850">McCordsville, IN - McCordsville</option>
+      <option value="Kid City USA - Paradise" data-city="Newburgh" data-state="IN" data-address="2699 St Route 261" data-postal-code="47630" data-location-phone="812-490-1191">Newburgh, IN - Paradise</option>
+      <option value="Kid City USA - Petersburg" data-city="Petersburg" data-state="IN" data-address="106 West Pike  Avenue" data-postal-code="47567" data-location-phone="812-380-9100">Petersburg IN - Petersburg</option>
+      <option value="Kid City USA - Plainfield" data-city="Plainfield" data-state="IN" data-address="147 Meijer Drive" data-postal-code="46168" data-location-phone="463-275-8041">Plainfield, IN - Plainfield</option>
+      <option value="Kid City USA - Westfield" data-city="Westfield" data-state="IN" data-address="1769 W Tournament Trail" data-postal-code="46074" data-location-phone="855-543-2489">Westfield, IN - Westfield</option>
+      <option value="Kid City USA - Whitestown" data-city="Whitestown" data-state="IN" data-address="5650 E 550 S Whitestown" data-postal-code="46075" data-location-phone="855-543-2490">Whitestown, IN - Whitestown</option>
+    </optgroup>
+    <optgroup label="KY">
+      <option value="Kid City USA - Bardstown" data-city="Bardstown" data-state="KY" data-address="104 Keystone Ave" data-postal-code="40004" data-location-phone="502-348-4444">Bardstown, KY - Bardstown</option>
+    </optgroup>
+    <optgroup label="MO">
+      <option value="Kid City USA - Lee’s Summit" data-city="Lee’s Summit" data-state="MO" data-address="850 NE Swann Road" data-postal-code="64086" data-location-phone="816-875-3363">Lee’s Summit, MO - Lee’s Summit</option>
+    </optgroup>
+    <optgroup label="NC">
+      <option value="Kid City USA - Canton" data-city="Canton" data-state="NC" data-address="43 Crestview Street" data-postal-code="28716" data-location-phone="828-648-2775">Canton, NC - Canton</option>
+      <option value="Kid City USA - Pisgah Forest" data-city="Pisgah Forest" data-state="NC" data-address="1131 Wilson Road" data-postal-code="28768" data-location-phone="828-877-2555">Pisgah Forest, NC - Pisgah Forest</option>
+    </optgroup>
+    <optgroup label="SC">
+      <option value="Kid City USA - Bluffton" data-city="Bluffton" data-state="SC" data-address="11 Mallett Way" data-postal-code="29910" data-location-phone="843-757-6650">Bluffton, SC - Bluffton</option>
+    </optgroup>
+    <optgroup label="TN">
+      <option value="Kid City USA - Columbia" data-city="Columbia" data-state="TN" data-address="300 E. James Campbell Blvd" data-postal-code="38401" data-location-phone="931-655-0723">Columbia, TN - Columbia</option>
+      <option value="Kid City USA - Lewisburg" data-city="Lewisburg" data-state="TN" data-address="964 N. Ellington Pkwy" data-postal-code="37091" data-location-phone="931-422-5276">Lewisburg, TN - Lewisburg</option>
+      <option value="Kid City USA - Pulaski TN" data-city="Pulaski" data-state="TN" data-address="110 N 8th Street" data-postal-code="38478" data-location-phone="931-292-6059">Pulaski, TN - Pulaski TN</option>
+      <option value="Kid City USA - Soddy Daisy" data-city="Soddy Daisy" data-state="TN" data-address="9834 Dayton Pike" data-postal-code="37379" data-location-phone="423-654-4049">Soddy Daisy, TN - Soddy Daisy</option>
+    </optgroup>
+    <optgroup label="TX">
+      <option value="Kid City USA - Friendswood" data-city="Friendswood" data-state="TX" data-address="1601 W Parkwood Avenue" data-postal-code="77546" data-location-phone="832-569-4674">Friendswood, TX - Friendswood</option>
+      <option value="Kid City USA - Garland" data-city="Garland" data-state="TX" data-address="1521 &amp; 1613 Rowlett Rd" data-postal-code="75043" data-location-phone="214-501-3001">Garland, TX - Garland</option>
+      <option value="Kid City USA - Granbury" data-city="Granbury" data-state="TX" data-address="2111 E US Highway 377" data-postal-code="76049" data-location-phone="817-573-2808">Granbury, TX - Granbury</option>
+      <option value="Kid City USA - North Richland Hills" data-city="North Richland Hills" data-state="TX" data-address="8304 Starnes Rd" data-postal-code="76182" data-location-phone="682-888-5247">North Richland Hills, TX - North Richland Hills</option>
+      <option value="Kid City USA - Pearland" data-city="Pearland" data-state="TX" data-address="12152 Shadow Creek Pkwy" data-postal-code="77584" data-location-phone="713-436-0580">Pearland, TX - Pearland</option>
+      <option value="Kid City USA - Pilot Point" data-city="Pilot Point" data-state="TX" data-address="1200 S Washington St" data-postal-code="76258" data-location-phone="940-343-5327">Pilot Point, TX - Pilot Point</option>
+      <option value="Kid City USA - Terrell" data-city="Terrell" data-state="TX" data-address="400 9th Street" data-postal-code="75160" data-location-phone="972-674-1078">Terrell, TX - Terrell</option>
+      <option value="Kid City USA - Tyler" data-city="Tyler" data-state="TX" data-address="2101 Shiloh Road" data-postal-code="75703" data-location-phone="409-757-8396">Tyler, TX - Tyler</option>
+    </optgroup>
+    </select>
+  </label>
+
+  <input type="hidden" name="leadSource" value="Website Inquiry">
+  <input type="hidden" name="pageUrl" value="">
+
+  <button class="kcusa-button kcusa-button-primary" type="submit">Submit inquiry</button>
+  <p class="kcusa-form-note">By submitting, you agree to be contacted by Kid City USA.</p>
+  <p class="kcusa-form-status" role="status" aria-live="polite"></p>
+</form>
+
+
+<script>
+(function () {
+  function getSelectedLocation(select) {
+    var option = select && select.options[select.selectedIndex];
+
+    if (!option || !option.value) {
+      return null;
+    }
+
+    return {
+      id: option.value,
+      label: option.textContent.trim(),
+      city: option.getAttribute("data-city") || "",
+      state: option.getAttribute("data-state") || "",
+      address: option.getAttribute("data-address") || "",
+      postalCode: option.getAttribute("data-postal-code") || "",
+      phone: option.getAttribute("data-location-phone") || ""
+    };
+  }
+
+  function getQueryParam(name) {
+    try {
+      return new URLSearchParams(window.location.search).get(name) || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  async function submitInquiry(form) {
+    var status = form.querySelector(".kcusa-form-status");
+    var endpoint = form.getAttribute("data-crm-endpoint");
+    var data = new FormData(form);
+    var selectedLocation = getSelectedLocation(form.querySelector('select[name="locationId"]'));
+
+    if (!endpoint) {
+      status.textContent = "The inquiry endpoint is not configured yet.";
+      return;
+    }
+
+    var payload = {
+      parentName: data.get("parentName"),
+      email: data.get("email"),
+      phone: data.get("phone"),
+      program: data.get("program"),
+      locationId: data.get("locationId"),
+      locationName: selectedLocation ? selectedLocation.label : "",
+      city: selectedLocation ? selectedLocation.city : "",
+      state: selectedLocation ? selectedLocation.state : "",
+      address: selectedLocation ? selectedLocation.address : "",
+      postalCode: selectedLocation ? selectedLocation.postalCode : "",
+      locationPhone: selectedLocation ? selectedLocation.phone : "",
+      leadSource: data.get("leadSource") || "Kid City USA Website Inquiry",
+      pageUrl: window.location.href,
+      utmSource: getQueryParam("utm_source"),
+      utmMedium: getQueryParam("utm_medium"),
+      utmCampaign: getQueryParam("utm_campaign")
+    };
+
+    status.textContent = "Submitting...";
+    form.querySelector('button[type="submit"]').disabled = true;
+
+    var response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    var result = await response.json().catch(function () { return {}; });
+
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || "Inquiry submission failed.");
+    }
+
+    form.reset();
+    status.textContent = "Thanks. Your inquiry has been submitted.";
+  }
+
+  document.addEventListener("submit", function (event) {
+    var form = event.target.closest(".kcusa-inquiry-form");
+
+    if (!form) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
+    submitInquiry(form).catch(function () {
+      var status = form.querySelector(".kcusa-form-status");
+      status.textContent = "Sorry, the inquiry could not be submitted. Please try again or call Kid City USA.";
+    }).finally(function () {
+      var button = form.querySelector('button[type="submit"]');
+      if (button) button.disabled = false;
+    });
+  });
+})();
+</script>

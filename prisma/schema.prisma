@@ -1,0 +1,807 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PLATFORM_OWNER
+  BRAND_ADMIN
+  REGIONAL_MANAGER
+  CENTER_DIRECTOR
+  ASSISTANT_DIRECTOR
+  TEACHER
+  BILLING_ADMIN
+  PARENT_GUARDIAN
+  AUTHORIZED_PICKUP
+  READ_ONLY_AUDITOR
+}
+
+enum EnrollmentStage {
+  NEW_INQUIRY
+  CONTACTED
+  TOUR_SCHEDULED
+  TOUR_COMPLETED
+  APPLICATION_SENT
+  APPLICATION_STARTED
+  APPLICATION_SUBMITTED
+  DOCUMENTS_PENDING
+  DEPOSIT_PENDING
+  ENROLLED
+  WAITLISTED
+  LOST_NOT_A_FIT
+}
+
+enum DocumentStatus {
+  DRAFT
+  REQUESTED
+  SUBMITTED
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  DRAFT
+  OPEN
+  PAID
+  FAILED
+  VOID
+  REFUNDED
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brands        Brand[]
+  organizations Organization[]
+  users         User[]
+  auditLogs     AuditLog[]
+  integrations  Integration[]
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  slug      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id])
+  orgs        Organization[]
+  settings    WhiteLabelSettings?
+  campaigns   Campaign[]
+  automations Automation[]
+
+  @@unique([tenantId, slug])
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  tenantId  String
+  brandId   String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  brand   Brand?  @relation(fields: [brandId], references: [id])
+  centers Center[]
+  users   User[]
+}
+
+model Center {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  address        String?
+  phone          String?
+  licensedCapacity Int
+  timezone       String   @default("America/New_York")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  classrooms   Classroom[]
+  leads        Lead[]
+  tours        Tour[]
+  staff        StaffProfile[]
+  schedules    StaffSchedule[]
+  announcements Announcement[]
+  auditLogs    AuditLog[]
+}
+
+model Classroom {
+  id        String   @id @default(cuid())
+  centerId  String
+  name      String
+  ageGroup  String
+  capacity  Int
+  ratioRule String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  center       Center       @relation(fields: [centerId], references: [id])
+  children     Child[]
+  staff        StaffProfile[]
+  dailyReports DailyReport[]
+  incidents    IncidentReport[]
+  attendance   AttendanceRecord[]
+}
+
+model User {
+  id             String   @id @default(cuid())
+  tenantId       String
+  organizationId String?
+  email          String   @unique
+  name           String
+  role           UserRole
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+  staffProfile StaffProfile?
+  guardians    Guardian[]
+  notes        Note[]
+  messages     Message[]     @relation("MessageSender")
+  auditLogs    AuditLog[]
+  notifications Notification[]
+}
+
+model Role {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+
+  permissions Permission[]
+}
+
+model Permission {
+  id       String @id @default(cuid())
+  roleId   String
+  resource String
+  action   String
+  scope    String
+
+  role Role @relation(fields: [roleId], references: [id])
+}
+
+model Family {
+  id          String   @id @default(cuid())
+  centerId    String?
+  name        String
+  address     String?
+  billingEmail String?
+  notes       String?
+  custodyNotes String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  guardians       Guardian[]
+  children        Child[]
+  pickups         AuthorizedPickup[]
+  emergencyContacts EmergencyContact[]
+  billingAccount  BillingAccount?
+  messages        Message[]
+  documents       Document[]
+  notesList       Note[]
+}
+
+model Guardian {
+  id        String @id @default(cuid())
+  familyId  String
+  userId    String?
+  fullName  String
+  email     String?
+  phone     String?
+  employer  String?
+  relation  String
+  preferredCommunication String?
+  isBillingContact Boolean @default(false)
+
+  family Family @relation(fields: [familyId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+}
+
+model Child {
+  id        String   @id @default(cuid())
+  familyId  String
+  classroomId String?
+  fullName  String
+  preferredName String?
+  dateOfBirth DateTime
+  ageGroup String
+  enrollmentStatus String
+  startDate DateTime?
+  schedule Json?
+  photoVideoPermission Boolean @default(false)
+  fieldTripPermission Boolean @default(false)
+  napNotes String?
+  feedingNotes String?
+  pottyNotes String?
+  developmentalNotes String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  family       Family       @relation(fields: [familyId], references: [id])
+  classroom    Classroom?   @relation(fields: [classroomId], references: [id])
+  medicalNotes ChildMedicalNote[]
+  allergies    Allergy[]
+  enrollments  Enrollment[]
+  attendance   AttendanceRecord[]
+  checkLogs    CheckInOutLog[]
+  dailyReports DailyReport[]
+  incidents    IncidentReport[]
+  documents    Document[]
+}
+
+model AuthorizedPickup {
+  id       String @id @default(cuid())
+  familyId String
+  fullName String
+  phone    String?
+  relation String?
+  verificationNotes String?
+
+  family Family @relation(fields: [familyId], references: [id])
+}
+
+model EmergencyContact {
+  id       String @id @default(cuid())
+  familyId String
+  fullName String
+  phone    String
+  relation String
+
+  family Family @relation(fields: [familyId], references: [id])
+}
+
+model ChildMedicalNote {
+  id        String   @id @default(cuid())
+  childId   String
+  category  String
+  note      String
+  restricted Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  child Child @relation(fields: [childId], references: [id])
+}
+
+model Allergy {
+  id       String @id @default(cuid())
+  childId  String
+  allergen String
+  severity String
+  actionPlan String?
+
+  child Child @relation(fields: [childId], references: [id])
+}
+
+model Enrollment {
+  id        String @id @default(cuid())
+  childId   String
+  leadId    String?
+  stage     EnrollmentStage
+  desiredStartDate DateTime?
+  depositDueCents Int @default(0)
+  depositPaidCents Int @default(0)
+  checklist Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  child Child @relation(fields: [childId], references: [id])
+  lead  Lead? @relation(fields: [leadId], references: [id])
+}
+
+model EnrollmentPipelineStage {
+  id        String @id @default(cuid())
+  name      String
+  sortOrder Int
+  isTerminal Boolean @default(false)
+}
+
+model Lead {
+  id        String @id @default(cuid())
+  centerId  String
+  familyName String
+  childName String?
+  leadSource String?
+  ageGroupInterest String?
+  desiredStartDate DateTime?
+  programInterest String?
+  stage EnrollmentStage @default(NEW_INQUIRY)
+  score Int @default(0)
+  status String @default("open")
+  customFields Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  center      Center      @relation(fields: [centerId], references: [id])
+  tours       Tour[]
+  enrollments Enrollment[]
+  tasks       Task[]
+  notes       Note[]
+  tags        Tag[]       @relation("LeadTags")
+}
+
+model Tour {
+  id        String @id @default(cuid())
+  centerId  String
+  leadId    String?
+  startsAt  DateTime
+  status    String
+  notes     String?
+
+  center Center @relation(fields: [centerId], references: [id])
+  lead   Lead?  @relation(fields: [leadId], references: [id])
+}
+
+model WaitlistEntry {
+  id        String @id @default(cuid())
+  childName String
+  familyName String
+  ageGroup String
+  desiredStartDate DateTime?
+  priority Int @default(0)
+  status String @default("waiting")
+  notes String?
+}
+
+model Task {
+  id        String @id @default(cuid())
+  leadId    String?
+  title     String
+  dueAt     DateTime?
+  status    String @default("open")
+  assignedTo String?
+
+  lead Lead? @relation(fields: [leadId], references: [id])
+}
+
+model Note {
+  id        String @id @default(cuid())
+  userId    String?
+  leadId    String?
+  familyId  String?
+  body      String
+  restricted Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+  family Family? @relation(fields: [familyId], references: [id])
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  color String?
+
+  leads Lead[] @relation("LeadTags")
+}
+
+model CustomField {
+  id        String @id @default(cuid())
+  entity    String
+  key       String
+  label     String
+  fieldType String
+  required  Boolean @default(false)
+}
+
+model Message {
+  id        String @id @default(cuid())
+  familyId  String?
+  senderId  String?
+  subject   String?
+  body      String
+  channel   String
+  priority  String @default("normal")
+  sentiment String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  family Family? @relation(fields: [familyId], references: [id])
+  sender User?   @relation("MessageSender", fields: [senderId], references: [id])
+}
+
+model Announcement {
+  id       String @id @default(cuid())
+  centerId String?
+  title    String
+  body     String
+  audience Json?
+  status   String @default("draft")
+  sendAt   DateTime?
+
+  center Center? @relation(fields: [centerId], references: [id])
+}
+
+model Campaign {
+  id        String @id @default(cuid())
+  brandId   String?
+  name      String
+  type      String
+  audience  Json?
+  status    String
+  metrics   Json?
+
+  brand Brand? @relation(fields: [brandId], references: [id])
+}
+
+model Automation {
+  id        String @id @default(cuid())
+  brandId   String?
+  name      String
+  trigger   String
+  condition Json?
+  action    Json
+  delay     String?
+  status    String
+
+  brand Brand? @relation(fields: [brandId], references: [id])
+  runs  AutomationRun[]
+}
+
+model AutomationRun {
+  id           String @id @default(cuid())
+  automationId String
+  status       String
+  logs         Json?
+  createdAt    DateTime @default(now())
+
+  automation Automation @relation(fields: [automationId], references: [id])
+}
+
+model Form {
+  id     String @id @default(cuid())
+  name   String
+  type   String
+  schema Json
+  status String @default("active")
+
+  submissions FormSubmission[]
+}
+
+model FormSubmission {
+  id       String @id @default(cuid())
+  formId   String
+  familyId String?
+  status   DocumentStatus
+  data     Json
+  signaturePlaceholder Boolean @default(false)
+  submittedAt DateTime?
+
+  form Form @relation(fields: [formId], references: [id])
+}
+
+model Document {
+  id        String @id @default(cuid())
+  familyId  String?
+  childId   String?
+  name      String
+  type      String
+  status    DocumentStatus
+  expiresAt DateTime?
+  storageKey String?
+  restricted Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  family Family? @relation(fields: [familyId], references: [id])
+  child  Child?  @relation(fields: [childId], references: [id])
+}
+
+model AttendanceRecord {
+  id          String @id @default(cuid())
+  childId     String?
+  classroomId String?
+  date        DateTime
+  status      String
+  absenceReason String?
+
+  child     Child?     @relation(fields: [childId], references: [id])
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+}
+
+model CheckInOutLog {
+  id        String @id @default(cuid())
+  childId   String
+  type      String
+  occurredAt DateTime
+  pickupName String?
+  signaturePlaceholder Boolean @default(false)
+  verificationStatus String?
+
+  child Child @relation(fields: [childId], references: [id])
+}
+
+model DailyReport {
+  id          String @id @default(cuid())
+  childId     String
+  classroomId String?
+  date        DateTime
+  mood        String?
+  teacherNote String?
+  suppliesNeeded String?
+  sentAt      DateTime?
+
+  child     Child      @relation(fields: [childId], references: [id])
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+  meals     Meal[]
+  naps      Nap[]
+  diapers   DiaperPottyLog[]
+  activities ActivityLog[]
+}
+
+model Meal {
+  id            String @id @default(cuid())
+  dailyReportId String
+  mealType      String
+  food          String
+  amount        String?
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
+}
+
+model Nap {
+  id            String @id @default(cuid())
+  dailyReportId String
+  startsAt      DateTime
+  endsAt        DateTime?
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
+}
+
+model DiaperPottyLog {
+  id            String @id @default(cuid())
+  dailyReportId String
+  type          String
+  occurredAt    DateTime
+  notes         String?
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
+}
+
+model ActivityLog {
+  id            String @id @default(cuid())
+  dailyReportId String
+  title         String
+  notes         String?
+
+  dailyReport DailyReport @relation(fields: [dailyReportId], references: [id])
+}
+
+model IncidentReport {
+  id          String @id @default(cuid())
+  childId     String
+  classroomId String?
+  staffMember String
+  occurredAt  DateTime
+  type        String
+  description String
+  actionTaken String
+  parentNotified Boolean @default(false)
+  parentAcknowledgedAt DateTime?
+  photoAttachmentPlaceholder Boolean @default(false)
+  adminReviewStatus String @default("pending")
+  followUpTasks Json?
+
+  child     Child      @relation(fields: [childId], references: [id])
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+}
+
+model StaffProfile {
+  id          String @id @default(cuid())
+  userId      String @unique
+  centerId    String
+  classroomId String?
+  title       String
+  phone       String?
+  backgroundCheckStatus String?
+  performanceNotesPlaceholder String?
+  ptoAvailabilityPlaceholder Json?
+
+  user      User       @relation(fields: [userId], references: [id])
+  center    Center     @relation(fields: [centerId], references: [id])
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+  schedules StaffSchedule[]
+  certifications Certification[]
+}
+
+model StaffSchedule {
+  id        String @id @default(cuid())
+  staffId   String
+  centerId  String
+  startsAt  DateTime
+  endsAt    DateTime
+  status    String
+
+  staff  StaffProfile @relation(fields: [staffId], references: [id])
+  center Center       @relation(fields: [centerId], references: [id])
+}
+
+model Certification {
+  id        String @id @default(cuid())
+  staffId   String
+  name      String
+  status    String
+  expiresAt DateTime?
+
+  staff StaffProfile @relation(fields: [staffId], references: [id])
+}
+
+model BillingAccount {
+  id       String @id @default(cuid())
+  familyId String @unique
+  balanceCents Int @default(0)
+  autopayPlaceholder Boolean @default(false)
+
+  family   Family    @relation(fields: [familyId], references: [id])
+  invoices Invoice[]
+  payments Payment[]
+}
+
+model Invoice {
+  id        String @id @default(cuid())
+  billingAccountId String
+  number    String @unique
+  status    PaymentStatus
+  dueDate   DateTime
+  totalCents Int
+  createdAt DateTime @default(now())
+
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
+  items InvoiceItem[]
+}
+
+model InvoiceItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  productId String?
+  description String
+  amountCents Int
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id        String @id @default(cuid())
+  billingAccountId String
+  amountCents Int
+  status PaymentStatus
+  provider String @default("stripe_mock")
+  externalIdPlaceholder String?
+  paidAt DateTime?
+
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
+}
+
+model Product {
+  id          String @id @default(cuid())
+  name        String
+  type        String
+  amountCents Int
+
+  invoiceItems InvoiceItem[]
+}
+
+model TuitionPlan {
+  id          String @id @default(cuid())
+  name        String
+  ageGroup    String
+  cadence     String
+  amountCents Int
+}
+
+model SubscriptionPlaceholder {
+  id        String @id @default(cuid())
+  name      String
+  plan      String
+  status    String
+}
+
+model Review {
+  id       String @id @default(cuid())
+  source   String
+  rating   Int
+  body     String?
+  responseDraft String?
+  approvedForPublicTestimonial Boolean @default(false)
+}
+
+model Survey {
+  id      String @id @default(cuid())
+  name    String
+  type    String
+  status  String
+  results Json?
+}
+
+model Notification {
+  id        String @id @default(cuid())
+  userId    String?
+  title     String
+  body      String
+  type      String
+  priority  String @default("normal")
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String @id @default(cuid())
+  tenantId  String
+  centerId  String?
+  userId    String?
+  action    String
+  resource  String
+  resourceId String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
+}
+
+model Integration {
+  id        String @id @default(cuid())
+  tenantId  String
+  provider  String
+  status    String
+  configPlaceholder Json?
+  lastSyncAt DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model WhiteLabelSettings {
+  id        String @id @default(cuid())
+  brandId   String @unique
+  brandName String
+  logoUrlPlaceholder String?
+  faviconUrlPlaceholder String?
+  primaryColor String
+  accentColor String
+  themeMode String
+  emailSenderPlaceholder String?
+  customDomainPlaceholder String?
+  legalFooterText String?
+  termsUrl String?
+  privacyUrl String?
+
+  brand Brand @relation(fields: [brandId], references: [id])
+}
+
+model AiSummary {
+  id        String @id @default(cuid())
+  scope     String
+  scopeId   String?
+  title     String
+  body      String
+  requiresReview Boolean @default(true)
+  createdAt DateTime @default(now())
+}
+
+model AiSuggestion {
+  id        String @id @default(cuid())
+  type      String
+  promptContext Json?
+  suggestion String
+  status    String @default("pending_review")
+  guardrailNote String
+  createdAt DateTime @default(now())
+}

@@ -9,11 +9,12 @@
 - PostgreSQL-compatible Prisma schema covering tenancy, CRM, enrollment, families, children, staff, billing, communications, forms, documents, attendance, daily reports, incidents, compliance, marketing, automations, reviews, notifications, audit logs, integrations, white-label settings, and AI.
 - Demo seed script covering the requested data categories.
 - Documentation for architecture, deployment, Supabase, Prisma, security, privacy, AI guardrails, and go-live.
+- Stripe Connect payout onboarding foundation for schools, plus guarded parent Checkout session creation and webhook reconciliation.
 
 ## Placeholder by Design
 
 - Real authentication and production RBAC enforcement.
-- Real payments and Stripe webhooks.
+- Real card charging remains gated until live Stripe keys, connected school payout accounts, refund policies, and support procedures are approved.
 - Real SMS, email, push notifications, and emergency alerts.
 - Real Google Calendar and Google Business Profile sync.
 - Real Meta Lead Ads ingestion.
@@ -45,7 +46,7 @@
 
 - Supabase Auth or Auth.js/Clerk for identity.
 - Supabase Storage or S3-compatible storage for documents/media.
-- Stripe Billing/Payments in test mode.
+- Stripe Connect test-mode rollout for every school payout account, then Stripe Billing/autopay where appropriate.
 - Twilio Messaging for SMS reminders.
 - SendGrid or Mailgun for transactional and campaign email.
 - OpenAI for labeled, human-reviewed AI assistance.

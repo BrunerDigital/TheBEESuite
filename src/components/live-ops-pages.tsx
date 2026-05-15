@@ -1,0 +1,2510 @@
+import {
+  Activity,
+  BadgeDollarSign,
+  Bell,
+  BookOpen,
+  Bot,
+  Building2,
+  CheckCircle2,
+  ClipboardCheck,
+  FileText,
+  HeartHandshake,
+  Inbox,
+  KeyRound,
+  Link2,
+  MapPin,
+  Megaphone,
+  MessageSquare,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  Workflow,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { OperationsActionHub } from "@/components/operations-action-hub";
+import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+
+function formatDate(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function jsonSummary(value: unknown) {
+  if (!value) return "Not set";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .slice(0, 3)
+      .map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(", ") : String(item)}`)
+      .join(" · ");
+  }
+  return String(value);
+}
+
+function money(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <Card className="glass-panel">
+      <CardHeader className="pb-2">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl">{value}</CardTitle>
+      </CardHeader>
+      {detail ? (
+        <CardContent>
+          <p className="text-xs text-muted-foreground">{detail}</p>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
+export type NotificationCenterData = {
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    type: string;
+    priority: string;
+    readAt: Date | string | null;
+    createdAt: Date | string;
+  }>;
+  derived: Array<{
+    title: string;
+    body: string;
+    priority: string;
+    type: string;
+  }>;
+  stats: {
+    unread: number;
+    openTasks: number;
+    highIntentLeads: number;
+    pendingIncidents: number;
+  };
+};
+
+export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
+  const items = [...data.derived, ...data.notifications].slice(0, 50);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Bell data-icon="inline-start" />
+          Live action queue
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Notification Center</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Role-scoped alerts from CRM tasks, high-intent leads, incident review queues, and system notifications.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Unread notifications" value={data.stats.unread} detail="Assigned to this user or system-wide" />
+        <StatCard label="Open lead tasks" value={data.stats.openTasks} detail="Follow-ups needing action" />
+        <StatCard label="High-intent leads" value={data.stats.highIntentLeads} detail="Lead score 75+" />
+        <StatCard label="Incidents pending" value={data.stats.pendingIncidents} detail="Director review queue" />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Current Queue</CardTitle>
+          <CardDescription>Newest alerts and derived CRM actions</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Alert</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, index) => (
+                <TableRow key={"id" in item ? String(item.id) : `${item.type}-${index}`}>
+                  <TableCell>
+                    <div className="font-medium">{item.title}</div>
+                    <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{item.body}</div>
+                  </TableCell>
+                  <TableCell>{item.type}</TableCell>
+                  <TableCell>
+                    <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
+                  </TableCell>
+                  <TableCell>{"readAt" in item && item.readAt ? "Read" : "Open"}</TableCell>
+                </TableRow>
+              ))}
+              {!items.length ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    No notifications are queued for this scope.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type AuditLogsData = {
+  logs: Array<{
+    id: string;
+    action: string;
+    resource: string;
+    resourceId: string | null;
+    createdAt: Date | string;
+    user: { name: string; email: string } | null;
+    center: { name: string; crmLocationId: string | null } | null;
+  }>;
+  stats: {
+    total: number;
+    sensitive: number;
+    leadActions: number;
+  };
+};
+
+export function AuditLogsPage({ data }: { data: AuditLogsData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ShieldCheck data-icon="inline-start" />
+          Sensitive workflow evidence
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Audit Logs</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live audit trail for lead creation, pipeline updates, notes, tasks, reviewed emails, and future restricted-data events.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Events" value={data.stats.total} detail="Visible to this role" />
+        <StatCard label="Lead actions" value={data.stats.leadActions} detail="CRM workflow changes" />
+        <StatCard label="Sensitive markers" value={data.stats.sensitive} detail="Restricted/security events" />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Events</CardTitle>
+          <CardDescription>Actor, action, center, and resource trail</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Resource</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>{formatDateTime(log.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{log.user?.name ?? "System"}</div>
+                    <div className="text-xs text-muted-foreground">{log.user?.email ?? "system"}</div>
+                  </TableCell>
+                  <TableCell><Badge variant="outline">{log.action}</Badge></TableCell>
+                  <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "Global"}</TableCell>
+                  <TableCell>{log.resource} {log.resourceId ? log.resourceId.slice(0, 8) : ""}</TableCell>
+                </TableRow>
+              ))}
+              {!data.logs.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No audit events have been recorded for this scope yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type TeamPermissionsData = {
+  users: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    staffProfile: {
+      title: string;
+      center: { name: string; crmLocationId: string | null } | null;
+    } | null;
+  }>;
+  roleCounts: Array<{ role: string; count: number }>;
+};
+
+export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <KeyRound data-icon="inline-start" />
+          Role-based access
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Team, Users, and Permissions</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live user directory with role, active status, and center assignments. Passwords are managed through Supabase Auth, not stored here.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Users visible" value={data.users.length} detail="Scoped by role and center" />
+        {data.roleCounts.slice(0, 3).map((role) => (
+          <StatCard key={role.role} label={role.role.replaceAll("_", " ")} value={role.count} />
+        ))}
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>User Directory</CardTitle>
+          <CardDescription>Kid City USA pilot accounts and SaaS role model</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-xs text-muted-foreground">{user.email}</div>
+                  </TableCell>
+                  <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? "Organization-wide"}</TableCell>
+                  <TableCell>
+                    <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type AgencyAdminData = {
+  stats: {
+    organizations: number;
+    centers: number;
+    users: number;
+    leads: number;
+  };
+  centers: Array<{
+    id: string;
+    name: string;
+    crmLocationId: string | null;
+    city: string | null;
+    state: string | null;
+    email: string | null;
+    licensedCapacity: number;
+    _count: { leads: number; staff: number; classrooms: number };
+  }>;
+};
+
+export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Building2 data-icon="inline-start" />
+          Enterprise control
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Agency / Franchise Admin</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Organization, center, user, and lead visibility for the Kid City USA live pilot and future multi-brand tenants.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Organizations" value={data.stats.organizations} />
+        <StatCard label="Centers" value={data.stats.centers} />
+        <StatCard label="Users" value={data.stats.users} />
+        <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Center Profiles</CardTitle>
+          <CardDescription>Location routing, capacity, and recipient readiness</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Center</TableHead>
+                <TableHead>Place</TableHead>
+                <TableHead>Email routing</TableHead>
+                <TableHead>Leads</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Capacity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.centers.map((center) => (
+                <TableRow key={center.id}>
+                  <TableCell>
+                    <div className="font-medium">{center.crmLocationId ?? center.name}</div>
+                    <div className="text-xs text-muted-foreground">{center.name}</div>
+                  </TableCell>
+                  <TableCell>{[center.city, center.state].filter(Boolean).join(", ") || "Not set"}</TableCell>
+                  <TableCell>
+                    <Badge variant={center.email ? "default" : "outline"}>{center.email ? "Ready" : "Missing"}</Badge>
+                  </TableCell>
+                  <TableCell>{center._count.leads.toLocaleString()}</TableCell>
+                  <TableCell>{center._count.staff}</TableCell>
+                  <TableCell>{center.licensedCapacity}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type IntegrationsData = {
+  integrations: Array<{
+    name: string;
+    purpose: string;
+    status: "Connected" | "Configured" | "Missing" | "Placeholder";
+    detail: string;
+  }>;
+};
+
+export function IntegrationsPage({ data }: { data: IntegrationsData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Link2 data-icon="inline-start" />
+          Credential readiness
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Integrations</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live environment status without exposing secrets. Credentialed integrations run from server routes with human review and audit logging where sensitive workflows are involved.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {data.integrations.map((integration) => (
+          <Card key={integration.name} className="glass-panel">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{integration.name}</CardTitle>
+                  <CardDescription>{integration.purpose}</CardDescription>
+                </div>
+                <Badge variant={integration.status === "Connected" || integration.status === "Configured" ? "default" : "outline"}>
+                  {integration.status}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-6 text-muted-foreground">{integration.detail}</p>
+              {integration.status === "Connected" || integration.status === "Configured" ? (
+                <div className="mt-4 flex items-center gap-2 text-sm text-primary">
+                  <CheckCircle2 data-icon="inline-start" />
+                  Ready for pilot workflows
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export type CenterDashboardData = {
+  centerName: string;
+  place: string;
+  stats: {
+    leads: number;
+    highIntentLeads: number;
+    staff: number;
+    classrooms: number;
+    toursUpcoming: number;
+    openTasks: number;
+  };
+  recentLeads: Array<{
+    id: string;
+    familyName: string;
+    stage: string;
+    score: number;
+    createdAt: Date | string;
+  }>;
+};
+
+export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <MapPin data-icon="inline-start" />
+          Today at {data.centerName}
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Center Dashboard</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live center-scoped snapshot for enrollment work, tours, staff profiles, classrooms, and follow-up tasks. {data.place}
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
+        <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
+        <StatCard label="Staff" value={data.stats.staff} />
+        <StatCard label="Classrooms" value={data.stats.classrooms} />
+        <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
+        <StatCard label="Open tasks" value={data.stats.openTasks} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Leads</CardTitle>
+          <CardDescription>Newest inquiries and manually added records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.recentLeads.map((lead) => (
+                <TableRow key={lead.id}>
+                  <TableCell className="font-medium">{lead.familyName}</TableCell>
+                  <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
+                  <TableCell><Badge>{lead.score}</Badge></TableCell>
+                  <TableCell>{formatDate(lead.createdAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type EnrollmentPipelineData = {
+  stages: Array<{
+    stage: string;
+    label: string;
+    count: number;
+    highIntent: number;
+  }>;
+  recentLeads: Array<{
+    id: string;
+    familyName: string;
+    email: string | null;
+    phone: string | null;
+    stage: string;
+    score: number;
+    createdAt: Date | string;
+    center: { name: string; crmLocationId: string | null };
+  }>;
+};
+
+export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData }) {
+  const total = data.stages.reduce((sum, stage) => sum + stage.count, 0);
+  const highIntent = data.stages.reduce((sum, stage) => sum + stage.highIntent, 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Workflow data-icon="inline-start" />
+          Live enrollment pipeline
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Enrollment Pipeline</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Stage counts, high-intent families, and newest CRM records scoped to the current user.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Visible leads" value={total.toLocaleString()} />
+        <StatCard label="High intent" value={highIntent.toLocaleString()} detail="Lead score 75+" />
+        <StatCard label="Active stages" value={data.stages.filter((stage) => stage.count > 0).length} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-4">
+        {data.stages.map((stage) => (
+          <Card key={stage.stage} className="glass-panel">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{stage.label}</CardTitle>
+                  <CardDescription>{stage.highIntent} high-intent</CardDescription>
+                </div>
+                <Badge>{stage.count}</Badge>
+              </div>
+            </CardHeader>
+          </Card>
+        ))}
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Newest Pipeline Activity</CardTitle>
+          <CardDescription>Use CRM Leads to move stages, add notes, schedule tours, and contact families.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.recentLeads.map((lead) => (
+                <TableRow key={lead.id}>
+                  <TableCell>
+                    <div className="font-medium">{lead.familyName}</div>
+                    <div className="text-xs text-muted-foreground">{lead.email ?? lead.phone ?? "No contact info"}</div>
+                  </TableCell>
+                  <TableCell>{lead.center.crmLocationId ?? lead.center.name}</TableCell>
+                  <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
+                  <TableCell><Badge>{lead.score}</Badge></TableCell>
+                  <TableCell>{formatDate(lead.createdAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type ToursPageData = {
+  tours: Array<{
+    id: string;
+    startsAt: Date | string;
+    status: string;
+    notes: string | null;
+    center: { name: string; crmLocationId: string | null };
+    lead: { familyName: string; email: string | null; phone: string | null } | null;
+  }>;
+  stats: {
+    upcoming: number;
+    today: number;
+    completed: number;
+  };
+};
+
+export function ToursPage({ data }: { data: ToursPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <MapPin data-icon="inline-start" />
+          Tour calendar
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Tours</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Scheduled family tours from the enrollment CRM. New tours can be scheduled from a selected lead.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Upcoming tours" value={data.stats.upcoming} />
+        <StatCard label="Today" value={data.stats.today} />
+        <StatCard label="Completed" value={data.stats.completed} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Tour Schedule</CardTitle>
+          <CardDescription>Newest and upcoming tours by school</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Family</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Notes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.tours.map((tour) => (
+                <TableRow key={tour.id}>
+                  <TableCell>{formatDateTime(tour.startsAt)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{tour.lead?.familyName ?? "Unlinked tour"}</div>
+                    <div className="text-xs text-muted-foreground">{tour.lead?.email ?? tour.lead?.phone ?? ""}</div>
+                  </TableCell>
+                  <TableCell>{tour.center.crmLocationId ?? tour.center.name}</TableCell>
+                  <TableCell><Badge variant={tour.status === "completed" ? "secondary" : "default"}>{tour.status}</Badge></TableCell>
+                  <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{tour.notes ?? ""}</TableCell>
+                </TableRow>
+              ))}
+              {!data.tours.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No tours are scheduled for this scope yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type WaitlistPageData = {
+  leadWaitlist: Array<{
+    id: string;
+    familyName: string;
+    childName: string | null;
+    programInterest: string | null;
+    score: number;
+    createdAt: Date | string;
+    center: { name: string; crmLocationId: string | null };
+  }>;
+  entries: Array<{
+    id: string;
+    childName: string;
+    familyName: string;
+    ageGroup: string;
+    desiredStartDate: Date | string | null;
+    priority: number;
+    status: string;
+    notes: string | null;
+  }>;
+};
+
+export function WaitlistPage({ data }: { data: WaitlistPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Workflow data-icon="inline-start" />
+          Enrollment demand
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Waitlist</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Families in the waitlisted CRM stage plus imported waitlist entries where available.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-2">
+        <StatCard label="Waitlisted leads" value={data.leadWaitlist.length} />
+        <StatCard label="Waitlist entries" value={data.entries.length} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>CRM Waitlist</CardTitle>
+          <CardDescription>Leads currently in the Waitlisted stage</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Program</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Score</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.leadWaitlist.map((lead) => (
+                <TableRow key={lead.id}>
+                  <TableCell className="font-medium">{lead.familyName}</TableCell>
+                  <TableCell>{lead.childName ?? "Not set"}</TableCell>
+                  <TableCell>{lead.programInterest ?? "Not set"}</TableCell>
+                  <TableCell>{lead.center.crmLocationId ?? lead.center.name}</TableCell>
+                  <TableCell><Badge>{lead.score}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!data.leadWaitlist.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No CRM leads are currently waitlisted in this scope.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Imported Waitlist Entries</CardTitle>
+          <CardDescription>Standalone waitlist records from the data model</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Age group</TableHead>
+                <TableHead>Desired start</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.entries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell className="font-medium">{entry.familyName}</TableCell>
+                  <TableCell>{entry.childName}</TableCell>
+                  <TableCell>{entry.ageGroup}</TableCell>
+                  <TableCell>{formatDate(entry.desiredStartDate)}</TableCell>
+                  <TableCell><Badge variant="outline">{entry.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!data.entries.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No standalone waitlist entries have been imported yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type MessagesPageData = {
+  messages: Array<{
+    id: string;
+    subject: string | null;
+    body: string;
+    channel: string;
+    priority: string;
+    sentiment: string | null;
+    readAt: Date | string | null;
+    createdAt: Date | string;
+    family: { name: string; billingEmail: string | null; centerId: string | null } | null;
+    sender: { name: string; email: string } | null;
+  }>;
+  stats: {
+    total: number;
+    unread: number;
+    priority: number;
+    aiReview: number;
+  };
+};
+
+export function MessagesPage({ data }: { data: MessagesPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <MessageSquare data-icon="inline-start" />
+          Family communication
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Parent Messaging Inbox</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live parent and staff communication records scoped to the current user. Mr. Bee can draft responses, but reviewed human approval remains required before sensitive outreach.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Messages" value={data.stats.total.toLocaleString()} />
+        <StatCard label="Unread" value={data.stats.unread.toLocaleString()} />
+        <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
+        <StatCard label="AI review queue" value={data.stats.aiReview.toLocaleString()} detail="Human approval before sending" />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Conversations</CardTitle>
+          <CardDescription>Email, portal, and future SMS-style records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Conversation</TableHead>
+                <TableHead>Channel</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Sentiment</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.messages.map((message) => (
+                <TableRow key={message.id}>
+                  <TableCell>{formatDateTime(message.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{message.subject ?? message.family?.name ?? "Untitled message"}</div>
+                    <div className="text-xs text-muted-foreground">{message.family?.name ?? message.sender?.name ?? "System"}</div>
+                    <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{message.body}</div>
+                  </TableCell>
+                  <TableCell>{message.channel}</TableCell>
+                  <TableCell>
+                    <Badge variant={message.priority === "high" || message.priority === "urgent" ? "destructive" : "outline"}>
+                      {message.priority}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{message.sentiment ?? (message.readAt ? "Reviewed" : "Unread")}</TableCell>
+                </TableRow>
+              ))}
+              {!data.messages.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No messages are visible for this scope yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type AnnouncementsPageData = {
+  announcements: Array<{
+    id: string;
+    title: string;
+    body: string;
+    audience: unknown;
+    status: string;
+    sendAt: Date | string | null;
+    center: { name: string; crmLocationId: string | null } | null;
+  }>;
+  stats: {
+    total: number;
+    draft: number;
+    scheduled: number;
+    sent: number;
+  };
+};
+
+export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Megaphone data-icon="inline-start" />
+          Center broadcasts
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Announcements</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Warm, professional broadcast drafts and scheduled notices by school. Emergency alert delivery remains a future integration workflow.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Announcements" value={data.stats.total} />
+        <StatCard label="Drafts" value={data.stats.draft} />
+        <StatCard label="Scheduled" value={data.stats.scheduled} />
+        <StatCard label="Sent" value={data.stats.sent} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Broadcast Queue</CardTitle>
+          <CardDescription>Audience, center, status, and scheduled delivery</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Announcement</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Audience</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Send time</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.announcements.map((announcement) => (
+                <TableRow key={announcement.id}>
+                  <TableCell>
+                    <div className="font-medium">{announcement.title}</div>
+                    <div className="mt-1 max-w-xl whitespace-normal text-xs text-muted-foreground">{announcement.body}</div>
+                  </TableCell>
+                  <TableCell>{announcement.center?.crmLocationId ?? announcement.center?.name ?? "All centers"}</TableCell>
+                  <TableCell>{jsonSummary(announcement.audience)}</TableCell>
+                  <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{announcement.status}</Badge></TableCell>
+                  <TableCell>{formatDateTime(announcement.sendAt)}</TableCell>
+                </TableRow>
+              ))}
+              {!data.announcements.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">
+                    No announcements have been created for this scope yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Announcement" defaultEntity="announcement" compact />
+    </div>
+  );
+}
+
+export type CampaignsPageData = {
+  campaigns: Array<{
+    id: string;
+    name: string;
+    type: string;
+    audience: unknown;
+    status: string;
+    metrics: unknown;
+    brand: { name: string } | null;
+  }>;
+  stats: {
+    total: number;
+    active: number;
+    draft: number;
+    paused: number;
+  };
+};
+
+export function CampaignsPage({ data }: { data: CampaignsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Inbox data-icon="inline-start" />
+          Enrollment marketing
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Campaigns</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Campaign templates and nurture sequences for inquiries, tours, applications, waitlist updates, newsletters, and review requests.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Campaigns" value={data.stats.total} />
+        <StatCard label="Active" value={data.stats.active} />
+        <StatCard label="Draft" value={data.stats.draft} />
+        <StatCard label="Paused" value={data.stats.paused} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Campaign Library</CardTitle>
+          <CardDescription>Brand-level campaign records and performance snapshots</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Campaign</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Audience</TableHead>
+                <TableHead>Metrics</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.campaigns.map((campaign) => (
+                <TableRow key={campaign.id}>
+                  <TableCell className="font-medium">{campaign.name}</TableCell>
+                  <TableCell>{campaign.brand?.name ?? "Tenant-wide"}</TableCell>
+                  <TableCell>{campaign.type}</TableCell>
+                  <TableCell>{jsonSummary(campaign.audience)}</TableCell>
+                  <TableCell>{jsonSummary(campaign.metrics)}</TableCell>
+                  <TableCell><Badge variant={campaign.status === "active" ? "default" : "outline"}>{campaign.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!data.campaigns.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">
+                    No campaigns have been configured yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Campaign" defaultEntity="campaign" compact />
+    </div>
+  );
+}
+
+export type AutomationsPageData = {
+  automations: Array<{
+    id: string;
+    name: string;
+    trigger: string;
+    condition: unknown;
+    action: unknown;
+    delay: string | null;
+    status: string;
+    brand: { name: string } | null;
+    runs: Array<{ id: string; status: string; createdAt: Date | string; logs: unknown }>;
+  }>;
+  stats: {
+    total: number;
+    active: number;
+    paused: number;
+    recentRuns: number;
+  };
+};
+
+export function AutomationsPage({ data }: { data: AutomationsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Bot data-icon="inline-start" />
+          Human-approved workflows
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Automations</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Workflow foundations for lead routing, tour reminders, document follow-ups, billing reminders, and Mr. Bee summaries. Sensitive decisions still require staff review.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Workflows" value={data.stats.total} />
+        <StatCard label="Active" value={data.stats.active} />
+        <StatCard label="Paused" value={data.stats.paused} />
+        <StatCard label="Recent runs" value={data.stats.recentRuns} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Workflow Builder Foundation</CardTitle>
+          <CardDescription>Trigger, condition, action, delay, status, and execution log summary</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Workflow</TableHead>
+                <TableHead>Trigger</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Delay</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.automations.map((automation) => (
+                <TableRow key={automation.id}>
+                  <TableCell>
+                    <div className="font-medium">{automation.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {automation.brand?.name ?? "Tenant-wide"} · {automation.runs.length} recent runs
+                    </div>
+                  </TableCell>
+                  <TableCell>{automation.trigger}</TableCell>
+                  <TableCell>{jsonSummary(automation.condition)}</TableCell>
+                  <TableCell>{jsonSummary(automation.action)}</TableCell>
+                  <TableCell>{automation.delay ?? "None"}</TableCell>
+                  <TableCell><Badge variant={automation.status === "active" ? "default" : "outline"}>{automation.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!data.automations.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">
+                    No automations have been configured yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Automation" defaultEntity="automation" compact />
+    </div>
+  );
+}
+
+export type ClassroomDashboardData = {
+  classrooms: Array<{
+    id: string;
+    name: string;
+    ageGroup: string;
+    capacity: number;
+    ratioRule: string | null;
+    center: { name: string; crmLocationId: string | null };
+    _count: { children: number; staff: number; dailyReports: number; incidents: number };
+  }>;
+};
+
+export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData }) {
+  const children = data.classrooms.reduce((sum, classroom) => sum + classroom._count.children, 0);
+  const capacity = data.classrooms.reduce((sum, classroom) => sum + classroom.capacity, 0);
+  const staff = data.classrooms.reduce((sum, classroom) => sum + classroom._count.staff, 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Activity data-icon="inline-start" />
+          Classroom operations
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Classroom Dashboard</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live classroom capacity, roster, staff assignment, daily report, and incident snapshot.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Classrooms" value={data.classrooms.length} />
+        <StatCard label="Children assigned" value={children} />
+        <StatCard label="Licensed seats shown" value={capacity} />
+        <StatCard label="Staff assigned" value={staff} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Classrooms</CardTitle>
+          <CardDescription>Capacity and ratio-ready operating view</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Age group</TableHead>
+                <TableHead>Children</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Ratio rule</TableHead>
+                <TableHead>Incidents</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.classrooms.map((classroom) => (
+                <TableRow key={classroom.id}>
+                  <TableCell className="font-medium">{classroom.name}</TableCell>
+                  <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
+                  <TableCell>{classroom.ageGroup}</TableCell>
+                  <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
+                  <TableCell>{classroom._count.staff}</TableCell>
+                  <TableCell>{classroom.ratioRule ?? "Not set"}</TableCell>
+                  <TableCell>{classroom._count.incidents}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type AttendancePageData = {
+  records: Array<{
+    id: string;
+    date: Date | string;
+    status: string;
+    absenceReason: string | null;
+    child: { fullName: string; ageGroup: string } | null;
+    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
+  }>;
+  stats: {
+    total: number;
+    present: number;
+    absent: number;
+    other: number;
+  };
+};
+
+export function AttendancePage({ data }: { data: AttendancePageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ClipboardCheck data-icon="inline-start" />
+          Check-in foundation
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Attendance</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Child attendance records with classroom scope. QR/PIN kiosk and signature capture remain integration-ready placeholders.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Records" value={data.stats.total} />
+        <StatCard label="Present" value={data.stats.present} />
+        <StatCard label="Absent" value={data.stats.absent} />
+        <StatCard label="Other" value={data.stats.other} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Attendance</CardTitle>
+          <CardDescription>Absences, sick days, vacations, and ratio-supporting classroom records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Notes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.records.map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell>{formatDate(record.date)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{record.child?.fullName ?? "Unlinked child"}</div>
+                    <div className="text-xs text-muted-foreground">{record.child?.ageGroup ?? ""}</div>
+                  </TableCell>
+                  <TableCell>{record.classroom?.name ?? "No classroom"}</TableCell>
+                  <TableCell><Badge variant={record.status === "present" ? "default" : "outline"}>{record.status}</Badge></TableCell>
+                  <TableCell>{record.absenceReason ?? ""}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type DailyReportsPageData = {
+  reports: Array<{
+    id: string;
+    date: Date | string;
+    mood: string | null;
+    teacherNote: string | null;
+    suppliesNeeded: string | null;
+    sentAt: Date | string | null;
+    child: { fullName: string; ageGroup: string };
+    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
+    _count: { meals: number; naps: number; diapers: number; activities: number };
+  }>;
+  stats: {
+    total: number;
+    sent: number;
+    inProgress: number;
+    needsSupplies: number;
+  };
+};
+
+export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <BookOpen data-icon="inline-start" />
+          Teacher daily sheets
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Daily Reports</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Meals, naps, diapers, activities, supplies, and teacher notes prepared for parent-facing daily reports.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Reports" value={data.stats.total} />
+        <StatCard label="Sent" value={data.stats.sent} />
+        <StatCard label="In progress" value={data.stats.inProgress} />
+        <StatCard label="Needs supplies" value={data.stats.needsSupplies} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Daily Reports</CardTitle>
+          <CardDescription>Classroom-ready activity summaries</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Logged Items</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Note</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.reports.map((report) => (
+                <TableRow key={report.id}>
+                  <TableCell>{formatDate(report.date)}</TableCell>
+                  <TableCell className="font-medium">{report.child.fullName}</TableCell>
+                  <TableCell>{report.classroom?.name ?? "No classroom"}</TableCell>
+                  <TableCell>{report._count.meals} meals · {report._count.naps} naps · {report._count.activities} activities</TableCell>
+                  <TableCell><Badge variant={report.sentAt ? "default" : "outline"}>{report.sentAt ? "sent" : "draft"}</Badge></TableCell>
+                  <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{report.suppliesNeeded ?? report.teacherNote ?? report.mood ?? ""}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type IncidentReportsPageData = {
+  incidents: Array<{
+    id: string;
+    occurredAt: Date | string;
+    type: string;
+    description: string;
+    actionTaken: string;
+    parentNotified: boolean;
+    parentAcknowledgedAt: Date | string | null;
+    adminReviewStatus: string;
+    child: { fullName: string };
+    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
+  }>;
+  stats: {
+    total: number;
+    pending: number;
+    parentNotified: number;
+    acknowledged: number;
+  };
+};
+
+export function IncidentReportsPage({ data }: { data: IncidentReportsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ShieldCheck data-icon="inline-start" />
+          Safety review
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Incident Reports</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Human-reviewed incident documentation. AI can assist wording only and must not make final safety, medical, legal, or custody decisions.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Incidents" value={data.stats.total} />
+        <StatCard label="Pending review" value={data.stats.pending} />
+        <StatCard label="Parents notified" value={data.stats.parentNotified} />
+        <StatCard label="Acknowledged" value={data.stats.acknowledged} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Incident Queue</CardTitle>
+          <CardDescription>Director review and parent acknowledgment status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Review</TableHead>
+                <TableHead>Summary</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.incidents.map((incident) => (
+                <TableRow key={incident.id}>
+                  <TableCell>{formatDateTime(incident.occurredAt)}</TableCell>
+                  <TableCell className="font-medium">{incident.child.fullName}</TableCell>
+                  <TableCell>{incident.classroom?.name ?? "No classroom"}</TableCell>
+                  <TableCell>{incident.type}</TableCell>
+                  <TableCell><Badge variant={incident.adminReviewStatus === "pending" ? "destructive" : "outline"}>{incident.adminReviewStatus}</Badge></TableCell>
+                  <TableCell className="max-w-md whitespace-normal text-muted-foreground">{incident.description} Action: {incident.actionTaken}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type StaffPageData = {
+  staff: Array<{
+    id: string;
+    title: string;
+    phone: string | null;
+    backgroundCheckStatus: string | null;
+    user: { name: string; email: string; role: string; isActive: boolean };
+    center: { name: string; crmLocationId: string | null };
+    classroom: { name: string } | null;
+    certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
+  }>;
+  stats: {
+    total: number;
+    activeUsers: number;
+    expiringCerts: number;
+    backgroundPending: number;
+  };
+};
+
+export function StaffPage({ data }: { data: StaffPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <HeartHandshake data-icon="inline-start" />
+          Staff operations
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Staff Management</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Staff profiles, center assignments, roles, certifications, and background-check readiness for ratio-aware operations.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Staff" value={data.stats.total} />
+        <StatCard label="Active users" value={data.stats.activeUsers} />
+        <StatCard label="Expiring certs" value={data.stats.expiringCerts} />
+        <StatCard label="Background pending" value={data.stats.backgroundPending} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Staff Directory</CardTitle>
+          <CardDescription>Role, classroom, and certification snapshot</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Staff</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Background</TableHead>
+                <TableHead>Certifications</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.staff.map((staff) => (
+                <TableRow key={staff.id}>
+                  <TableCell>
+                    <div className="font-medium">{staff.user.name}</div>
+                    <div className="text-xs text-muted-foreground">{staff.user.email}</div>
+                  </TableCell>
+                  <TableCell>{staff.center.crmLocationId ?? staff.center.name}</TableCell>
+                  <TableCell>{staff.classroom?.name ?? "Unassigned"}</TableCell>
+                  <TableCell>{staff.user.role.replaceAll("_", " ")}</TableCell>
+                  <TableCell><Badge variant={staff.backgroundCheckStatus?.includes("clear") ? "default" : "outline"}>{staff.backgroundCheckStatus ?? "Not set"}</Badge></TableCell>
+                  <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Add or Edit Staff Certification" defaultEntity="certification" compact />
+    </div>
+  );
+}
+
+export type FormsPageData = {
+  forms: Array<{
+    id: string;
+    name: string;
+    type: string;
+    schema: unknown;
+    status: string;
+    _count: { submissions: number };
+  }>;
+  submissions: Array<{
+    id: string;
+    status: string;
+    submittedAt: Date | string | null;
+    signaturePlaceholder: boolean;
+    form: { name: string; type: string };
+  }>;
+};
+
+export function FormsPage({ data }: { data: FormsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <FileText data-icon="inline-start" />
+          Digital paperwork
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Forms</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Enrollment, emergency contact, medical, permission, policy acknowledgment, incident, and staff onboarding form foundations.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Forms" value={data.forms.length} />
+        <StatCard label="Submissions" value={data.submissions.length} />
+        <StatCard label="Signature placeholders" value={data.submissions.filter((submission) => submission.signaturePlaceholder).length} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Form Library</CardTitle>
+          <CardDescription>Schema-ready form builder foundation</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Form</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Fields</TableHead>
+                <TableHead>Submissions</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.forms.map((form) => (
+                <TableRow key={form.id}>
+                  <TableCell className="font-medium">{form.name}</TableCell>
+                  <TableCell>{form.type}</TableCell>
+                  <TableCell>{jsonSummary(form.schema)}</TableCell>
+                  <TableCell>{form._count.submissions}</TableCell>
+                  <TableCell><Badge>{form.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Form Record" defaultEntity="form" compact />
+    </div>
+  );
+}
+
+export type DocumentsPageData = {
+  documents: Array<{
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+    expiresAt: Date | string | null;
+    restricted: boolean;
+    family: { name: string } | null;
+    child: { fullName: string; family: { centerId: string | null } } | null;
+  }>;
+  stats: {
+    total: number;
+    expiring: number;
+    restricted: number;
+    pending: number;
+  };
+};
+
+export function DocumentsPage({ data }: { data: DocumentsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <FileText data-icon="inline-start" />
+          Document checklist
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Documents</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Family and child documents with status, expiration reminders, restricted visibility markers, and storage integration placeholders.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Documents" value={data.stats.total} />
+        <StatCard label="Expiring soon" value={data.stats.expiring} />
+        <StatCard label="Restricted" value={data.stats.restricted} />
+        <StatCard label="Pending" value={data.stats.pending} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Document Records</CardTitle>
+          <CardDescription>Compliance-ready document tracking without legal compliance guarantees</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Visibility</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.documents.map((document) => (
+                <TableRow key={document.id}>
+                  <TableCell className="font-medium">{document.name}</TableCell>
+                  <TableCell>{document.child?.fullName ?? document.family?.name ?? "Unassigned"}</TableCell>
+                  <TableCell>{document.type}</TableCell>
+                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{document.status}</Badge></TableCell>
+                  <TableCell>{formatDate(document.expiresAt)}</TableCell>
+                  <TableCell>{document.restricted ? <Badge variant="destructive">Restricted</Badge> : "Standard"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Document Request" defaultEntity="document" compact />
+    </div>
+  );
+}
+
+export type CompliancePageData = {
+  stats: {
+    pendingIncidents: number;
+    expiringCertifications: number;
+    expiringDocuments: number;
+    allergies: number;
+    restrictedMedicalNotes: number;
+  };
+  certifications: Array<{
+    id: string;
+    name: string;
+    status: string;
+    expiresAt: Date | string | null;
+    staff: { user: { name: string }; center: { name: string; crmLocationId: string | null } };
+  }>;
+  allergies: Array<{
+    id: string;
+    allergen: string;
+    severity: string;
+    actionPlan: string | null;
+    child: { fullName: string; family: { centerId: string | null } };
+  }>;
+};
+
+export function CompliancePage({ data }: { data: CompliancePageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ShieldCheck data-icon="inline-start" />
+          Documentation support
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Compliance-Readiness Dashboard</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Compliance-ready workflows and documentation support for licensing checklists, certifications, incident review, immunization placeholders, allergies, and audit readiness. This is not legal or licensing advice.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-5">
+        <StatCard label="Incidents pending" value={data.stats.pendingIncidents} />
+        <StatCard label="Certs expiring" value={data.stats.expiringCertifications} />
+        <StatCard label="Docs expiring" value={data.stats.expiringDocuments} />
+        <StatCard label="Allergies" value={data.stats.allergies} />
+        <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Certification Reminders</CardTitle>
+            <CardDescription>Expiring staff documentation</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Staff</TableHead>
+                  <TableHead>Center</TableHead>
+                  <TableHead>Certification</TableHead>
+                  <TableHead>Expires</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.certifications.map((certification) => (
+                  <TableRow key={certification.id}>
+                    <TableCell className="font-medium">{certification.staff.user.name}</TableCell>
+                    <TableCell>{certification.staff.center.crmLocationId ?? certification.staff.center.name}</TableCell>
+                    <TableCell>{certification.name}</TableCell>
+                    <TableCell>{formatDate(certification.expiresAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Allergy List</CardTitle>
+            <CardDescription>Restricted child safety information</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Child</TableHead>
+                  <TableHead>Allergen</TableHead>
+                  <TableHead>Severity</TableHead>
+                  <TableHead>Action Plan</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.allergies.map((allergy) => (
+                  <TableRow key={allergy.id}>
+                    <TableCell className="font-medium">{allergy.child.fullName}</TableCell>
+                    <TableCell>{allergy.allergen}</TableCell>
+                    <TableCell><Badge variant={allergy.severity === "High" ? "destructive" : "outline"}>{allergy.severity}</Badge></TableCell>
+                    <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{allergy.actionPlan ?? "Not set"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+export type MultiLocationDashboardData = {
+  centers: Array<{
+    id: string;
+    name: string;
+    crmLocationId: string | null;
+    city: string | null;
+    state: string | null;
+    licensedCapacity: number;
+    _count: { leads: number; staff: number; classrooms: number };
+  }>;
+  stats: {
+    centers: number;
+    leads: number;
+    highIntentLeads: number;
+    upcomingTours: number;
+    staff: number;
+  };
+};
+
+export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashboardData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Building2 data-icon="inline-start" />
+          Multi-location visibility
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Multi-Location Dashboard</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Brand and regional visibility across Kid City USA school profiles, enrollment demand, staff, and upcoming tours.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-5">
+        <StatCard label="Centers" value={data.stats.centers} />
+        <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
+        <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
+        <StatCard label="Upcoming tours" value={data.stats.upcomingTours} />
+        <StatCard label="Staff" value={data.stats.staff} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>School Network</CardTitle>
+          <CardDescription>Location profile readiness and CRM volume</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>School</TableHead>
+                <TableHead>Place</TableHead>
+                <TableHead>Leads</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Classrooms</TableHead>
+                <TableHead>Capacity</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.centers.map((center) => (
+                <TableRow key={center.id}>
+                  <TableCell className="font-medium">{center.crmLocationId ?? center.name}</TableCell>
+                  <TableCell>{[center.city, center.state].filter(Boolean).join(", ") || "Not set"}</TableCell>
+                  <TableCell>{center._count.leads.toLocaleString()}</TableCell>
+                  <TableCell>{center._count.staff}</TableCell>
+                  <TableCell>{center._count.classrooms}</TableCell>
+                  <TableCell>{center.licensedCapacity}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type FamilyProfilesPageData = {
+  families: Array<{
+    id: string;
+    name: string;
+    billingEmail: string | null;
+    custodyNotes: string | null;
+    createdAt: Date | string;
+    guardians: Array<{ fullName: string; email: string | null; phone: string | null; relation: string }>;
+    children: Array<{ fullName: string; ageGroup: string; enrollmentStatus: string }>;
+    _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
+  }>;
+  stats: {
+    total: number;
+    withCustodyNotes: number;
+    children: number;
+    guardians: number;
+  };
+};
+
+export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <HeartHandshake data-icon="inline-start" />
+          Family lifecycle
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Family Profiles</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Guardian, child, document, pickup, emergency contact, billing email, and restricted custody-note visibility.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Families" value={data.stats.total} />
+        <StatCard label="Children" value={data.stats.children} />
+        <StatCard label="Guardians" value={data.stats.guardians} />
+        <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Family Directory</CardTitle>
+          <CardDescription>Role-scoped family profile snapshot</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Guardians</TableHead>
+                <TableHead>Children</TableHead>
+                <TableHead>Records</TableHead>
+                <TableHead>Restricted</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.families.map((family) => (
+                <TableRow key={family.id}>
+                  <TableCell>
+                    <div className="font-medium">{family.name}</div>
+                    <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
+                  </TableCell>
+                  <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
+                  <TableCell>{family.children.map((child) => `${child.fullName} (${child.ageGroup})`).join(", ") || "None"}</TableCell>
+                  <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
+                  <TableCell>{family.custodyNotes ? <Badge variant="destructive">Custody note</Badge> : "Standard"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type ChildProfilesPageData = {
+  children: Array<{
+    id: string;
+    fullName: string;
+    preferredName: string | null;
+    dateOfBirth: Date | string;
+    ageGroup: string;
+    enrollmentStatus: string;
+    startDate: Date | string | null;
+    photoVideoPermission: boolean;
+    fieldTripPermission: boolean;
+    family: { name: string; centerId: string | null };
+    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
+    _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
+  }>;
+  stats: {
+    total: number;
+    enrolled: number;
+    allergies: number;
+    restrictedMedicalNotes: number;
+  };
+};
+
+export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ShieldCheck data-icon="inline-start" />
+          Child safety records
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Child Profiles</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Child enrollment, classroom, allergy, medical note, document, incident, permission, and daily activity profile foundation.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Children" value={data.stats.total} />
+        <StatCard label="Enrolled" value={data.stats.enrolled} />
+        <StatCard label="Allergy records" value={data.stats.allergies} />
+        <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Children</CardTitle>
+          <CardDescription>Sensitive records are marked for restricted access handling</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Child</TableHead>
+                <TableHead>Family</TableHead>
+                <TableHead>Classroom</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Safety</TableHead>
+                <TableHead>Permissions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.children.map((child) => (
+                <TableRow key={child.id}>
+                  <TableCell>
+                    <div className="font-medium">{child.fullName}</div>
+                    <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
+                  </TableCell>
+                  <TableCell>{child.family.name}</TableCell>
+                  <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
+                  <TableCell>{child.enrollmentStatus}</TableCell>
+                  <TableCell>{child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents</TableCell>
+                  <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type BillingInvoicesPageData = {
+  invoices: Array<{
+    id: string;
+    number: string;
+    status: string;
+    dueDate: Date | string;
+    totalCents: number;
+    billingAccount: { balanceCents: number; family: { name: string; billingEmail: string | null; centerId: string | null } };
+    _count: { items: number };
+  }>;
+  stats: {
+    total: number;
+    open: number;
+    paid: number;
+    outstandingCents: number;
+  };
+};
+
+export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <BadgeDollarSign data-icon="inline-start" />
+          Billing foundation
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Family billing accounts, tuition invoices, balances, and mock payment readiness. Real payment processing is intentionally disabled for this phase.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Invoices" value={data.stats.total} />
+        <StatCard label="Open" value={data.stats.open} />
+        <StatCard label="Paid" value={data.stats.paid} />
+        <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Invoices</CardTitle>
+          <CardDescription>Payment status and balances from the CRM database</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Family</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Items</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.invoices.map((invoice) => (
+                <TableRow key={invoice.id}>
+                  <TableCell className="font-medium">{invoice.number}</TableCell>
+                  <TableCell>{invoice.billingAccount.family.name}</TableCell>
+                  <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge></TableCell>
+                  <TableCell>{formatDate(invoice.dueDate)}</TableCell>
+                  <TableCell>{money(invoice.totalCents)}</TableCell>
+                  <TableCell>{invoice._count.items}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type PaymentsPageData = {
+  payments: Array<{
+    id: string;
+    amountCents: number;
+    status: string;
+    provider: string;
+    externalIdPlaceholder: string | null;
+    paidAt: Date | string | null;
+    billingAccount: { family: { name: string; billingEmail: string | null; centerId: string | null } };
+  }>;
+  stats: {
+    total: number;
+    paid: number;
+    failed: number;
+    draft: number;
+    stripeConfigured: boolean;
+    webhookConfigured: boolean;
+    payoutReadyCenters: number;
+    payoutStartedCenters: number;
+  };
+};
+
+export function PaymentsPage({ data }: { data: PaymentsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <BadgeDollarSign data-icon="inline-start" />
+          Payment processing
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Stripe Checkout and webhook reconciliation are live in the server layer. Parent payments are routed through The Bee Suite platform account to each school&apos;s connected payout account.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-6">
+        <StatCard label="Payment records" value={data.stats.total} />
+        <StatCard label="Paid" value={data.stats.paid} />
+        <StatCard label="Failed" value={data.stats.failed} />
+        <StatCard label="Draft/checkout" value={data.stats.draft} />
+        <StatCard label="Stripe" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Needs keys"} />
+        <StatCard label="Payout schools" value={`${data.stats.payoutReadyCenters}/${data.stats.payoutStartedCenters}`} detail="ready / started" />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Payment Attempts</CardTitle>
+          <CardDescription>Provider status, family, and reconciliation marker</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Family</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Paid</TableHead>
+                <TableHead>External ID</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.payments.map((payment) => (
+                <TableRow key={payment.id}>
+                  <TableCell>
+                    <div className="font-medium">{payment.billingAccount.family.name}</div>
+                    <div className="text-xs text-muted-foreground">{payment.billingAccount.family.billingEmail ?? "No billing email"}</div>
+                  </TableCell>
+                  <TableCell>{payment.provider}</TableCell>
+                  <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge></TableCell>
+                  <TableCell>{money(payment.amountCents)}</TableCell>
+                  <TableCell>{formatDateTime(payment.paidAt)}</TableCell>
+                  <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>
+                </TableRow>
+              ))}
+              {!data.payments.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type AnalyticsPageData = {
+  stats: {
+    leads: number;
+    enrolled: number;
+    waitlisted: number;
+    tours: number;
+    openInvoices: number;
+    outstandingCents: number;
+    incidentsPending: number;
+    unreadMessages: number;
+  };
+  stageCounts: Array<{ stage: string; count: number }>;
+};
+
+export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Activity data-icon="inline-start" />
+          Executive analytics
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Reporting and Analytics</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Live enrollment, tour, billing, message, incident, and pipeline health indicators for the pilot.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
+        <StatCard label="Enrolled" value={data.stats.enrolled.toLocaleString()} />
+        <StatCard label="Waitlisted" value={data.stats.waitlisted.toLocaleString()} />
+        <StatCard label="Tours" value={data.stats.tours.toLocaleString()} />
+        <StatCard label="Open invoices" value={data.stats.openInvoices.toLocaleString()} />
+        <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
+        <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
+        <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Pipeline Distribution</CardTitle>
+          <CardDescription>Current lead counts by enrollment stage</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+          {data.stageCounts.map((stage) => (
+            <div key={stage.stage} className="rounded-xl border bg-background/40 p-4">
+              <div className="text-sm text-muted-foreground">{stage.stage.replaceAll("_", " ")}</div>
+              <div className="mt-2 text-2xl font-semibold">{stage.count.toLocaleString()}</div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export type ReputationPageData = {
+  reviews: Array<{ id: string; source: string; rating: number; body: string | null; responseDraft: string | null; approvedForPublicTestimonial: boolean }>;
+  surveys: Array<{ id: string; name: string; type: string; status: string; results: unknown }>;
+  stats: { reviews: number; averageRating: number; testimonials: number; surveys: number };
+};
+
+export function ReputationPage({ data }: { data: ReputationPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Star data-icon="inline-start" />
+          Family trust signals
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Reputation and Reviews</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Review requests, parent satisfaction surveys, testimonial approval, and AI response drafts. Google Business integration remains mock-ready.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Reviews" value={data.stats.reviews} />
+        <StatCard label="Average rating" value={data.stats.averageRating.toFixed(1)} />
+        <StatCard label="Testimonials" value={data.stats.testimonials} />
+        <StatCard label="Surveys" value={data.stats.surveys} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Review Queue</CardTitle>
+          <CardDescription>Public testimonial approval and draft response support</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Source</TableHead>
+                <TableHead>Rating</TableHead>
+                <TableHead>Review</TableHead>
+                <TableHead>AI Draft</TableHead>
+                <TableHead>Public</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.reviews.map((review) => (
+                <TableRow key={review.id}>
+                  <TableCell>{review.source}</TableCell>
+                  <TableCell>{review.rating}/5</TableCell>
+                  <TableCell className="max-w-md whitespace-normal text-muted-foreground">{review.body ?? ""}</TableCell>
+                  <TableCell>{review.responseDraft ? "Draft ready" : "Not drafted"}</TableCell>
+                  <TableCell>{review.approvedForPublicTestimonial ? <Badge>Approved</Badge> : <Badge variant="outline">Needs review</Badge>}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create or Edit Review Response" defaultEntity="review" compact />
+    </div>
+  );
+}
+
+export type AiCommandPageData = {
+  summaries: Array<{ id: string; scope: string; title: string; body: string; requiresReview: boolean; createdAt: Date | string }>;
+  suggestions: Array<{ id: string; type: string; suggestion: string; status: string; guardrailNote: string; createdAt: Date | string }>;
+  stats: { summaries: number; suggestions: number; pendingReview: number };
+};
+
+export function AiCommandPage({ data }: { data: AiCommandPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Bot data-icon="inline-start" />
+          Mr. Bee assistant
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">AI Command Center</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Mr. Bee helps summarize, draft, prioritize, and recommend next steps. Suggestions are labeled, logged, and require human review for sensitive workflows.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Summaries" value={data.stats.summaries} />
+        <StatCard label="Suggestions" value={data.stats.suggestions} />
+        <StatCard label="Pending review" value={data.stats.pendingReview} />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Recent Summaries</CardTitle>
+            <CardDescription>Daily center, family, lead, and compliance summaries</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.summaries.map((summary) => (
+              <div key={summary.id} className="rounded-xl border bg-background/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="font-medium">{summary.title}</div>
+                  <Badge variant={summary.requiresReview ? "outline" : "default"}>{summary.scope}</Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{summary.body}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Suggestion Queue</CardTitle>
+            <CardDescription>Human approval gate for generated content</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {data.suggestions.map((suggestion) => (
+              <div key={suggestion.id} className="rounded-xl border bg-background/40 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="font-medium">{suggestion.type}</div>
+                  <Badge variant={suggestion.status === "approved" ? "default" : "outline"}>{suggestion.status}</Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{suggestion.suggestion}</p>
+                <p className="mt-2 text-xs text-amber-500">{suggestion.guardrailNote}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+      <OperationsActionHub title="Create or Edit Product / Tuition Plan" defaultEntity="tuitionPlan" compact />
+    </div>
+  );
+}
+
+export type WhiteLabelPageData = {
+  settings: Array<{
+    id: string;
+    brandName: string;
+    primaryColor: string;
+    accentColor: string;
+    themeMode: string;
+    emailSenderPlaceholder: string | null;
+    customDomainPlaceholder: string | null;
+    legalFooterText: string | null;
+    termsUrl: string | null;
+    privacyUrl: string | null;
+    brand: { name: string; slug: string };
+  }>;
+};
+
+export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <Sparkles data-icon="inline-start" />
+          White-label controls
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">White-Label Settings</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Brand, color, sender, custom domain, portal, login, notification, and legal footer settings for the SaaS platform.
+        </p>
+      </section>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {data.settings.map((setting) => (
+          <Card key={setting.id} className="glass-panel">
+            <CardHeader>
+              <CardTitle>{setting.brandName}</CardTitle>
+              <CardDescription>{setting.brand.name} · {setting.brand.slug}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-3">
+                <span className="size-5 rounded-full border" style={{ backgroundColor: setting.primaryColor }} />
+                <span>Primary {setting.primaryColor}</span>
+                <span className="size-5 rounded-full border" style={{ backgroundColor: setting.accentColor }} />
+                <span>Accent {setting.accentColor}</span>
+              </div>
+              <div>Theme: {setting.themeMode}</div>
+              <div>Email sender: {setting.emailSenderPlaceholder ?? "Not set"}</div>
+              <div>Custom domain: {setting.customDomainPlaceholder ?? "Not set"}</div>
+              <div className="text-muted-foreground">{setting.legalFooterText ?? "Legal footer not set"}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export type BillingSettingsPageData = {
+  products: Array<{ id: string; name: string; type: string; amountCents: number }>;
+  tuitionPlans: Array<{ id: string; name: string; ageGroup: string; cadence: string; amountCents: number }>;
+  subscriptions: Array<{ id: string; name: string; plan: string; status: string }>;
+  centers: StripeConnectCenter[];
+  stripeConfigured: boolean;
+  webhookConfigured: boolean;
+  applicationFeeBps: number;
+};
+
+export function BillingSettingsPage({ data }: { data: BillingSettingsPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <BadgeDollarSign data-icon="inline-start" />
+          SaaS and tuition settings
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Billing Settings</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Tuition plans, products, fees, discounts, subscriptions, and Stripe Connect payout setup for each school.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Products and fees" value={data.products.length} />
+        <StatCard label="Tuition plans" value={data.tuitionPlans.length} />
+        <StatCard label="Subscription placeholders" value={data.subscriptions.length} />
+        <StatCard label="Payout accounts" value={data.centers.filter((center) => {
+          const fields = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
+            ? center.customFields as Record<string, unknown>
+            : {};
+          return Boolean(fields.stripeConnectAccountId || fields.stripeConnectedAccountId);
+        }).length} />
+      </div>
+      <StripeConnectPanel
+        centers={data.centers}
+        stripeConfigured={data.stripeConfigured}
+        webhookConfigured={data.webhookConfigured}
+        applicationFeeBps={data.applicationFeeBps}
+      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Tuition Plans</CardTitle>
+            <CardDescription>Age group and cadence settings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Plan</TableHead>
+                  <TableHead>Age group</TableHead>
+                  <TableHead>Cadence</TableHead>
+                  <TableHead>Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.tuitionPlans.map((plan) => (
+                  <TableRow key={plan.id}>
+                    <TableCell className="font-medium">{plan.name}</TableCell>
+                    <TableCell>{plan.ageGroup}</TableCell>
+                    <TableCell>{plan.cadence}</TableCell>
+                    <TableCell>{money(plan.amountCents)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Products and Fees</CardTitle>
+            <CardDescription>One-time and recurring billing items</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.products.map((product) => (
+                  <TableRow key={product.id}>
+                    <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell>{product.type}</TableCell>
+                    <TableCell>{money(product.amountCents)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

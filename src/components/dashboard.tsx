@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -25,7 +26,20 @@ import { analytics, centers, classrooms, kpis, leads, messages, notifications, p
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 
-export function ExecutiveDashboard() {
+export type LiveDashboardData = {
+  kpis: typeof kpis;
+  pipelineStages: typeof pipelineStages;
+  centers: typeof centers;
+  aiSummary: string;
+};
+
+export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
+  const dashboardKpis = live?.kpis ?? kpis;
+  const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
+  const dashboardCenters = live?.centers ?? centers;
+  const aiSummary = live?.aiSummary ??
+    "Kid City USA is operating inside ratio targets with 18 staff checked in. Prioritize the Rivera tour packet, review one Maple Studio incident, and approve two billing reminder drafts. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
+
   return (
     <div className="flex flex-col gap-6">
       <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
@@ -47,14 +61,14 @@ export function ExecutiveDashboard() {
                   <Sparkles data-icon="inline-start" />
                   Review AI brief
                 </Button>
-                <Button variant="outline">
+                <Button variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
                   <ArrowUpRight data-icon="inline-start" />
                   Open pipeline
                 </Button>
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {kpis.slice(0, 4).map((kpi, index) => {
+              {dashboardKpis.slice(0, 4).map((kpi, index) => {
                 const Icon = iconMap[index];
                 return (
                   <Card key={kpi.label} className="glass-panel">
@@ -81,7 +95,7 @@ export function ExecutiveDashboard() {
             </CardHeader>
             <CardContent>
               <p className="text-sm leading-6 text-muted-foreground">
-                Kid City USA is operating inside ratio targets with 18 staff checked in. Prioritize the Rivera tour packet, review one Maple Studio incident, and approve two billing reminder drafts. AI does not make safety, billing, custody, medical, legal, or compliance decisions.
+                {aiSummary}
               </p>
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
                 {["4 high-fit leads", "8 expiring docs", "2 open seats"].map((item) => (
@@ -108,7 +122,7 @@ export function ExecutiveDashboard() {
           <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
             <div className="grid gap-6">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {kpis.slice(4).map((kpi, index) => {
+                {dashboardKpis.slice(4).map((kpi, index) => {
                   const Icon = iconMap[index + 4];
                   return (
                     <Card key={kpi.label} className="glass-panel">
@@ -178,7 +192,7 @@ export function ExecutiveDashboard() {
                     <CardDescription>Drag-and-drop board-ready stages</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
-                    {pipelineStages.slice(0, 8).map((stage) => (
+                    {dashboardPipeline.slice(0, 8).map((stage) => (
                       <div key={stage.name} className="rounded-xl border bg-background/50 p-3">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium">{stage.name}</span>
@@ -268,7 +282,7 @@ export function ExecutiveDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
-                {centers.map((center) => (
+                {dashboardCenters.map((center) => (
                   <div key={center.name} className="rounded-xl border bg-background/50 p-4">
                     <div className="font-medium">{center.name}</div>
                     <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>

@@ -12,7 +12,11 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "kidcity:prepare-crm": "python scripts/prepare-kidcity-crm-export.py",
+    "kidcity:import-crm": "tsx -r tsconfig-paths/register scripts/import-kidcity-crm.ts",
+    "kidcity:create-auth-users": "tsx scripts/create-kidcity-auth-users.ts",
+    "kidcity:backfill-center-emails": "tsx -r tsconfig-paths/register scripts/backfill-center-notification-emails.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -53,6 +57,7 @@
     "playwright": "^1.59.1",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5"
   }

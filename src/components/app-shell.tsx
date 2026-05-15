@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
   ChevronDown,
@@ -9,6 +9,7 @@ import {
   Hexagon,
   Menu,
   Moon,
+  LogOut,
   Search,
   ShieldCheck,
   Sparkles,
@@ -22,6 +23,12 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navGroups } from "@/lib/demo-data";
 import { cn } from "@/lib/utils";
+
+type ShellUser = {
+  name: string;
+  email: string;
+  role: string;
+};
 
 function BrandMark() {
   return (
@@ -54,8 +61,8 @@ function SidebarNav({ close }: { close?: () => void }) {
               </div>
               <div className="flex flex-col gap-1">
                 {group.items.map(([label, slug, Icon]) => {
-                  const href = slug === "dashboard" ? "/" : `/${slug}`;
-                  const active = pathname === href || (pathname === "/" && slug === "dashboard");
+                  const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                  const active = pathname === href || (pathname === "/dashboard" && slug === "dashboard");
                   return (
                     <Link
                       key={slug}
@@ -91,7 +98,15 @@ function SidebarNav({ close }: { close?: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
+  const router = useRouter();
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/");
+    router.refresh();
+  }
+
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r bg-sidebar/90 backdrop-blur-xl lg:block">
@@ -140,10 +155,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />
               </Button>
-              <Button variant="secondary" className="hidden gap-2 sm:inline-flex">
-                Kid City USA
-                <ChevronDown data-icon="inline-end" />
-              </Button>
+              {currentUser ? (
+                <div className="hidden items-center gap-2 sm:flex">
+                  <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
+                    <div className="text-xs font-medium leading-none">{currentUser.name}</div>
+                    <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
+                  </div>
+                  <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
+                    <LogOut />
+                  </Button>
+                </div>
+              ) : (
+                <Button variant="secondary" className="hidden gap-2 sm:inline-flex">
+                  Kid City USA
+                  <ChevronDown data-icon="inline-end" />
+                </Button>
+              )}
             </div>
           </div>
         </header>

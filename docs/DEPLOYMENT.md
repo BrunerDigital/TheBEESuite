@@ -49,8 +49,8 @@ npm run dev
 - Add tenant-scoped database query helpers.
 - Add encryption/key management for restricted child, custody, medical, billing, and compliance data.
 - Configure audit logging for sensitive reads and writes.
-- Replace mock Stripe, Twilio, email, calendar, review, signature, storage, and OpenAI connectors with live integrations.
-- Validate payment workflows with Stripe test mode before enabling live mode.
+- Configure Stripe Connect platform keys, school payout onboarding, webhook signing, and platform fee rules.
+- Validate parent checkout, connected account payouts, application fees, refunds, and disputes in Stripe test mode before enabling live mode.
 - Review all compliance-readiness language with counsel/licensing experts.
 - Add backup, retention, and deletion policies.
 - Add monitoring, error reporting, and security headers.

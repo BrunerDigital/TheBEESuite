@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage } from "@prisma/client";
+import {
+  appendRowToGoogleSheet,
+  hasGoogleSheetsApiConfig,
+  type GoogleSheetValue,
+} from "@/lib/google-sheets";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -12,6 +17,8 @@ type InquiryPayload = {
   program?: string;
   locationId?: string;
   location_id?: string;
+  publicLocationId?: string;
+  public_location_id?: string;
   locationName?: string;
   location_name?: string;
   city?: string;
@@ -40,6 +47,12 @@ type IntegrationResult = {
   ok: boolean;
   skipped?: boolean;
   error?: string;
+  mode?: "google_sheets_api" | "webhook";
+  spreadsheetId?: string;
+  sheetName?: string;
+  updatedRange?: string;
+  recipients?: number;
+  locationRecipients?: number;
 };
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -47,6 +60,30 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://www.kidcityusa.com",
   "https://the-bee-suite-beta.vercel.app",
 ];
+
+const GOOGLE_SHEET_COLUMNS = [
+  { header: "Submitted At", field: "submittedAt" },
+  { header: "Bee Suite Lead ID", field: "leadId" },
+  { header: "Parent Name", field: "parentName" },
+  { header: "Email", field: "email" },
+  { header: "Phone", field: "phone" },
+  { header: "Program", field: "program" },
+  { header: "Location ID", field: "locationId" },
+  { header: "Public Location ID", field: "publicLocationId" },
+  { header: "Location Name", field: "locationName" },
+  { header: "City", field: "city" },
+  { header: "State", field: "state" },
+  { header: "Address", field: "address" },
+  { header: "Postal Code", field: "postalCode" },
+  { header: "Location Phone", field: "locationPhone" },
+  { header: "Page URL", field: "pageUrl" },
+  { header: "Lead Source", field: "leadSource" },
+  { header: "UTM Source", field: "utmSource" },
+  { header: "UTM Medium", field: "utmMedium" },
+  { header: "UTM Campaign", field: "utmCampaign" },
+  { header: "Lead Score", field: "leadScore" },
+  { header: "Stage", field: "stage" },
+] as const;
 
 function json(data: unknown, status = 200, origin?: string | null) {
   return NextResponse.json(data, {
@@ -118,6 +155,7 @@ function normalizePayload(input: InquiryPayload) {
   const phone = clean(input.phone);
   const program = normalizeProgram(clean(input.program));
   const locationId = clean(input.locationId || input.location_id);
+  const publicLocationId = clean(input.publicLocationId || input.public_location_id);
 
   return {
     parentName,
@@ -125,6 +163,7 @@ function normalizePayload(input: InquiryPayload) {
     phone,
     program,
     locationId,
+    publicLocationId,
     locationName: clean(input.locationName || input.location_name),
     city: clean(input.city || input.location_city),
     state: clean(input.state || input.location_state),
@@ -158,20 +197,53 @@ function scoreLead(program: string, locationId: string) {
   return Math.min(score, 95);
 }
 
-async function getIntakeCenterId() {
+function uniqueEmails(values: string[]) {
+  const seen = new Set<string>();
+  return values
+    .map((value) => value.trim())
+    .filter((value) => isEmail(value))
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+async function getIntakeCenter(locationId: string, publicLocationId?: string) {
+  const locationIds = [locationId, publicLocationId].map(clean).filter(Boolean);
+  if (locationIds.length) {
+    const routedCenter = await prisma.center.findFirst({
+      where: {
+        OR: [
+          { crmLocationId: { in: locationIds } },
+          { locationId: { in: locationIds } },
+          { name: { in: locationIds } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, email: true },
+    });
+
+    if (routedCenter) return routedCenter;
+  }
+
   const configuredCenterId = process.env.INQUIRY_DEFAULT_CENTER_ID;
 
   if (configuredCenterId) {
-    const center = await prisma.center.findUnique({ where: { id: configuredCenterId } });
-    if (center) return center.id;
+    const center = await prisma.center.findUnique({
+      where: { id: configuredCenterId },
+      select: { id: true, email: true },
+    });
+    if (center) return center;
   }
 
   const center = await prisma.center.findFirst({
     orderBy: { createdAt: "asc" },
-    select: { id: true },
+    select: { id: true, email: true },
   });
 
-  if (center) return center.id;
+  if (center) return center;
 
   const organization = await prisma.organization.findFirst({
     orderBy: { createdAt: "asc" },
@@ -188,13 +260,46 @@ async function getIntakeCenterId() {
       name: "Kid City USA",
       licensedCapacity: 0,
     },
-    select: { id: true },
+    select: { id: true, email: true },
   });
 
-  return created.id;
+  return created;
+}
+
+async function getLocationNotificationEmails(centerId: string, centerEmail?: string | null) {
+  if (centerEmail && isEmail(centerEmail)) return [centerEmail];
+
+  const staff = await prisma.staffProfile.findMany({
+    where: {
+      centerId,
+      user: {
+        isActive: true,
+        email: { endsWith: "@kidcityusa.com" },
+      },
+    },
+    orderBy: { id: "asc" },
+    select: {
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  });
+
+  return uniqueEmails(staff.map((profile) => profile.user.email)).slice(0, 3);
 }
 
 async function forwardToGoogleSheets(payload: Record<string, unknown>): Promise<IntegrationResult> {
+  if (hasGoogleSheetsApiConfig()) {
+    return appendRowToGoogleSheet({
+      headers: GOOGLE_SHEET_COLUMNS.map((column) => column.header),
+      row: GOOGLE_SHEET_COLUMNS.map((column) =>
+        sheetValue(payload[column.field]),
+      ),
+    });
+  }
+
   const url = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
   if (!url) return { ok: true, skipped: true };
 
@@ -210,23 +315,34 @@ async function forwardToGoogleSheets(payload: Record<string, unknown>): Promise<
       return { ok: false, error: `Google Sheets webhook returned ${response.status}.` };
     }
 
-    return { ok: true };
+    return { ok: true, mode: "webhook" };
   } catch (error) {
     return {
       ok: false,
+      mode: "webhook",
       error: error instanceof Error ? error.message : "Google Sheets webhook failed.",
     };
   }
 }
 
-async function sendNotificationEmail(payload: Record<string, unknown>): Promise<IntegrationResult> {
+function sheetValue(value: unknown): GoogleSheetValue {
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "string") return value;
+  return "";
+}
+
+async function sendNotificationEmail(
+  payload: Record<string, unknown>,
+  locationRecipients: string[] = [],
+): Promise<IntegrationResult> {
   const apiKey = process.env.SENDGRID_API_KEY;
-  const recipients = process.env.INQUIRY_NOTIFICATION_EMAILS?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const recipients = uniqueEmails([
+    ...(process.env.INQUIRY_NOTIFICATION_EMAILS?.split(",") ?? []),
+    ...locationRecipients,
+  ]);
   const from = process.env.SENDGRID_FROM_EMAIL;
 
-  if (!apiKey || !recipients?.length || !from) {
+  if (!apiKey || !recipients.length || !from) {
     return { ok: true, skipped: true };
   }
 
@@ -237,6 +353,7 @@ async function sendNotificationEmail(payload: Record<string, unknown>): Promise<
     `Phone: ${payload.phone}`,
     `Program: ${payload.program}`,
     `Location ID: ${payload.locationId}`,
+    `Public Location ID: ${payload.publicLocationId || ""}`,
     `Location: ${payload.locationName || ""}`,
     `City/State: ${payload.city || ""}, ${payload.state || ""}`,
     `Page: ${payload.pageUrl || ""}`,
@@ -268,7 +385,11 @@ async function sendNotificationEmail(payload: Record<string, unknown>): Promise<
       return { ok: false, error: `SendGrid returned ${response.status}.` };
     }
 
-    return { ok: true };
+    return {
+      ok: true,
+      recipients: recipients.length,
+      locationRecipients: uniqueEmails(locationRecipients).length,
+    };
   } catch (error) {
     return {
       ok: false,
@@ -295,11 +416,17 @@ export async function POST(request: NextRequest) {
       return json({ ok: false, errors }, 400, origin);
     }
 
-    const centerId = await getIntakeCenterId();
+    const center = await getIntakeCenter(payload.locationId, payload.publicLocationId);
+    const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
+    const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
     const lead = await prisma.lead.create({
       data: {
-        centerId,
+        centerId: center.id,
         familyName: payload.parentName,
+        parentFirstName,
+        parentLastName: parentLastNameParts.join(" ") || null,
+        email: payload.email,
+        phone: payload.phone,
         leadSource: payload.leadSource,
         programInterest: payload.program,
         ageGroupInterest: payload.program,
@@ -313,6 +440,7 @@ export async function POST(request: NextRequest) {
           phone: payload.phone,
           program: payload.program,
           locationId: payload.locationId,
+          publicLocationId: payload.publicLocationId,
           locationName: payload.locationName,
           city: payload.city,
           state: payload.state,
@@ -357,7 +485,7 @@ export async function POST(request: NextRequest) {
 
     const [googleSheets, email] = await Promise.all([
       forwardToGoogleSheets(integrationPayload),
-      sendNotificationEmail(integrationPayload),
+      sendNotificationEmail(integrationPayload, locationRecipients),
     ]);
 
     return json(

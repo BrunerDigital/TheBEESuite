@@ -35,4 +35,4 @@ AI outputs are suggestions only. They must not make final safety, medical, legal
 
 ## Placeholders
 
-Stripe, Twilio, SendGrid/Mailgun, Google Calendar, Google Business Profile, Meta Lead Ads, OpenAI, Zapier/webhooks, signature capture, and cloud storage are represented as credential-ready placeholders. No real payment or messaging action is performed by this v1.
+Stripe Connect, Twilio, SendGrid/Mailgun, Google Calendar, Google Business Profile, Meta Lead Ads, OpenAI, Zapier/webhooks, signature capture, and cloud storage are represented as credential-ready integrations. Parent checkout uses server-side Stripe Checkout only when platform keys are present and the selected school has a connected payout account; missing credentials keep the workflow safely disabled.

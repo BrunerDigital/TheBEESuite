@@ -294,6 +294,7 @@ export const navGroups = [
       ["Tours", "tours", CalendarDays],
       ["Waitlist", "waitlist", ClipboardCheck],
       ["Campaigns", "campaigns", Megaphone],
+      ["Automations", "automations", Workflow],
     ],
   },
   {

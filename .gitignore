@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/tmp/
 
 # debug
 npm-debug.log*
@@ -42,3 +43,8 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+.env*.local
+
+# local Codex/agent skill cache
+.agents/
+skills-lock.json

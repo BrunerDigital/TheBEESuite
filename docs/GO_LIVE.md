@@ -71,3 +71,61 @@ AUTH_SECRET
 ```
 
 Use preview deployments first, then promote to production after auth, RBAC, RLS, and integration checks are complete.
+
+## 4. Payments, Payouts, SMS, Push, and Signature Requests
+
+The server routes are live-ready but remain safe when credentials are missing.
+
+Stripe should be configured as a Connect platform. The Bee Suite platform account creates Checkout Sessions for parent payments, retains the configured platform fee, and transfers the remainder to the selected school's connected payout account.
+
+Required for Stripe Checkout and Connect:
+
+```text
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+NEXT_PUBLIC_APP_URL
+STRIPE_ACCOUNTS_V2_API_VERSION
+STRIPE_APPLICATION_FEE_BPS
+STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=false
+STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT=true
+```
+
+Configure the Stripe webhook endpoint as:
+
+```text
+https://YOUR_DOMAIN/api/billing/stripe-webhook
+```
+
+Listen for these Stripe events:
+
+```text
+checkout.session.completed
+checkout.session.async_payment_succeeded
+checkout.session.async_payment_failed
+account.updated
+v2.core.account[requirements].updated
+```
+
+New customer payout workflow:
+
+1. Add the platform Stripe keys in Vercel.
+2. Open `Billing Settings` in The Bee Suite.
+3. For each school, click `Set up` or `Continue` in the Stripe Connect payout table.
+4. The authenticated school owner or payout admin completes Stripe-hosted onboarding.
+5. Return to The Bee Suite; the payout table auto-syncs status, and the `Check` button can refresh it later.
+6. Parent checkout remains blocked for that school until Stripe reports payouts are enabled.
+
+Use destination-charge Checkout Sessions for parent payments. Do not enable platform-only parent payments except for a controlled internal test, because those funds would remain on the platform account instead of routing to the school.
+
+Required for Twilio SMS:
+
+```text
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TWILIO_FROM_NUMBER
+```
+
+Push notifications currently create in-app notifications and expose a provider hook through `PUSH_PROVIDER_KEY`.
+Signature requests create document records and send email when SendGrid is configured; DocuSign-style API credentials can be added with `DOCUSIGN_INTEGRATION_KEY` / `SIGNATURE_PROVIDER_API_KEY`.
+
+Do not enable live payments for families until tuition policies, refund handling, connected account ownership, Stripe dispute/negative-balance responsibilities, webhook retries, school payout support procedures, and platform fee rules are approved.

@@ -1,0 +1,964 @@
+{
+  "locations": [
+    {
+      "crmLocationId": "CO | Colorado Springs - Cordera",
+      "locationId": "Kid City USA - Cordera (Colorado Springs)",
+      "name": "Kid City USA - Cordera (Colorado Springs)",
+      "address": "10085 Pearl Pass View",
+      "city": "Colorado Springs",
+      "state": "CO",
+      "postalCode": "80924",
+      "phone": "719-301-0049"
+    },
+    {
+      "crmLocationId": "CO | Grand Junction",
+      "locationId": "Kid City USA - Grand Junction",
+      "name": "Kid City USA - Grand Junction",
+      "address": "3170 D \u00bd Road",
+      "city": "Grand Junction",
+      "state": "CO",
+      "postalCode": "81504",
+      "phone": "970-837-3211"
+    },
+    {
+      "crmLocationId": "CO | Highlands Ranch",
+      "locationId": "Kid City USA - Highlands Ranch",
+      "name": "Kid City USA - Highlands Ranch",
+      "address": "8373 Burnley Court",
+      "city": "Highlands Ranch",
+      "state": "CO",
+      "postalCode": "80126",
+      "phone": "303-791-5547"
+    },
+    {
+      "crmLocationId": "CO | Longmont",
+      "locationId": "Kid City USA - Longmont",
+      "name": "Kid City USA - Longmont",
+      "address": "1941 Terry St.",
+      "city": "Longmont",
+      "state": "CO",
+      "postalCode": "80501",
+      "phone": "303-651-3780"
+    },
+    {
+      "crmLocationId": "CO | Woodland Park - East Midland",
+      "locationId": "Kid City USA - Woodland Park - East Midland",
+      "name": "Kid City USA - Woodland Park - East Midland",
+      "address": "520 E. Midland Ave",
+      "city": "Woodland Park",
+      "state": "CO",
+      "postalCode": "80863",
+      "phone": "719-687-8123"
+    },
+    {
+      "crmLocationId": "CO | Woodland Park - Forest Edge",
+      "locationId": "Kid City USA - Woodland Park - Forest Edge",
+      "name": "Kid City USA - Woodland Park - Forest Edge",
+      "address": "501 Forest Edge Rd.",
+      "city": "Woodland Park",
+      "state": "CO",
+      "postalCode": "80863",
+      "phone": "719-687-8513"
+    },
+    {
+      "crmLocationId": "FL | Altamonte - Douglas",
+      "locationId": "Kid City USA - Altamonte - Douglas",
+      "name": "Kid City USA - Altamonte - Douglas",
+      "address": "841 Douglas Ave.",
+      "city": "Altamonte Springs",
+      "state": "FL",
+      "postalCode": "32714",
+      "phone": "407-682-5437"
+    },
+    {
+      "crmLocationId": "FL | Altamonte - Fruitland",
+      "locationId": "Kid City USA - Altamonte - Fruitland",
+      "name": "Kid City USA - Altamonte - Fruitland",
+      "address": "480 Fruitland St.",
+      "city": "Altamonte Springs",
+      "state": "FL",
+      "postalCode": "32714",
+      "phone": "407-339-2337"
+    },
+    {
+      "crmLocationId": "FL | Altamonte - Maitland",
+      "locationId": "Kid City USA - Altamonte - Maitland",
+      "name": "Kid City USA - Altamonte - Maitland",
+      "address": "290 Maitland Ave.",
+      "city": "Altamonte Springs",
+      "state": "FL",
+      "postalCode": "32701",
+      "phone": "407-767-5437"
+    },
+    {
+      "crmLocationId": "FL | Apopka",
+      "locationId": "Kid City USA - Apopka",
+      "name": "Kid City USA - Apopka",
+      "address": "204 S Central Ave.",
+      "city": "Apopka",
+      "state": "FL",
+      "postalCode": "32703",
+      "phone": "407-814-0444"
+    },
+    {
+      "crmLocationId": "FL | Clearwater",
+      "locationId": "Kid City USA - Clearwater",
+      "name": "Kid City USA - Clearwater",
+      "address": "3130 N McMullen Booth Rd",
+      "city": "Clearwater",
+      "state": "FL",
+      "postalCode": "33761",
+      "phone": "727-797-0382"
+    },
+    {
+      "crmLocationId": "FL | College Park",
+      "locationId": "Kid City USA - College Park",
+      "name": "Kid City USA - College Park",
+      "address": "2828 Edgewater Dr.",
+      "city": "College Park",
+      "state": "FL",
+      "postalCode": "32804",
+      "phone": "407-985-5464"
+    },
+    {
+      "crmLocationId": "FL | Crystal River",
+      "locationId": "Kid City USA - Crystal River",
+      "name": "Kid City USA - Crystal River",
+      "address": "243 N.E. 7th Terrace",
+      "city": "Crystal River",
+      "state": "FL",
+      "postalCode": "34428",
+      "phone": "352-794-3415"
+    },
+    {
+      "crmLocationId": "FL | Daytona Beach East",
+      "locationId": "Kid City USA - Daytona Beach East",
+      "name": "Kid City USA - Daytona Beach East",
+      "address": "1122 Dr Mary McLeod Bethune Blvd,",
+      "city": "Daytona Beach",
+      "state": "FL",
+      "postalCode": "32114",
+      "phone": "386-281-3445"
+    },
+    {
+      "crmLocationId": "FL | Deland - Amelia",
+      "locationId": "Kid City USA - DeLand - Ameila",
+      "name": "Kid City USA - DeLand - Ameila",
+      "address": "238 S Amelia Ave.",
+      "city": "Deland",
+      "state": "FL",
+      "postalCode": "32724",
+      "phone": "386-279-7553"
+    },
+    {
+      "crmLocationId": "FL | Deland - Orange",
+      "locationId": "Kid City USA - DeLand - Orange",
+      "name": "Kid City USA - DeLand - Orange",
+      "address": "404 N. Orange Ave.",
+      "city": "Deland",
+      "state": "FL",
+      "postalCode": "32720",
+      "phone": "386-736-0000"
+    },
+    {
+      "crmLocationId": "FL | Deltona - Howland",
+      "locationId": "Kid City USA - Deltona - Howland",
+      "name": "Kid City USA - Deltona - Howland",
+      "address": "1382 Howland Blvd. #126",
+      "city": "Deltona",
+      "state": "FL",
+      "postalCode": "32738",
+      "phone": "386-860-7979"
+    },
+    {
+      "crmLocationId": "FL | Deltona - Providence",
+      "locationId": "Kid City USA - Deltona 2",
+      "name": "Kid City USA - Deltona 2",
+      "address": "1859 Providence Blvd.",
+      "city": "Deltona",
+      "state": "FL",
+      "postalCode": "32738",
+      "phone": "386-960-7628"
+    },
+    {
+      "crmLocationId": "FL | Edgewater",
+      "locationId": "Kid City USA - Edgewater",
+      "name": "Kid City USA - Edgewater",
+      "address": "2311 S. Ridgewood Ave.",
+      "city": "Edgewater",
+      "state": "FL",
+      "postalCode": "32141",
+      "phone": "386-410-2924"
+    },
+    {
+      "crmLocationId": "FL | Gainesville",
+      "locationId": "Kid City USA - Gainesville",
+      "name": "Kid City USA - Gainesville",
+      "address": "1127 NW 7th Ave.",
+      "city": "Gainesville",
+      "state": "FL",
+      "postalCode": "32601",
+      "phone": "352-756-4867"
+    },
+    {
+      "crmLocationId": "FL | Glen Saint Mary",
+      "locationId": "Kid City USA - Glen St. Mary",
+      "name": "Kid City USA - Glen St. Mary",
+      "address": "10274 N. Sherman Ave.",
+      "city": "Glen St. Mary",
+      "state": "FL",
+      "postalCode": "32040",
+      "phone": "904-259-4899"
+    },
+    {
+      "crmLocationId": "FL | Hampton",
+      "locationId": "Kid City USA - Hampton",
+      "name": "Kid City USA - Hampton",
+      "address": "10228 N Division Street",
+      "city": "Hampton",
+      "state": "FL",
+      "postalCode": "32044",
+      "phone": "352-468-1008"
+    },
+    {
+      "crmLocationId": "FL | Heathrow",
+      "locationId": "Kid City USA - Heathrow",
+      "name": "Kid City USA - Heathrow",
+      "address": "1032 AAA Drive.",
+      "city": "Heathrow",
+      "state": "FL",
+      "postalCode": "32746",
+      "phone": "407-732-4413"
+    },
+    {
+      "crmLocationId": "FL | Holly Hill",
+      "locationId": "Kid City USA - Holly Hill",
+      "name": "Kid City USA - Holly Hill",
+      "address": "1501 N. Nova Rd.",
+      "city": "Holly Hill",
+      "state": "FL",
+      "postalCode": "32117",
+      "phone": "386-265-4016"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Abbess",
+      "locationId": "Kid City USA - Abbess",
+      "name": "Kid City USA - Abbess",
+      "address": "12750 Abess Blvd.",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32225",
+      "phone": "904-220-7737"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Beach",
+      "locationId": "Kid City USA - Beach Blvd",
+      "name": "Kid City USA - Beach Blvd",
+      "address": "7044 Beach Blvd.",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32216",
+      "phone": "904-575-9649"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Durbin",
+      "locationId": "Kid City USA - Durbin",
+      "name": "Kid City USA - Durbin",
+      "address": "14985 Old St. Augustine Rd Suite 120",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32258",
+      "phone": "904-672-7616"
+    },
+    {
+      "crmLocationId": "FL | Global Leadership Academy",
+      "locationId": "Kid City USA - Global Leadership Academy",
+      "name": "Kid City USA - Global Leadership Academy",
+      "address": "8985 Lonestar Rd.",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32211",
+      "phone": "904-916-3639"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Jacksonville Heights",
+      "locationId": "Kid City USA - Jacksonville Heights",
+      "name": "Kid City USA - Jacksonville Heights",
+      "address": "4056 Fouraker Rd",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32210",
+      "phone": "904-902-4152"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Oakleaf",
+      "locationId": "Kid City USA - Oakleaf",
+      "name": "Kid City USA - Oakleaf",
+      "address": "8720 Collins Rd.",
+      "city": "Jacksonville",
+      "state": "FL",
+      "postalCode": "32244",
+      "phone": "904-717-9166"
+    },
+    {
+      "crmLocationId": "FL | Lake City",
+      "locationId": "Kid City USA - Lake City",
+      "name": "Kid City USA - Lake City",
+      "address": "1290 SE Baya Drive,",
+      "city": "Lake City",
+      "state": "FL",
+      "postalCode": "32025",
+      "phone": "386-269-4607"
+    },
+    {
+      "crmLocationId": "FL | Lake Mary",
+      "locationId": "Kid City USA - Lake Mary",
+      "name": "Kid City USA - Lake Mary",
+      "address": "2720 W. Lake Mary Blvd.",
+      "city": "Lake Mary",
+      "state": "FL",
+      "postalCode": "32746",
+      "phone": "407-323-1221"
+    },
+    {
+      "crmLocationId": "FL | Lake Wales",
+      "locationId": "Kid City USA - Lake Wales",
+      "name": "Kid City USA - Lake Wales",
+      "address": "712 N. Scenic Hwy",
+      "city": "Lake Wales",
+      "state": "FL",
+      "postalCode": "33853",
+      "phone": "863-676-2351"
+    },
+    {
+      "crmLocationId": "FL | Leesburg",
+      "locationId": "Kid City USA - Leesburg",
+      "name": "Kid City USA - Leesburg",
+      "address": "710 Carpenter Ave.",
+      "city": "Leesburg",
+      "state": "FL",
+      "postalCode": "34748",
+      "phone": "352-460-0627"
+    },
+    {
+      "crmLocationId": "FL | Longwood",
+      "locationId": "Kid City USA - Longwood",
+      "name": "Kid City USA - Longwood",
+      "address": "382 W SR 434",
+      "city": "Longwood",
+      "state": "FL",
+      "postalCode": "32750",
+      "phone": "407-539-2337"
+    },
+    {
+      "crmLocationId": "FL | Wekiva",
+      "locationId": "Kid City USA - Wekiva",
+      "name": "Kid City USA - Wekiva",
+      "address": "935 Wekiva Springs Rd.",
+      "city": "Longwood",
+      "state": "FL",
+      "postalCode": "32779",
+      "phone": "407-786-4023"
+    },
+    {
+      "crmLocationId": "FL | Macclenny",
+      "locationId": "Kid City USA - MacClenny",
+      "name": "Kid City USA - MacClenny",
+      "address": "5418 County Rd 23B",
+      "city": "Macclenny",
+      "state": "FL",
+      "postalCode": "32063",
+      "phone": "904-259-5438"
+    },
+    {
+      "crmLocationId": "FL | Melbourne",
+      "locationId": "Kid City USA - Melbourne",
+      "name": "Kid City USA - Melbourne",
+      "address": "4950 Dairy Rd.",
+      "city": "Melbourne",
+      "state": "FL",
+      "postalCode": "32904",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "FL | Middleburg",
+      "locationId": "Kid City USA - Middleburg",
+      "name": "Kid City USA - Middleburg",
+      "address": "29 Cinnamon St.",
+      "city": "Middleburg",
+      "state": "FL",
+      "postalCode": "32068",
+      "phone": "904-923-2909"
+    },
+    {
+      "crmLocationId": "FL | New Smyrna Beach",
+      "locationId": "Kid City USA - New Smyrna Beach",
+      "name": "Kid City USA - New Smyrna Beach",
+      "address": "1890 S.R. 44",
+      "city": "New Smyrna Beach",
+      "state": "FL",
+      "postalCode": "32168",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "FL | Ocala",
+      "locationId": "Kid City USA - Ocala - 2nd",
+      "name": "Kid City USA - Ocala - 2nd",
+      "address": "2125 NE 2nd St.",
+      "city": "Ocala",
+      "state": "FL",
+      "postalCode": "34470",
+      "phone": "352-622-6481"
+    },
+    {
+      "crmLocationId": "FL | Ormond Beach",
+      "locationId": "Kid City USA - Ormond Beach",
+      "name": "Kid City USA - Ormond Beach",
+      "address": "50 Coolidge Ave.",
+      "city": "Ormond Beach",
+      "state": "FL",
+      "postalCode": "32174",
+      "phone": "386-492-7228"
+    },
+    {
+      "crmLocationId": "FL | Oviedo",
+      "locationId": "Kid City USA - Oviedo",
+      "name": "Kid City USA - Oviedo",
+      "address": "204 Alexandria Blvd.",
+      "city": "Oviedo",
+      "state": "FL",
+      "postalCode": "",
+      "phone": "407-542-0030"
+    },
+    {
+      "crmLocationId": "FL | Palatka",
+      "locationId": "Kid City USA - Palatka",
+      "name": "Kid City USA - Palatka",
+      "address": "3420 St. Johns Ave.",
+      "city": "Palatka",
+      "state": "FL",
+      "postalCode": "32177",
+      "phone": "386-385-3054"
+    },
+    {
+      "crmLocationId": "FL | Palm Bay",
+      "locationId": "Kid City USA - Palm Bay",
+      "name": "Kid City USA - Palm Bay",
+      "address": "1516 Norman Street NE",
+      "city": "Palm Bay",
+      "state": "FL",
+      "postalCode": "32907",
+      "phone": "321-728-5503"
+    },
+    {
+      "crmLocationId": "FL | Panama City",
+      "locationId": "Kid City USA - Panama City",
+      "name": "Kid City USA - Panama City",
+      "address": "7221 Patronis Dr.",
+      "city": "Panama City",
+      "state": "FL",
+      "postalCode": "32408",
+      "phone": "850-233-3884"
+    },
+    {
+      "crmLocationId": "FL | Port Orange",
+      "locationId": "Kid City USA - Port Orange",
+      "name": "Kid City USA - Port Orange",
+      "address": "3911 S. Nova Rd.",
+      "city": "Port Orange",
+      "state": "FL",
+      "postalCode": "32127",
+      "phone": "386-317-2337"
+    },
+    {
+      "crmLocationId": "FL | Riverview",
+      "locationId": "Kid City USA - Riverview",
+      "name": "Kid City USA - Riverview",
+      "address": "11329 Big Bend Rd.",
+      "city": "Riverview",
+      "state": "FL",
+      "postalCode": "33579",
+      "phone": "813-415-3988"
+    },
+    {
+      "crmLocationId": "FL | South Daytona",
+      "locationId": "Kid City USA - South Daytona",
+      "name": "Kid City USA - South Daytona",
+      "address": "712 Reed Canal Rd.",
+      "city": "S. Daytona",
+      "state": "FL",
+      "postalCode": "32119",
+      "phone": "386-322-0103"
+    },
+    {
+      "crmLocationId": "FL | Jacksonville - Fruit Cove",
+      "locationId": "Kid City USA - Fruit Cove",
+      "name": "Kid City USA - Fruit Cove",
+      "address": "1461 Fruit Cove Rd S,",
+      "city": "Saint Johns",
+      "state": "FL",
+      "postalCode": "32259",
+      "phone": "904-615-1595"
+    },
+    {
+      "crmLocationId": "FL | Sanford",
+      "locationId": "Kid City USA - Sanford",
+      "name": "Kid City USA - Sanford",
+      "address": "1320 Hickory Ave",
+      "city": "Sanford",
+      "state": "FL",
+      "postalCode": "32771",
+      "phone": "407-942-3242"
+    },
+    {
+      "crmLocationId": "FL | Sarasota",
+      "locationId": "Kid City USA - Sarasota",
+      "name": "Kid City USA - Sarasota",
+      "address": "374 Scott Ave",
+      "city": "Sarasota",
+      "state": "FL",
+      "postalCode": "34243",
+      "phone": "941-210-4482"
+    },
+    {
+      "crmLocationId": "FL | Saint Cloud",
+      "locationId": "Kid City USA - St. Cloud",
+      "name": "Kid City USA - St. Cloud",
+      "address": "1422 Virginia Ave.",
+      "city": "St. Cloud",
+      "state": "FL",
+      "postalCode": "34769",
+      "phone": "321-805-4780"
+    },
+    {
+      "crmLocationId": "FL | Starke",
+      "locationId": "Kid City USA - Starke",
+      "name": "Kid City USA - Starke",
+      "address": "202 West Market Road",
+      "city": "Starke",
+      "state": "FL",
+      "postalCode": "32091",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "FL | Vero Beach",
+      "locationId": "Kid City USA - Vero Beach",
+      "name": "Kid City USA - Vero Beach",
+      "address": "760 20th Avenue",
+      "city": "Vero Beach",
+      "state": "FL",
+      "postalCode": "32962",
+      "phone": "772-778-2262"
+    },
+    {
+      "crmLocationId": "FL | Winter Park",
+      "locationId": "Kid City USA - Winter Park",
+      "name": "Kid City USA - Winter Park",
+      "address": "3650 Howell Branch Rd.",
+      "city": "Winter Park",
+      "state": "FL",
+      "postalCode": "32792",
+      "phone": "407-671-2882"
+    },
+    {
+      "crmLocationId": "FL | Winter Springs",
+      "locationId": "Kid City USA - Winter Springs",
+      "name": "Kid City USA - Winter Springs",
+      "address": "1015 Willa Springs Dr.",
+      "city": "Winter Springs",
+      "state": "FL",
+      "postalCode": "32708",
+      "phone": "407-695-7737"
+    },
+    {
+      "crmLocationId": "GA | Duluth",
+      "locationId": "Kid City USA - Duluth",
+      "name": "Kid City USA - Duluth",
+      "address": "4278 Abbotts Bridge Rd",
+      "city": "Duluth",
+      "state": "GA",
+      "postalCode": "30097",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Bargersville",
+      "locationId": "Kid City USA - Bargersville",
+      "name": "Kid City USA - Bargersville",
+      "address": "2805 South Grove Blvd.",
+      "city": "Bargersville",
+      "state": "IN",
+      "postalCode": "46106",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Beech Grove",
+      "locationId": "Kid City USA - Beech Grove",
+      "name": "Kid City USA - Beech Grove",
+      "address": "4545 Independence Sq.",
+      "city": "Beech Grove",
+      "state": "IN",
+      "postalCode": "46203",
+      "phone": "317-781-0577"
+    },
+    {
+      "crmLocationId": "IN | Brownsburg",
+      "locationId": "Kid City USA - Brownsburg",
+      "name": "Kid City USA - Brownsburg",
+      "address": "1570 East US Highway 136",
+      "city": "Brownsburg",
+      "state": "IN",
+      "postalCode": "46112",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Elkhart",
+      "locationId": "Kid City USA - Elkhart",
+      "name": "Kid City USA - Elkhart",
+      "address": "631 Simpson Ave.",
+      "city": "Elkhart",
+      "state": "IN",
+      "postalCode": "46516",
+      "phone": "574-444-3543"
+    },
+    {
+      "crmLocationId": "IN | Evansville",
+      "locationId": "Kid City USA - Evansville",
+      "name": "Kid City USA - Evansville",
+      "address": "240 S Rosenberger Avenue",
+      "city": "Evansville",
+      "state": "IN",
+      "postalCode": "47712",
+      "phone": "812-425-8687"
+    },
+    {
+      "crmLocationId": "IN | Fishers",
+      "locationId": "Kid City USA - Fishers",
+      "name": "Kid City USA - Fishers",
+      "address": "9000 Fitness Lane",
+      "city": "Fishers",
+      "state": "IN",
+      "postalCode": "46038",
+      "phone": "317-863-8220"
+    },
+    {
+      "crmLocationId": "IN | Greenwood",
+      "locationId": "Kid City USA - Greenwood",
+      "name": "Kid City USA - Greenwood",
+      "address": "1111 South Park Drive",
+      "city": "Greenwood",
+      "state": "IN",
+      "postalCode": "46143",
+      "phone": "317-300-0108"
+    },
+    {
+      "crmLocationId": "IN | Avon",
+      "locationId": "Kid City USA - Avon",
+      "name": "Kid City USA - Avon",
+      "address": "55 N Raceway Road",
+      "city": "Indianapolis",
+      "state": "IN",
+      "postalCode": "46234",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Franklin Township",
+      "locationId": "Kid City USA - Franklin Township",
+      "name": "Kid City USA - Franklin Township",
+      "address": "8046 E Southport Road",
+      "city": "Indianapolis",
+      "state": "IN",
+      "postalCode": "46259",
+      "phone": "463-800-3443"
+    },
+    {
+      "crmLocationId": "IN | Meridian Park",
+      "locationId": "Kid City USA - Meridian Park",
+      "name": "Kid City USA - Meridian Park",
+      "address": "130 E 30th Street",
+      "city": "Indianapolis",
+      "state": "IN",
+      "postalCode": "46205",
+      "phone": "317-220-8879"
+    },
+    {
+      "crmLocationId": "IN | Southpointe",
+      "locationId": "Kid City USA - Southpointe",
+      "name": "Kid City USA - Southpointe",
+      "address": "8830 Southpointe Drive",
+      "city": "Indianapolis",
+      "state": "IN",
+      "postalCode": "46227",
+      "phone": "463-634-4044"
+    },
+    {
+      "crmLocationId": "IN | Jasper - Baden Strasse",
+      "locationId": "Kid City USA - Jasper - Baden Strasse",
+      "name": "Kid City USA - Jasper - Baden Strasse",
+      "address": "4312 Baden Strasse Rd.",
+      "city": "Jasper",
+      "state": "IN",
+      "postalCode": "47546",
+      "phone": "812-481-8230"
+    },
+    {
+      "crmLocationId": "IN | Jasper - Truman",
+      "locationId": "Kid City USA - Jasper - Truman",
+      "name": "Kid City USA - Jasper - Truman",
+      "address": "600 N. Truman Rd.",
+      "city": "Jasper",
+      "state": "IN",
+      "postalCode": "47546",
+      "phone": "812-848-2273"
+    },
+    {
+      "crmLocationId": "IN | Kokomo",
+      "locationId": "Kid City USA - Kokomo",
+      "name": "Kid City USA - Kokomo",
+      "address": "1998 Bent Creek Road",
+      "city": "Kokomo",
+      "state": "IN",
+      "postalCode": "46901",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Lebanon",
+      "locationId": "Kid City USA - Lebanon",
+      "name": "Kid City USA - Lebanon",
+      "address": "924 S Meridian Street",
+      "city": "Lebanon",
+      "state": "IN",
+      "postalCode": "46052",
+      "phone": "765-335-0162"
+    },
+    {
+      "crmLocationId": "IN | McCordsville",
+      "locationId": "Kid City USA - McCordsville",
+      "name": "Kid City USA - McCordsville",
+      "address": "7409 N 600 W.",
+      "city": "McCordsville",
+      "state": "IN",
+      "postalCode": "46055",
+      "phone": "463-999-9850"
+    },
+    {
+      "crmLocationId": "IN | Newburgh",
+      "locationId": "Kid City USA - Paradise",
+      "name": "Kid City USA - Paradise",
+      "address": "2699 St Route 261",
+      "city": "Newburgh",
+      "state": "IN",
+      "postalCode": "47630",
+      "phone": "812-490-1191"
+    },
+    {
+      "crmLocationId": "IN | Petersburg",
+      "locationId": "Kid City USA - Petersburg",
+      "name": "Kid City USA - Petersburg",
+      "address": "106 West Pike  Avenue",
+      "city": "Petersburg",
+      "state": "IN",
+      "postalCode": "47567",
+      "phone": "812-380-9100"
+    },
+    {
+      "crmLocationId": "IN | Plainfield",
+      "locationId": "Kid City USA - Plainfield",
+      "name": "Kid City USA - Plainfield",
+      "address": "147 Meijer Drive",
+      "city": "Plainfield",
+      "state": "IN",
+      "postalCode": "46168",
+      "phone": "463-275-8041"
+    },
+    {
+      "crmLocationId": "IN | Westfield",
+      "locationId": "Kid City USA - Westfield",
+      "name": "Kid City USA - Westfield",
+      "address": "1769 W Tournament Trail",
+      "city": "Westfield",
+      "state": "IN",
+      "postalCode": "46074",
+      "phone": "855-543-2489"
+    },
+    {
+      "crmLocationId": "IN | Whitestown",
+      "locationId": "Kid City USA - Whitestown",
+      "name": "Kid City USA - Whitestown",
+      "address": "5650 E 550 S Whitestown",
+      "city": "Whitestown",
+      "state": "IN",
+      "postalCode": "46075",
+      "phone": "855-543-2490"
+    },
+    {
+      "crmLocationId": "KY | Bardstown",
+      "locationId": "Kid City USA - Bardstown",
+      "name": "Kid City USA - Bardstown",
+      "address": "104 Keystone Ave",
+      "city": "Bardstown",
+      "state": "KY",
+      "postalCode": "40004",
+      "phone": "502-348-4444"
+    },
+    {
+      "crmLocationId": "MO | Lees Summit",
+      "locationId": "Kid City USA - Lees Summit",
+      "name": "Kid City USA - Lees Summit",
+      "address": "850 NE Swann Road",
+      "city": "Lee\u2019s Summit",
+      "state": "MO",
+      "postalCode": "64086",
+      "phone": "816-875-3363"
+    },
+    {
+      "crmLocationId": "NC | Canton",
+      "locationId": "Kid City USA - Canton",
+      "name": "Kid City USA - Canton",
+      "address": "43 Crestview Street",
+      "city": "Canton",
+      "state": "NC",
+      "postalCode": "28716",
+      "phone": "828-648-2775"
+    },
+    {
+      "crmLocationId": "NC | Pisgah Forest",
+      "locationId": "Kid City USA - Pisgah Forest",
+      "name": "Kid City USA - Pisgah Forest",
+      "address": "1131 Wilson Road",
+      "city": "Pisgah Forest",
+      "state": "NC",
+      "postalCode": "28768",
+      "phone": "828-877-2555"
+    },
+    {
+      "crmLocationId": "SC | Bluffton",
+      "locationId": "Kid City USA - Bluffton",
+      "name": "Kid City USA - Bluffton",
+      "address": "11 Mallett Way",
+      "city": "Bluffton",
+      "state": "SC",
+      "postalCode": "29910",
+      "phone": "843-757-6650"
+    },
+    {
+      "crmLocationId": "TN | Columbia",
+      "locationId": "Kid City USA - Columbia",
+      "name": "Kid City USA - Columbia",
+      "address": "300 E. James Campbell Blvd",
+      "city": "Columbia",
+      "state": "TN",
+      "postalCode": "38401",
+      "phone": "931-655-0723"
+    },
+    {
+      "crmLocationId": "TN | Lewisburg",
+      "locationId": "Kid City USA - Lewisburg",
+      "name": "Kid City USA - Lewisburg",
+      "address": "964 N. Ellington Pkwy",
+      "city": "Lewisburg",
+      "state": "TN",
+      "postalCode": "37091",
+      "phone": "931-422-5276"
+    },
+    {
+      "crmLocationId": "TN | Pulaski",
+      "locationId": "Kid City USA - Pulaski TN",
+      "name": "Kid City USA - Pulaski TN",
+      "address": "110 N 8th Street",
+      "city": "Pulaski",
+      "state": "TN",
+      "postalCode": "38478",
+      "phone": "931-292-6059"
+    },
+    {
+      "crmLocationId": "TN | Soddy Daisy",
+      "locationId": "Kid City USA - Soddy Daisy",
+      "name": "Kid City USA - Soddy Daisy",
+      "address": "9834 Dayton Pike",
+      "city": "Soddy Daisy",
+      "state": "TN",
+      "postalCode": "37379",
+      "phone": "423-654-4049"
+    },
+    {
+      "crmLocationId": "TX | Friendswood",
+      "locationId": "Kid City USA - Friendswood",
+      "name": "Kid City USA - Friendswood",
+      "address": "1601 W Parkwood Avenue",
+      "city": "Friendswood",
+      "state": "TX",
+      "postalCode": "77546",
+      "phone": "832-569-4674"
+    },
+    {
+      "crmLocationId": "TX | Garland",
+      "locationId": "Kid City USA - Garland",
+      "name": "Kid City USA - Garland",
+      "address": "1521 & 1613 Rowlett Rd",
+      "city": "Garland",
+      "state": "TX",
+      "postalCode": "75043",
+      "phone": "214-501-3001"
+    },
+    {
+      "crmLocationId": "TX | Granbury",
+      "locationId": "Kid City USA - Granbury",
+      "name": "Kid City USA - Granbury",
+      "address": "2111 E US Highway 377",
+      "city": "Granbury",
+      "state": "TX",
+      "postalCode": "76049",
+      "phone": "817-573-2808"
+    },
+    {
+      "crmLocationId": "TX | North Richland Hills",
+      "locationId": "Kid City USA - North Richland Hills",
+      "name": "Kid City USA - North Richland Hills",
+      "address": "8304 Starnes Rd",
+      "city": "North Richland Hills",
+      "state": "TX",
+      "postalCode": "76182",
+      "phone": "682-888-5247"
+    },
+    {
+      "crmLocationId": "TX | Pearland",
+      "locationId": "Kid City USA - Pearland",
+      "name": "Kid City USA - Pearland",
+      "address": "12152 Shadow Creek Pkwy",
+      "city": "Pearland",
+      "state": "TX",
+      "postalCode": "77584",
+      "phone": "713-436-0580"
+    },
+    {
+      "crmLocationId": "TX | Pilot Point",
+      "locationId": "Kid City USA - Pilot Point",
+      "name": "Kid City USA - Pilot Point",
+      "address": "1200 S Washington St",
+      "city": "Pilot Point",
+      "state": "TX",
+      "postalCode": "76258",
+      "phone": "940-343-5327"
+    },
+    {
+      "crmLocationId": "TX | Terrell",
+      "locationId": "Kid City USA - Terrell",
+      "name": "Kid City USA - Terrell",
+      "address": "400 9th Street",
+      "city": "Terrell",
+      "state": "TX",
+      "postalCode": "75160",
+      "phone": "972-674-1078"
+    },
+    {
+      "crmLocationId": "TX | Tyler",
+      "locationId": "Kid City USA - Tyler",
+      "name": "Kid City USA - Tyler",
+      "address": "2101 Shiloh Road",
+      "city": "Tyler",
+      "state": "TX",
+      "postalCode": "75703",
+      "phone": "409-757-8396"
+    }
+  ]
+}

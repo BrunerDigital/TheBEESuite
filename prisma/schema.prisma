@@ -102,8 +102,18 @@ model Center {
   id             String   @id @default(cuid())
   organizationId String
   name           String
+  crmLocationId  String?
+  locationId     String?
   address        String?
+  city           String?
+  state          String?
+  postalCode     String?
   phone          String?
+  email          String?
+  status         String   @default("active")
+  sourceSystem   String?
+  externalId     String?
+  customFields   Json?
   licensedCapacity Int
   timezone       String   @default("America/New_York")
   createdAt      DateTime @default(now())
@@ -117,6 +127,10 @@ model Center {
   schedules    StaffSchedule[]
   announcements Announcement[]
   auditLogs    AuditLog[]
+
+  @@index([crmLocationId])
+  @@index([locationId])
+  @@index([state, city])
 }
 
 model Classroom {
@@ -313,7 +327,12 @@ model EnrollmentPipelineStage {
 model Lead {
   id        String @id @default(cuid())
   centerId  String
+  externalId String?
   familyName String
+  parentFirstName String?
+  parentLastName String?
+  email String?
+  phone String?
   childName String?
   leadSource String?
   ageGroupInterest String?
@@ -332,6 +351,11 @@ model Lead {
   tasks       Task[]
   notes       Note[]
   tags        Tag[]       @relation("LeadTags")
+
+  @@unique([centerId, externalId])
+  @@index([centerId, stage])
+  @@index([email])
+  @@index([createdAt])
 }
 
 model Tour {

@@ -1,0 +1,59 @@
+import { redirect } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
+import { CrmWorkspace } from "@/components/crm/crm-workspace";
+import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export default async function CrmLeadsPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?next=/crm-leads");
+
+  const centerWhere = getLeadScopeWhere(user);
+  const leadWhere = canAccessAllCenters(user)
+    ? {}
+    : {
+        centerId: {
+          in: user.centerIds,
+        },
+      };
+
+  const [centers, leads] = await Promise.all([
+    prisma.center.findMany({
+      where: centerWhere,
+      orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        crmLocationId: true,
+        locationId: true,
+        city: true,
+        state: true,
+      },
+    }),
+    prisma.lead.findMany({
+      where: leadWhere,
+      orderBy: { createdAt: "desc" },
+      take: 400,
+      include: {
+        center: {
+          select: {
+            id: true,
+            name: true,
+            crmLocationId: true,
+            locationId: true,
+            city: true,
+            state: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return (
+    <AppShell currentUser={user}>
+      <CrmWorkspace initialLeads={leads} centers={centers} currentUser={user} />
+    </AppShell>
+  );
+}

@@ -58,9 +58,10 @@ function normalizePayload(input: OnboardingPayload) {
 
 function validate(payload: NormalizedPayload) {
   const errors: Record<string, string> = {};
+  const centerCount = Number.parseInt(payload.centerCount, 10);
   if (!payload.brandName) errors.brandName = "Brand name is required.";
   if (!isEmail(payload.workEmail)) errors.workEmail = "A valid work email is required.";
-  if (!payload.centerCount || Number.parseInt(payload.centerCount, 10) < 1) errors.centerCount = "Number of centers is required.";
+  if (!payload.centerCount || !Number.isFinite(centerCount) || centerCount < 1) errors.centerCount = "Number of centers is required.";
   if (!payload.state) errors.state = "Primary state or region is required.";
   if (!payload.timeline) errors.timeline = "Launch timeline is required.";
   if (!payload.priority) errors.priority = "First priority is required.";

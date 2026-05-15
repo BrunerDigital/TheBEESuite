@@ -85,6 +85,15 @@ https://YOUR_DOMAIN/reset-password
 
 Then set `AUTH_PASSWORD_RESET_REDIRECT_URL` in Vercel to the same URL. The `/forgot-password` page sends the recovery email, and `/reset-password` completes the password update after Supabase redirects the user back with a recovery token.
 
+Readiness checks:
+
+```text
+GET /api/health
+GET /api/system/readiness
+```
+
+`/api/health` is public and only reports database reachability. `/api/system/readiness` requires a signed-in platform, brand, or regional user and returns non-secret launch status for Supabase Auth, Kid City center data, inquiry intake, Google Sheets, SendGrid, Stripe Connect, and Twilio.
+
 ## 4. Payments, Payouts, SMS, Push, and Signature Requests
 
 The server routes are live-ready but remain safe when credentials are missing.

@@ -75,6 +75,7 @@ Use preview deployments first, then promote to production after auth, RBAC, RLS,
 ## 4. Payments, Payouts, SMS, Push, and Signature Requests
 
 The server routes are live-ready but remain safe when credentials are missing.
+See `docs/STRIPE_CONNECT_SETUP.md` for the dedicated Stripe Connect platform and school payout runbook.
 
 Stripe should be configured as a Connect platform. The Bee Suite platform account creates Checkout Sessions for parent payments, retains the configured platform fee, and transfers the remainder to the selected school's connected payout account.
 

@@ -22,9 +22,11 @@ Run these from the project root after setting `DATABASE_URL`.
 npm run kidcity:prepare-crm
 npx prisma db execute --file prisma/migrations/202605131600_kidcity_crm_import/migration.sql --schema prisma/schema.prisma
 npm run kidcity:import-crm
+npm run kidcity:sync-open-schools
 ```
 
 The import is idempotent for centers, users, and legacy leads with the same center/external ID.
+The open-schools sync is also idempotent and ensures the website dropdown's 96 open Kid City USA schools have matching center profiles, even when a location was missing from the legacy CRM export.
 
 ## Supabase Auth Users
 

@@ -16,7 +16,8 @@
     "kidcity:prepare-crm": "python scripts/prepare-kidcity-crm-export.py",
     "kidcity:import-crm": "tsx -r tsconfig-paths/register scripts/import-kidcity-crm.ts",
     "kidcity:create-auth-users": "tsx scripts/create-kidcity-auth-users.ts",
-    "kidcity:backfill-center-emails": "tsx -r tsconfig-paths/register scripts/backfill-center-notification-emails.ts"
+    "kidcity:backfill-center-emails": "tsx -r tsconfig-paths/register scripts/backfill-center-notification-emails.ts",
+    "kidcity:sync-open-schools": "tsx -r tsconfig-paths/register scripts/sync-kidcity-open-schools.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

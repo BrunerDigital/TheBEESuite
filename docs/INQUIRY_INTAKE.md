@@ -18,6 +18,8 @@ The preferred Avada embed block is:
 ></script>
 ```
 
+The hosted embed currently loads 96 Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show 97 `<option>` elements total.
+
 ## What Happens
 
 1. The Bee Suite validates the form payload.
@@ -30,6 +32,8 @@ The preferred Avada embed block is:
 8. If the matched center has a `Center.email` value, that location email is added to the central notification recipient list.
 
 The CRM lead is created first. Google Sheets and email failures are returned in the response but do not block lead creation.
+
+The endpoint rejects browser requests from origins outside `INQUIRY_ALLOWED_ORIGINS` and includes hidden `company` / `website` honeypot fields in the hosted embed. Honeypot hits return a non-error response without creating a CRM lead.
 
 ## Required Form Fields
 
@@ -56,7 +60,11 @@ leadSource
 utmSource
 utmMedium
 utmCampaign
+company
+website
 ```
+
+Do not remove the hidden `company` and `website` fields from the hosted embed unless another anti-spam control replaces them.
 
 ## Vercel Environment Variables
 

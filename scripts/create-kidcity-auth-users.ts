@@ -1,3 +1,4 @@
+import "./load-env";
 import { readFileSync } from "node:fs";
 
 type NormalizedUser = {

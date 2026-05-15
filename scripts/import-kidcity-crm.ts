@@ -1,3 +1,4 @@
+import "./load-env";
 import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/prisma";

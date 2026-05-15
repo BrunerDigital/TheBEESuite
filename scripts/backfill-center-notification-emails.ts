@@ -1,3 +1,4 @@
+import "./load-env";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 

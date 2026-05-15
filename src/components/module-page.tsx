@@ -25,6 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { integrations, ModuleDefinition, roleMatrix } from "@/lib/demo-data";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
 
 export function ModulePage({ module }: { module: ModuleDefinition }) {
   return (
@@ -269,6 +270,10 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
 export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "onboarding" }) {
   const isLogin = type === "login";
   const isForgot = type === "forgot-password";
+
+  if (isForgot) {
+    return <ForgotPasswordForm />;
+  }
 
   return (
     <div className="grid min-h-screen place-items-center p-4">

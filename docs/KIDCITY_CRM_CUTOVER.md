@@ -39,7 +39,7 @@ KIDCITY_DEFAULT_PASSWORD="YOUR_APPROVED_TEMP_PASSWORD" \
 npm run kidcity:create-auth-users
 ```
 
-Require password reset after live testing begins if this becomes production access.
+Require password reset after live testing begins if this becomes production access. The Bee Suite now has a Supabase-backed reset flow at `/forgot-password` and `/reset-password`; make sure the Supabase Auth redirect allow-list includes `https://the-bee-suite-beta.vercel.app/reset-password` before inviting school users.
 
 ## CRM Access Rules
 

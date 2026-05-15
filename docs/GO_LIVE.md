@@ -68,9 +68,18 @@ SUPABASE_URL
 SUPABASE_ANON_KEY
 SUPABASE_SERVICE_ROLE_KEY
 AUTH_SECRET
+AUTH_PASSWORD_RESET_REDIRECT_URL
 ```
 
 Use preview deployments first, then promote to production after auth, RBAC, RLS, and integration checks are complete.
+
+For Supabase Auth password recovery, add this redirect URL in the Supabase Auth settings:
+
+```text
+https://YOUR_DOMAIN/reset-password
+```
+
+Then set `AUTH_PASSWORD_RESET_REDIRECT_URL` in Vercel to the same URL. The `/forgot-password` page sends the recovery email, and `/reset-password` completes the password update after Supabase redirects the user back with a recovery token.
 
 ## 4. Payments, Payouts, SMS, Push, and Signature Requests
 

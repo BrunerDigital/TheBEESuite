@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FormEvent, useState, useTransition } from "react";
-import { AlertCircle, ArrowRight, Hexagon, LogIn, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, Hexagon, LogIn, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
+  const resetStatus = searchParams.get("reset");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -81,6 +82,13 @@ export function LoginForm() {
           </CardHeader>
           <CardContent>
             <form className="flex flex-col gap-4" onSubmit={submit}>
+              {resetStatus === "complete" ? (
+                <Alert className="border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle2 />
+                  <AlertTitle>Password updated</AlertTitle>
+                  <AlertDescription>Sign in with your new password.</AlertDescription>
+                </Alert>
+              ) : null}
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
@@ -101,7 +109,12 @@ export function LoginForm() {
                 />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="password">Password</Label>
+                  <Link href="/forgot-password" className="text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline">
+                    Forgot password?
+                  </Link>
+                </div>
                 <Input
                   id="password"
                   value={password}

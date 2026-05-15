@@ -1,43 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
+import { verifySupabasePassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
-const DEFAULT_SUPABASE_URL = "https://nqjrlktoewiueiwrubas.supabase.co";
-
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function getSupabaseAuthConfig() {
-  const url =
-    process.env.SUPABASE_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    DEFAULT_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error("Supabase auth environment variables are not configured.");
-  }
-  return { url, key };
-}
-
-async function verifySupabasePassword(email: string, password: string) {
-  const { url, key } = getSupabaseAuthConfig();
-  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ email, password }),
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!response.ok) return false;
-  const result = (await response.json()) as { user?: { email?: string } };
-  return result.user?.email?.toLowerCase() === email;
 }
 
 export async function POST(request: NextRequest) {

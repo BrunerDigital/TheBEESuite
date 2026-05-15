@@ -1,0 +1,81 @@
+const DEFAULT_SUPABASE_URL = "https://nqjrlktoewiueiwrubas.supabase.co";
+
+type SupabaseAuthKeyPreference = "anon" | "service";
+
+export function cleanSupabaseUrl(value?: string | null) {
+  const url = value?.trim().replace(/\/+$/, "");
+  return url || DEFAULT_SUPABASE_URL;
+}
+
+export function getSupabaseAuthConfig(preference: SupabaseAuthKeyPreference = "anon") {
+  const url = cleanSupabaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = preference === "service" ? serviceKey || anonKey : anonKey || serviceKey;
+
+  if (!url || !key) {
+    throw new Error("Supabase auth environment variables are not configured.");
+  }
+
+  return { url, key };
+}
+
+export function getAppBaseUrl(requestUrl?: string) {
+  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, "");
+  if (requestUrl) return new URL(requestUrl).origin;
+  return "http://localhost:3000";
+}
+
+export function getPasswordResetRedirectUrl(requestUrl?: string) {
+  const configured = process.env.AUTH_PASSWORD_RESET_REDIRECT_URL;
+  if (configured) return configured;
+  return `${getAppBaseUrl(requestUrl)}/reset-password`;
+}
+
+export async function requestSupabasePasswordReset(email: string, redirectTo: string) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  return fetch(`${url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email }),
+    signal: AbortSignal.timeout(10_000),
+  });
+}
+
+export async function verifySupabasePassword(email: string, password: string) {
+  const { url, key } = getSupabaseAuthConfig("service");
+  const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ email, password }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (!response.ok) return false;
+  const result = (await response.json()) as { user?: { email?: string } };
+  return result.user?.email?.toLowerCase() === email;
+}
+
+export async function updateSupabasePassword(accessToken: string, password: string) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  return fetch(`${url}/auth/v1/user`, {
+    method: "PUT",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ password }),
+    signal: AbortSignal.timeout(10_000),
+  });
+}

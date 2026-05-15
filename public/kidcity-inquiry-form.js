@@ -32,6 +32,7 @@
     .bee-suite-status{min-height:20px;font-size:13px!important;font-weight:700}
     .bee-suite-status[data-state=success]{color:#198754!important}
     .bee-suite-status[data-state=error]{color:#b42318!important}
+    .bee-suite-honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
   `;
   document.head.appendChild(style);
 
@@ -77,6 +78,8 @@
         <h2>Start an inquiry</h2>
         <p>Choose your Kid City USA school and a team member will follow up.</p>
         <div class="bee-suite-grid">
+          <label class="bee-suite-honeypot">Company<input name="company" type="text" tabindex="-1" autocomplete="off"></label>
+          <label class="bee-suite-honeypot">Website<input name="website" type="text" tabindex="-1" autocomplete="off"></label>
           <label class="bee-suite-field"><span>Parent's Name</span><input name="parentName" type="text" autocomplete="name" required></label>
           <label class="bee-suite-field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
           <label class="bee-suite-field"><span>Phone Number</span><input name="phone" type="tel" autocomplete="tel" required></label>

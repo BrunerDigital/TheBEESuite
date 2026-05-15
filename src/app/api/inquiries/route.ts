@@ -41,6 +41,8 @@ type InquiryPayload = {
   utm_medium?: string;
   utmCampaign?: string;
   utm_campaign?: string;
+  company?: string;
+  website?: string;
 };
 
 type IntegrationResult = {
@@ -107,12 +109,19 @@ function corsHeaders(origin?: string | null) {
 function getAllowedOrigin(origin?: string | null) {
   if (!origin) return DEFAULT_ALLOWED_ORIGINS[0];
 
+  return isAllowedOrigin(origin) ? origin : getConfiguredAllowedOrigins()[0];
+}
+
+function getConfiguredAllowedOrigins() {
   const configured = process.env.INQUIRY_ALLOWED_ORIGINS?.split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  const allowed = configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS;
+  return configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS;
+}
 
-  return allowed.includes(origin) ? origin : allowed[0];
+function isAllowedOrigin(origin?: string | null) {
+  if (!origin) return true;
+  return getConfiguredAllowedOrigins().includes(origin);
 }
 
 function clean(value: unknown) {
@@ -175,6 +184,8 @@ function normalizePayload(input: InquiryPayload) {
     utmSource: clean(input.utmSource || input.utm_source),
     utmMedium: clean(input.utmMedium || input.utm_medium),
     utmCampaign: clean(input.utmCampaign || input.utm_campaign),
+    company: clean(input.company),
+    website: clean(input.website),
   };
 }
 
@@ -410,6 +421,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = normalizePayload(await readPayload(request));
+    if (!isAllowedOrigin(origin)) {
+      return json({ ok: false, error: "Origin is not allowed." }, 403, origin);
+    }
+    if (payload.company || payload.website) {
+      return json({ ok: true, leadId: null, spamFiltered: true }, 202, origin);
+    }
     const errors = validate(payload);
 
     if (Object.keys(errors).length) {

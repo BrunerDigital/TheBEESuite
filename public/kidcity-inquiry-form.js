@@ -123,6 +123,8 @@
         locationPhone: selectedLocation.dataset.locationPhone || "",
         pageUrl: window.location.href,
         leadSource: "Kid City USA Website Inquiry",
+        company: String(formData.get("company") || "").trim(),
+        website: String(formData.get("website") || "").trim(),
       };
 
       button.disabled = true;

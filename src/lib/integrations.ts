@@ -174,10 +174,22 @@ export async function sendSms({
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM_NUMBER;
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
   const normalizedTo = clean(to);
 
-  if (!accountSid || !authToken || !from || !normalizedTo) {
+  if (!accountSid || !authToken || (!from && !messagingServiceSid) || !normalizedTo) {
     return { ok: false, configured: false, provider: "twilio", error: "Twilio is not configured." };
+  }
+
+  const form = new URLSearchParams({
+    To: normalizedTo,
+    Body: body,
+  });
+
+  if (messagingServiceSid) {
+    form.set("MessagingServiceSid", messagingServiceSid);
+  } else if (from) {
+    form.set("From", from);
   }
 
   const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
@@ -186,11 +198,7 @@ export async function sendSms({
       Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({
-      To: normalizedTo,
-      From: from,
-      Body: body,
-    }),
+    body: form,
     signal: AbortSignal.timeout(10_000),
   });
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -127,6 +128,18 @@ async function sendOnboardingEmail(payload: NormalizedPayload, notificationId: s
 }
 
 export async function POST(request: NextRequest) {
+  const rate = checkRateLimit({
+    key: `onboarding:${requestIp(request.headers)}`,
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many onboarding attempts. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(rate.resetAt)) } },
+    );
+  }
+
   const payload = normalizePayload((await request.json().catch(() => ({}))) as OnboardingPayload);
   const errors = validate(payload);
 

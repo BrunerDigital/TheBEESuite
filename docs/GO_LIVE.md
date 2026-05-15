@@ -94,6 +94,16 @@ GET /api/system/readiness
 
 `/api/health` is public and only reports database reachability. `/api/system/readiness` requires a signed-in platform, brand, or regional user and returns non-secret launch status for Supabase Auth, Kid City center data, inquiry intake, Google Sheets, SendGrid, Stripe Connect, and Twilio.
 
+Public intake routes include best-effort in-process burst limits:
+
+```text
+/api/inquiries
+/api/onboarding
+/api/auth/forgot-password
+```
+
+Keep Vercel firewall/WAF or a dedicated abuse-prevention layer on the roadmap for production scale.
+
 ## 4. Payments, Payouts, SMS, Push, and Signature Requests
 
 The server routes are live-ready but remain safe when credentials are missing.

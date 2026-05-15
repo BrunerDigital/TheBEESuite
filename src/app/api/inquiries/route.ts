@@ -6,6 +6,7 @@ import {
   type GoogleSheetValue,
 } from "@/lib/google-sheets";
 import { prisma } from "@/lib/prisma";
+import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -420,10 +421,21 @@ export async function POST(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
-    const payload = normalizePayload(await readPayload(request));
     if (!isAllowedOrigin(origin)) {
       return json({ ok: false, error: "Origin is not allowed." }, 403, origin);
     }
+    const rate = checkRateLimit({
+      key: `inquiry:${requestIp(request.headers)}`,
+      limit: 30,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!rate.ok) {
+      const response = json({ ok: false, error: "Too many inquiry attempts. Please try again shortly." }, 429, origin);
+      response.headers.set("Retry-After", String(retryAfterSeconds(rate.resetAt)));
+      return response;
+    }
+
+    const payload = normalizePayload(await readPayload(request));
     if (payload.company || payload.website) {
       return json({ ok: true, leadId: null, spamFiltered: true }, 202, origin);
     }

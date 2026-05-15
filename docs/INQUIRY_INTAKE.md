@@ -35,6 +35,8 @@ The CRM lead is created first. Google Sheets and email failures are returned in 
 
 The endpoint rejects browser requests from origins outside `INQUIRY_ALLOWED_ORIGINS` and includes hidden `company` / `website` honeypot fields in the hosted embed. Honeypot hits return a non-error response without creating a CRM lead.
 
+The endpoint also applies a best-effort server-side burst limit per requester. It is not a replacement for a WAF or dedicated abuse service, but it reduces accidental or automated repeated submissions during live testing.
+
 ## Required Form Fields
 
 ```text

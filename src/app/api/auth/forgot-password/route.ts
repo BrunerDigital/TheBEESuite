@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
@@ -17,6 +18,18 @@ export async function POST(request: NextRequest) {
 
   if (!looksLikeEmail(email)) {
     return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 400 });
+  }
+
+  const rate = checkRateLimit({
+    key: `forgot-password:${requestIp(request.headers)}:${email}`,
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many reset requests. Please try again shortly." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(rate.resetAt)) } },
+    );
   }
 
   const redirectTo = getPasswordResetRedirectUrl(request.url);

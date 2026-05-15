@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
   ArrowRight,
   BadgeDollarSign,
@@ -84,7 +84,10 @@ function hasValue(value: string) {
 export function OnboardingFlow() {
   const [activeStep, setActiveStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submissionId, setSubmissionId] = useState("");
   const [form, setForm] = useState<FormState>(initialForm);
+  const [isPending, startTransition] = useTransition();
 
   const completedFields = useMemo(
     () => Object.entries(form).filter(([key, value]) => key !== "notes" && hasValue(value)).length,
@@ -102,12 +105,40 @@ export function OnboardingFlow() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
+  function submitIntake() {
+    setSubmitError("");
+    startTransition(async () => {
+      const response = await fetch("/api/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          pageUrl: typeof window !== "undefined" ? window.location.href : "",
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        notificationId?: string;
+        error?: string;
+        errors?: Record<string, string>;
+      } | null;
+
+      if (!response.ok) {
+        const firstFieldError = data?.errors ? Object.values(data.errors)[0] : "";
+        setSubmitError(firstFieldError || data?.error || "Onboarding intake could not be submitted.");
+        return;
+      }
+
+      setSubmissionId(data?.notificationId ?? "");
+      setSubmitted(true);
+    });
+  }
+
   function nextStep() {
     if (activeStep < steps.length - 1) {
       setActiveStep((step) => step + 1);
       return;
     }
-    setSubmitted(true);
+    submitIntake();
   }
 
   return (
@@ -174,8 +205,13 @@ export function OnboardingFlow() {
               </CardHeader>
               <CardContent className="space-y-5 text-slate-200">
                 <p className="leading-7">
-                  The next handoff is a workspace invitation, center import, CRM funnel confirmation, and Stripe Connect payout onboarding for {form.brandName || "your brand"}.
+                  The Bee Suite team has the launch intake for {form.brandName || "your brand"}. The next handoff is a workspace invitation, center import, CRM funnel confirmation, and Stripe Connect payout onboarding.
                 </p>
+                {submissionId ? (
+                  <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-sm">
+                    Intake reference: <span className="font-semibold text-white">{submissionId}</span>
+                  </div>
+                ) : null}
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Brand", form.brandName],
@@ -333,9 +369,15 @@ export function OnboardingFlow() {
                   </div>
                 ) : null}
 
+                {submitError ? (
+                  <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+                    {submitError}
+                  </div>
+                ) : null}
+
                 <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
-                  <Button type="button" disabled={!canContinue} onClick={nextStep}>
-                    {activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
+                  <Button type="button" disabled={!canContinue || isPending} onClick={nextStep}>
+                    {isPending ? "Submitting..." : activeStep === steps.length - 1 ? "Finish intake" : "Continue"}
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   {activeStep > 0 ? (

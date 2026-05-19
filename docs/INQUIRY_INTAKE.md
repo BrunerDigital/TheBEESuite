@@ -37,6 +37,16 @@ The endpoint rejects browser requests from origins outside `INQUIRY_ALLOWED_ORIG
 
 The endpoint also applies a best-effort server-side burst limit per requester. It is not a replacement for a WAF or dedicated abuse service, but it reduces accidental or automated repeated submissions during live testing.
 
+## Routing Audit
+
+Brand, regional, and platform users can verify public-form routing without creating test leads:
+
+```text
+GET /api/inquiries/routing-audit
+```
+
+The audit compares every hosted Kid City USA dropdown location against production center records and reports missing CRM mappings or missing notification targets without exposing full email addresses.
+
 ## Required Form Fields
 
 ```text

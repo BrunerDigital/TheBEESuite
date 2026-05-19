@@ -148,12 +148,14 @@ function StatTile({
   tone: string;
 }) {
   return (
-    <GlassPanel className="p-4">
-      <div className="flex items-start gap-3">
-        <Icon className={cn("mt-1 size-5", tone)} />
-        <div className="min-w-0">
+    <GlassPanel className="overflow-hidden p-4">
+      <div className="flex min-w-0 items-start gap-2.5">
+        <Icon className={cn("mt-1 size-5 shrink-0", tone)} />
+        <div className="min-w-0 flex-1">
           <div className="text-xs text-zinc-400">{label}</div>
-          <div className="mt-1 text-3xl font-semibold leading-none text-white">{value}</div>
+          <div className="mt-1 whitespace-nowrap text-[1.45rem] font-semibold leading-none tracking-normal text-white sm:text-[1.65rem] xl:text-[1.45rem] 2xl:text-[1.65rem]">
+            {value}
+          </div>
           <div className="mt-2 text-xs text-emerald-300">{trend}</div>
         </div>
       </div>

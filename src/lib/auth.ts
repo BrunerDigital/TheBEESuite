@@ -73,6 +73,8 @@ const executiveDemoRoles = new Set<UserRole>([
   UserRole.REGIONAL_MANAGER,
 ]);
 
+const executiveDemoEmails = new Set(["brenden@kidcityusa.com"]);
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
   if (secret) return secret;
@@ -230,8 +232,8 @@ export function canManageBilling(user: Pick<CurrentUser, "role">) {
   return billingWriteRoles.has(user.role);
 }
 
-export function canViewExecutiveDemoData(user: Pick<CurrentUser, "role">) {
-  return executiveDemoRoles.has(user.role);
+export function canViewExecutiveDemoData(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "email">>) {
+  return executiveDemoRoles.has(user.role) || executiveDemoEmails.has(user.email?.toLowerCase() ?? "");
 }
 
 export function isParentGuardian(user: Pick<CurrentUser, "role">) {

@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Bee Suite | Location Pricing & Charge Flow Visuals</title>
+  <style>
+    :root {
+      --bg: #05070a;
+      --panel: #11161d;
+      --panel-2: #171d25;
+      --line: rgba(255, 255, 255, 0.12);
+      --gold: #ffc426;
+      --gold-2: #f3a90f;
+      --green: #58d68d;
+      --sky: #63c8ff;
+      --violet: #b99cff;
+      --rose: #ff7f7f;
+      --text: #f7f7f5;
+      --muted: #a5adba;
+      --faint: #6f7887;
+      --radius: 22px;
+      --shadow: 0 28px 90px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1180px;
+      background:
+        radial-gradient(circle at 74% 7%, rgba(255, 196, 38, 0.18), transparent 420px),
+        radial-gradient(circle at 8% 12%, rgba(99, 200, 255, 0.10), transparent 340px),
+        linear-gradient(135deg, #05070a 0%, #0d1218 50%, #1d1404 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .page {
+      width: 1180px;
+      min-height: 760px;
+      margin: 0 auto;
+      padding: 34px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page::after {
+      content: "";
+      position: absolute;
+      right: -40px;
+      top: 0;
+      width: 260px;
+      height: 220px;
+      opacity: 0.22;
+      background-image:
+        linear-gradient(30deg, rgba(255, 196, 38, .25) 12%, transparent 12.5%, transparent 87%, rgba(255, 196, 38, .25) 87.5%, rgba(255, 196, 38, .25)),
+        linear-gradient(150deg, rgba(255, 196, 38, .25) 12%, transparent 12.5%, transparent 87%, rgba(255, 196, 38, .25) 87.5%, rgba(255, 196, 38, .25));
+      background-size: 38px 66px;
+      pointer-events: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 26px;
+    }
+
+    .mark {
+      width: 44px;
+      height: 44px;
+      border-radius: 15px;
+      border: 1px solid rgba(255, 196, 38, .34);
+      background: rgba(255, 196, 38, .12);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 34px rgba(255, 196, 38, .12);
+    }
+
+    .mark svg { width: 31px; height: 31px; }
+    .brand-title { color: var(--gold); font-weight: 800; font-size: 18px; line-height: 1; }
+    .brand-sub { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 54px; line-height: 0.98; letter-spacing: -0.01em; max-width: 760px; }
+    h2 { font-size: 30px; line-height: 1.05; letter-spacing: -0.01em; }
+    h3 { font-size: 18px; line-height: 1.16; }
+    p { color: var(--muted); line-height: 1.55; font-size: 14px; }
+
+    .topline {
+      display: grid;
+      grid-template-columns: 1fr 330px;
+      gap: 26px;
+      align-items: end;
+      margin-bottom: 28px;
+    }
+
+    .note {
+      border: 1px solid rgba(255, 196, 38, .24);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(255, 196, 38, .12), rgba(255, 255, 255, .04));
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .note strong { color: var(--gold); display: block; margin-bottom: 8px; }
+
+    .grid { display: grid; gap: 18px; }
+    .cols-5 { grid-template-columns: repeat(5, 1fr); }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+    .cols-main { grid-template-columns: 0.92fr 1.08fr; }
+
+    .card {
+      border: 1px solid var(--line);
+      background: linear-gradient(145deg, rgba(255, 255, 255, .075), rgba(255, 255, 255, .025));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card.gold { border-color: rgba(255, 196, 38, .32); }
+    .card.green { border-color: rgba(88, 214, 141, .28); }
+    .card.sky { border-color: rgba(99, 200, 255, .28); }
+    .card.violet { border-color: rgba(185, 156, 255, .28); }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 196, 38, .28);
+      color: var(--gold);
+      background: rgba(255, 196, 38, .1);
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 750;
+      margin-bottom: 14px;
+    }
+
+    .price {
+      font-size: 30px;
+      font-weight: 850;
+      margin: 13px 0 5px;
+      white-space: nowrap;
+    }
+
+    .tiny { color: var(--faint); font-size: 11px; line-height: 1.45; }
+    .accent { color: var(--gold); }
+    .green-text { color: var(--green); }
+    .sky-text { color: var(--sky); }
+    .violet-text { color: var(--violet); }
+    .rose-text { color: var(--rose); }
+
+    ul { padding-left: 17px; margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    li + li { margin-top: 6px; }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(0, 0, 0, .22);
+      padding: 12px 14px;
+      min-height: 58px;
+    }
+
+    .node strong { display: block; font-size: 14px; color: var(--text); margin-bottom: 3px; }
+    .node span { display: block; font-size: 11px; color: var(--muted); line-height: 1.35; }
+
+    .arrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .arrow::before,
+    .arrow::after {
+      content: "";
+      height: 1px;
+      flex: 1;
+      background: linear-gradient(90deg, transparent, rgba(255, 196, 38, .65), transparent);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .split .node { min-height: 76px; }
+
+    .matrix {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .matrix th,
+    .matrix td {
+      text-align: left;
+      padding: 13px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      vertical-align: top;
+    }
+
+    .matrix th {
+      background: rgba(255, 196, 38, .1);
+      color: var(--gold);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+
+    .matrix tr:last-child td { border-bottom: 0; }
+    .matrix td { color: var(--muted); }
+    .matrix td:first-child { color: var(--text); font-weight: 760; }
+
+    .stacked-bars {
+      margin-top: 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 132px 1fr 60px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .track {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,.08);
+      display: flex;
+    }
+
+    .seg { height: 100%; }
+    .seg.gold { background: linear-gradient(90deg, var(--gold), var(--gold-2)); }
+    .seg.green { background: var(--green); }
+    .seg.sky { background: var(--sky); }
+    .seg.violet { background: var(--violet); }
+
+    .recommend {
+      border: 1px solid rgba(88, 214, 141, .34);
+      background:
+        linear-gradient(145deg, rgba(88, 214, 141, .14), rgba(255,255,255,.03)),
+        rgba(0,0,0,.18);
+    }
+
+    .footer {
+      margin-top: 22px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--faint);
+      font-size: 11px;
+      border-top: 1px solid rgba(255,255,255,.08);
+      padding-top: 14px;
+    }
+
+    .page-break { page-break-before: always; }
+
+    @media print {
+      body { background: #05070a; }
+      .page { page-break-after: always; }
+    }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <path d="M16 6 25 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M29 6 38 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M22 19 31 24v10l-9 5-9-5V24l9-5Z" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">The Bee Suite</div>
+        <div class="brand-sub">Pricing model visuals for location-based SaaS revenue</div>
+      </div>
+    </div>
+
+    <div class="topline">
+      <div>
+        <h1>Ways to charge each childcare location.</h1>
+        <p style="margin-top:18px; max-width:760px; font-size:16px;">
+          A team review board for monthly platform revenue, payment processing participation, franchise rollups, onboarding fees, and optional usage-based add-ons.
+        </p>
+      </div>
+      <div class="note">
+        <strong>Decision lens</strong>
+        <p>Keep the core CRM easy to buy, then let payments, automations, communications, and enterprise reporting expand ARPU as schools mature.</p>
+      </div>
+    </div>
+
+    <div class="grid cols-5">
+      <div class="card gold">
+        <div class="pill">Model 1</div>
+        <h3>Flat monthly per location</h3>
+        <div class="price">$149-$499</div>
+        <p>Simple SaaS invoice for each school. Best for fast sales and predictable MRR.</p>
+        <ul>
+          <li>CRM, leads, tours, embed form</li>
+          <li>Basic reporting and support</li>
+          <li>Best v1 anchor model</li>
+        </ul>
+      </div>
+      <div class="card sky">
+        <div class="pill">Model 2</div>
+        <h3>Base + enrolled child band</h3>
+        <div class="price">$199 + tier</div>
+        <p>Location fee scales with school size, capacity, or active children.</p>
+        <ul>
+          <li>Fairer for small centers</li>
+          <li>Captures value from larger sites</li>
+          <li>Needs clean child counts</li>
+        </ul>
+      </div>
+      <div class="card green">
+        <div class="pill">Model 3</div>
+        <h3>Payments platform fee</h3>
+        <div class="price">25-75 bps</div>
+        <p>When parent tuition flows through Stripe Connect, Bee Suite keeps a configurable platform fee.</p>
+        <ul>
+          <li>High upside with tuition volume</li>
+          <li>Must disclose clearly</li>
+          <li>Can cap by location</li>
+        </ul>
+      </div>
+      <div class="card violet">
+        <div class="pill">Model 4</div>
+        <h3>Brand or franchise license</h3>
+        <div class="price">Custom</div>
+        <p>HQ pays for the network, with location usage tracked underneath.</p>
+        <ul>
+          <li>Best for Kid City style groups</li>
+          <li>Central admin and reporting fee</li>
+          <li>Volume discounts by center count</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="pill">Model 5</div>
+        <h3>Add-on marketplace</h3>
+        <div class="price">Usage</div>
+        <p>Optional paid modules increase ARPU without making the entry package heavy.</p>
+        <ul>
+          <li>SMS, AI, e-sign, storage</li>
+          <li>FTE and executive reporting</li>
+          <li>Integrations and automations</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="grid cols-2" style="margin-top:18px;">
+      <div class="card recommend">
+        <div class="pill">Recommended V1 bundle</div>
+        <h2>Hybrid: base SaaS + payment fee + add-ons</h2>
+        <p style="margin-top:12px;">
+          Launch with a clear per-location subscription, add a small configurable platform fee only when payments are processed through Bee Suite, and keep premium modules optional.
+        </p>
+      </div>
+      <div class="card">
+        <h3>What to avoid early</h3>
+        <ul>
+          <li>Charging only on payment volume before parent billing is live.</li>
+          <li>Making every feature usage-based; directors need predictable bills.</li>
+          <li>Blending Stripe processing fees and Bee Suite platform fees in a way schools cannot audit.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Illustrative pricing only. Final rates require margin, support, Stripe cost, tax, and contract review.</span>
+      <span>Visual 1 of 3</span>
+    </div>
+  </section>
+
+  <section class="page page-break">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <path d="M16 6 25 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M29 6 38 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M22 19 31 24v10l-9 5-9-5V24l9-5Z" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Charge Flow Maps</div>
+        <div class="brand-sub">How money moves between schools, parents, Stripe, and The Bee Suite</div>
+      </div>
+    </div>
+
+    <div class="grid cols-2">
+      <div class="card gold">
+        <div class="pill">Flow A | Monthly SaaS</div>
+        <h2>Per-location subscription</h2>
+        <div class="flow" style="margin-top:18px;">
+          <div class="node"><strong>School or brand HQ</strong><span>Chooses plan and number of locations.</span></div>
+          <div class="arrow">Stripe Billing subscription</div>
+          <div class="node"><strong>Bee Suite platform account</strong><span>Receives recurring MRR by location, plan, and add-ons.</span></div>
+          <div class="split">
+            <div class="node"><strong>Base plan</strong><span>CRM + form + reporting.</span></div>
+            <div class="node"><strong>Add-ons</strong><span>AI, SMS, e-sign, FTE, automations.</span></div>
+            <div class="node"><strong>Support</strong><span>Premium onboarding and admin help.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card green">
+        <div class="pill">Flow B | Parent payments</div>
+        <h2>Stripe Connect tuition flow</h2>
+        <div class="flow" style="margin-top:18px;">
+          <div class="node"><strong>Parent payment</strong><span>Tuition, deposit, registration fee, invoice, or one-time charge.</span></div>
+          <div class="arrow">Stripe Checkout / Payment Element</div>
+          <div class="node"><strong>Stripe processing fee</strong><span>Pass-through processor cost. Confirm current Stripe pricing before launch.</span></div>
+          <div class="split">
+            <div class="node"><strong>Bee Suite fee</strong><span>Application/platform fee, e.g. 25-75 bps or fixed invoice fee.</span></div>
+            <div class="node"><strong>School payout</strong><span>Net funds to connected location account.</span></div>
+            <div class="node"><strong>Ledger</strong><span>Invoice, transfer, fee, refund, dispute records.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card sky">
+        <div class="pill">Flow C | Usage add-ons</div>
+        <h2>Metered operational tools</h2>
+        <div class="flow" style="margin-top:18px;">
+          <div class="node"><strong>Location activity</strong><span>Messages, AI drafts, signatures, storage, automations, campaigns.</span></div>
+          <div class="arrow">Usage meter or package</div>
+          <div class="node"><strong>Monthly invoice line items</strong><span>Bundles or overages keep usage costs visible and adjustable.</span></div>
+          <div class="split">
+            <div class="node"><strong>SMS pack</strong><span>Included allotment + overage.</span></div>
+            <div class="node"><strong>Mr. Bee AI</strong><span>Team seats or monthly credits.</span></div>
+            <div class="node"><strong>Docs/e-sign</strong><span>Per packet or per signature.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card violet">
+        <div class="pill">Flow D | Franchise network</div>
+        <h2>Brand-level agreement</h2>
+        <div class="flow" style="margin-top:18px;">
+          <div class="node"><strong>Franchise / enterprise HQ</strong><span>Purchases command center, reporting, white-label, and governance layer.</span></div>
+          <div class="arrow">Master subscription + per-center schedule</div>
+          <div class="node"><strong>The Bee Suite</strong><span>Bills HQ or bills locations with HQ rollup reporting.</span></div>
+          <div class="split">
+            <div class="node"><strong>HQ license</strong><span>Executive dashboards and controls.</span></div>
+            <div class="node"><strong>Location fees</strong><span>Discounted SaaS by center count.</span></div>
+            <div class="node"><strong>Services</strong><span>Data import and rollout fee.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Stripe Connect note: platform fee must be separate from Stripe processing cost, configurable, auditable, and reflected in webhook reconciliation.</span>
+      <span>Visual 2 of 3</span>
+    </div>
+  </section>
+
+  <section class="page page-break">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 44 44" fill="none" aria-hidden="true">
+          <path d="M16 6 25 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M29 6 38 11v10l-9 5-9-5V11l9-5Z" stroke="currentColor" stroke-width="2"/>
+          <path d="M22 19 31 24v10l-9 5-9-5V24l9-5Z" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Revenue Stack Options</div>
+        <div class="brand-sub">How each model changes ARPU, sales friction, and implementation risk</div>
+      </div>
+    </div>
+
+    <div class="grid cols-main">
+      <div class="card">
+        <h2>Comparison matrix</h2>
+        <table class="matrix" style="margin-top:18px;">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Revenue upside</th>
+              <th>Sales friction</th>
+              <th>Best use</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Flat monthly location fee</td>
+              <td>Medium, predictable MRR</td>
+              <td>Low</td>
+              <td>Core v1 and trials converting to paid</td>
+            </tr>
+            <tr>
+              <td>Tiered by active children</td>
+              <td>Medium-high with larger schools</td>
+              <td>Medium</td>
+              <td>Fair pricing for different center sizes</td>
+            </tr>
+            <tr>
+              <td>Payment platform fee</td>
+              <td>High if tuition volume flows through app</td>
+              <td>Medium-high</td>
+              <td>Billing phase after trust is established</td>
+            </tr>
+            <tr>
+              <td>Enterprise/franchise license</td>
+              <td>High contract value</td>
+              <td>Medium</td>
+              <td>Brands with many centers and central ops</td>
+            </tr>
+            <tr>
+              <td>Usage add-ons</td>
+              <td>Expandable ARPU</td>
+              <td>Low if optional</td>
+              <td>SMS, AI, e-sign, storage, integrations</td>
+            </tr>
+            <tr>
+              <td>Implementation/import fee</td>
+              <td>Cash upfront</td>
+              <td>Medium</td>
+              <td>CRM migration, forms, setup, training</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card gold">
+        <h2>Example blended ARPU stack</h2>
+        <p style="margin-top:12px;">Illustrative only. Use this to discuss the direction, not final prices.</p>
+        <div class="stacked-bars">
+          <div class="bar">
+            <span>Base platform</span>
+            <div class="track"><div class="seg gold" style="width:55%"></div></div>
+            <strong>$299</strong>
+          </div>
+          <div class="bar">
+            <span>Automation + AI</span>
+            <div class="track"><div class="seg violet" style="width:26%"></div></div>
+            <strong>$99</strong>
+          </div>
+          <div class="bar">
+            <span>Comms package</span>
+            <div class="track"><div class="seg sky" style="width:18%"></div></div>
+            <strong>$59</strong>
+          </div>
+          <div class="bar">
+            <span>Payment fee</span>
+            <div class="track"><div class="seg green" style="width:38%"></div></div>
+            <strong>bps</strong>
+          </div>
+          <div class="bar">
+            <span>Setup/import</span>
+            <div class="track"><div class="seg gold" style="width:72%"></div></div>
+            <strong>one-time</strong>
+          </div>
+        </div>
+        <div class="note" style="margin-top:18px; box-shadow:none;">
+          <strong>Best candidate offer</strong>
+          <p>Start with $299/location/mo for CRM + inquiry routing + reporting, then add payment platform fee when parent billing launches. Discount multi-location groups, but keep enterprise/HQ reporting as its own value line.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid cols-3" style="margin-top:18px;">
+      <div class="card">
+        <div class="pill">Starter Hive</div>
+        <h3>CRM adoption plan</h3>
+        <div class="price">$149-$249</div>
+        <p>For one location that needs leads, tours, inquiry embed, and simple reports.</p>
+      </div>
+      <div class="card gold">
+        <div class="pill">Growth Hive</div>
+        <h3>Recommended core plan</h3>
+        <div class="price">$299-$499</div>
+        <p>CRM, automations, Mr. Bee, tasking, reporting, and billing readiness.</p>
+      </div>
+      <div class="card violet">
+        <div class="pill">Enterprise Hive</div>
+        <h3>Brand network plan</h3>
+        <div class="price">Custom</div>
+        <p>HQ reporting, white-labeling, governance, onboarding, and rollout support.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Next decision: choose v1 public offer, Kid City pilot economics, Stripe platform fee cap, and which modules are paid add-ons.</span>
+      <span>Visual 3 of 3</span>
+    </div>
+  </section>
+</body>
+</html>

@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
-import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
+import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/dashboard");
 
-  const centerWhere = getLeadScopeWhere(user);
+  const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
   const centers = await prisma.center.findMany({
     where: centerWhere,
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
@@ -25,8 +26,9 @@ export default async function DashboardPage() {
   });
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
-  const leadWhere = canAccessAllCenters(user)
-    ? {}
+  const allCentersAccess = canAccessAllCenters(user);
+  const leadWhere = allCentersAccess
+    ? { center: { is: { status: { not: "closed" } } } }
     : {
         centerId: scopedCenterFilter,
       };
@@ -144,6 +146,27 @@ export default async function DashboardPage() {
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
   const revenueDollars = Math.round((revenue._sum.totalCents ?? 0) / 100);
+  const inquiryEmbed = canManageCrmLeads(user)
+    ? allCentersAccess
+      ? {
+          title: "Kid City USA inquiry form embed",
+          description:
+            "Executive users can copy this multi-location form for the Kid City USA website. It routes each selected school to the matching CRM profile, notification email, and Google Sheets backup.",
+          embedCode: getKidCityInquiryEmbedCode(),
+        }
+      : centers.length === 1
+        ? {
+            title: "School inquiry form embed",
+            description:
+              "This center-specific form sends new inquiries directly into this school's CRM profile and notification routing.",
+            embedCode: getCenterInquiryEmbedCode({
+              centerId: centers[0].id,
+              centerName: centers[0].name,
+              brandName: "Kid City USA",
+            }),
+          }
+        : undefined
+    : undefined;
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -162,7 +185,7 @@ export default async function DashboardPage() {
     })),
     centers: centers.slice(0, 6).map((center) => ({
       name: center.name,
-      region: [center.city, center.state].filter(Boolean).join(", ") || "Kid City USA",
+      region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
       director: user.name,
       children: activeChildren,
       capacity: center.licensedCapacity,
@@ -171,6 +194,7 @@ export default async function DashboardPage() {
       compliance: expiringDocuments ? 88 : 96,
     })),
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
+    inquiryEmbed,
   };
 
   return (

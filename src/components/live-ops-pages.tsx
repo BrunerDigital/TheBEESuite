@@ -25,6 +25,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import type { FteSnapshot } from "@/lib/fte-reports";
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "Not set";
@@ -1799,6 +1800,7 @@ export type MultiLocationDashboardData = {
     upcomingTours: number;
     staff: number;
   };
+  fte?: FteSnapshot;
 };
 
 export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashboardData }) {
@@ -1821,6 +1823,60 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         <StatCard label="Upcoming tours" value={data.stats.upcomingTours} />
         <StatCard label="Staff" value={data.stats.staff} />
       </div>
+      {data.fte ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>FTE Report Snapshot</CardTitle>
+            <CardDescription>
+              {data.fte.status === "ready"
+                ? `Synced from Google Sheets tab "${data.fte.sheetName}".`
+                : "Connect the Kid City USA FTE Google Sheet to show live full-time-equivalent reporting."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-[16rem_1fr]">
+            <div className="grid gap-3">
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-sm text-muted-foreground">Total FTE</div>
+                <div className="mt-2 text-2xl font-semibold">{data.fte.totalFte.toLocaleString()}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{data.fte.status.replaceAll("_", " ")}</div>
+              </div>
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-sm text-muted-foreground">Locations reported</div>
+                <div className="mt-2 text-2xl font-semibold">{data.fte.locationCount.toLocaleString()}</div>
+              </div>
+            </div>
+            <div className="max-h-72 overflow-auto rounded-xl border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>School</TableHead>
+                    <TableHead>CRM Location ID</TableHead>
+                    <TableHead>FTE</TableHead>
+                    <TableHead>Report Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.fte.rows.slice(0, 20).map((row) => (
+                    <TableRow key={row.key}>
+                      <TableCell className="font-medium">{row.centerName}</TableCell>
+                      <TableCell>{row.crmLocationId ?? "Not mapped"}</TableCell>
+                      <TableCell>{row.fte.toLocaleString()}</TableCell>
+                      <TableCell>{row.reportDate ?? "Not set"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!data.fte.rows.length ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-muted-foreground">
+                        {data.fte.error || "No FTE rows are available yet."}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>School Network</CardTitle>
@@ -2185,6 +2241,7 @@ export type AnalyticsPageData = {
     unreadMessages: number;
   };
   stageCounts: Array<{ stage: string; count: number }>;
+  fte?: FteSnapshot;
 };
 
 export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
@@ -2210,6 +2267,17 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
         <StatCard label="Incidents pending" value={data.stats.incidentsPending.toLocaleString()} />
         <StatCard label="Unread messages" value={data.stats.unreadMessages.toLocaleString()} />
       </div>
+      {data.fte ? (
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={data.fte.status.replaceAll("_", " ")} />
+          <StatCard label="FTE locations" value={data.fte.locationCount.toLocaleString()} detail={`Sheet tab: ${data.fte.sheetName}`} />
+          <StatCard
+            label="FTE sync"
+            value={data.fte.status === "ready" ? "Ready" : "Needs setup"}
+            detail={data.fte.error || "Uses Google Sheets as the backup source for FTE reporting."}
+          />
+        </div>
+      ) : null}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Pipeline Distribution</CardTitle>

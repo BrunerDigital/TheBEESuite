@@ -87,10 +87,10 @@ function SidebarNav({ close }: { close?: () => void }) {
         <div className="rounded-xl border bg-background/60 p-3">
           <div className="flex items-center gap-2 text-sm font-medium">
             <ShieldCheck data-icon="inline-start" />
-            Safety-first demo
+            Live pilot safeguards
           </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Sensitive child, custody, medical, billing, and compliance workflows are role-gated placeholders.
+            Sensitive child, custody, medical, billing, and compliance workflows stay role-gated and human-reviewed.
           </p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 </div>
               ) : (
                 <Button variant="secondary" className="hidden gap-2 sm:inline-flex">
-                  Kid City USA
+                  Live workspace
                   <ChevronDown data-icon="inline-end" />
                 </Button>
               )}

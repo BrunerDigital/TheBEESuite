@@ -64,11 +64,13 @@ npm run db:push
 npm run db:seed
 ```
 
-The UI currently uses demo data from `src/lib/demo-data.ts`; the Prisma schema and seed are ready for the next step of wiring server queries.
+Production CRM, inquiry intake, dashboard, reporting, users, center profiles, and operational pages are backed by the configured database. `src/lib/demo-data.ts` now only supplies static navigation/module metadata and safe fallback labels for setup-oriented pages.
 
 ## Routes
 
-Primary dashboard: `/`
+Public landing page: `/`
+
+Primary dashboard: `/dashboard`
 
 Auth and setup: `/login`, `/forgot-password`, `/onboarding`
 
@@ -76,7 +78,7 @@ Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classr
 
 ## Environment Variables
 
-Use `.env.example` as the guide. All external services are placeholders in v1 unless explicitly connected:
+Use `.env.example` as the guide. External services stay gated until explicitly connected:
 
 - `DATABASE_URL`
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -103,7 +105,9 @@ The design concept was generated with Image Gen and used as the implementation r
 
 Production-ready foundation: app shell, responsive UI, shadcn component system, dashboard visuals, module routes, data model, seed strategy, docs, and environment structure.
 
-Placeholder: auth, live RBAC enforcement, payments, SMS/email/push, calendar sync, review sync, lead ad sync, OpenAI calls, e-signatures, document/media storage, kiosk mode, QR/PIN check-in, and licensing exports.
+Connected/live foundation: custom auth session flow, server-side role and center scoping, CRM lead creation/editing, Kid City inquiry routing, SendGrid notifications, Google Sheets inquiry backup, Stripe Connect setup flow, reporting snapshots, and audit logging.
+
+Gated next phase: real parent payment processing, SMS/push, calendar sync, review sync, lead ad sync, e-signatures, document/media storage, kiosk mode, QR/PIN check-in, and licensing exports.
 
 ## Security and Privacy Notes
 

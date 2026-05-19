@@ -28,6 +28,7 @@ async function resolveCenterId(user: CurrentUser, locationId?: string) {
   if (requested) {
     const center = await prisma.center.findFirst({
       where: {
+        status: { not: "closed" },
         OR: [
           { id: requested },
           { crmLocationId: requested },
@@ -51,6 +52,7 @@ async function resolveCenterId(user: CurrentUser, locationId?: string) {
   }
 
   const fallback = await prisma.center.findFirst({
+    where: { status: { not: "closed" } },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });

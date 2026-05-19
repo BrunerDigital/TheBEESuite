@@ -40,6 +40,7 @@ import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { getModule, modules } from "@/lib/demo-data";
 import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
+import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -57,7 +58,7 @@ function centerIdFilter(centerIds: string[]) {
 
 async function getVisibleCenters(user: CurrentUser) {
   return prisma.center.findMany({
-    where: getLeadScopeWhere(user),
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
     select: {
       id: true,
@@ -83,7 +84,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(visibleCenterIds);
-  const leadWhere: Prisma.LeadWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+  const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds };
   const today = new Date();
   const thirtyDays = new Date(today);
   thirtyDays.setDate(today.getDate() + 30);
@@ -93,12 +94,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   endOfDay.setHours(23, 59, 59, 999);
 
   if (slug === "multi-location-dashboard") {
-    const [leads, highIntentLeads, upcomingTours] = await Promise.all([
+    const [leads, highIntentLeads, upcomingTours, fte] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
-      prisma.tour.count({
-        where: allCenters ? { startsAt: { gte: today } } : { centerId: scopedCenterIds, startsAt: { gte: today } },
-      }),
+      prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
+      getKidCityFteSnapshot(centers),
     ]);
 
     return (
@@ -112,6 +112,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             upcomingTours,
             staff: centers.reduce((sum, center) => sum + center._count.staff, 0),
           },
+          fte,
         }}
       />
     );
@@ -169,7 +170,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "tours") {
-    const tourWhere: Prisma.TourWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+    const tourWhere: Prisma.TourWhereInput = { centerId: scopedCenterIds };
     const [tours, upcoming, todayTours, completed] = await Promise.all([
       prisma.tour.findMany({
         where: tourWhere,
@@ -233,7 +234,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "family-detail") {
-    const familyWhere: Prisma.FamilyWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+    const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
     const [families, total, withCustodyNotes, children, guardians] = await Promise.all([
       prisma.family.findMany({
         where: familyWhere,
@@ -247,8 +248,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
       prisma.family.count({ where: familyWhere }),
       prisma.family.count({ where: { ...familyWhere, custodyNotes: { not: null } } }),
-      prisma.child.count({ where: allCenters ? {} : { family: { is: { centerId: scopedCenterIds } } } }),
-      prisma.guardian.count({ where: allCenters ? {} : { family: { is: { centerId: scopedCenterIds } } } }),
+      prisma.child.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
+      prisma.guardian.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
     ]);
 
     return <FamilyProfilesPage data={{ families, stats: { total, withCustodyNotes, children, guardians } }} />;
@@ -281,8 +282,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
       prisma.child.count({ where: childWhere }),
       prisma.child.count({ where: { ...childWhere, enrollmentStatus: "enrolled" } }),
-      prisma.allergy.count({ where: allCenters ? {} : { child: { family: { is: { centerId: scopedCenterIds } } } } }),
-      prisma.childMedicalNote.count({ where: allCenters ? { restricted: true } : { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } } }),
+      prisma.allergy.count({ where: { child: { family: { is: { centerId: scopedCenterIds } } } } }),
+      prisma.childMedicalNote.count({ where: { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } } }),
     ]);
 
     return <ChildProfilesPage data={{ children, stats: { total, enrolled, allergies, restrictedMedicalNotes } }} />;
@@ -627,16 +628,17 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             { child: { family: { is: { centerId: scopedCenterIds } } } },
           ],
         };
-    const [leads, enrolled, waitlisted, tours, openInvoices, openRows, incidentsPending, unreadMessages, stageCounts] = await Promise.all([
+    const [leads, enrolled, waitlisted, tours, openInvoices, openRows, incidentsPending, unreadMessages, stageCounts, fte] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.ENROLLED } }),
       prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.WAITLISTED } }),
-      prisma.tour.count({ where: allCenters ? {} : { centerId: scopedCenterIds } }),
+      prisma.tour.count({ where: { centerId: scopedCenterIds } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true } }),
       prisma.incidentReport.count({ where: incidentWhere }),
       prisma.message.count({ where: { ...messageWhere, readAt: null } }),
       prisma.lead.groupBy({ by: ["stage"], where: leadWhere, _count: { _all: true } }),
+      getKidCityFteSnapshot(centers),
     ]);
 
     return (
@@ -653,6 +655,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             unreadMessages,
           },
           stageCounts: stageCounts.map((stage) => ({ stage: stage.stage, count: stage._count._all })),
+          fte,
         }}
       />
     );
@@ -798,7 +801,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "audit-logs") {
-    const where = allCenters ? {} : { centerId: scopedCenterIds };
+    const where = { centerId: scopedCenterIds };
     const [logs, total, leadActions, sensitive] = await Promise.all([
       prisma.auditLog.findMany({
         where,
@@ -987,7 +990,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "classroom-dashboard") {
-    const classroomWhere: Prisma.ClassroomWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+    const classroomWhere: Prisma.ClassroomWhereInput = { centerId: scopedCenterIds };
     const classrooms = await prisma.classroom.findMany({
       where: classroomWhere,
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
@@ -1095,7 +1098,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds };
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
       ? { expiresAt: { lte: thirtyDays } }
       : { staff: { centerId: scopedCenterIds }, expiresAt: { lte: thirtyDays } };

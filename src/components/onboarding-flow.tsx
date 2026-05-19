@@ -100,6 +100,20 @@ export function OnboardingFlow() {
   const completedSteps = steps.map((step) =>
     step.fields.length > 0 && step.fields.every((field) => hasValue(form[field as keyof FormState])),
   );
+  const draftEmbedCode = useMemo(() => {
+    const appBaseUrl = typeof window !== "undefined" ? window.location.origin : "https://thebeesuite.io";
+    const brandName = form.brandName || "Your Childcare Brand";
+    return `<div id="bee-suite-inquiry-form"></div>
+<script
+  src="${appBaseUrl}/bee-suite-inquiry-form.js"
+  data-target="bee-suite-inquiry-form"
+  data-endpoint="${appBaseUrl}/api/inquiries"
+  data-brand-name="${brandName.replace(/"/g, "&quot;")}"
+  data-center-id="CENTER_ID_FROM_THE_BEE_SUITE"
+  data-location-name="Primary Center"
+  async
+></script>`;
+  }, [form.brandName]);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -207,6 +221,13 @@ export function OnboardingFlow() {
                 <p className="leading-7">
                   The Bee Suite team has the launch intake for {form.brandName || "your brand"}. The next handoff is a workspace invitation, center import, CRM funnel confirmation, and Stripe Connect payout onboarding.
                 </p>
+                <div className="rounded-lg border border-white/10 bg-slate-950/50 p-4">
+                  <div className="text-sm font-semibold text-white">Inquiry form embed setup</div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Each live center profile gets a linked form code inside its dashboard. This draft shows the install format; The Bee Suite replaces the center ID when the profile is created.
+                  </p>
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/50 p-3 text-xs leading-5 text-slate-200">{draftEmbedCode}</pre>
+                </div>
                 {submissionId ? (
                   <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-sm">
                     Intake reference: <span className="font-semibold text-white">{submissionId}</span>
@@ -255,7 +276,7 @@ export function OnboardingFlow() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="brandName">Brand name</Label>
-                      <Input id="brandName" value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Kid City USA" required />
+                      <Input id="brandName" value={form.brandName} onChange={(event) => update("brandName", event.target.value)} placeholder="Your childcare brand" required />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="workEmail">Work email</Label>

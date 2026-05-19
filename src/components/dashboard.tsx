@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
@@ -31,6 +32,11 @@ export type LiveDashboardData = {
   pipelineStages: typeof pipelineStages;
   centers: typeof centers;
   aiSummary: string;
+  inquiryEmbed?: {
+    title: string;
+    description: string;
+    embedCode: string;
+  };
 };
 
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
@@ -38,7 +44,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
   const dashboardCenters = live?.centers ?? centers;
   const aiSummary = live?.aiSummary ??
-    "Kid City USA is operating inside ratio targets with 18 staff checked in. Prioritize the Rivera tour packet, review one Maple Studio incident, and approve two billing reminder drafts. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
+    "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm any sensitive action before sending messages or changing records. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
 
   return (
     <div className="flex flex-col gap-6">
@@ -108,6 +114,14 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           </Card>
         </div>
       </section>
+
+      {live?.inquiryEmbed ? (
+        <InquiryEmbedCard
+          title={live.inquiryEmbed.title}
+          description={live.inquiryEmbed.description}
+          embedCode={live.inquiryEmbed.embedCode}
+        />
+      ) : null}
 
       <Tabs defaultValue="director" className="flex flex-col gap-4">
         <TabsList className="w-full justify-start overflow-x-auto">
@@ -304,7 +318,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Enrollment funnel</CardTitle>
-            <CardDescription>Inquiry to enrolled demo conversion</CardDescription>
+            <CardDescription>Inquiry to enrolled conversion snapshot</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">

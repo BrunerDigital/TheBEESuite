@@ -12,6 +12,16 @@ export type GoogleSheetsAppendResult = {
   updatedRange?: string;
 };
 
+export type GoogleSheetsReadResult = {
+  ok: boolean;
+  skipped?: boolean;
+  error?: string;
+  mode?: "google_sheets_api";
+  spreadsheetId?: string;
+  range?: string;
+  values?: string[][];
+};
+
 type GoogleTokenResponse = {
   access_token?: string;
   expires_in?: number;
@@ -54,6 +64,12 @@ export function hasGoogleSheetsApiConfig() {
       getServiceAccountEmail() &&
       getServiceAccountPrivateKey(),
   );
+}
+
+export function spreadsheetIdFromUrl(value?: string | null) {
+  const input = value?.trim() || "";
+  if (!input) return "";
+  return input.match(/\/spreadsheets\/d\/([^/]+)/)?.[1] || input;
 }
 
 export async function appendRowToGoogleSheet({
@@ -109,12 +125,50 @@ export async function appendRowToGoogleSheet({
   }
 }
 
+export async function readGoogleSheetValues({
+  spreadsheetId,
+  range,
+}: {
+  spreadsheetId: string;
+  range: string;
+}): Promise<GoogleSheetsReadResult> {
+  if (!spreadsheetId || !getServiceAccountEmail() || !getServiceAccountPrivateKey()) {
+    return { ok: true, skipped: true, spreadsheetId, range };
+  }
+
+  try {
+    const token = await getAccessToken();
+    const response = await googleFetch<ValuesResponse>(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+        spreadsheetId,
+      )}/values/${encodeURIComponent(range)}`,
+      token,
+    );
+
+    return {
+      ok: true,
+      mode: "google_sheets_api",
+      spreadsheetId,
+      range,
+      values: response.values ?? [],
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      mode: "google_sheets_api",
+      spreadsheetId,
+      range,
+      error: error instanceof Error ? error.message : "Google Sheets API read failed.",
+    };
+  }
+}
+
 function getSpreadsheetId() {
   const configuredId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
   if (configuredId) return configuredId;
 
   const url = process.env.GOOGLE_SHEETS_SPREADSHEET_URL?.trim();
-  return url?.match(/\/spreadsheets\/d\/([^/]+)/)?.[1] || "";
+  return spreadsheetIdFromUrl(url);
 }
 
 function getServiceAccountEmail() {

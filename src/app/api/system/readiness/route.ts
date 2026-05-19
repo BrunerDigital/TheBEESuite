@@ -109,6 +109,11 @@ export async function GET() {
       "Lead backups are sent through either the Apps Script webhook or Google Sheets API credentials.",
     ),
     check(
+      "Kid City FTE sheet",
+      env("KIDCITY_FTE_SPREADSHEET_URL") || env("KIDCITY_FTE_SPREADSHEET_ID") || env("KIDCITY_FTE_CSV_URL") ? "ready" : "warning",
+      "Executive reporting can read the Kid City FTE Google Sheet through public CSV export or Google Sheets API credentials.",
+    ),
+    check(
       "SendGrid",
       env("SENDGRID_API_KEY") && env("SENDGRID_FROM_EMAIL") ? "ready" : "warning",
       "Inquiry, onboarding, and reviewed lead emails can be sent by server routes.",

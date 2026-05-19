@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeLeadStage } from "@/lib/crm";
@@ -12,6 +13,14 @@ type RouteContext = {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeEmail(value: unknown) {
+  return clean(value).toLowerCase();
+}
+
+function hasField(body: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(body, key);
 }
 
 export async function GET(_request: NextRequest, context: RouteContext) {
@@ -79,13 +88,26 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const body = await request.json();
-  const stage = normalizeLeadStage(clean(body.stage));
+  const body = (await request.json()) as Record<string, unknown>;
+  const requestedStage = clean(body.stage);
+  const stage = requestedStage ? normalizeLeadStage(requestedStage) : undefined;
   const status = clean(body.status);
 
   const existing = await prisma.lead.findUnique({
     where: { id },
-    select: { centerId: true, stage: true, status: true },
+    select: {
+      centerId: true,
+      familyName: true,
+      email: true,
+      phone: true,
+      childName: true,
+      leadSource: true,
+      ageGroupInterest: true,
+      desiredStartDate: true,
+      programInterest: true,
+      stage: true,
+      status: true,
+    },
   });
 
   if (!existing) {
@@ -96,12 +118,82 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
   }
 
+  const data: Prisma.LeadUpdateInput = {};
+  const fieldChanges: string[] = [];
+
+  if (stage && stage !== existing.stage) {
+    data.stage = stage;
+    fieldChanges.push("stage");
+  }
+
+  if (status && status !== existing.status) {
+    data.status = status;
+    fieldChanges.push("status");
+  }
+
+  if (hasField(body, "familyName") || hasField(body, "parentName")) {
+    const familyName = clean(body.familyName || body.parentName);
+    if (!familyName) {
+      return NextResponse.json({ ok: false, errors: { familyName: "Family or parent name is required." } }, { status: 400 });
+    }
+    const [parentFirstName, ...parentLastNameParts] = familyName.split(/\s+/);
+    data.familyName = familyName;
+    data.parentFirstName = parentFirstName;
+    data.parentLastName = parentLastNameParts.join(" ") || null;
+    fieldChanges.push("familyName");
+  }
+
+  if (hasField(body, "email")) {
+    data.email = normalizeEmail(body.email) || null;
+    fieldChanges.push("email");
+  }
+
+  if (hasField(body, "phone")) {
+    data.phone = clean(body.phone) || null;
+    fieldChanges.push("phone");
+  }
+
+  if (hasField(body, "childName")) {
+    data.childName = clean(body.childName) || null;
+    fieldChanges.push("childName");
+  }
+
+  if (hasField(body, "leadSource")) {
+    data.leadSource = clean(body.leadSource) || null;
+    fieldChanges.push("leadSource");
+  }
+
+  if (hasField(body, "programInterest") || hasField(body, "program")) {
+    data.programInterest = clean(body.programInterest || body.program) || null;
+    fieldChanges.push("programInterest");
+  }
+
+  if (hasField(body, "ageGroupInterest")) {
+    data.ageGroupInterest = clean(body.ageGroupInterest) || null;
+    fieldChanges.push("ageGroupInterest");
+  }
+
+  if (hasField(body, "desiredStartDate")) {
+    const desiredStartDate = clean(body.desiredStartDate);
+    if (desiredStartDate) {
+      const parsed = new Date(desiredStartDate);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ ok: false, errors: { desiredStartDate: "Desired start date is invalid." } }, { status: 400 });
+      }
+      data.desiredStartDate = parsed;
+    } else {
+      data.desiredStartDate = null;
+    }
+    fieldChanges.push("desiredStartDate");
+  }
+
+  if (!fieldChanges.length) {
+    return NextResponse.json({ ok: false, error: "No lead updates were provided." }, { status: 400 });
+  }
+
   const lead = await prisma.lead.update({
     where: { id },
-    data: {
-      stage,
-      ...(status ? { status } : {}),
-    },
+    data,
     include: {
       center: {
         select: {
@@ -120,10 +212,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     data: {
       userId: user.id,
       leadId: lead.id,
-      body:
-        existing.stage === stage
-          ? `Lead status updated${status ? ` to ${status}` : ""}.`
-          : `Pipeline stage changed from ${existing.stage} to ${stage}.`,
+      body: fieldChanges.includes("stage")
+        ? `Pipeline stage changed from ${existing.stage} to ${lead.stage}.`
+        : `Lead details updated: ${fieldChanges.join(", ")}.`,
     },
   });
 
@@ -136,11 +227,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       before: {
         stage: existing.stage,
         status: existing.status,
+        familyName: existing.familyName,
+        email: existing.email,
+        phone: existing.phone,
+        childName: existing.childName,
+        leadSource: existing.leadSource,
+        ageGroupInterest: existing.ageGroupInterest,
+        desiredStartDate: existing.desiredStartDate,
+        programInterest: existing.programInterest,
       },
       after: {
         stage: lead.stage,
         status: lead.status,
+        familyName: lead.familyName,
+        email: lead.email,
+        phone: lead.phone,
+        childName: lead.childName,
+        leadSource: lead.leadSource,
+        ageGroupInterest: lead.ageGroupInterest,
+        desiredStartDate: lead.desiredStartDate,
+        programInterest: lead.programInterest,
       },
+      fields: fieldChanges,
     },
   });
 

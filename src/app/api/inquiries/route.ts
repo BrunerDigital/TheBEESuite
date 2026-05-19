@@ -16,6 +16,8 @@ type InquiryPayload = {
   email?: string;
   phone?: string;
   program?: string;
+  centerId?: string;
+  center_id?: string;
   locationId?: string;
   location_id?: string;
   publicLocationId?: string;
@@ -42,6 +44,8 @@ type InquiryPayload = {
   utm_medium?: string;
   utmCampaign?: string;
   utm_campaign?: string;
+  brandName?: string;
+  brand_name?: string;
   company?: string;
   website?: string;
 };
@@ -71,6 +75,7 @@ const GOOGLE_SHEET_COLUMNS = [
   { header: "Email", field: "email" },
   { header: "Phone", field: "phone" },
   { header: "Program", field: "program" },
+  { header: "Center ID", field: "centerId" },
   { header: "Location ID", field: "locationId" },
   { header: "Public Location ID", field: "publicLocationId" },
   { header: "Location Name", field: "locationName" },
@@ -81,6 +86,7 @@ const GOOGLE_SHEET_COLUMNS = [
   { header: "Location Phone", field: "locationPhone" },
   { header: "Page URL", field: "pageUrl" },
   { header: "Lead Source", field: "leadSource" },
+  { header: "Brand Name", field: "brandName" },
   { header: "UTM Source", field: "utmSource" },
   { header: "UTM Medium", field: "utmMedium" },
   { header: "UTM Campaign", field: "utmCampaign" },
@@ -164,6 +170,7 @@ function normalizePayload(input: InquiryPayload) {
   const email = normalizeEmail(input.email);
   const phone = clean(input.phone);
   const program = normalizeProgram(clean(input.program));
+  const centerId = clean(input.centerId || input.center_id);
   const locationId = clean(input.locationId || input.location_id);
   const publicLocationId = clean(input.publicLocationId || input.public_location_id);
 
@@ -172,6 +179,7 @@ function normalizePayload(input: InquiryPayload) {
     email,
     phone,
     program,
+    centerId,
     locationId,
     publicLocationId,
     locationName: clean(input.locationName || input.location_name),
@@ -185,6 +193,7 @@ function normalizePayload(input: InquiryPayload) {
     utmSource: clean(input.utmSource || input.utm_source),
     utmMedium: clean(input.utmMedium || input.utm_medium),
     utmCampaign: clean(input.utmCampaign || input.utm_campaign),
+    brandName: clean(input.brandName || input.brand_name),
     company: clean(input.company),
     website: clean(input.website),
   };
@@ -197,15 +206,15 @@ function validate(payload: ReturnType<typeof normalizePayload>) {
   if (!payload.email || !isEmail(payload.email)) errors.email = "A valid email is required.";
   if (!payload.phone) errors.phone = "Phone number is required.";
   if (!payload.program) errors.program = "Program is required.";
-  if (!payload.locationId) errors.locationId = "Location is required.";
+  if (!payload.locationId && !payload.centerId) errors.locationId = "Location is required.";
 
   return errors;
 }
 
-function scoreLead(program: string, locationId: string) {
+function scoreLead(program: string, locationId: string, centerId = "") {
   let score = 70;
   if (program === "Daycare" || program === "Preschool") score += 10;
-  if (locationId) score += 5;
+  if (locationId || centerId) score += 5;
   return Math.min(score, 95);
 }
 
@@ -222,7 +231,20 @@ function uniqueEmails(values: string[]) {
     });
 }
 
-async function getIntakeCenter(locationId: string, publicLocationId?: string) {
+async function getIntakeCenter(locationId: string, publicLocationId?: string, centerId?: string) {
+  const requestedCenterId = clean(centerId);
+  if (requestedCenterId) {
+    const center = await prisma.center.findFirst({
+      where: {
+        id: requestedCenterId,
+        status: { not: "closed" },
+      },
+      select: { id: true, email: true },
+    });
+
+    if (center) return center;
+  }
+
   const locationIds = [locationId, publicLocationId].map(clean).filter(Boolean);
   if (locationIds.length) {
     const routedCenter = await prisma.center.findFirst({
@@ -244,8 +266,11 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string) {
   const configuredCenterId = process.env.INQUIRY_DEFAULT_CENTER_ID;
 
   if (configuredCenterId) {
-    const center = await prisma.center.findUnique({
-      where: { id: configuredCenterId },
+    const center = await prisma.center.findFirst({
+      where: {
+        id: configuredCenterId,
+        status: { not: "closed" },
+      },
       select: { id: true, email: true },
     });
     if (center) return center;
@@ -271,7 +296,7 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string) {
   const created = await prisma.center.create({
     data: {
       organizationId: organization.id,
-      name: "Kid City USA",
+      name: "Website Inquiry Center",
       licensedCapacity: 0,
     },
     select: { id: true, email: true },
@@ -360,7 +385,8 @@ async function sendNotificationEmail(
     return { ok: true, skipped: true };
   }
 
-  const subject = `New Kid City USA Inquiry - ${payload.program} - ${payload.locationId}`;
+  const brand = String(payload.brandName || "Kid City USA");
+  const subject = `New ${brand} Inquiry - ${payload.program} - ${payload.locationId || payload.locationName || payload.centerId}`;
   const lines = [
     `Parent: ${payload.parentName}`,
     `Email: ${payload.email}`,
@@ -447,7 +473,7 @@ export async function POST(request: NextRequest) {
       return json({ ok: false, errors }, 400, origin);
     }
 
-    const center = await getIntakeCenter(payload.locationId, payload.publicLocationId);
+    const center = await getIntakeCenter(payload.locationId, payload.publicLocationId, payload.centerId);
     const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
     const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
     const lead = await prisma.lead.create({
@@ -462,7 +488,7 @@ export async function POST(request: NextRequest) {
         programInterest: payload.program,
         ageGroupInterest: payload.program,
         stage: EnrollmentStage.NEW_INQUIRY,
-        score: scoreLead(payload.program, payload.locationId),
+        score: scoreLead(payload.program, payload.locationId, payload.centerId),
         status: "open",
         customFields: {
           intakeType: "wordpress_inquiry_form",
@@ -470,6 +496,7 @@ export async function POST(request: NextRequest) {
           email: payload.email,
           phone: payload.phone,
           program: payload.program,
+          centerId: payload.centerId,
           locationId: payload.locationId,
           publicLocationId: payload.publicLocationId,
           locationName: payload.locationName,
@@ -482,6 +509,7 @@ export async function POST(request: NextRequest) {
           utmSource: payload.utmSource,
           utmMedium: payload.utmMedium,
           utmCampaign: payload.utmCampaign,
+          brandName: payload.brandName,
         },
         tasks: {
           create: [

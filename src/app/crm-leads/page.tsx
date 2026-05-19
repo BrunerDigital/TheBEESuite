@@ -10,9 +10,17 @@ export default async function CrmLeadsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/crm-leads");
 
-  const centerWhere = getLeadScopeWhere(user);
+  const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
   const leadWhere = canAccessAllCenters(user)
-    ? {}
+    ? {
+        center: {
+          is: {
+            status: {
+              not: "closed",
+            },
+          },
+        },
+      }
     : {
         centerId: {
           in: user.centerIds,

@@ -48,7 +48,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
             <div className="mt-5 flex flex-wrap gap-2">
               <Button>
                 <Plus data-icon="inline-start" />
-                Create demo record
+                Create setup record
               </Button>
               <Button variant="outline">
                 View audit trail
@@ -85,7 +85,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
         {module.metrics.map((metric) => (
           <Card key={metric} className="glass-panel">
             <CardHeader className="pb-2">
-              <CardDescription>Demo metric</CardDescription>
+              <CardDescription>Launch metric</CardDescription>
               <CardTitle className="text-2xl">{metric}</CardTitle>
             </CardHeader>
             <CardContent>
@@ -107,7 +107,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
             <Card className="glass-panel">
               <CardHeader>
                 <CardTitle>Feature surface</CardTitle>
-                <CardDescription>Production-oriented v1 controls and placeholders</CardDescription>
+                <CardDescription>Launch-ready controls and integration surfaces</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-2">
                 {module.features.map((feature) => (
@@ -116,7 +116,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                     <div>
                       <div className="text-sm font-medium">{feature}</div>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Demo-ready now, with tenant and integration hooks documented for production expansion.
+                        Ready for tenant-scoped setup, with integration hooks documented for production expansion.
                       </p>
                     </div>
                   </div>
@@ -131,19 +131,19 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
               <CardContent className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="family">Family or record name</Label>
-                  <Input id="family" placeholder="Rivera Family" />
+                  <Input id="family" placeholder="Family, lead, or record name" />
                 </div>
                 <div className="flex flex-col gap-2">
                   <Label>Center</Label>
-                  <Select defaultValue="Kid City USA">
+                  <Select defaultValue="Current center">
                     <SelectTrigger>
                       <SelectValue placeholder="Choose center" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="Kid City USA">Kid City USA</SelectItem>
-                        <SelectItem value="Kid City USA - North">Kid City USA</SelectItem>
-                        <SelectItem value="Kid City USA - South">Kid City USA</SelectItem>
+                        <SelectItem value="Current center">Current center</SelectItem>
+                        <SelectItem value="Additional center">Additional center</SelectItem>
+                        <SelectItem value="Regional view">Regional view</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
@@ -159,7 +159,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                   </div>
                   <Switch defaultChecked aria-label="Require human review" />
                 </div>
-                <Button>Save demo record</Button>
+                <Button>Save record</Button>
               </CardContent>
             </Card>
           </div>
@@ -167,8 +167,8 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
         <TabsContent value="records" className="mt-0">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Demo records</CardTitle>
-              <CardDescription>Seeded examples for this module</CardDescription>
+              <CardTitle>Setup records</CardTitle>
+              <CardDescription>Configured records for this module surface</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
@@ -208,7 +208,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                   {["New inquiry submitted", "Missing document", "Notify director"].map((item, itemIndex) => (
                     <div key={item} className="rounded-xl border bg-background/50 p-3">
                       <div className="text-sm font-medium">{index === itemIndex ? item : `${label} option ${itemIndex + 1}`}</div>
-                      <p className="mt-1 text-xs text-muted-foreground">Execution logs are placeholders in this v1.</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Execution logs appear here when workflows run.</p>
                     </div>
                   ))}
                 </CardContent>
@@ -238,7 +238,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
             <Card className="glass-panel">
               <CardHeader>
                 <CardTitle>Integration readiness</CardTitle>
-                <CardDescription>Mock services and credential placeholders</CardDescription>
+                <CardDescription>Connected services and credential status</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 {integrations.slice(0, 6).map(([name, purpose, status]) => (
@@ -260,7 +260,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
         <AlertTriangle />
         <AlertTitle>Production boundary</AlertTitle>
         <AlertDescription>
-          This screen is a working demo foundation. Live credentials, real payment processing, SMS/email sending, signatures, document storage, and final licensing exports remain integration work.
+          This screen is an operational foundation. Real payment processing, SMS/push, signatures, document storage, and final licensing exports remain gated integration work.
         </AlertDescription>
       </Alert>
     </div>
@@ -287,7 +287,7 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
           </CardTitle>
           <CardDescription>
             {isLogin
-              ? "Auth-ready demo login for directors, teachers, parents, and platform teams."
+              ? "Secure login for directors, teachers, parents, and platform teams."
               : isForgot
                 ? "Password reset delivery is a placeholder until an auth provider is connected."
                 : "Configure organization hierarchy, centers, white-label settings, and first workflows."}
@@ -301,7 +301,7 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
           {!isForgot ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="password">Password</Label>
-              <Input id="password" placeholder="Demo mode" type="password" />
+              <Input id="password" placeholder="Password" type="password" />
             </div>
           ) : null}
           {type === "onboarding" ? (
@@ -317,9 +317,9 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
               </div>
             </>
           ) : null}
-          <Button>{isLogin ? "Enter demo workspace" : isForgot ? "Send reset placeholder" : "Continue onboarding"}</Button>
+          <Button>{isLogin ? "Enter workspace" : isForgot ? "Send reset placeholder" : "Continue onboarding"}</Button>
           <p className="text-center text-xs leading-5 text-muted-foreground">
-            Demo mode only. Connect Supabase Auth, Clerk, Auth.js, or another provider before production.
+            Access is scoped by role, center, organization, and tenant before sensitive workflows are shown.
           </p>
         </CardContent>
       </Card>

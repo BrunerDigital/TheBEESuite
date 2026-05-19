@@ -45,6 +45,8 @@ type CrmLead = {
   phone: string | null;
   leadSource: string | null;
   programInterest: string | null;
+  ageGroupInterest: string | null;
+  desiredStartDate: string | Date | null;
   stage: EnrollmentStage;
   score: number;
   status: string;
@@ -117,6 +119,13 @@ function formatTourDate(value: string | Date) {
   }).format(new Date(value));
 }
 
+function dateInputValue(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
 function getCenterLabel(center: CenterOption) {
   const place = [center.city, center.state].filter(Boolean).join(", ");
   return place ? `${center.name} (${place})` : center.name;
@@ -151,6 +160,16 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [tourNotes, setTourNotes] = useState("");
   const [emailSubject, setEmailSubject] = useState("Kid City USA enrollment follow-up");
   const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0]));
+  const [editForm, setEditForm] = useState({
+    familyName: initialLeads[0]?.familyName ?? "",
+    childName: initialLeads[0]?.childName ?? "",
+    email: initialLeads[0]?.email ?? "",
+    phone: initialLeads[0]?.phone ?? "",
+    programInterest: initialLeads[0]?.programInterest ?? "Preschool",
+    ageGroupInterest: initialLeads[0]?.ageGroupInterest ?? "",
+    desiredStartDate: dateInputValue(initialLeads[0]?.desiredStartDate),
+    leadSource: initialLeads[0]?.leadSource ?? "",
+  });
 
   const filteredLeads = useMemo(() => {
     const needle = query.toLowerCase();
@@ -202,6 +221,16 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     setSelectedLeadDetails(null);
     setEmailSubject(`Kid City USA ${lead.programInterest ?? "enrollment"} follow-up`);
     setEmailDraft(makeMrBeeDraft(lead));
+    setEditForm({
+      familyName: lead.familyName,
+      childName: lead.childName ?? "",
+      email: lead.email ?? "",
+      phone: lead.phone ?? "",
+      programInterest: lead.programInterest ?? "Preschool",
+      ageGroupInterest: lead.ageGroupInterest ?? "",
+      desiredStartDate: dateInputValue(lead.desiredStartDate),
+      leadSource: lead.leadSource ?? "",
+    });
   }
 
   function showStatus(message: string) {
@@ -234,6 +263,30 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const json = (await response.json()) as { lead: CrmLead };
       setLeads((current) => current.map((lead) => (lead.id === leadId ? json.lead : lead)));
       showStatus("Pipeline stage updated and logged.");
+    });
+  }
+
+  function saveLeadDetails() {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch(`/api/leads/${selectedLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null) as { error?: string; errors?: Record<string, string> } | null;
+        showError(json?.error || Object.values(json?.errors || {})[0] || "Lead details could not be updated.");
+        return;
+      }
+
+      const json = (await response.json()) as { lead: CrmLead };
+      setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
+      setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
+      setEmailDraft(makeMrBeeDraft(json.lead));
+      showStatus("Lead details updated and audit logged.");
     });
   }
 
@@ -667,6 +720,86 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       {getCenterLabel(selectedLead.center)}
                     </div>
                   </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-family-name">Parent / family name</Label>
+                    <Input
+                      id="edit-family-name"
+                      value={editForm.familyName}
+                      onChange={(event) => setEditForm({ ...editForm, familyName: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-child-name">Child name</Label>
+                    <Input
+                      id="edit-child-name"
+                      value={editForm.childName}
+                      onChange={(event) => setEditForm({ ...editForm, childName: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-email">Email</Label>
+                    <Input
+                      id="edit-email"
+                      value={editForm.email}
+                      onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
+                      type="email"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-phone">Phone</Label>
+                    <Input
+                      id="edit-phone"
+                      value={editForm.phone}
+                      onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Program interest</Label>
+                    <Select
+                      value={editForm.programInterest || "Preschool"}
+                      onValueChange={(programInterest) => programInterest && setEditForm({ ...editForm, programInterest })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {programOptions.map((program) => (
+                          <SelectItem key={program} value={program}>
+                            {program}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-age-group">Age group interest</Label>
+                    <Input
+                      id="edit-age-group"
+                      value={editForm.ageGroupInterest}
+                      onChange={(event) => setEditForm({ ...editForm, ageGroupInterest: event.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-start-date">Desired start date</Label>
+                    <Input
+                      id="edit-start-date"
+                      value={editForm.desiredStartDate}
+                      onChange={(event) => setEditForm({ ...editForm, desiredStartDate: event.target.value })}
+                      type="date"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="edit-source">Lead source</Label>
+                    <Input
+                      id="edit-source"
+                      value={editForm.leadSource}
+                      onChange={(event) => setEditForm({ ...editForm, leadSource: event.target.value })}
+                    />
+                  </div>
+                  <Button variant="outline" onClick={saveLeadDetails} disabled={isPending || !editForm.familyName.trim()}>
+                    Save lead details
+                    <ArrowRight data-icon="inline-end" />
+                  </Button>
                   <div className="grid gap-2">
                     <Label>Move pipeline stage</Label>
                     <Select

@@ -18,6 +18,12 @@ The preferred Avada embed block is:
 ></script>
 ```
 
+Executive and center users can also copy live embed code from their Bee Suite dashboard:
+
+- Kid City USA executive users receive the multi-location embed above.
+- Single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
+- New public onboarding records include the embed-code setup format so each provider can install the form after the center profile is created.
+
 The hosted embed currently loads 94 Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show 95 `<option>` elements total.
 
 ## What Happens
@@ -60,6 +66,7 @@ locationId
 Recommended optional fields:
 
 ```text
+centerId
 publicLocationId
 locationName
 city
@@ -72,6 +79,7 @@ leadSource
 utmSource
 utmMedium
 utmCampaign
+brandName
 company
 website
 ```

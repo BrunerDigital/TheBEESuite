@@ -43,7 +43,7 @@ const setupSteps = [
   "Brand profile and custom domain",
   "Organization, regions, and centers",
   "Roles, permissions, and staff invites",
-  "Inquiry form, CRM stages, and tour rules",
+  "Inquiry form embed, CRM stages, and tour rules",
   "Stripe Connect payout accounts",
   "Parent portal, billing, and document checklist",
 ];
@@ -161,7 +161,7 @@ export default function LandingPage() {
               The Bee Suite
             </h1>
             <p className="mt-6 max-w-2xl text-xl leading-8 text-slate-200">
-              Childcare CRM, enrollment, operations, billing, and family engagement in one role-aware command center for growing childcare brands.
+              Childcare CRM, enrollment, operations, billing, and family engagement in one role-aware command center for childcare centers, preschools, daycare groups, and multi-location operators.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="h-11 px-4" nativeButton={false} render={<Link href="/onboarding" />}>
@@ -212,7 +212,7 @@ export default function LandingPage() {
             <div>
               <h2 className="text-3xl font-semibold tracking-normal sm:text-4xl">A cleaner path from first inquiry to first day.</h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
-                The landing page sends new brands into onboarding. Inside the app, the same funnel becomes the operating model for every center and family.
+                Website forms, call-ins, tours, and applications flow into one operating model for every center, family, and admissions team.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -240,7 +240,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-semibold tracking-normal sm:text-4xl">Onboarding is ready before the sales call ends.</h2>
             <p className="mt-4 text-base leading-7 text-slate-600">
-              New users get a structured intake instead of a blank demo form: brand details, center count, launch timeline, priorities, and handoff guidance.
+              New providers get a structured launch intake: brand details, center count, inquiry form setup, launch timeline, priorities, payout ownership, and handoff guidance.
             </p>
             <div className="mt-6 flex gap-3">
               <Button nativeButton={false} render={<Link href="/onboarding" />}>
@@ -267,7 +267,7 @@ export default function LandingPage() {
                     <span className="grid size-7 place-items-center rounded-md bg-slate-950 text-xs font-semibold text-primary">
                       {index + 1}
                     </span>
-                    <span className="text-sm font-medium">{step}</span>
+                      <span className="text-sm font-medium">{step}</span>
                   </div>
                 ))}
               </div>
@@ -297,7 +297,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-semibold tracking-normal">Ready to set up The Bee Suite?</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-800">
-              Start onboarding for a new childcare brand, or sign in if your workspace is already live.
+              Start onboarding for a childcare center, preschool, or multi-location brand, or sign in if your workspace is already live.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

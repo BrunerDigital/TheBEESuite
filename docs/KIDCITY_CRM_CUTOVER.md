@@ -26,7 +26,7 @@ npm run kidcity:sync-open-schools
 ```
 
 The import is idempotent for centers, users, and legacy leads with the same center/external ID.
-The open-schools sync is also idempotent and ensures the website dropdown's 96 open Kid City USA schools have matching center profiles, even when a location was missing from the legacy CRM export.
+The open-schools sync is also idempotent and ensures the website dropdown's 94 open Kid City USA schools have matching center profiles, even when a location was missing from the legacy CRM export.
 
 ## Supabase Auth Users
 

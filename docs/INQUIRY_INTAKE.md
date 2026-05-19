@@ -18,7 +18,7 @@ The preferred Avada embed block is:
 ></script>
 ```
 
-The hosted embed currently loads 96 Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show 97 `<option>` elements total.
+The hosted embed currently loads 94 Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show 95 `<option>` elements total.
 
 ## What Happens
 

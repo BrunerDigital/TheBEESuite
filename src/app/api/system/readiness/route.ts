@@ -94,7 +94,7 @@ export async function GET() {
       env("AUTH_PASSWORD_RESET_REDIRECT_URL") ? "ready" : "warning",
       env("AUTH_PASSWORD_RESET_REDIRECT_URL") ? "Reset redirect is configured." : "Set AUTH_PASSWORD_RESET_REDIRECT_URL and allow-list it in Supabase Auth.",
     ),
-    check("Kid City centers", kidCityCenters >= 96 ? "ready" : "warning", `${kidCityCenters} Kid City center profile(s), ${openSchoolCount} with open-school location IDs.`),
+    check("Kid City centers", kidCityCenters >= 94 ? "ready" : "warning", `${kidCityCenters} Kid City center profile(s), ${openSchoolCount} with open-school location IDs.`),
     check("Location emails", kidCityCentersWithEmail >= 90 ? "ready" : "warning", `${kidCityCentersWithEmail} Kid City center profile(s) have a routed email.`),
     check("Kid City users", kidCityUsers > 0 ? "ready" : "warning", `${kidCityUsers} active @kidcityusa.com user account(s) are present.`),
     check("CRM leads", importedLeads > 0 ? "ready" : "warning", `${importedLeads} lead record(s) are available in the CRM.`),

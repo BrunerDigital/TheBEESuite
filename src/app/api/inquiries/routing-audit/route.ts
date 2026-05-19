@@ -48,6 +48,7 @@ export async function GET() {
     locations.map(async (location) => {
       const center = await prisma.center.findFirst({
         where: {
+          status: { not: "closed" },
           OR: [
             { crmLocationId: location.crmLocationId },
             { locationId: location.locationId },

@@ -171,16 +171,6 @@
       "phone": "386-860-7979"
     },
     {
-      "crmLocationId": "FL | Deltona - Providence",
-      "locationId": "Kid City USA - Deltona 2",
-      "name": "Kid City USA - Deltona 2",
-      "address": "1859 Providence Blvd.",
-      "city": "Deltona",
-      "state": "FL",
-      "postalCode": "32738",
-      "phone": "386-960-7628"
-    },
-    {
       "crmLocationId": "FL | Edgewater",
       "locationId": "Kid City USA - Edgewater",
       "name": "Kid City USA - Edgewater",
@@ -239,16 +229,6 @@
       "state": "FL",
       "postalCode": "32117",
       "phone": "386-265-4016"
-    },
-    {
-      "crmLocationId": "FL | Jacksonville - Abbess",
-      "locationId": "Kid City USA - Abbess",
-      "name": "Kid City USA - Abbess",
-      "address": "12750 Abess Blvd.",
-      "city": "Jacksonville",
-      "state": "FL",
-      "postalCode": "32225",
-      "phone": "904-220-7737"
     },
     {
       "crmLocationId": "FL | Jacksonville - Beach",

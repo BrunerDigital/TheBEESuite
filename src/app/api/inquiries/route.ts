@@ -227,6 +227,7 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string) {
   if (locationIds.length) {
     const routedCenter = await prisma.center.findFirst({
       where: {
+        status: { not: "closed" },
         OR: [
           { crmLocationId: { in: locationIds } },
           { locationId: { in: locationIds } },
@@ -251,6 +252,7 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string) {
   }
 
   const center = await prisma.center.findFirst({
+    where: { status: { not: "closed" } },
     orderBy: { createdAt: "asc" },
     select: { id: true, email: true },
   });

@@ -74,6 +74,8 @@ Primary dashboard: `/dashboard`
 
 Auth and setup: `/login`, `/forgot-password`, `/onboarding`
 
+`/onboarding` creates a gated trial workspace with a tenant, brand, organization, primary center profile, brand-admin user, setup integrations, audit log, and center-linked inquiry form embed. The owner sets their own password through Supabase Auth recovery/setup email; live payments stay gated until payout onboarding is complete and reviewed.
+
 Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classroom-dashboard`, `/crm-leads`, `/family-detail`, `/child-profile`, `/enrollment-pipeline`, `/waitlist`, `/tours`, `/calendar`, `/messages`, `/announcements`, `/campaigns`, `/automations`, `/forms`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/staff`, `/billing-invoices`, `/payments`, `/compliance`, `/reputation`, `/analytics`, `/ai-command`, `/parent-portal`, `/teacher-portal`, `/agency-admin`, `/white-label`, `/team-permissions`, `/integrations`, `/billing-settings`, `/notifications`, `/audit-logs`, and `/help`.
 
 ## Environment Variables

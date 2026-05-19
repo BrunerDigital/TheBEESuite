@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
-import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -11,21 +11,7 @@ export default async function CrmLeadsPage() {
   if (!user) redirect("/login?next=/crm-leads");
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
-  const leadWhere = canAccessAllCenters(user)
-    ? {
-        center: {
-          is: {
-            status: {
-              not: "closed",
-            },
-          },
-        },
-      }
-    : {
-        centerId: {
-          in: user.centerIds,
-        },
-      };
+  const leadWhere = { center: { is: centerWhere } };
 
   const [centers, leads] = await Promise.all([
     prisma.center.findMany({

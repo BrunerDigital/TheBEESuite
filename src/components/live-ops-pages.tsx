@@ -1829,7 +1829,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
             <CardTitle>FTE Report Snapshot</CardTitle>
             <CardDescription>
               {data.fte.status === "ready"
-                ? `Synced from Google Sheets tab "${data.fte.sheetName}".`
+                ? `Synced from ${data.fte.sourceMode === "template_week_tab" ? "template" : "rolling"} Google Sheets tab "${data.fte.sheetName}".`
                 : "Connect the Kid City USA FTE Google Sheet to show live full-time-equivalent reporting."}
             </CardDescription>
           </CardHeader>
@@ -2270,7 +2270,7 @@ export function AnalyticsPage({ data }: { data: AnalyticsPageData }) {
       {data.fte ? (
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard label="FTE total" value={data.fte.totalFte.toLocaleString()} detail={data.fte.status.replaceAll("_", " ")} />
-          <StatCard label="FTE locations" value={data.fte.locationCount.toLocaleString()} detail={`Sheet tab: ${data.fte.sheetName}`} />
+          <StatCard label="FTE locations" value={data.fte.locationCount.toLocaleString()} detail={`${data.fte.sourceMode === "template_week_tab" ? "Template" : "Rolling"} tab: ${data.fte.sheetName}`} />
           <StatCard
             label="FTE sync"
             value={data.fte.status === "ready" ? "Ready" : "Needs setup"}

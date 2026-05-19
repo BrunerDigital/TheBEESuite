@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const DEFAULT_SUPABASE_URL = "https://nqjrlktoewiueiwrubas.supabase.co";
 
 type SupabaseAuthKeyPreference = "anon" | "service";
@@ -46,6 +48,59 @@ export async function requestSupabasePasswordReset(email: string, redirectTo: st
     body: JSON.stringify({ email }),
     signal: AbortSignal.timeout(10_000),
   });
+}
+
+export async function ensureSupabaseAuthUser({
+  email,
+  name,
+}: {
+  email: string;
+  name?: string;
+}) {
+  const { url, key } = getSupabaseAuthConfig("service");
+  const password = randomUUID() + randomUUID();
+  const response = await fetch(`${url}/auth/v1/admin/users`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        name,
+        source: "bee_suite_trial_onboarding",
+      },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  if (response.ok) {
+    return { ok: true, created: true };
+  }
+
+  const text = await response.text();
+  const normalized = text.toLowerCase();
+  const alreadyExists =
+    response.status === 400 || response.status === 409 || response.status === 422
+      ? normalized.includes("already") ||
+        normalized.includes("exist") ||
+        normalized.includes("registered") ||
+        normalized.includes("unique")
+      : false;
+
+  if (alreadyExists) {
+    return { ok: true, created: false, alreadyExisted: true };
+  }
+
+  return {
+    ok: false,
+    created: false,
+    error: text || `Supabase admin user create returned ${response.status}.`,
+  };
 }
 
 export async function verifySupabasePassword(email: string, password: string) {

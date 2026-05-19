@@ -104,6 +104,8 @@ Public intake routes include best-effort in-process burst limits:
 
 Keep Vercel firewall/WAF or a dedicated abuse-prevention layer on the roadmap for production scale.
 
+The public `/api/onboarding` route creates a gated trial workspace: tenant, brand, organization, primary center, brand-admin user, white-label defaults, setup integrations, audit log, and a center-linked inquiry embed code. Supabase Auth receives the user server-side with the service key and the user should set their own password through the recovery/setup email. Live checkout and parent engagement workflows remain disabled until the workspace is reviewed and connected.
+
 ## 4. Payments, Payouts, SMS, Push, and Signature Requests
 
 The server routes are live-ready but remain safe when credentials are missing.

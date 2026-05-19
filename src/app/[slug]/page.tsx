@@ -80,7 +80,8 @@ async function getVisibleCenters(user: CurrentUser) {
 }
 
 async function renderLivePage(slug: string, user: CurrentUser) {
-  const allCenters = canAccessAllCenters(user);
+  const allCenters = user.role === "PLATFORM_OWNER";
+  const tenantWide = canAccessAllCenters(user);
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(visibleCenterIds);
@@ -830,7 +831,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "team-permissions") {
-    const where = allCenters
+    const where = tenantWide
       ? { tenantId: user.tenantId }
       : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } };
     const [users, roleCounts] = await Promise.all([
@@ -873,10 +874,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   if (slug === "agency-admin") {
     const [organizations, users, leads] = await Promise.all([
       prisma.organization.count({
-        where: allCenters ? { tenantId: user.tenantId } : { id: user.organizationId ?? "__none__" },
+        where: tenantWide ? { tenantId: user.tenantId } : { id: user.organizationId ?? "__none__" },
       }),
       prisma.user.count({
-        where: allCenters
+        where: tenantWide
           ? { tenantId: user.tenantId }
           : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } },
       }),

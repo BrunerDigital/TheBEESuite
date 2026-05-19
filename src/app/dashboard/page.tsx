@@ -24,14 +24,28 @@ export default async function DashboardPage() {
       licensedCapacity: true,
     },
   });
+  const tenantBrand = await prisma.tenant.findUnique({
+    where: { id: user.tenantId },
+    select: {
+      name: true,
+      slug: true,
+      brands: {
+        take: 1,
+        orderBy: { createdAt: "asc" },
+        select: { name: true, slug: true },
+      },
+    },
+  });
+  const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The Bee Suite";
+  const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
-  const leadWhere = allCentersAccess
-    ? { center: { is: { status: { not: "closed" } } } }
-    : {
-        centerId: scopedCenterFilter,
-      };
+  const leadWhere = {
+    center: {
+      is: centerWhere,
+    },
+  };
   const today = new Date();
   const startOfDay = new Date(today);
   startOfDay.setHours(0, 0, 0, 0);
@@ -148,12 +162,25 @@ export default async function DashboardPage() {
   const revenueDollars = Math.round((revenue._sum.totalCents ?? 0) / 100);
   const inquiryEmbed = canManageCrmLeads(user)
     ? allCentersAccess
-      ? {
-          title: "Kid City USA inquiry form embed",
-          description:
-            "Executive users can copy this multi-location form for the Kid City USA website. It routes each selected school to the matching CRM profile, notification email, and Google Sheets backup.",
-          embedCode: getKidCityInquiryEmbedCode(),
-        }
+      ? isKidCityWorkspace
+        ? {
+            title: "Kid City USA inquiry form embed",
+            description:
+              "Executive users can copy this multi-location form for the Kid City USA website. It routes each selected school to the matching CRM profile, notification email, and Google Sheets backup.",
+            embedCode: getKidCityInquiryEmbedCode(),
+          }
+        : centers[0]
+          ? {
+              title: `${brandName} inquiry form embed`,
+              description:
+                "Copy this primary-center form while the trial workspace is being configured. Add center-specific embeds as each location profile is completed.",
+              embedCode: getCenterInquiryEmbedCode({
+                centerId: centers[0].id,
+                centerName: centers[0].name,
+                brandName,
+              }),
+            }
+          : undefined
       : centers.length === 1
         ? {
             title: "School inquiry form embed",
@@ -162,7 +189,7 @@ export default async function DashboardPage() {
             embedCode: getCenterInquiryEmbedCode({
               centerId: centers[0].id,
               centerName: centers[0].name,
-              brandName: "Kid City USA",
+              brandName,
             }),
           }
         : undefined

@@ -156,7 +156,19 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user) return null;
 
-  const centerIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
+  let centerIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
+  if (user.role !== UserRole.PLATFORM_OWNER && allCenterRoles.has(user.role)) {
+    const tenantCenters = await prisma.center.findMany({
+      where: {
+        organization: {
+          tenantId: user.tenantId,
+        },
+      },
+      select: { id: true },
+    });
+    centerIds = tenantCenters.map((center) => center.id);
+  }
+
   return {
     id: user.id,
     tenantId: user.tenantId,
@@ -180,13 +192,20 @@ export function canAccessAllCenters(user: Pick<CurrentUser, "role">) {
 }
 
 export function getLeadScopeWhere(user: CurrentUser) {
-  if (canAccessAllCenters(user)) return {};
+  if (user.role === UserRole.PLATFORM_OWNER) return {};
+  if (canAccessAllCenters(user)) {
+    return {
+      organization: {
+        tenantId: user.tenantId,
+      },
+    };
+  }
   if (!user.centerIds.length) return { id: "__no_authorized_center__" };
   return { id: { in: user.centerIds } };
 }
 
 export function canAccessCenter(user: CurrentUser, centerId: string) {
-  return canAccessAllCenters(user) || user.centerIds.includes(centerId);
+  return user.role === UserRole.PLATFORM_OWNER || user.centerIds.includes(centerId);
 }
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {

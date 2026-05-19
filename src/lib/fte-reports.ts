@@ -12,6 +12,7 @@ export type FteSnapshot = {
   configured: boolean;
   status: "ready" | "needs_sheet_url" | "needs_google_credentials" | "error";
   sheetName: string;
+  sourceMode: "rolling_sheet" | "template_week_tab";
   spreadsheetId?: string;
   totalFte: number;
   locationCount: number;
@@ -26,7 +27,7 @@ export type FteSnapshot = {
   error?: string;
 };
 
-const DEFAULT_SHEET_NAME = "FTE";
+const DEFAULT_SHEET_NAME = "FTE Data";
 
 function quoteRangeSheetName(sheetName: string) {
   return `'${sheetName.replace(/'/g, "''")}'`;
@@ -113,6 +114,34 @@ async function readPublicCsvValues(spreadsheetId: string, sheetName?: string) {
   return parseCsv(text);
 }
 
+async function discoverPublicSheetName(spreadsheetId: string) {
+  const response = await fetch(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/edit`, {
+    signal: AbortSignal.timeout(8000),
+  });
+  const html = await response.text();
+  if (!response.ok || !html) return null;
+
+  const normalized = html.replace(/\\u003c/g, "<").replace(/\\u003e/g, ">");
+  const candidateNames = Array.from(
+    normalized.matchAll(/(?:FTE Data|Current FTE|Rolling FTE|FTE Report|week\s+\d+)/gi),
+    (match) => match[0].trim(),
+  );
+  const uniqueNames = Array.from(new Set(candidateNames.map((name) => name.replace(/\s+/g, " "))));
+  const rollingName = uniqueNames.find((name) => /fte/i.test(name) && !/^week\s+\d+$/i.test(name));
+  if (rollingName) return { sheetName: rollingName, sourceMode: "rolling_sheet" as const };
+
+  const weekNames = uniqueNames
+    .filter((name) => /^week\s+\d+$/i.test(name))
+    .sort((a, b) => {
+      const aWeek = Number.parseInt(a.match(/\d+/)?.[0] || "0", 10);
+      const bWeek = Number.parseInt(b.match(/\d+/)?.[0] || "0", 10);
+      return bWeek - aWeek;
+    });
+
+  if (weekNames[0]) return { sheetName: weekNames[0], sourceMode: "template_week_tab" as const };
+  return null;
+}
+
 function keyVariants(value?: string | null) {
   const base = value?.trim().toLowerCase();
   if (!base) return [];
@@ -146,7 +175,9 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
       process.env.KIDCITY_FTE_SPREADSHEET_URL ||
       process.env.KIDCITY_FTE_GOOGLE_SHEET_URL,
   );
-  const sheetName = configuredSheetName || DEFAULT_SHEET_NAME;
+  const discovered = spreadsheetId && !configuredSheetName ? await discoverPublicSheetName(spreadsheetId).catch(() => null) : null;
+  const sheetName = configuredSheetName || discovered?.sheetName || DEFAULT_SHEET_NAME;
+  const sourceMode = /^week\s+\d+$/i.test(sheetName) || discovered?.sourceMode === "template_week_tab" ? "template_week_tab" : "rolling_sheet";
   const range = process.env.KIDCITY_FTE_RANGE || `${quoteRangeSheetName(sheetName)}!A:Z`;
 
   if (!spreadsheetId) {
@@ -154,6 +185,7 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
       configured: false,
       status: "needs_sheet_url",
       sheetName,
+      sourceMode,
       totalFte: 0,
       locationCount: 0,
       rows: [],
@@ -173,6 +205,7 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
           status: "needs_google_credentials",
           spreadsheetId,
           sheetName,
+          sourceMode,
           totalFte: 0,
           locationCount: 0,
           rows: [],
@@ -185,6 +218,7 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
         status: "error",
         spreadsheetId,
         sheetName,
+        sourceMode,
         totalFte: 0,
         locationCount: 0,
         rows: [],
@@ -199,6 +233,7 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
       status: "error",
       spreadsheetId,
       sheetName,
+      sourceMode,
       totalFte: 0,
       locationCount: 0,
       rows: [],
@@ -219,7 +254,17 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
     "fulltimeequivalent",
     "fte",
   ]);
-  const dateIndex = headerIndex(headers, ["date", "week", "report date", "as of", "asof"]);
+  const dateIndex = headerIndex(headers, [
+    "date",
+    "week",
+    "report date",
+    "as of",
+    "asof",
+    "period start",
+    "period end",
+    "effective date",
+    "month",
+  ]);
   const visibleKeys = new Set(visibleCenters.flatMap(visibleCenterKeys));
   const latestByLocation = new Map<string, { rowIndex: number; date: Date | null; data: FteSnapshot["rows"][number] }>();
 
@@ -265,6 +310,7 @@ export async function getKidCityFteSnapshot(visibleCenters: VisibleCenter[] = []
     status: "ready",
     spreadsheetId,
     sheetName,
+    sourceMode,
     totalFte: Math.round(rows.reduce((sum, row) => sum + row.fte, 0) * 100) / 100,
     locationCount: rows.length,
     updatedAt: new Date().toISOString(),

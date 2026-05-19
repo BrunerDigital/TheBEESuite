@@ -64,6 +64,35 @@ type FormState = {
   notes: string;
 };
 
+type WorkspaceSetup = {
+  existingWorkspace?: boolean;
+  status?: string;
+  notificationId?: string;
+  tenantId?: string;
+  tenantName?: string;
+  tenantSlug?: string;
+  organizationId?: string | null;
+  organizationName?: string;
+  centerId?: string;
+  centerName?: string;
+  userId?: string;
+  loginUrl?: string;
+  embedCode?: string;
+  auth?: {
+    user?: {
+      ok?: boolean;
+      created?: boolean;
+      alreadyExisted?: boolean;
+      error?: string;
+    };
+    passwordReset?: {
+      ok?: boolean;
+      status?: number;
+      error?: string;
+    };
+  };
+};
+
 const initialForm: FormState = {
   brandName: "",
   workEmail: "",
@@ -86,6 +115,7 @@ export function OnboardingFlow() {
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [submissionId, setSubmissionId] = useState("");
+  const [workspace, setWorkspace] = useState<WorkspaceSetup | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
   const [isPending, startTransition] = useTransition();
 
@@ -132,6 +162,7 @@ export function OnboardingFlow() {
       });
       const data = (await response.json().catch(() => null)) as {
         notificationId?: string;
+        workspace?: WorkspaceSetup;
         error?: string;
         errors?: Record<string, string>;
       } | null;
@@ -143,6 +174,7 @@ export function OnboardingFlow() {
       }
 
       setSubmissionId(data?.notificationId ?? "");
+      setWorkspace(data?.workspace ?? null);
       setSubmitted(true);
     });
   }
@@ -177,8 +209,8 @@ export function OnboardingFlow() {
             Set up your childcare brand.
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            This guided intake collects the essentials for a Bee Suite workspace: brand, centers, users, funnel priorities, and launch timing.
-            Payout ownership is captured up front so each school can complete Stripe Connect before accepting parent payments.
+            This creates a gated Bee Suite trial workspace for your childcare brand, then walks you through profile setup,
+            inquiry form install, center imports, user invitations, and payout readiness before any live payment workflows are enabled.
           </p>
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <div className="flex items-center justify-between text-sm">
@@ -215,18 +247,28 @@ export function OnboardingFlow() {
                 <div className="grid size-12 place-items-center rounded-xl bg-emerald-300 text-slate-950">
                   <CheckCircle2 />
                 </div>
-                <CardTitle className="text-3xl">Onboarding brief is ready</CardTitle>
+                <CardTitle className="text-3xl">
+                  {workspace?.existingWorkspace ? "Workspace access is ready" : "Trial workspace is ready"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5 text-slate-200">
                 <p className="leading-7">
-                  The Bee Suite team has the launch intake for {form.brandName || "your brand"}. The next handoff is a workspace invitation, center import, CRM funnel confirmation, and Stripe Connect payout onboarding.
+                  {workspace?.existingWorkspace
+                    ? `${form.workEmail} already has Bee Suite access. We sent an account recovery email when Supabase Auth accepted the request.`
+                    : `${form.brandName || "Your brand"} now has a trial workspace with a primary center profile, brand settings, setup integrations, and an owner account.`}
+                  {" "}Use the dashboard to finish center profiles, invite staff, install the inquiry form, and prepare payout onboarding.
                 </p>
+                {!workspace?.auth?.passwordReset?.ok ? (
+                  <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100">
+                    The workspace record was created, but the password setup email may still need review. Admins can send a reset from Supabase Auth if the user does not receive it.
+                  </div>
+                ) : null}
                 <div className="rounded-lg border border-white/10 bg-slate-950/50 p-4">
                   <div className="text-sm font-semibold text-white">Inquiry form embed setup</div>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    Each live center profile gets a linked form code inside its dashboard. This draft shows the install format; The Bee Suite replaces the center ID when the profile is created.
+                    This code is linked to the primary center profile created for the workspace. Additional center-specific codes are available inside each center dashboard as profiles are added.
                   </p>
-                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/50 p-3 text-xs leading-5 text-slate-200">{draftEmbedCode}</pre>
+                  <pre className="mt-3 max-h-56 overflow-auto rounded-lg bg-black/50 p-3 text-xs leading-5 text-slate-200">{workspace?.embedCode || draftEmbedCode}</pre>
                 </div>
                 {submissionId ? (
                   <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-sm">
@@ -236,9 +278,10 @@ export function OnboardingFlow() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Brand", form.brandName],
-                    ["Centers", form.centerCount],
+                    ["Workspace", workspace?.tenantSlug || "Trial setup"],
+                    ["Primary center", workspace?.centerName || "Primary Center"],
+                    ["Centers requested", form.centerCount],
                     ["Payout owner", form.payoutAdminName],
-                    ["Timeline", form.timeline],
                     ["Priority", form.priority],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
@@ -248,8 +291,8 @@ export function OnboardingFlow() {
                   ))}
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button nativeButton={false} render={<Link href="/login" />}>
-                    Go to login
+                  <Button nativeButton={false} render={<Link href={workspace?.loginUrl || "/login"} />}>
+                    Open login
                     <ArrowRight data-icon="inline-end" />
                   </Button>
                   <Button variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/10" onClick={() => setSubmitted(false)}>
@@ -385,7 +428,7 @@ export function OnboardingFlow() {
                       ))}
                     </div>
                     <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-700">
-                      This intake does not create production users or bank payout accounts by itself. It prepares the handoff for workspace creation, identity provider setup, Stripe Connect payout onboarding, import mapping, and first-login invitations.
+                      Finishing onboarding creates a gated trial workspace, owner account, primary center profile, and inquiry form embed. Live checkout remains disabled until Stripe Connect payout onboarding is complete and reviewed.
                     </div>
                   </div>
                 ) : null}
@@ -417,9 +460,9 @@ export function OnboardingFlow() {
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
-              [Mail, "Invite flow", "Workspace invitations are sent after setup approval."],
+              [Mail, "Account setup", "Owners receive a password setup email and can complete their profile from the workspace."],
               [BadgeDollarSign, "Payout onboarding", "Schools complete connected Stripe payout setup before live checkout."],
-              [ShieldCheck, "Safety posture", "Sensitive records stay gated before launch."],
+              [ShieldCheck, "Trial safeguards", "Live payments, parent engagement, and sensitive workflows stay gated until reviewed."],
             ].map(([Icon, title, body]) => (
               <div key={title as string} className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
                 <Icon className="size-5 text-primary" />

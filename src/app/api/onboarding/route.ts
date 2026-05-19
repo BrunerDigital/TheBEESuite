@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { getCenterInquiryEmbedCode } from "@/lib/inquiry-embed";
+import {
+  ensureSupabaseAuthUser,
+  getAppBaseUrl,
+  getPasswordResetRedirectUrl,
+  requestSupabasePasswordReset,
+} from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -41,6 +49,35 @@ function uniqueEmails(values: string[]) {
     });
 }
 
+function slugify(value: string) {
+  const slug = value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "childcare-brand";
+}
+
+async function uniqueTenantSlug(baseValue: string) {
+  const base = slugify(baseValue);
+  for (let index = 0; index < 50; index += 1) {
+    const slug = index === 0 ? base : `${base}-${index + 1}`;
+    const existing = await prisma.tenant.findUnique({ where: { slug }, select: { id: true } });
+    if (!existing) return slug;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+function ownerNameFromPayload(payload: NormalizedPayload) {
+  if (payload.payoutAdminName) return payload.payoutAdminName;
+  return payload.workEmail
+    .split("@")[0]
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || `${payload.brandName} Admin`;
+}
+
 function normalizePayload(input: OnboardingPayload) {
   return {
     brandName: clean(input.brandName),
@@ -79,7 +116,16 @@ function getNotificationRecipients() {
   ]);
 }
 
-async function sendOnboardingEmail(payload: NormalizedPayload, notificationId: string) {
+async function sendOnboardingEmail(
+  payload: NormalizedPayload,
+  notificationId: string,
+  workspace?: {
+    tenantId: string;
+    centerId: string;
+    loginUrl: string;
+    status: string;
+  },
+) {
   const apiKey = process.env.SENDGRID_API_KEY;
   const from = process.env.SENDGRID_FROM_EMAIL;
   const recipients = getNotificationRecipients();
@@ -100,10 +146,14 @@ async function sendOnboardingEmail(payload: NormalizedPayload, notificationId: s
     `Stripe Connect readiness: ${payload.payoutReadiness}`,
     `Page URL: ${payload.pageUrl || ""}`,
     `Notification ID: ${notificationId}`,
+    workspace ? `Workspace tenant ID: ${workspace.tenantId}` : "",
+    workspace ? `Primary center ID: ${workspace.centerId}` : "",
+    workspace ? `Workspace status: ${workspace.status}` : "",
+    workspace ? `Login URL: ${workspace.loginUrl}` : "",
     "",
     "Launch notes:",
     payload.notes || "None provided.",
-  ];
+  ].filter((line) => line !== "");
 
   const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
@@ -127,6 +177,280 @@ async function sendOnboardingEmail(payload: NormalizedPayload, notificationId: s
   return { ok: true, skipped: false, recipients: recipients.length };
 }
 
+async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: string) {
+  const existingUser = await prisma.user.findUnique({
+    where: { email: payload.workEmail },
+    include: {
+      tenant: { select: { id: true, name: true, slug: true } },
+      organization: { select: { id: true, name: true } },
+    },
+  });
+  const baseUrl = getAppBaseUrl(requestUrl);
+  const loginUrl = `${baseUrl}/login`;
+  const resetRedirectUrl = getPasswordResetRedirectUrl(requestUrl);
+
+  if (existingUser) {
+    const reset = await requestSupabasePasswordReset(existingUser.email, resetRedirectUrl)
+      .then((response) => ({ ok: response.ok, status: response.status }))
+      .catch((error) => ({
+        ok: false,
+        error: error instanceof Error ? error.message : "Password reset email failed.",
+      }));
+
+    const notification = await prisma.notification.create({
+      data: {
+        title: `Existing workspace requested: ${payload.brandName}`,
+        body: `${payload.workEmail} already has Bee Suite access. Sent account recovery when possible.`,
+        type: "Onboarding",
+        priority: "normal",
+        userId: existingUser.id,
+      },
+      select: { id: true },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: existingUser.tenantId,
+        userId: existingUser.id,
+        action: "onboarding.workspace.existing_user",
+        resource: "User",
+        resourceId: existingUser.id,
+        metadata: {
+          ...payload,
+          notificationId: notification.id,
+          reset,
+          submittedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return {
+      existingWorkspace: true,
+      status: "existing_user",
+      notificationId: notification.id,
+      tenantId: existingUser.tenantId,
+      tenantName: existingUser.tenant.name,
+      tenantSlug: existingUser.tenant.slug,
+      organizationId: existingUser.organizationId,
+      organizationName: existingUser.organization?.name,
+      centerId: "",
+      centerName: "",
+      userId: existingUser.id,
+      loginUrl,
+      embedCode: "",
+      auth: {
+        user: { ok: true, created: false, alreadyExisted: true },
+        passwordReset: reset,
+      },
+    };
+  }
+
+  const tenantSlug = await uniqueTenantSlug(payload.brandName);
+  const ownerName = ownerNameFromPayload(payload);
+  const requestedCenters = Math.max(1, Number.parseInt(payload.centerCount, 10) || 1);
+  const centerName = requestedCenters > 1 ? `${payload.brandName} - Primary Center` : `${payload.brandName} Center`;
+  const workspace = await prisma.$transaction(async (tx) => {
+    const tenant = await tx.tenant.create({
+      data: {
+        name: payload.brandName,
+        slug: tenantSlug,
+      },
+      select: { id: true, name: true, slug: true },
+    });
+
+    const brand = await tx.brand.create({
+      data: {
+        tenantId: tenant.id,
+        name: payload.brandName,
+        slug: tenantSlug,
+      },
+      select: { id: true, name: true, slug: true },
+    });
+
+    const organization = await tx.organization.create({
+      data: {
+        tenantId: tenant.id,
+        brandId: brand.id,
+        name: payload.brandName,
+      },
+      select: { id: true, name: true },
+    });
+
+    const center = await tx.center.create({
+      data: {
+        organizationId: organization.id,
+        name: centerName,
+        crmLocationId: `trial-${tenantSlug}`,
+        locationId: `trial-${tenantSlug}`,
+        state: payload.state,
+        email: payload.workEmail,
+        status: "trial_setup",
+        sourceSystem: "bee_suite_trial_onboarding",
+        externalId: `trial-${tenantSlug}`,
+        licensedCapacity: 0,
+        customFields: {
+          trialWorkspace: true,
+          setupStatus: "trial_setup",
+          requestedCenterCount: requestedCenters,
+          launchTimeline: payload.timeline,
+          firstPriority: payload.priority,
+          payoutAdminName: payload.payoutAdminName,
+          payoutAdminEmail: payload.payoutAdminEmail,
+          payoutReadiness: payload.payoutReadiness,
+          livePaymentsEnabled: false,
+          parentEngagementEnabled: false,
+          publicInquiryEmbedEnabled: true,
+          submittedPageUrl: payload.pageUrl,
+        },
+      },
+      select: { id: true, name: true },
+    });
+
+    const user = await tx.user.create({
+      data: {
+        tenantId: tenant.id,
+        organizationId: organization.id,
+        email: payload.workEmail,
+        name: ownerName,
+        role: UserRole.BRAND_ADMIN,
+        isActive: true,
+      },
+      select: { id: true, email: true, name: true, role: true },
+    });
+
+    await tx.whiteLabelSettings.create({
+      data: {
+        brandId: brand.id,
+        brandName: payload.brandName,
+        primaryColor: "#f5b51b",
+        accentColor: "#10b981",
+        themeMode: "dark",
+        emailSenderPlaceholder: payload.workEmail,
+        customDomainPlaceholder: "",
+        legalFooterText: `${payload.brandName} childcare operations powered by The Bee Suite.`,
+      },
+    });
+
+    await tx.integration.createMany({
+      data: [
+        {
+          tenantId: tenant.id,
+          provider: "bee_suite_inquiry_form",
+          status: "ready_to_install",
+          configPlaceholder: {
+            centerId: center.id,
+            endpoint: "/api/inquiries",
+            leadBackup: "crm_database_and_google_sheet_when_configured",
+          },
+        },
+        {
+          tenantId: tenant.id,
+          provider: "stripe_connect",
+          status: "setup_required",
+          configPlaceholder: {
+            payoutAdminEmail: payload.payoutAdminEmail,
+            livePaymentsEnabled: false,
+            note: "Each school must complete connected payout onboarding before parent checkout is enabled.",
+          },
+        },
+        {
+          tenantId: tenant.id,
+          provider: "google_sheets_fte",
+          status: "setup_required",
+          configPlaceholder: {
+            model: "rolling_fte_source",
+            note: "Use one rolling FTE workbook or connect the future database-backed importer.",
+          },
+        },
+        {
+          tenantId: tenant.id,
+          provider: "sendgrid_notifications",
+          status: "platform_managed",
+          configPlaceholder: {
+            senderRequired: true,
+            locationRoutingSupported: true,
+          },
+        },
+      ],
+    });
+
+    const notification = await tx.notification.create({
+      data: {
+        userId: user.id,
+        title: `Trial workspace ready: ${payload.brandName}`,
+        body: `${centerName} is ready for profile setup, inquiry form install, center import, and payout onboarding.`,
+        type: "Onboarding",
+        priority: "high",
+      },
+      select: { id: true },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        tenantId: tenant.id,
+        centerId: center.id,
+        userId: user.id,
+        action: "onboarding.trial_workspace.created",
+        resource: "Tenant",
+        resourceId: tenant.id,
+        metadata: {
+          ...payload,
+          brandId: brand.id,
+          organizationId: organization.id,
+          centerId: center.id,
+          userId: user.id,
+          notificationId: notification.id,
+          submittedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return { tenant, brand, organization, center, user, notification };
+  });
+
+  const authUser = await ensureSupabaseAuthUser({
+    email: payload.workEmail,
+    name: workspace.user.name,
+  }).catch((error) => ({
+    ok: false,
+    created: false,
+    error: error instanceof Error ? error.message : "Supabase auth user setup failed.",
+  }));
+  const passwordReset = await requestSupabasePasswordReset(payload.workEmail, resetRedirectUrl)
+    .then((response) => ({ ok: response.ok, status: response.status }))
+    .catch((error) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : "Password reset email failed.",
+    }));
+
+  return {
+    existingWorkspace: false,
+    status: "trial_setup",
+    notificationId: workspace.notification.id,
+    tenantId: workspace.tenant.id,
+    tenantName: workspace.tenant.name,
+    tenantSlug: workspace.tenant.slug,
+    brandId: workspace.brand.id,
+    brandName: workspace.brand.name,
+    organizationId: workspace.organization.id,
+    organizationName: workspace.organization.name,
+    centerId: workspace.center.id,
+    centerName: workspace.center.name,
+    userId: workspace.user.id,
+    loginUrl,
+    embedCode: getCenterInquiryEmbedCode({
+      baseUrl,
+      centerId: workspace.center.id,
+      centerName: workspace.center.name,
+      brandName: workspace.brand.name,
+    }),
+    auth: {
+      user: authUser,
+      passwordReset,
+    },
+  };
+}
+
 export async function POST(request: NextRequest) {
   const rate = checkRateLimit({
     key: `onboarding:${requestIp(request.headers)}`,
@@ -147,40 +471,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, errors }, { status: 400 });
   }
 
-  const tenant = await prisma.tenant.findFirst({
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
+  const workspace = await createTrialWorkspace(payload, request.url);
 
-  if (!tenant) {
-    return NextResponse.json({ ok: false, error: "The Bee Suite tenant is not initialized yet." }, { status: 503 });
-  }
-
-  const notification = await prisma.notification.create({
-    data: {
-      title: `New onboarding intake: ${payload.brandName}`,
-      body: `${payload.centerCount} center(s), priority ${payload.priority}, payout owner ${payload.payoutAdminEmail}.`,
-      type: "Onboarding",
-      priority: "high",
-    },
-    select: { id: true },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      tenantId: tenant.id,
-      action: "onboarding.intake.submitted",
-      resource: "OnboardingSubmission",
-      resourceId: notification.id,
-      metadata: {
-        ...payload,
-        notificationId: notification.id,
-        submittedAt: new Date().toISOString(),
-      },
-    },
-  });
-
-  const email = await sendOnboardingEmail(payload, notification.id).catch((error) => ({
+  const email = await sendOnboardingEmail(payload, workspace.notificationId, {
+    tenantId: workspace.tenantId,
+    centerId: workspace.centerId,
+    loginUrl: workspace.loginUrl,
+    status: workspace.status,
+  }).catch((error) => ({
     ok: false,
     skipped: false,
     recipients: getNotificationRecipients().length,
@@ -189,7 +487,8 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    notificationId: notification.id,
+    notificationId: workspace.notificationId,
+    workspace,
     integrations: { email },
   });
 }

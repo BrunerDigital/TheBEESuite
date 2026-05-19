@@ -86,6 +86,24 @@ function StatCard({
   );
 }
 
+function DemoDataNotice({ section }: { section: string }) {
+  return (
+    <Card className="border-primary/30 bg-primary/10">
+      <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Badge variant="outline" className="border-primary/40 text-primary">
+            Executive demo data
+          </Badge>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This {section} sample is visible only to executive roles and is not saved as live school data.
+          </p>
+        </div>
+        <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Preview only</span>
+      </CardContent>
+    </Card>
+  );
+}
+
 export type NotificationCenterData = {
   notifications: Array<{
     id: string;
@@ -835,6 +853,7 @@ export type MessagesPageData = {
     priority: number;
     aiReview: number;
   };
+  demoMode?: boolean;
 };
 
 export function MessagesPage({ data }: { data: MessagesPageData }) {
@@ -850,6 +869,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
           Live parent and staff communication records scoped to the current user. Mr. Bee can draft responses, but reviewed human approval remains required before sensitive outreach.
         </p>
       </section>
+      {data.demoMode ? <DemoDataNotice section="parent messaging" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Messages" value={data.stats.total.toLocaleString()} />
         <StatCard label="Unread" value={data.stats.unread.toLocaleString()} />
@@ -921,6 +941,7 @@ export type AnnouncementsPageData = {
     scheduled: number;
     sent: number;
   };
+  demoMode?: boolean;
 };
 
 export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
@@ -936,6 +957,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
           Warm, professional broadcast drafts and scheduled notices by school. Emergency alert delivery remains a future integration workflow.
         </p>
       </section>
+      {data.demoMode ? <DemoDataNotice section="announcement" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Announcements" value={data.stats.total} />
         <StatCard label="Drafts" value={data.stats.draft} />
@@ -1166,6 +1188,7 @@ export type ClassroomDashboardData = {
     center: { name: string; crmLocationId: string | null };
     _count: { children: number; staff: number; dailyReports: number; incidents: number };
   }>;
+  demoMode?: boolean;
 };
 
 export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData }) {
@@ -1185,6 +1208,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
           Live classroom capacity, roster, staff assignment, daily report, and incident snapshot.
         </p>
       </section>
+      {data.demoMode ? <DemoDataNotice section="classroom operations" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Classrooms" value={data.classrooms.length} />
         <StatCard label="Children assigned" value={children} />
@@ -1320,6 +1344,7 @@ export type DailyReportsPageData = {
     inProgress: number;
     needsSupplies: number;
   };
+  demoMode?: boolean;
 };
 
 export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
@@ -1335,6 +1360,7 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
           Meals, naps, diapers, activities, supplies, and teacher notes prepared for parent-facing daily reports.
         </p>
       </section>
+      {data.demoMode ? <DemoDataNotice section="daily report" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Reports" value={data.stats.total} />
         <StatCard label="Sent" value={data.stats.sent} />

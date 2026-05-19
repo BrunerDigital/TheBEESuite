@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
-import { canAccessAllCenters, canManageCrmLeads, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +38,7 @@ export default async function DashboardPage() {
   });
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The Bee Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
+  const showExecutiveDemoData = canViewExecutiveDemoData(user);
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
@@ -66,6 +67,8 @@ export default async function DashboardPage() {
     staffCount,
     revenue,
     pipelineCounts,
+    classroomSnapshotRows,
+    parentMessageRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -155,6 +158,43 @@ export default async function DashboardPage() {
         _all: true,
       },
     }),
+    prisma.classroom.findMany({
+      where: {
+        centerId: scopedCenterFilter,
+      },
+      orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
+      take: 8,
+      select: {
+        name: true,
+        ageGroup: true,
+        capacity: true,
+        ratioRule: true,
+        _count: {
+          select: {
+            children: true,
+            staff: true,
+          },
+        },
+      },
+    }),
+    prisma.message.findMany({
+      where: {
+        family: {
+          centerId: scopedCenterFilter,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        subject: true,
+        body: true,
+        priority: true,
+        sentiment: true,
+        readAt: true,
+        family: { select: { name: true } },
+        sender: { select: { name: true } },
+      },
+    }),
   ]);
 
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
@@ -220,6 +260,24 @@ export default async function DashboardPage() {
       revenue: `$${revenueDollars.toLocaleString()}`,
       compliance: expiringDocuments ? 88 : 96,
     })),
+    classroomSnapshots: classroomSnapshotRows.map((classroom) => {
+      const staffAssigned = classroom._count.staff || 1;
+      return {
+        name: classroom.name,
+        ageGroup: classroom.ageGroup,
+        present: classroom._count.children,
+        capacity: classroom.capacity,
+        ratio: classroom.ratioRule ?? `${staffAssigned}:${classroom._count.children}`,
+      };
+    }),
+    parentMessages: parentMessageRows.map((message) => ({
+      from: message.family?.name ?? message.sender?.name ?? "Parent message",
+      subject: message.subject ?? "Parent message",
+      status: message.priority === "high" || message.priority === "urgent" ? "Priority" : message.readAt ? "Reviewed" : "Open",
+      preview: message.body,
+      sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
+    })),
+    showExecutiveDemoData,
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
     inquiryEmbed,
   };

@@ -67,6 +67,12 @@ const billingWriteRoles = new Set<UserRole>([
   UserRole.BILLING_ADMIN,
 ]);
 
+const executiveDemoRoles = new Set<UserRole>([
+  UserRole.PLATFORM_OWNER,
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
+]);
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
   if (secret) return secret;
@@ -222,6 +228,10 @@ export function canManageClassroomTasks(user: Pick<CurrentUser, "role">) {
 
 export function canManageBilling(user: Pick<CurrentUser, "role">) {
   return billingWriteRoles.has(user.role);
+}
+
+export function canViewExecutiveDemoData(user: Pick<CurrentUser, "role">) {
+  return executiveDemoRoles.has(user.role);
 }
 
 export function isParentGuardian(user: Pick<CurrentUser, "role">) {

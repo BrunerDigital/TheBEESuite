@@ -32,6 +32,9 @@ export type LiveDashboardData = {
   pipelineStages: typeof pipelineStages;
   centers: typeof centers;
   aiSummary: string;
+  classroomSnapshots?: typeof classrooms;
+  parentMessages?: typeof messages;
+  showExecutiveDemoData?: boolean;
   inquiryEmbed?: {
     title: string;
     description: string;
@@ -43,6 +46,19 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const dashboardKpis = live?.kpis ?? kpis;
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
   const dashboardCenters = live?.centers ?? centers;
+  const showExecutiveDemoData = Boolean(live?.showExecutiveDemoData);
+  const classroomSnapshots = live?.classroomSnapshots?.length
+    ? live.classroomSnapshots
+    : showExecutiveDemoData
+      ? classrooms
+      : [];
+  const parentMessages = live?.parentMessages?.length
+    ? live.parentMessages
+    : showExecutiveDemoData
+      ? messages
+      : [];
+  const isClassroomDemo = showExecutiveDemoData && !live?.classroomSnapshots?.length;
+  const isParentMessageDemo = showExecutiveDemoData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
     "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm any sensitive action before sending messages or changing records. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
 
@@ -181,10 +197,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Capacity by classroom</CardTitle>
-                    <CardDescription>Open seats and ratio pulse</CardDescription>
+                    <CardDescription>
+                      {isClassroomDemo ? "Executive demo preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
-                    {classrooms.slice(0, 6).map((room) => (
+                    {classroomSnapshots.slice(0, 6).map((room) => (
                       <div key={room.name} className="flex flex-col gap-2">
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -196,6 +214,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         <Progress value={(room.present / room.capacity) * 100} />
                       </div>
                     ))}
+                    {!classroomSnapshots.length ? (
+                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                        No classroom records are visible for this login yet.
+                      </p>
+                    ) : null}
                   </CardContent>
                 </Card>
               </div>
@@ -264,10 +287,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle>Parent messages</CardTitle>
-                  <CardDescription>Unread and priority conversations</CardDescription>
+                  <CardDescription>
+                    {isParentMessageDemo ? "Executive demo preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                  {messages.map((message) => (
+                  {parentMessages.map((message) => (
                     <div key={message.subject} className="flex gap-3">
                       <Avatar className="size-9">
                         <AvatarFallback>{message.from.slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -281,6 +306,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       </div>
                     </div>
                   ))}
+                  {!parentMessages.length ? (
+                    <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                      No parent messages are visible for this login yet.
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
             </aside>

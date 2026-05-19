@@ -38,8 +38,15 @@ import { AuthLikePage, ModulePage } from "@/components/module-page";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { getModule, modules } from "@/lib/demo-data";
-import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
+import {
+  executiveAnnouncementDemoRows,
+  executiveClassroomDemoRows,
+  executiveDailyReportDemoRows,
+  executiveParentMessageDemoRows,
+  executiveParentPortalDemo,
+} from "@/lib/executive-demo-data";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { prisma } from "@/lib/prisma";
 
@@ -82,6 +89,7 @@ async function getVisibleCenters(user: CurrentUser) {
 async function renderLivePage(slug: string, user: CurrentUser) {
   const allCenters = user.role === "PLATFORM_OWNER";
   const tenantWide = canAccessAllCenters(user);
+  const showExecutiveDemoData = canViewExecutiveDemoData(user);
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(visibleCenterIds);
@@ -312,6 +320,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       },
     });
 
+    if (!family && showExecutiveDemoData) {
+      return <ParentPortalWorkspace {...executiveParentPortalDemo} demoMode />;
+    }
+
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
     const [invoices, dailyReports, incidents, messages, documents] = await Promise.all([
@@ -436,7 +448,27 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
     ]);
 
-    return <MessagesPage data={{ messages, stats: { total, unread, priority, aiReview } }} />;
+    const demoMode = showExecutiveDemoData && messages.length === 0;
+    const visibleMessages = demoMode ? executiveParentMessageDemoRows : messages;
+
+    return (
+      <MessagesPage
+        data={{
+          messages: visibleMessages,
+          stats: demoMode
+            ? {
+                total: visibleMessages.length,
+                unread: visibleMessages.filter((message) => !message.readAt).length,
+                priority: visibleMessages.filter((message) => ["high", "urgent"].includes(message.priority)).length,
+                aiReview: visibleMessages.filter((message) =>
+                  ["high", "urgent"].includes(message.priority) || ["sensitive", "negative"].includes(message.sentiment ?? ""),
+                ).length,
+              }
+            : { total, unread, priority, aiReview },
+          demoMode,
+        }}
+      />
+    );
   }
 
   if (slug === "announcements") {
@@ -463,7 +495,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.announcement.count({ where: { ...announcementWhere, status: "sent" } }),
     ]);
 
-    return <AnnouncementsPage data={{ announcements, stats: { total, draft, scheduled, sent } }} />;
+    const demoMode = showExecutiveDemoData && announcements.length === 0;
+    const visibleAnnouncements = demoMode ? executiveAnnouncementDemoRows : announcements;
+
+    return (
+      <AnnouncementsPage
+        data={{
+          announcements: visibleAnnouncements,
+          stats: demoMode
+            ? {
+                total: visibleAnnouncements.length,
+                draft: visibleAnnouncements.filter((announcement) => announcement.status === "draft").length,
+                scheduled: visibleAnnouncements.filter((announcement) => announcement.status === "scheduled").length,
+                sent: visibleAnnouncements.filter((announcement) => announcement.status === "sent").length,
+              }
+            : { total, draft, scheduled, sent },
+          demoMode,
+        }}
+      />
+    );
   }
 
   if (slug === "campaigns") {
@@ -1002,7 +1052,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       },
     });
 
-    return <ClassroomDashboardPage data={{ classrooms }} />;
+    const demoMode = showExecutiveDemoData && classrooms.length === 0;
+
+    return <ClassroomDashboardPage data={{ classrooms: demoMode ? executiveClassroomDemoRows : classrooms, demoMode }} />;
   }
 
   if (slug === "attendance") {
@@ -1062,7 +1114,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.dailyReport.count({ where: { ...dailyReportWhere, suppliesNeeded: { not: null } } }),
     ]);
 
-    return <DailyReportsPage data={{ reports, stats: { total, sent, inProgress: Math.max(total - sent, 0), needsSupplies } }} />;
+    const demoMode = showExecutiveDemoData && reports.length === 0;
+    const visibleReports = demoMode ? executiveDailyReportDemoRows : reports;
+
+    return (
+      <DailyReportsPage
+        data={{
+          reports: visibleReports,
+          stats: demoMode
+            ? {
+                total: visibleReports.length,
+                sent: visibleReports.filter((report) => Boolean(report.sentAt)).length,
+                inProgress: visibleReports.filter((report) => !report.sentAt).length,
+                needsSupplies: visibleReports.filter((report) => Boolean(report.suppliesNeeded)).length,
+              }
+            : { total, sent, inProgress: Math.max(total - sent, 0), needsSupplies },
+          demoMode,
+        }}
+      />
+    );
   }
 
   if (slug === "incident-reports") {

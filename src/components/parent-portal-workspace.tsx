@@ -59,6 +59,7 @@ type Props = {
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null }>;
+  demoMode?: boolean;
 };
 
 function formatDate(value: string | Date | null) {
@@ -70,7 +71,7 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function ParentPortalWorkspace({ family, invoices, dailyReports, incidents, messages, documents }: Props) {
+export function ParentPortalWorkspace({ family, invoices, dailyReports, incidents, messages, documents, demoMode }: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [subject, setSubject] = useState("Question for the center");
@@ -178,6 +179,16 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
           Daily reports, invoices, messages, documents, and director-reviewed update requests for your family.
         </p>
       </section>
+
+      {demoMode ? (
+        <Alert className="border-primary/30 bg-primary/10">
+          <ShieldCheck className="size-4" />
+          <AlertTitle>Executive demo data</AlertTitle>
+          <AlertDescription>
+            This parent portal sample is visible only to executive roles and is not saved as live family data.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       {status ? (
         <Alert>

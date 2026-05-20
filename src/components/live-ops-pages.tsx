@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OperationsActionHub } from "@/components/operations-action-hub";
+import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
@@ -2088,6 +2089,7 @@ export type FamilyProfilesPageData = {
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
   }>;
   importCenters: Array<{ id: string; name: string }>;
+  intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
     withCustodyNotes: number;
@@ -2115,6 +2117,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         <StatCard label="Guardians" value={data.stats.guardians} />
         <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
       </div>
+      <FamilyStudentIntakeForm centers={data.intakeCenters} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Family Directory</CardTitle>
@@ -2190,6 +2193,7 @@ export type ChildProfilesPageData = {
     classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
     _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
   }>;
+  intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
     enrolled: number;
@@ -2217,6 +2221,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
         <StatCard label="Allergy records" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
+      <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Children</CardTitle>

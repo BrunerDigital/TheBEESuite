@@ -88,6 +88,30 @@ async function getVisibleCenters(user: CurrentUser) {
   });
 }
 
+async function getFamilyIntakeCenters(user: CurrentUser) {
+  const centers = await prisma.center.findMany({
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      city: true,
+      state: true,
+      classrooms: {
+        orderBy: [{ ageGroup: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, ageGroup: true },
+      },
+    },
+  });
+
+  return centers.map((center) => ({
+    id: center.id,
+    name: [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    classrooms: center.classrooms,
+  }));
+}
+
 async function renderLivePage(slug: string, user: CurrentUser) {
   const allCenters = user.role === "PLATFORM_OWNER";
   const tenantWide = canAccessAllCenters(user);
@@ -246,7 +270,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
   if (slug === "family-detail") {
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
-    const [families, total, withCustodyNotes, children, guardians] = await Promise.all([
+    const [families, total, withCustodyNotes, children, guardians, intakeCenters] = await Promise.all([
       prisma.family.findMany({
         where: familyWhere,
         orderBy: { createdAt: "desc" },
@@ -261,6 +285,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.family.count({ where: { ...familyWhere, custodyNotes: { not: null } } }),
       prisma.child.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
       prisma.guardian.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
+      getFamilyIntakeCenters(user),
     ]);
 
     return (
@@ -268,6 +293,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         data={{
           families,
           importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
+          intakeCenters,
           stats: { total, withCustodyNotes, children, guardians },
         }}
       />
@@ -283,7 +309,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             { family: { is: { centerId: scopedCenterIds } } },
           ],
         };
-    const [children, total, enrolled, allergies, restrictedMedicalNotes] = await Promise.all([
+    const [children, total, enrolled, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: childWhere,
         orderBy: { fullName: "asc" },
@@ -303,9 +329,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.child.count({ where: { ...childWhere, enrollmentStatus: "enrolled" } }),
       prisma.allergy.count({ where: { child: { family: { is: { centerId: scopedCenterIds } } } } }),
       prisma.childMedicalNote.count({ where: { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } } }),
+      getFamilyIntakeCenters(user),
     ]);
 
-    return <ChildProfilesPage data={{ children, stats: { total, enrolled, allergies, restrictedMedicalNotes } }} />;
+    return <ChildProfilesPage data={{ children, intakeCenters, stats: { total, enrolled, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {

@@ -122,6 +122,21 @@ The import creates or updates:
 
 Every import row is recorded so directors can review which rows imported and which rows errored.
 
+## Manual Family and Student Intake
+
+Directors can add a new family and student from `Family Profiles` or `Child Profiles` without copying internal IDs.
+
+The intake form creates or updates:
+
+- `Family`
+- Primary `Guardian`
+- `Child` linked to the family
+- `BillingAccount`
+- Optional opening invoice and ledger entry
+- Optional 4 digit lobby kiosk PIN
+
+If the submitted parent email already belongs to a family at the selected center, the workflow attaches the child to that existing family account instead of creating a duplicate.
+
 ## Billing and Ledger Foundation
 
 Billing is still merchant-placeholder mode, but directors can now record tuition charges and ledger adjustments.

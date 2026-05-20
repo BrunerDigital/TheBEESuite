@@ -127,6 +127,8 @@ model Center {
   schedules    StaffSchedule[]
   announcements Announcement[]
   auditLogs    AuditLog[]
+  checkLogs    CheckInOutLog[]
+  procareImports ProcareImportBatch[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -149,6 +151,8 @@ model Classroom {
   dailyReports DailyReport[]
   incidents    IncidentReport[]
   attendance   AttendanceRecord[]
+  checkLogs    CheckInOutLog[]
+  media        ChildMedia[]
 }
 
 model User {
@@ -170,6 +174,8 @@ model User {
   messages     Message[]     @relation("MessageSender")
   auditLogs    AuditLog[]
   notifications Notification[]
+  uploadedMedia ChildMedia[]
+  procareImports ProcareImportBatch[]
 }
 
 model Role {
@@ -222,9 +228,15 @@ model Guardian {
   relation  String
   preferredCommunication String?
   isBillingContact Boolean @default(false)
+  checkInPinHash String?
+  checkInPinSetAt DateTime?
+  checkInPinSetById String?
 
   family Family @relation(fields: [familyId], references: [id])
   user   User?  @relation(fields: [userId], references: [id])
+  checkLogs CheckInOutLog[]
+
+  @@index([checkInPinHash])
 }
 
 model Child {
@@ -257,6 +269,7 @@ model Child {
   dailyReports DailyReport[]
   incidents    IncidentReport[]
   documents    Document[]
+  media        ChildMedia[]
 }
 
 model AuthorizedPickup {
@@ -540,13 +553,25 @@ model AttendanceRecord {
 model CheckInOutLog {
   id        String @id @default(cuid())
   childId   String
+  centerId  String?
+  classroomId String?
+  guardianId String?
   type      String
   occurredAt DateTime
   pickupName String?
   signaturePlaceholder Boolean @default(false)
   verificationStatus String?
+  pinVerified Boolean @default(false)
+  notes String?
 
   child Child @relation(fields: [childId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id])
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+  guardian Guardian? @relation(fields: [guardianId], references: [id])
+
+  @@index([centerId, occurredAt])
+  @@index([childId, occurredAt])
+  @@index([guardianId, occurredAt])
 }
 
 model DailyReport {
@@ -565,6 +590,31 @@ model DailyReport {
   naps      Nap[]
   diapers   DiaperPottyLog[]
   activities ActivityLog[]
+  media     ChildMedia[]
+}
+
+model ChildMedia {
+  id          String @id @default(cuid())
+  childId     String
+  classroomId String?
+  uploadedById String?
+  dailyReportId String?
+  url         String
+  storageKey String?
+  caption    String?
+  mediaType  String @default("photo")
+  status     String @default("shared")
+  sharedWithParents Boolean @default(true)
+  takenAt     DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  child       Child @relation(fields: [childId], references: [id])
+  classroom   Classroom? @relation(fields: [classroomId], references: [id])
+  uploadedBy  User? @relation(fields: [uploadedById], references: [id])
+  dailyReport DailyReport? @relation(fields: [dailyReportId], references: [id])
+
+  @@index([childId, createdAt])
+  @@index([classroomId, createdAt])
 }
 
 model Meal {
@@ -669,10 +719,12 @@ model BillingAccount {
   familyId String @unique
   balanceCents Int @default(0)
   autopayPlaceholder Boolean @default(false)
+  ledgerSyncedAt DateTime?
 
   family   Family    @relation(fields: [familyId], references: [id])
   invoices Invoice[]
   payments Payment[]
+  ledgerEntries LedgerEntry[]
 }
 
 model Invoice {
@@ -686,6 +738,7 @@ model Invoice {
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
   items InvoiceItem[]
+  ledgerEntries LedgerEntry[]
 }
 
 model InvoiceItem {
@@ -709,6 +762,32 @@ model Payment {
   paidAt DateTime?
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
+  ledgerEntries LedgerEntry[]
+}
+
+model LedgerEntry {
+  id        String @id @default(cuid())
+  billingAccountId String
+  invoiceId String?
+  paymentId String?
+  type      String
+  description String
+  amountCents Int
+  balanceAfterCents Int?
+  effectiveAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  sourceSystem String?
+  externalId String?
+  metadata Json?
+
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
+  invoice Invoice? @relation(fields: [invoiceId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id])
+
+  @@index([billingAccountId, effectiveAt])
+  @@index([invoiceId])
+  @@index([paymentId])
+  @@unique([sourceSystem, externalId])
 }
 
 model Product {
@@ -790,6 +869,37 @@ model Integration {
   lastSyncAt DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model ProcareImportBatch {
+  id        String @id @default(cuid())
+  centerId  String
+  uploadedById String?
+  filename  String
+  status    String @default("completed")
+  summary   Json?
+  createdAt DateTime @default(now())
+
+  center Center @relation(fields: [centerId], references: [id])
+  uploadedBy User? @relation(fields: [uploadedById], references: [id])
+  rows ProcareImportRow[]
+
+  @@index([centerId, createdAt])
+}
+
+model ProcareImportRow {
+  id        String @id @default(cuid())
+  batchId   String
+  rowNumber Int
+  status    String
+  message   String?
+  rawData   Json
+  createdFamilyId String?
+  createdChildId String?
+
+  batch ProcareImportBatch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId, status])
 }
 
 model WhiteLabelSettings {

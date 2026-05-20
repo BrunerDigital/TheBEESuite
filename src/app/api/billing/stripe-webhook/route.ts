@@ -213,20 +213,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, pending: true });
   }
 
-  await prisma.$transaction([
-    prisma.payment.update({
+  await prisma.$transaction(async (tx) => {
+    const payment = await tx.payment.update({
       where: { id: paymentId },
       data: {
         status: PaymentStatus.PAID,
         paidAt: new Date(),
         externalIdPlaceholder: session.id,
       },
-    }),
-    prisma.invoice.update({
+    });
+    await tx.invoice.update({
       where: { id: invoiceId },
       data: { status: PaymentStatus.PAID },
-    }),
-  ]);
+    });
+    const updatedAccount = await tx.billingAccount.update({
+      where: { id: payment.billingAccountId },
+      data: { balanceCents: { decrement: payment.amountCents } },
+    });
+    await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: payment.billingAccountId,
+        invoiceId,
+        paymentId: payment.id,
+        type: "payment",
+        description: "Stripe parent payment",
+        amountCents: -payment.amountCents,
+        balanceAfterCents: updatedAccount.balanceCents,
+        sourceSystem: "stripe",
+        externalId: session.id,
+        metadata: { stripeEventId: event.id },
+      },
+    });
+  });
 
   await writeSystemAudit(invoiceId, event.id, session.id, event.type === "checkout.session.async_payment_succeeded" ? "billing.checkout.async_succeeded" : "billing.checkout.completed");
 

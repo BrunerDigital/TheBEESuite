@@ -24,6 +24,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OperationsActionHub } from "@/components/operations-action-hub";
+import { GuardianPinManager } from "@/components/guardian-pin-manager";
+import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
 
@@ -475,6 +477,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
 }
 
 export type CenterDashboardData = {
+  centerId: string | null;
   centerName: string;
   place: string;
   stats: {
@@ -543,6 +546,19 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
           </Table>
         </CardContent>
       </Card>
+      {data.centerId ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Lobby Check-In Kiosk</CardTitle>
+            <CardDescription>Open this on the lobby tablet or front desk computer for parent PIN check-in/out.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href={`/check-in/${data.centerId}`} target="_blank" rel="noreferrer">
+              Open kiosk screen
+            </a>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -1249,6 +1265,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
           </Table>
         </CardContent>
       </Card>
+      <OperationsActionHub title="Create or Edit Classroom" defaultEntity="classroom" compact />
     </div>
   );
 }
@@ -1552,6 +1569,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
+      <OperationsActionHub title="Create or Edit Staff Profile" defaultEntity="staff" compact />
       <OperationsActionHub title="Add or Edit Staff Certification" defaultEntity="certification" compact />
     </div>
   );
@@ -1946,10 +1964,11 @@ export type FamilyProfilesPageData = {
     billingEmail: string | null;
     custodyNotes: string | null;
     createdAt: Date | string;
-    guardians: Array<{ fullName: string; email: string | null; phone: string | null; relation: string }>;
+    guardians: Array<{ id: string; fullName: string; email: string | null; phone: string | null; relation: string; checkInPinSetAt: Date | string | null }>;
     children: Array<{ fullName: string; ageGroup: string; enrollmentStatus: string }>;
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
   }>;
+  importCenters: Array<{ id: string; name: string }>;
   stats: {
     total: number;
     withCustodyNotes: number;
@@ -2010,6 +2029,29 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           </Table>
         </CardContent>
       </Card>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Lobby Kiosk PINs</CardTitle>
+          <CardDescription>Directors set the 4 digit guardian PIN used on the check-in/check-out tablet.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-2">
+          {data.families.flatMap((family) =>
+            family.guardians.map((guardian) => (
+              <GuardianPinManager
+                key={guardian.id}
+                guardianId={guardian.id}
+                guardianName={`${guardian.fullName} · ${family.name}`}
+                pinSetAt={guardian.checkInPinSetAt}
+              />
+            )),
+          )}
+          {!data.families.some((family) => family.guardians.length) ? (
+            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
+          ) : null}
+        </CardContent>
+      </Card>
+      <ProcareImportPanel centers={data.importCenters} />
+      <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact />
     </div>
   );
 }
@@ -2091,6 +2133,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
           </Table>
         </CardContent>
       </Card>
+      <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
     </div>
   );
 }
@@ -2104,6 +2147,15 @@ export type BillingInvoicesPageData = {
     totalCents: number;
     billingAccount: { balanceCents: number; family: { name: string; billingEmail: string | null; centerId: string | null } };
     _count: { items: number };
+  }>;
+  ledgerEntries: Array<{
+    id: string;
+    type: string;
+    description: string;
+    amountCents: number;
+    balanceAfterCents: number | null;
+    effectiveAt: Date | string;
+    billingAccount: { family: { name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
     total: number;
@@ -2164,6 +2216,44 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           </Table>
         </CardContent>
       </Card>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Family Ledger</CardTitle>
+          <CardDescription>Tuition charges, imported ProCare balances, credits, and manual adjustments.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Family</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Balance</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.ledgerEntries.map((entry) => (
+                <TableRow key={entry.id}>
+                  <TableCell>{formatDate(entry.effectiveAt)}</TableCell>
+                  <TableCell>{entry.billingAccount.family.name}</TableCell>
+                  <TableCell><Badge variant="outline">{entry.type}</Badge></TableCell>
+                  <TableCell>{entry.description}</TableCell>
+                  <TableCell>{money(entry.amountCents)}</TableCell>
+                  <TableCell>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</TableCell>
+                </TableRow>
+              ))}
+              {!data.ledgerEntries.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">No ledger entries have been created yet.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <OperationsActionHub title="Create Invoice or Ledger Adjustment" defaultEntity="invoice" compact />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, BookOpen, CheckCircle2, ClipboardCheck, ShieldAlert } from "lucide-react";
+import { AlertCircle, BookOpen, Camera, CheckCircle2, ClipboardCheck, ShieldAlert } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,8 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
   const [teacherNote, setTeacherNote] = useState("");
   const [meal, setMeal] = useState("");
   const [activity, setActivity] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoCaption, setPhotoCaption] = useState("");
   const [suppliesNeeded, setSuppliesNeeded] = useState("");
   const [incidentType, setIncidentType] = useState("Minor injury");
   const [incidentDescription, setIncidentDescription] = useState("");
@@ -119,6 +121,23 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
     });
   }
 
+  function submitPhoto() {
+    if (!selectedChild?.id || !photo) return;
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set("childId", selectedChild.id);
+      formData.set("caption", photoCaption);
+      formData.set("photo", photo);
+      formData.set("sharedWithParents", "true");
+      const response = await fetch("/api/teacher/media", { method: "POST", body: formData });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return showError(json?.error || "Photo could not be shared.");
+      setPhoto(null);
+      setPhotoCaption("");
+      showStatus("Photo shared to the parent portal.");
+    });
+  }
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
       <section className="rounded-2xl border bg-card/80 p-5 shadow-2xl shadow-black/15">
@@ -174,7 +193,7 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-4">
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Attendance</CardTitle>
@@ -207,6 +226,21 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitAttendance}>
               <ClipboardCheck data-icon="inline-start" />
               Save Attendance
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Photo</CardTitle>
+            <CardDescription>Share a classroom moment</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
+            <Textarea value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
+            <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>
+              <Camera data-icon="inline-start" />
+              Share Photo
             </Button>
           </CardContent>
         </Card>

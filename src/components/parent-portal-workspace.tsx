@@ -59,6 +59,7 @@ type Props = {
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null }>;
+  media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
   demoMode?: boolean;
 };
 
@@ -71,7 +72,7 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function ParentPortalWorkspace({ family, invoices, dailyReports, incidents, messages, documents, demoMode }: Props) {
+export function ParentPortalWorkspace({ family, invoices, dailyReports, incidents, messages, documents, media = [], demoMode }: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [subject, setSubject] = useState("Question for the center");
@@ -260,6 +261,26 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Photos and Moments</CardTitle>
+            <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {media.slice(0, 8).map((item) => (
+              <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.url} alt={item.caption || `${item.child.fullName} classroom moment`} className="aspect-video w-full object-cover" />
+                <div className="p-3">
+                  <div className="text-sm font-medium">{item.child.fullName}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
+                </div>
+              </div>
+            ))}
+            {!media.length ? <p className="text-sm text-muted-foreground">No shared photos have been added yet.</p> : null}
+          </CardContent>
+        </Card>
+
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Daily Reports</CardTitle>

@@ -23,3 +23,17 @@ export async function writeAuditLog(user: CurrentUser, input: AuditInput) {
     },
   });
 }
+
+export async function writeSystemAuditLog(input: AuditInput & { tenantId: string }) {
+  await prisma.auditLog.create({
+    data: {
+      tenantId: input.tenantId,
+      centerId: input.centerId || null,
+      userId: null,
+      action: input.action,
+      resource: input.resource,
+      resourceId: input.resourceId || null,
+      metadata: input.metadata || {},
+    },
+  });
+}

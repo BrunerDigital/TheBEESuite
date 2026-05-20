@@ -261,7 +261,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.guardian.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
     ]);
 
-    return <FamilyProfilesPage data={{ families, stats: { total, withCustodyNotes, children, guardians } }} />;
+    return (
+      <FamilyProfilesPage
+        data={{
+          families,
+          importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
+          stats: { total, withCustodyNotes, children, guardians },
+        }}
+      />
+    );
   }
 
   if (slug === "child-profile") {
@@ -326,7 +334,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [invoices, dailyReports, incidents, messages, documents] = await Promise.all([
+    const [invoices, dailyReports, incidents, messages, documents, media] = await Promise.all([
       prisma.invoice.findMany({
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -372,9 +380,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         take: 20,
         select: { id: true, name: true, type: true, status: true, expiresAt: true },
       }),
+      prisma.childMedia.findMany({
+        where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        select: { id: true, url: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
+      }),
     ]);
 
-    return <ParentPortalWorkspace family={family} invoices={invoices} dailyReports={dailyReports} incidents={incidents} messages={messages} documents={documents} />;
+    return <ParentPortalWorkspace family={family} invoices={invoices} dailyReports={dailyReports} incidents={incidents} messages={messages} documents={documents} media={media} />;
   }
 
   if (slug === "teacher-portal") {
@@ -581,7 +595,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const [invoices, total, open, paid, openRows] = await Promise.all([
+    const [invoices, ledgerEntries, total, open, paid, openRows] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -596,13 +610,27 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           _count: { select: { items: true } },
         },
       }),
+      prisma.ledgerEntry.findMany({
+        where: {
+          billingAccount: invoiceWhere.billingAccount,
+        },
+        orderBy: { effectiveAt: "desc" },
+        take: 50,
+        include: {
+          billingAccount: {
+            select: {
+              family: { select: { name: true, billingEmail: true, centerId: true } },
+            },
+          },
+        },
+      }),
       prisma.invoice.count({ where: invoiceWhere }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.PAID } }),
       prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true } }),
     ]);
 
-    return <BillingInvoicesPage data={{ invoices, stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) } }} />;
+    return <BillingInvoicesPage data={{ invoices, ledgerEntries, stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) } }} />;
   }
 
   if (slug === "payments") {
@@ -1031,6 +1059,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     return (
       <CenterDashboardPage
         data={{
+          centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
           stats: { leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks },

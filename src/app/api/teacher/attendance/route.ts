@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     ? await prisma.checkInOutLog.create({
         data: {
           childId,
+          centerId,
+          classroomId: child.classroom?.id ?? null,
           type: logType,
           occurredAt: date,
           pickupName: pickupName || null,

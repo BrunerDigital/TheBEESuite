@@ -11,6 +11,7 @@ import {
   FileText,
   HeartHandshake,
   Home,
+  Image as ImageIcon,
   Inbox,
   LayoutDashboard,
   Megaphone,
@@ -38,6 +39,7 @@ export type ModuleSlug =
   | "tours"
   | "calendar"
   | "messages"
+  | "parent-media-review"
   | "announcements"
   | "campaigns"
   | "automations"
@@ -314,6 +316,7 @@ export const navGroups = [
       ["Family detail", "family-detail", Users],
       ["Child profile", "child-profile", HeartHandshake],
       ["Messages", "messages", MessageSquare],
+      ["Media review", "parent-media-review", ImageIcon],
       ["Parent portal", "parent-portal", Inbox],
       ["Teacher portal", "teacher-portal", Activity],
     ],
@@ -586,6 +589,18 @@ export const modules: ModuleDefinition[] = [
     features: ["Meals and bottles", "Nap tracking", "Activities and mood", "Teacher notes and photo placeholder"],
     records: ["Sofia: cheerful, 1 nap, lunch finished", "Ari: needs extra clothes", "Mia: potty progress note"],
     ai: "Can polish parent-facing notes while preserving teacher intent.",
+  },
+  {
+    slug: "parent-media-review",
+    title: "Parent Media Review",
+    eyebrow: "Permission-aware photo sharing",
+    description:
+      "Director review queue for teacher-uploaded photos that require human permission confirmation before parent portal sharing.",
+    owner: "Director, assistant director, regional manager",
+    metrics: ["Permission review queue", "Signed private media previews", "Parent visibility decision", "Audit trail"],
+    features: ["Private Supabase Storage media", "Photo/video permission confirmation", "Approve or reject sharing", "Teacher notification after review"],
+    records: ["Classroom photo held for review", "Director approval with permission update", "Rejected sharing kept internal"],
+    sensitive: true,
   },
   {
     slug: "incident-reports",

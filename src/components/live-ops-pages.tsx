@@ -9,6 +9,7 @@ import {
   ClipboardCheck,
   FileText,
   HeartHandshake,
+  Image as ImageIcon,
   Inbox,
   KeyRound,
   Link2,
@@ -25,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
+import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
@@ -1416,6 +1418,123 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
           </Table>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+export type ParentMediaReviewPageData = {
+  media: Array<{
+    id: string;
+    url: string;
+    caption: string | null;
+    status: string;
+    sharedWithParents: boolean;
+    takenAt: Date | string;
+    createdAt: Date | string;
+    child: {
+      id: string;
+      fullName: string;
+      preferredName: string | null;
+      ageGroup: string;
+      photoVideoPermission: boolean;
+      family: { name: string; centerId: string | null };
+    };
+    classroom: { name: string } | null;
+    uploadedBy: { name: string; email: string; role: string } | null;
+    center: { id: string; name: string; crmLocationId: string | null; city: string | null; state: string | null } | null;
+  }>;
+  stats: {
+    pending: number;
+    sharedThirtyDays: number;
+    rejectedThirtyDays: number;
+    restrictedChildren: number;
+  };
+};
+
+export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageData }) {
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ImageIcon data-icon="inline-start" />
+          Parent engagement safety
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Parent Media Review</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Review teacher-uploaded child photos that were held because photo/video permission was missing. Approval is a human confirmation and is written to the audit trail.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Needs review" value={data.stats.pending} />
+        <StatCard label="Shared in 30 days" value={data.stats.sharedThirtyDays} />
+        <StatCard label="Rejected in 30 days" value={data.stats.rejectedThirtyDays} />
+        <StatCard label="Restricted children" value={data.stats.restrictedChildren} />
+      </div>
+      <div className="grid gap-4">
+        {data.media.map((item) => (
+          <Card key={item.id} className="glass-panel overflow-hidden">
+            <CardContent className="p-0">
+              <div className="grid gap-0 lg:grid-cols-[280px_1fr_320px]">
+                <div className="bg-muted/40">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.url}
+                    alt={item.caption || `${item.child.fullName} classroom moment`}
+                    className="aspect-video h-full min-h-52 w-full object-cover lg:aspect-auto"
+                  />
+                </div>
+                <div className="space-y-4 p-5">
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">{item.status.replaceAll("_", " ")}</Badge>
+                    <Badge variant={item.child.photoVideoPermission ? "default" : "secondary"}>
+                      {item.child.photoVideoPermission ? "Permission verified" : "Permission missing"}
+                    </Badge>
+                    <Badge variant="outline">{item.child.ageGroup}</Badge>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">{item.child.fullName}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {item.child.family.name} · {item.classroom?.name ?? "No classroom"} · {item.center?.crmLocationId ?? item.center?.name ?? "No center"}
+                    </p>
+                  </div>
+                  <div className="grid gap-3 text-sm md:grid-cols-2">
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Uploaded by</div>
+                      <div className="mt-1 font-medium">{item.uploadedBy?.name ?? "Unknown staff"}</div>
+                      <div className="text-xs text-muted-foreground">{item.uploadedBy?.email ?? "No email"}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submitted</div>
+                      <div className="mt-1 font-medium">{formatDateTime(item.createdAt)}</div>
+                      <div className="text-xs text-muted-foreground">Taken {formatDate(item.takenAt)}</div>
+                    </div>
+                  </div>
+                  <p className="rounded-xl border bg-background/50 p-3 text-sm leading-6 text-muted-foreground">
+                    {item.caption || "No caption was added. Review the image before approving parent visibility."}
+                  </p>
+                </div>
+                <div className="border-t bg-background/45 p-5 lg:border-l lg:border-t-0">
+                  <div className="mb-3 text-sm font-medium">Director decision</div>
+                  <p className="mb-4 text-xs leading-5 text-muted-foreground">
+                    Approving confirms the center has verified photo/video permission for this child and shares this photo in the parent portal.
+                  </p>
+                  <MediaReviewActions mediaId={item.id} childName={item.child.fullName} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {!data.media.length ? (
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>No photos need review</CardTitle>
+              <CardDescription>
+                Teacher-uploaded parent photos with missing permission will appear here before they can be shared.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        ) : null}
+      </div>
     </div>
   );
 }

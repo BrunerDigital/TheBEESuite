@@ -27,6 +27,7 @@ import {
   MultiLocationDashboardPage,
   NotificationCenterPage,
   PaymentsPage,
+  ParentMediaReviewPage,
   ReputationPage,
   StaffPage,
   TeamPermissionsPage,
@@ -1161,6 +1162,84 @@ async function renderLivePage(slug: string, user: CurrentUser) {
               }
             : { total, sent, inProgress: Math.max(total - sent, 0), needsSupplies },
           demoMode,
+        }}
+      />
+    );
+  }
+
+  if (slug === "parent-media-review") {
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const mediaScopeWhere: Prisma.ChildMediaWhereInput = allCenters
+      ? {}
+      : {
+          OR: [
+            { classroom: { is: { centerId: scopedCenterIds } } },
+            { child: { family: { is: { centerId: scopedCenterIds } } } },
+          ],
+        };
+    const scopedMediaWhere = (where: Prisma.ChildMediaWhereInput): Prisma.ChildMediaWhereInput =>
+      Object.keys(mediaScopeWhere).length ? { AND: [mediaScopeWhere, where] } : where;
+
+    const [media, pending, sharedThirtyDays, rejectedThirtyDays, restrictedChildren] = await Promise.all([
+      prisma.childMedia.findMany({
+        where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }),
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: {
+          child: {
+            select: {
+              id: true,
+              fullName: true,
+              preferredName: true,
+              ageGroup: true,
+              photoVideoPermission: true,
+              family: { select: { name: true, centerId: true } },
+            },
+          },
+          classroom: {
+            select: {
+              name: true,
+              center: { select: { id: true, name: true, crmLocationId: true, city: true, state: true } },
+            },
+          },
+          uploadedBy: { select: { name: true, email: true, role: true } },
+        },
+      }),
+      prisma.childMedia.count({ where: scopedMediaWhere({ status: "permission_review", sharedWithParents: false }) }),
+      prisma.childMedia.count({ where: scopedMediaWhere({ status: "shared", sharedWithParents: true, createdAt: { gte: thirtyDaysAgo } }) }),
+      prisma.childMedia.count({ where: scopedMediaWhere({ status: "rejected", createdAt: { gte: thirtyDaysAgo } }) }),
+      prisma.child.count({
+        where: allCenters
+          ? { photoVideoPermission: false }
+          : { photoVideoPermission: false, family: { is: { centerId: scopedCenterIds } } },
+      }),
+    ]);
+
+    const centerById = new Map(centers.map((center) => [center.id, center]));
+    const signedMedia = await signChildMediaRecords(media);
+    const reviewMedia = signedMedia.map((item) => {
+      const center = item.classroom?.center ?? (item.child.family.centerId ? centerById.get(item.child.family.centerId) ?? null : null);
+      return {
+        id: item.id,
+        url: item.url,
+        caption: item.caption,
+        status: item.status,
+        sharedWithParents: item.sharedWithParents,
+        takenAt: item.takenAt,
+        createdAt: item.createdAt,
+        child: item.child,
+        classroom: item.classroom ? { name: item.classroom.name } : null,
+        uploadedBy: item.uploadedBy,
+        center,
+      };
+    });
+
+    return (
+      <ParentMediaReviewPage
+        data={{
+          media: reviewMedia,
+          stats: { pending, sharedThirtyDays, rejectedThirtyDays, restrictedChildren },
         }}
       />
     );

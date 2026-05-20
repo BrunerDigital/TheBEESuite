@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -113,6 +114,33 @@ export async function POST(request: NextRequest) {
     include: { child: { select: { fullName: true } } },
   });
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
+
+  if (sharedWithParents && !child.photoVideoPermission && centerId) {
+    const directors = await prisma.staffProfile.findMany({
+      where: {
+        centerId,
+        user: {
+          isActive: true,
+          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] },
+          id: { not: user.id },
+        },
+      },
+      select: { userId: true },
+    });
+    await Promise.all(
+      directors.map((director) =>
+        prisma.notification.create({
+          data: {
+            userId: director.userId,
+            title: "Photo needs parent permission review",
+            body: `${child.fullName}'s photo is held until photo/video permission is confirmed.`,
+            type: "parent_media",
+            priority: "high",
+          },
+        }),
+      ),
+    );
+  }
 
   await writeAuditLog(user, {
     centerId,

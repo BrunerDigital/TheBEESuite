@@ -83,11 +83,14 @@ Current v1 behavior:
 - Stores Storage object keys in `ChildMedia`.
 - Shows shared media in the parent portal through signed URLs.
 - Writes an audit log for each shared photo.
-- If photo/video permission is not enabled for a child, the upload is saved for review but is not shared with parents.
+- If photo/video permission is not enabled for a child, the upload is saved to the `Parent Media Review` queue but is not shared with parents.
+- Directors and assistant directors can approve or reject held photos from `/parent-media-review`.
+- Approval marks photo/video permission verified for the child, shares the photo, notifies the uploader, and writes an audit log.
+- Rejection keeps the photo internal, notifies the uploader, and writes an audit log.
 
 Production hardening to do before heavy media use:
 
-- Add moderation/review status for sensitive content.
+- Add optional second-admin moderation for high-risk media decisions.
 - Add optional image optimization/transforms if the Supabase plan supports it.
 - Add automatic media retention policies by tenant or center.
 

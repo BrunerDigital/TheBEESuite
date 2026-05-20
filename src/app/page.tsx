@@ -3,58 +3,41 @@ import Link from "next/link";
 import {
   ArrowRight,
   BarChart3,
-  Bell,
   Building2,
-  CalendarCheck2,
+  Camera,
   CheckCircle2,
-  ChevronRight,
   ClipboardCheck,
   CreditCard,
   FileCheck2,
   Hexagon,
-  LineChart,
   LockKeyhole,
   Mail,
   MapPin,
-  MessageSquareText,
-  Plus,
-  Search,
-  Settings2,
+  Quote,
+  School,
   ShieldCheck,
   Sparkles,
+  TabletSmartphone,
   UsersRound,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
+import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   ["Product", "#product"],
-  ["CRM", "#crm"],
-  ["Onboarding", "#onboarding"],
+  ["How it works", "#workflows"],
+  ["Schools", "#school-use"],
+  ["Testimonials", "#testimonials"],
   ["Reporting", "#reporting"],
 ];
 
 const heroProof = [
-  ["94", "Kid City locations live-ready"],
-  ["1", "Form to CRM and Sheets"],
-  ["24/7", "Operational visibility"],
-];
-
-const kpis = [
-  { label: "Active Enrollments", value: "128", trend: "+8 vs last month", icon: UsersRound, tone: "text-amber-300" },
-  { label: "Open Enquiries", value: "27", trend: "+5 this week", icon: MessageSquareText, tone: "text-sky-300" },
-  { label: "Occupancy Rate", value: "87%", trend: "+4% vs last month", icon: LineChart, tone: "text-emerald-300" },
-  { label: "Collected MTD", value: "$48,320", trend: "+12% vs last month", icon: CreditCard, tone: "text-violet-300" },
-];
-
-const pipelineStages = [
-  ["New Inquiry", 18, "from-amber-400/85 to-amber-500/35"],
-  ["Tour Scheduled", 12, "from-yellow-300/80 to-amber-500/25"],
-  ["Application", 9, "from-amber-300/65 to-yellow-500/20"],
-  ["Offer Extended", 6, "from-lime-300/55 to-lime-500/15"],
-  ["Enrolled", 9, "from-emerald-300/45 to-emerald-500/15"],
+  ["Multi-location", "Franchise, agency, and single-center ready"],
+  ["1 embed", "Inquiry form to CRM, email, and Sheets"],
+  ["Human-reviewed AI", "Suggestions with safety guardrails"],
 ];
 
 const crmSteps = [
@@ -82,6 +65,63 @@ const setupCards = [
   ["Inquiry form", "Copyable embed codes tied to the correct center or multi-location account.", ClipboardCheck],
   ["Payouts", "Stripe Connect readiness is captured, but live checkout stays gated until reviewed.", CreditCard],
   ["Reports", "FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.", BarChart3],
+];
+
+const workflowCards = [
+  {
+    title: "Enrollment capture",
+    body: "Parents inquire from a school website, the form routes by location, the CRM creates the lead, and the school receives a notification.",
+    icon: Mail,
+    steps: ["Website form", "CRM lead", "School alert", "Sheets backup"],
+  },
+  {
+    title: "School day engagement",
+    body: "The lobby kiosk, classroom updates, photos, and daily reports create one connected record for staff and families.",
+    icon: TabletSmartphone,
+    steps: ["PIN check-in", "Teacher update", "Parent portal", "Daily report"],
+  },
+  {
+    title: "Executive rollup",
+    body: "Operators see FTE, occupancy, conversion, revenue readiness, ratio snapshots, and action queues across every center.",
+    icon: BarChart3,
+    steps: ["FTE data", "Pipeline health", "Center snapshot", "Next action"],
+  },
+];
+
+const schoolScenes = [
+  {
+    title: "Lobby check-in on a tablet",
+    body: "Parents use a 4 digit PIN set by the director, select their children, and create check-in or check-out records without staff retyping the day.",
+    icon: TabletSmartphone,
+  },
+  {
+    title: "Teacher updates during the day",
+    body: "Classroom staff can share photos, notes, activities, meals, naps, and daily reports so families get a warmer window into the day.",
+    icon: Camera,
+  },
+  {
+    title: "Director follow-up desk",
+    body: "Enrollment teams can add leads manually, move families through the pipeline, assign tasks, and use Mr. Bee to draft thoughtful replies.",
+    icon: School,
+  },
+];
+
+const testimonials = [
+  {
+    quote: "This is the first childcare CRM view that feels like it was designed around the actual work happening in a center, not a generic sales board.",
+    person: "Pilot center director",
+    role: "Multi-classroom preschool",
+  },
+  {
+    quote: "The multi-location snapshot makes the morning standup faster. We can see where inquiries, tours, occupancy, and follow-ups need attention.",
+    person: "Regional operator",
+    role: "Childcare franchise group",
+  },
+  {
+    quote: "The inquiry routing is the part I care about most. Every lead needs to reach the right school quickly, with a backup record we can trust.",
+    person: "Enrollment coordinator",
+    role: "Early education brand",
+  },
 ];
 
 const reportingRows = [
@@ -134,185 +174,6 @@ function GlassPanel({
   );
 }
 
-function StatTile({
-  label,
-  value,
-  trend,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  trend: string;
-  icon: LucideIcon;
-  tone: string;
-}) {
-  return (
-    <GlassPanel className="overflow-hidden p-4">
-      <div className="flex min-w-0 items-start gap-2.5">
-        <Icon className={cn("mt-1 size-5 shrink-0", tone)} />
-        <div className="min-w-0 flex-1">
-          <div className="text-xs text-zinc-400">{label}</div>
-          <div className="mt-1 whitespace-nowrap text-[1.45rem] font-semibold leading-none tracking-normal text-white sm:text-[1.65rem] xl:text-[1.45rem] 2xl:text-[1.65rem]">
-            {value}
-          </div>
-          <div className="mt-2 text-xs text-emerald-300">{trend}</div>
-        </div>
-      </div>
-    </GlassPanel>
-  );
-}
-
-function MiniChart() {
-  return (
-    <div className="relative h-32 overflow-hidden rounded-lg border border-white/10 bg-black/20">
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:100%_32px,80px_100%]" />
-      <svg viewBox="0 0 480 140" className="absolute inset-0 size-full" preserveAspectRatio="none" aria-hidden="true">
-        <defs>
-          <linearGradient id="landing-chart-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#f5b51b" stopOpacity="0.46" />
-            <stop offset="100%" stopColor="#f5b51b" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M0 116 C35 82 59 98 88 82 C120 64 137 86 166 64 C199 38 218 72 246 52 C282 26 306 58 334 38 C373 10 389 36 420 20 C446 6 460 24 480 5 L480 140 L0 140 Z"
-          fill="url(#landing-chart-fill)"
-        />
-        <path
-          d="M0 116 C35 82 59 98 88 82 C120 64 137 86 166 64 C199 38 218 72 246 52 C282 26 306 58 334 38 C373 10 389 36 420 20 C446 6 460 24 480 5"
-          fill="none"
-          stroke="#f5b51b"
-          strokeLinecap="round"
-          strokeWidth="4"
-        />
-      </svg>
-      <div className="absolute bottom-2 left-3 right-3 flex justify-between text-[0.66rem] text-zinc-500">
-        <span>Apr 16</span>
-        <span>Apr 30</span>
-        <span>May 14</span>
-      </div>
-    </div>
-  );
-}
-
-function DashboardPreview() {
-  return (
-    <div className="relative">
-      <div className="absolute -right-5 -top-8 hidden h-40 w-48 opacity-50 hive-texture lg:block" />
-      <GlassPanel className="relative overflow-hidden rounded-2xl border-amber-300/20 bg-[#090d12]/90">
-        <div className="grid min-h-[560px] lg:grid-cols-[210px_1fr]">
-          <aside className="hidden border-r border-white/10 bg-black/25 p-4 lg:block">
-            <BrandMark />
-            <nav className="mt-7 space-y-1.5">
-              {["Command Center", "Dashboard", "Inbox", "Families", "Enrollments", "Reports"].map((item, index) => (
-                <div
-                  key={item}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-xs",
-                    index === 0 ? "border border-amber-300/20 bg-amber-300/14 text-amber-200" : "text-zinc-400",
-                  )}
-                >
-                  <Hexagon className="size-3.5" />
-                  <span>{item}</span>
-                </div>
-              ))}
-            </nav>
-            <div className="mt-8 rounded-xl border border-amber-300/20 bg-amber-300/8 p-3">
-              <div className="text-xs font-medium text-white">Little Explorers Center</div>
-              <div className="mt-1 text-[0.68rem] text-zinc-500">Center ID: LEC-1001</div>
-            </div>
-          </aside>
-
-          <div className="min-w-0 p-4 sm:p-5">
-            <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-center">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500" />
-                <div className="rounded-xl border border-white/10 bg-black/30 py-2 pl-10 pr-4 text-sm text-zinc-500">
-                  Search families, children, staff, invoices, and more...
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 text-xs font-semibold text-amber-300">
-                  <Plus className="size-4" />
-                  Quick Add
-                </button>
-                <button aria-label="Notifications" className="grid size-10 place-items-center rounded-xl border border-white/10 bg-black/20 text-zinc-300">
-                  <Bell className="size-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-normal text-white">Welcome back, Maya</h2>
-                <p className="mt-1 text-sm text-zinc-400">Here is what is happening across your centers today.</p>
-              </div>
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
-                <CalendarCheck2 className="size-4 text-amber-300" />
-                May 16, 2025
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {kpis.map((kpi) => (
-                <StatTile key={kpi.label} {...kpi} />
-              ))}
-            </div>
-
-            <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_0.74fr]">
-              <GlassPanel className="p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-white">Enrollment Pipeline</div>
-                    <div className="mt-1 text-xs text-zinc-500">Total prospects: 54</div>
-                  </div>
-                  <ChevronRight className="size-5 text-amber-300" />
-                </div>
-                <div className="grid overflow-hidden rounded-lg border border-amber-300/30 sm:grid-cols-5">
-                  {pipelineStages.map(([label, count, gradient]) => (
-                    <div key={label} className={cn("bg-gradient-to-br px-3 py-3 text-center", gradient as string)}>
-                      <div className="text-[0.66rem] text-white/80">{label}</div>
-                      <div className="mt-1 text-xl font-semibold text-white">{count}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-4">
-                  <MiniChart />
-                </div>
-              </GlassPanel>
-
-              <GlassPanel className="p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div className="text-sm font-semibold text-white">AI Daily Center Summary</div>
-                  <Sparkles className="size-4 text-amber-300" />
-                </div>
-                <p className="text-sm leading-6 text-zinc-300">
-                  Good morning. Mr. Bee found 2 tours today, 4 follow-ups due, and 3 compliance reminders that need review.
-                </p>
-                <div className="mt-4 space-y-3">
-                  {[
-                    ["Tours scheduled", "10:00 AM, 1:30 PM", CalendarCheck2, "text-sky-300"],
-                    ["Birthdays this month", "Celebrate Ava, Logan, Mia", Sparkles, "text-amber-300"],
-                    ["Immunization records", "4 children need updates", ShieldCheck, "text-red-300"],
-                  ].map(([title, body, Icon, tone]) => (
-                    <div key={title as string} className="flex gap-3 rounded-lg bg-black/20 p-3">
-                      <Icon className={cn("mt-0.5 size-4", tone as string)} />
-                      <div>
-                        <div className="text-xs font-medium text-white">{title as string}</div>
-                        <div className="mt-0.5 text-[0.68rem] text-zinc-500">{body as string}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </GlassPanel>
-            </div>
-          </div>
-        </div>
-      </GlassPanel>
-    </div>
-  );
-}
-
 function SectionHeading({
   title,
   body,
@@ -346,20 +207,133 @@ function FeatureCard({ title, body, icon: Icon }: { title: string; body: string;
   );
 }
 
+function WorkflowGraphic({
+  title,
+  body,
+  steps,
+  icon: Icon,
+}: {
+  title: string;
+  body: string;
+  steps: string[];
+  icon: LucideIcon;
+}) {
+  return (
+    <GlassPanel className="group relative overflow-hidden p-5">
+      <div className="absolute -right-12 -top-12 size-40 rounded-full bg-amber-300/10 blur-3xl transition group-hover:bg-amber-300/15" />
+      <div className="relative">
+        <span className="grid size-12 place-items-center rounded-xl border border-amber-300/25 bg-amber-300/10 text-amber-300">
+          <Icon className="size-5" />
+        </span>
+        <h3 className="mt-5 text-xl font-semibold text-white">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+        <div className="mt-6 space-y-3">
+          {steps.map((step, index) => (
+            <div key={step} className="relative flex items-center gap-3">
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-white/10 bg-black/30 text-xs font-semibold text-amber-300">
+                {index + 1}
+              </span>
+              <span className="flex-1 rounded-lg border border-white/10 bg-white/[0.035] px-3 py-2 text-sm text-zinc-300">{step}</span>
+              {index < steps.length - 1 ? <span className="absolute left-4 top-8 h-3 w-px bg-amber-300/35" /> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    </GlassPanel>
+  );
+}
+
+function SchoolSceneCard({
+  title,
+  body,
+  icon: Icon,
+  index,
+}: {
+  title: string;
+  body: string;
+  icon: LucideIcon;
+  index: number;
+}) {
+  return (
+    <GlassPanel className="relative overflow-hidden">
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_30%_20%,rgba(245,181,27,0.24),transparent_12rem),linear-gradient(135deg,#121821,#05070a)]">
+        <div className="absolute inset-x-6 top-6 h-8 rounded-t-2xl border border-white/10 bg-black/35" />
+        <div className="absolute inset-x-8 bottom-5 top-11 rounded-2xl border border-white/10 bg-black/45 p-4 shadow-2xl shadow-black/40">
+          {index === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-center">
+              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Lobby kiosk</div>
+              <div className="mt-5 flex gap-2">
+                {[1, 2, 3, 4].map((dot) => (
+                  <span key={dot} className="size-4 rounded-full bg-amber-300" />
+                ))}
+              </div>
+              <div className="mt-6 grid w-full max-w-52 grid-cols-3 gap-2">
+                {Array.from({ length: 9 }, (_, keypad) => (
+                  <span key={keypad} className="rounded-lg bg-white/[0.07] py-2 text-xs text-zinc-300">
+                    {keypad + 1}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ) : index === 1 ? (
+            <div className="grid h-full grid-cols-[0.72fr_1fr] gap-4">
+              <div className="rounded-xl bg-amber-300/20" />
+              <div className="space-y-3 self-center">
+                <div className="h-3 rounded bg-white/18" />
+                <div className="h-3 w-2/3 rounded bg-white/12" />
+                <div className="h-10 rounded-lg border border-amber-300/25 bg-amber-300/10" />
+              </div>
+            </div>
+          ) : (
+            <div className="h-full space-y-2">
+              {["New Inquiry", "Tour Scheduled", "Application", "Enrolled"].map((stage, stageIndex) => (
+                <div key={stage} className="grid grid-cols-[1fr_auto] rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300">
+                  <span>{stage}</span>
+                  <span className="font-semibold text-amber-300">{[18, 12, 9, 6][stageIndex]}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="absolute left-5 top-5 grid size-11 place-items-center rounded-xl border border-amber-300/25 bg-black/45 text-amber-300 backdrop-blur-md">
+          <Icon className="size-5" />
+        </div>
+      </div>
+      <div className="p-5">
+        <h3 className="text-xl font-semibold text-white">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+      </div>
+    </GlassPanel>
+  );
+}
+
+function TestimonialCard({ quote, person, role }: { quote: string; person: string; role: string }) {
+  return (
+    <GlassPanel className="relative p-6">
+      <Quote className="size-7 text-amber-300" />
+      <p className="mt-5 text-base leading-7 text-zinc-200">{quote}</p>
+      <div className="mt-6 border-t border-white/10 pt-4">
+        <div className="text-sm font-semibold text-white">{person}</div>
+        <div className="mt-1 text-xs text-zinc-500">{role}</div>
+      </div>
+    </GlassPanel>
+  );
+}
+
 export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070a] text-white">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#080b0f]/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1540px] items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <BrandMark />
-          <nav className="ml-auto hidden items-center gap-7 text-sm text-zinc-400 md:flex">
+          <nav className="ml-auto hidden items-center gap-7 text-sm text-zinc-400 lg:flex">
             {navItems.map(([label, href]) => (
               <a key={label} href={href} className="transition hover:text-white">
                 {label}
               </a>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2 md:ml-4">
+          <div className="ml-auto flex items-center gap-2 lg:ml-4">
             <Button
               variant="outline"
               className="hidden h-10 border-white/15 bg-white/[0.03] px-4 text-white hover:bg-white/10 sm:inline-flex"
@@ -376,7 +350,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <section id="product" className="relative">
+      <section id="product" className="relative landing-parallax-hero">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_10%,rgba(245,181,27,0.18),transparent_28rem),radial-gradient(circle_at_15%_16%,rgba(56,189,248,0.09),transparent_22rem),linear-gradient(135deg,#05070a_0%,#10151c_58%,#201605_100%)]" />
         <div className="absolute right-0 top-0 hidden h-64 w-72 opacity-40 hive-texture lg:block" />
         <div className="relative mx-auto grid max-w-[1540px] gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[0.72fr_1.28fr] lg:px-8 lg:py-16">
@@ -411,7 +385,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <DashboardPreview />
+          <LandingHeroShowcase />
         </div>
       </section>
 
@@ -425,6 +399,37 @@ export default function LandingPage() {
           <div className="grid gap-4">
             {crmSteps.map((step) => (
               <FeatureCard key={step.title} {...step} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="workflows" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute left-0 top-20 hidden h-80 w-80 opacity-25 hive-texture lg:block" />
+        <div className="mx-auto max-w-[1400px]">
+          <SectionHeading
+            align="center"
+            title="The workflows connect instead of living in separate tabs."
+            body="Inquiry capture, classroom engagement, billing readiness, reporting, and AI assistance share the same center-aware foundation, so schools do less duplicate admin work."
+          />
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            {workflowCards.map((workflow) => (
+              <WorkflowGraphic key={workflow.title} {...workflow} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="school-use" className="relative overflow-hidden border-y border-white/10 bg-[#0a0f15] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_28%,rgba(56,189,248,0.09),transparent_28rem),radial-gradient(circle_at_85%_35%,rgba(245,181,27,0.12),transparent_24rem)]" />
+        <div className="relative mx-auto max-w-[1400px]">
+          <SectionHeading
+            title="Designed for how schools actually use the system."
+            body="The Bee Suite is not just a back-office dashboard. It supports the lobby, the classroom, the enrollment desk, and the executive view with role-aware screens."
+          />
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {schoolScenes.map((scene, index) => (
+              <SchoolSceneCard key={scene.title} {...scene} index={index} />
             ))}
           </div>
         </div>
@@ -446,12 +451,28 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="testimonials" className="landing-parallax-band relative border-y border-white/10 px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-black/45" />
+        <div className="relative mx-auto max-w-[1400px]">
+          <SectionHeading
+            align="center"
+            title="Built with operators, directors, and enrollment teams in mind."
+            body="The first production rollout is focused on real center operations: lead capture, school-level ownership, executive visibility, and parent engagement foundations."
+          />
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {testimonials.map((testimonial) => (
+              <TestimonialCard key={testimonial.person} {...testimonial} />
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="reporting" className="border-y border-white/10 bg-[#0b1016] px-4 py-20 sm:px-6 lg:px-8">
         <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[1fr_0.82fr] lg:items-center">
           <div>
             <SectionHeading
               title="Executive reporting without losing the school-level truth."
-              body="The Bee Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, and FTE reporting. Kid City can keep the FTE Google Sheet as a backup while the app shows the executive snapshot."
+              body="The Bee Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
             />
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {reportingRows.map(([title, body]) => (
@@ -472,14 +493,14 @@ export default function LandingPage() {
                   <div className="text-sm font-semibold text-white">Multi-location snapshot</div>
                   <div className="mt-1 text-xs text-zinc-500">Open centers, lead volume, FTE source, and conversion health</div>
                 </div>
-                <Settings2 className="size-5 text-amber-300" />
+                <BarChart3 className="size-5 text-amber-300" />
               </div>
             </div>
             <div className="grid gap-3 p-5">
               {[
-                ["Open centers", "94", "Synced from active Kid City profiles"],
-                ["Lead routing", "Ready", "CRM, email, and Google Sheets backup"],
-                ["FTE source", "Rolling", "Latest compatible tab or FTE Data"],
+                ["Centers", "Ready", "Open and active locations only"],
+                ["Lead routing", "Live", "CRM, email, and Sheets backup"],
+                ["FTE source", "Rolling", "Latest compatible report tab"],
                 ["AI guardrails", "Review", "Suggestions never make final decisions"],
               ].map(([label, value, detail]) => (
                 <div key={label} className="grid grid-cols-[1fr_auto] gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
@@ -499,13 +520,13 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.72fr_1fr] lg:items-center">
           <GlassPanel className="relative overflow-hidden p-6">
             <div className="absolute -right-8 -top-8 size-52 rounded-full bg-amber-300/10 blur-3xl" />
-            <div className="relative flex items-center gap-5">
+            <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
               <Image
                 src="/mr-bee.png"
                 alt="Mr. Bee AI assistant"
                 width={156}
                 height={156}
-                className="size-24 rounded-2xl border border-amber-300/20 bg-black/30 object-contain p-2 sm:size-32"
+                className="size-28 rounded-2xl border border-amber-300/20 bg-black/30 object-contain p-2 sm:size-32"
                 priority
               />
               <div>

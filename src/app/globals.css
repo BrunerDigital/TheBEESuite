@@ -159,4 +159,24 @@
     background-position: 0 0, 0 0, 18px 31px, 18px 31px;
     background-size: 36px 62px;
   }
+
+  .landing-parallax-hero {
+    background-attachment: fixed;
+  }
+
+  .landing-parallax-band {
+    background-image:
+      radial-gradient(circle at 18% 20%, rgba(245, 181, 27, 0.18), transparent 24rem),
+      radial-gradient(circle at 84% 36%, rgba(56, 189, 248, 0.1), transparent 26rem),
+      linear-gradient(135deg, #090d12 0%, #05070a 55%, #1c1406 100%);
+    background-attachment: fixed;
+    background-size: cover;
+  }
+
+  @media (prefers-reduced-motion: reduce), (max-width: 768px) {
+    .landing-parallax-hero,
+    .landing-parallax-band {
+      background-attachment: scroll;
+    }
+  }
 }

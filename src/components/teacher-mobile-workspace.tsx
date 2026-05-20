@@ -130,11 +130,11 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
       formData.set("photo", photo);
       formData.set("sharedWithParents", "true");
       const response = await fetch("/api/teacher/media", { method: "POST", body: formData });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
+      const json = await response.json().catch(() => null) as { error?: string; warning?: string } | null;
       if (!response.ok) return showError(json?.error || "Photo could not be shared.");
       setPhoto(null);
       setPhotoCaption("");
-      showStatus("Photo shared to the parent portal.");
+      showStatus(json?.warning || "Photo shared to the parent portal.");
     });
   }
 
@@ -233,7 +233,7 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Photo</CardTitle>
-            <CardDescription>Share a classroom moment</CardDescription>
+            <CardDescription>Share a private classroom moment with parent permission checks.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <Input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />

@@ -49,6 +49,7 @@ import {
 } from "@/lib/executive-demo-data";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { prisma } from "@/lib/prisma";
+import { signChildMediaRecords } from "@/lib/supabase-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -384,11 +385,12 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
         orderBy: { createdAt: "desc" },
         take: 20,
-        select: { id: true, url: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
+        select: { id: true, url: true, storageKey: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
       }),
     ]);
 
-    return <ParentPortalWorkspace family={family} invoices={invoices} dailyReports={dailyReports} incidents={incidents} messages={messages} documents={documents} media={media} />;
+    const signedMedia = await signChildMediaRecords(media);
+    return <ParentPortalWorkspace family={family} invoices={invoices} dailyReports={dailyReports} incidents={incidents} messages={messages} documents={documents} media={signedMedia} />;
   }
 
   if (slug === "teacher-portal") {

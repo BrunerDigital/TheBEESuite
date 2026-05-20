@@ -32,23 +32,64 @@ PIN_HASH_SECRET=
 
 Set this in Vercel before schools use the kiosk. If it is missing, the app falls back to `AUTH_SECRET`, then to a development-only fallback.
 
+## Supabase Storage for Child Media
+
+Child photos now use a private Supabase Storage bucket instead of inline database blobs.
+
+Expected bucket:
+
+```text
+child-media
+```
+
+Required environment variables:
+
+```text
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SECRET_KEY=
+SUPABASE_CHILD_MEDIA_BUCKET=child-media
+SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS=7200
+```
+
+Run this when setting up a new Supabase project or refreshing bucket policy:
+
+```bash
+npm run supabase:setup-storage
+```
+
+The bucket is private, limited to image uploads, and capped at 8 MB per object. Uploads happen from server route handlers using the server-side key. Parent portal media is shown with short-lived signed URLs.
+
+To migrate old inline demo uploads into Storage:
+
+```bash
+npm run supabase:migrate-child-media
+```
+
+Supabase Storage docs used for this setup:
+
+- Private buckets and signed URLs: https://supabase.com/docs/guides/storage/buckets/fundamentals
+- Storage access control: https://supabase.com/docs/guides/storage/security/access-control
+- Bucket upload restrictions: https://supabase.com/docs/guides/storage/buckets/creating-buckets/
+
 ## Teacher Parent Engagement
 
 The teacher mobile workspace now supports shared child photos. Teachers can upload an image, select a child, add a caption, and publish it for parent visibility.
 
 Current v1 behavior:
 
-- Supports image files up to 3 MB.
-- Stores photos as data URLs in `ChildMedia` as a bridge implementation.
-- Shows shared media in the parent portal.
+- Supports image files up to 8 MB.
+- Stores photos in private Supabase Storage.
+- Stores Storage object keys in `ChildMedia`.
+- Shows shared media in the parent portal through signed URLs.
 - Writes an audit log for each shared photo.
+- If photo/video permission is not enabled for a child, the upload is saved for review but is not shared with parents.
 
 Production hardening to do before heavy media use:
 
-- Move photo storage to Supabase Storage, S3, or another private object store.
-- Generate signed URLs for parent access.
-- Add photo/video permission enforcement before sharing.
 - Add moderation/review status for sensitive content.
+- Add optional image optimization/transforms if the Supabase plan supports it.
+- Add automatic media retention policies by tenant or center.
 
 ## ProCare Family Import
 
@@ -102,4 +143,3 @@ supabase/migrations/202605200900_parent_engagement_kiosk.sql
 ```
 
 Apply the migration to Supabase before enabling the kiosk, photo uploads, ProCare import, or ledger screens in production.
-

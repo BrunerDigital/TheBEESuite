@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { CHILD_MEDIA_BUCKET, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,6 +89,11 @@ export async function GET() {
       "Supabase Auth",
       hasAnyEnv(["SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]) && env("SUPABASE_SERVICE_ROLE_KEY") ? "ready" : "blocked",
       "Password grant login and password recovery require Supabase URL, anon/publishable key, and server-side service role key.",
+    ),
+    check(
+      "Supabase Storage",
+      isSupabaseStorageConfigured() ? "ready" : "warning",
+      `Private child media bucket is expected at "${CHILD_MEDIA_BUCKET}". Teacher uploads and parent photo viewing use server-side signed URLs.`,
     ),
     check(
       "Password recovery redirect",

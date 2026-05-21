@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,6 +18,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -30,6 +37,34 @@ type ShellUser = {
   role: string;
 };
 
+type NotificationSummary = {
+  stats: {
+    unread: number;
+    newInquiries: number;
+    highIntentLeads: number;
+    openTasks: number;
+    upcomingTours: number;
+    pendingIncidents: number;
+    missingFteReports: number;
+  };
+  derived: Array<{
+    title: string;
+    body: string;
+    type: string;
+    priority: string;
+    href?: string;
+  }>;
+  notifications: Array<{
+    id: string;
+    title: string;
+    body: string;
+    type: string;
+    priority: string;
+    readAt: string | null;
+    createdAt: string;
+  }>;
+};
+
 function BrandMark() {
   return (
     <Link href="/" className="flex items-center gap-3">
@@ -41,6 +76,97 @@ function BrandMark() {
         <span className="block text-xs text-muted-foreground">Childcare OS</span>
       </span>
     </Link>
+  );
+}
+
+function NotificationDropdown() {
+  const [summary, setSummary] = useState<NotificationSummary | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch("/api/notifications/summary")
+      .then((response) => response.json())
+      .then((json) => {
+        if (mounted && json?.ok) setSummary(json as NotificationSummary);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const unread = summary?.stats.unread ?? 0;
+  const items = [
+    ...(summary?.derived ?? []),
+    ...(summary?.notifications.map((notification) => ({
+      title: notification.title,
+      body: notification.body,
+      type: notification.type,
+      priority: notification.priority,
+      href: "/notification-center",
+    })) ?? []),
+  ].slice(0, 6);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Notifications" className="relative" />}>
+        <Bell />
+        {unread ? (
+          <span className="absolute -right-1 -top-1 grid min-w-5 place-items-center rounded-full bg-primary px-1 text-[0.65rem] font-semibold text-primary-foreground">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        ) : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-0">
+        <div className="border-b p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Notifications</div>
+              <div className="text-xs text-muted-foreground">New inquiries, tasks, FTE, tours, and review alerts</div>
+            </div>
+            <Badge variant={unread ? "default" : "outline"}>{unread} unread</Badge>
+          </div>
+          {summary ? (
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-lg border bg-background/60 p-2">
+                <div className="font-semibold">{summary.stats.newInquiries}</div>
+                <div className="text-muted-foreground">Inquiries</div>
+              </div>
+              <div className="rounded-lg border bg-background/60 p-2">
+                <div className="font-semibold">{summary.stats.openTasks}</div>
+                <div className="text-muted-foreground">Tasks</div>
+              </div>
+              <div className="rounded-lg border bg-background/60 p-2">
+                <div className="font-semibold">{summary.stats.missingFteReports}</div>
+                <div className="text-muted-foreground">FTE due</div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <div className="max-h-80 overflow-auto p-2">
+          {items.map((item, index) => (
+            <Link
+              key={`${item.type}-${index}`}
+              href={item.href ?? "/notification-center"}
+              className="block rounded-lg p-3 text-sm transition hover:bg-muted"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="font-medium">{item.title}</div>
+                <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
+              </div>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.body}</p>
+            </Link>
+          ))}
+          {!items.length ? (
+            <div className="p-4 text-sm text-muted-foreground">No urgent notifications are queued for your scope.</div>
+          ) : null}
+        </div>
+        <DropdownMenuSeparator />
+        <Link href="/notification-center" className="block p-3 text-sm font-medium text-primary hover:bg-muted">
+          Open notification center
+        </Link>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -148,9 +274,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 </TooltipTrigger>
                 <TooltipContent>Command menu placeholder</TooltipContent>
               </Tooltip>
-              <Button variant="outline" size="icon" aria-label="Notifications">
-                <Bell />
-              </Button>
+              <NotificationDropdown />
               <Button variant="outline" size="icon" aria-label="Theme preview">
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

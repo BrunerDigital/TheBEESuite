@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FormEvent, useState, useTransition } from "react";
 import { AlertCircle, ArrowRight, CheckCircle2, Hexagon, LogIn, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,10 +125,10 @@ export function LoginForm() {
                   required
                 />
               </div>
-              <Button size="lg" type="submit" disabled={isPending}>
+              <button className={buttonVariants({ size: "lg" })} type="submit" disabled={isPending}>
                 {isPending ? "Signing in..." : "Sign in"}
                 <LogIn data-icon="inline-end" />
-              </Button>
+              </button>
             </form>
             <div className="mt-5 rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
               New to The Bee Suite?{" "}

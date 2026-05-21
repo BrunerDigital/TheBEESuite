@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { normalizeLeadStage } from "@/lib/crm";
+import { parseLeadStage } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -90,8 +90,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const body = (await request.json()) as Record<string, unknown>;
   const requestedStage = clean(body.stage);
-  const stage = requestedStage ? normalizeLeadStage(requestedStage) : undefined;
+  const stage = requestedStage ? parseLeadStage(requestedStage) : undefined;
   const status = clean(body.status);
+
+  if (requestedStage && !stage) {
+    return NextResponse.json({ ok: false, errors: { stage: "Pipeline stage is invalid." } }, { status: 400 });
+  }
 
   const existing = await prisma.lead.findUnique({
     where: { id },

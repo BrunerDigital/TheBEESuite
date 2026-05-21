@@ -38,6 +38,11 @@ export function normalizeLeadStage(value: string) {
   return isEnrollmentStage(value) ? value : EnrollmentStage.NEW_INQUIRY;
 }
 
+export function parseLeadStage(value: string) {
+  const normalized = value.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+  return isEnrollmentStage(normalized) ? normalized : null;
+}
+
 export function leadScore({
   email,
   phone,

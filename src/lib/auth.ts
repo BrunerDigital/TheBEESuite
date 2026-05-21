@@ -73,7 +73,12 @@ const executiveDemoRoles = new Set<UserRole>([
   UserRole.REGIONAL_MANAGER,
 ]);
 
-const executiveDemoEmails = new Set(["brenden@kidcityusa.com"]);
+const executiveDemoEmails = new Set([
+  "brenden@kidcityusa.com",
+  "marie@kidcityusa.com",
+  "audrey@kidcityusa.com",
+  "kayleen@kidcityusa.com",
+]);
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;

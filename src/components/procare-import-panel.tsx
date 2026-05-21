@@ -14,8 +14,8 @@ type CenterOption = {
   name: string;
 };
 
-export function ProcareImportPanel({ centers }: { centers: CenterOption[] }) {
-  const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
+export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
+  const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -40,7 +40,9 @@ export function ProcareImportPanel({ centers }: { centers: CenterOption[] }) {
       setCsv("");
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
-      setStatus(`Imported ${summary?.imported ?? 0} rows, created ${summary?.createdFamilies ?? 0} families and ${summary?.createdChildren ?? 0} children.`);
+      setStatus(
+        `Imported ${summary?.imported ?? 0} rows across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, and ${summary?.createdClassrooms ?? 0} classrooms.`,
+      );
     });
   }
 
@@ -73,11 +75,19 @@ export function ProcareImportPanel({ centers }: { centers: CenterOption[] }) {
             <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
               <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
               <SelectContent>
+                {allowBulkImport ? (
+                  <SelectItem value="auto">Auto-map by ProCare school/location column</SelectItem>
+                ) : null}
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {allowBulkImport ? (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Executive import can auto-map rows when the CSV includes location ID, CRM location ID, school, center, or location columns.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-1">
             <Label htmlFor="procare-file">CSV export</Label>

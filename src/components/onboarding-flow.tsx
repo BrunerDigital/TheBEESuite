@@ -37,7 +37,7 @@ const steps = [
   {
     title: "Payouts",
     icon: BadgeDollarSign,
-    fields: ["payoutAdminName", "payoutAdminEmail", "payoutReadiness"],
+    fields: ["softwarePlan", "addOnBundle", "merchantFeeStrategy", "payoutAdminName", "payoutAdminEmail", "payoutReadiness"],
   },
   {
     title: "Launch",
@@ -61,6 +61,9 @@ type FormState = {
   payoutAdminName: string;
   payoutAdminEmail: string;
   payoutReadiness: string;
+  softwarePlan: string;
+  addOnBundle: string;
+  merchantFeeStrategy: string;
   notes: string;
 };
 
@@ -103,6 +106,9 @@ const initialForm: FormState = {
   payoutAdminName: "",
   payoutAdminEmail: "",
   payoutReadiness: "",
+  softwarePlan: "",
+  addOnBundle: "",
+  merchantFeeStrategy: "",
   notes: "",
 };
 
@@ -282,6 +288,7 @@ export function OnboardingFlow() {
                     ["Primary center", workspace?.centerName || "Primary Center"],
                     ["Centers requested", form.centerCount],
                     ["Payout owner", form.payoutAdminName],
+                    ["Software plan", form.softwarePlan],
                     ["Priority", form.priority],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
@@ -343,6 +350,47 @@ export function OnboardingFlow() {
 
                 {activeStep === 2 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Software plan</Label>
+                      <Select value={form.softwarePlan} onValueChange={(value) => update("softwarePlan", value ?? "")}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose plan model" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Kid City USA pilot - all features included">Kid City USA pilot - all features included</SelectItem>
+                          <SelectItem value="Per-location monthly platform fee">Per-location monthly platform fee</SelectItem>
+                          <SelectItem value="Enterprise franchise agreement">Enterprise franchise agreement</SelectItem>
+                          <SelectItem value="Usage-based plus platform fee">Usage-based plus platform fee</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Add-on bundle</Label>
+                      <Select value={form.addOnBundle} onValueChange={(value) => update("addOnBundle", value ?? "")}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose starting bundle" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="CRM and enrollment only">CRM and enrollment only</SelectItem>
+                          <SelectItem value="CRM + operations + parent engagement">CRM + operations + parent engagement</SelectItem>
+                          <SelectItem value="Full platform with billing">Full platform with billing</SelectItem>
+                          <SelectItem value="Enterprise pilot configuration">Enterprise pilot configuration</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 sm:col-span-2">
+                      <Label>Merchant fee strategy</Label>
+                      <Select value={form.merchantFeeStrategy} onValueChange={(value) => update("merchantFeeStrategy", value ?? "")}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose fee handling" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Stripe processing plus Bee Suite surcharge passed to payer">Stripe processing plus Bee Suite surcharge passed to payer</SelectItem>
+                          <SelectItem value="School absorbs Stripe processing; Bee Suite surcharge invoiced monthly">School absorbs Stripe processing; Bee Suite surcharge invoiced monthly</SelectItem>
+                          <SelectItem value="Enterprise negotiated merchant services">Enterprise negotiated merchant services</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="payoutAdminName">Payout setup owner</Label>
                       <Input id="payoutAdminName" value={form.payoutAdminName} onChange={(event) => update("payoutAdminName", event.target.value)} placeholder="Finance owner or franchise admin" required />
@@ -417,6 +465,9 @@ export function OnboardingFlow() {
                         ["Region", form.state || "Missing"],
                         ["Payout owner", form.payoutAdminName || "Missing"],
                         ["Payout email", form.payoutAdminEmail || "Missing"],
+                        ["Software plan", form.softwarePlan || "Missing"],
+                        ["Add-ons", form.addOnBundle || "Missing"],
+                        ["Merchant fees", form.merchantFeeStrategy || "Missing"],
                         ["Payout readiness", form.payoutReadiness || "Missing"],
                         ["Timeline", form.timeline || "Missing"],
                         ["Priority", form.priority || "Missing"],

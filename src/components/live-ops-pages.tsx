@@ -26,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
+import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
@@ -483,6 +484,8 @@ export type CenterDashboardData = {
   centerId: string | null;
   centerName: string;
   place: string;
+  fteCenters: FteReportCenterOption[];
+  fteReports: FteReportRow[];
   stats: {
     leads: number;
     highIntentLeads: number;
@@ -521,6 +524,14 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
         <StatCard label="Open tasks" value={data.stats.openTasks} />
       </div>
+      {data.fteCenters.length ? (
+        <FteReportForm
+          centers={data.fteCenters}
+          reports={data.fteReports}
+          title="Submit Weekly FTE"
+          description="Directors submit the weekly FTE report here. The latest rows show below for quick corrections."
+        />
+      ) : null}
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Leads</CardTitle>
@@ -1963,8 +1974,13 @@ export type MultiLocationDashboardData = {
     highIntentLeads: number;
     upcomingTours: number;
     staff: number;
+    submittedFteReports: number;
+    latestFteTotal: number;
+    missingFteReports: number;
   };
   fte?: FteSnapshot;
+  fteCenters: FteReportCenterOption[];
+  fteReports: FteReportRow[];
 };
 
 export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashboardData }) {
@@ -1987,6 +2003,18 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         <StatCard label="Upcoming tours" value={data.stats.upcomingTours} />
         <StatCard label="Staff" value={data.stats.staff} />
       </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Latest submitted FTE" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per school" />
+        <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The Bee Suite" />
+        <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current report in the last 7 days" />
+      </div>
+      <FteReportForm
+        centers={data.fteCenters}
+        reports={data.fteReports}
+        allowCenterSelect
+        title="Executive FTE Reporting"
+        description="Submit, correct, or manually enter weekly FTE data for any visible school. Rows can also forward to the configured FTE Google Sheet backup."
+      />
       {data.fte ? (
         <Card className="glass-panel">
           <CardHeader>
@@ -2089,6 +2117,7 @@ export type FamilyProfilesPageData = {
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
   }>;
   importCenters: Array<{ id: string; name: string }>;
+  bulkImportEnabled: boolean;
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
@@ -2172,7 +2201,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           ) : null}
         </CardContent>
       </Card>
-      <ProcareImportPanel centers={data.importCenters} />
+      <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
       <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact />
     </div>
   );

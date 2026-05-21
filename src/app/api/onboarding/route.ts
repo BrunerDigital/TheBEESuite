@@ -22,6 +22,9 @@ type OnboardingPayload = {
   payoutAdminName?: unknown;
   payoutAdminEmail?: unknown;
   payoutReadiness?: unknown;
+  softwarePlan?: unknown;
+  addOnBundle?: unknown;
+  merchantFeeStrategy?: unknown;
   notes?: unknown;
   pageUrl?: unknown;
 };
@@ -89,6 +92,9 @@ function normalizePayload(input: OnboardingPayload) {
     payoutAdminName: clean(input.payoutAdminName),
     payoutAdminEmail: clean(input.payoutAdminEmail).toLowerCase(),
     payoutReadiness: clean(input.payoutReadiness),
+    softwarePlan: clean(input.softwarePlan),
+    addOnBundle: clean(input.addOnBundle),
+    merchantFeeStrategy: clean(input.merchantFeeStrategy),
     notes: clean(input.notes),
     pageUrl: clean(input.pageUrl),
   };
@@ -106,6 +112,9 @@ function validate(payload: NormalizedPayload) {
   if (!payload.payoutAdminName) errors.payoutAdminName = "Payout setup owner is required.";
   if (!isEmail(payload.payoutAdminEmail)) errors.payoutAdminEmail = "A valid payout setup email is required.";
   if (!payload.payoutReadiness) errors.payoutReadiness = "Stripe Connect readiness is required.";
+  if (!payload.softwarePlan) errors.softwarePlan = "Software plan model is required.";
+  if (!payload.addOnBundle) errors.addOnBundle = "Add-on bundle is required.";
+  if (!payload.merchantFeeStrategy) errors.merchantFeeStrategy = "Merchant fee strategy is required.";
   return errors;
 }
 
@@ -144,6 +153,9 @@ async function sendOnboardingEmail(
     `Payout setup owner: ${payload.payoutAdminName}`,
     `Payout setup email: ${payload.payoutAdminEmail}`,
     `Stripe Connect readiness: ${payload.payoutReadiness}`,
+    `Software plan: ${payload.softwarePlan}`,
+    `Add-on bundle: ${payload.addOnBundle}`,
+    `Merchant fee strategy: ${payload.merchantFeeStrategy}`,
     `Page URL: ${payload.pageUrl || ""}`,
     `Notification ID: ${notificationId}`,
     workspace ? `Workspace tenant ID: ${workspace.tenantId}` : "",
@@ -297,6 +309,11 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           payoutAdminName: payload.payoutAdminName,
           payoutAdminEmail: payload.payoutAdminEmail,
           payoutReadiness: payload.payoutReadiness,
+          softwarePlan: payload.softwarePlan,
+          addOnBundle: payload.addOnBundle,
+          merchantFeeStrategy: payload.merchantFeeStrategy,
+          monthlySoftwareCostStatus: payload.softwarePlan.includes("pilot") ? "waived_for_pilot" : "setup_required",
+          platformSurchargeStatus: "configured_later_in_stripe_checkout",
           livePaymentsEnabled: false,
           parentEngagementEnabled: false,
           publicInquiryEmbedEnabled: true,
@@ -350,6 +367,10 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           configPlaceholder: {
             payoutAdminEmail: payload.payoutAdminEmail,
             livePaymentsEnabled: false,
+            softwarePlan: payload.softwarePlan,
+            addOnBundle: payload.addOnBundle,
+            merchantFeeStrategy: payload.merchantFeeStrategy,
+            platformSurchargeDestination: "the_bee_suite_platform_account",
             note: "Each school must complete connected payout onboarding before parent checkout is enabled.",
           },
         },

@@ -35,6 +35,7 @@ import {
   WaitlistPage,
   WhiteLabelPage,
 } from "@/components/live-ops-pages";
+import type { FteReportRow } from "@/components/fte-report-form";
 import { AuthLikePage, ModulePage } from "@/components/module-page";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
@@ -112,6 +113,71 @@ async function getFamilyIntakeCenters(user: CurrentUser) {
   }));
 }
 
+function formatCenterName(center: { name: string; crmLocationId: string | null; city?: string | null; state?: string | null }) {
+  return [
+    center.crmLocationId ?? center.name,
+    [center.city, center.state].filter(Boolean).join(", "),
+  ].filter(Boolean).join(" · ");
+}
+
+function serializeFteReport(report: {
+  id: string;
+  centerId: string;
+  weekStart: Date;
+  weekEnd: Date | null;
+  enrolledCount: number;
+  fullTimeCount: number;
+  partTimeCount: number;
+  fteCount: number;
+  infants: number;
+  toddlers: number;
+  twos: number;
+  preschool: number;
+  preK: number;
+  schoolAge: number;
+  status: string;
+  source: string;
+  notes: string | null;
+  updatedAt: Date;
+  center: { name: string; crmLocationId: string | null };
+  submittedBy: { name: string; email: string } | null;
+}): FteReportRow {
+  return {
+    id: report.id,
+    centerId: report.centerId,
+    centerName: report.center.crmLocationId ?? report.center.name,
+    weekStart: report.weekStart.toISOString(),
+    weekEnd: report.weekEnd?.toISOString() ?? null,
+    enrolledCount: report.enrolledCount,
+    fullTimeCount: report.fullTimeCount,
+    partTimeCount: report.partTimeCount,
+    fteCount: report.fteCount,
+    infants: report.infants,
+    toddlers: report.toddlers,
+    twos: report.twos,
+    preschool: report.preschool,
+    preK: report.preK,
+    schoolAge: report.schoolAge,
+    status: report.status,
+    source: report.source,
+    notes: report.notes,
+    submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
+    updatedAt: report.updatedAt.toISOString(),
+  };
+}
+
+async function getFteReports(centerIds: string[], take = 150) {
+  return prisma.fteReport.findMany({
+    where: { centerId: centerIdFilter(centerIds) },
+    orderBy: [{ weekStart: "desc" }, { updatedAt: "desc" }],
+    take,
+    include: {
+      center: { select: { name: true, crmLocationId: true } },
+      submittedBy: { select: { name: true, email: true } },
+    },
+  });
+}
+
 async function renderLivePage(slug: string, user: CurrentUser) {
   const allCenters = user.role === "PLATFORM_OWNER";
   const tenantWide = canAccessAllCenters(user);
@@ -129,12 +195,22 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   endOfDay.setHours(23, 59, 59, 999);
 
   if (slug === "multi-location-dashboard") {
-    const [leads, highIntentLeads, upcomingTours, fte] = await Promise.all([
+    const [leads, highIntentLeads, upcomingTours, fte, fteReports] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
       getKidCityFteSnapshot(centers),
+      getFteReports(visibleCenterIds, 250),
     ]);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(today.getDate() - 7);
+    const latestByCenter = new Map<string, (typeof fteReports)[number]>();
+    for (const report of fteReports) {
+      if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
+    }
+    const recentlyReportedCenterIds = new Set(
+      fteReports.filter((report) => report.weekStart >= weekAgo).map((report) => report.centerId),
+    );
 
     return (
       <MultiLocationDashboardPage
@@ -146,8 +222,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             highIntentLeads,
             upcomingTours,
             staff: centers.reduce((sum, center) => sum + center._count.staff, 0),
+            submittedFteReports: fteReports.length,
+            latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
+            missingFteReports: Math.max(centers.length - recentlyReportedCenterIds.size, 0),
           },
           fte,
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          fteReports: fteReports.map(serializeFteReport),
         }}
       />
     );
@@ -293,6 +374,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         data={{
           families,
           importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
+          bulkImportEnabled: tenantWide || allCenters,
           intakeCenters,
           stats: { total, withCustodyNotes, children, guardians },
         }}
@@ -1058,7 +1140,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   if (slug === "center-dashboard") {
     const center = centers[0];
     const centerWhere = center ? { centerId: center.id } : { centerId: "__none__" };
-    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads] = await Promise.all([
+    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
       center ? prisma.staffProfile.count({ where: { centerId: center.id } }) : 0,
@@ -1084,6 +1166,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           createdAt: true,
         },
       }),
+      center ? getFteReports([center.id], 24) : [],
     ]);
 
     return (
@@ -1092,6 +1175,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
+          fteCenters: center ? [{ id: center.id, name: formatCenterName(center) }] : [],
+          fteReports: fteReports.map(serializeFteReport),
           stats: { leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks },
           recentLeads,
         }}

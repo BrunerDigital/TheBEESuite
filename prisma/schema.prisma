@@ -129,6 +129,7 @@ model Center {
   auditLogs    AuditLog[]
   checkLogs    CheckInOutLog[]
   procareImports ProcareImportBatch[]
+  fteReports   FteReport[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -176,6 +177,7 @@ model User {
   notifications Notification[]
   uploadedMedia ChildMedia[]
   procareImports ProcareImportBatch[]
+  fteReports   FteReport[] @relation("FteSubmittedBy")
 }
 
 model Role {
@@ -900,6 +902,37 @@ model ProcareImportRow {
   batch ProcareImportBatch @relation(fields: [batchId], references: [id])
 
   @@index([batchId, status])
+}
+
+model FteReport {
+  id              String   @id @default(cuid())
+  centerId        String
+  submittedById   String?
+  weekStart       DateTime
+  weekEnd         DateTime?
+  enrolledCount   Int      @default(0)
+  fullTimeCount   Int      @default(0)
+  partTimeCount   Int      @default(0)
+  fteCount        Float    @default(0)
+  infants         Int      @default(0)
+  toddlers        Int      @default(0)
+  twos            Int      @default(0)
+  preschool       Int      @default(0)
+  preK            Int      @default(0)
+  schoolAge       Int      @default(0)
+  notes           String?
+  status          String   @default("submitted")
+  source          String   @default("manual")
+  sourceMetadata  Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  center      Center @relation(fields: [centerId], references: [id])
+  submittedBy User?  @relation("FteSubmittedBy", fields: [submittedById], references: [id])
+
+  @@unique([centerId, weekStart])
+  @@index([weekStart])
+  @@index([status])
 }
 
 model WhiteLabelSettings {

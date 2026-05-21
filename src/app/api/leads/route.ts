@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { EnrollmentStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { leadScore, normalizeLeadStage } from "@/lib/crm";
+import { leadScore, parseLeadStage } from "@/lib/crm";
 import { canAccessAllCenters, canAccessCenter, canManageCrmLeads, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -70,6 +71,11 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const centerId = searchParams.get("centerId") ?? undefined;
   const stage = searchParams.get("stage") ?? undefined;
+  const parsedStage = stage ? parseLeadStage(stage) : undefined;
+
+  if (stage && !parsedStage) {
+    return NextResponse.json({ ok: false, error: "Pipeline stage filter is invalid." }, { status: 400 });
+  }
 
   if (centerId && !canAccessCenter(user, centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
@@ -86,7 +92,7 @@ export async function GET(request: NextRequest) {
         : !canAccessAllCenters(user)
           ? { centerId: { in: user.centerIds } }
           : {}),
-      ...(stage ? { stage: normalizeLeadStage(stage) } : {}),
+      ...(parsedStage ? { stage: parsedStage } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 250,
@@ -122,12 +128,17 @@ export async function POST(request: NextRequest) {
   const phone = clean(body.phone);
   const program = clean(body.programInterest || body.program);
   const locationId = clean(body.locationId || body.crmLocationId || body.centerId);
+  const requestedStage = clean(body.stage);
+  const stage = requestedStage ? parseLeadStage(requestedStage) : undefined;
 
   if (!familyName) {
     return NextResponse.json(
       { ok: false, errors: { familyName: "Family or parent name is required." } },
       { status: 400 },
     );
+  }
+  if (requestedStage && !stage) {
+    return NextResponse.json({ ok: false, errors: { stage: "Pipeline stage is invalid." } }, { status: 400 });
   }
 
   let centerId: string;
@@ -156,7 +167,7 @@ export async function POST(request: NextRequest) {
       desiredStartDate: clean(body.desiredStartDate)
         ? new Date(clean(body.desiredStartDate))
         : null,
-      stage: normalizeLeadStage(clean(body.stage)),
+      stage: stage || EnrollmentStage.NEW_INQUIRY,
       score: leadScore({ email, phone, program, locationId }),
       status: "open",
       customFields: {

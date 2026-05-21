@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
@@ -59,6 +59,21 @@ function parseDate(input: string) {
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
+function centerKey(value: string | null | undefined) {
+  return (value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function centerAliases(center: { id: string; name: string; crmLocationId: string | null; locationId: string | null; city: string | null; state: string | null }) {
+  return [
+    center.id,
+    center.name,
+    center.crmLocationId,
+    center.locationId,
+    [center.city, center.state].filter(Boolean).join(" "),
+    [center.name, center.city, center.state].filter(Boolean).join(" "),
+  ].map(centerKey).filter(Boolean);
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -69,17 +84,32 @@ export async function POST(request: NextRequest) {
   }
 
   const formData = await request.formData();
-  const centerId = clean(formData.get("centerId")) || user.primaryCenterId;
+  const requestedCenterId = clean(formData.get("centerId"));
+  const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
+  const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
   const pastedCsv = clean(formData.get("csv"));
-  if (!centerId) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
-  if (!canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
+  if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
+  if (centerId && !canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
 
-  const center = await prisma.center.findUnique({
-    where: { id: centerId },
-    select: { id: true, name: true, crmLocationId: true },
+  const visibleCenters = await prisma.center.findMany({
+    where: {
+      status: { not: "closed" },
+      ...(user.role === "PLATFORM_OWNER" ? {} : { id: { in: user.centerIds.length ? user.centerIds : ["__none__"] } }),
+    },
+    orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+    select: { id: true, name: true, crmLocationId: true, locationId: true, city: true, state: true },
   });
+  const center = autoMap
+    ? visibleCenters[0] ?? null
+    : visibleCenters.find((item) => item.id === centerId) ?? null;
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
+  const centerByAlias = new Map<string, typeof center>();
+  for (const visibleCenter of visibleCenters) {
+    for (const alias of centerAliases(visibleCenter)) {
+      centerByAlias.set(alias, visibleCenter);
+    }
+  }
 
   const text = file instanceof File && file.size > 0 ? await file.text() : pastedCsv;
   if (!text) return NextResponse.json({ ok: false, error: "Upload a CSV export or paste CSV text." }, { status: 400 });
@@ -94,11 +124,13 @@ export async function POST(request: NextRequest) {
   let updatedFamilies = 0;
   let createdChildren = 0;
   let ledgerRows = 0;
+  let createdClassrooms = 0;
+  const centersTouched = new Set<string>();
   const rowResults: Array<{ rowNumber: number; status: string; message?: string; rawData: Record<string, string>; createdFamilyId?: string; createdChildId?: string }> = [];
 
   const batch = await prisma.procareImportBatch.create({
     data: {
-      centerId,
+      centerId: center.id,
       uploadedById: user.id,
       filename: file instanceof File && file.size > 0 ? file.name : "pasted-procare-import.csv",
       status: "processing",
@@ -109,6 +141,24 @@ export async function POST(request: NextRequest) {
   for (let index = 1; index < rows.length; index += 1) {
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
     try {
+      const rowCenterValue = value(rawData, [
+        "location id",
+        "crm location id",
+        "school id",
+        "school",
+        "school name",
+        "center",
+        "center name",
+        "location",
+        "site",
+      ]);
+      const targetCenter = autoMap
+        ? centerByAlias.get(centerKey(rowCenterValue)) ?? null
+        : center;
+      if (!targetCenter) {
+        throw new Error(`Could not map row to a center from "${rowCenterValue || "blank location"}".`);
+      }
+      centersTouched.add(targetCenter.id);
       const familyName = value(rawData, ["family name", "account name", "account", "family", "parent name", "primary guardian"]);
       const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
       const guardianName = value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "mother", "father"]);
@@ -116,6 +166,8 @@ export async function POST(request: NextRequest) {
       const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone"]);
       const address = value(rawData, ["address", "street address", "home address"]);
       const balanceCents = cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]));
+      const classroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "class"]);
+      const ageGroup = value(rawData, ["age group", "program", "class", "room"]) || "Preschool";
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
       const familyMatchers = [
@@ -125,7 +177,7 @@ export async function POST(request: NextRequest) {
       const existing = familyMatchers.length
         ? await prisma.family.findFirst({
             where: {
-              centerId,
+              centerId: targetCenter.id,
               OR: familyMatchers,
             },
             select: { id: true },
@@ -143,7 +195,7 @@ export async function POST(request: NextRequest) {
           })
         : await prisma.family.create({
             data: {
-              centerId,
+              centerId: targetCenter.id,
               name: familyName || childName || email,
               billingEmail: email || null,
               address: address || null,
@@ -186,14 +238,38 @@ export async function POST(request: NextRequest) {
 
       let childId: string | undefined;
       if (childName) {
+        let classroomId: string | null = null;
+        if (classroomName) {
+          const existingClassroom = await prisma.classroom.findFirst({
+            where: { centerId: targetCenter.id, name: classroomName },
+            select: { id: true },
+          });
+          if (existingClassroom) {
+            classroomId = existingClassroom.id;
+          } else {
+            const classroom = await prisma.classroom.create({
+              data: {
+                centerId: targetCenter.id,
+                name: classroomName,
+                ageGroup,
+                capacity: 12,
+                ratioRule: "Imported from ProCare; verify capacity and ratio.",
+              },
+              select: { id: true },
+            });
+            classroomId = classroom.id;
+            createdClassrooms += 1;
+          }
+        }
         const existingChild = await prisma.child.findFirst({ where: { familyId: family.id, fullName: childName }, select: { id: true } });
         if (!existingChild) {
           const child = await prisma.child.create({
             data: {
               familyId: family.id,
+              classroomId,
               fullName: childName,
               dateOfBirth: parseDate(value(rawData, ["dob", "birth date", "date of birth"])) ?? new Date("2021-01-01T12:00:00.000Z"),
-              ageGroup: value(rawData, ["age group", "program", "class", "room"]) || "Preschool",
+              ageGroup,
               enrollmentStatus: value(rawData, ["status", "enrollment status"]) || "enrolled",
               startDate: parseDate(value(rawData, ["start date", "enrollment date"])),
             },
@@ -202,6 +278,9 @@ export async function POST(request: NextRequest) {
           createdChildren += 1;
         } else {
           childId = existingChild.id;
+          if (classroomId) {
+            await prisma.child.update({ where: { id: existingChild.id }, data: { classroomId, ageGroup } });
+          }
         }
       }
 
@@ -220,13 +299,19 @@ export async function POST(request: NextRequest) {
             balanceAfterCents: balanceCents,
             sourceSystem: "procare",
             externalId: `${batch.id}:${index}`,
-            metadata: rawData,
+            metadata: { ...rawData, mappedCenterId: targetCenter.id },
           },
         });
         ledgerRows += 1;
       }
 
-      rowResults.push({ rowNumber: index + 1, status: "imported", rawData, createdFamilyId: family.id, createdChildId: childId });
+      rowResults.push({
+        rowNumber: index + 1,
+        status: "imported",
+        rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedCenter: targetCenter.crmLocationId ?? targetCenter.name },
+        createdFamilyId: family.id,
+        createdChildId: childId,
+      });
     } catch (error) {
       rowResults.push({ rowNumber: index + 1, status: "error", message: error instanceof Error ? error.message : "Import failed", rawData });
     }
@@ -245,14 +330,16 @@ export async function POST(request: NextRequest) {
   });
 
   const summary = {
-    center: center.crmLocationId ?? center.name,
+    center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
     rows: rowResults.length,
     imported: rowResults.filter((row) => row.status === "imported").length,
     errors: rowResults.filter((row) => row.status === "error").length,
     createdFamilies,
     updatedFamilies,
     createdChildren,
+    createdClassrooms,
     ledgerRows,
+    centersTouched: centersTouched.size,
   };
 
   await prisma.procareImportBatch.update({
@@ -261,7 +348,7 @@ export async function POST(request: NextRequest) {
   });
 
   await writeAuditLog(user, {
-    centerId,
+    centerId: center.id,
     action: "procare.import.completed",
     resource: "ProcareImportBatch",
     resourceId: batch.id,

@@ -26,15 +26,18 @@ import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
+type DashboardLens = "platform" | "brand" | "regional" | "director" | "teacher" | "parent";
 
 export type LiveDashboardData = {
   kpis: typeof kpis;
   pipelineStages: typeof pipelineStages;
   centers: typeof centers;
+  leadRows?: typeof leads;
   aiSummary: string;
   classroomSnapshots?: typeof classrooms;
   parentMessages?: typeof messages;
   showExecutiveDemoData?: boolean;
+  visibleLenses?: readonly DashboardLens[];
   inquiryEmbed?: {
     title: string;
     description: string;
@@ -46,6 +49,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const dashboardKpis = live?.kpis ?? kpis;
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
   const dashboardCenters = live?.centers ?? centers;
+  const dashboardLeads = live ? live.leadRows ?? [] : leads;
+  const visibleLenses = live?.visibleLenses?.length
+    ? live.visibleLenses
+    : (["platform", "brand", "regional", "director", "teacher", "parent"] as const);
+  const defaultLens = visibleLenses.includes("director") ? "director" : visibleLenses[0] ?? "director";
+  const secondaryLenses = visibleLenses.filter((lens) => lens !== "director");
   const showExecutiveDemoData = Boolean(live?.showExecutiveDemoData);
   const classroomSnapshots = live?.classroomSnapshots?.length
     ? live.classroomSnapshots
@@ -139,16 +148,16 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         />
       ) : null}
 
-      <Tabs defaultValue="director" className="flex flex-col gap-4">
+      <Tabs defaultValue={defaultLens} className="flex flex-col gap-4">
         <TabsList className="w-full justify-start overflow-x-auto">
-          <TabsTrigger value="platform">Platform admin</TabsTrigger>
-          <TabsTrigger value="brand">Brand admin</TabsTrigger>
-          <TabsTrigger value="regional">Regional</TabsTrigger>
-          <TabsTrigger value="director">Center director</TabsTrigger>
-          <TabsTrigger value="teacher">Teacher</TabsTrigger>
-          <TabsTrigger value="parent">Parent</TabsTrigger>
+          {visibleLenses.includes("platform") ? <TabsTrigger value="platform">Platform admin</TabsTrigger> : null}
+          {visibleLenses.includes("brand") ? <TabsTrigger value="brand">Brand admin</TabsTrigger> : null}
+          {visibleLenses.includes("regional") ? <TabsTrigger value="regional">Regional</TabsTrigger> : null}
+          {visibleLenses.includes("director") ? <TabsTrigger value="director">Center director</TabsTrigger> : null}
+          {visibleLenses.includes("teacher") ? <TabsTrigger value="teacher">Teacher</TabsTrigger> : null}
+          {visibleLenses.includes("parent") ? <TabsTrigger value="parent">Parent</TabsTrigger> : null}
         </TabsList>
-        <TabsContent value="director" className="mt-0">
+        {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0">
           <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
             <div className="grid gap-6">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -246,7 +255,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <CardDescription>Childcare-specific CRM records</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
-                    {leads.map((lead) => (
+                    {dashboardLeads.map((lead) => (
                       <div key={lead.family} className="grid gap-3 rounded-xl border bg-background/50 p-3 sm:grid-cols-[1fr_auto]">
                         <div>
                           <div className="font-medium">{lead.family}</div>
@@ -263,6 +272,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         </div>
                       </div>
                     ))}
+                    {!dashboardLeads.length ? (
+                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                        No visible CRM leads are available for this login yet.
+                      </p>
+                    ) : null}
                   </CardContent>
                 </Card>
               </div>
@@ -315,8 +329,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </Card>
             </aside>
           </div>
-        </TabsContent>
-        {["platform", "brand", "regional", "teacher", "parent"].map((tab) => (
+        </TabsContent> : null}
+        {secondaryLenses.map((tab) => (
           <TabsContent key={tab} value={tab} className="mt-0">
             <Card className="glass-panel">
               <CardHeader>

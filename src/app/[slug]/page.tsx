@@ -51,6 +51,7 @@ import {
 } from "@/lib/executive-demo-data";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { prisma } from "@/lib/prisma";
+import { canAccessModule } from "@/lib/rbac";
 import { signChildMediaRecords } from "@/lib/supabase-storage";
 
 export const dynamic = "force-dynamic";
@@ -188,8 +189,8 @@ async function getFteReports(centerIds: string[], take = 150) {
 }
 
 async function renderLivePage(slug: string, user: CurrentUser) {
-  const allCenters = user.role === "PLATFORM_OWNER";
   const tenantWide = canAccessAllCenters(user);
+  const allCenters = tenantWide;
   const showExecutiveDemoData = canViewExecutiveDemoData(user);
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
@@ -1773,6 +1774,10 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
   const user = await getCurrentUser();
   if (!user) {
     redirect(`/login?next=/${encodeURIComponent(slug)}`);
+  }
+
+  if (!canAccessModule(user.role, slug)) {
+    notFound();
   }
 
   const livePage = await renderLivePage(slug, user);

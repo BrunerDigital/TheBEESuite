@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseLeadStage } from "@/lib/crm";
-import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
+import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -27,6 +27,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canViewCrmLeads(user)) {
+    return NextResponse.json({ ok: false, error: "Lead access is not allowed for this role." }, { status: 403 });
   }
 
   const { id } = await context.params;

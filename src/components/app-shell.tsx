@@ -29,6 +29,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navGroups } from "@/lib/demo-data";
+import { canAccessModule } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 type ShellUser = {
@@ -103,7 +104,7 @@ function NotificationDropdown() {
       body: notification.body,
       type: notification.type,
       priority: notification.priority,
-      href: "/notification-center",
+      href: "/notifications",
     })) ?? []),
   ].slice(0, 6);
 
@@ -147,7 +148,7 @@ function NotificationDropdown() {
           {items.map((item, index) => (
             <Link
               key={`${item.type}-${index}`}
-              href={item.href ?? "/notification-center"}
+              href={item.href ?? "/notifications"}
               className="block rounded-lg p-3 text-sm transition hover:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
@@ -162,7 +163,7 @@ function NotificationDropdown() {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <Link href="/notification-center" className="block p-3 text-sm font-medium text-primary hover:bg-muted">
+        <Link href="/notifications" className="block p-3 text-sm font-medium text-primary hover:bg-muted">
           Open notification center
         </Link>
       </DropdownMenuContent>
@@ -170,8 +171,14 @@ function NotificationDropdown() {
   );
 }
 
-function SidebarNav({ close }: { close?: () => void }) {
+function SidebarNav({ close, role }: { close?: () => void; role?: string }) {
   const pathname = usePathname();
+  const visibleNavGroups = navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(([, slug]) => canAccessModule(role, slug)),
+    }))
+    .filter((group) => group.items.length);
 
   return (
     <div className="flex h-full flex-col">
@@ -180,7 +187,7 @@ function SidebarNav({ close }: { close?: () => void }) {
       </div>
       <ScrollArea className="flex-1 px-3">
         <nav className="flex flex-col gap-5 pb-6">
-          {navGroups.map((group) => (
+          {visibleNavGroups.map((group) => (
             <div key={group.title} className="flex flex-col gap-2">
               <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {group.title}
@@ -236,7 +243,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r bg-sidebar/90 backdrop-blur-xl lg:block">
-        <SidebarNav />
+        <SidebarNav role={currentUser?.role} />
       </aside>
       <div className="lg:pl-72">
         <header className="sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
@@ -251,7 +258,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav />
+                <SidebarNav role={currentUser?.role} />
               </SheetContent>
             </Sheet>
             <div className="hidden flex-1 items-center md:flex">

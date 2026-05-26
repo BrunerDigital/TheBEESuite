@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { EnrollmentStage, Prisma } from "@prisma/client";
-import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -22,6 +22,10 @@ export async function GET() {
   const centerIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(centerIds);
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds };
+  const tenantWide = canAccessAllCenters(user);
+  const notificationUserWhere = tenantWide
+    ? { OR: [{ userId: user.id }, { userId: null }] }
+    : { userId: user.id };
   const now = new Date();
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);
@@ -39,13 +43,13 @@ export async function GET() {
     missingFteReports,
   ] = await Promise.all([
     prisma.notification.findMany({
-      where: { OR: [{ userId: user.id }, { userId: null }] },
+      where: notificationUserWhere,
       orderBy: { createdAt: "desc" },
       take: 8,
       select: { id: true, title: true, body: true, type: true, priority: true, readAt: true, createdAt: true },
     }),
     prisma.notification.count({
-      where: { readAt: null, OR: [{ userId: user.id }, { userId: null }] },
+      where: { readAt: null, ...notificationUserWhere },
     }),
     prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.NEW_INQUIRY } }),
     prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 }, status: "open" } }),
@@ -93,7 +97,7 @@ export async function GET() {
           body: "Follow-up tasks are still open across the visible CRM scope.",
           type: "tasks",
           priority: "normal",
-          href: "/notification-center",
+          href: "/notifications",
         }
       : null,
     upcomingTours
@@ -120,7 +124,7 @@ export async function GET() {
           body: "Schools without a current weekly FTE report should submit or be updated manually.",
           type: "fte",
           priority: "normal",
-          href: "/multi-location-dashboard",
+          href: tenantWide ? "/multi-location-dashboard" : "/center-dashboard",
         }
       : null,
   ].filter(Boolean);

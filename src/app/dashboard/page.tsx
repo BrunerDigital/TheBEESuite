@@ -5,6 +5,7 @@ import { canAccessAllCenters, canManageCrmLeads, canViewExecutiveDemoData, getCu
 import { stageLabels } from "@/lib/crm";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
+import { dashboardLensesForRole } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,7 @@ export default async function DashboardPage() {
     pipelineCounts,
     classroomSnapshotRows,
     parentMessageRows,
+    recentDashboardLeads,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -195,6 +197,22 @@ export default async function DashboardPage() {
         sender: { select: { name: true } },
       },
     }),
+    prisma.lead.findMany({
+      where: leadWhere,
+      orderBy: { createdAt: "desc" },
+      take: 4,
+      select: {
+        familyName: true,
+        childName: true,
+        leadSource: true,
+        stage: true,
+        score: true,
+        desiredStartDate: true,
+        ageGroupInterest: true,
+        programInterest: true,
+        tags: { select: { name: true } },
+      },
+    }),
   ]);
 
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
@@ -250,6 +268,19 @@ export default async function DashboardPage() {
       count: item._count._all,
       value: `${item._count._all.toLocaleString()} leads`,
     })),
+    leadRows: recentDashboardLeads.map((lead) => ({
+      family: lead.familyName,
+      child: lead.childName || lead.ageGroupInterest || lead.programInterest || "Child details pending",
+      source: lead.leadSource || "Website/manual",
+      stage: stageLabels[lead.stage],
+      score: lead.score,
+      desiredStart: lead.desiredStartDate
+        ? lead.desiredStartDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        : "TBD",
+      tags: lead.tags.length
+        ? lead.tags.map((tag) => tag.name)
+        : [lead.programInterest, lead.ageGroupInterest].filter((tag): tag is string => Boolean(tag)),
+    })),
     centers: centers.slice(0, 6).map((center) => ({
       name: center.name,
       region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
@@ -278,6 +309,7 @@ export default async function DashboardPage() {
       sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
     })),
     showExecutiveDemoData,
+    visibleLenses: dashboardLensesForRole(user.role),
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
     inquiryEmbed,
   };

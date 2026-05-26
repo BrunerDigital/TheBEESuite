@@ -43,6 +43,11 @@ const leadWriteRoles = new Set<UserRole>([
   UserRole.BILLING_ADMIN,
 ]);
 
+const leadReadRoles = new Set<UserRole>([
+  ...leadWriteRoles,
+  UserRole.READ_ONLY_AUDITOR,
+]);
+
 const operationsWriteRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
   UserRole.BRAND_ADMIN,
@@ -309,6 +314,10 @@ export function canAccessCenter(user: CurrentUser, centerId: string) {
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {
   return leadWriteRoles.has(user.role);
+}
+
+export function canViewCrmLeads(user: Pick<CurrentUser, "role">) {
+  return leadReadRoles.has(user.role);
 }
 
 export function canManageOperations(user: Pick<CurrentUser, "role">) {

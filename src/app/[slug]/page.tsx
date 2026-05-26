@@ -1126,7 +1126,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "agency-admin") {
-    const [organizations, users, leads, ownerGroups, accessGrants, adminCenters] = await Promise.all([
+    const [organizations, users, leads, ownerGroups, accessGrants, adminCenters, adminUsers] = await Promise.all([
       prisma.organization.count({
         where: tenantWide ? { tenantId: user.tenantId } : { id: user.organizationId ?? "__none__" },
       }),
@@ -1202,6 +1202,41 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           _count: { select: { leads: true, staff: true, classrooms: true } },
         },
       }),
+      prisma.user.findMany({
+        where: tenantWide
+          ? { tenantId: user.tenantId }
+          : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } },
+        orderBy: [{ isActive: "desc" }, { email: "asc" }],
+        take: 150,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          isActive: true,
+          accessGrants: {
+            where: { isActive: true },
+            orderBy: { createdAt: "desc" },
+            take: 3,
+            select: {
+              id: true,
+              role: true,
+              scopeType: true,
+              isActive: true,
+              centerId: true,
+              ownerGroupId: true,
+              center: { select: { name: true, crmLocationId: true } },
+              ownerGroup: { select: { name: true } },
+            },
+          },
+          staffProfile: {
+            select: {
+              title: true,
+              center: { select: { id: true, name: true, crmLocationId: true } },
+            },
+          },
+        },
+      }),
     ]);
 
     return (
@@ -1214,6 +1249,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             leads,
           },
           centers: adminCenters,
+          users: adminUsers,
           ownerGroups,
           accessGrants,
         }}

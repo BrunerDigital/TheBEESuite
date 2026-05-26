@@ -398,6 +398,27 @@ export type AgencyAdminData = {
     ownerGroup: { name: string; ownerType: string } | null;
     _count: { leads: number; staff: number; classrooms: number };
   }>;
+  users: Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    accessGrants: Array<{
+      id: string;
+      role: string;
+      scopeType: string;
+      isActive: boolean;
+      centerId: string | null;
+      ownerGroupId: string | null;
+      center: { name: string; crmLocationId: string | null } | null;
+      ownerGroup: { name: string } | null;
+    }>;
+    staffProfile: {
+      title: string;
+      center: { id: string; name: string; crmLocationId: string | null } | null;
+    } | null;
+  }>;
   ownerGroups: Array<{
     id: string;
     name: string;
@@ -439,7 +460,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         <StatCard label="Users" value={data.stats.users} />
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
       </div>
-      <ExecutiveAdminConsole centers={data.centers} ownerGroups={data.ownerGroups} />
+      <ExecutiveAdminConsole centers={data.centers} ownerGroups={data.ownerGroups} users={data.users} />
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>

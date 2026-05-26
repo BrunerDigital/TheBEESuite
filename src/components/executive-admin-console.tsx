@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type CenterOption = {
   id: string;
@@ -36,9 +37,32 @@ type OwnerGroupOption = {
   contactName: string | null;
 };
 
+type UserOption = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  accessGrants: Array<{
+    id: string;
+    role: string;
+    scopeType: string;
+    isActive: boolean;
+    centerId: string | null;
+    ownerGroupId: string | null;
+    center: { name: string; crmLocationId: string | null } | null;
+    ownerGroup: { name: string } | null;
+  }>;
+  staffProfile: {
+    title: string;
+    center: { id: string; name: string; crmLocationId: string | null } | null;
+  } | null;
+};
+
 type Props = {
   centers: CenterOption[];
   ownerGroups: OwnerGroupOption[];
+  users: UserOption[];
 };
 
 const roles = [
@@ -80,7 +104,7 @@ function shortCenterLabel(center: CenterOption) {
   return [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" - ");
 }
 
-export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
+export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
@@ -103,6 +127,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
   const sortedCenters = useMemo(
     () => [...centers].sort((a, b) => shortCenterLabel(a).localeCompare(shortCenterLabel(b))),
     [centers],
+  );
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => a.email.localeCompare(b.email)).slice(0, 75),
+    [users],
   );
 
   function setCenterField(key: keyof ReturnType<typeof blankCenterForm>, value: string) {
@@ -182,6 +210,21 @@ export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
 
   function setUserStatus(status: "active" | "inactive") {
     post("setUserStatus", { email: resetForm.email, status }, status === "active" ? "User reactivated." : "User deactivated.");
+  }
+
+  function loadUserForEdit(user: UserOption) {
+    const grant = user.accessGrants.find((item) => item.isActive) ?? user.accessGrants[0];
+    setUserForm({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      centerId: grant?.centerId ?? user.staffProfile?.center?.id ?? "",
+      ownerGroupId: grant?.ownerGroupId ?? "",
+      accessScopeType: grant?.scopeType ?? (user.staffProfile?.center?.id ? "CENTER" : "TENANT"),
+      title: user.staffProfile?.title ?? user.role.replaceAll("_", " ").toLowerCase(),
+      password: "",
+      sendPasswordReset: "no",
+    });
   }
 
   return (
@@ -390,6 +433,62 @@ export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <ShieldCheck className="size-5 text-primary" />
+              Existing User Accounts
+            </CardTitle>
+            <CardDescription>Find live users quickly, then load them into the edit or password-reset forms.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Center</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedUsers.map((user) => {
+                  const grant = user.accessGrants.find((item) => item.isActive) ?? user.accessGrants[0];
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="font-medium">{user.name}</div>
+                        <div className="text-xs text-muted-foreground">{user.email}</div>
+                      </TableCell>
+                      <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
+                      <TableCell>{grant?.scopeType.replaceAll("_", " ") ?? "Role fallback"}</TableCell>
+                      <TableCell>{grant?.center?.crmLocationId ?? grant?.center?.name ?? user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? grant?.ownerGroup?.name ?? "Tenant"}</TableCell>
+                      <TableCell>
+                        <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => setResetForm((current) => ({ ...current, email: user.email }))}>Reset</Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {!sortedUsers.length ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      No users are available in this scope yet.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>

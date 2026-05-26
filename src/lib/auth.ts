@@ -260,7 +260,7 @@ async function resolveAccessGrantCenterIds(
 ) {
   const usableGrants = options.allowBroadGrantAccess
     ? grants
-    : grants.filter((grant) => grant.scopeType === "CENTER" || grant.centerId);
+    : grants.filter((grant) => grant.scopeType === "CENTER" || Boolean(grant.centerId));
 
   if (
     options.allowBroadGrantAccess &&
@@ -274,10 +274,26 @@ async function resolveAccessGrantCenterIds(
     return tenantCenters.map((center) => center.id);
   }
 
-  const centerIds = unique(usableGrants.filter((grant) => grant.centerId).map((grant) => grant.centerId as string));
-  const ownerGroupIds = unique(usableGrants.filter((grant) => grant.ownerGroupId).map((grant) => grant.ownerGroupId as string));
-  const organizationIds = unique(usableGrants.filter((grant) => grant.organizationId).map((grant) => grant.organizationId as string));
-  const brandIds = unique(usableGrants.filter((grant) => grant.brandId).map((grant) => grant.brandId as string));
+  const centerIds = unique(
+    usableGrants
+      .filter((grant) => grant.scopeType === "CENTER" && grant.centerId)
+      .map((grant) => grant.centerId as string),
+  );
+  const ownerGroupIds = unique(
+    usableGrants
+      .filter((grant) => grant.scopeType === "OWNER_GROUP" && grant.ownerGroupId)
+      .map((grant) => grant.ownerGroupId as string),
+  );
+  const organizationIds = unique(
+    usableGrants
+      .filter((grant) => grant.scopeType === "ORGANIZATION" && grant.organizationId)
+      .map((grant) => grant.organizationId as string),
+  );
+  const brandIds = unique(
+    usableGrants
+      .filter((grant) => grant.scopeType === "BRAND" && grant.brandId)
+      .map((grant) => grant.brandId as string),
+  );
   const ors = [
     centerIds.length ? { id: { in: centerIds }, organization: { tenantId } } : null,
     ownerGroupIds.length ? { ownerGroupId: { in: ownerGroupIds }, organization: { tenantId } } : null,

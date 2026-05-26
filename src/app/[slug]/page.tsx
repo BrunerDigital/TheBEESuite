@@ -1116,8 +1116,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
           {
             OR: [
-              { centerId: scopedCenterIds },
-              { ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
+              { scopeType: "CENTER", centerId: scopedCenterIds },
+              { scopeType: "OWNER_GROUP", ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
             ],
           },
         ],

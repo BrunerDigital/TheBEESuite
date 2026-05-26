@@ -1366,7 +1366,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
     const demoMode = showExecutiveDemoData && classrooms.length === 0;
 
-    return <ClassroomDashboardPage data={{ classrooms: demoMode ? executiveClassroomDemoRows : classrooms, demoMode }} />;
+    return (
+      <ClassroomDashboardPage
+        data={{
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          classrooms: demoMode ? executiveClassroomDemoRows : classrooms,
+          demoMode,
+        }}
+      />
+    );
   }
 
   if (slug === "attendance") {
@@ -1586,7 +1594,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
     ]);
 
-    return <StaffPage data={{ staff, stats: { total, activeUsers, expiringCerts, backgroundPending } }} />;
+    return (
+      <StaffPage
+        data={{
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          staff,
+          stats: { total, activeUsers, expiringCerts, backgroundPending },
+        }}
+      />
+    );
   }
 
   if (slug === "forms") {

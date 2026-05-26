@@ -34,11 +34,15 @@ type Props = {
   title?: string;
   defaultEntity?: string;
   compact?: boolean;
+  centers?: Array<{ id: string; name: string }>;
 };
 
-export function OperationsActionHub({ title = "Create / Edit Record", defaultEntity = "announcement", compact = false }: Props) {
+const centerScopedEntities = new Set(["family", "classroom", "staff", "announcement"]);
+
+export function OperationsActionHub({ title = "Create / Edit Record", defaultEntity = "announcement", compact = false, centers = [] }: Props) {
   const [entity, setEntity] = useState(defaultEntity);
   const [id, setId] = useState("");
+  const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [relatedId, setRelatedId] = useState("");
@@ -54,6 +58,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      const scopedCenterId = centerScopedEntities.has(entity) ? centerId || relatedId : undefined;
       const response = await fetch("/api/operations/records", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -64,7 +69,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
           body,
           familyId: entity === "document" || entity === "formSubmission" ? relatedId : undefined,
           relatedId,
-          centerId: ["family", "classroom", "staff", "announcement"].includes(entity) ? relatedId : undefined,
+          centerId: scopedCenterId,
           ageGroup: ["child", "classroom", "tuitionPlan"].includes(entity) ? type : undefined,
           billingEmail: entity === "family" ? type : undefined,
           email: ["guardian", "staff"].includes(entity) ? type : undefined,
@@ -142,6 +147,19 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
               </SelectContent>
             </Select>
           </div>
+          {centers.length > 0 && centerScopedEntities.has(entity) ? (
+            <div className="space-y-1">
+              <Label>Center</Label>
+              <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
+                <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
+                <SelectContent>
+                  {centers.map((center) => (
+                    <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-1">
             <Label>Existing ID</Label>
             <Input value={id} onChange={(event) => setId(event.target.value)} placeholder="Optional edit ID" />

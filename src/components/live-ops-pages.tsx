@@ -1874,6 +1874,7 @@ export type FormsPageData = {
   submissions: Array<{
     id: string;
     status: string;
+    data: unknown;
     submittedAt: Date | string | null;
     signaturePlaceholder: boolean;
     form: { name: string; type: string };
@@ -1929,6 +1930,44 @@ export function FormsPage({ data }: { data: FormsPageData }) {
         </CardContent>
       </Card>
       <OperationsActionHub title="Create or Edit Form Record" defaultEntity="form" compact />
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Submissions</CardTitle>
+          <CardDescription>Online registration packets and other submitted forms visible to this account.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Submitted</TableHead>
+                <TableHead>Form</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Signature</TableHead>
+                <TableHead>Details</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.submissions.map((submission) => (
+                <TableRow key={submission.id}>
+                  <TableCell>{formatDateTime(submission.submittedAt)}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{submission.form.name}</div>
+                    <div className="text-xs text-muted-foreground">{submission.form.type}</div>
+                  </TableCell>
+                  <TableCell><Badge variant="outline">{submission.status}</Badge></TableCell>
+                  <TableCell>{submission.signaturePlaceholder ? "Captured placeholder" : "Not required"}</TableCell>
+                  <TableCell className="max-w-xl whitespace-normal text-xs text-muted-foreground">{jsonSummary(submission.data)}</TableCell>
+                </TableRow>
+              ))}
+              {!data.submissions.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">No submitted forms are visible for this scope.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -2484,7 +2523,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Family billing accounts, tuition invoices, balances, and mock payment readiness. Real payment processing is intentionally disabled for this phase.
+          Family billing accounts, tuition invoices, balances, ProCare/imported ledger activity, and Stripe Checkout readiness for parent tuition payments.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -3050,6 +3089,32 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         webhookConfigured={data.webhookConfigured}
         applicationFeeBps={data.applicationFeeBps}
       />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Parent Tuition Flow</CardTitle>
+            <CardDescription>
+              Parent portal invoice buttons create Stripe Checkout sessions. Successful webhooks mark payments paid, close invoices, and write ledger credits.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>School Payout Flow</CardTitle>
+            <CardDescription>
+              Each school completes Stripe Connect onboarding before live parent payments are accepted for that school.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Platform Fee Flow</CardTitle>
+            <CardDescription>
+              The configured application fee is retained by The Bee Suite while the remaining payment amount is routed to the school payout account.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>

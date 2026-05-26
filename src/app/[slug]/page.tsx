@@ -454,7 +454,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [invoices, dailyReports, incidents, messages, documents, media] = await Promise.all([
+    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media] = await Promise.all([
+      prisma.billingAccount.findUnique({
+        where: { familyId },
+        select: {
+          id: true,
+          balanceCents: true,
+          autopayPlaceholder: true,
+          payments: {
+            orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+            take: 10,
+            select: { id: true, amountCents: true, status: true, provider: true, paidAt: true },
+          },
+          ledgerEntries: {
+            orderBy: { effectiveAt: "desc" },
+            take: 20,
+            select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
+          },
+        },
+      }),
       prisma.invoice.findMany({
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -509,7 +527,24 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     ]);
 
     const signedMedia = await signChildMediaRecords(media);
-    return <ParentPortalWorkspace family={family} invoices={invoices} dailyReports={dailyReports} incidents={incidents} messages={messages} documents={documents} media={signedMedia} />;
+    return (
+      <ParentPortalWorkspace
+        family={family}
+        billingAccount={billingAccount ? {
+          id: billingAccount.id,
+          balanceCents: billingAccount.balanceCents,
+          autopayPlaceholder: billingAccount.autopayPlaceholder,
+        } : null}
+        invoices={invoices}
+        payments={billingAccount?.payments ?? []}
+        ledgerEntries={billingAccount?.ledgerEntries ?? []}
+        dailyReports={dailyReports}
+        incidents={incidents}
+        messages={messages}
+        documents={documents}
+        media={signedMedia}
+      />
+    );
   }
 
   if (slug === "teacher-portal") {
@@ -1306,7 +1341,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "center-dashboard") {
-    const center = centers[0];
+    const center = centers.find((item) => item.id === user.primaryCenterId) ?? centers[0];
     const centerWhere = center ? { centerId: center.id } : { centerId: "__none__" };
     const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
@@ -1606,6 +1641,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "forms") {
+    const submissionWhere: Prisma.FormSubmissionWhereInput = allCenters
+      ? {}
+      : visibleCenterIds.length
+        ? { OR: visibleCenterIds.map((centerId) => ({ data: { path: ["centerId"], equals: centerId } })) }
+        : { id: "__no_visible_submissions__" };
     const [forms, submissions] = await Promise.all([
       prisma.form.findMany({
         orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -1613,6 +1653,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         include: { _count: { select: { submissions: true } } },
       }),
       prisma.formSubmission.findMany({
+        where: submissionWhere,
         orderBy: { submittedAt: "desc" },
         take: 100,
         include: { form: { select: { name: true, type: true } } },

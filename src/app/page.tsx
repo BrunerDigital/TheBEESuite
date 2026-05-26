@@ -30,6 +30,7 @@ const navItems = [
   ["Product", "#product"],
   ["How it works", "#workflows"],
   ["Schools", "#school-use"],
+  ["Registration", "/registration"],
   ["Testimonials", "#testimonials"],
   ["Reporting", "#reporting"],
 ];
@@ -43,7 +44,7 @@ const heroProof = [
 const crmSteps = [
   {
     title: "Capture every inquiry",
-    body: "Website embeds, manual lead entry, location routing, Google Sheets backup, and notification emails all feed the same CRM record.",
+    body: "Website embeds, online registration packets, manual lead entry, location routing, Google Sheets backup, and notification emails all feed the same CRM record.",
     icon: Mail,
   },
   {
@@ -65,6 +66,7 @@ const setupCards = [
   ["Users", "Role-scoped access for owners, regional teams, directors, staff, and auditors.", UsersRound],
   ["Branding layers", "Tenant, brand, owner group, and center customizations can override the right surfaces.", Sparkles],
   ["Inquiry form", "Copyable embed codes tied to the correct center or multi-location account.", ClipboardCheck],
+  ["Online registration", "Public registration packets create application-stage leads and director review tasks.", FileCheck2],
   ["Payouts", "Stripe Connect readiness is captured, but live checkout stays gated until reviewed.", CreditCard],
   ["Reports", "FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.", BarChart3],
 ];
@@ -72,9 +74,9 @@ const setupCards = [
 const workflowCards = [
   {
     title: "Enrollment capture",
-    body: "Parents inquire from a school website, the form routes by location, the CRM creates the lead, and the school receives a notification.",
+    body: "Parents inquire or submit an online registration packet, the form routes by school, the CRM creates the lead, and the school receives a notification.",
     icon: Mail,
-    steps: ["Website form", "CRM lead", "School alert", "Sheets backup"],
+    steps: ["Website form", "Registration packet", "CRM lead", "School alert"],
   },
   {
     title: "School day engagement",
@@ -379,6 +381,15 @@ export default function LandingPage() {
                 variant="outline"
                 className="h-12 border-white/15 bg-white/[0.04] px-5 text-sm text-white hover:bg-white/10"
                 nativeButton={false}
+                render={<Link href="/registration" />}
+              >
+                View registration flow
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 border-white/15 bg-transparent px-5 text-sm text-white hover:bg-white/10"
+                nativeButton={false}
                 render={<Link href="/login" />}
               >
                 Log in to CRM
@@ -567,7 +578,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-semibold tracking-normal">Ready to run enrollment from one command center?</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#29313a]">
-              Create a trial workspace for a childcare center, preschool, agency, franchise, or multi-location brand.
+              Create a trial workspace for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -577,6 +588,9 @@ export default function LandingPage() {
             </Button>
             <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/login" />}>
               Log in
+            </Button>
+            <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/registration" />}>
+              Registration
             </Button>
           </div>
         </div>

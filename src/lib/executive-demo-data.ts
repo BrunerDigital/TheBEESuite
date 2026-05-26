@@ -196,6 +196,11 @@ export const executiveParentPortalDemo = {
       },
     ],
   },
+  billingAccount: {
+    id: "exec-demo-billing-account",
+    balanceCents: 124500,
+    autopayPlaceholder: false,
+  },
   invoices: [
     {
       id: "exec-demo-invoice",
@@ -203,6 +208,33 @@ export const executiveParentPortalDemo = {
       status: "OPEN",
       dueDate: isoWithOffset(7, 9, 0),
       totalCents: 124500,
+    },
+  ],
+  payments: [
+    {
+      id: "exec-demo-payment",
+      amountCents: 118000,
+      status: "PAID",
+      provider: "stripe",
+      paidAt: isoWithOffset(-21, 10, 15),
+    },
+  ],
+  ledgerEntries: [
+    {
+      id: "exec-demo-ledger-charge",
+      type: "tuition_charge",
+      description: "Weekly tuition",
+      amountCents: 124500,
+      balanceAfterCents: 124500,
+      effectiveAt: isoWithOffset(0, 8, 0),
+    },
+    {
+      id: "exec-demo-ledger-payment",
+      type: "payment",
+      description: "Card payment",
+      amountCents: -118000,
+      balanceAfterCents: 0,
+      effectiveAt: isoWithOffset(-21, 10, 15),
     },
   ],
   dailyReports: executiveDailyReportDemoRows.slice(0, 2).map((report) => ({

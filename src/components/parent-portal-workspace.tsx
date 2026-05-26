@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, CreditCard, FileText, MessageSquare, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, CreditCard, FileText, MessageSquare, ReceiptText, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,23 @@ type Invoice = {
   status: string;
   dueDate: string | Date;
   totalCents: number;
+};
+
+type Payment = {
+  id: string;
+  amountCents: number;
+  status: string;
+  provider: string;
+  paidAt: string | Date | null;
+};
+
+type LedgerEntry = {
+  id: string;
+  type: string;
+  description: string;
+  amountCents: number;
+  balanceAfterCents: number | null;
+  effectiveAt: string | Date;
 };
 
 type DailyReport = {
@@ -54,7 +71,10 @@ type PortalFamily = {
 
 type Props = {
   family: PortalFamily | null;
+  billingAccount?: { id: string; balanceCents: number; autopayPlaceholder: boolean } | null;
   invoices: Invoice[];
+  payments?: Payment[];
+  ledgerEntries?: LedgerEntry[];
   dailyReports: DailyReport[];
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
@@ -72,7 +92,19 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function ParentPortalWorkspace({ family, invoices, dailyReports, incidents, messages, documents, media = [], demoMode }: Props) {
+export function ParentPortalWorkspace({
+  family,
+  billingAccount,
+  invoices,
+  payments = [],
+  ledgerEntries = [],
+  dailyReports,
+  incidents,
+  messages,
+  documents,
+  media = [],
+  demoMode,
+}: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [subject, setSubject] = useState("Question for the center");
@@ -82,6 +114,7 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
   const unacknowledged = useMemo(() => incidents.filter((incident) => !incident.parentAcknowledgedAt), [incidents]);
+  const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
 
   function showStatus(next: string) {
     setError("");
@@ -207,7 +240,7 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="glass-panel"><CardHeader><CardDescription>Children</CardDescription><CardTitle>{family.children.length}</CardTitle></CardHeader></Card>
+        <Card className="glass-panel"><CardHeader><CardDescription>Current balance</CardDescription><CardTitle>{money(balanceCents)}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Open invoices</CardDescription><CardTitle>{openInvoices.length}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Reports</CardDescription><CardTitle>{dailyReports.length}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Need acknowledgment</CardDescription><CardTitle>{unacknowledged.length}</CardTitle></CardHeader></Card>
@@ -220,6 +253,20 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
             <CardDescription>Stripe Checkout is used when platform keys and the school payout account are ready.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-xs text-muted-foreground">Balance due</div>
+                <div className="mt-1 text-2xl font-semibold">{money(balanceCents)}</div>
+              </div>
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-xs text-muted-foreground">Billing email</div>
+                <div className="mt-1 truncate font-medium">{family.billingEmail ?? family.guardians[0]?.email ?? "Not set"}</div>
+              </div>
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-xs text-muted-foreground">Autopay</div>
+                <div className="mt-1 font-medium">{billingAccount?.autopayPlaceholder ? "Requested" : "Off"}</div>
+              </div>
+            </div>
             {invoices.map((invoice) => (
               <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/40 p-4">
                 <div>
@@ -235,6 +282,43 @@ export function ParentPortalWorkspace({ family, invoices, dailyReports, incident
               </div>
             ))}
             {!invoices.length ? <p className="text-sm text-muted-foreground">No invoices are visible yet.</p> : null}
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <ReceiptText className="size-4 text-primary" />
+                Recent payments
+              </div>
+              <div className="space-y-2">
+                {payments.slice(0, 5).map((payment) => (
+                  <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
+                    <span className="text-muted-foreground">
+                      {payment.provider} · {payment.status} · {formatDate(payment.paidAt)}
+                    </span>
+                    <span className="font-medium">{money(payment.amountCents)}</span>
+                  </div>
+                ))}
+                {!payments.length ? <p className="text-sm text-muted-foreground">No payments are recorded yet.</p> : null}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 text-sm font-medium">Ledger history</div>
+              <div className="space-y-2">
+                {ledgerEntries.slice(0, 6).map((entry) => (
+                  <div key={entry.id} className="grid gap-1 rounded-lg bg-background/35 p-3 text-sm sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <div className="font-medium">{entry.description}</div>
+                      <div className="text-xs text-muted-foreground">{entry.type} · {formatDate(entry.effectiveAt)}</div>
+                    </div>
+                    <div className="text-right font-medium">
+                      {money(entry.amountCents)}
+                      <div className="text-xs text-muted-foreground">
+                        Balance {entry.balanceAfterCents === null ? "not set" : money(entry.balanceAfterCents)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!ledgerEntries.length ? <p className="text-sm text-muted-foreground">No ledger entries are visible yet.</p> : null}
+              </div>
+            </div>
           </CardContent>
         </Card>
 

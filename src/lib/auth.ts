@@ -210,6 +210,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (!user) return null;
 
   const staffCenterIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
+  const hasStaffCenterAssignment = staffCenterIds.length > 0;
   let centerIds = staffCenterIds;
   let accessScope: CurrentUser["accessScope"] = staffCenterIds.length ? "center" : "none";
   const activeGrants = user.accessGrants as ActiveAccessGrant[];
@@ -219,13 +220,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
   } else if (activeGrants.length) {
-    const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role);
+    const allowBroadGrantAccess = canUseTenantWideAccessRole(user.role) && !hasStaffCenterAssignment;
+    const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role, {
+      allowBroadGrantAccess,
+    });
     const hasAllowedTenantGrant =
-      canUseTenantWideAccessRole(user.role) &&
+      allowBroadGrantAccess &&
       activeGrants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === user.tenantId);
     centerIds = unique([...staffCenterIds, ...grantCenterIds]);
     accessScope = hasAllowedTenantGrant ? "tenant" : centerIds.length ? "scoped" : "none";
-  } else if (tenantWideAccessRoles.has(user.role)) {
+  } else if (tenantWideAccessRoles.has(user.role) && !hasStaffCenterAssignment) {
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId: user.tenantId } },
       select: { id: true },
@@ -248,10 +252,20 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   };
 }
 
-async function resolveAccessGrantCenterIds(tenantId: string, grants: ActiveAccessGrant[], role: UserRole) {
+async function resolveAccessGrantCenterIds(
+  tenantId: string,
+  grants: ActiveAccessGrant[],
+  role: UserRole,
+  options: { allowBroadGrantAccess?: boolean } = {},
+) {
+  const usableGrants = options.allowBroadGrantAccess
+    ? grants
+    : grants.filter((grant) => grant.scopeType === "CENTER" || grant.centerId);
+
   if (
+    options.allowBroadGrantAccess &&
     canUseTenantWideAccessRole(role) &&
-    grants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === tenantId)
+    usableGrants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === tenantId)
   ) {
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId } },
@@ -260,10 +274,10 @@ async function resolveAccessGrantCenterIds(tenantId: string, grants: ActiveAcces
     return tenantCenters.map((center) => center.id);
   }
 
-  const centerIds = unique(grants.filter((grant) => grant.centerId).map((grant) => grant.centerId as string));
-  const ownerGroupIds = unique(grants.filter((grant) => grant.ownerGroupId).map((grant) => grant.ownerGroupId as string));
-  const organizationIds = unique(grants.filter((grant) => grant.organizationId).map((grant) => grant.organizationId as string));
-  const brandIds = unique(grants.filter((grant) => grant.brandId).map((grant) => grant.brandId as string));
+  const centerIds = unique(usableGrants.filter((grant) => grant.centerId).map((grant) => grant.centerId as string));
+  const ownerGroupIds = unique(usableGrants.filter((grant) => grant.ownerGroupId).map((grant) => grant.ownerGroupId as string));
+  const organizationIds = unique(usableGrants.filter((grant) => grant.organizationId).map((grant) => grant.organizationId as string));
+  const brandIds = unique(usableGrants.filter((grant) => grant.brandId).map((grant) => grant.brandId as string));
   const ors = [
     centerIds.length ? { id: { in: centerIds }, organization: { tenantId } } : null,
     ownerGroupIds.length ? { ownerGroupId: { in: ownerGroupIds }, organization: { tenantId } } : null,

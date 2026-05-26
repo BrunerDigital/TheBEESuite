@@ -2,6 +2,16 @@ import type { ModuleSlug } from "@/lib/demo-data";
 
 export const executiveRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "READ_ONLY_AUDITOR"]);
 
+type AccessSubject =
+  | string
+  | null
+  | undefined
+  | {
+      role?: string | null;
+      accessScope?: string | null;
+      centerIds?: string[] | null;
+    };
+
 const enrollmentRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BILLING_ADMIN", "READ_ONLY_AUDITOR"]);
 const schoolAdminRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "READ_ONLY_AUDITOR"]);
 const classroomRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "TEACHER", "READ_ONLY_AUDITOR"]);
@@ -70,25 +80,42 @@ export function isExecutiveRole(role?: string | null) {
   return Boolean(role && executiveRoles.has(role));
 }
 
-export function canAccessModule(role: string | null | undefined, slug: string) {
+function getRole(subject: AccessSubject) {
+  return typeof subject === "string" || subject == null ? subject : subject.role;
+}
+
+function hasTenantWideUiAccess(subject: AccessSubject) {
+  const role = getRole(subject);
+  if (role === "PLATFORM_OWNER") return true;
+  if (!isExecutiveRole(role)) return false;
+  if (typeof subject === "string" || subject == null) return false;
+  return subject.accessScope === "tenant" || subject.accessScope === "platform";
+}
+
+export function canAccessModule(subject: AccessSubject, slug: string) {
+  const role = getRole(subject);
   if (!role) return false;
   if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
-  if (isExecutiveRole(role)) return true;
+  if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
+  if (hasTenantWideUiAccess(subject)) return true;
   if (parentRoles.has(role)) return parentModules.has(slug as ModuleSlug);
   if (enrollmentModules.has(slug as ModuleSlug)) return enrollmentRoles.has(role);
   if (schoolAdminModules.has(slug as ModuleSlug)) return schoolAdminRoles.has(role);
   if (classroomModules.has(slug as ModuleSlug)) return classroomRoles.has(role);
   if (billingModules.has(slug as ModuleSlug)) return billingRoles.has(role);
-  if (executiveOnlyModules.has(slug as ModuleSlug)) return false;
   return false;
 }
 
-export function dashboardLensesForRole(role: string | null | undefined) {
+export function dashboardLensesForRole(subject: AccessSubject) {
+  const role = getRole(subject);
+  if (!hasTenantWideUiAccess(subject)) {
+    if (role === "TEACHER") return ["teacher"] as const;
+    if (role === "PARENT_GUARDIAN") return ["parent"] as const;
+    return ["director"] as const;
+  }
   if (role === "PLATFORM_OWNER") return ["platform", "brand", "regional", "director"] as const;
   if (role === "BRAND_ADMIN") return ["brand", "regional", "director"] as const;
   if (role === "REGIONAL_MANAGER" || role === "READ_ONLY_AUDITOR") return ["regional", "director"] as const;
-  if (role === "TEACHER") return ["teacher"] as const;
-  if (role === "PARENT_GUARDIAN") return ["parent"] as const;
   return ["director"] as const;
 }

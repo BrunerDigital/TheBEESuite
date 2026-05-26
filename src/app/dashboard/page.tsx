@@ -309,7 +309,7 @@ export default async function DashboardPage() {
       sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
     })),
     showExecutiveDemoData,
-    visibleLenses: dashboardLensesForRole(user.role),
+    visibleLenses: dashboardLensesForRole(user),
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
     inquiryEmbed,
   };

@@ -36,6 +36,8 @@ type ShellUser = {
   name: string;
   email: string;
   role: string;
+  accessScope?: string;
+  centerIds?: string[];
 };
 
 type NotificationSummary = {
@@ -171,12 +173,12 @@ function NotificationDropdown() {
   );
 }
 
-function SidebarNav({ close, role }: { close?: () => void; role?: string }) {
+function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: ShellUser }) {
   const pathname = usePathname();
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(([, slug]) => canAccessModule(role, slug)),
+      items: group.items.filter(([, slug]) => canAccessModule(currentUser, slug)),
     }))
     .filter((group) => group.items.length);
 
@@ -243,7 +245,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   return (
     <div className="min-h-screen">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r bg-sidebar/90 backdrop-blur-xl lg:block">
-        <SidebarNav role={currentUser?.role} />
+        <SidebarNav currentUser={currentUser} />
       </aside>
       <div className="lg:pl-72">
         <header className="sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
@@ -258,7 +260,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               </SheetTrigger>
               <SheetContent side="left" className="w-80 p-0">
                 <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SidebarNav role={currentUser?.role} />
+                <SidebarNav currentUser={currentUser} />
               </SheetContent>
             </Sheet>
             <div className="hidden flex-1 items-center md:flex">

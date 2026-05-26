@@ -1776,7 +1776,7 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
     redirect(`/login?next=/${encodeURIComponent(slug)}`);
   }
 
-  if (!canAccessModule(user.role, slug)) {
+  if (!canAccessModule(user, slug)) {
     notFound();
   }
 

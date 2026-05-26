@@ -44,7 +44,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
       setStatus(
-        `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, and ${summary?.createdClassrooms ?? 0} classrooms.`,
+        `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
       );
     });
   }
@@ -54,7 +54,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import ProCare Family Accounts</CardTitle>
         <CardDescription>
-          Upload a ProCare CSV export or encrypted .v10 export to create or update families, guardians, children, classrooms, billing accounts, and starting ledger balances.
+          Upload a ProCare CSV export or encrypted .v10 export to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -96,18 +96,25 @@ Production hardening to do before heavy media use:
 
 ## ProCare Family Import
 
-Directors and operations users can import family account data from ProCare CSV exports from the family profile page.
+Directors and operations users can import family account data from ProCare CSV exports or encrypted `.v10` exports from the family profile page. `.v10` passwords are used server-side for that upload only and are not saved.
 
 Supported matching fields include common aliases for:
 
 - Family/account name
 - Child/student name
 - Guardian/parent name
+- Primary and secondary payer/guardian
 - Email
 - Phone
 - Address
 - DOB
 - Enrollment/start date
+- Classroom/room
+- Staff/teacher/employee
+- Authorized pickup
+- Emergency contact
+- Medical/allergy notes
+- Attendance and sign-in/out
 - Account balance
 
 The import creates or updates:
@@ -115,12 +122,21 @@ The import creates or updates:
 - `Family`
 - `Guardian`
 - `Child`
+- `Classroom`
+- `StaffProfile`
+- `AuthorizedPickup`
+- `EmergencyContact`
+- `ChildMedicalNote`
+- `Allergy`
+- `AttendanceRecord`
+- `CheckInOutLog`
 - `BillingAccount`
+- `Invoice`
 - `LedgerEntry`
 - `ProcareImportBatch`
 - `ProcareImportRow`
 
-Every import row is recorded so directors can review which rows imported and which rows errored.
+Every import row is recorded so directors can review which rows imported and which rows errored. ProCare external IDs and unmapped columns are preserved in source metadata/custom fields so records remain traceable after cutover.
 
 ## Manual Family and Student Intake
 
@@ -157,7 +173,9 @@ The schema changes are in:
 
 ```text
 prisma/migrations/202605200900_parent_engagement_kiosk/migration.sql
+prisma/migrations/20260526153000_procare_source_metadata/migration.sql
 supabase/migrations/202605200900_parent_engagement_kiosk.sql
+supabase/migrations/20260526153000_procare_source_metadata.sql
 ```
 
 Apply the migration to Supabase before enabling the kiosk, photo uploads, ProCare import, or ledger screens in production.

@@ -190,6 +190,9 @@ model Classroom {
   ageGroup  String
   capacity  Int
   ratioRule String?
+  sourceSystem String?
+  externalId   String?
+  customFields Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -201,6 +204,8 @@ model Classroom {
   attendance   AttendanceRecord[]
   checkLogs    CheckInOutLog[]
   media        ChildMedia[]
+
+  @@index([centerId, sourceSystem, externalId])
 }
 
 model User {
@@ -351,6 +356,9 @@ model Family {
   billingEmail String?
   notes        String?
   custodyNotes String?
+  sourceSystem String?
+  externalId   String?
+  customFields Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -362,6 +370,8 @@ model Family {
   messages          Message[]
   documents         Document[]
   notesList         Note[]
+
+  @@index([centerId, sourceSystem, externalId])
 }
 
 model Guardian {
@@ -378,12 +388,16 @@ model Guardian {
   checkInPinHash         String?
   checkInPinSetAt        DateTime?
   checkInPinSetById      String?
+  sourceSystem           String?
+  externalId             String?
+  customFields           Json?
 
   family    Family          @relation(fields: [familyId], references: [id])
   user      User?           @relation(fields: [userId], references: [id])
   checkLogs CheckInOutLog[]
 
   @@index([checkInPinHash])
+  @@index([sourceSystem, externalId])
 }
 
 model Child {
@@ -403,6 +417,9 @@ model Child {
   feedingNotes         String?
   pottyNotes           String?
   developmentalNotes   String?
+  sourceSystem         String?
+  externalId           String?
+  customFields         Json?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
@@ -417,6 +434,8 @@ model Child {
   incidents    IncidentReport[]
   documents    Document[]
   media        ChildMedia[]
+
+  @@index([sourceSystem, externalId])
 }
 
 model AuthorizedPickup {
@@ -426,8 +445,13 @@ model AuthorizedPickup {
   phone             String?
   relation          String?
   verificationNotes String?
+  sourceSystem      String?
+  externalId        String?
+  customFields      Json?
 
   family Family @relation(fields: [familyId], references: [id])
+
+  @@index([sourceSystem, externalId])
 }
 
 model EmergencyContact {
@@ -436,8 +460,13 @@ model EmergencyContact {
   fullName String
   phone    String
   relation String
+  sourceSystem String?
+  externalId   String?
+  customFields Json?
 
   family Family @relation(fields: [familyId], references: [id])
+
+  @@index([sourceSystem, externalId])
 }
 
 model ChildMedicalNote {
@@ -692,9 +721,15 @@ model AttendanceRecord {
   date          DateTime
   status        String
   absenceReason String?
+  sourceSystem  String?
+  externalId    String?
+  metadata      Json?
 
   child     Child?     @relation(fields: [childId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
+
+  @@index([sourceSystem, externalId])
+  @@index([classroomId, date])
 }
 
 model CheckInOutLog {
@@ -710,6 +745,9 @@ model CheckInOutLog {
   verificationStatus   String?
   pinVerified          Boolean  @default(false)
   notes                String?
+  sourceSystem         String?
+  externalId           String?
+  metadata             Json?
 
   child     Child      @relation(fields: [childId], references: [id])
   center    Center?    @relation(fields: [centerId], references: [id])
@@ -719,6 +757,7 @@ model CheckInOutLog {
   @@index([centerId, occurredAt])
   @@index([childId, occurredAt])
   @@index([guardianId, occurredAt])
+  @@index([sourceSystem, externalId])
 }
 
 model DailyReport {
@@ -831,12 +870,17 @@ model StaffProfile {
   backgroundCheckStatus       String?
   performanceNotesPlaceholder String?
   ptoAvailabilityPlaceholder  Json?
+  sourceSystem                String?
+  externalId                  String?
+  customFields                Json?
 
   user           User            @relation(fields: [userId], references: [id])
   center         Center          @relation(fields: [centerId], references: [id])
   classroom      Classroom?      @relation(fields: [classroomId], references: [id])
   schedules      StaffSchedule[]
   certifications Certification[]
+
+  @@index([centerId, sourceSystem, externalId])
 }
 
 model StaffSchedule {
@@ -867,11 +911,16 @@ model BillingAccount {
   balanceCents       Int       @default(0)
   autopayPlaceholder Boolean   @default(false)
   ledgerSyncedAt     DateTime?
+  sourceSystem       String?
+  externalId         String?
+  customFields       Json?
 
   family        Family        @relation(fields: [familyId], references: [id])
   invoices      Invoice[]
   payments      Payment[]
   ledgerEntries LedgerEntry[]
+
+  @@index([sourceSystem, externalId])
 }
 
 model Invoice {
@@ -881,11 +930,16 @@ model Invoice {
   status           PaymentStatus
   dueDate          DateTime
   totalCents       Int
+  sourceSystem     String?
+  externalId       String?
+  customFields     Json?
   createdAt        DateTime      @default(now())
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
   items          InvoiceItem[]
   ledgerEntries  LedgerEntry[]
+
+  @@index([sourceSystem, externalId])
 }
 
 model InvoiceItem {

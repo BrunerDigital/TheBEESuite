@@ -22,6 +22,7 @@
     "kidcity:ensure-executives": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-executives.ts",
     "kidcity:backfill-center-emails": "tsx -r tsconfig-paths/register scripts/backfill-center-notification-emails.ts",
     "kidcity:sync-open-schools": "tsx -r tsconfig-paths/register scripts/sync-kidcity-open-schools.ts",
+    "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",
     "supabase:setup-storage": "tsx -r tsconfig-paths/register scripts/setup-supabase-storage.ts",
     "supabase:migrate-child-media": "tsx -r tsconfig-paths/register scripts/migrate-inline-child-media-to-storage.ts"
   },

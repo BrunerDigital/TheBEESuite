@@ -4,9 +4,17 @@ The Bee Suite is structured as a white-label, multi-tenant childcare operating s
 
 ## Tenant Hierarchy
 
-Platform owner -> tenant -> brand/franchise -> organization -> center/location -> classroom -> staff/family/child.
+Platform owner -> tenant -> brand/franchise -> organization -> owner group -> center/location -> classroom -> staff/family/child.
 
-The Prisma schema models this hierarchy with `Tenant`, `Brand`, `Organization`, `Center`, `Classroom`, `User`, `Family`, `Guardian`, and `Child`. Production authorization should scope every query by tenant and then by assigned organization, center, classroom, family, or child.
+The Prisma schema models this hierarchy with `Tenant`, `Brand`, `Organization`, `OwnerGroup`, `Center`, `Classroom`, `User`, `Family`, `Guardian`, and `Child`. Production authorization scopes every query by tenant first, then by explicit access grants for brand, organization, owner group, center, classroom, family, or child.
+
+`OwnerGroup` is the franchisee/operator container. It supports a single-location owner, a multi-location operator who owns a few centers inside a larger brand, and corporate/franchise network ownership for rollups like Kid City USA. Each center can be assigned to one owner group while still belonging to the larger brand and organization.
+
+White-label data is layered:
+
+- `WhiteLabelSettings`: legacy brand-level settings kept for compatibility.
+- `BrandCustomization`: tenant, brand, organization, owner group, or center-level overrides for colors, names, domains, portal copy, sender placeholders, legal footer, and login surfaces.
+- `BrandAsset`: logo, favicon, mascot, login image, and parent portal media references scoped to the correct tenant, brand, owner group, or center.
 
 ## Application Structure
 
@@ -23,7 +31,7 @@ The Prisma schema models this hierarchy with `Tenant`, `Brand`, `Organization`, 
 
 The v1 schema includes explicit roles for platform owner, brand/franchise admin, regional manager, center director, assistant director, teacher, billing/admin staff, parent/guardian, authorized pickup, and read-only auditor.
 
-Production enforcement should happen in server actions, route handlers, database policies where applicable, and UI field-level guards. Sensitive reads should create audit log events.
+`UserAccessGrant` adds explicit scoped access on top of roles. A user can be granted access at tenant, brand, organization, owner group, or center level, which lets a franchise owner see only their locations while corporate admins retain full network visibility. Production enforcement happens in server actions, route handlers, database policies where applicable, and UI field-level guards. Sensitive reads should create audit log events.
 
 ## Sensitive Data
 

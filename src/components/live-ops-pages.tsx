@@ -285,6 +285,15 @@ export type TeamPermissionsData = {
     email: string;
     role: string;
     isActive: boolean;
+    accessGrants: Array<{
+      id: string;
+      role: string;
+      scopeType: string;
+      brand: { name: string } | null;
+      organization: { name: string } | null;
+      ownerGroup: { name: string } | null;
+      center: { name: string; crmLocationId: string | null } | null;
+    }>;
     staffProfile: {
       title: string;
       center: { name: string; crmLocationId: string | null } | null;
@@ -324,6 +333,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Center</TableHead>
+                <TableHead>Access scope</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -336,6 +346,20 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
                   </TableCell>
                   <TableCell>{user.role.replaceAll("_", " ")}</TableCell>
                   <TableCell>{user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? "Organization-wide"}</TableCell>
+                  <TableCell>
+                    {user.accessGrants.length ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {user.accessGrants.slice(0, 3).map((grant) => (
+                          <Badge key={grant.id} variant="outline">
+                            {grant.scopeType.replaceAll("_", " ")}: {grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "Tenant"}
+                          </Badge>
+                        ))}
+                        {user.accessGrants.length > 3 ? <Badge variant="outline">+{user.accessGrants.length - 3}</Badge> : null}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Role fallback</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
                   </TableCell>
@@ -364,7 +388,28 @@ export type AgencyAdminData = {
     state: string | null;
     email: string | null;
     licensedCapacity: number;
+    ownerGroup: { name: string; ownerType: string } | null;
     _count: { leads: number; staff: number; classrooms: number };
+  }>;
+  ownerGroups: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    ownerType: string;
+    billingEmail: string | null;
+    contactName: string | null;
+    status: string;
+    _count: { centers: number; accessGrants: number };
+  }>;
+  accessGrants: Array<{
+    id: string;
+    role: string;
+    scopeType: string;
+    user: { name: string; email: string };
+    brand: { name: string } | null;
+    organization: { name: string } | null;
+    ownerGroup: { name: string } | null;
+    center: { name: string; crmLocationId: string | null } | null;
   }>;
 };
 
@@ -387,6 +432,80 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         <StatCard label="Users" value={data.stats.users} />
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
       </div>
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Ownership Containers</CardTitle>
+            <CardDescription>Franchisees, multi-location owners, and single-center operators under a brand</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Owner group</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Centers</TableHead>
+                  <TableHead>Users</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.ownerGroups.map((group) => (
+                  <TableRow key={group.id}>
+                    <TableCell>
+                      <div className="font-medium">{group.name}</div>
+                      <div className="text-xs text-muted-foreground">{group.contactName ?? group.billingEmail ?? group.slug}</div>
+                    </TableCell>
+                    <TableCell>{group.ownerType.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{group._count.centers}</TableCell>
+                    <TableCell>{group._count.accessGrants}</TableCell>
+                  </TableRow>
+                ))}
+                {!data.ownerGroups.length ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground">No owner groups have been created yet.</TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Scoped Access Grants</CardTitle>
+            <CardDescription>Explicit visibility rules layered over roles</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Scope</TableHead>
+                  <TableHead>Container</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.accessGrants.map((grant) => (
+                  <TableRow key={grant.id}>
+                    <TableCell>
+                      <div className="font-medium">{grant.user.name}</div>
+                      <div className="text-xs text-muted-foreground">{grant.user.email}</div>
+                    </TableCell>
+                    <TableCell>{grant.role.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{grant.scopeType.replaceAll("_", " ")}</TableCell>
+                    <TableCell>{grant.center?.crmLocationId ?? grant.center?.name ?? grant.ownerGroup?.name ?? grant.organization?.name ?? grant.brand?.name ?? "Tenant"}</TableCell>
+                  </TableRow>
+                ))}
+                {!data.accessGrants.length ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-muted-foreground">No explicit grants yet. Legacy role fallbacks still apply.</TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Center Profiles</CardTitle>
@@ -397,6 +516,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
             <TableHeader>
               <TableRow>
                 <TableHead>Center</TableHead>
+                <TableHead>Owner group</TableHead>
                 <TableHead>Place</TableHead>
                 <TableHead>Email routing</TableHead>
                 <TableHead>Leads</TableHead>
@@ -411,6 +531,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                     <div className="font-medium">{center.crmLocationId ?? center.name}</div>
                     <div className="text-xs text-muted-foreground">{center.name}</div>
                   </TableCell>
+                  <TableCell>{center.ownerGroup?.name ?? "Unassigned"}</TableCell>
                   <TableCell>{[center.city, center.state].filter(Boolean).join(", ") || "Not set"}</TableCell>
                   <TableCell>
                     <Badge variant={center.email ? "default" : "outline"}>{center.email ? "Ready" : "Missing"}</Badge>
@@ -2705,6 +2826,32 @@ export type WhiteLabelPageData = {
     privacyUrl: string | null;
     brand: { name: string; slug: string };
   }>;
+  customizations: Array<{
+    id: string;
+    scopeType: string;
+    brandName: string;
+    primaryColor: string;
+    accentColor: string;
+    themeMode: string;
+    emailSenderPlaceholder: string | null;
+    customDomainPlaceholder: string | null;
+    parentPortalName: string | null;
+    loginScreenTitle: string | null;
+    legalFooterText: string | null;
+    brand: { name: string; slug: string } | null;
+    ownerGroup: { name: string } | null;
+    center: { name: string; crmLocationId: string | null } | null;
+  }>;
+  assets: Array<{
+    id: string;
+    assetType: string;
+    url: string | null;
+    storageKey: string | null;
+    altText: string | null;
+    brand: { name: string } | null;
+    ownerGroup: { name: string } | null;
+    center: { name: string; crmLocationId: string | null } | null;
+  }>;
 };
 
 export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
@@ -2720,6 +2867,88 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
           Brand, color, sender, custom domain, portal, login, notification, and legal footer settings for the SaaS platform.
         </p>
       </section>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <StatCard label="Legacy brand settings" value={data.settings.length} detail="Backward-compatible white-label records" />
+        <StatCard label="Customization layers" value={data.customizations.length} detail="Brand, owner group, and center-scoped overrides" />
+        <StatCard label="Brand assets" value={data.assets.length} detail="Logos, favicon, mascot, and portal media references" />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Customization Layers</CardTitle>
+          <CardDescription>Brand defaults can be overridden by owner groups or individual schools without mixing tenants.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Scope</TableHead>
+                <TableHead>Branding</TableHead>
+                <TableHead>Container</TableHead>
+                <TableHead>Portal</TableHead>
+                <TableHead>Domain</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.customizations.map((setting) => (
+                <TableRow key={setting.id}>
+                  <TableCell><Badge variant="outline">{setting.scopeType}</Badge></TableCell>
+                  <TableCell>
+                    <div className="font-medium">{setting.brandName}</div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="size-4 rounded-full border" style={{ backgroundColor: setting.primaryColor }} />
+                      {setting.primaryColor}
+                      <span className="size-4 rounded-full border" style={{ backgroundColor: setting.accentColor }} />
+                      {setting.accentColor}
+                    </div>
+                  </TableCell>
+                  <TableCell>{setting.center?.crmLocationId ?? setting.center?.name ?? setting.ownerGroup?.name ?? setting.brand?.name ?? "Tenant"}</TableCell>
+                  <TableCell>{setting.parentPortalName ?? setting.loginScreenTitle ?? "Default portal"}</TableCell>
+                  <TableCell>{setting.customDomainPlaceholder || "Not set"}</TableCell>
+                </TableRow>
+              ))}
+              {!data.customizations.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">No layered customization records yet.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Asset Registry</CardTitle>
+          <CardDescription>Where logos, mascot art, favicon, login, and parent portal assets are attached.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Asset</TableHead>
+                <TableHead>Container</TableHead>
+                <TableHead>Location</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.assets.map((asset) => (
+                <TableRow key={asset.id}>
+                  <TableCell>
+                    <div className="font-medium">{asset.assetType.replaceAll("_", " ")}</div>
+                    <div className="text-xs text-muted-foreground">{asset.altText ?? "No alt text"}</div>
+                  </TableCell>
+                  <TableCell>{asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Tenant"}</TableCell>
+                  <TableCell>{asset.storageKey ?? asset.url ?? "Upload pending"}</TableCell>
+                </TableRow>
+              ))}
+              {!data.assets.length ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="text-muted-foreground">No assets have been attached yet.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         {data.settings.map((setting) => (
           <Card key={setting.id} className="glass-panel">

@@ -23,6 +23,8 @@ export type CurrentUser = {
   organizationId: string | null;
   centerIds: string[];
   primaryCenterId: string | null;
+  accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
+  accessGrantCount: number;
 };
 
 const allCenterRoles = new Set<UserRole>([
@@ -79,6 +81,19 @@ const executiveDemoEmails = new Set([
   "audrey@kidcityusa.com",
   "kayleen@kidcityusa.com",
 ]);
+
+type ActiveAccessGrant = {
+  tenantId: string;
+  brandId: string | null;
+  organizationId: string | null;
+  ownerGroupId: string | null;
+  centerId: string | null;
+  scopeType: string;
+};
+
+function unique(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
 
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
@@ -153,6 +168,7 @@ export async function getSession() {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await getSession();
   if (!session) return null;
+  const now = new Date();
 
   const user = await prisma.user.findFirst({
     where: {
@@ -164,22 +180,46 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       staffProfile: {
         select: { centerId: true },
       },
+      accessGrants: {
+        where: {
+          isActive: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+        },
+        select: {
+          tenantId: true,
+          brandId: true,
+          organizationId: true,
+          ownerGroupId: true,
+          centerId: true,
+          scopeType: true,
+        },
+      },
     },
   });
 
   if (!user) return null;
 
-  let centerIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
-  if (user.role !== UserRole.PLATFORM_OWNER && allCenterRoles.has(user.role)) {
+  const staffCenterIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
+  let centerIds = staffCenterIds;
+  let accessScope: CurrentUser["accessScope"] = staffCenterIds.length ? "center" : "none";
+  const activeGrants = user.accessGrants as ActiveAccessGrant[];
+
+  if (user.role === UserRole.PLATFORM_OWNER) {
+    const allCenters = await prisma.center.findMany({ select: { id: true } });
+    centerIds = allCenters.map((center) => center.id);
+    accessScope = "platform";
+  } else if (activeGrants.length) {
+    const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants);
+    centerIds = unique([...staffCenterIds, ...grantCenterIds]);
+    accessScope = activeGrants.some((grant) => grant.scopeType === "TENANT") ? "tenant" : centerIds.length ? "scoped" : "none";
+  } else if (allCenterRoles.has(user.role)) {
     const tenantCenters = await prisma.center.findMany({
-      where: {
-        organization: {
-          tenantId: user.tenantId,
-        },
-      },
+      where: { organization: { tenantId: user.tenantId } },
       select: { id: true },
     });
     centerIds = tenantCenters.map((center) => center.id);
+    accessScope = "tenant";
   }
 
   return {
@@ -191,7 +231,37 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     organizationId: user.organizationId,
     centerIds,
     primaryCenterId: centerIds[0] ?? null,
+    accessScope,
+    accessGrantCount: activeGrants.length,
   };
+}
+
+async function resolveAccessGrantCenterIds(tenantId: string, grants: ActiveAccessGrant[]) {
+  if (grants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === tenantId)) {
+    const tenantCenters = await prisma.center.findMany({
+      where: { organization: { tenantId } },
+      select: { id: true },
+    });
+    return tenantCenters.map((center) => center.id);
+  }
+
+  const centerIds = unique(grants.filter((grant) => grant.centerId).map((grant) => grant.centerId as string));
+  const ownerGroupIds = unique(grants.filter((grant) => grant.ownerGroupId).map((grant) => grant.ownerGroupId as string));
+  const organizationIds = unique(grants.filter((grant) => grant.organizationId).map((grant) => grant.organizationId as string));
+  const brandIds = unique(grants.filter((grant) => grant.brandId).map((grant) => grant.brandId as string));
+  const ors = [
+    centerIds.length ? { id: { in: centerIds }, organization: { tenantId } } : null,
+    ownerGroupIds.length ? { ownerGroupId: { in: ownerGroupIds }, organization: { tenantId } } : null,
+    organizationIds.length ? { organizationId: { in: organizationIds }, organization: { tenantId } } : null,
+    brandIds.length ? { organization: { tenantId, brandId: { in: brandIds } } } : null,
+  ].filter((where): where is NonNullable<typeof where> => Boolean(where));
+
+  if (!ors.length) return [];
+  const centers = await prisma.center.findMany({
+    where: { OR: ors },
+    select: { id: true },
+  });
+  return centers.map((center) => center.id);
 }
 
 export async function requireCurrentUser() {
@@ -200,7 +270,9 @@ export async function requireCurrentUser() {
   return user;
 }
 
-export function canAccessAllCenters(user: Pick<CurrentUser, "role">) {
+export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope">>) {
+  if (user.role === UserRole.PLATFORM_OWNER) return true;
+  if (user.accessScope) return user.accessScope === "tenant";
   return allCenterRoles.has(user.role);
 }
 
@@ -218,7 +290,7 @@ export function getLeadScopeWhere(user: CurrentUser) {
 }
 
 export function canAccessCenter(user: CurrentUser, centerId: string) {
-  return user.role === UserRole.PLATFORM_OWNER || user.centerIds.includes(centerId);
+  return user.role === UserRole.PLATFORM_OWNER || user.accessScope === "tenant" || user.centerIds.includes(centerId);
 }
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {

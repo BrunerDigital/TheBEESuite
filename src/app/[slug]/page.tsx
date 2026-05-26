@@ -78,6 +78,12 @@ async function getVisibleCenters(user: CurrentUser) {
       state: true,
       email: true,
       licensedCapacity: true,
+      ownerGroup: {
+        select: {
+          name: true,
+          ownerType: true,
+        },
+      },
       _count: {
         select: {
           leads: true,
@@ -886,13 +892,54 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "white-label") {
-    const settings = await prisma.whiteLabelSettings.findMany({
-      where: { brand: { tenantId: user.tenantId } },
-      orderBy: { brandName: "asc" },
-      include: { brand: { select: { name: true, slug: true } } },
-    });
+    const customizationScope = tenantWide
+      ? { tenantId: user.tenantId }
+      : {
+          tenantId: user.tenantId,
+          OR: [
+            { centerId: scopedCenterIds },
+            { ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
+            { organizationId: user.organizationId ?? "__none__" },
+          ],
+        };
+    const [settings, customizations, assets] = await Promise.all([
+      prisma.whiteLabelSettings.findMany({
+        where: { brand: { tenantId: user.tenantId } },
+        orderBy: { brandName: "asc" },
+        include: { brand: { select: { name: true, slug: true } } },
+      }),
+      prisma.brandCustomization.findMany({
+        where: customizationScope,
+        orderBy: [{ scopeType: "asc" }, { brandName: "asc" }],
+        take: 100,
+        include: {
+          brand: { select: { name: true, slug: true } },
+          ownerGroup: { select: { name: true } },
+          center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
+      prisma.brandAsset.findMany({
+        where: tenantWide
+          ? { tenantId: user.tenantId }
+          : {
+              tenantId: user.tenantId,
+              OR: [
+                { centerId: scopedCenterIds },
+                { ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
+                { brand: { orgs: { some: { id: user.organizationId ?? "__none__" } } } },
+              ],
+            },
+        orderBy: [{ assetType: "asc" }, { createdAt: "desc" }],
+        take: 100,
+        include: {
+          brand: { select: { name: true } },
+          ownerGroup: { select: { name: true } },
+          center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
+    ]);
 
-    return <WhiteLabelPage data={{ settings }} />;
+    return <WhiteLabelPage data={{ settings, customizations, assets }} />;
   }
 
   if (slug === "billing-settings") {
@@ -1030,6 +1077,20 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         orderBy: [{ role: "asc" }, { name: "asc" }],
         take: 250,
         include: {
+          accessGrants: {
+            where: {
+              isActive: true,
+              OR: [{ startsAt: null }, { startsAt: { lte: today } }],
+              AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: today } }] }],
+            },
+            orderBy: [{ scopeType: "asc" }, { createdAt: "asc" }],
+            include: {
+              brand: { select: { name: true } },
+              organization: { select: { name: true } },
+              ownerGroup: { select: { name: true } },
+              center: { select: { name: true, crmLocationId: true } },
+            },
+          },
           staffProfile: {
             select: {
               title: true,
@@ -1062,7 +1123,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "agency-admin") {
-    const [organizations, users, leads] = await Promise.all([
+    const [organizations, users, leads, ownerGroups, accessGrants] = await Promise.all([
       prisma.organization.count({
         where: tenantWide ? { tenantId: user.tenantId } : { id: user.organizationId ?? "__none__" },
       }),
@@ -1072,6 +1133,48 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } },
       }),
       prisma.lead.count({ where: leadWhere }),
+      prisma.ownerGroup.findMany({
+        where: tenantWide
+          ? { tenantId: user.tenantId }
+          : {
+              tenantId: user.tenantId,
+              centers: { some: { id: scopedCenterIds } },
+            },
+        orderBy: [{ status: "asc" }, { name: "asc" }],
+        take: 100,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          ownerType: true,
+          billingEmail: true,
+          contactName: true,
+          status: true,
+          _count: { select: { centers: true, accessGrants: true } },
+        },
+      }),
+      prisma.userAccessGrant.findMany({
+        where: tenantWide
+          ? { tenantId: user.tenantId, isActive: true }
+          : {
+              tenantId: user.tenantId,
+              isActive: true,
+              OR: [
+                { centerId: scopedCenterIds },
+                { ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
+                { user: { staffProfile: { centerId: scopedCenterIds } } },
+              ],
+            },
+        orderBy: [{ scopeType: "asc" }, { createdAt: "desc" }],
+        take: 100,
+        include: {
+          user: { select: { name: true, email: true } },
+          brand: { select: { name: true } },
+          organization: { select: { name: true } },
+          ownerGroup: { select: { name: true } },
+          center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
     ]);
 
     return (
@@ -1084,6 +1187,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             leads,
           },
           centers: centers.slice(0, 150),
+          ownerGroups,
+          accessGrants,
         }}
       />
     );

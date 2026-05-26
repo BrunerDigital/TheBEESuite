@@ -60,11 +60,15 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  brands        Brand[]
-  organizations Organization[]
-  users         User[]
-  auditLogs     AuditLog[]
-  integrations  Integration[]
+  brands              Brand[]
+  organizations       Organization[]
+  users               User[]
+  auditLogs           AuditLog[]
+  integrations        Integration[]
+  ownerGroups         OwnerGroup[]
+  accessGrants        UserAccessGrant[]
+  brandAssets         BrandAsset[]
+  brandCustomizations BrandCustomization[]
 }
 
 model Brand {
@@ -75,11 +79,15 @@ model Brand {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant      Tenant               @relation(fields: [tenantId], references: [id])
-  orgs        Organization[]
-  settings    WhiteLabelSettings?
-  campaigns   Campaign[]
-  automations Automation[]
+  tenant         Tenant               @relation(fields: [tenantId], references: [id])
+  orgs           Organization[]
+  settings       WhiteLabelSettings?
+  ownerGroups    OwnerGroup[]
+  accessGrants   UserAccessGrant[]
+  assets         BrandAsset[]
+  customizations BrandCustomization[]
+  campaigns      Campaign[]
+  automations    Automation[]
 
   @@unique([tenantId, slug])
 }
@@ -92,48 +100,87 @@ model Organization {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant  @relation(fields: [tenantId], references: [id])
-  brand   Brand?  @relation(fields: [brandId], references: [id])
-  centers Center[]
-  users   User[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  brand               Brand?               @relation(fields: [brandId], references: [id])
+  centers             Center[]
+  users               User[]
+  ownerGroups         OwnerGroup[]
+  accessGrants        UserAccessGrant[]
+  brandCustomizations BrandCustomization[]
 }
 
 model Center {
-  id             String   @id @default(cuid())
-  organizationId String
-  name           String
-  crmLocationId  String?
-  locationId     String?
-  address        String?
-  city           String?
-  state          String?
-  postalCode     String?
-  phone          String?
-  email          String?
-  status         String   @default("active")
-  sourceSystem   String?
-  externalId     String?
-  customFields   Json?
+  id               String   @id @default(cuid())
+  organizationId   String
+  ownerGroupId     String?
+  name             String
+  crmLocationId    String?
+  locationId       String?
+  address          String?
+  city             String?
+  state            String?
+  postalCode       String?
+  phone            String?
+  email            String?
+  status           String   @default("active")
+  sourceSystem     String?
+  externalId       String?
+  customFields     Json?
   licensedCapacity Int
-  timezone       String   @default("America/New_York")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  timezone         String   @default("America/New_York")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  classrooms   Classroom[]
-  leads        Lead[]
-  tours        Tour[]
-  staff        StaffProfile[]
-  schedules    StaffSchedule[]
-  announcements Announcement[]
-  auditLogs    AuditLog[]
-  checkLogs    CheckInOutLog[]
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+  ownerGroup     OwnerGroup?          @relation(fields: [ownerGroupId], references: [id])
+  classrooms     Classroom[]
+  leads          Lead[]
+  tours          Tour[]
+  staff          StaffProfile[]
+  schedules      StaffSchedule[]
+  announcements  Announcement[]
+  auditLogs      AuditLog[]
+  checkLogs      CheckInOutLog[]
   procareImports ProcareImportBatch[]
-  fteReports   FteReport[]
+  fteReports     FteReport[]
+  accessGrants   UserAccessGrant[]
+  brandAssets    BrandAsset[]
+  customizations BrandCustomization[]
 
   @@index([crmLocationId])
   @@index([locationId])
+  @@index([ownerGroupId])
   @@index([state, city])
+}
+
+model OwnerGroup {
+  id             String   @id @default(cuid())
+  tenantId       String
+  brandId        String?
+  organizationId String?
+  name           String
+  slug           String
+  ownerType      String   @default("franchisee")
+  billingEmail   String?
+  contactName    String?
+  phone          String?
+  status         String   @default("active")
+  customFields   Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant               @relation(fields: [tenantId], references: [id])
+  brand          Brand?               @relation(fields: [brandId], references: [id])
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  centers        Center[]
+  accessGrants   UserAccessGrant[]
+  assets         BrandAsset[]
+  customizations BrandCustomization[]
+
+  @@unique([tenantId, slug])
+  @@index([brandId])
+  @@index([organizationId])
+  @@index([status])
 }
 
 model Classroom {
@@ -146,7 +193,7 @@ model Classroom {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  center       Center       @relation(fields: [centerId], references: [id])
+  center       Center             @relation(fields: [centerId], references: [id])
   children     Child[]
   staff        StaffProfile[]
   dailyReports DailyReport[]
@@ -167,22 +214,120 @@ model User {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
-  organization Organization?  @relation(fields: [organizationId], references: [id])
-  staffProfile StaffProfile?
-  guardians    Guardian[]
-  notes        Note[]
-  messages     Message[]     @relation("MessageSender")
-  auditLogs    AuditLog[]
-  notifications Notification[]
-  uploadedMedia ChildMedia[]
+  tenant         Tenant               @relation(fields: [tenantId], references: [id])
+  organization   Organization?        @relation(fields: [organizationId], references: [id])
+  staffProfile   StaffProfile?
+  guardians      Guardian[]
+  notes          Note[]
+  messages       Message[]            @relation("MessageSender")
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  uploadedMedia  ChildMedia[]
   procareImports ProcareImportBatch[]
-  fteReports   FteReport[] @relation("FteSubmittedBy")
+  fteReports     FteReport[]          @relation("FteSubmittedBy")
+  accessGrants   UserAccessGrant[]
+}
+
+model UserAccessGrant {
+  id             String    @id @default(cuid())
+  userId         String
+  tenantId       String
+  brandId        String?
+  organizationId String?
+  ownerGroupId   String?
+  centerId       String?
+  role           UserRole
+  scopeType      String
+  permissions    Json?
+  isActive       Boolean   @default(true)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  brand        Brand?        @relation(fields: [brandId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  ownerGroup   OwnerGroup?   @relation(fields: [ownerGroupId], references: [id])
+  center       Center?       @relation(fields: [centerId], references: [id])
+
+  @@index([userId, isActive])
+  @@index([tenantId, scopeType])
+  @@index([brandId])
+  @@index([organizationId])
+  @@index([ownerGroupId])
+  @@index([centerId])
+}
+
+model BrandAsset {
+  id           String   @id @default(cuid())
+  tenantId     String
+  brandId      String?
+  ownerGroupId String?
+  centerId     String?
+  assetType    String
+  url          String?
+  storageKey   String?
+  altText      String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id])
+  brand      Brand?      @relation(fields: [brandId], references: [id])
+  ownerGroup OwnerGroup? @relation(fields: [ownerGroupId], references: [id])
+  center     Center?     @relation(fields: [centerId], references: [id])
+
+  @@index([tenantId, assetType])
+  @@index([brandId, assetType])
+  @@index([ownerGroupId, assetType])
+  @@index([centerId, assetType])
+}
+
+model BrandCustomization {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  brandId                 String?
+  organizationId          String?
+  ownerGroupId            String?
+  centerId                String?
+  scopeType               String
+  brandName               String
+  logoUrlPlaceholder      String?
+  faviconUrlPlaceholder   String?
+  mascotUrlPlaceholder    String?
+  primaryColor            String   @default("#f5b51b")
+  accentColor             String   @default("#10b981")
+  themeMode               String   @default("dark")
+  emailSenderPlaceholder  String?
+  customDomainPlaceholder String?
+  parentPortalName        String?
+  loginScreenTitle        String?
+  notificationFooterText  String?
+  legalFooterText         String?
+  termsUrl                String?
+  privacyUrl              String?
+  customCss               Json?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  brand        Brand?        @relation(fields: [brandId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  ownerGroup   OwnerGroup?   @relation(fields: [ownerGroupId], references: [id])
+  center       Center?       @relation(fields: [centerId], references: [id])
+
+  @@index([tenantId, scopeType])
+  @@index([brandId, scopeType])
+  @@index([organizationId, scopeType])
+  @@index([ownerGroupId, scopeType])
+  @@index([centerId, scopeType])
 }
 
 model Role {
-  id          String @id @default(cuid())
-  name        String @unique
+  id          String  @id @default(cuid())
+  name        String  @unique
   description String?
 
   permissions Permission[]
@@ -199,70 +344,70 @@ model Permission {
 }
 
 model Family {
-  id          String   @id @default(cuid())
-  centerId    String?
-  name        String
-  address     String?
+  id           String   @id @default(cuid())
+  centerId     String?
+  name         String
+  address      String?
   billingEmail String?
-  notes       String?
+  notes        String?
   custodyNotes String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  guardians       Guardian[]
-  children        Child[]
-  pickups         AuthorizedPickup[]
+  guardians         Guardian[]
+  children          Child[]
+  pickups           AuthorizedPickup[]
   emergencyContacts EmergencyContact[]
-  billingAccount  BillingAccount?
-  messages        Message[]
-  documents       Document[]
-  notesList       Note[]
+  billingAccount    BillingAccount?
+  messages          Message[]
+  documents         Document[]
+  notesList         Note[]
 }
 
 model Guardian {
-  id        String @id @default(cuid())
-  familyId  String
-  userId    String?
-  fullName  String
-  email     String?
-  phone     String?
-  employer  String?
-  relation  String
+  id                     String    @id @default(cuid())
+  familyId               String
+  userId                 String?
+  fullName               String
+  email                  String?
+  phone                  String?
+  employer               String?
+  relation               String
   preferredCommunication String?
-  isBillingContact Boolean @default(false)
-  checkInPinHash String?
-  checkInPinSetAt DateTime?
-  checkInPinSetById String?
+  isBillingContact       Boolean   @default(false)
+  checkInPinHash         String?
+  checkInPinSetAt        DateTime?
+  checkInPinSetById      String?
 
-  family Family @relation(fields: [familyId], references: [id])
-  user   User?  @relation(fields: [userId], references: [id])
+  family    Family          @relation(fields: [familyId], references: [id])
+  user      User?           @relation(fields: [userId], references: [id])
   checkLogs CheckInOutLog[]
 
   @@index([checkInPinHash])
 }
 
 model Child {
-  id        String   @id @default(cuid())
-  familyId  String
-  classroomId String?
-  fullName  String
-  preferredName String?
-  dateOfBirth DateTime
-  ageGroup String
-  enrollmentStatus String
-  startDate DateTime?
-  schedule Json?
-  photoVideoPermission Boolean @default(false)
-  fieldTripPermission Boolean @default(false)
-  napNotes String?
-  feedingNotes String?
-  pottyNotes String?
-  developmentalNotes String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  familyId             String
+  classroomId          String?
+  fullName             String
+  preferredName        String?
+  dateOfBirth          DateTime
+  ageGroup             String
+  enrollmentStatus     String
+  startDate            DateTime?
+  schedule             Json?
+  photoVideoPermission Boolean   @default(false)
+  fieldTripPermission  Boolean   @default(false)
+  napNotes             String?
+  feedingNotes         String?
+  pottyNotes           String?
+  developmentalNotes   String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  family       Family       @relation(fields: [familyId], references: [id])
-  classroom    Classroom?   @relation(fields: [classroomId], references: [id])
+  family       Family             @relation(fields: [familyId], references: [id])
+  classroom    Classroom?         @relation(fields: [classroomId], references: [id])
   medicalNotes ChildMedicalNote[]
   allergies    Allergy[]
   enrollments  Enrollment[]
@@ -275,11 +420,11 @@ model Child {
 }
 
 model AuthorizedPickup {
-  id       String @id @default(cuid())
-  familyId String
-  fullName String
-  phone    String?
-  relation String?
+  id                String  @id @default(cuid())
+  familyId          String
+  fullName          String
+  phone             String?
+  relation          String?
   verificationNotes String?
 
   family Family @relation(fields: [familyId], references: [id])
@@ -296,76 +441,76 @@ model EmergencyContact {
 }
 
 model ChildMedicalNote {
-  id        String   @id @default(cuid())
-  childId   String
-  category  String
-  note      String
-  restricted Boolean @default(true)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  childId    String
+  category   String
+  note       String
+  restricted Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   child Child @relation(fields: [childId], references: [id])
 }
 
 model Allergy {
-  id       String @id @default(cuid())
-  childId  String
-  allergen String
-  severity String
+  id         String  @id @default(cuid())
+  childId    String
+  allergen   String
+  severity   String
   actionPlan String?
 
   child Child @relation(fields: [childId], references: [id])
 }
 
 model Enrollment {
-  id        String @id @default(cuid())
-  childId   String
-  leadId    String?
-  stage     EnrollmentStage
+  id               String          @id @default(cuid())
+  childId          String
+  leadId           String?
+  stage            EnrollmentStage
   desiredStartDate DateTime?
-  depositDueCents Int @default(0)
-  depositPaidCents Int @default(0)
-  checklist Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  depositDueCents  Int             @default(0)
+  depositPaidCents Int             @default(0)
+  checklist        Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
   child Child @relation(fields: [childId], references: [id])
   lead  Lead? @relation(fields: [leadId], references: [id])
 }
 
 model EnrollmentPipelineStage {
-  id        String @id @default(cuid())
-  name      String
-  sortOrder Int
+  id         String  @id @default(cuid())
+  name       String
+  sortOrder  Int
   isTerminal Boolean @default(false)
 }
 
 model Lead {
-  id        String @id @default(cuid())
-  centerId  String
-  externalId String?
-  familyName String
-  parentFirstName String?
-  parentLastName String?
-  email String?
-  phone String?
-  childName String?
-  leadSource String?
+  id               String          @id @default(cuid())
+  centerId         String
+  externalId       String?
+  familyName       String
+  parentFirstName  String?
+  parentLastName   String?
+  email            String?
+  phone            String?
+  childName        String?
+  leadSource       String?
   ageGroupInterest String?
   desiredStartDate DateTime?
-  programInterest String?
-  stage EnrollmentStage @default(NEW_INQUIRY)
-  score Int @default(0)
-  status String @default("open")
-  customFields Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  programInterest  String?
+  stage            EnrollmentStage @default(NEW_INQUIRY)
+  score            Int             @default(0)
+  status           String          @default("open")
+  customFields     Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
-  center      Center      @relation(fields: [centerId], references: [id])
+  center      Center       @relation(fields: [centerId], references: [id])
   tours       Tour[]
   enrollments Enrollment[]
   tasks       Task[]
   notes       Note[]
-  tags        Tag[]       @relation("LeadTags")
+  tags        Tag[]        @relation("LeadTags")
 
   @@unique([centerId, externalId])
   @@index([centerId, stage])
@@ -374,47 +519,47 @@ model Lead {
 }
 
 model Tour {
-  id        String @id @default(cuid())
-  centerId  String
-  leadId    String?
-  startsAt  DateTime
-  status    String
-  notes     String?
+  id       String   @id @default(cuid())
+  centerId String
+  leadId   String?
+  startsAt DateTime
+  status   String
+  notes    String?
 
   center Center @relation(fields: [centerId], references: [id])
   lead   Lead?  @relation(fields: [leadId], references: [id])
 }
 
 model WaitlistEntry {
-  id        String @id @default(cuid())
-  childName String
-  familyName String
-  ageGroup String
+  id               String    @id @default(cuid())
+  childName        String
+  familyName       String
+  ageGroup         String
   desiredStartDate DateTime?
-  priority Int @default(0)
-  status String @default("waiting")
-  notes String?
+  priority         Int       @default(0)
+  status           String    @default("waiting")
+  notes            String?
 }
 
 model Task {
-  id        String @id @default(cuid())
-  leadId    String?
-  title     String
-  dueAt     DateTime?
-  status    String @default("open")
+  id         String    @id @default(cuid())
+  leadId     String?
+  title      String
+  dueAt      DateTime?
+  status     String    @default("open")
   assignedTo String?
 
   lead Lead? @relation(fields: [leadId], references: [id])
 }
 
 model Note {
-  id        String @id @default(cuid())
-  userId    String?
-  leadId    String?
-  familyId  String?
-  body      String
-  restricted Boolean @default(false)
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String?
+  leadId     String?
+  familyId   String?
+  body       String
+  restricted Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   user   User?   @relation(fields: [userId], references: [id])
   lead   Lead?   @relation(fields: [leadId], references: [id])
@@ -422,15 +567,15 @@ model Note {
 }
 
 model Tag {
-  id    String @id @default(cuid())
-  name  String @unique
+  id    String  @id @default(cuid())
+  name  String  @unique
   color String?
 
   leads Lead[] @relation("LeadTags")
 }
 
 model CustomField {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   entity    String
   key       String
   label     String
@@ -439,47 +584,47 @@ model CustomField {
 }
 
 model Message {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   familyId  String?
   senderId  String?
   subject   String?
   body      String
   channel   String
-  priority  String @default("normal")
+  priority  String    @default("normal")
   sentiment String?
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   family Family? @relation(fields: [familyId], references: [id])
   sender User?   @relation("MessageSender", fields: [senderId], references: [id])
 }
 
 model Announcement {
-  id       String @id @default(cuid())
+  id       String    @id @default(cuid())
   centerId String?
   title    String
   body     String
   audience Json?
-  status   String @default("draft")
+  status   String    @default("draft")
   sendAt   DateTime?
 
   center Center? @relation(fields: [centerId], references: [id])
 }
 
 model Campaign {
-  id        String @id @default(cuid())
-  brandId   String?
-  name      String
-  type      String
-  audience  Json?
-  status    String
-  metrics   Json?
+  id       String  @id @default(cuid())
+  brandId  String?
+  name     String
+  type     String
+  audience Json?
+  status   String
+  metrics  Json?
 
   brand Brand? @relation(fields: [brandId], references: [id])
 }
 
 model Automation {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   brandId   String?
   name      String
   trigger   String
@@ -488,12 +633,12 @@ model Automation {
   delay     String?
   status    String
 
-  brand Brand? @relation(fields: [brandId], references: [id])
+  brand Brand?          @relation(fields: [brandId], references: [id])
   runs  AutomationRun[]
 }
 
 model AutomationRun {
-  id           String @id @default(cuid())
+  id           String   @id @default(cuid())
   automationId String
   status       String
   logs         Json?
@@ -513,39 +658,39 @@ model Form {
 }
 
 model FormSubmission {
-  id       String @id @default(cuid())
-  formId   String
-  familyId String?
-  status   DocumentStatus
-  data     Json
-  signaturePlaceholder Boolean @default(false)
-  submittedAt DateTime?
+  id                   String         @id @default(cuid())
+  formId               String
+  familyId             String?
+  status               DocumentStatus
+  data                 Json
+  signaturePlaceholder Boolean        @default(false)
+  submittedAt          DateTime?
 
   form Form @relation(fields: [formId], references: [id])
 }
 
 model Document {
-  id        String @id @default(cuid())
-  familyId  String?
-  childId   String?
-  name      String
-  type      String
-  status    DocumentStatus
-  expiresAt DateTime?
+  id         String         @id @default(cuid())
+  familyId   String?
+  childId    String?
+  name       String
+  type       String
+  status     DocumentStatus
+  expiresAt  DateTime?
   storageKey String?
-  restricted Boolean @default(false)
-  createdAt DateTime @default(now())
+  restricted Boolean        @default(false)
+  createdAt  DateTime       @default(now())
 
   family Family? @relation(fields: [familyId], references: [id])
   child  Child?  @relation(fields: [childId], references: [id])
 }
 
 model AttendanceRecord {
-  id          String @id @default(cuid())
-  childId     String?
-  classroomId String?
-  date        DateTime
-  status      String
+  id            String   @id @default(cuid())
+  childId       String?
+  classroomId   String?
+  date          DateTime
+  status        String
   absenceReason String?
 
   child     Child?     @relation(fields: [childId], references: [id])
@@ -553,23 +698,23 @@ model AttendanceRecord {
 }
 
 model CheckInOutLog {
-  id        String @id @default(cuid())
-  childId   String
-  centerId  String?
-  classroomId String?
-  guardianId String?
-  type      String
-  occurredAt DateTime
-  pickupName String?
-  signaturePlaceholder Boolean @default(false)
-  verificationStatus String?
-  pinVerified Boolean @default(false)
-  notes String?
+  id                   String   @id @default(cuid())
+  childId              String
+  centerId             String?
+  classroomId          String?
+  guardianId           String?
+  type                 String
+  occurredAt           DateTime
+  pickupName           String?
+  signaturePlaceholder Boolean  @default(false)
+  verificationStatus   String?
+  pinVerified          Boolean  @default(false)
+  notes                String?
 
-  child Child @relation(fields: [childId], references: [id])
-  center Center? @relation(fields: [centerId], references: [id])
+  child     Child      @relation(fields: [childId], references: [id])
+  center    Center?    @relation(fields: [centerId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
-  guardian Guardian? @relation(fields: [guardianId], references: [id])
+  guardian  Guardian?  @relation(fields: [guardianId], references: [id])
 
   @@index([centerId, occurredAt])
   @@index([childId, occurredAt])
@@ -577,42 +722,42 @@ model CheckInOutLog {
 }
 
 model DailyReport {
-  id          String @id @default(cuid())
-  childId     String
-  classroomId String?
-  date        DateTime
-  mood        String?
-  teacherNote String?
+  id             String    @id @default(cuid())
+  childId        String
+  classroomId    String?
+  date           DateTime
+  mood           String?
+  teacherNote    String?
   suppliesNeeded String?
-  sentAt      DateTime?
+  sentAt         DateTime?
 
-  child     Child      @relation(fields: [childId], references: [id])
-  classroom Classroom? @relation(fields: [classroomId], references: [id])
-  meals     Meal[]
-  naps      Nap[]
-  diapers   DiaperPottyLog[]
+  child      Child            @relation(fields: [childId], references: [id])
+  classroom  Classroom?       @relation(fields: [classroomId], references: [id])
+  meals      Meal[]
+  naps       Nap[]
+  diapers    DiaperPottyLog[]
   activities ActivityLog[]
-  media     ChildMedia[]
+  media      ChildMedia[]
 }
 
 model ChildMedia {
-  id          String @id @default(cuid())
-  childId     String
-  classroomId String?
-  uploadedById String?
-  dailyReportId String?
-  url         String
-  storageKey String?
-  caption    String?
-  mediaType  String @default("photo")
-  status     String @default("shared")
-  sharedWithParents Boolean @default(true)
-  takenAt     DateTime @default(now())
-  createdAt   DateTime @default(now())
+  id                String   @id @default(cuid())
+  childId           String
+  classroomId       String?
+  uploadedById      String?
+  dailyReportId     String?
+  url               String
+  storageKey        String?
+  caption           String?
+  mediaType         String   @default("photo")
+  status            String   @default("shared")
+  sharedWithParents Boolean  @default(true)
+  takenAt           DateTime @default(now())
+  createdAt         DateTime @default(now())
 
-  child       Child @relation(fields: [childId], references: [id])
-  classroom   Classroom? @relation(fields: [classroomId], references: [id])
-  uploadedBy  User? @relation(fields: [uploadedById], references: [id])
+  child       Child        @relation(fields: [childId], references: [id])
+  classroom   Classroom?   @relation(fields: [classroomId], references: [id])
+  uploadedBy  User?        @relation(fields: [uploadedById], references: [id])
   dailyReport DailyReport? @relation(fields: [dailyReportId], references: [id])
 
   @@index([childId, createdAt])
@@ -620,7 +765,7 @@ model ChildMedia {
 }
 
 model Meal {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   dailyReportId String
   mealType      String
   food          String
@@ -630,7 +775,7 @@ model Meal {
 }
 
 model Nap {
-  id            String @id @default(cuid())
+  id            String    @id @default(cuid())
   dailyReportId String
   startsAt      DateTime
   endsAt        DateTime?
@@ -639,7 +784,7 @@ model Nap {
 }
 
 model DiaperPottyLog {
-  id            String @id @default(cuid())
+  id            String   @id @default(cuid())
   dailyReportId String
   type          String
   occurredAt    DateTime
@@ -649,7 +794,7 @@ model DiaperPottyLog {
 }
 
 model ActivityLog {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   dailyReportId String
   title         String
   notes         String?
@@ -658,56 +803,56 @@ model ActivityLog {
 }
 
 model IncidentReport {
-  id          String @id @default(cuid())
-  childId     String
-  classroomId String?
-  staffMember String
-  occurredAt  DateTime
-  type        String
-  description String
-  actionTaken String
-  parentNotified Boolean @default(false)
-  parentAcknowledgedAt DateTime?
-  photoAttachmentPlaceholder Boolean @default(false)
-  adminReviewStatus String @default("pending")
-  followUpTasks Json?
+  id                         String    @id @default(cuid())
+  childId                    String
+  classroomId                String?
+  staffMember                String
+  occurredAt                 DateTime
+  type                       String
+  description                String
+  actionTaken                String
+  parentNotified             Boolean   @default(false)
+  parentAcknowledgedAt       DateTime?
+  photoAttachmentPlaceholder Boolean   @default(false)
+  adminReviewStatus          String    @default("pending")
+  followUpTasks              Json?
 
   child     Child      @relation(fields: [childId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
 }
 
 model StaffProfile {
-  id          String @id @default(cuid())
-  userId      String @unique
-  centerId    String
-  classroomId String?
-  title       String
-  phone       String?
-  backgroundCheckStatus String?
+  id                          String  @id @default(cuid())
+  userId                      String  @unique
+  centerId                    String
+  classroomId                 String?
+  title                       String
+  phone                       String?
+  backgroundCheckStatus       String?
   performanceNotesPlaceholder String?
-  ptoAvailabilityPlaceholder Json?
+  ptoAvailabilityPlaceholder  Json?
 
-  user      User       @relation(fields: [userId], references: [id])
-  center    Center     @relation(fields: [centerId], references: [id])
-  classroom Classroom? @relation(fields: [classroomId], references: [id])
-  schedules StaffSchedule[]
+  user           User            @relation(fields: [userId], references: [id])
+  center         Center          @relation(fields: [centerId], references: [id])
+  classroom      Classroom?      @relation(fields: [classroomId], references: [id])
+  schedules      StaffSchedule[]
   certifications Certification[]
 }
 
 model StaffSchedule {
-  id        String @id @default(cuid())
-  staffId   String
-  centerId  String
-  startsAt  DateTime
-  endsAt    DateTime
-  status    String
+  id       String   @id @default(cuid())
+  staffId  String
+  centerId String
+  startsAt DateTime
+  endsAt   DateTime
+  status   String
 
   staff  StaffProfile @relation(fields: [staffId], references: [id])
   center Center       @relation(fields: [centerId], references: [id])
 }
 
 model Certification {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   staffId   String
   name      String
   status    String
@@ -717,79 +862,79 @@ model Certification {
 }
 
 model BillingAccount {
-  id       String @id @default(cuid())
-  familyId String @unique
-  balanceCents Int @default(0)
-  autopayPlaceholder Boolean @default(false)
-  ledgerSyncedAt DateTime?
+  id                 String    @id @default(cuid())
+  familyId           String    @unique
+  balanceCents       Int       @default(0)
+  autopayPlaceholder Boolean   @default(false)
+  ledgerSyncedAt     DateTime?
 
-  family   Family    @relation(fields: [familyId], references: [id])
-  invoices Invoice[]
-  payments Payment[]
+  family        Family        @relation(fields: [familyId], references: [id])
+  invoices      Invoice[]
+  payments      Payment[]
   ledgerEntries LedgerEntry[]
 }
 
 model Invoice {
-  id        String @id @default(cuid())
+  id               String        @id @default(cuid())
   billingAccountId String
-  number    String @unique
-  status    PaymentStatus
-  dueDate   DateTime
-  totalCents Int
-  createdAt DateTime @default(now())
+  number           String        @unique
+  status           PaymentStatus
+  dueDate          DateTime
+  totalCents       Int
+  createdAt        DateTime      @default(now())
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
-  items InvoiceItem[]
-  ledgerEntries LedgerEntry[]
+  items          InvoiceItem[]
+  ledgerEntries  LedgerEntry[]
 }
 
 model InvoiceItem {
-  id        String @id @default(cuid())
-  invoiceId String
-  productId String?
+  id          String  @id @default(cuid())
+  invoiceId   String
+  productId   String?
   description String
   amountCents Int
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  invoice Invoice  @relation(fields: [invoiceId], references: [id])
   product Product? @relation(fields: [productId], references: [id])
 }
 
 model Payment {
-  id        String @id @default(cuid())
-  billingAccountId String
-  amountCents Int
-  status PaymentStatus
-  provider String @default("stripe_mock")
+  id                    String        @id @default(cuid())
+  billingAccountId      String
+  amountCents           Int
+  status                PaymentStatus
+  provider              String        @default("stripe_mock")
   externalIdPlaceholder String?
-  paidAt DateTime?
+  paidAt                DateTime?
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
-  ledgerEntries LedgerEntry[]
+  ledgerEntries  LedgerEntry[]
 }
 
 model LedgerEntry {
-  id        String @id @default(cuid())
-  billingAccountId String
-  invoiceId String?
-  paymentId String?
-  type      String
-  description String
-  amountCents Int
+  id                String   @id @default(cuid())
+  billingAccountId  String
+  invoiceId         String?
+  paymentId         String?
+  type              String
+  description       String
+  amountCents       Int
   balanceAfterCents Int?
-  effectiveAt DateTime @default(now())
-  createdAt DateTime @default(now())
-  sourceSystem String?
-  externalId String?
-  metadata Json?
+  effectiveAt       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  sourceSystem      String?
+  externalId        String?
+  metadata          Json?
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
-  invoice Invoice? @relation(fields: [invoiceId], references: [id])
-  payment Payment? @relation(fields: [paymentId], references: [id])
+  invoice        Invoice?       @relation(fields: [invoiceId], references: [id])
+  payment        Payment?       @relation(fields: [paymentId], references: [id])
 
+  @@unique([sourceSystem, externalId])
   @@index([billingAccountId, effectiveAt])
   @@index([invoiceId])
   @@index([paymentId])
-  @@unique([sourceSystem, externalId])
 }
 
 model Product {
@@ -810,18 +955,18 @@ model TuitionPlan {
 }
 
 model SubscriptionPlaceholder {
-  id        String @id @default(cuid())
-  name      String
-  plan      String
-  status    String
+  id     String @id @default(cuid())
+  name   String
+  plan   String
+  status String
 }
 
 model Review {
-  id       String @id @default(cuid())
-  source   String
-  rating   Int
-  body     String?
-  responseDraft String?
+  id                           String  @id @default(cuid())
+  source                       String
+  rating                       Int
+  body                         String?
+  responseDraft                String?
   approvedForPublicTestimonial Boolean @default(false)
 }
 
@@ -834,70 +979,70 @@ model Survey {
 }
 
 model Notification {
-  id        String @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String?
   title     String
   body      String
   type      String
-  priority  String @default("normal")
+  priority  String    @default("normal")
   readAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 }
 
 model AuditLog {
-  id        String @id @default(cuid())
-  tenantId  String
-  centerId  String?
-  userId    String?
-  action    String
-  resource  String
+  id         String   @id @default(cuid())
+  tenantId   String
+  centerId   String?
+  userId     String?
+  action     String
+  resource   String
   resourceId String?
-  metadata  Json?
-  createdAt DateTime @default(now())
+  metadata   Json?
+  createdAt  DateTime @default(now())
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
   center Center? @relation(fields: [centerId], references: [id])
   user   User?   @relation(fields: [userId], references: [id])
 }
 
 model Integration {
-  id        String @id @default(cuid())
-  tenantId  String
-  provider  String
-  status    String
+  id                String    @id @default(cuid())
+  tenantId          String
+  provider          String
+  status            String
   configPlaceholder Json?
-  lastSyncAt DateTime?
+  lastSyncAt        DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
 }
 
 model ProcareImportBatch {
-  id        String @id @default(cuid())
-  centerId  String
+  id           String   @id @default(cuid())
+  centerId     String
   uploadedById String?
-  filename  String
-  status    String @default("completed")
-  summary   Json?
-  createdAt DateTime @default(now())
+  filename     String
+  status       String   @default("completed")
+  summary      Json?
+  createdAt    DateTime @default(now())
 
-  center Center @relation(fields: [centerId], references: [id])
-  uploadedBy User? @relation(fields: [uploadedById], references: [id])
-  rows ProcareImportRow[]
+  center     Center             @relation(fields: [centerId], references: [id])
+  uploadedBy User?              @relation(fields: [uploadedById], references: [id])
+  rows       ProcareImportRow[]
 
   @@index([centerId, createdAt])
 }
 
 model ProcareImportRow {
-  id        String @id @default(cuid())
-  batchId   String
-  rowNumber Int
-  status    String
-  message   String?
-  rawData   Json
+  id              String  @id @default(cuid())
+  batchId         String
+  rowNumber       Int
+  status          String
+  message         String?
+  rawData         Json
   createdFamilyId String?
-  createdChildId String?
+  createdChildId  String?
 
   batch ProcareImportBatch @relation(fields: [batchId], references: [id])
 
@@ -905,27 +1050,27 @@ model ProcareImportRow {
 }
 
 model FteReport {
-  id              String   @id @default(cuid())
-  centerId        String
-  submittedById   String?
-  weekStart       DateTime
-  weekEnd         DateTime?
-  enrolledCount   Int      @default(0)
-  fullTimeCount   Int      @default(0)
-  partTimeCount   Int      @default(0)
-  fteCount        Float    @default(0)
-  infants         Int      @default(0)
-  toddlers        Int      @default(0)
-  twos            Int      @default(0)
-  preschool       Int      @default(0)
-  preK            Int      @default(0)
-  schoolAge       Int      @default(0)
-  notes           String?
-  status          String   @default("submitted")
-  source          String   @default("manual")
-  sourceMetadata  Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String    @id @default(cuid())
+  centerId       String
+  submittedById  String?
+  weekStart      DateTime
+  weekEnd        DateTime?
+  enrolledCount  Int       @default(0)
+  fullTimeCount  Int       @default(0)
+  partTimeCount  Int       @default(0)
+  fteCount       Float     @default(0)
+  infants        Int       @default(0)
+  toddlers       Int       @default(0)
+  twos           Int       @default(0)
+  preschool      Int       @default(0)
+  preK           Int       @default(0)
+  schoolAge      Int       @default(0)
+  notes          String?
+  status         String    @default("submitted")
+  source         String    @default("manual")
+  sourceMetadata Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   center      Center @relation(fields: [centerId], references: [id])
   submittedBy User?  @relation("FteSubmittedBy", fields: [submittedById], references: [id])
@@ -936,39 +1081,39 @@ model FteReport {
 }
 
 model WhiteLabelSettings {
-  id        String @id @default(cuid())
-  brandId   String @unique
-  brandName String
-  logoUrlPlaceholder String?
-  faviconUrlPlaceholder String?
-  primaryColor String
-  accentColor String
-  themeMode String
-  emailSenderPlaceholder String?
+  id                      String  @id @default(cuid())
+  brandId                 String  @unique
+  brandName               String
+  logoUrlPlaceholder      String?
+  faviconUrlPlaceholder   String?
+  primaryColor            String
+  accentColor             String
+  themeMode               String
+  emailSenderPlaceholder  String?
   customDomainPlaceholder String?
-  legalFooterText String?
-  termsUrl String?
-  privacyUrl String?
+  legalFooterText         String?
+  termsUrl                String?
+  privacyUrl              String?
 
   brand Brand @relation(fields: [brandId], references: [id])
 }
 
 model AiSummary {
-  id        String @id @default(cuid())
-  scope     String
-  scopeId   String?
-  title     String
-  body      String
-  requiresReview Boolean @default(true)
-  createdAt DateTime @default(now())
+  id             String   @id @default(cuid())
+  scope          String
+  scopeId        String?
+  title          String
+  body           String
+  requiresReview Boolean  @default(true)
+  createdAt      DateTime @default(now())
 }
 
 model AiSuggestion {
-  id        String @id @default(cuid())
-  type      String
+  id            String   @id @default(cuid())
+  type          String
   promptContext Json?
-  suggestion String
-  status    String @default("pending_review")
+  suggestion    String
+  status        String   @default("pending_review")
   guardrailNote String
-  createdAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 }

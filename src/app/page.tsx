@@ -35,7 +35,7 @@ const navItems = [
 ];
 
 const heroProof = [
-  ["Multi-location", "Franchise, agency, and single-center ready"],
+  ["Tenant-isolated", "Separate brands, owner groups, schools, and users"],
   ["1 embed", "Inquiry form to CRM, email, and Sheets"],
   ["Human-reviewed AI", "Suggestions with safety guardrails"],
 ];
@@ -60,8 +60,10 @@ const crmSteps = [
 
 const setupCards = [
   ["Brand profile", "Name, theme, logo placeholder, custom domain, and parent-facing identity.", Building2],
+  ["Owner groups", "Single-center owners, franchisees, and multi-location operators stay properly separated.", ShieldCheck],
   ["Centers", "Location profiles, CRM IDs, routing emails, capacity, and open or closed status.", MapPin],
   ["Users", "Role-scoped access for owners, regional teams, directors, staff, and auditors.", UsersRound],
+  ["Branding layers", "Tenant, brand, owner group, and center customizations can override the right surfaces.", Sparkles],
   ["Inquiry form", "Copyable embed codes tied to the correct center or multi-location account.", ClipboardCheck],
   ["Payouts", "Stripe Connect readiness is captured, but live checkout stays gated until reviewed.", CreditCard],
   ["Reports", "FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.", BarChart3],
@@ -85,6 +87,12 @@ const workflowCards = [
     body: "Operators see FTE, occupancy, conversion, revenue readiness, ratio snapshots, and action queues across every center.",
     icon: BarChart3,
     steps: ["FTE data", "Pipeline health", "Center snapshot", "Next action"],
+  },
+  {
+    title: "Account separation",
+    body: "A provider can run one school, a franchisee can own a few locations, and a brand admin can manage the larger network without crossing data boundaries.",
+    icon: ShieldCheck,
+    steps: ["Tenant", "Brand", "Owner group", "Center"],
   },
 ];
 
@@ -441,7 +449,7 @@ export default function LandingPage() {
           <SectionHeading
             align="center"
             title="Trial workspaces start with the pieces a provider actually needs."
-            body="A new operator can create a gated workspace, complete brand and center setup, copy their inquiry form, invite users, and prepare payout onboarding before live parent workflows are enabled."
+            body="A new operator can create a gated workspace, define the ownership container, complete brand and center setup, copy their inquiry form, invite users, and prepare payout onboarding before live parent workflows are enabled."
           />
           <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {setupCards.map(([title, body, Icon]) => (

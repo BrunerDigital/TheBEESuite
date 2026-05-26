@@ -74,7 +74,7 @@ Primary dashboard: `/dashboard`
 
 Auth and setup: `/login`, `/forgot-password`, `/onboarding`
 
-`/onboarding` creates a gated trial workspace with a tenant, brand, organization, primary center profile, brand-admin user, setup integrations, audit log, and center-linked inquiry form embed. The owner sets their own password through Supabase Auth recovery/setup email; live payments stay gated until payout onboarding is complete and reviewed.
+`/onboarding` creates a gated trial workspace with a tenant, brand, organization, owner group, primary center profile, brand-admin user, explicit access grant, setup integrations, audit log, brand customization records, asset placeholders, and center-linked inquiry form embed. The owner sets their own password through Supabase Auth recovery/setup email; live payments stay gated until payout onboarding is complete and reviewed.
 
 Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classroom-dashboard`, `/crm-leads`, `/family-detail`, `/child-profile`, `/enrollment-pipeline`, `/waitlist`, `/tours`, `/calendar`, `/messages`, `/announcements`, `/campaigns`, `/automations`, `/forms`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/staff`, `/billing-invoices`, `/payments`, `/compliance`, `/reputation`, `/analytics`, `/ai-command`, `/parent-portal`, `/teacher-portal`, `/agency-admin`, `/white-label`, `/team-permissions`, `/integrations`, `/billing-settings`, `/notifications`, `/audit-logs`, and `/help`.
 
@@ -113,7 +113,7 @@ Gated next phase: real parent payment processing, SMS/push, calendar sync, revie
 
 ## Security and Privacy Notes
 
-Sensitive child, custody, medical, billing, incident, and compliance data must be role-filtered, audited, and encrypted where appropriate. The UI marks restricted workflows, and the schema includes audit-log and restricted-field foundations. The product provides compliance-ready documentation support only and does not provide legal or licensing advice.
+Tenant data is separated by `Tenant`, then by `Brand`, `Organization`, `OwnerGroup`, and `Center`. `UserAccessGrant` supports tenant-wide executives, brand/franchise admins, multi-location owners, single-center directors, and auditors without mixing unrelated operators. Sensitive child, custody, medical, billing, incident, and compliance data must be role-filtered, audited, and encrypted where appropriate. The UI marks restricted workflows, and the schema includes audit-log and restricted-field foundations. The product provides compliance-ready documentation support only and does not provide legal or licensing advice.
 
 ## AI Guardrails
 

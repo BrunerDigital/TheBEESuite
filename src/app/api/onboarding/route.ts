@@ -288,9 +288,30 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
       select: { id: true, name: true },
     });
 
+    const ownerGroup = await tx.ownerGroup.create({
+      data: {
+        tenantId: tenant.id,
+        brandId: brand.id,
+        organizationId: organization.id,
+        name: `${payload.brandName} Ownership`,
+        slug: `${tenantSlug}-ownership`,
+        ownerType: requestedCenters > 1 ? "multi_location_operator" : "single_location_owner",
+        billingEmail: payload.payoutAdminEmail || payload.workEmail,
+        contactName: payload.payoutAdminName,
+        status: "trial_setup",
+        customFields: {
+          trialWorkspace: true,
+          requestedCenterCount: requestedCenters,
+          model: requestedCenters > 1 ? "owner_group_multi_location" : "owner_group_single_center",
+        },
+      },
+      select: { id: true, name: true, slug: true, ownerType: true },
+    });
+
     const center = await tx.center.create({
       data: {
         organizationId: organization.id,
+        ownerGroupId: ownerGroup.id,
         name: centerName,
         crmLocationId: `trial-${tenantSlug}`,
         locationId: `trial-${tenantSlug}`,
@@ -335,6 +356,25 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
       select: { id: true, email: true, name: true, role: true },
     });
 
+    await tx.userAccessGrant.create({
+      data: {
+        userId: user.id,
+        tenantId: tenant.id,
+        brandId: brand.id,
+        organizationId: organization.id,
+        ownerGroupId: ownerGroup.id,
+        role: UserRole.BRAND_ADMIN,
+        scopeType: "OWNER_GROUP",
+        permissions: {
+          canManageBranding: true,
+          canManageCenters: true,
+          canManageUsers: true,
+          canInstallInquiryForms: true,
+          canPreparePayouts: true,
+        },
+      },
+    });
+
     await tx.whiteLabelSettings.create({
       data: {
         brandId: brand.id,
@@ -348,6 +388,45 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
       },
     });
 
+    await tx.brandCustomization.create({
+      data: {
+        tenantId: tenant.id,
+        brandId: brand.id,
+        organizationId: organization.id,
+        scopeType: "BRAND",
+        brandName: payload.brandName,
+        mascotUrlPlaceholder: "/mr-bee.png",
+        primaryColor: "#f5b51b",
+        accentColor: "#10b981",
+        themeMode: "dark",
+        emailSenderPlaceholder: payload.workEmail,
+        customDomainPlaceholder: "",
+        parentPortalName: `${payload.brandName} Family Portal`,
+        loginScreenTitle: `${payload.brandName} operations workspace`,
+        notificationFooterText: `Sent from ${payload.brandName} through The Bee Suite.`,
+        legalFooterText: `${payload.brandName} childcare operations powered by The Bee Suite.`,
+      },
+    });
+
+    await tx.brandAsset.createMany({
+      data: [
+        {
+          tenantId: tenant.id,
+          brandId: brand.id,
+          assetType: "mascot",
+          url: "/mr-bee.png",
+          altText: "Mr. Bee AI assistant",
+        },
+        {
+          tenantId: tenant.id,
+          brandId: brand.id,
+          assetType: "logo_placeholder",
+          altText: `${payload.brandName} logo placeholder`,
+          metadata: { uploadStatus: "pending", scope: "brand" },
+        },
+      ],
+    });
+
     await tx.integration.createMany({
       data: [
         {
@@ -356,6 +435,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           status: "ready_to_install",
           configPlaceholder: {
             centerId: center.id,
+            ownerGroupId: ownerGroup.id,
             endpoint: "/api/inquiries",
             leadBackup: "crm_database_and_google_sheet_when_configured",
           },
@@ -366,6 +446,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           status: "setup_required",
           configPlaceholder: {
             payoutAdminEmail: payload.payoutAdminEmail,
+            ownerGroupId: ownerGroup.id,
             livePaymentsEnabled: false,
             softwarePlan: payload.softwarePlan,
             addOnBundle: payload.addOnBundle,
@@ -418,6 +499,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           ...payload,
           brandId: brand.id,
           organizationId: organization.id,
+          ownerGroupId: ownerGroup.id,
           centerId: center.id,
           userId: user.id,
           notificationId: notification.id,
@@ -426,7 +508,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
       },
     });
 
-    return { tenant, brand, organization, center, user, notification };
+    return { tenant, brand, organization, ownerGroup, center, user, notification };
   });
 
   const authUser = await ensureSupabaseAuthUser({
@@ -453,6 +535,10 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
     tenantSlug: workspace.tenant.slug,
     brandId: workspace.brand.id,
     brandName: workspace.brand.name,
+    ownerGroupId: workspace.ownerGroup.id,
+    ownerGroupName: workspace.ownerGroup.name,
+    ownerGroupType: workspace.ownerGroup.ownerType,
+    accessScope: "OWNER_GROUP",
     organizationId: workspace.organization.id,
     organizationName: workspace.organization.name,
     centerId: workspace.center.id,

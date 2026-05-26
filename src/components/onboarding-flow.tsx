@@ -74,6 +74,10 @@ type WorkspaceSetup = {
   tenantId?: string;
   tenantName?: string;
   tenantSlug?: string;
+  ownerGroupId?: string;
+  ownerGroupName?: string;
+  ownerGroupType?: string;
+  accessScope?: string;
   organizationId?: string | null;
   organizationName?: string;
   centerId?: string;
@@ -261,7 +265,7 @@ export function OnboardingFlow() {
                 <p className="leading-7">
                   {workspace?.existingWorkspace
                     ? `${form.workEmail} already has Bee Suite access. We sent an account recovery email when Supabase Auth accepted the request.`
-                    : `${form.brandName || "Your brand"} now has a trial workspace with a primary center profile, brand settings, setup integrations, and an owner account.`}
+                    : `${form.brandName || "Your brand"} now has a trial workspace with an ownership container, primary center profile, brand settings, setup integrations, and an owner account.`}
                   {" "}Use the dashboard to finish center profiles, invite staff, install the inquiry form, and prepare payout onboarding.
                 </p>
                 {!workspace?.auth?.passwordReset?.ok ? (
@@ -284,6 +288,7 @@ export function OnboardingFlow() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ["Brand", form.brandName],
+                    ["Owner group", workspace?.ownerGroupName || "Ownership container"],
                     ["Workspace", workspace?.tenantSlug || "Trial setup"],
                     ["Primary center", workspace?.centerName || "Primary Center"],
                     ["Centers requested", form.centerCount],

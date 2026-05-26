@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { inflateRawSync } from "node:zlib";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +10,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function parseCsv(text: string) {
+function parseDelimited(text: string, delimiter: "," | "\t" | "|") {
   const rows: string[][] = [];
   let current = "";
   let row: string[] = [];
@@ -22,7 +23,7 @@ function parseCsv(text: string) {
       i += 1;
     } else if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === "," && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       row.push(current.trim());
       current = "";
     } else if ((char === "\n" || char === "\r") && !inQuotes) {
@@ -38,6 +39,17 @@ function parseCsv(text: string) {
   row.push(current.trim());
   if (row.some(Boolean)) rows.push(row);
   return rows;
+}
+
+function parseImportRows(text: string) {
+  const candidates = [",", "\t", "|"] as const;
+  const parsed = candidates.map((delimiter) => {
+    const rows = parseDelimited(text, delimiter);
+    const score = rows.slice(0, 20).reduce((sum, row) => sum + row.length, 0);
+    return { delimiter, rows, score };
+  });
+  parsed.sort((a, b) => b.score - a.score);
+  return parsed[0]?.rows ?? [];
 }
 
 function value(record: Record<string, string>, aliases: string[]) {
@@ -74,6 +86,134 @@ function centerAliases(center: { id: string; name: string; crmLocationId: string
   ].map(centerKey).filter(Boolean);
 }
 
+const crcTable = Array.from({ length: 256 }, (_, index) => {
+  let crc = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+  }
+  return crc >>> 0;
+});
+
+function crc32Byte(crc: number, byte: number) {
+  return (crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8)) >>> 0;
+}
+
+function makeZipCrypto(password: string) {
+  const keys = [0x12345678, 0x23456789, 0x34567890];
+
+  function updateKeys(byte: number) {
+    keys[0] = crc32Byte(keys[0], byte);
+    keys[1] = (Math.imul((keys[1] + (keys[0] & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    keys[2] = crc32Byte(keys[2], keys[1] >>> 24);
+  }
+
+  for (const byte of Buffer.from(password, "utf8")) {
+    updateKeys(byte);
+  }
+
+  function decryptByte() {
+    const temp = (keys[2] | 2) >>> 0;
+    return (Math.imul(temp, temp ^ 1) >>> 8) & 0xff;
+  }
+
+  return {
+    decrypt(input: Buffer) {
+      const output = Buffer.alloc(input.length);
+      for (let index = 0; index < input.length; index += 1) {
+        const plain = input[index] ^ decryptByte();
+        updateKeys(plain);
+        output[index] = plain;
+      }
+      return output;
+    },
+  };
+}
+
+function readUInt16(buffer: Buffer, offset: number) {
+  return buffer.readUInt16LE(offset);
+}
+
+function readUInt32(buffer: Buffer, offset: number) {
+  return buffer.readUInt32LE(offset);
+}
+
+function findZipEntry(buffer: Buffer, wantedName: string) {
+  let offset = 0;
+  while (offset < buffer.length - 30) {
+    if (readUInt32(buffer, offset) !== 0x04034b50) {
+      offset += 1;
+      continue;
+    }
+    const flags = readUInt16(buffer, offset + 6);
+    const method = readUInt16(buffer, offset + 8);
+    const crc = readUInt32(buffer, offset + 14);
+    const compressedSize = readUInt32(buffer, offset + 18);
+    const uncompressedSize = readUInt32(buffer, offset + 22);
+    const fileNameLength = readUInt16(buffer, offset + 26);
+    const extraLength = readUInt16(buffer, offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + fileNameLength + extraLength;
+    const name = buffer.subarray(nameStart, nameStart + fileNameLength).toString(flags & 0x800 ? "utf8" : "latin1");
+    const dataEnd = dataStart + compressedSize;
+    if (name === wantedName) {
+      return {
+        flags,
+        method,
+        crc,
+        compressedSize,
+        uncompressedSize,
+        encrypted: Boolean(flags & 1),
+        data: buffer.subarray(dataStart, dataEnd),
+      };
+    }
+    offset = dataEnd > offset ? dataEnd : offset + 4;
+  }
+  return null;
+}
+
+function extractV10ImportText(buffer: Buffer, password: string) {
+  const entry = findZipEntry(buffer, "V10Import.txt");
+  if (!entry) throw new Error("The .v10 file did not contain V10Import.txt.");
+  if (entry.encrypted && !password) throw new Error("This .v10 export is encrypted. Enter the export password and try again.");
+  let compressedData = entry.data;
+  if (entry.encrypted) {
+    const decrypted = makeZipCrypto(password).decrypt(entry.data);
+    const validationByte = (entry.crc >>> 24) & 0xff;
+    if (decrypted.length < 13 || decrypted[11] !== validationByte) {
+      throw new Error("The .v10 export password did not unlock V10Import.txt.");
+    }
+    compressedData = decrypted.subarray(12);
+  }
+  if (entry.method === 8) {
+    return inflateRawSync(compressedData).toString("utf8");
+  }
+  if (entry.method === 0) {
+    return compressedData.toString("utf8");
+  }
+  throw new Error(`Unsupported .v10 compression method ${entry.method}.`);
+}
+
+function isZip(buffer: Buffer) {
+  return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
+}
+
+async function readImportText(file: FormDataEntryValue | null, pastedCsv: string, password: string) {
+  if (!(file instanceof File) || file.size <= 0) {
+    return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text" };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (file.name.toLowerCase().endsWith(".v10") || isZip(buffer)) {
+    return {
+      text: extractV10ImportText(buffer, password),
+      filename: file.name,
+      sourceType: "procare_v10",
+    };
+  }
+
+  return { text: buffer.toString("utf8"), filename: file.name, sourceType: "csv_file" };
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -85,6 +225,7 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData();
   const requestedCenterId = clean(formData.get("centerId"));
+  const v10Password = clean(formData.get("v10Password"));
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
@@ -111,10 +252,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const text = file instanceof File && file.size > 0 ? await file.text() : pastedCsv;
+  let importPayload: Awaited<ReturnType<typeof readImportText>>;
+  try {
+    importPayload = await readImportText(file, pastedCsv, v10Password);
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "ProCare export could not be read." },
+      { status: 400 },
+    );
+  }
+  const text = importPayload.text;
   if (!text) return NextResponse.json({ ok: false, error: "Upload a CSV export or paste CSV text." }, { status: 400 });
 
-  const rows = parseCsv(text);
+  const rows = parseImportRows(text);
   const headers = rows[0]?.map((header) => header.trim().toLowerCase()) ?? [];
   if (rows.length < 2 || !headers.length) {
     return NextResponse.json({ ok: false, error: "No import rows found." }, { status: 400 });
@@ -132,9 +282,9 @@ export async function POST(request: NextRequest) {
     data: {
       centerId: center.id,
       uploadedById: user.id,
-      filename: file instanceof File && file.size > 0 ? file.name : "pasted-procare-import.csv",
+      filename: importPayload.filename,
       status: "processing",
-      summary: {},
+      summary: { sourceType: importPayload.sourceType },
     },
   });
 
@@ -331,6 +481,8 @@ export async function POST(request: NextRequest) {
 
   const summary = {
     center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
+    sourceType: importPayload.sourceType,
+    filename: importPayload.filename,
     rows: rowResults.length,
     imported: rowResults.filter((row) => row.status === "imported").length,
     errors: rowResults.filter((row) => row.status === "error").length,

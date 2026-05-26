@@ -1108,9 +1108,30 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "team-permissions") {
-    const where = tenantWide
+    const scopedActiveGrantWhere: Prisma.UserAccessGrantListRelationFilter = {
+      some: {
+        isActive: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: today } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: today } }] },
+          {
+            OR: [
+              { centerId: scopedCenterIds },
+              { ownerGroup: { centers: { some: { id: scopedCenterIds } } } },
+            ],
+          },
+        ],
+      },
+    };
+    const where: Prisma.UserWhereInput = tenantWide
       ? { tenantId: user.tenantId }
-      : { tenantId: user.tenantId, staffProfile: { centerId: scopedCenterIds } };
+      : {
+          tenantId: user.tenantId,
+          OR: [
+            { staffProfile: { centerId: scopedCenterIds } },
+            { accessGrants: scopedActiveGrantWhere },
+          ],
+        };
     const [users, roleCounts] = await Promise.all([
       prisma.user.findMany({
         where,

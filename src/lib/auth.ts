@@ -27,7 +27,7 @@ export type CurrentUser = {
   accessGrantCount: number;
 };
 
-const allCenterRoles = new Set<UserRole>([
+const tenantWideAccessRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
@@ -93,6 +93,10 @@ type ActiveAccessGrant = {
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function canUseTenantWideAccessRole(role: UserRole) {
+  return tenantWideAccessRoles.has(role);
 }
 
 function getAuthSecret() {
@@ -210,10 +214,13 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
   } else if (activeGrants.length) {
-    const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants);
+    const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role);
+    const hasAllowedTenantGrant =
+      canUseTenantWideAccessRole(user.role) &&
+      activeGrants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === user.tenantId);
     centerIds = unique([...staffCenterIds, ...grantCenterIds]);
-    accessScope = activeGrants.some((grant) => grant.scopeType === "TENANT") ? "tenant" : centerIds.length ? "scoped" : "none";
-  } else if (allCenterRoles.has(user.role)) {
+    accessScope = hasAllowedTenantGrant ? "tenant" : centerIds.length ? "scoped" : "none";
+  } else if (tenantWideAccessRoles.has(user.role)) {
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId: user.tenantId } },
       select: { id: true },
@@ -236,8 +243,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   };
 }
 
-async function resolveAccessGrantCenterIds(tenantId: string, grants: ActiveAccessGrant[]) {
-  if (grants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === tenantId)) {
+async function resolveAccessGrantCenterIds(tenantId: string, grants: ActiveAccessGrant[], role: UserRole) {
+  if (
+    canUseTenantWideAccessRole(role) &&
+    grants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === tenantId)
+  ) {
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId } },
       select: { id: true },
@@ -272,8 +282,8 @@ export async function requireCurrentUser() {
 
 export function canAccessAllCenters(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "accessScope">>) {
   if (user.role === UserRole.PLATFORM_OWNER) return true;
-  if (user.accessScope) return user.accessScope === "tenant";
-  return allCenterRoles.has(user.role);
+  if (user.accessScope) return user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role);
+  return tenantWideAccessRoles.has(user.role);
 }
 
 export function getLeadScopeWhere(user: CurrentUser) {
@@ -290,7 +300,11 @@ export function getLeadScopeWhere(user: CurrentUser) {
 }
 
 export function canAccessCenter(user: CurrentUser, centerId: string) {
-  return user.role === UserRole.PLATFORM_OWNER || user.accessScope === "tenant" || user.centerIds.includes(centerId);
+  return (
+    user.role === UserRole.PLATFORM_OWNER ||
+    (user.accessScope === "tenant" && canUseTenantWideAccessRole(user.role)) ||
+    user.centerIds.includes(centerId)
+  );
 }
 
 export function canManageCrmLeads(user: Pick<CurrentUser, "role">) {

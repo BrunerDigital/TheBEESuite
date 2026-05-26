@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createClient, type User } from "@supabase/supabase-js";
 
 const DEFAULT_SUPABASE_URL = "https://nqjrlktoewiueiwrubas.supabase.co";
 
@@ -20,6 +21,28 @@ export function getSupabaseAuthConfig(preference: SupabaseAuthKeyPreference = "a
   }
 
   return { url, key };
+}
+
+function getSupabaseAdminClient() {
+  const { url, key } = getSupabaseAuthConfig("service");
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+async function findSupabaseAuthUserByEmail(email: string) {
+  const supabase = getSupabaseAdminClient();
+  const normalized = email.toLowerCase();
+
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    const user = data.users.find((item) => item.email?.toLowerCase() === normalized);
+    if (user) return { supabase, user };
+    if (data.users.length < 1000) break;
+  }
+
+  return { supabase, user: null as User | null };
 }
 
 export function getAppBaseUrl(requestUrl?: string) {
@@ -101,6 +124,55 @@ export async function ensureSupabaseAuthUser({
     created: false,
     error: text || `Supabase admin user create returned ${response.status}.`,
   };
+}
+
+export async function upsertSupabaseAuthUserWithPassword({
+  email,
+  name,
+  password,
+  role,
+  source = "bee_suite_executive_admin",
+}: {
+  email: string;
+  name?: string;
+  password: string;
+  role?: string;
+  source?: string;
+}) {
+  const normalizedEmail = email.toLowerCase();
+  const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
+  const metadata = {
+    name,
+    source,
+  };
+  const appMetadata = role ? { bee_suite_role: role } : undefined;
+
+  if (user) {
+    const { error } = await supabase.auth.admin.updateUserById(user.id, {
+      password,
+      email_confirm: true,
+      user_metadata: {
+        ...(user.user_metadata ?? {}),
+        ...metadata,
+      },
+      app_metadata: {
+        ...(user.app_metadata ?? {}),
+        ...(appMetadata ?? {}),
+      },
+    });
+    if (error) throw error;
+    return { ok: true, created: false, updated: true };
+  }
+
+  const { error } = await supabase.auth.admin.createUser({
+    email: normalizedEmail,
+    password,
+    email_confirm: true,
+    user_metadata: metadata,
+    app_metadata: appMetadata,
+  });
+  if (error) throw error;
+  return { ok: true, created: true, updated: false };
 }
 
 export async function verifySupabasePassword(email: string, password: string) {

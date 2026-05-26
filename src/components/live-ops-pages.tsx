@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
@@ -384,10 +385,13 @@ export type AgencyAdminData = {
     id: string;
     name: string;
     crmLocationId: string | null;
+    locationId: string | null;
     city: string | null;
     state: string | null;
     email: string | null;
+    status: string;
     licensedCapacity: number;
+    ownerGroupId: string | null;
     ownerGroup: { name: string; ownerType: string } | null;
     _count: { leads: number; staff: number; classrooms: number };
   }>;
@@ -432,6 +436,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         <StatCard label="Users" value={data.stats.users} />
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
       </div>
+      <ExecutiveAdminConsole centers={data.centers} ownerGroups={data.ownerGroups} />
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
@@ -519,6 +524,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                 <TableHead>Owner group</TableHead>
                 <TableHead>Place</TableHead>
                 <TableHead>Email routing</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Leads</TableHead>
                 <TableHead>Staff</TableHead>
                 <TableHead>Capacity</TableHead>
@@ -535,6 +541,9 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                   <TableCell>{[center.city, center.state].filter(Boolean).join(", ") || "Not set"}</TableCell>
                   <TableCell>
                     <Badge variant={center.email ? "default" : "outline"}>{center.email ? "Ready" : "Missing"}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={center.status === "active" ? "default" : "outline"}>{center.status}</Badge>
                   </TableCell>
                   <TableCell>{center._count.leads.toLocaleString()}</TableCell>
                   <TableCell>{center._count.staff}</TableCell>

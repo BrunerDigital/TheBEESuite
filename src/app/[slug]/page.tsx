@@ -74,10 +74,13 @@ async function getVisibleCenters(user: CurrentUser) {
       id: true,
       name: true,
       crmLocationId: true,
+      locationId: true,
       city: true,
       state: true,
       email: true,
+      status: true,
       licensedCapacity: true,
+      ownerGroupId: true,
       ownerGroup: {
         select: {
           name: true,
@@ -1123,7 +1126,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "agency-admin") {
-    const [organizations, users, leads, ownerGroups, accessGrants] = await Promise.all([
+    const [organizations, users, leads, ownerGroups, accessGrants, adminCenters] = await Promise.all([
       prisma.organization.count({
         where: tenantWide ? { tenantId: user.tenantId } : { id: user.organizationId ?? "__none__" },
       }),
@@ -1175,6 +1178,27 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           center: { select: { name: true, crmLocationId: true } },
         },
       }),
+      prisma.center.findMany({
+        where: tenantWide
+          ? { organization: { tenantId: user.tenantId } }
+          : { id: scopedCenterIds },
+        orderBy: [{ status: "asc" }, { state: "asc" }, { city: "asc" }, { name: "asc" }],
+        take: 250,
+        select: {
+          id: true,
+          name: true,
+          crmLocationId: true,
+          locationId: true,
+          city: true,
+          state: true,
+          email: true,
+          status: true,
+          licensedCapacity: true,
+          ownerGroupId: true,
+          ownerGroup: { select: { name: true, ownerType: true } },
+          _count: { select: { leads: true, staff: true, classrooms: true } },
+        },
+      }),
     ]);
 
     return (
@@ -1182,11 +1206,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         data={{
           stats: {
             organizations,
-            centers: centers.length,
+            centers: adminCenters.length,
             users,
             leads,
           },
-          centers: centers.slice(0, 150),
+          centers: adminCenters,
           ownerGroups,
           accessGrants,
         }}

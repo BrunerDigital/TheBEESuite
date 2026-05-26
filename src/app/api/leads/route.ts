@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { leadScore, parseLeadStage } from "@/lib/crm";
-import { canAccessAllCenters, canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser, type CurrentUser } from "@/lib/auth";
+import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
 export const runtime = "nodejs";
@@ -47,18 +47,13 @@ async function resolveCenterId(user: CurrentUser, locationId?: string) {
     }
   }
 
-  if (!canAccessAllCenters(user)) {
-    if (!user.primaryCenterId) throw new ApiError("No assigned center found for this account.", 403);
-    return user.primaryCenterId;
-  }
-
   const fallback = await prisma.center.findFirst({
-    where: { status: { not: "closed" } },
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
 
-  if (!fallback) throw new Error("No center exists for lead creation.");
+  if (!fallback) throw new ApiError("No assigned center found for this account.", 403);
   return fallback.id;
 }
 
@@ -84,17 +79,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
 
-  if (!canAccessAllCenters(user) && !user.centerIds.length) {
+  const visibleCenters = await prisma.center.findMany({
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    select: { id: true },
+  });
+  const visibleCenterIds = visibleCenters.map((center) => center.id);
+
+  if (!visibleCenterIds.length) {
     return NextResponse.json({ ok: false, error: "No assigned center found for this account." }, { status: 403 });
+  }
+  if (centerId && !visibleCenterIds.includes(centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
 
   const leads = await prisma.lead.findMany({
     where: {
-      ...(centerId
-        ? { centerId }
-        : !canAccessAllCenters(user)
-          ? { centerId: { in: user.centerIds } }
-          : {}),
+      centerId: centerId ?? { in: visibleCenterIds },
       ...(parsedStage ? { stage: parsedStage } : {}),
     },
     orderBy: { createdAt: "desc" },

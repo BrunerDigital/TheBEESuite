@@ -45,9 +45,7 @@ export default async function DashboardPage() {
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
   const leadWhere = {
-    center: {
-      is: centerWhere,
-    },
+    centerId: scopedCenterFilter,
   };
   const today = new Date();
   const startOfDay = new Date(today);

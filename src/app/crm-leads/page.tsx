@@ -12,39 +12,40 @@ export default async function CrmLeadsPage() {
   if (!canViewCrmLeads(user)) notFound();
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
-  const leadWhere = { center: { is: centerWhere } };
+  const centers = await prisma.center.findMany({
+    where: centerWhere,
+    orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      city: true,
+      state: true,
+    },
+  });
+  const visibleCenterIds = centers.map((center) => center.id);
+  const leadWhere = {
+    centerId: visibleCenterIds.length ? { in: visibleCenterIds } : { in: ["__no_visible_centers__"] },
+  };
 
-  const [centers, leads] = await Promise.all([
-    prisma.center.findMany({
-      where: centerWhere,
-      orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        crmLocationId: true,
-        locationId: true,
-        city: true,
-        state: true,
-      },
-    }),
-    prisma.lead.findMany({
-      where: leadWhere,
-      orderBy: { createdAt: "desc" },
-      take: 400,
-      include: {
-        center: {
-          select: {
-            id: true,
-            name: true,
-            crmLocationId: true,
-            locationId: true,
-            city: true,
-            state: true,
-          },
+  const leads = await prisma.lead.findMany({
+    where: leadWhere,
+    orderBy: { createdAt: "desc" },
+    take: 400,
+    include: {
+      center: {
+        select: {
+          id: true,
+          name: true,
+          crmLocationId: true,
+          locationId: true,
+          city: true,
+          state: true,
         },
       },
-    }),
-  ]);
+    },
+  });
 
   return (
     <AppShell currentUser={user}>

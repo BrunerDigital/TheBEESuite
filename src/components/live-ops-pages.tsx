@@ -386,8 +386,11 @@ export type AgencyAdminData = {
     name: string;
     crmLocationId: string | null;
     locationId: string | null;
+    address: string | null;
     city: string | null;
     state: string | null;
+    postalCode: string | null;
+    phone: string | null;
     email: string | null;
     status: string;
     licensedCapacity: number;
@@ -425,9 +428,9 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
           <Building2 data-icon="inline-start" />
           Enterprise control
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Agency / Franchise Admin</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Executive / Franchise Admin</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Organization, center, user, and lead visibility for the Kid City USA live pilot and future multi-brand tenants.
+          Corporate controls for location lifecycle, owner groups, scoped users, password resets, and multi-location visibility for Kid City USA and future SaaS tenants.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">

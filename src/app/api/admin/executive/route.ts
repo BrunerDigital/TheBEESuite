@@ -238,11 +238,12 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
     if (!canAccessCenter(actor, centerId)) throw new Error("You do not have access to update this center.");
   }
 
-  if (!centerId && (crmLocationId || locationId)) {
+  if (crmLocationId || locationId) {
     const existing = await prisma.center.findFirst({
       where: {
         organization: { tenantId: actor.tenantId },
         status: { not: "closed" },
+        ...(centerId ? { NOT: { id: centerId } } : {}),
         OR: [
           crmLocationId ? { crmLocationId } : undefined,
           locationId ? { locationId } : undefined,

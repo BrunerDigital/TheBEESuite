@@ -78,6 +78,8 @@ Auth and setup: `/login`, `/forgot-password`, `/onboarding`
 
 Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classroom-dashboard`, `/crm-leads`, `/family-detail`, `/child-profile`, `/enrollment-pipeline`, `/waitlist`, `/tours`, `/calendar`, `/messages`, `/announcements`, `/campaigns`, `/automations`, `/forms`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/staff`, `/billing-invoices`, `/payments`, `/compliance`, `/reputation`, `/analytics`, `/ai-command`, `/parent-portal`, `/teacher-portal`, `/agency-admin`, `/white-label`, `/team-permissions`, `/integrations`, `/billing-settings`, `/notifications`, `/audit-logs`, and `/help`.
 
+Executive users manage live locations, owner groups, scoped users, temporary passwords, and archived/reactivated centers from `/agency-admin`. See `docs/EXECUTIVE_ADMIN.md` for the operational workflow.
+
 ## Environment Variables
 
 Use `.env.example` as the guide. External services stay gated until explicitly connected:

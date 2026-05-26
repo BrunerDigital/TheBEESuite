@@ -336,7 +336,7 @@ export const navGroups = [
   {
     title: "Platform",
     items: [
-      ["Agency admin", "agency-admin", Building2],
+      ["Executive admin", "agency-admin", Building2],
       ["White-label", "white-label", Sparkles],
       ["Team permissions", "team-permissions", Users],
       ["Integrations", "integrations", Workflow],
@@ -726,13 +726,13 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "agency-admin",
-    title: "Agency / Franchise Admin",
+    title: "Executive / Franchise Admin",
     eyebrow: "White-label enterprise control",
     description:
-      "Manage organizations, brands, centers, users, subscriptions placeholders, analytics, feature flags, audit logs, impersonation warning, and support access placeholder.",
+      "Manage organizations, owner groups, locations, scoped users, temporary passwords, subscriptions placeholders, analytics, feature flags, audit logs, impersonation warning, and support access placeholder.",
     owner: "Platform owner, brand/franchise admin",
-    metrics: ["1 brand", "3 centers", "10 roles", "6 feature flags"],
-    features: ["Organization management", "Center management", "Support access placeholder", "Impersonation audit warning"],
+    metrics: ["1 brand", "Live centers", "10 roles", "Audit logged"],
+    features: ["Location lifecycle", "Owner group containers", "User and password controls", "Impersonation audit warning"],
     records: ["Kid City USA", "North Metro region", "Feature flag: Kiosk preview"],
     sensitive: true,
   },

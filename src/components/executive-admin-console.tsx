@@ -16,8 +16,11 @@ type CenterOption = {
   name: string;
   crmLocationId: string | null;
   locationId?: string | null;
+  address: string | null;
   city: string | null;
   state: string | null;
+  postalCode: string | null;
+  phone: string | null;
   email: string | null;
   status: string;
   licensedCapacity: number;
@@ -117,11 +120,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
       name: center.name,
       crmLocationId: center.crmLocationId ?? "",
       locationId: center.locationId ?? center.crmLocationId ?? "",
-      address: "",
+      address: center.address ?? "",
       city: center.city ?? "",
       state: center.state ?? "",
-      postalCode: "",
-      phone: "",
+      postalCode: center.postalCode ?? "",
+      phone: center.phone ?? "",
       email: center.email ?? "",
       licensedCapacity: String(center.licensedCapacity ?? 0),
       ownerGroupId: center.ownerGroupId ?? "",
@@ -282,6 +285,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups }: Props) {
                 <div className="space-y-1 md:col-span-2">
                   <Label>Address</Label>
                   <Input value={centerForm.address} onChange={(event) => setCenterField("address", event.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Postal code</Label>
+                  <Input value={centerForm.postalCode} onChange={(event) => setCenterField("postalCode", event.target.value)} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">

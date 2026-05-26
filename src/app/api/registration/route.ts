@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, EnrollmentStage, UserRole } from "@prisma/client";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
+import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -331,21 +332,15 @@ export async function POST(request: NextRequest) {
       }),
     ]);
 
-    const directors = await prisma.staffProfile.findMany({
-      where: {
-        centerId: center.id,
-        user: {
-          isActive: true,
-          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
-        },
-      },
-      select: { userId: true },
+    const directors = await getCenterLeadershipUsers({
+      centerId: center.id,
+      roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN],
     });
 
     if (directors.length) {
       await prisma.notification.createMany({
         data: directors.map((director) => ({
-          userId: director.userId,
+          userId: director.id,
           title: "Online registration submitted",
           body: `${payload.primaryGuardianName} submitted a packet for ${payload.childFullName}.`,
           type: "online_registration",

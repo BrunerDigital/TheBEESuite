@@ -550,7 +550,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
                 <TableHead>Email routing</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Leads</TableHead>
-                <TableHead>Staff</TableHead>
+                <TableHead>Teachers</TableHead>
                 <TableHead>Capacity</TableHead>
               </TableRow>
             </TableHeader>
@@ -667,13 +667,13 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Center Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live center-scoped snapshot for enrollment work, tours, staff profiles, classrooms, and follow-up tasks. {data.place}
+          Live center-scoped snapshot for enrollment work, tours, teachers, classrooms, and follow-up tasks. {data.place}
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
-        <StatCard label="Staff" value={data.stats.staff} />
+        <StatCard label="Teachers" value={data.stats.staff} />
         <StatCard label="Classrooms" value={data.stats.classrooms} />
         <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
         <StatCard label="Open tasks" value={data.stats.openTasks} />
@@ -1390,7 +1390,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Classroom Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live classroom capacity, roster, staff assignment, daily report, and incident snapshot.
+          Live classroom capacity, roster, teacher assignment, daily report, and incident snapshot.
         </p>
       </section>
       {data.demoMode ? <DemoDataNotice section="classroom operations" /> : null}
@@ -1398,7 +1398,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <StatCard label="Classrooms" value={data.classrooms.length} />
         <StatCard label="Children assigned" value={children} />
         <StatCard label="Licensed seats shown" value={capacity} />
-        <StatCard label="Staff assigned" value={staff} />
+        <StatCard label="Teachers assigned" value={staff} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
@@ -1413,7 +1413,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
                 <TableHead>Center</TableHead>
                 <TableHead>Age group</TableHead>
                 <TableHead>Children</TableHead>
-                <TableHead>Staff</TableHead>
+                <TableHead>Teachers</TableHead>
                 <TableHead>Ratio rule</TableHead>
                 <TableHead>Incidents</TableHead>
               </TableRow>
@@ -1808,29 +1808,29 @@ export function StaffPage({ data }: { data: StaffPageData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <HeartHandshake data-icon="inline-start" />
-          Staff operations
+          Teacher operations
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Staff Management</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Teacher Staff Management</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Staff profiles, center assignments, roles, certifications, and background-check readiness for ratio-aware operations.
+          Teacher profiles, classroom assignments, certifications, and background-check readiness for ratio-aware operations.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Staff" value={data.stats.total} />
+        <StatCard label="Teachers" value={data.stats.total} />
         <StatCard label="Active users" value={data.stats.activeUsers} />
         <StatCard label="Expiring certs" value={data.stats.expiringCerts} />
         <StatCard label="Background pending" value={data.stats.backgroundPending} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Staff Directory</CardTitle>
+          <CardTitle>Teacher Directory</CardTitle>
           <CardDescription>Role, classroom, and certification snapshot</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Staff</TableHead>
+                <TableHead>Teacher</TableHead>
                 <TableHead>Center</TableHead>
                 <TableHead>Classroom</TableHead>
                 <TableHead>Role</TableHead>
@@ -1856,8 +1856,8 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <OperationsActionHub title="Create or Edit Staff Profile" defaultEntity="staff" compact centers={data.centers} />
-      <OperationsActionHub title="Add or Edit Staff Certification" defaultEntity="certification" compact />
+      <OperationsActionHub title="Create or Edit Teacher Profile" defaultEntity="staff" compact centers={data.centers} />
+      <OperationsActionHub title="Add or Edit Teacher Certification" defaultEntity="certification" compact />
     </div>
   );
 }
@@ -2095,13 +2095,13 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Certification Reminders</CardTitle>
-            <CardDescription>Expiring staff documentation</CardDescription>
+            <CardDescription>Expiring teacher documentation</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Staff</TableHead>
+                  <TableHead>Teacher</TableHead>
                   <TableHead>Center</TableHead>
                   <TableHead>Certification</TableHead>
                   <TableHead>Expires</TableHead>
@@ -2196,7 +2196,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
         <StatCard label="Upcoming tours" value={data.stats.upcomingTours} />
-        <StatCard label="Staff" value={data.stats.staff} />
+        <StatCard label="Teachers" value={data.stats.staff} />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Latest submitted FTE" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per school" />
@@ -2276,7 +2276,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
                 <TableHead>School</TableHead>
                 <TableHead>Place</TableHead>
                 <TableHead>Leads</TableHead>
-                <TableHead>Staff</TableHead>
+                <TableHead>Teachers</TableHead>
                 <TableHead>Classrooms</TableHead>
                 <TableHead>Capacity</TableHead>
               </TableRow>

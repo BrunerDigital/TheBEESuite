@@ -307,7 +307,7 @@ export const navGroups = [
       ["Attendance", "attendance", ClipboardCheck],
       ["Daily reports", "daily-reports", BookOpen],
       ["Incidents", "incident-reports", ShieldCheck],
-      ["Staff", "staff", HeartHandshake],
+      ["Teachers", "staff", HeartHandshake],
     ],
   },
   {
@@ -617,10 +617,10 @@ export const modules: ModuleDefinition[] = [
   },
   {
     slug: "staff",
-    title: "Staff Operations",
+    title: "Teacher Staff Operations",
     eyebrow: "Team and ratios",
     description:
-      "Staff directory, roles, classrooms, schedules, certifications, background check placeholders, training, documents, tasks, PTO, and notes.",
+      "Teacher directory, classroom assignments, schedules, certifications, background check placeholders, training, documents, tasks, PTO, and notes.",
     owner: "Director, assistant director, regional manager",
     metrics: ["20 staff", "18 present", "3 certifications expiring", "0 ratio warnings"],
     features: ["Roles and permissions", "Assigned centers/classrooms", "Time clock placeholder", "Training records"],

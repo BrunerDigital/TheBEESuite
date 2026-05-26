@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
 import { canAccessAllCenters, canManageCrmLeads, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
@@ -139,6 +140,7 @@ export default async function DashboardPage() {
     prisma.staffProfile.count({
       where: {
         centerId: scopedCenterFilter,
+        user: { role: UserRole.TEACHER },
       },
     }),
     prisma.invoice.aggregate({
@@ -174,7 +176,7 @@ export default async function DashboardPage() {
         _count: {
           select: {
             children: true,
-            staff: true,
+            staff: { where: { user: { role: UserRole.TEACHER } } },
           },
         },
       },
@@ -260,7 +262,7 @@ export default async function DashboardPage() {
       { label: "New leads", value: newLeadCount.toLocaleString(), trend: `${highIntentLeadCount.toLocaleString()} high-fit`, tone: "violet" },
       { label: "Tours today", value: toursToday.toLocaleString(), trend: `${openTasks.toLocaleString()} open CRM tasks`, tone: "sky" },
       { label: "Outstanding balances", value: `$${revenueDollars.toLocaleString()}`, trend: "Invoice total snapshot", tone: "rose" },
-      { label: "Staff profiles", value: staffCount.toLocaleString(), trend: "Assigned to visible centers", tone: "emerald" },
+      { label: "Teachers", value: staffCount.toLocaleString(), trend: "Assigned to visible centers", tone: "emerald" },
       { label: "Incidents to review", value: pendingIncidents.toLocaleString(), trend: `${expiringDocuments.toLocaleString()} expiring docs`, tone: "amber" },
     ],
     pipelineStages: pipelineCounts.map((item) => ({

@@ -347,7 +347,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <Separator className="my-4" />
                     <div className="grid grid-cols-3 gap-3 text-center text-sm">
                       <div><b>{center.children}</b><span className="block text-xs text-muted-foreground">Children</span></div>
-                      <div><b>{center.staff}</b><span className="block text-xs text-muted-foreground">Staff</span></div>
+                      <div><b>{center.staff}</b><span className="block text-xs text-muted-foreground">Teachers</span></div>
                       <div><b>{center.compliance}%</b><span className="block text-xs text-muted-foreground">Docs</span></div>
                     </div>
                   </div>

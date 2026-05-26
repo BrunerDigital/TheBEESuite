@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma } from "@prisma/client";
+import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import {
   AgencyAdminPage,
@@ -91,7 +91,7 @@ async function getVisibleCenters(user: CurrentUser) {
       _count: {
         select: {
           leads: true,
-          staff: true,
+          staff: { where: { user: { role: UserRole.TEACHER } } },
           classrooms: true,
         },
       },
@@ -205,10 +205,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   endOfDay.setHours(23, 59, 59, 999);
 
   if (slug === "multi-location-dashboard") {
-    const [leads, highIntentLeads, upcomingTours, fte, fteReports] = await Promise.all([
+    const [leads, highIntentLeads, upcomingTours, teacherCount, fte, fteReports] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
+      prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } } }),
       getKidCityFteSnapshot(centers),
       getFteReports(visibleCenterIds, 250),
     ]);
@@ -231,7 +232,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             leads,
             highIntentLeads,
             upcomingTours,
-            staff: centers.reduce((sum, center) => sum + center._count.staff, 0),
+            staff: teacherCount,
             submittedFteReports: fteReports.length,
             latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
             missingFteReports: Math.max(centers.length - recentlyReportedCenterIds.size, 0),
@@ -1235,7 +1236,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           licensedCapacity: true,
           ownerGroupId: true,
           ownerGroup: { select: { name: true, ownerType: true } },
-          _count: { select: { leads: true, staff: true, classrooms: true } },
+          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER } } }, classrooms: true } },
         },
       }),
       prisma.user.findMany({
@@ -1347,7 +1348,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
-      center ? prisma.staffProfile.count({ where: { centerId: center.id } }) : 0,
+      center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER } } }) : 0,
       center ? prisma.classroom.count({ where: { centerId: center.id } }) : 0,
       center
         ? prisma.tour.count({
@@ -1396,7 +1397,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       take: 150,
       include: {
         center: { select: { name: true, crmLocationId: true } },
-        _count: { select: { children: true, staff: true, dailyReports: true, incidents: true } },
+        _count: { select: { children: true, staff: { where: { user: { role: UserRole.TEACHER } } }, dailyReports: true, incidents: true } },
       },
     });
 
@@ -1603,10 +1604,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds };
+    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
-      ? { expiresAt: { lte: thirtyDays } }
-      : { staff: { centerId: scopedCenterIds }, expiresAt: { lte: thirtyDays } };
+      ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
+      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };
     const [staff, total, activeUsers, expiringCerts, backgroundPending] = await Promise.all([
       prisma.staffProfile.findMany({
         where: staffWhere,

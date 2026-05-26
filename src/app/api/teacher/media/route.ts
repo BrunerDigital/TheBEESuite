@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
 import { createChildMediaSignedUrl, uploadChildMediaBuffer } from "@/lib/supabase-storage";
 
@@ -116,22 +117,16 @@ export async function POST(request: NextRequest) {
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
 
   if (sharedWithParents && !child.photoVideoPermission && centerId) {
-    const directors = await prisma.staffProfile.findMany({
-      where: {
-        centerId,
-        user: {
-          isActive: true,
-          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] },
-          id: { not: user.id },
-        },
-      },
-      select: { userId: true },
+    const directors = await getCenterLeadershipUsers({
+      centerId,
+      excludeUserId: user.id,
+      roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
     });
     await Promise.all(
       directors.map((director) =>
         prisma.notification.create({
           data: {
-            userId: director.userId,
+            userId: director.id,
             title: "Photo needs parent permission review",
             body: `${child.fullName}'s photo is held until photo/video permission is confirmed.`,
             type: "parent_media",

@@ -209,10 +209,10 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user) return null;
 
-  const staffCenterIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
-  const hasStaffCenterAssignment = staffCenterIds.length > 0;
-  let centerIds = staffCenterIds;
-  let accessScope: CurrentUser["accessScope"] = staffCenterIds.length ? "center" : "none";
+  const profileCenterIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
+  const hasProfileCenterAssignment = profileCenterIds.length > 0;
+  let centerIds = profileCenterIds;
+  let accessScope: CurrentUser["accessScope"] = profileCenterIds.length ? "center" : "none";
   const activeGrants = user.accessGrants as ActiveAccessGrant[];
 
   if (user.role === UserRole.PLATFORM_OWNER) {
@@ -220,16 +220,16 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
   } else if (activeGrants.length) {
-    const allowBroadGrantAccess = canUseTenantWideAccessRole(user.role) && !hasStaffCenterAssignment;
+    const allowBroadGrantAccess = canUseTenantWideAccessRole(user.role) && !hasProfileCenterAssignment;
     const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role, {
       allowBroadGrantAccess,
     });
     const hasAllowedTenantGrant =
       allowBroadGrantAccess &&
       activeGrants.some((grant) => grant.scopeType === "TENANT" && grant.tenantId === user.tenantId);
-    centerIds = unique([...staffCenterIds, ...grantCenterIds]);
+    centerIds = unique([...profileCenterIds, ...grantCenterIds]);
     accessScope = hasAllowedTenantGrant ? "tenant" : centerIds.length ? "scoped" : "none";
-  } else if (tenantWideAccessRoles.has(user.role) && !hasStaffCenterAssignment) {
+  } else if (tenantWideAccessRoles.has(user.role) && !hasProfileCenterAssignment) {
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId: user.tenantId } },
       select: { id: true },

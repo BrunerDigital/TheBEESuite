@@ -71,7 +71,7 @@ const roles = [
   ["CENTER_DIRECTOR", "Center director"],
   ["ASSISTANT_DIRECTOR", "Assistant director"],
   ["TEACHER", "Teacher"],
-  ["BILLING_ADMIN", "Billing / admin staff"],
+  ["BILLING_ADMIN", "Billing/admin user"],
   ["READ_ONLY_AUDITOR", "Read-only auditor"],
 ];
 

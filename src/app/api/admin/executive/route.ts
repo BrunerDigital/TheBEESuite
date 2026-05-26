@@ -46,12 +46,8 @@ const assignableRoles = new Set<UserRole>([
   UserRole.BILLING_ADMIN,
   UserRole.READ_ONLY_AUDITOR,
 ]);
-const staffRoles = new Set<UserRole>([
-  UserRole.REGIONAL_MANAGER,
-  UserRole.CENTER_DIRECTOR,
-  UserRole.ASSISTANT_DIRECTOR,
+const classroomStaffProfileRoles = new Set<UserRole>([
   UserRole.TEACHER,
-  UserRole.BILLING_ADMIN,
 ]);
 const tenantAccessRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
@@ -479,7 +475,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     },
   });
 
-  if (center && staffRoles.has(roleValue)) {
+  if (center && classroomStaffProfileRoles.has(roleValue)) {
     await prisma.staffProfile.upsert({
       where: { userId: appUser.id },
       update: {

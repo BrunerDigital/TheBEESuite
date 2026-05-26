@@ -15,7 +15,7 @@ const entityOptions = [
   ["guardian", "Guardian"],
   ["child", "Child"],
   ["classroom", "Classroom"],
-  ["staff", "Staff profile"],
+  ["staff", "Teacher profile"],
   ["announcement", "Announcement"],
   ["campaign", "Campaign"],
   ["automation", "Automation"],

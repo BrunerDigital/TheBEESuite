@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -48,12 +50,9 @@ export async function POST(request: NextRequest) {
   });
 
   const directors = family.centerId
-    ? await prisma.staffProfile.findMany({
-        where: {
-          centerId: family.centerId,
-          user: { isActive: true, role: { in: ["CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"] } },
-        },
-        select: { userId: true },
+    ? await getCenterLeadershipUsers({
+        centerId: family.centerId,
+        roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
       })
     : [];
 
@@ -61,7 +60,7 @@ export async function POST(request: NextRequest) {
     directors.map((director) =>
       prisma.notification.create({
         data: {
-          userId: director.userId,
+          userId: director.id,
           title: `${requestType} request`,
           body: `${family.name}: ${details}`,
           type: "parent_request",

@@ -3,6 +3,7 @@ import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { sendEmail } from "@/lib/integrations";
+import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -65,13 +66,9 @@ export async function POST(request: NextRequest) {
   });
 
   const directors = family?.centerId
-    ? await prisma.staffProfile.findMany({
-        where: {
-          centerId: family.centerId,
-          user: { isActive: true, role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] } },
-        },
-        select: { userId: true, user: { select: { email: true } } },
-        take: 10,
+    ? await getCenterLeadershipUsers({
+        centerId: family.centerId,
+        roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
       })
     : [];
 
@@ -79,7 +76,7 @@ export async function POST(request: NextRequest) {
     ...directors.map((director) =>
       prisma.notification.create({
         data: {
-          userId: director.userId,
+          userId: director.id,
           title: `New parent message: ${subject}`,
           body: family ? `${family.name}: ${message}` : message,
           type: "message",
@@ -91,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   const email = sendEmailCopy && family
     ? await sendEmail({
-        to: directors.map((director) => director.user.email),
+        to: directors.map((director) => director.email),
         subject: `Portal message from ${family.name}: ${subject}`,
         text: message,
         fromName: "The Bee Suite",

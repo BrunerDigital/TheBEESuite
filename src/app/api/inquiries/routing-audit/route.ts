@@ -65,10 +65,12 @@ export async function GET() {
         },
       });
 
-      const fallbackStaffTargets = center
-        ? await prisma.staffProfile.count({
+      const fallbackLocationUsers = center
+        ? await prisma.userAccessGrant.count({
             where: {
               centerId: center.id,
+              isActive: true,
+              role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
               user: {
                 isActive: true,
                 email: { endsWith: "@kidcityusa.com" },
@@ -76,6 +78,19 @@ export async function GET() {
             },
           })
         : 0;
+      const legacyDirectorProfiles = center
+        ? await prisma.staffProfile.count({
+            where: {
+              centerId: center.id,
+              user: {
+                isActive: true,
+                email: { endsWith: "@kidcityusa.com" },
+                role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
+              },
+            },
+          })
+        : 0;
+      const fallbackLocationUserTargets = fallbackLocationUsers + legacyDirectorProfiles;
 
       const hasCenterEmail = Boolean(center?.email && isEmail(center.email));
       return {
@@ -88,9 +103,9 @@ export async function GET() {
         centerName: center?.name ?? null,
         matchedByCrmLocationId: center?.crmLocationId === location.crmLocationId,
         matchedByPublicLocationId: center?.locationId === location.locationId,
-        hasNotificationTarget: hasCenterEmail || fallbackStaffTargets > 0,
-        notificationTargetType: hasCenterEmail ? "center_email" : fallbackStaffTargets > 0 ? "staff_fallback" : "none",
-        fallbackStaffTargets,
+        hasNotificationTarget: hasCenterEmail || fallbackLocationUserTargets > 0,
+        notificationTargetType: hasCenterEmail ? "center_email" : fallbackLocationUserTargets > 0 ? "location_user_fallback" : "none",
+        fallbackLocationUserTargets,
       };
     }),
   );

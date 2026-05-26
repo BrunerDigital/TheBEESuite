@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EnrollmentStage } from "@prisma/client";
+import { EnrollmentStage, UserRole } from "@prisma/client";
 import {
   appendRowToGoogleSheet,
   hasGoogleSheetsApiConfig,
@@ -308,12 +308,37 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string, ce
 async function getLocationNotificationEmails(centerId: string, centerEmail?: string | null) {
   if (centerEmail && isEmail(centerEmail)) return [centerEmail];
 
-  const staff = await prisma.staffProfile.findMany({
+  const locationUsers = await prisma.userAccessGrant.findMany({
+    where: {
+      centerId,
+      isActive: true,
+      role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
+      user: {
+        isActive: true,
+        email: { endsWith: "@kidcityusa.com" },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (locationUsers.length) {
+    return uniqueEmails(locationUsers.map((grant) => grant.user.email)).slice(0, 3);
+  }
+
+  const directorProfiles = await prisma.staffProfile.findMany({
     where: {
       centerId,
       user: {
         isActive: true,
         email: { endsWith: "@kidcityusa.com" },
+        role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
       },
     },
     orderBy: { id: "asc" },
@@ -326,7 +351,7 @@ async function getLocationNotificationEmails(centerId: string, centerEmail?: str
     },
   });
 
-  return uniqueEmails(staff.map((profile) => profile.user.email)).slice(0, 3);
+  return uniqueEmails(directorProfiles.map((profile) => profile.user.email)).slice(0, 3);
 }
 
 async function forwardToGoogleSheets(payload: Record<string, unknown>): Promise<IntegrationResult> {

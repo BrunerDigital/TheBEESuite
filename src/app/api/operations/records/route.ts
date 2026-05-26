@@ -32,11 +32,6 @@ function requestedStatus(value: unknown) {
   return Object.values(DocumentStatus).includes(status as DocumentStatus) ? status as DocumentStatus : DocumentStatus.REQUESTED;
 }
 
-function requestedRole(value: unknown) {
-  const role = clean(value).toUpperCase().replaceAll(" ", "_");
-  return Object.values(UserRole).includes(role as UserRole) ? role as UserRole : UserRole.TEACHER;
-}
-
 async function assertCenterAccess(user: Awaited<ReturnType<typeof getCurrentUser>>, centerId: string) {
   if (!user) throw new Error("Authentication required.");
   const center = await prisma.center.findUnique({
@@ -171,8 +166,8 @@ export async function POST(request: NextRequest) {
     centerId = access.center.id;
     const email = clean(body.email) || clean(body.type);
     const staffName = clean(body.name);
-    if (!email || !staffName) return NextResponse.json({ ok: false, error: "Staff name and email are required." }, { status: 400 });
-    const staffRole = requestedRole(body.role || body.status);
+    if (!email || !staffName) return NextResponse.json({ ok: false, error: "Teacher name and email are required." }, { status: 400 });
+    const staffRole = UserRole.TEACHER;
     const staffUser = await prisma.user.upsert({
       where: { email },
       update: { name: staffName, role: staffRole, isActive: true, organizationId: access.center.organizationId },
@@ -391,10 +386,10 @@ export async function POST(request: NextRequest) {
     result = id ? await prisma.formSubmission.update({ where: { id }, data }) : await prisma.formSubmission.create({ data });
   } else if (entity === "certification") {
     const staffId = clean(body.staffId);
-    if (!staffId) return NextResponse.json({ ok: false, error: "Staff ID is required." }, { status: 400 });
+    if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
     const staff = await prisma.staffProfile.findUnique({ where: { id: staffId }, select: { centerId: true } });
-    if (!staff) return NextResponse.json({ ok: false, error: "Staff profile not found." }, { status: 404 });
-    if (!canAccessCenter(user, staff.centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this staff profile." }, { status: 403 });
+    if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
+    if (!canAccessCenter(user, staff.centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     centerId = staff.centerId;
     const data = {
       staffId,

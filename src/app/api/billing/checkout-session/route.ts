@@ -5,8 +5,11 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeCheckoutSession,
   getStripeCheckoutAmounts,
+  getStripePaymentMethodConfigurationId,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
+  shouldWaiveStripePaymentOperationsFee,
+  type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
@@ -14,6 +17,12 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function paymentMethodCategory(value: unknown): StripePaymentMethodCategory {
+  const normalized = clean(value).toLowerCase();
+  if (normalized === "ach" || normalized === "card" || normalized === "link_bank") return normalized;
+  return "default";
 }
 
 function requestBaseUrl(request: NextRequest) {
@@ -63,6 +72,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const invoiceId = clean(body.invoiceId);
+  const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory || body.paymentMethod);
   if (!invoiceId) {
     return NextResponse.json({ ok: false, error: "Invoice ID is required." }, { status: 400 });
   }
@@ -83,7 +93,17 @@ export async function POST(request: NextRequest) {
   const center = centerId
     ? await prisma.center.findUnique({
         where: { id: centerId },
-        select: { id: true, name: true, customFields: true },
+        select: {
+          id: true,
+          name: true,
+          customFields: true,
+          organization: {
+            select: {
+              tenant: { select: { name: true, slug: true } },
+              brand: { select: { name: true, slug: true } },
+            },
+          },
+        },
       })
     : null;
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
@@ -158,8 +178,33 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
+  const usesSpecificFeePolicy = requestedPaymentMethodCategory !== "default";
+  const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
+  if (usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "This payment method is not configured yet. Add the matching Stripe payment method configuration before enabling method-specific processing fees.",
+      },
+      { status: 400 },
+    );
+  }
+  const effectivePaymentMethodCategory =
+    usesSpecificFeePolicy && !paymentMethodConfigurationId ? "default" : requestedPaymentMethodCategory;
+
+  const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
+    tenantSlug: center?.organization.tenant.slug,
+    tenantName: center?.organization.tenant.name,
+    brandSlug: center?.organization.brand?.slug,
+    brandName: center?.organization.brand?.name,
+  });
   const baseUrl = requestBaseUrl(request);
-  const amounts = getStripeCheckoutAmounts(invoice.totalCents);
+  const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
+    paymentMethodCategory: effectivePaymentMethodCategory,
+    waiveBeeSuitePaymentOperationsFee,
+  });
   const session = await createStripeCheckoutSession({
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
@@ -177,12 +222,19 @@ export async function POST(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       invoiceAmountCents: String(amounts.invoiceAmountCents),
       parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
+      parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
+      beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
+      beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
+      requestedPaymentMethodCategory,
+      paymentMethodCategory: amounts.paymentMethodCategory,
+      paymentMethodConfigurationMissing: String(usesSpecificFeePolicy && !paymentMethodConfigurationId),
       checkoutTotalCents: String(amounts.checkoutTotalCents),
       applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     connectedAccountId,
     applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+    paymentMethodConfigurationId,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
   });
 
@@ -195,6 +247,12 @@ export async function POST(request: NextRequest) {
         customFields: {
           invoiceAmountCents: amounts.invoiceAmountCents,
           parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+          parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
+          beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
+          beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
+          requestedPaymentMethodCategory,
+          paymentMethodCategory: amounts.paymentMethodCategory,
+          paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
           checkoutTotalCents: amounts.checkoutTotalCents,
           applicationFeeAmountCents: amounts.applicationFeeAmountCents,
           status: "checkout_failed",
@@ -216,6 +274,12 @@ export async function POST(request: NextRequest) {
       customFields: {
         invoiceAmountCents: amounts.invoiceAmountCents,
         parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+        parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
+        beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
+        beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
+        requestedPaymentMethodCategory,
+        paymentMethodCategory: amounts.paymentMethodCategory,
+        paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
         checkoutTotalCents: amounts.checkoutTotalCents,
         applicationFeeAmountCents: amounts.applicationFeeAmountCents,
         stripeCheckoutSessionId: session.id,
@@ -237,6 +301,12 @@ export async function POST(request: NextRequest) {
       checkoutTotalCents: amounts.checkoutTotalCents,
       stripeConnectedAccountId: connectedAccountId || null,
       parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+      parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
+      beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
+      beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
+      requestedPaymentMethodCategory,
+      paymentMethodCategory: amounts.paymentMethodCategory,
+      paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
       applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     },
   });

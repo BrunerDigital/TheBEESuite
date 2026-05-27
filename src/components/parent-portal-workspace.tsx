@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, CreditCard, FileText, MessageSquare, ReceiptText, ShieldCheck } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, FileText, MessageSquare, ReceiptText, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,14 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+function estimatedAchRecovery(cents: number) {
+  return Math.min(Math.round(cents * 0.008), 500);
+}
+
+function estimatedCardRecovery(cents: number) {
+  return Math.max(0, Math.ceil((cents + 30) / (1 - 0.029) - cents));
+}
+
 export function ParentPortalWorkspace({
   family,
   billingAccount,
@@ -175,12 +183,12 @@ export function ParentPortalWorkspace({
     });
   }
 
-  function payInvoice(invoiceId: string) {
+  function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card") {
     startTransition(async () => {
       const response = await fetch("/api/billing/checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId }),
+        body: JSON.stringify({ invoiceId, paymentMethodCategory }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string; configured?: boolean } | null;
       if (!response.ok || !json?.url) {
@@ -275,10 +283,24 @@ export function ParentPortalWorkspace({
                 </div>
                 <Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge>
                 <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
-                <Button disabled={isPending || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id)}>
-                  <CreditCard data-icon="inline-start" />
-                  Pay
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={isPending || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
+                    <Building2 data-icon="inline-start" />
+                    Bank / ACH
+                  </Button>
+                  <Button
+                    disabled={isPending || invoice.status !== "OPEN"}
+                    onClick={() => payInvoice(invoice.id, "card")}
+                    variant="outline"
+                  >
+                    <CreditCard data-icon="inline-start" />
+                    Card
+                  </Button>
+                </div>
+                <div className="basis-full text-xs text-muted-foreground sm:text-right">
+                  Est. ACH recovery {money(estimatedAchRecovery(invoice.totalCents))}; card processing recovery{" "}
+                  {money(estimatedCardRecovery(invoice.totalCents))}. Exact total is shown in Stripe Checkout before payment.
+                </div>
               </div>
             ))}
             {!invoices.length ? <p className="text-sm text-muted-foreground">No invoices are visible yet.</p> : null}

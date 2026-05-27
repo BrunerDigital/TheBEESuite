@@ -24,6 +24,20 @@ STRIPE_APPLICATION_FEE_FIXED_CENTS=0
 STRIPE_PARENT_SURCHARGE_BPS=0
 STRIPE_PARENT_SURCHARGE_FIXED_CENTS=0
 STRIPE_PARENT_SURCHARGE_MAX_CENTS=0
+STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
+STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
+STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true
+STRIPE_ACH_PROCESSING_RECOVERY_BPS=80
+STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS=0
+STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS=500
+STRIPE_CARD_PROCESSING_RECOVERY_BPS=290
+STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS=30
+STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP=true
+STRIPE_PAYMENT_OPS_FEE_BPS=0
+STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS=75
+STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS=kid-city-usa
+STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS=kid-city-usa
+STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES=kid city usa
 STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=false
 STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT=true
 STRIPE_CHECKOUT_ON_BEHALF_OF=false
@@ -66,21 +80,46 @@ account.updated
 
 ## Fee Configuration
 
-`STRIPE_APPLICATION_FEE_BPS` and `STRIPE_APPLICATION_FEE_FIXED_CENTS` are Bee Suite fees retained from the checkout.
+`STRIPE_PARENT_SURCHARGE_BPS` and `STRIPE_PARENT_SURCHARGE_FIXED_CENTS` are legacy/global surcharge controls. Keep them at `0` for live tuition unless a single global surcharge has been reviewed and approved.
 
-`STRIPE_PARENT_SURCHARGE_BPS` and `STRIPE_PARENT_SURCHARGE_FIXED_CENTS` add a separate parent-facing Checkout line item above tuition. That surcharge is also included in the application fee so the school payout can still receive the invoice amount.
+The preferred tuition model is method-specific processing recovery:
+
+- ACH: parent pays tuition plus `STRIPE_ACH_PROCESSING_RECOVERY_BPS`, capped by `STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS`. Current policy is 0.8%, capped at $5.
+- Card: parent pays tuition plus grossed-up card processing recovery. Current policy uses 2.9% + $0.30 gross-up so the school can still receive the invoice amount.
+- Payment method configurations should be created in Stripe Dashboard and wired into `STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID` and `STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID`. Keep `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` so an ACH-fee checkout cannot accidentally allow card payment methods.
+
+Bee Suite payment operations fees are school/brand-side economics, not an extra parent card surcharge:
+
+- `STRIPE_PAYMENT_OPS_FEE_BPS`
+- `STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS`
+- `STRIPE_PAYMENT_OPS_FEE_MAX_CENTS`
+
+Kid City USA is waived during live testing by:
+
+```text
+STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS=kid-city-usa
+STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS=kid-city-usa
+STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES=kid city usa
+```
+
+`STRIPE_APPLICATION_FEE_BPS` and `STRIPE_APPLICATION_FEE_FIXED_CENTS` are still supported for platform-level fee experiments, but should remain `0` unless intentionally enabled.
 
 Example:
 
 ```text
 Invoice tuition: $1,000.00
-Parent surcharge: 3.00% + $0.30 = $30.30
-Parent checkout total: $1,030.30
-Application fee: surcharge plus any Bee Suite fee
+ACH parent processing recovery: $5.00
+ACH checkout total: $1,005.00
+Application fee: $5.00 processing recovery + Bee Suite payment operations fee, if not waived
+Family ledger credit: $1,000.00
+
+Credit card parent processing recovery: about $30.18
+Card checkout total: about $1,030.18
+Application fee: card processing recovery + Bee Suite payment operations fee, if not waived
 Family ledger credit: $1,000.00
 ```
 
-Review fee disclosures, state surcharge restrictions, card-network rules, refunds, and dispute handling before enabling surcharges in live mode.
+Review fee disclosures, state surcharge restrictions, card-network rules, debit-card handling, refunds, and dispute handling before enabling parent-facing card recovery in live mode.
 
 ## Go-Live Checks
 

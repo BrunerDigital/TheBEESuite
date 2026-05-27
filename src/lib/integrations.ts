@@ -9,8 +9,15 @@ export type IntegrationSendResult = {
   error?: string;
 };
 
-const STRIPE_API_VERSION = "2026-02-25.clover";
+const STRIPE_API_VERSION = "2026-04-22.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || "2026-04-22.dahlia";
+
+export type StripePaymentMethodCategory = "default" | "ach" | "card" | "link_bank";
+
+export type StripeCheckoutFeePolicy = {
+  paymentMethodCategory?: StripePaymentMethodCategory;
+  waiveBeeSuitePaymentOperationsFee?: boolean;
+};
 
 export type StripeConnectedAccountSnapshot = {
   id: string;
@@ -47,8 +54,40 @@ function nonNegativeIntEnv(name: string, fallback = 0) {
   return parsed;
 }
 
-function basisPointsEnv(name: string) {
-  return Math.min(nonNegativeIntEnv(name), 10_000);
+function basisPointsEnv(name: string, fallback = 0) {
+  return Math.min(nonNegativeIntEnv(name, fallback), 10_000);
+}
+
+function boolEnv(name: string, fallback = false) {
+  const value = process.env[name];
+  if (!value) return fallback;
+  return value === "true" || value === "1";
+}
+
+function listEnv(name: string, fallback: string[] = []) {
+  const value = process.env[name];
+  if (!value) return fallback;
+  return value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function normalizeKey(value?: string | null) {
+  return clean(value).toLowerCase();
+}
+
+function feeFromParts(amountCents: number, bps: number, fixedCents: number, maxCents = 0) {
+  const percentageFee = Math.round(Math.max(0, amountCents) * (Math.min(Math.max(0, bps), 10_000) / 10_000));
+  const fee = Math.max(0, percentageFee + Math.max(0, fixedCents));
+  return maxCents > 0 ? Math.min(fee, maxCents) : fee;
+}
+
+function grossedUpFee(amountCents: number, bps: number, fixedCents: number, maxCents = 0) {
+  const safeAmountCents = Math.max(0, amountCents);
+  const rate = Math.min(Math.max(0, bps), 9_900) / 10_000;
+  const fee = Math.ceil((safeAmountCents + Math.max(0, fixedCents)) / (1 - rate) - safeAmountCents);
+  return maxCents > 0 ? Math.min(Math.max(0, fee), maxCents) : Math.max(0, fee);
 }
 
 function stripeHeaders(contentType: "json" | "form", apiVersion = STRIPE_API_VERSION) {
@@ -71,6 +110,19 @@ export function getStripeApplicationFeeAmount(amountCents: number) {
   return Math.max(0, Math.min(fee, amountCents));
 }
 
+export function getStripePaymentOperationsFeeAmount(amountCents: number, waived = false) {
+  if (waived) return 0;
+  return Math.min(
+    feeFromParts(
+      amountCents,
+      basisPointsEnv("STRIPE_PAYMENT_OPS_FEE_BPS"),
+      nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS"),
+      nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_MAX_CENTS"),
+    ),
+    Math.max(0, amountCents),
+  );
+}
+
 export function getStripeParentSurchargeBps() {
   return basisPointsEnv("STRIPE_PARENT_SURCHARGE_BPS");
 }
@@ -83,18 +135,97 @@ export function getStripeParentSurchargeAmount(amountCents: number) {
   return Math.max(0, maxFee > 0 ? Math.min(fee, maxFee) : fee);
 }
 
-export function getStripeCheckoutAmounts(invoiceAmountCents: number) {
+export function getStripePaymentMethodConfigurationId(paymentMethodCategory: StripePaymentMethodCategory) {
+  if (paymentMethodCategory === "ach") return clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
+  if (paymentMethodCategory === "card") return clean(process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID);
+  if (paymentMethodCategory === "link_bank") return clean(process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID);
+  return "";
+}
+
+export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
+  if (paymentMethodCategory === "ach") {
+    return feeFromParts(
+      amountCents,
+      basisPointsEnv("STRIPE_ACH_PROCESSING_RECOVERY_BPS", 80),
+      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS"),
+      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS", 500),
+    );
+  }
+
+  if (paymentMethodCategory === "card") {
+    const bps = basisPointsEnv("STRIPE_CARD_PROCESSING_RECOVERY_BPS", 290);
+    const fixedCents = nonNegativeIntEnv("STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS", 30);
+    const maxCents = nonNegativeIntEnv("STRIPE_CARD_PROCESSING_RECOVERY_MAX_CENTS");
+    if (boolEnv("STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP", true)) {
+      return grossedUpFee(amountCents, bps, fixedCents, maxCents);
+    }
+    return feeFromParts(amountCents, bps, fixedCents, maxCents);
+  }
+
+  if (paymentMethodCategory === "link_bank") {
+    return grossedUpFee(
+      amountCents,
+      basisPointsEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_BPS", 260),
+      nonNegativeIntEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_FIXED_CENTS", 30),
+      nonNegativeIntEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_MAX_CENTS"),
+    );
+  }
+
+  return getStripeParentSurchargeAmount(amountCents);
+}
+
+export function shouldWaiveStripePaymentOperationsFee({
+  tenantSlug,
+  tenantName,
+  brandSlug,
+  brandName,
+}: {
+  tenantSlug?: string | null;
+  tenantName?: string | null;
+  brandSlug?: string | null;
+  brandName?: string | null;
+}) {
+  const waivedTenantSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS", ["kid-city-usa"]);
+  const waivedBrandSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS", ["kid-city-usa"]);
+  const waivedNames = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES", ["kid city usa"]);
+  const tenantSlugKey = normalizeKey(tenantSlug);
+  const brandSlugKey = normalizeKey(brandSlug);
+  const tenantNameKey = normalizeKey(tenantName);
+  const brandNameKey = normalizeKey(brandName);
+
+  return Boolean(
+    (tenantSlugKey && waivedTenantSlugs.includes(tenantSlugKey)) ||
+    (brandSlugKey && waivedBrandSlugs.includes(brandSlugKey)) ||
+    (tenantNameKey && waivedNames.includes(tenantNameKey)) ||
+    (brandNameKey && waivedNames.includes(brandNameKey))
+  );
+}
+
+export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: StripeCheckoutFeePolicy = {}) {
   const safeInvoiceAmountCents = Math.max(0, invoiceAmountCents);
-  const parentSurchargeAmountCents = getStripeParentSurchargeAmount(safeInvoiceAmountCents);
-  const checkoutTotalCents = safeInvoiceAmountCents + parentSurchargeAmountCents;
+  const paymentMethodCategory = policy.paymentMethodCategory || "default";
+  const parentProcessingRecoveryAmountCents = getStripeProcessingRecoveryAmount(
+    safeInvoiceAmountCents,
+    paymentMethodCategory,
+  );
+  const beeSuitePaymentOperationsFeeAmountCents = getStripePaymentOperationsFeeAmount(
+    safeInvoiceAmountCents,
+    policy.waiveBeeSuitePaymentOperationsFee,
+  );
+  const checkoutTotalCents = safeInvoiceAmountCents + parentProcessingRecoveryAmountCents;
   const applicationFeeAmountCents = Math.min(
-    getStripeApplicationFeeAmount(safeInvoiceAmountCents) + parentSurchargeAmountCents,
+    getStripeApplicationFeeAmount(safeInvoiceAmountCents) +
+      parentProcessingRecoveryAmountCents +
+      beeSuitePaymentOperationsFeeAmountCents,
     checkoutTotalCents,
   );
 
   return {
     invoiceAmountCents: safeInvoiceAmountCents,
-    parentSurchargeAmountCents,
+    paymentMethodCategory,
+    parentSurchargeAmountCents: parentProcessingRecoveryAmountCents,
+    parentProcessingRecoveryAmountCents,
+    beeSuitePaymentOperationsFeeAmountCents,
     checkoutTotalCents,
     applicationFeeAmountCents,
   };
@@ -267,6 +398,7 @@ export async function createStripeCheckoutSession({
   metadata,
   connectedAccountId,
   applicationFeeAmountCents = 0,
+  paymentMethodConfigurationId,
   onBehalfOfConnectedAccount = false,
 }: {
   amountCents: number;
@@ -280,6 +412,7 @@ export async function createStripeCheckoutSession({
   metadata: Record<string, string>;
   connectedAccountId?: string | null;
   applicationFeeAmountCents?: number;
+  paymentMethodConfigurationId?: string | null;
   onBehalfOfConnectedAccount?: boolean;
 }): Promise<IntegrationSendResult> {
   const apiKey = stripeSecretKey();
@@ -302,11 +435,15 @@ export async function createStripeCheckoutSession({
     body.set("line_items[1][quantity]", "1");
     body.set("line_items[1][price_data][currency]", "usd");
     body.set("line_items[1][price_data][unit_amount]", String(parentSurchargeAmountCents));
-    body.set("line_items[1][price_data][product_data][name]", "Processing and platform fee");
+    body.set("line_items[1][price_data][product_data][name]", "Payment processing recovery");
   }
 
   if (customerEmail && isEmail(customerEmail)) {
     body.set("customer_email", customerEmail);
+  }
+
+  if (paymentMethodConfigurationId) {
+    body.set("payment_method_configuration", paymentMethodConfigurationId);
   }
 
   if (connectedAccountId) {

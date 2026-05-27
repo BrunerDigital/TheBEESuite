@@ -50,6 +50,7 @@ import {
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
+import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { signChildMediaRecords } from "@/lib/supabase-storage";
@@ -1000,7 +1001,6 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
     ]);
 
-    const applicationFeeBps = Number.parseInt(process.env.STRIPE_APPLICATION_FEE_BPS || "0", 10);
     return (
       <BillingSettingsPage
         data={{
@@ -1010,7 +1010,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           centers: billingCenters,
           stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
           webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
-          applicationFeeBps: Number.isFinite(applicationFeeBps) ? Math.max(0, Math.min(applicationFeeBps, 10_000)) : 0,
+          applicationFeeBps: getStripeApplicationFeeBps(),
+          parentSurchargeBps: getStripeParentSurchargeBps(),
+          applicationFeeFixedCents: Number.parseInt(process.env.STRIPE_APPLICATION_FEE_FIXED_CENTS || "0", 10) || 0,
+          parentSurchargeFixedCents: Number.parseInt(process.env.STRIPE_PARENT_SURCHARGE_FIXED_CENTS || "0", 10) || 0,
         }}
       />
     );

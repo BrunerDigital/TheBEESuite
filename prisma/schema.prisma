@@ -960,6 +960,7 @@ model Payment {
   status                PaymentStatus
   provider              String        @default("stripe_mock")
   externalIdPlaceholder String?
+  customFields          Json?
   paidAt                DateTime?
 
   billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id])
@@ -1070,6 +1071,24 @@ model Integration {
   lastSyncAt        DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model StripeWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  dedupeKey   String   @unique
+  type        String
+  objectId    String?
+  livemode    Boolean?
+  status      String
+  payload     Json?
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type, createdAt])
+  @@index([objectId])
 }
 
 model ProcareImportBatch {

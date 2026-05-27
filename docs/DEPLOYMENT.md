@@ -51,6 +51,7 @@ npm run dev
 - Configure audit logging for sensitive reads and writes.
 - Configure Stripe Connect platform keys, school payout onboarding, webhook signing, and platform fee rules.
 - Validate parent checkout, connected account payouts, application fees, refunds, and disputes in Stripe test mode before enabling live mode.
+- See `docs/STRIPE_CONNECT.md` for the exact webhook URL, event list, Vercel variables, surcharge settings, and payout onboarding flow.
 - Review all compliance-readiness language with counsel/licensing experts.
 - Add backup, retention, and deletion policies.
 - Add monitoring, error reporting, and security headers.

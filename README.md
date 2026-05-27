@@ -86,7 +86,8 @@ Use `.env.example` as the guide. External services stay gated until explicitly c
 
 - `DATABASE_URL`
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_APPLICATION_FEE_BPS`, `STRIPE_APPLICATION_FEE_FIXED_CENTS`, `STRIPE_PARENT_SURCHARGE_BPS`, `STRIPE_PARENT_SURCHARGE_FIXED_CENTS`
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`
 - `SENDGRID_API_KEY` or `MAILGUN_API_KEY`
 - `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`
@@ -109,9 +110,9 @@ The design concept was generated with Image Gen and used as the implementation r
 
 Production-ready foundation: app shell, responsive UI, shadcn component system, dashboard visuals, module routes, data model, seed strategy, docs, and environment structure.
 
-Connected/live foundation: custom auth session flow, server-side role and center scoping, CRM lead creation/editing, Kid City inquiry routing, SendGrid notifications, Google Sheets inquiry backup, Stripe Connect setup flow, reporting snapshots, and audit logging.
+Connected/live foundation: custom auth session flow, server-side role and center scoping, CRM lead creation/editing, Kid City inquiry routing, SendGrid notifications, Google Sheets inquiry backup, Stripe Connect setup flow, parent Checkout session creation, webhook reconciliation, reporting snapshots, and audit logging.
 
-Gated next phase: real parent payment processing, SMS/push, calendar sync, review sync, lead ad sync, e-signatures, document/media storage, kiosk mode, QR/PIN check-in, and licensing exports.
+Gated next phase: live Stripe key activation and school payout onboarding, SMS/push, calendar sync, review sync, lead ad sync, e-signatures, expanded document/media storage, QR/PIN check-in rollout, and licensing exports.
 
 ## Security and Privacy Notes
 
@@ -127,5 +128,5 @@ AI is labeled as suggestions only. Human review is required for sensitive output
 2. Wire Prisma reads/writes into the route surfaces.
 3. Build real enrollment pipeline drag-and-drop.
 4. Implement parent/teacher mobile workflows as dedicated experiences.
-5. Connect Stripe test mode, email, SMS, storage, and OpenAI behind guardrails.
+5. Complete Stripe test-mode checkout/payout validation before enabling live tuition payments.
 

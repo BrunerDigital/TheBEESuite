@@ -4,7 +4,7 @@ import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian
 import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeCheckoutSession,
-  getStripeApplicationFeeAmount,
+  getStripeCheckoutAmounts,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
 } from "@/lib/integrations";
@@ -151,13 +151,21 @@ export async function POST(request: NextRequest) {
       status: PaymentStatus.DRAFT,
       provider: "stripe",
       externalIdPlaceholder: "checkout_session_pending",
+      customFields: {
+        invoiceAmountCents: invoice.totalCents,
+        status: "checkout_pending",
+      },
     },
   });
 
   const baseUrl = requestBaseUrl(request);
+  const amounts = getStripeCheckoutAmounts(invoice.totalCents);
   const session = await createStripeCheckoutSession({
-    amountCents: invoice.totalCents,
+    amountCents: amounts.checkoutTotalCents,
+    invoiceAmountCents: amounts.invoiceAmountCents,
+    parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
     invoiceNumber: invoice.number,
+    centerName: center?.name,
     customerEmail: invoice.billingAccount.family.billingEmail,
     successUrl: `${baseUrl}/parent-portal?payment=success&invoice=${invoice.id}`,
     cancelUrl: `${baseUrl}/parent-portal?payment=cancelled&invoice=${invoice.id}`,
@@ -167,10 +175,14 @@ export async function POST(request: NextRequest) {
       familyId: invoice.billingAccount.familyId,
       centerId: centerId || "",
       stripeConnectedAccountId: connectedAccountId || "",
+      invoiceAmountCents: String(amounts.invoiceAmountCents),
+      parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
+      checkoutTotalCents: String(amounts.checkoutTotalCents),
+      applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     connectedAccountId,
-    applicationFeeAmountCents: getStripeApplicationFeeAmount(invoice.totalCents),
+    applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
   });
 
@@ -180,6 +192,14 @@ export async function POST(request: NextRequest) {
       data: {
         status: PaymentStatus.FAILED,
         externalIdPlaceholder: session.error || "stripe_checkout_failed",
+        customFields: {
+          invoiceAmountCents: amounts.invoiceAmountCents,
+          parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+          checkoutTotalCents: amounts.checkoutTotalCents,
+          applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+          status: "checkout_failed",
+          stripeError: session.error || "stripe_checkout_failed",
+        },
       },
     });
 
@@ -193,6 +213,15 @@ export async function POST(request: NextRequest) {
     where: { id: payment.id },
     data: {
       externalIdPlaceholder: session.id,
+      customFields: {
+        invoiceAmountCents: amounts.invoiceAmountCents,
+        parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+        checkoutTotalCents: amounts.checkoutTotalCents,
+        applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+        stripeCheckoutSessionId: session.id,
+        stripeConnectedAccountId: connectedAccountId || null,
+        status: "checkout_created",
+      },
     },
   });
 
@@ -205,8 +234,10 @@ export async function POST(request: NextRequest) {
       paymentId: payment.id,
       stripeSessionId: session.id,
       amountCents: invoice.totalCents,
+      checkoutTotalCents: amounts.checkoutTotalCents,
       stripeConnectedAccountId: connectedAccountId || null,
-      applicationFeeAmountCents: getStripeApplicationFeeAmount(invoice.totalCents),
+      parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
+      applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     },
   });
 

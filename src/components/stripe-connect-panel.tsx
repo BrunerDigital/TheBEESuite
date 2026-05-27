@@ -21,6 +21,9 @@ type StripeConnectPanelProps = {
   stripeConfigured: boolean;
   webhookConfigured: boolean;
   applicationFeeBps: number;
+  parentSurchargeBps: number;
+  applicationFeeFixedCents: number;
+  parentSurchargeFixedCents: number;
 };
 
 function fields(value: unknown): Record<string, unknown> {
@@ -58,11 +61,19 @@ function percentFromBps(bps: number) {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
 }
 
+function centsLabel(cents: number) {
+  if (!cents) return "";
+  return ` + ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100)}`;
+}
+
 export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
   applicationFeeBps,
+  parentSurchargeBps,
+  applicationFeeFixedCents,
+  parentSurchargeFixedCents,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
@@ -174,8 +185,14 @@ export function StripeConnectPanel({
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Platform fee</div>
-            <div className="text-2xl font-semibold">{percentFromBps(applicationFeeBps)}</div>
+            <div className="font-medium">Bee Suite fee</div>
+            <div className="text-2xl font-semibold">{percentFromBps(applicationFeeBps)}{centsLabel(applicationFeeFixedCents)}</div>
+            <div className="mt-1 text-xs text-muted-foreground">Retained from each parent checkout</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-3 text-sm">
+            <div className="font-medium">Parent surcharge</div>
+            <div className="text-2xl font-semibold">{percentFromBps(parentSurchargeBps)}{centsLabel(parentSurchargeFixedCents)}</div>
+            <div className="mt-1 text-xs text-muted-foreground">Added above tuition when configured</div>
           </div>
         </div>
       </CardHeader>
@@ -273,6 +290,9 @@ export function StripeConnectPanel({
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
           Parent checkout is blocked for a school until its connected payout account exists and Stripe reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
+        </div>
+        <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
+          Fee behavior: the tuition invoice remains the family ledger amount. Any configured parent surcharge is added as a separate Checkout line item and included in the Stripe application fee so the school payout can still receive the invoice amount. Confirm fee disclosures and card-network/state surcharge rules before enabling this in live mode.
         </div>
       </CardContent>
     </Card>

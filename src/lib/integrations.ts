@@ -41,6 +41,16 @@ function stripeSecretKey() {
   return process.env.STRIPE_SECRET_KEY;
 }
 
+function nonNegativeIntEnv(name: string, fallback = 0) {
+  const parsed = Number.parseInt(process.env[name] || String(fallback), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function basisPointsEnv(name: string) {
+  return Math.min(nonNegativeIntEnv(name), 10_000);
+}
+
 function stripeHeaders(contentType: "json" | "form", apiVersion = STRIPE_API_VERSION) {
   const apiKey = stripeSecretKey();
   return {
@@ -51,14 +61,43 @@ function stripeHeaders(contentType: "json" | "form", apiVersion = STRIPE_API_VER
 }
 
 export function getStripeApplicationFeeBps() {
-  const parsed = Number.parseInt(process.env.STRIPE_APPLICATION_FEE_BPS || "0", 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, 10_000);
+  return basisPointsEnv("STRIPE_APPLICATION_FEE_BPS");
 }
 
 export function getStripeApplicationFeeAmount(amountCents: number) {
-  const fee = Math.round(amountCents * (getStripeApplicationFeeBps() / 10_000));
+  const percentageFee = Math.round(amountCents * (getStripeApplicationFeeBps() / 10_000));
+  const fixedFee = nonNegativeIntEnv("STRIPE_APPLICATION_FEE_FIXED_CENTS");
+  const fee = percentageFee + fixedFee;
   return Math.max(0, Math.min(fee, amountCents));
+}
+
+export function getStripeParentSurchargeBps() {
+  return basisPointsEnv("STRIPE_PARENT_SURCHARGE_BPS");
+}
+
+export function getStripeParentSurchargeAmount(amountCents: number) {
+  const percentageFee = Math.round(amountCents * (getStripeParentSurchargeBps() / 10_000));
+  const fixedFee = nonNegativeIntEnv("STRIPE_PARENT_SURCHARGE_FIXED_CENTS");
+  const maxFee = nonNegativeIntEnv("STRIPE_PARENT_SURCHARGE_MAX_CENTS");
+  const fee = percentageFee + fixedFee;
+  return Math.max(0, maxFee > 0 ? Math.min(fee, maxFee) : fee);
+}
+
+export function getStripeCheckoutAmounts(invoiceAmountCents: number) {
+  const safeInvoiceAmountCents = Math.max(0, invoiceAmountCents);
+  const parentSurchargeAmountCents = getStripeParentSurchargeAmount(safeInvoiceAmountCents);
+  const checkoutTotalCents = safeInvoiceAmountCents + parentSurchargeAmountCents;
+  const applicationFeeAmountCents = Math.min(
+    getStripeApplicationFeeAmount(safeInvoiceAmountCents) + parentSurchargeAmountCents,
+    checkoutTotalCents,
+  );
+
+  return {
+    invoiceAmountCents: safeInvoiceAmountCents,
+    parentSurchargeAmountCents,
+    checkoutTotalCents,
+    applicationFeeAmountCents,
+  };
 }
 
 export function readStripeConnectedAccountId(customFields: unknown) {
@@ -218,7 +257,10 @@ export async function sendSms({
 
 export async function createStripeCheckoutSession({
   amountCents,
+  invoiceAmountCents = amountCents,
+  parentSurchargeAmountCents = 0,
   invoiceNumber,
+  centerName,
   customerEmail,
   successUrl,
   cancelUrl,
@@ -228,7 +270,10 @@ export async function createStripeCheckoutSession({
   onBehalfOfConnectedAccount = false,
 }: {
   amountCents: number;
+  invoiceAmountCents?: number;
+  parentSurchargeAmountCents?: number;
   invoiceNumber: string;
+  centerName?: string | null;
   customerEmail?: string | null;
   successUrl: string;
   cancelUrl: string;
@@ -248,9 +293,17 @@ export async function createStripeCheckoutSession({
     cancel_url: cancelUrl,
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "usd",
-    "line_items[0][price_data][unit_amount]": String(amountCents),
-    "line_items[0][price_data][product_data][name]": `Kid City USA invoice ${invoiceNumber}`,
+    "line_items[0][price_data][unit_amount]": String(invoiceAmountCents),
+    "line_items[0][price_data][product_data][name]": `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber}`,
+    client_reference_id: metadata.invoiceId || invoiceNumber,
   });
+
+  if (parentSurchargeAmountCents > 0) {
+    body.set("line_items[1][quantity]", "1");
+    body.set("line_items[1][price_data][currency]", "usd");
+    body.set("line_items[1][price_data][unit_amount]", String(parentSurchargeAmountCents));
+    body.set("line_items[1][price_data][product_data][name]", "Processing and platform fee");
+  }
 
   if (customerEmail && isEmail(customerEmail)) {
     body.set("customer_email", customerEmail);
@@ -268,6 +321,7 @@ export async function createStripeCheckoutSession({
 
   Object.entries(metadata).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
+    body.set(`payment_intent_data[metadata][${key}]`, value);
   });
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -486,15 +540,15 @@ export function verifyStripeSignature({
 }) {
   if (!signature) return false;
 
-  const parts = Object.fromEntries(
-    signature.split(",").map((part) => {
-      const [key, ...rest] = part.split("=");
-      return [key, rest.join("=")];
-    }),
-  );
-  const timestamp = Number(parts.t);
-  const signed = parts.v1;
-  if (!timestamp || !signed) return false;
+  const parts = signature.split(",").reduce<{ timestamp?: string; signatures: string[] }>((acc, part) => {
+    const [key, ...rest] = part.split("=");
+    const value = rest.join("=");
+    if (key === "t") acc.timestamp = value;
+    if (key === "v1" && value) acc.signatures.push(value);
+    return acc;
+  }, { signatures: [] });
+  const timestamp = Number(parts.timestamp);
+  if (!timestamp || !parts.signatures.length) return false;
 
   if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSeconds) return false;
 
@@ -502,6 +556,8 @@ export function verifyStripeSignature({
     .update(`${timestamp}.${payload}`)
     .digest("hex");
   const expectedBuffer = Buffer.from(expected);
-  const actualBuffer = Buffer.from(signed);
-  return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
+  return parts.signatures.some((signed) => {
+    const actualBuffer = Buffer.from(signed);
+    return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
+  });
 }

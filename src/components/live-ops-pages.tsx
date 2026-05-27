@@ -3057,6 +3057,9 @@ export type BillingSettingsPageData = {
   stripeConfigured: boolean;
   webhookConfigured: boolean;
   applicationFeeBps: number;
+  parentSurchargeBps: number;
+  applicationFeeFixedCents: number;
+  parentSurchargeFixedCents: number;
 };
 
 export function BillingSettingsPage({ data }: { data: BillingSettingsPageData }) {
@@ -3088,6 +3091,9 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         stripeConfigured={data.stripeConfigured}
         webhookConfigured={data.webhookConfigured}
         applicationFeeBps={data.applicationFeeBps}
+        parentSurchargeBps={data.parentSurchargeBps}
+        applicationFeeFixedCents={data.applicationFeeFixedCents}
+        parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">

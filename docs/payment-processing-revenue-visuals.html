@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Bee Suite | Payment Processing Revenue Options</title>
+  <style>
+    :root {
+      --bg: #05070a;
+      --panel: rgba(18, 23, 30, 0.82);
+      --panel-strong: rgba(24, 30, 39, 0.94);
+      --line: rgba(255, 255, 255, 0.13);
+      --muted: #a7b0bd;
+      --faint: #737d8d;
+      --text: #f8f7f2;
+      --gold: #ffc529;
+      --amber: #f3a40f;
+      --green: #5fd28d;
+      --blue: #65c7ff;
+      --violet: #b69bff;
+      --rose: #ff7c7c;
+      --shadow: 0 32px 90px rgba(0, 0, 0, 0.36);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #030507;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    .slide {
+      width: 1600px;
+      height: 900px;
+      position: relative;
+      overflow: hidden;
+      padding: 50px 58px;
+      background:
+        radial-gradient(circle at 82% 7%, rgba(255, 197, 41, 0.18), transparent 380px),
+        radial-gradient(circle at 8% 12%, rgba(101, 199, 255, 0.10), transparent 360px),
+        linear-gradient(135deg, #05070a 0%, #0c1117 56%, #1d1405 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      right: -46px;
+      top: -20px;
+      width: 330px;
+      height: 260px;
+      opacity: 0.20;
+      background-image:
+        linear-gradient(30deg, rgba(255, 197, 41, .28) 12%, transparent 12.5%, transparent 87%, rgba(255, 197, 41, .28) 87.5%, rgba(255, 197, 41, .28)),
+        linear-gradient(150deg, rgba(255, 197, 41, .28) 12%, transparent 12.5%, transparent 87%, rgba(255, 197, 41, .28) 87.5%, rgba(255, 197, 41, .28));
+      background-size: 44px 76px;
+      pointer-events: none;
+    }
+
+    .top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 28px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--gold);
+      font-weight: 800;
+      font-size: 24px;
+    }
+
+    .mark {
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(255, 197, 41, 0.42);
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 30% 28%, rgba(255, 197, 41, .40), transparent 34%),
+        rgba(255, 197, 41, .10);
+      box-shadow: 0 0 34px rgba(255, 197, 41, .12);
+      display: grid;
+      place-items: center;
+      color: var(--gold);
+      font-size: 21px;
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 34px;
+      padding: 0 13px;
+      border: 1px solid rgba(255, 197, 41, 0.28);
+      border-radius: 999px;
+      color: var(--gold);
+      background: rgba(255, 197, 41, 0.08);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 1050px;
+      font-size: 54px;
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 31px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 9px;
+      font-size: 20px;
+      line-height: 1.15;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.48;
+    }
+
+    .lede {
+      max-width: 890px;
+      margin-top: 13px;
+      color: #d8dde5;
+      font-size: 20px;
+      line-height: 1.45;
+    }
+
+    .grid { display: grid; gap: 18px; position: relative; z-index: 1; }
+    .cols-4 { grid-template-columns: repeat(4, 1fr); }
+    .cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+    .card {
+      position: relative;
+      min-height: 188px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .02)),
+        var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .card.gold { border-color: rgba(255, 197, 41, 0.34); }
+    .card.green { border-color: rgba(95, 210, 141, 0.30); }
+    .card.blue { border-color: rgba(101, 199, 255, 0.30); }
+    .card.violet { border-color: rgba(182, 155, 255, 0.30); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      margin-bottom: 15px;
+      color: #0b0d10;
+      font-weight: 900;
+      background: var(--gold);
+    }
+
+    .metric {
+      margin: 12px 0 8px;
+      font-size: 34px;
+      line-height: 1;
+      font-weight: 850;
+      color: #fff;
+    }
+
+    .small { font-size: 13px; color: var(--faint); line-height: 1.38; }
+    .note {
+      margin-top: 18px;
+      padding: 15px 18px;
+      border: 1px solid rgba(255, 197, 41, 0.24);
+      border-radius: 16px;
+      background: rgba(255, 197, 41, 0.075);
+      color: #e7dec8;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #d7dde6;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(13, 18, 24, 0.75);
+      box-shadow: var(--shadow);
+    }
+
+    .table th, .table td {
+      padding: 18px 20px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+      font-size: 16px;
+    }
+
+    .table th {
+      color: var(--gold);
+      font-size: 13px;
+      text-transform: uppercase;
+      background: rgba(255, 197, 41, 0.08);
+    }
+
+    .table tr:last-child td { border-bottom: 0; }
+    .table .money { color: #fff; font-size: 24px; font-weight: 850; }
+    .table .best { background: rgba(255, 197, 41, 0.065); }
+
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr 64px 1fr 64px 1fr;
+      align-items: stretch;
+      gap: 12px;
+      margin-top: 22px;
+    }
+
+    .flow-card {
+      min-height: 210px;
+      padding: 25px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--gold);
+      font-size: 44px;
+      font-weight: 900;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 22px;
+      align-items: start;
+      position: relative;
+      z-index: 1;
+    }
+
+    .stack {
+      display: grid;
+      gap: 13px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 170px 1fr 115px;
+      align-items: center;
+      gap: 13px;
+      margin: 17px 0;
+    }
+
+    .bar-track {
+      height: 32px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .bar {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--gold), var(--amber));
+      box-shadow: 0 0 28px rgba(255, 197, 41, 0.22);
+    }
+
+    .bar.blue { background: linear-gradient(90deg, var(--blue), #2f8df0); }
+    .bar.green { background: linear-gradient(90deg, var(--green), #27a864); }
+    .bar.violet { background: linear-gradient(90deg, var(--violet), #7e62f2); }
+
+    .bar-label { color: #d7dde6; font-size: 15px; font-weight: 740; }
+    .bar-value { color: #fff; font-size: 22px; font-weight: 850; text-align: right; }
+
+    .callout {
+      padding: 26px;
+      border: 1px solid rgba(255, 197, 41, 0.40);
+      border-radius: 24px;
+      background:
+        linear-gradient(135deg, rgba(255, 197, 41, 0.18), rgba(255, 197, 41, 0.045)),
+        rgba(15, 20, 27, 0.90);
+      box-shadow: var(--shadow);
+    }
+
+    .quote {
+      font-size: 31px;
+      line-height: 1.18;
+      color: #fff;
+      font-weight: 820;
+    }
+
+    .footer {
+      position: absolute;
+      left: 58px;
+      right: 58px;
+      bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--faint);
+      font-size: 12px;
+      z-index: 1;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 30px 1fr;
+      gap: 11px;
+      align-items: start;
+      color: #d7dde6;
+      font-size: 17px;
+      line-height: 1.38;
+    }
+
+    .check span:first-child {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      background: rgba(95, 210, 141, 0.18);
+      color: var(--green);
+      font-weight: 900;
+    }
+
+    @media print {
+      body { background: #05070a; }
+      .slide {
+        page-break-after: always;
+        break-after: page;
+        border-bottom: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <section class="slide" id="slide-1">
+    <div class="top">
+      <div>
+        <div class="brand"><div class="mark">⬢</div>The Bee Suite</div>
+        <div style="height: 26px"></div>
+        <span class="label">Payment Revenue Strategy</span>
+        <h1 style="margin-top: 16px">Make money from payment operations, not by saying “we take tuition volume.”</h1>
+        <p class="lede">Package the fee as infrastructure: online payment workflow, payout routing, reconciliation, receipts, failed payment handling, ledger updates, and support.</p>
+      </div>
+      <div class="callout" style="width: 365px; margin-top: 22px">
+        <div class="small">Recommended language</div>
+        <div class="quote" style="margin-top: 10px">Payment Operations Fee</div>
+        <p style="margin-top: 13px">This sounds like a service layer, not a tuition skim.</p>
+      </div>
+    </div>
+
+    <div class="grid cols-4">
+      <div class="card gold">
+        <div class="badge">1</div>
+        <h3>Monthly Payments Add-On</h3>
+        <div class="metric">$99-$299</div>
+        <p>Per location per month for payment infrastructure and reconciliation.</p>
+      </div>
+      <div class="card blue">
+        <div class="badge">2</div>
+        <h3>Successful Payment Fee</h3>
+        <div class="metric">$0.50-$0.95</div>
+        <p>Flat fee per successful payment. Simple, defensible, and scales with usage.</p>
+      </div>
+      <div class="card green">
+        <div class="badge">3</div>
+        <h3>Parent Convenience Fee</h3>
+        <div class="metric">Optional</div>
+        <p>Card fee or service fee can be parent-paid after legal/card-network review.</p>
+      </div>
+      <div class="card violet">
+        <div class="badge">4</div>
+        <h3>Recovery & Add-On Fees</h3>
+        <div class="metric">$2-$15</div>
+        <p>Failed-payment recovery, registration deposits, expedited payouts, and premium workflows.</p>
+      </div>
+    </div>
+    <div class="footer"><span>Meeting visual packet · payment monetization</span><span>Slide 1 / 4</span></div>
+  </section>
+
+  <section class="slide" id="slide-2">
+    <div class="top">
+      <div>
+        <div class="brand"><div class="mark">⬢</div>The Bee Suite</div>
+        <div style="height: 22px"></div>
+        <span class="label">Money Flow</span>
+        <h1 style="margin-top: 16px">Clean payment flow: parents pay, school receives tuition, Bee Suite retains the platform/service fee.</h1>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-card">
+        <span class="pill">Parent</span>
+        <h2 style="margin-top: 18px">$1,000 tuition invoice</h2>
+        <p style="margin-top: 12px">Parent pays through the portal. Optional service/convenience fee can be shown separately.</p>
+        <div class="note">Parent-facing wording matters: “online payment service fee” is clearer than “tuition surcharge.”</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-card">
+        <span class="pill">Stripe Checkout + Connect</span>
+        <h2 style="margin-top: 18px">Routes funds automatically</h2>
+        <p style="margin-top: 12px">Stripe handles card/ACH processing, hosted checkout, receipts, and Connect payout routing.</p>
+        <div class="note">The Bee Suite app uses application fees to retain the configured platform fee.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="flow-card">
+        <span class="pill">School + Bee Suite</span>
+        <h2 style="margin-top: 18px">Tuition to school, fee to platform</h2>
+        <p style="margin-top: 12px">School ledger is credited for tuition. Bee Suite captures the payment operations economics.</p>
+        <div class="note">Refunds, failed payments, disputes, and expired checkouts are tracked by webhook events.</div>
+      </div>
+    </div>
+
+    <div class="grid cols-3" style="margin-top: 24px">
+      <div class="card">
+        <h3>School-paid model</h3>
+        <p>School pays SaaS + payment operations. Parent checkout stays clean.</p>
+      </div>
+      <div class="card">
+        <h3>Parent-paid model</h3>
+        <p>Parent pays convenience/card fee where allowed. Requires disclosure review.</p>
+      </div>
+      <div class="card">
+        <h3>Hybrid model</h3>
+        <p>Brand pays SaaS, locations use payment tools, parent fees are optional by payment type.</p>
+      </div>
+    </div>
+    <div class="footer"><span>Meeting visual packet · payment monetization</span><span>Slide 2 / 4</span></div>
+  </section>
+
+  <section class="slide" id="slide-3">
+    <div class="top">
+      <div>
+        <div class="brand"><div class="mark">⬢</div>The Bee Suite</div>
+        <div style="height: 22px"></div>
+        <span class="label">Kid City Scenario</span>
+        <h1 style="margin-top: 16px">Payment operations can create upside without pitching a percentage of tuition.</h1>
+        <p class="lede">Illustrative assumption: 96 locations and 100 successful parent payments per location per month.</p>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card" style="min-height: 590px">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Pricing Structure</th>
+              <th>Monthly Revenue</th>
+              <th>Annualized</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>SaaS-only parity</strong><br><span class="small">Matches current software baseline</span></td>
+              <td>$4,000 brand fee</td>
+              <td class="money">$4,000</td>
+              <td>$48,000</td>
+            </tr>
+            <tr>
+              <td><strong>Transaction layer</strong><br><span class="small">No per-location add-on</span></td>
+              <td>$4,000 + $0.75/payment</td>
+              <td class="money">$11,200</td>
+              <td>$134,400</td>
+            </tr>
+            <tr class="best">
+              <td><strong>Payments bundle</strong><br><span class="small">Best launch position</span></td>
+              <td>$4,000 + $99/location + $0.50/payment</td>
+              <td class="money">$18,304</td>
+              <td>$219,648</td>
+            </tr>
+            <tr>
+              <td><strong>Enterprise payments</strong><br><span class="small">Post-pilot full suite</span></td>
+              <td>$6,500 + $149/location + $0.75/payment</td>
+              <td class="money">$28,004</td>
+              <td>$336,048</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">These are pricing scenarios, not final quotes. Swap the payment count, locations, and fee levels to model low/base/high cases.</div>
+      </div>
+
+      <div class="card" style="min-height: 590px">
+        <h2>Monthly revenue comparison</h2>
+        <p style="margin-top: 8px">Relative to the $4,000/month software-only baseline.</p>
+        <div style="height: 18px"></div>
+        <div class="bar-row">
+          <div class="bar-label">SaaS-only</div>
+          <div class="bar-track"><div class="bar blue" style="width: 14%"></div></div>
+          <div class="bar-value">$4.0k</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Txn layer</div>
+          <div class="bar-track"><div class="bar green" style="width: 40%"></div></div>
+          <div class="bar-value">$11.2k</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Bundle</div>
+          <div class="bar-track"><div class="bar" style="width: 65%"></div></div>
+          <div class="bar-value">$18.3k</div>
+        </div>
+        <div class="bar-row">
+          <div class="bar-label">Enterprise</div>
+          <div class="bar-track"><div class="bar violet" style="width: 100%"></div></div>
+          <div class="bar-value">$28.0k</div>
+        </div>
+        <div class="callout" style="margin-top: 30px">
+          <div class="small">Strategic point</div>
+          <div class="quote" style="font-size: 28px; margin-top: 8px">The upside is in owning payment operations, not just replacing the old software bill.</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer"><span>Meeting visual packet · payment monetization</span><span>Slide 3 / 4</span></div>
+  </section>
+
+  <section class="slide" id="slide-4">
+    <div class="top">
+      <div>
+        <div class="brand"><div class="mark">⬢</div>The Bee Suite</div>
+        <div style="height: 22px"></div>
+        <span class="label">Recommendation</span>
+        <h1 style="margin-top: 16px; max-width: 1100px; font-size: 48px">Launch with a clean pilot offer, then graduate to a payments bundle once schools use billing live.</h1>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="grid">
+        <div class="card gold" style="min-height: 148px; padding: 20px 24px">
+          <h2>Phase 1 · Kid City Pilot</h2>
+          <div class="metric">$4,000/month brand fee</div>
+          <p>Include payments during pilot. Keep parent surcharge off. Validate onboarding, reconciliation, and support load.</p>
+        </div>
+        <div class="card green" style="min-height: 148px; padding: 20px 24px">
+          <h2>Phase 2 · Payments Bundle</h2>
+          <div class="metric">$99/location + $0.50/payment</div>
+          <p>Position as online payment operations. Include portal pay, ledger sync, receipts, refunds, and reporting.</p>
+        </div>
+        <div class="card violet" style="min-height: 148px; padding: 20px 24px">
+          <h2>Phase 3 · Enterprise Payments</h2>
+          <div class="metric">$149/location + $0.75/payment</div>
+          <p>Add recovery, auto-pay optimization, registration/deposit flows, payout options, and payment analytics.</p>
+        </div>
+      </div>
+
+      <div class="card" style="min-height: 565px">
+        <h2>Decision checklist for the team</h2>
+        <div style="height: 22px"></div>
+        <div class="stack">
+          <div class="check"><span>✓</span><div>Use the phrase <strong>Payment Operations Fee</strong> or <strong>Online Payment Platform Fee</strong>.</div></div>
+          <div class="check"><span>✓</span><div>Keep Stripe card/ACH processing separate from Bee Suite service fees in proposals.</div></div>
+          <div class="check"><span>✓</span><div>Do not enable parent card surcharges until disclosure, debit-card handling, and state/card-network rules are reviewed.</div></div>
+          <div class="check"><span>✓</span><div>Make ACH the preferred payment method to reduce friction and improve center margins.</div></div>
+          <div class="check"><span>✓</span><div>Report value monthly: successful payments, failed-payment recoveries, auto-pay adoption, days-to-collect, and reconciliation time saved.</div></div>
+          <div class="check"><span>✓</span><div>After 60-90 days of payment data, renegotiate from pilot pricing to the bundle.</div></div>
+        </div>
+        <div class="note" style="margin-top: 30px">Recommended meeting ask: approve the pilot offer now, approve the post-pilot payments bundle as the default conversion path, and defer parent surcharge decisions until compliance review.</div>
+      </div>
+    </div>
+    <div class="footer"><span>Meeting visual packet · payment monetization</span><span>Slide 4 / 4</span></div>
+  </section>
+</body>
+</html>

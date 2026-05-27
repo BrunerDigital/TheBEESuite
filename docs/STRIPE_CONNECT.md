@@ -41,11 +41,28 @@ Subscribe the endpoint to:
 checkout.session.completed
 checkout.session.async_payment_succeeded
 checkout.session.async_payment_failed
+checkout.session.expired
+payment_intent.payment_failed
+charge.refunded
+charge.dispute.created
 account.updated
 v2.core.account[requirements].updated
 ```
 
 If Stripe does not show the v2 account requirements event in the dashboard, keep `account.updated` enabled and use the status sync button in `/billing-settings`.
+
+Production currently uses the events Stripe accepted for the live webhook endpoint:
+
+```text
+checkout.session.completed
+checkout.session.async_payment_succeeded
+checkout.session.async_payment_failed
+checkout.session.expired
+payment_intent.payment_failed
+charge.refunded
+charge.dispute.created
+account.updated
+```
 
 ## Fee Configuration
 
@@ -73,4 +90,5 @@ Review fee disclosures, state surcharge restrictions, card-network rules, refund
 - Each school has completed Connect onboarding and shows `Ready` in `/billing-settings`.
 - Test at least one invoice payment with a connected test account.
 - Confirm the family balance, invoice status, payment record, ledger entry, application fee, and school payout all reconcile.
+- Confirm refund and dispute handling with Stripe test events before live parent payments are broadly enabled.
 - Keep `STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=false` in production.

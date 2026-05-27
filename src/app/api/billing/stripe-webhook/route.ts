@@ -24,17 +24,71 @@ type StripeCheckoutSessionCompleted = {
   };
 };
 
+type StripeMetadata = {
+  invoiceId?: string;
+  paymentId?: string;
+  familyId?: string;
+  centerId?: string;
+  stripeConnectedAccountId?: string;
+  invoiceAmountCents?: string;
+  parentSurchargeAmountCents?: string;
+  checkoutTotalCents?: string;
+  applicationFeeAmountCents?: string;
+};
+
+type StripePaymentIntentObject = {
+  id: string;
+  object: "payment_intent";
+  amount?: number;
+  status?: string;
+  last_payment_error?: { message?: string } | null;
+  metadata?: StripeMetadata;
+};
+
+type StripeChargeObject = {
+  id: string;
+  object: "charge";
+  amount?: number;
+  amount_refunded?: number;
+  refunded?: boolean;
+  payment_intent?: string | null;
+  metadata?: StripeMetadata;
+};
+
+type StripeDisputeObject = {
+  id: string;
+  object: "dispute";
+  amount?: number;
+  charge?: string | null;
+  payment_intent?: string | null;
+  reason?: string | null;
+  status?: string | null;
+  metadata?: StripeMetadata;
+};
+
 type StripeWebhookEvent = {
   id: string;
   type: string;
   livemode?: boolean;
   data: {
-    object: StripeCheckoutSessionCompleted | { id?: string; object?: string };
+    object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | { id?: string; object?: string };
   };
 };
 
 function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function numeric(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function metadataOf(value: { metadata?: unknown }) {
+  return jsonObject(value.metadata) as StripeMetadata;
 }
 
 function accountEventType(type: string) {
@@ -85,6 +139,51 @@ async function recordStripeWebhookEvent(
 
 function isDuplicateWebhookEvent(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+async function findPaymentForStripeObject(
+  tx: Prisma.TransactionClient,
+  object: StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject,
+) {
+  const metadata = metadataOf(object);
+  if (metadata.paymentId) {
+    const payment = await tx.payment.findUnique({
+      where: { id: metadata.paymentId },
+      include: { billingAccount: true },
+    });
+    if (payment) return payment;
+  }
+
+  const paymentIntentId = object.object === "payment_intent"
+    ? object.id
+    : clean(object.payment_intent);
+  if (paymentIntentId) {
+    return tx.payment.findFirst({
+      where: {
+        provider: "stripe",
+        customFields: {
+          path: ["stripePaymentIntentId"],
+          equals: paymentIntentId,
+        },
+      },
+      include: { billingAccount: true },
+    });
+  }
+
+  return null;
+}
+
+async function invoiceIdForPayment(
+  tx: Prisma.TransactionClient,
+  paymentId: string,
+  metadata: StripeMetadata,
+) {
+  if (metadata.invoiceId) return metadata.invoiceId;
+  const ledgerEntry = await tx.ledgerEntry.findFirst({
+    where: { paymentId, invoiceId: { not: null } },
+    select: { invoiceId: true },
+  });
+  return ledgerEntry?.invoiceId || null;
 }
 
 async function handleConnectedAccountEvent(event: StripeWebhookEvent) {
@@ -165,6 +264,196 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent) {
   return NextResponse.json({ ok: true, updatedCenters: matchedCenters.length });
 }
 
+async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  const paymentId = session.metadata?.paymentId;
+  if (!paymentId) {
+    return NextResponse.json({ ok: false, error: "Missing payment metadata." }, { status: 400 });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const payment = await tx.payment.findUnique({ where: { id: paymentId }, select: { status: true, customFields: true } });
+      if (!payment || payment.status !== PaymentStatus.DRAFT) return;
+      await tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: PaymentStatus.VOID,
+          externalIdPlaceholder: session.id,
+          customFields: {
+            ...jsonObject(payment.customFields),
+            stripeCheckoutSessionId: session.id,
+            stripeEventId: event.id,
+            status: "checkout_expired",
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  if (session.metadata?.invoiceId) {
+    await writeSystemAudit(session.metadata.invoiceId, event.id, session.id, "billing.checkout.expired");
+  }
+  return NextResponse.json({ ok: true });
+}
+
+async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
+  const metadata = metadataOf(paymentIntent);
+  if (!metadata.paymentId) {
+    return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const currentPayment = await tx.payment.findUnique({ where: { id: metadata.paymentId }, select: { customFields: true } });
+      await tx.payment.update({
+        where: { id: metadata.paymentId },
+        data: {
+          status: PaymentStatus.FAILED,
+          customFields: {
+            ...jsonObject(currentPayment?.customFields),
+            stripePaymentIntentId: paymentIntent.id,
+            stripeEventId: event.id,
+            stripePaymentIntentStatus: paymentIntent.status || null,
+            stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
+            status: "payment_intent_failed",
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  if (metadata.invoiceId) {
+    await writeSystemAudit(metadata.invoiceId, event.id, paymentIntent.id, "billing.payment_intent.failed");
+  }
+  return NextResponse.json({ ok: true });
+}
+
+async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeChargeObject) {
+  const metadata = metadataOf(charge);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const payment = await findPaymentForStripeObject(tx, charge);
+      if (!payment) return;
+
+      const currentFields = jsonObject(payment.customFields);
+      const previousRefundedCents = numeric(currentFields.stripeAmountRefundedCents);
+      const refundedCents = numeric(charge.amount_refunded);
+      const refundDeltaCents = Math.max(0, refundedCents - previousRefundedCents);
+      const invoiceId = await invoiceIdForPayment(tx, payment.id, metadata);
+
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: charge.refunded ? PaymentStatus.REFUNDED : payment.status,
+          customFields: {
+            ...currentFields,
+            stripeChargeId: charge.id,
+            stripePaymentIntentId: clean(charge.payment_intent) || currentFields.stripePaymentIntentId || null,
+            stripeEventId: event.id,
+            stripeAmountRefundedCents: refundedCents,
+            stripeFullyRefunded: charge.refunded === true,
+            status: charge.refunded ? "refunded" : "partially_refunded",
+          },
+        },
+      });
+
+      if (refundDeltaCents > 0 && invoiceId) {
+        const updatedAccount = await tx.billingAccount.update({
+          where: { id: payment.billingAccountId },
+          data: { balanceCents: { increment: refundDeltaCents } },
+        });
+        await tx.invoice.update({
+          where: { id: invoiceId },
+          data: { status: PaymentStatus.OPEN },
+        });
+        await tx.ledgerEntry.create({
+          data: {
+            billingAccountId: payment.billingAccountId,
+            invoiceId,
+            paymentId: payment.id,
+            type: "refund",
+            description: charge.refunded ? "Stripe payment refunded" : "Stripe payment partially refunded",
+            amountCents: refundDeltaCents,
+            balanceAfterCents: updatedAccount.balanceCents,
+            sourceSystem: "stripe",
+            externalId: `stripe-refund:${charge.id}:${refundedCents}`,
+            metadata: {
+              stripeEventId: event.id,
+              stripeChargeId: charge.id,
+              stripePaymentIntentId: clean(charge.payment_intent) || null,
+              refundedCents,
+              refundDeltaCents,
+            },
+          },
+        });
+      }
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  if (metadata.invoiceId) {
+    await writeSystemAudit(metadata.invoiceId, event.id, charge.id, "billing.charge.refunded");
+  }
+  return NextResponse.json({ ok: true });
+}
+
+async function handleDisputeCreated(event: StripeWebhookEvent, dispute: StripeDisputeObject) {
+  const metadata = metadataOf(dispute);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const payment = await findPaymentForStripeObject(tx, dispute);
+      if (!payment) return;
+      const currentFields = jsonObject(payment.customFields);
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          customFields: {
+            ...currentFields,
+            stripeDisputeId: dispute.id,
+            stripeDisputeAmountCents: numeric(dispute.amount),
+            stripeDisputeReason: dispute.reason || null,
+            stripeDisputeStatus: dispute.status || null,
+            stripeDisputeChargeId: clean(dispute.charge) || null,
+            stripePaymentIntentId: clean(dispute.payment_intent) || currentFields.stripePaymentIntentId || null,
+            stripeEventId: event.id,
+            status: "disputed",
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  if (metadata.invoiceId) {
+    await writeSystemAudit(metadata.invoiceId, event.id, dispute.id, "billing.dispute.created");
+  }
+  return NextResponse.json({ ok: true });
+}
+
 async function writeSystemAudit(invoiceId: string, stripeEventId: string, sessionId: string, action = "billing.checkout.completed") {
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
@@ -240,13 +529,37 @@ export async function POST(request: NextRequest) {
     return handleConnectedAccountEvent(event);
   }
 
-  if (!["checkout.session.completed", "checkout.session.async_payment_succeeded", "checkout.session.async_payment_failed"].includes(event.type)) {
+  if (![
+    "checkout.session.completed",
+    "checkout.session.async_payment_succeeded",
+    "checkout.session.async_payment_failed",
+    "checkout.session.expired",
+    "payment_intent.payment_failed",
+    "charge.refunded",
+    "charge.dispute.created",
+  ].includes(event.type)) {
     return NextResponse.json({ ok: true, ignored: true });
+  }
+
+  if (event.type === "payment_intent.payment_failed") {
+    return handlePaymentIntentFailed(event, event.data.object as StripePaymentIntentObject);
+  }
+
+  if (event.type === "charge.refunded") {
+    return handleChargeRefunded(event, event.data.object as StripeChargeObject);
+  }
+
+  if (event.type === "charge.dispute.created") {
+    return handleDisputeCreated(event, event.data.object as StripeDisputeObject);
   }
 
   const session = event.data.object as StripeCheckoutSessionCompleted;
   const invoiceId = session.metadata?.invoiceId;
   const paymentId = session.metadata?.paymentId;
+
+  if (event.type === "checkout.session.expired") {
+    return handleCheckoutExpired(event, session);
+  }
 
   if (!invoiceId || !paymentId) {
     return NextResponse.json({ ok: false, error: "Missing invoice/payment metadata." }, { status: 400 });

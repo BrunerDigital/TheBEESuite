@@ -62,6 +62,24 @@ type IntegrationResult = {
   locationRecipients?: number;
 };
 
+type IntakeCenter = {
+  id: string;
+  name: string;
+  crmLocationId: string | null;
+  locationId: string | null;
+  email: string | null;
+};
+
+class InquiryRoutingError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public status = 400,
+  ) {
+    super(message);
+  }
+}
+
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://kidcityusa.com",
   "https://www.kidcityusa.com",
@@ -218,6 +236,31 @@ function scoreLead(program: string, locationId: string, centerId = "") {
   return Math.min(score, 95);
 }
 
+function uniqueValues(values: string[]) {
+  const seen = new Set<string>();
+  return values
+    .map(clean)
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function isKidCityInquiry(payload: ReturnType<typeof normalizePayload>) {
+  const values = [
+    payload.leadSource,
+    payload.brandName,
+    payload.locationId,
+    payload.publicLocationId,
+    payload.locationName,
+  ].join(" ");
+
+  return /kid city usa/i.test(values) || /^[A-Z]{2}\s\|\s/.test(payload.locationId);
+}
+
 function uniqueEmails(values: string[]) {
   const seen = new Set<string>();
   return values
@@ -231,21 +274,97 @@ function uniqueEmails(values: string[]) {
     });
 }
 
-async function getIntakeCenter(locationId: string, publicLocationId?: string, centerId?: string) {
+async function findCenterById(centerId: string): Promise<IntakeCenter | null> {
+  return prisma.center.findFirst({
+    where: {
+      id: centerId,
+      status: { not: "closed" },
+    },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      email: true,
+    },
+  });
+}
+
+async function getFallbackIntakeCenter(): Promise<IntakeCenter> {
+  const configuredCenterId = process.env.INQUIRY_DEFAULT_CENTER_ID;
+
+  if (configuredCenterId) {
+    const center = await findCenterById(configuredCenterId);
+    if (center) return center;
+  }
+
+  const unassignedCenter = await prisma.center.findFirst({
+    where: {
+      status: { not: "closed" },
+      OR: [
+        { crmLocationId: "UNASSIGNED" },
+        { locationId: "UNASSIGNED" },
+        { name: "Website Inquiry Center" },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      email: true,
+    },
+  });
+
+  if (unassignedCenter) return unassignedCenter;
+
+  const organization = await prisma.organization.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  if (!organization) {
+    throw new Error("No organization exists for inquiry intake.");
+  }
+
+  return prisma.center.create({
+    data: {
+      organizationId: organization.id,
+      name: "Website Inquiry Center",
+      crmLocationId: "UNASSIGNED",
+      locationId: "UNASSIGNED",
+      licensedCapacity: 0,
+    },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      email: true,
+    },
+  });
+}
+
+async function getIntakeCenter({
+  locationId,
+  publicLocationId,
+  centerId,
+  strictLocationRouting,
+}: {
+  locationId: string;
+  publicLocationId?: string;
+  centerId?: string;
+  strictLocationRouting: boolean;
+}): Promise<IntakeCenter> {
   const requestedCenterId = clean(centerId);
   if (requestedCenterId) {
-    const center = await prisma.center.findFirst({
-      where: {
-        id: requestedCenterId,
-        status: { not: "closed" },
-      },
-      select: { id: true, email: true },
-    });
+    const center = await findCenterById(requestedCenterId);
 
     if (center) return center;
   }
 
-  const locationIds = [locationId, publicLocationId].map(clean).filter(Boolean);
+  const locationIds = uniqueValues([locationId, publicLocationId ?? ""]);
   if (locationIds.length) {
     const routedCenter = await prisma.center.findFirst({
       where: {
@@ -257,52 +376,26 @@ async function getIntakeCenter(locationId: string, publicLocationId?: string, ce
         ],
       },
       orderBy: { createdAt: "asc" },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        crmLocationId: true,
+        locationId: true,
+        email: true,
+      },
     });
 
     if (routedCenter) return routedCenter;
+
+    if (strictLocationRouting) {
+      throw new InquiryRoutingError(
+        "The selected Kid City USA location is not currently mapped in The Bee Suite. Please choose another location or contact the center.",
+        "unknown_kidcity_location",
+      );
+    }
   }
 
-  const configuredCenterId = process.env.INQUIRY_DEFAULT_CENTER_ID;
-
-  if (configuredCenterId) {
-    const center = await prisma.center.findFirst({
-      where: {
-        id: configuredCenterId,
-        status: { not: "closed" },
-      },
-      select: { id: true, email: true },
-    });
-    if (center) return center;
-  }
-
-  const center = await prisma.center.findFirst({
-    where: { status: { not: "closed" } },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, email: true },
-  });
-
-  if (center) return center;
-
-  const organization = await prisma.organization.findFirst({
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-
-  if (!organization) {
-    throw new Error("No organization exists for inquiry intake.");
-  }
-
-  const created = await prisma.center.create({
-    data: {
-      organizationId: organization.id,
-      name: "Website Inquiry Center",
-      licensedCapacity: 0,
-    },
-    select: { id: true, email: true },
-  });
-
-  return created;
+  return getFallbackIntakeCenter();
 }
 
 async function getLocationNotificationEmails(centerId: string, centerEmail?: string | null) {
@@ -498,7 +591,12 @@ export async function POST(request: NextRequest) {
       return json({ ok: false, errors }, 400, origin);
     }
 
-    const center = await getIntakeCenter(payload.locationId, payload.publicLocationId, payload.centerId);
+    const center = await getIntakeCenter({
+      locationId: payload.locationId,
+      publicLocationId: payload.publicLocationId,
+      centerId: payload.centerId,
+      strictLocationRouting: isKidCityInquiry(payload),
+    });
     const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
     const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);
     const lead = await prisma.lead.create({
@@ -522,6 +620,10 @@ export async function POST(request: NextRequest) {
           phone: payload.phone,
           program: payload.program,
           centerId: payload.centerId,
+          resolvedCenterId: center.id,
+          resolvedCenterName: center.name,
+          resolvedCrmLocationId: center.crmLocationId,
+          resolvedLocationId: center.locationId,
           locationId: payload.locationId,
           publicLocationId: payload.publicLocationId,
           locationName: payload.locationName,
@@ -561,6 +663,10 @@ export async function POST(request: NextRequest) {
 
     const integrationPayload = {
       ...payload,
+      centerId: center.id,
+      resolvedCenterName: center.name,
+      resolvedCrmLocationId: center.crmLocationId,
+      resolvedLocationId: center.locationId,
       leadId: lead.id,
       leadScore: lead.score,
       stage: lead.stage,
@@ -585,6 +691,18 @@ export async function POST(request: NextRequest) {
       origin,
     );
   } catch (error) {
+    if (error instanceof InquiryRoutingError) {
+      return json(
+        {
+          ok: false,
+          code: error.code,
+          error: error.message,
+        },
+        error.status,
+        origin,
+      );
+    }
+
     console.error("Inquiry intake failed", error);
     return json(
       {

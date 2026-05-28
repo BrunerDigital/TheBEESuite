@@ -647,6 +647,9 @@ export type CenterDashboardData = {
     classrooms: number;
     toursUpcoming: number;
     openTasks: number;
+    currentWeekFte: number | null;
+    latestFte: number | null;
+    fteSubmittedThisWeek: boolean;
   };
   recentLeads: Array<{
     id: string;
@@ -678,10 +681,27 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
         <StatCard label="Open tasks" value={data.stats.openTasks} />
       </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Weekly FTE status"
+          value={data.stats.fteSubmittedThisWeek ? "Submitted" : "Due"}
+          detail="Current reporting week"
+        />
+        <StatCard
+          label="Current week FTE"
+          value={data.stats.currentWeekFte === null ? "Not submitted" : data.stats.currentWeekFte.toLocaleString()}
+        />
+        <StatCard
+          label="Latest FTE"
+          value={data.stats.latestFte === null ? "No reports" : data.stats.latestFte.toLocaleString()}
+          detail="Most recent report on file"
+        />
+      </div>
       {data.fteCenters.length ? (
         <FteReportForm
           centers={data.fteCenters}
           reports={data.fteReports}
+          mode="director"
           title="Submit Weekly FTE"
           description="Directors submit the weekly FTE report here. The latest rows show below for quick corrections."
         />
@@ -2171,8 +2191,12 @@ export type MultiLocationDashboardData = {
     staff: number;
     submittedFteReports: number;
     latestFteTotal: number;
+    currentWeekFteTotal: number;
+    currentWeekSubmittedCenters: number;
     missingFteReports: number;
   };
+  currentWeekStart: string;
+  dueCenters: Array<{ id: string; name: string }>;
   fte?: FteSnapshot;
   fteCenters: FteReportCenterOption[];
   fteReports: FteReportRow[];
@@ -2203,13 +2227,64 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The Bee Suite" />
         <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current report in the last 7 days" />
       </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Current week FTE"
+          value={data.stats.currentWeekFteTotal.toLocaleString()}
+          detail={`Week of ${formatDate(data.currentWeekStart)}`}
+        />
+        <StatCard
+          label="Schools submitted"
+          value={`${data.stats.currentWeekSubmittedCenters}/${data.stats.centers}`}
+          detail="Current weekly cycle"
+        />
+        <StatCard
+          label="Schools still due"
+          value={data.dueCenters.length.toLocaleString()}
+          detail={data.dueCenters.slice(0, 2).map((center) => center.name).join("; ") || "All visible schools submitted"}
+        />
+      </div>
       <FteReportForm
         centers={data.fteCenters}
         reports={data.fteReports}
         allowCenterSelect
+        mode="executive"
         title="Executive FTE Reporting"
         description="Submit, correct, or manually enter weekly FTE data for any visible school. Rows can also forward to the configured FTE Google Sheet backup."
       />
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Current Week Submission Tracker</CardTitle>
+          <CardDescription>Visible schools without a report for the current FTE week</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-60 overflow-auto rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>School</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.dueCenters.slice(0, 50).map((center) => (
+                  <TableRow key={center.id}>
+                    <TableCell className="font-medium">{center.name}</TableCell>
+                    <TableCell><Badge variant="outline">Due</Badge></TableCell>
+                  </TableRow>
+                ))}
+                {!data.dueCenters.length ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-muted-foreground">
+                      Every visible school has submitted for the current week.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
       {data.fte ? (
         <Card className="glass-panel">
           <CardHeader>

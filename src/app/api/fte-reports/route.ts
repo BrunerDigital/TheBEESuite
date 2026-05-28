@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import {
+  ageGroupTotal,
+  calculateFteCount,
+  defaultFteWeekEnd,
+  normalizeFteStatus,
+  resolveFteCenterId,
+  validateFtePeriod,
+} from "@/lib/fte-report-guardrails";
 import { appendRowToGoogleSheet, spreadsheetIdFromUrl, type GoogleSheetValue } from "@/lib/google-sheets";
 import { prisma } from "@/lib/prisma";
 
@@ -47,11 +55,6 @@ function parseDate(value: unknown) {
   if (!text) return null;
   const date = new Date(`${text}T00:00:00.000Z`);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function allowedStatus(value: unknown) {
-  const status = clean(value).toLowerCase().replace(/[^a-z0-9]+/g, "_");
-  return ["draft", "submitted", "corrected", "approved"].includes(status) ? status : "submitted";
 }
 
 function googleSpreadsheetId() {
@@ -110,11 +113,30 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const id = clean(body.id);
-  const centerId = clean(body.centerId) || user.primaryCenterId || "";
+  const requestedCenterId = clean(body.centerId);
   const weekStart = parseDate(body.weekStart);
-  const weekEnd = parseDate(body.weekEnd);
+  const weekEnd = parseDate(body.weekEnd) || (weekStart ? defaultFteWeekEnd(weekStart) : null);
 
-  if (!centerId) return NextResponse.json({ ok: false, error: "Center is required." }, { status: 400 });
+  const existingById = id
+    ? await prisma.fteReport.findUnique({ where: { id }, select: { id: true, centerId: true } })
+    : null;
+  if (id && !existingById) return NextResponse.json({ ok: false, error: "FTE report not found." }, { status: 404 });
+
+  const centerResolution = resolveFteCenterId({
+    role: user.role,
+    requestedCenterId,
+    primaryCenterId: user.primaryCenterId,
+    existingReportCenterId: existingById?.centerId,
+  });
+  if (!centerResolution.ok) {
+    return NextResponse.json({ ok: false, error: centerResolution.error }, { status: centerResolution.status });
+  }
+
+  const centerId = centerResolution.centerId;
+  const periodValidation = validateFtePeriod(weekStart, weekEnd);
+  if (!periodValidation.ok) {
+    return NextResponse.json({ ok: false, error: periodValidation.error }, { status: periodValidation.status });
+  }
   if (!weekStart) return NextResponse.json({ ok: false, error: "Week start is required." }, { status: 400 });
   if (!canAccessCenter(user, centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
@@ -126,57 +148,88 @@ export async function POST(request: NextRequest) {
   });
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
 
-  if (id) {
-    const existing = await prisma.fteReport.findUnique({ where: { id }, select: { centerId: true } });
-    if (!existing) return NextResponse.json({ ok: false, error: "FTE report not found." }, { status: 404 });
-    if (!canAccessCenter(user, existing.centerId)) {
-      return NextResponse.json({ ok: false, error: "You do not have access to this report." }, { status: 403 });
-    }
+  if (existingById && !canAccessCenter(user, existingById.centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this report." }, { status: 403 });
   }
 
   const fullTimeCount = intValue(body.fullTimeCount);
   const partTimeCount = intValue(body.partTimeCount);
-  const calculatedFte = fullTimeCount + partTimeCount * 0.5;
+  const calculatedFte = calculateFteCount(fullTimeCount, partTimeCount);
   const fteCount = body.fteCount === "" || body.fteCount === undefined || body.fteCount === null
     ? calculatedFte
     : floatValue(body.fteCount);
+  const existingByWeek = weekStart && !id
+    ? await prisma.fteReport.findUnique({
+        where: { centerId_weekStart: { centerId, weekStart } },
+        select: { id: true, centerId: true },
+      })
+    : null;
+  const reportToUpdate = existingById ?? existingByWeek;
+  const selectedStatus = normalizeFteStatus({
+    requestedStatus: body.status,
+    role: user.role,
+    isCorrection: Boolean(reportToUpdate),
+  });
+  const infants = intValue(body.infants);
+  const toddlers = intValue(body.toddlers);
+  const twos = intValue(body.twos);
+  const preschool = intValue(body.preschool);
+  const preK = intValue(body.preK);
+  const schoolAge = intValue(body.schoolAge);
+  const enrolledCount = intValue(body.enrolledCount);
+  const ageGroupCount = ageGroupTotal({
+    infants,
+    toddlers,
+    twos,
+    preschool,
+    preK,
+    schoolAge,
+  });
 
   const data = {
     centerId,
     submittedById: user.id,
     weekStart,
     weekEnd,
-    enrolledCount: intValue(body.enrolledCount),
+    enrolledCount,
     fullTimeCount,
     partTimeCount,
     fteCount,
-    infants: intValue(body.infants),
-    toddlers: intValue(body.toddlers),
-    twos: intValue(body.twos),
-    preschool: intValue(body.preschool),
-    preK: intValue(body.preK),
-    schoolAge: intValue(body.schoolAge),
+    infants,
+    toddlers,
+    twos,
+    preschool,
+    preK,
+    schoolAge,
     notes: clean(body.notes) || null,
-    status: allowedStatus(body.status),
+    status: selectedStatus,
     source: "manual_dashboard",
     sourceMetadata: {
       enteredBy: user.email,
       enteredRole: user.role,
       app: "the_bee_suite",
+      calculatedFte,
+      ageGroupCount,
+      enrollmentVariance: enrolledCount - ageGroupCount,
+      requestedCenterId,
+      resolvedCenterId: centerId,
     },
   };
 
-  const report = id
+  const reportInclude = {
+    center: { select: { name: true, crmLocationId: true } },
+    submittedBy: { select: { name: true, email: true } },
+  } satisfies Prisma.FteReportInclude;
+  type ReportWithRelations = Prisma.FteReportGetPayload<{ include: typeof reportInclude }>;
+  const report: ReportWithRelations = reportToUpdate
     ? await prisma.fteReport.update({
-        where: { id },
+        where: { id: reportToUpdate.id },
         data,
-        include: { center: { select: { name: true, crmLocationId: true } }, submittedBy: { select: { name: true, email: true } } },
+        include: reportInclude,
       })
-    : await prisma.fteReport.upsert({
-        where: { centerId_weekStart: { centerId, weekStart } },
-        update: data,
-        create: data,
-        include: { center: { select: { name: true, crmLocationId: true } }, submittedBy: { select: { name: true, email: true } } },
+    : await prisma.fteReport.create({
+        data,
+        include: reportInclude,
       });
 
   const fteSheetResult = await forwardToFteSheet([
@@ -225,13 +278,15 @@ export async function POST(request: NextRequest) {
 
   await writeAuditLog(user, {
     centerId,
-    action: id ? "fte_report.updated" : "fte_report.submitted",
+    action: reportToUpdate ? "fte_report.updated" : "fte_report.submitted",
     resource: "FteReport",
     resourceId: report.id,
     metadata: {
       weekStart: report.weekStart.toISOString(),
       fteCount: report.fteCount,
       status: report.status,
+      ageGroupCount,
+      enrollmentVariance: report.enrolledCount - ageGroupCount,
       googleSheets: fteSheetResult,
     },
   });
@@ -243,8 +298,13 @@ export async function POST(request: NextRequest) {
       centerId: report.centerId,
       centerName: report.center.crmLocationId ?? report.center.name,
       weekStart: report.weekStart,
+      weekEnd: report.weekEnd,
+      enrolledCount: report.enrolledCount,
+      fullTimeCount: report.fullTimeCount,
+      partTimeCount: report.partTimeCount,
       fteCount: report.fteCount,
       status: report.status,
+      updated: Boolean(reportToUpdate),
     },
     integrations: {
       googleSheets: fteSheetResult,

@@ -49,6 +49,7 @@ import {
   executiveParentMessageDemoRows,
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
+import { startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -216,10 +217,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     ]);
     const weekAgo = new Date(today);
     weekAgo.setDate(today.getDate() - 7);
+    const currentFteWeekStart = startOfFteWeek(today);
     const latestByCenter = new Map<string, (typeof fteReports)[number]>();
     for (const report of fteReports) {
       if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
     }
+    const currentWeekReports = fteReports.filter((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
+    const currentWeekReportedCenterIds = new Set(currentWeekReports.map((report) => report.centerId));
     const recentlyReportedCenterIds = new Set(
       fteReports.filter((report) => report.weekStart >= weekAgo).map((report) => report.centerId),
     );
@@ -236,8 +240,14 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             staff: teacherCount,
             submittedFteReports: fteReports.length,
             latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
+            currentWeekFteTotal: currentWeekReports.reduce((sum, report) => sum + report.fteCount, 0),
+            currentWeekSubmittedCenters: currentWeekReportedCenterIds.size,
             missingFteReports: Math.max(centers.length - recentlyReportedCenterIds.size, 0),
           },
+          currentWeekStart: currentFteWeekStart.toISOString(),
+          dueCenters: centers
+            .filter((center) => !currentWeekReportedCenterIds.has(center.id))
+            .map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fte,
           fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fteReports: fteReports.map(serializeFteReport),
@@ -1397,6 +1407,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
       center ? getFteReports([center.id], 24) : [],
     ]);
+    const currentFteWeekStart = startOfFteWeek(today);
+    const currentWeekFteReport = fteReports.find((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
+    const latestFteReport = fteReports[0];
 
     return (
       <CenterDashboardPage
@@ -1406,7 +1419,17 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           place: [center?.city, center?.state].filter(Boolean).join(", "),
           fteCenters: center ? [{ id: center.id, name: formatCenterName(center) }] : [],
           fteReports: fteReports.map(serializeFteReport),
-          stats: { leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks },
+          stats: {
+            leads,
+            highIntentLeads,
+            staff,
+            classrooms,
+            toursUpcoming,
+            openTasks,
+            currentWeekFte: currentWeekFteReport?.fteCount ?? null,
+            latestFte: latestFteReport?.fteCount ?? null,
+            fteSubmittedThisWeek: Boolean(currentWeekFteReport),
+          },
           recentLeads,
         }}
       />

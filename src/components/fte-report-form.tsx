@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { ageGroupTotal, calculateFteCount, dateInputString, defaultFteWeekEnd, startOfFteWeek } from "@/lib/fte-report-guardrails";
 
 export type FteReportCenterOption = {
   id: string;
@@ -45,6 +46,7 @@ type Props = {
   title?: string;
   description?: string;
   allowCenterSelect?: boolean;
+  mode?: "director" | "executive";
 };
 
 type FormState = {
@@ -74,19 +76,22 @@ function dateInput(value?: string | null) {
 }
 
 function defaultWeekStart() {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  today.setDate(today.getDate() + diff);
-  return today.toISOString().slice(0, 10);
+  return dateInputString(startOfFteWeek());
+}
+
+function defaultWeekEnd(weekStart: string) {
+  const date = new Date(`${weekStart}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return "";
+  return dateInputString(defaultFteWeekEnd(date));
 }
 
 function emptyForm(centerId = ""): FormState {
+  const weekStart = defaultWeekStart();
   return {
     id: "",
     centerId,
-    weekStart: defaultWeekStart(),
-    weekEnd: "",
+    weekStart,
+    weekEnd: defaultWeekEnd(weekStart),
     enrolledCount: "",
     fullTimeCount: "",
     partTimeCount: "",
@@ -112,6 +117,7 @@ export function FteReportForm({
   title = "Weekly FTE Report",
   description = "Submit or edit the weekly full-time-equivalent report for the selected school.",
   allowCenterSelect = false,
+  mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
   const defaultCenterId = centers[0]?.id ?? "";
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId));
@@ -122,11 +128,31 @@ export function FteReportForm({
   const calculatedFte = useMemo(() => {
     const full = Number(form.fullTimeCount || 0);
     const part = Number(form.partTimeCount || 0);
-    return Number.isFinite(full + part) ? full + part * 0.5 : 0;
+    return Number.isFinite(full + part) ? calculateFteCount(full, part) : 0;
   }, [form.fullTimeCount, form.partTimeCount]);
+  const ageGroupCount = useMemo(() => ageGroupTotal({
+    infants: Number(form.infants || 0),
+    toddlers: Number(form.toddlers || 0),
+    twos: Number(form.twos || 0),
+    preschool: Number(form.preschool || 0),
+    preK: Number(form.preK || 0),
+    schoolAge: Number(form.schoolAge || 0),
+  }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
+  const selectedCenter = centers.find((center) => center.id === form.centerId);
+  const currentWeekReport = reports.find((report) => (
+    report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
+  ));
 
   function setField(field: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function setWeekStart(value: string) {
+    setForm((current) => ({
+      ...current,
+      weekStart: value,
+      weekEnd: defaultWeekEnd(value),
+    }));
   }
 
   function editReport(report: FteReportRow) {
@@ -136,7 +162,7 @@ export function FteReportForm({
       id: report.id,
       centerId: report.centerId,
       weekStart: dateInput(report.weekStart),
-      weekEnd: dateInput(report.weekEnd),
+      weekEnd: dateInput(report.weekEnd) || defaultWeekEnd(dateInput(report.weekStart)),
       enrolledCount: asInput(report.enrolledCount),
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
@@ -147,7 +173,7 @@ export function FteReportForm({
       preschool: asInput(report.preschool),
       preK: asInput(report.preK),
       schoolAge: asInput(report.schoolAge),
-      status: report.status,
+      status: mode === "executive" ? report.status : "submitted",
       notes: report.notes ?? "",
     });
   }
@@ -162,6 +188,7 @@ export function FteReportForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          status: mode === "executive" ? form.status : undefined,
           fteCount: form.fteCount || calculatedFte,
         }),
       });
@@ -200,6 +227,25 @@ export function FteReportForm({
           </Alert>
         ) : null}
 
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Selected school</div>
+            <div className="mt-1 text-sm font-semibold">{selectedCenter?.name ?? "Choose school"}</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">This week</div>
+            <div className="mt-1 text-sm font-semibold">{currentWeekReport ? "Submitted" : "Not submitted"}</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Calculated FTE</div>
+            <div className="mt-1 text-sm font-semibold">{calculatedFte.toLocaleString()}</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Age group total</div>
+            <div className="mt-1 text-sm font-semibold">{ageGroupCount.toLocaleString()}</div>
+          </div>
+        </div>
+
         <div className="grid gap-3 lg:grid-cols-4">
           <div className="space-y-1 lg:col-span-2">
             <Label>School</Label>
@@ -218,7 +264,7 @@ export function FteReportForm({
           </div>
           <div className="space-y-1">
             <Label htmlFor="fte-week-start">Week start</Label>
-            <Input id="fte-week-start" type="date" value={form.weekStart} onChange={(event) => setField("weekStart", event.target.value)} />
+            <Input id="fte-week-start" type="date" value={form.weekStart} onChange={(event) => setWeekStart(event.target.value)} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="fte-week-end">Week end</Label>
@@ -270,19 +316,21 @@ export function FteReportForm({
           ))}
         </div>
 
-        <div className="grid gap-3 md:grid-cols-[14rem_1fr]">
-          <div className="space-y-1">
-            <Label>Status</Label>
-            <Select value={form.status} onValueChange={(value) => value && setField("status", value)}>
-              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="corrected">Corrected</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className={mode === "executive" ? "grid gap-3 md:grid-cols-[14rem_1fr]" : "grid gap-3"}>
+          {mode === "executive" ? (
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(value) => value && setField("status", value)}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="submitted">Submitted</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="corrected">Corrected</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           <div className="space-y-1">
             <Label>Notes</Label>
             <Textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} placeholder="Optional context or correction notes" />
@@ -298,7 +346,7 @@ export function FteReportForm({
             <Button variant="outline" onClick={() => setForm(emptyForm(form.centerId || defaultCenterId))}>Cancel edit</Button>
           ) : null}
           <span className="text-xs text-muted-foreground">
-            Calculated FTE uses full-time + half of part-time unless manually overridden.
+            Calculated FTE uses full-time + half of part-time unless manually overridden. Directors can only submit for their assigned school.
           </span>
         </div>
 
@@ -309,8 +357,10 @@ export function FteReportForm({
                 <TableHead>Week</TableHead>
                 <TableHead>School</TableHead>
                 <TableHead>FTE</TableHead>
+                <TableHead>FT/PT</TableHead>
                 <TableHead>Enrollment</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Submitted by</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
@@ -321,8 +371,10 @@ export function FteReportForm({
                   <TableCell>{dateInput(report.weekStart)}</TableCell>
                   <TableCell>{report.centerName}</TableCell>
                   <TableCell>{report.fteCount.toLocaleString()}</TableCell>
+                  <TableCell>{report.fullTimeCount.toLocaleString()} / {report.partTimeCount.toLocaleString()}</TableCell>
                   <TableCell>{report.enrolledCount.toLocaleString()}</TableCell>
                   <TableCell>{report.status.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{report.submittedBy ?? "Not set"}</TableCell>
                   <TableCell>{dateInput(report.updatedAt)}</TableCell>
                   <TableCell>
                     <Button variant="outline" size="sm" onClick={() => editReport(report)}>Edit</Button>
@@ -331,7 +383,7 @@ export function FteReportForm({
               ))}
               {!reports.length ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-muted-foreground">
+                  <TableCell colSpan={9} className="text-muted-foreground">
                     No FTE reports have been submitted for this scope yet.
                   </TableCell>
                 </TableRow>

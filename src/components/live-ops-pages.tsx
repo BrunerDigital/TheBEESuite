@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
+import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { MediaReviewActions } from "@/components/media-review-actions";
@@ -40,6 +41,16 @@ function formatDate(value: Date | string | null | undefined) {
     month: "short",
     day: "numeric",
     year: "numeric",
+  }).format(new Date(value));
+}
+
+function formatUtcDate(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 
@@ -2225,7 +2236,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Latest submitted FTE" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per school" />
         <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The Bee Suite" />
-        <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current report in the last 7 days" />
+        <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current-week FTE report" />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
@@ -2394,6 +2405,30 @@ export type FteReportsPageData = {
   };
   currentWeekStart: string;
   dueCenters: Array<{ id: string; name: string }>;
+  dueState: {
+    label: string;
+    phase: "open" | "due_soon" | "overdue";
+    priority: "normal" | "high";
+    dueAt: string;
+    reminder: string;
+  };
+  trendWeeks: Array<{
+    weekStart: string;
+    fteTotal: number;
+    enrolledTotal: number;
+    submittedCenters: number;
+    approvedReports: number;
+    correctedReports: number;
+    missingCenters: number;
+  }>;
+  centerSnapshots: Array<{
+    id: string;
+    name: string;
+    latestWeekStart: string | null;
+    latestFte: number | null;
+    currentWeekFte: number | null;
+    status: string;
+  }>;
   fte?: FteSnapshot;
   fteCenters: FteReportCenterOption[];
   fteReports: FteReportRow[];
@@ -2402,6 +2437,7 @@ export type FteReportsPageData = {
 
 export function FteReportsPage({ data }: { data: FteReportsPageData }) {
   const isExecutive = data.mode === "executive";
+  const maxTrendFte = Math.max(...data.trendWeeks.map((week) => week.fteTotal), 1);
 
   return (
     <div className="flex flex-col gap-6">
@@ -2427,13 +2463,22 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
             Export CSV
           </a>
         </div>
+        <div className="mt-5 rounded-xl border bg-background/45 p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold">Weekly deadline: {formatUtcDate(data.dueState.dueAt)}</div>
+              <div className="text-sm text-muted-foreground">{data.dueState.reminder}</div>
+            </div>
+            <Badge variant={data.dueState.priority === "high" ? "destructive" : "outline"}>{data.dueState.label}</Badge>
+          </div>
+        </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           label="Current week FTE"
           value={data.stats.currentWeekFteTotal.toLocaleString()}
-          detail={`Week of ${formatDate(data.currentWeekStart)}`}
+          detail={`Week of ${formatUtcDate(data.currentWeekStart)}`}
         />
         <StatCard
           label={isExecutive ? "Schools submitted" : "Submitted this week"}
@@ -2453,6 +2498,71 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         <StatCard label="Visible schools" value={data.stats.centers.toLocaleString()} detail={isExecutive ? "Executive scope" : "Director scope"} />
       </div>
 
+      {isExecutive ? (
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Weekly FTE Trend</CardTitle>
+              <CardDescription>Last visible reporting weeks by total FTE, submitted schools, and missing reports</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex min-h-64 items-end gap-3 overflow-x-auto border-b pb-4">
+                {data.trendWeeks.map((week) => (
+                  <div key={week.weekStart} className="flex min-w-24 flex-1 flex-col items-center gap-2">
+                    <div className="flex h-44 w-full items-end rounded-t-xl bg-muted/35 px-3 pt-3">
+                      <div
+                        className="w-full rounded-t-lg bg-gradient-to-t from-amber-500 to-yellow-300"
+                        style={{ height: `${Math.max(8, (week.fteTotal / maxTrendFte) * 100)}%` }}
+                        aria-label={`${week.fteTotal} FTE for week of ${formatUtcDate(week.weekStart)}`}
+                      />
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm font-semibold">{week.fteTotal.toLocaleString()}</div>
+                      <div className="text-[11px] text-muted-foreground">{formatUtcDate(week.weekStart)}</div>
+                      <div className="text-[11px] text-muted-foreground">{week.submittedCenters} submitted · {week.missingCenters} due</div>
+                    </div>
+                  </div>
+                ))}
+                {!data.trendWeeks.length ? (
+                  <div className="p-6 text-sm text-muted-foreground">No trend data is available yet.</div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>School FTE Snapshot</CardTitle>
+              <CardDescription>Current week status by visible school</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-80 overflow-auto rounded-xl border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>School</TableHead>
+                      <TableHead>Current</TableHead>
+                      <TableHead>Latest</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.centerSnapshots.map((center) => (
+                      <TableRow key={center.id}>
+                        <TableCell className="font-medium">{center.name}</TableCell>
+                        <TableCell>{center.currentWeekFte?.toLocaleString() ?? "Due"}</TableCell>
+                        <TableCell>{center.latestFte?.toLocaleString() ?? "None"}</TableCell>
+                        <TableCell><Badge variant={center.status === "Due" ? "outline" : "secondary"}>{center.status}</Badge></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <FteReportForm
         centers={data.fteCenters}
         reports={data.fteReports}
@@ -2463,6 +2573,8 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
           ? "Executives can enter, correct, or approve visible school reports. Approved rows are locked for directors."
           : "Directors can submit or correct reports for their assigned school until an executive approves the row."}
       />
+
+      {isExecutive ? <FteBulkImportPanel /> : null}
 
       <Card className="glass-panel">
         <CardHeader>

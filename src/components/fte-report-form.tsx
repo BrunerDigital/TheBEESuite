@@ -254,7 +254,9 @@ export function FteReportForm({
               onValueChange={(value) => value && setField("centerId", value)}
               disabled={!allowCenterSelect || centers.length <= 1}
             >
-              <SelectTrigger className="w-full"><SelectValue placeholder="Choose school" /></SelectTrigger>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose school">{selectedCenter?.name ?? "Choose school"}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 {centers.map((center) => (
                   <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>

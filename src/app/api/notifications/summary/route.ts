@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { EnrollmentStage, Prisma } from "@prisma/client";
 import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -27,10 +28,9 @@ export async function GET() {
     ? { OR: [{ userId: user.id }, { userId: null }] }
     : { userId: user.id };
   const now = new Date();
+  const fteDueState = getFteDueState(now);
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);
-  const weekAgo = new Date(now);
-  weekAgo.setDate(now.getDate() - 7);
 
   const [
     notifications,
@@ -67,7 +67,7 @@ export async function GET() {
     prisma.center.count({
       where: {
         id: scopedCenterIds,
-        fteReports: { none: { weekStart: { gte: weekAgo } } },
+        fteReports: { none: { weekStart: fteDueState.weekStart } },
       },
     }),
   ]);
@@ -120,10 +120,10 @@ export async function GET() {
       : null,
     missingFteReports
       ? {
-          title: `${missingFteReports.toLocaleString()} FTE reports due`,
-          body: "Schools without a current weekly FTE report should submit or be updated manually.",
+          title: `${missingFteReports.toLocaleString()} FTE reports ${fteDueState.phase === "overdue" ? "overdue" : "due"}`,
+          body: `${fteDueState.reminder} Deadline: ${fteDueState.dueAt.toISOString().slice(0, 10)}.`,
           type: "fte",
-          priority: "normal",
+          priority: fteDueState.priority,
           href: "/fte-reports",
         }
       : null,

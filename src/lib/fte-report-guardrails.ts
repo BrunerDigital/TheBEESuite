@@ -44,6 +44,54 @@ export function defaultFteWeekEnd(weekStart: Date) {
   return end;
 }
 
+export function fteDueAtForWeek(weekStart: Date) {
+  const dueAt = new Date(weekStart);
+  dueAt.setUTCDate(dueAt.getUTCDate() + 4);
+  dueAt.setUTCHours(22, 0, 0, 0);
+  return dueAt;
+}
+
+export function getFteDueState(now = new Date()) {
+  const weekStart = startOfFteWeek(now);
+  const dueAt = fteDueAtForWeek(weekStart);
+  const msUntilDue = dueAt.getTime() - now.getTime();
+  const daysUntilDue = Math.ceil(msUntilDue / 86_400_000);
+
+  if (msUntilDue < 0) {
+    return {
+      weekStart,
+      dueAt,
+      daysUntilDue,
+      phase: "overdue" as const,
+      priority: "high" as const,
+      label: "Overdue",
+      reminder: "Current-week FTE reports are past the Friday due window.",
+    };
+  }
+
+  if (daysUntilDue <= 1) {
+    return {
+      weekStart,
+      dueAt,
+      daysUntilDue,
+      phase: "due_soon" as const,
+      priority: "high" as const,
+      label: daysUntilDue <= 0 ? "Due today" : "Due tomorrow",
+      reminder: "Current-week FTE reports are due by Friday afternoon.",
+    };
+  }
+
+  return {
+    weekStart,
+    dueAt,
+    daysUntilDue,
+    phase: "open" as const,
+    priority: "normal" as const,
+    label: `Due in ${daysUntilDue} days`,
+    reminder: "Current-week FTE reports are due by Friday afternoon.",
+  };
+}
+
 export function normalizeFteStatus(input: {
   requestedStatus?: string | null;
   role?: string | null;

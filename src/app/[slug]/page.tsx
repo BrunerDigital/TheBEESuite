@@ -50,7 +50,7 @@ import {
   executiveParentMessageDemoRows,
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
-import { startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -191,6 +191,62 @@ async function getFteReports(centerIds: string[], take = 150) {
   });
 }
 
+function buildFteTrendData(
+  centers: Array<{ id: string; name: string; crmLocationId: string | null; city?: string | null; state?: string | null }>,
+  reports: Awaited<ReturnType<typeof getFteReports>>,
+  currentWeekStart: Date,
+) {
+  const centerCount = centers.length;
+  const reportsByWeek = new Map<string, typeof reports>();
+  for (const report of reports) {
+    const key = report.weekStart.toISOString().slice(0, 10);
+    const weekReports = reportsByWeek.get(key) ?? [];
+    weekReports.push(report);
+    reportsByWeek.set(key, weekReports);
+  }
+
+  const trendWeeks = Array.from(reportsByWeek.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-8)
+    .map(([weekStart, weekReports]) => {
+      const submittedCenters = new Set(weekReports.map((report) => report.centerId)).size;
+      return {
+        weekStart: `${weekStart}T00:00:00.000Z`,
+        fteTotal: weekReports.reduce((sum, report) => sum + report.fteCount, 0),
+        enrolledTotal: weekReports.reduce((sum, report) => sum + report.enrolledCount, 0),
+        submittedCenters,
+        approvedReports: weekReports.filter((report) => report.status === "approved").length,
+        correctedReports: weekReports.filter((report) => report.status === "corrected").length,
+        missingCenters: Math.max(centerCount - submittedCenters, 0),
+      };
+    });
+
+  const latestByCenter = new Map<string, (typeof reports)[number]>();
+  const currentByCenter = new Map<string, (typeof reports)[number]>();
+  for (const report of reports) {
+    if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
+    if (report.weekStart.getTime() === currentWeekStart.getTime()) currentByCenter.set(report.centerId, report);
+  }
+
+  return {
+    trendWeeks,
+    latestByCenter,
+    currentByCenter,
+    centerSnapshots: centers.map((center) => {
+      const latest = latestByCenter.get(center.id);
+      const current = currentByCenter.get(center.id);
+      return {
+        id: center.id,
+        name: formatCenterName(center),
+        latestWeekStart: latest?.weekStart.toISOString() ?? null,
+        latestFte: latest?.fteCount ?? null,
+        currentWeekFte: current?.fteCount ?? null,
+        status: current ? current.status.replaceAll("_", " ") : "Due",
+      };
+    }),
+  };
+}
+
 async function renderLivePage(slug: string, user: CurrentUser) {
   const tenantWide = canAccessAllCenters(user);
   const allCenters = tenantWide;
@@ -206,6 +262,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   startOfDay.setHours(0, 0, 0, 0);
   const endOfDay = new Date(today);
   endOfDay.setHours(23, 59, 59, 999);
+  const fteDueState = getFteDueState(today);
 
   if (slug === "multi-location-dashboard") {
     const [leads, highIntentLeads, upcomingTours, teacherCount, fte, fteReports] = await Promise.all([
@@ -216,18 +273,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       getKidCityFteSnapshot(centers),
       getFteReports(visibleCenterIds, 250),
     ]);
-    const weekAgo = new Date(today);
-    weekAgo.setDate(today.getDate() - 7);
-    const currentFteWeekStart = startOfFteWeek(today);
-    const latestByCenter = new Map<string, (typeof fteReports)[number]>();
-    for (const report of fteReports) {
-      if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
-    }
+    const currentFteWeekStart = fteDueState.weekStart;
+    const trend = buildFteTrendData(centers, fteReports, currentFteWeekStart);
     const currentWeekReports = fteReports.filter((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
     const currentWeekReportedCenterIds = new Set(currentWeekReports.map((report) => report.centerId));
-    const recentlyReportedCenterIds = new Set(
-      fteReports.filter((report) => report.weekStart >= weekAgo).map((report) => report.centerId),
-    );
 
     return (
       <MultiLocationDashboardPage
@@ -240,10 +289,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             upcomingTours,
             staff: teacherCount,
             submittedFteReports: fteReports.length,
-            latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
+            latestFteTotal: Array.from(trend.latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
             currentWeekFteTotal: currentWeekReports.reduce((sum, report) => sum + report.fteCount, 0),
             currentWeekSubmittedCenters: currentWeekReportedCenterIds.size,
-            missingFteReports: Math.max(centers.length - recentlyReportedCenterIds.size, 0),
+            missingFteReports: Math.max(centers.length - currentWeekReportedCenterIds.size, 0),
           },
           currentWeekStart: currentFteWeekStart.toISOString(),
           dueCenters: centers
@@ -262,11 +311,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       getFteReports(visibleCenterIds, tenantWide ? 500 : 100),
       tenantWide ? getKidCityFteSnapshot(centers) : Promise.resolve(undefined),
     ]);
-    const currentFteWeekStart = startOfFteWeek(today);
-    const latestByCenter = new Map<string, (typeof fteReports)[number]>();
-    for (const report of fteReports) {
-      if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
-    }
+    const currentFteWeekStart = fteDueState.weekStart;
+    const trend = buildFteTrendData(centers, fteReports, currentFteWeekStart);
     const currentWeekReports = fteReports.filter((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
     const currentWeekReportedCenterIds = new Set(currentWeekReports.map((report) => report.centerId));
 
@@ -278,7 +324,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           stats: {
             centers: centers.length,
             submittedFteReports: fteReports.length,
-            latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
+            latestFteTotal: Array.from(trend.latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
             currentWeekFteTotal: currentWeekReports.reduce((sum, report) => sum + report.fteCount, 0),
             currentWeekSubmittedCenters: currentWeekReportedCenterIds.size,
             missingCurrentWeekReports: Math.max(centers.length - currentWeekReportedCenterIds.size, 0),
@@ -287,6 +333,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           dueCenters: centers
             .filter((center) => !currentWeekReportedCenterIds.has(center.id))
             .map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          dueState: {
+            label: fteDueState.label,
+            phase: fteDueState.phase,
+            priority: fteDueState.priority,
+            dueAt: fteDueState.dueAt.toISOString(),
+            reminder: fteDueState.reminder,
+          },
+          trendWeeks: trend.trendWeeks,
+          centerSnapshots: trend.centerSnapshots,
           fte,
           fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fteReports: fteReports.map(serializeFteReport),

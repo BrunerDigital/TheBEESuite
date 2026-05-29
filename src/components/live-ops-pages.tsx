@@ -2375,6 +2375,153 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
   );
 }
 
+export type FteReportsPageData = {
+  mode: "director" | "executive";
+  centers: Array<{
+    id: string;
+    name: string;
+    crmLocationId: string | null;
+    city: string | null;
+    state: string | null;
+  }>;
+  stats: {
+    centers: number;
+    submittedFteReports: number;
+    latestFteTotal: number;
+    currentWeekFteTotal: number;
+    currentWeekSubmittedCenters: number;
+    missingCurrentWeekReports: number;
+  };
+  currentWeekStart: string;
+  dueCenters: Array<{ id: string; name: string }>;
+  fte?: FteSnapshot;
+  fteCenters: FteReportCenterOption[];
+  fteReports: FteReportRow[];
+  exportHref: string;
+};
+
+export function FteReportsPage({ data }: { data: FteReportsPageData }) {
+  const isExecutive = data.mode === "executive";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <Badge className="mb-4">
+              <ClipboardCheck data-icon="inline-start" />
+              Weekly FTE reporting
+            </Badge>
+            <h1 className="text-3xl font-semibold tracking-tight">FTE Reports</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              {isExecutive
+                ? "Executive review, correction, approval, CSV export, and missing-school tracking for weekly FTE submissions."
+                : "Submit this week's full-time-equivalent report for your assigned school and review recent submissions."}
+            </p>
+          </div>
+          <a
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold text-primary transition hover:bg-muted"
+            href={data.exportHref}
+          >
+            <Link2 data-icon="inline-start" />
+            Export CSV
+          </a>
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Current week FTE"
+          value={data.stats.currentWeekFteTotal.toLocaleString()}
+          detail={`Week of ${formatDate(data.currentWeekStart)}`}
+        />
+        <StatCard
+          label={isExecutive ? "Schools submitted" : "Submitted this week"}
+          value={isExecutive ? `${data.stats.currentWeekSubmittedCenters}/${data.stats.centers}` : data.stats.currentWeekSubmittedCenters ? "Yes" : "No"}
+          detail="Current weekly cycle"
+        />
+        <StatCard
+          label={isExecutive ? "Schools still due" : "Report status"}
+          value={isExecutive ? data.stats.missingCurrentWeekReports.toLocaleString() : data.stats.missingCurrentWeekReports ? "Due" : "Complete"}
+          detail={isExecutive ? "Missing current-week report" : "Assigned center only"}
+        />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Visible reports" />
+        <StatCard label="Latest FTE total" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per visible school" />
+        <StatCard label="Visible schools" value={data.stats.centers.toLocaleString()} detail={isExecutive ? "Executive scope" : "Director scope"} />
+      </div>
+
+      <FteReportForm
+        centers={data.fteCenters}
+        reports={data.fteReports}
+        allowCenterSelect={isExecutive}
+        mode={data.mode}
+        title={isExecutive ? "Review or Enter FTE" : "Submit Weekly FTE"}
+        description={isExecutive
+          ? "Executives can enter, correct, or approve visible school reports. Approved rows are locked for directors."
+          : "Directors can submit or correct reports for their assigned school until an executive approves the row."}
+      />
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>{isExecutive ? "Current Week Due Tracker" : "Assigned School Tracker"}</CardTitle>
+          <CardDescription>
+            {isExecutive
+              ? "Schools without a report for the current reporting week"
+              : "Your school's current reporting status"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-72 overflow-auto rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>School</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.dueCenters.map((center) => (
+                  <TableRow key={center.id}>
+                    <TableCell className="font-medium">{center.name}</TableCell>
+                    <TableCell><Badge variant="outline">Due</Badge></TableCell>
+                  </TableRow>
+                ))}
+                {!data.dueCenters.length ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="text-muted-foreground">
+                      All visible schools have submitted for the current week.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {isExecutive && data.fte ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Google Sheet Backup Snapshot</CardTitle>
+            <CardDescription>
+              {data.fte.status === "ready"
+                ? `Synced from ${data.fte.sourceMode === "template_week_tab" ? "template" : "rolling"} Google Sheets tab "${data.fte.sheetName}".`
+                : "Connect or publish the FTE Google Sheet backup to show sheet-side totals."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <StatCard label="Sheet FTE total" value={data.fte.totalFte.toLocaleString()} detail={data.fte.status.replaceAll("_", " ")} />
+            <StatCard label="Sheet locations" value={data.fte.locationCount.toLocaleString()} detail={data.fte.error || "Backup source read"} />
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
 export type FamilyProfilesPageData = {
   families: Array<{
     id: string;

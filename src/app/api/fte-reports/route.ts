@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
-import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessCenter, canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
   calculateFteCount,
   defaultFteWeekEnd,
+  isExecutiveFteManager,
   normalizeFteStatus,
   resolveFteCenterId,
   validateFtePeriod,
@@ -57,6 +58,39 @@ function parseDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function csvValue(value: unknown) {
+  const text = value instanceof Date ? value.toISOString() : String(value ?? "");
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+const reportInclude = {
+  center: { select: { name: true, crmLocationId: true } },
+  submittedBy: { select: { name: true, email: true } },
+} satisfies Prisma.FteReportInclude;
+
+function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof reportInclude }>) {
+  return [
+    report.updatedAt.toISOString(),
+    report.weekStart.toISOString().slice(0, 10),
+    report.weekEnd?.toISOString().slice(0, 10) ?? "",
+    report.center.crmLocationId ?? report.center.name,
+    report.center.crmLocationId ?? "",
+    report.enrolledCount,
+    report.fullTimeCount,
+    report.partTimeCount,
+    report.fteCount,
+    report.infants,
+    report.toddlers,
+    report.twos,
+    report.preschool,
+    report.preK,
+    report.schoolAge,
+    report.status,
+    report.submittedBy?.email ?? "",
+    report.notes ?? "",
+  ];
+}
+
 function googleSpreadsheetId() {
   return (
     process.env.FTE_GOOGLE_SHEETS_SPREADSHEET_ID?.trim() ||
@@ -102,6 +136,84 @@ async function forwardToFteSheet(row: GoogleSheetValue[]) {
   }
 }
 
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "FTE reporting is not allowed for this role." }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const requestedCenterId = clean(searchParams.get("centerId"));
+  const requestedStatus = clean(searchParams.get("status"));
+  const format = clean(searchParams.get("format"));
+  const requestedWeekStart = parseDate(searchParams.get("weekStart"));
+  const visibleCenters = await prisma.center.findMany({
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    select: { id: true },
+  });
+  const visibleCenterIds = visibleCenters.map((center) => center.id);
+
+  if (!visibleCenterIds.length) {
+    return NextResponse.json({ ok: false, error: "No assigned center found for this account." }, { status: 403 });
+  }
+  if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
+  }
+
+  const reports = await prisma.fteReport.findMany({
+    where: {
+      centerId: requestedCenterId || { in: visibleCenterIds },
+      ...(requestedWeekStart ? { weekStart: requestedWeekStart } : {}),
+      ...(requestedStatus ? { status: requestedStatus } : {}),
+    },
+    orderBy: [{ weekStart: "desc" }, { updatedAt: "desc" }],
+    take: format === "csv" ? 1000 : 250,
+    include: reportInclude,
+  });
+
+  if (format === "csv") {
+    const lines = [
+      FTE_SHEET_HEADERS.map(csvValue).join(","),
+      ...reports.map((report) => reportCsvRow(report).map(csvValue).join(",")),
+    ];
+    return new NextResponse(lines.join("\n"), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="bee-suite-fte-reports-${new Date().toISOString().slice(0, 10)}.csv"`,
+      },
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    reports: reports.map((report) => ({
+      id: report.id,
+      centerId: report.centerId,
+      centerName: report.center.crmLocationId ?? report.center.name,
+      weekStart: report.weekStart,
+      weekEnd: report.weekEnd,
+      enrolledCount: report.enrolledCount,
+      fullTimeCount: report.fullTimeCount,
+      partTimeCount: report.partTimeCount,
+      fteCount: report.fteCount,
+      infants: report.infants,
+      toddlers: report.toddlers,
+      twos: report.twos,
+      preschool: report.preschool,
+      preK: report.preK,
+      schoolAge: report.schoolAge,
+      status: report.status,
+      source: report.source,
+      notes: report.notes,
+      submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
+      updatedAt: report.updatedAt,
+    })),
+  });
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -118,7 +230,7 @@ export async function POST(request: NextRequest) {
   const weekEnd = parseDate(body.weekEnd) || (weekStart ? defaultFteWeekEnd(weekStart) : null);
 
   const existingById = id
-    ? await prisma.fteReport.findUnique({ where: { id }, select: { id: true, centerId: true } })
+    ? await prisma.fteReport.findUnique({ where: { id }, select: { id: true, centerId: true, status: true } })
     : null;
   if (id && !existingById) return NextResponse.json({ ok: false, error: "FTE report not found." }, { status: 404 });
 
@@ -161,10 +273,16 @@ export async function POST(request: NextRequest) {
   const existingByWeek = weekStart && !id
     ? await prisma.fteReport.findUnique({
         where: { centerId_weekStart: { centerId, weekStart } },
-        select: { id: true, centerId: true },
+        select: { id: true, centerId: true, status: true },
       })
     : null;
   const reportToUpdate = existingById ?? existingByWeek;
+  if (reportToUpdate?.status === "approved" && !isExecutiveFteManager(user.role)) {
+    return NextResponse.json(
+      { ok: false, error: "Approved FTE reports require executive correction before they can be changed." },
+      { status: 403 },
+    );
+  }
   const selectedStatus = normalizeFteStatus({
     requestedStatus: body.status,
     role: user.role,
@@ -216,10 +334,6 @@ export async function POST(request: NextRequest) {
     },
   };
 
-  const reportInclude = {
-    center: { select: { name: true, crmLocationId: true } },
-    submittedBy: { select: { name: true, email: true } },
-  } satisfies Prisma.FteReportInclude;
   type ReportWithRelations = Prisma.FteReportGetPayload<{ include: typeof reportInclude }>;
   const report: ReportWithRelations = reportToUpdate
     ? await prisma.fteReport.update({

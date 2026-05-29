@@ -30,6 +30,7 @@ export type ModuleSlug =
   | "dashboard"
   | "multi-location-dashboard"
   | "center-dashboard"
+  | "fte-reports"
   | "classroom-dashboard"
   | "crm-leads"
   | "family-detail"
@@ -303,6 +304,7 @@ export const navGroups = [
     title: "Operations",
     items: [
       ["Center dashboard", "center-dashboard", Home],
+      ["FTE reports", "fte-reports", ClipboardCheck],
       ["Classroom", "classroom-dashboard", Activity],
       ["Attendance", "attendance", ClipboardCheck],
       ["Daily reports", "daily-reports", BookOpen],
@@ -396,6 +398,18 @@ export const modules: ModuleDefinition[] = [
     features: ["Today schedule", "Open tasks", "Message response queue", "Licensing reminder lane"],
     records: notifications.slice(0, 6),
     ai: "Drafts the morning summary and flags workflow bottlenecks for human review.",
+  },
+  {
+    slug: "fte-reports",
+    title: "FTE Reports",
+    eyebrow: "Weekly reporting",
+    description:
+      "Director weekly full-time-equivalent submissions, executive review, missing-school tracking, corrections, approvals, and CSV export.",
+    owner: "Center director, regional manager, brand admin",
+    metrics: ["Weekly FTE", "Submitted schools", "Due schools", "Approved corrections"],
+    features: ["Director submission form", "Executive rollup", "Current-week tracker", "CSV export"],
+    records: ["Week start", "Enrollment", "Full-time", "Part-time", "Age group counts", "Notes"],
+    sensitive: true,
   },
   {
     slug: "classroom-dashboard",

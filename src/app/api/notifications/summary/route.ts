@@ -124,7 +124,7 @@ export async function GET() {
           body: "Schools without a current weekly FTE report should submit or be updated manually.",
           type: "fte",
           priority: "normal",
-          href: tenantWide ? "/multi-location-dashboard" : "/center-dashboard",
+          href: "/fte-reports",
         }
       : null,
   ].filter(Boolean);

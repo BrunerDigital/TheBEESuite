@@ -36,6 +36,7 @@ const enrollmentModules = new Set<ModuleSlug>([
 
 const schoolAdminModules = new Set<ModuleSlug>([
   "center-dashboard",
+  "fte-reports",
   "family-detail",
   "child-profile",
   "messages",

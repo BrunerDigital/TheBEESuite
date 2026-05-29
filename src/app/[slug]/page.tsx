@@ -21,6 +21,7 @@ import {
   EnrollmentPipelinePage,
   FormsPage,
   FamilyProfilesPage,
+  FteReportsPage,
   IntegrationsPage,
   IncidentReportsPage,
   MessagesPage,
@@ -251,6 +252,45 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           fte,
           fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fteReports: fteReports.map(serializeFteReport),
+        }}
+      />
+    );
+  }
+
+  if (slug === "fte-reports") {
+    const [fteReports, fte] = await Promise.all([
+      getFteReports(visibleCenterIds, tenantWide ? 500 : 100),
+      tenantWide ? getKidCityFteSnapshot(centers) : Promise.resolve(undefined),
+    ]);
+    const currentFteWeekStart = startOfFteWeek(today);
+    const latestByCenter = new Map<string, (typeof fteReports)[number]>();
+    for (const report of fteReports) {
+      if (!latestByCenter.has(report.centerId)) latestByCenter.set(report.centerId, report);
+    }
+    const currentWeekReports = fteReports.filter((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
+    const currentWeekReportedCenterIds = new Set(currentWeekReports.map((report) => report.centerId));
+
+    return (
+      <FteReportsPage
+        data={{
+          mode: tenantWide ? "executive" : "director",
+          centers,
+          stats: {
+            centers: centers.length,
+            submittedFteReports: fteReports.length,
+            latestFteTotal: Array.from(latestByCenter.values()).reduce((sum, report) => sum + report.fteCount, 0),
+            currentWeekFteTotal: currentWeekReports.reduce((sum, report) => sum + report.fteCount, 0),
+            currentWeekSubmittedCenters: currentWeekReportedCenterIds.size,
+            missingCurrentWeekReports: Math.max(centers.length - currentWeekReportedCenterIds.size, 0),
+          },
+          currentWeekStart: currentFteWeekStart.toISOString(),
+          dueCenters: centers
+            .filter((center) => !currentWeekReportedCenterIds.has(center.id))
+            .map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          fte,
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          fteReports: fteReports.map(serializeFteReport),
+          exportHref: "/api/fte-reports?format=csv",
         }}
       />
     );

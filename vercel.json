@@ -1,5 +1,11 @@
 {
   "framework": "nextjs",
   "installCommand": "npm ci",
-  "buildCommand": "npm run vercel-build"
+  "buildCommand": "npm run vercel-build",
+  "crons": [
+    {
+      "path": "/api/cron/fte-reminders",
+      "schedule": "0 14 * * 1-5"
+    }
+  ]
 }

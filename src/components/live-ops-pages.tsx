@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   Activity,
   BadgeDollarSign,
@@ -79,6 +80,10 @@ function jsonSummary(value: unknown) {
       .join(" · ");
   }
   return String(value);
+}
+
+function localImageSrc(value: string | null | undefined) {
+  return value?.startsWith("/") ? value : null;
 }
 
 function money(cents: number) {
@@ -3493,16 +3498,38 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.assets.map((asset) => (
-                <TableRow key={asset.id}>
-                  <TableCell>
-                    <div className="font-medium">{asset.assetType.replaceAll("_", " ")}</div>
-                    <div className="text-xs text-muted-foreground">{asset.altText ?? "No alt text"}</div>
-                  </TableCell>
-                  <TableCell>{asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Tenant"}</TableCell>
-                  <TableCell>{asset.storageKey ?? asset.url ?? "Upload pending"}</TableCell>
-                </TableRow>
-              ))}
+              {data.assets.map((asset) => {
+                const previewSrc = localImageSrc(asset.url);
+                const assetLabel = asset.assetType.replaceAll("_", " ");
+
+                return (
+                  <TableRow key={asset.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        {previewSrc ? (
+                          <Image
+                            src={previewSrc}
+                            alt={asset.altText ?? assetLabel}
+                            width={96}
+                            height={56}
+                            className="h-10 w-16 rounded-md border bg-white object-contain p-1"
+                          />
+                        ) : (
+                          <span className="grid size-10 place-items-center rounded-md border bg-background/50 text-muted-foreground">
+                            <ImageIcon className="size-4" />
+                          </span>
+                        )}
+                        <div>
+                          <div className="font-medium">{assetLabel}</div>
+                          <div className="text-xs text-muted-foreground">{asset.altText ?? "No alt text"}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>{asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Tenant"}</TableCell>
+                    <TableCell>{asset.storageKey ?? asset.url ?? "Upload pending"}</TableCell>
+                  </TableRow>
+                );
+              })}
               {!data.assets.length ? (
                 <TableRow>
                   <TableCell colSpan={3} className="text-muted-foreground">No assets have been attached yet.</TableCell>

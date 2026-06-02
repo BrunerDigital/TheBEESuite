@@ -208,7 +208,7 @@ Status legend:
 - [x] Add late pickup flag workflow.
 - [ ] Add staff kiosk mode.
 - [x] Add parent authorization warnings during pickup.
-- [ ] Add end-of-day attendance reconciliation report.
+- [x] Add end-of-day attendance reconciliation report.
 
 ## Classroom Operations And Teacher Workflows
 

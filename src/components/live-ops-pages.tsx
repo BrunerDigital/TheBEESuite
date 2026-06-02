@@ -1564,6 +1564,29 @@ export type AttendancePageData = {
     absent: number;
     other: number;
   };
+  reconciliation: {
+    serviceDate: Date | string;
+    checkIns: number;
+    checkOuts: number;
+    stillCheckedIn: number;
+    latePickups: number;
+    authorizationWarnings: number;
+    signaturesCaptured: number;
+    logs: Array<{
+      id: string;
+      type: string;
+      occurredAt: Date | string;
+      pickupName: string | null;
+      pinVerified: boolean;
+      signatureCaptured: boolean;
+      latePickup: boolean;
+      pickupAuthorizationWarning: boolean;
+      child: { fullName: string; ageGroup: string } | null;
+      guardian: { fullName: string; email: string | null } | null;
+      classroom: { name: string } | null;
+      center: { name: string; crmLocationId: string | null } | null;
+    }>;
+  };
 };
 
 export function AttendancePage({ data }: { data: AttendancePageData }) {
@@ -1576,7 +1599,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Attendance</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Child attendance records with classroom scope. QR/PIN kiosk and signature capture remain integration-ready placeholders.
+          Child attendance records, PIN kiosk check-ins, typed guardian signatures, late pickup flags, and end-of-day reconciliation.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -1585,6 +1608,95 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         <StatCard label="Absent" value={data.stats.absent} />
         <StatCard label="Other" value={data.stats.other} />
       </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>End-of-Day Reconciliation</CardTitle>
+              <CardDescription>
+                Kiosk activity for {formatDate(data.reconciliation.serviceDate)} with unresolved check-ins and front desk review flags.
+              </CardDescription>
+            </div>
+            <Badge variant={data.reconciliation.stillCheckedIn > 0 ? "destructive" : "default"}>
+              {data.reconciliation.stillCheckedIn > 0 ? "Needs closeout" : "Balanced"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            {[
+              ["Check-ins", data.reconciliation.checkIns],
+              ["Check-outs", data.reconciliation.checkOuts],
+              ["Still checked in", data.reconciliation.stillCheckedIn],
+              ["Late pickups", data.reconciliation.latePickups],
+              ["Pickup warnings", data.reconciliation.authorizationWarnings],
+              ["Signatures", data.reconciliation.signaturesCaptured],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl border bg-background/45 p-3">
+                <div className="text-xs text-muted-foreground">{label}</div>
+                <div className="mt-1 text-2xl font-semibold">{value}</div>
+              </div>
+            ))}
+          </div>
+          {data.reconciliation.logs.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Child</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Guardian</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Verification</TableHead>
+                  <TableHead>Flags</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.reconciliation.logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>{formatDateTime(log.occurredAt)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{log.child?.fullName ?? "Unlinked child"}</div>
+                      <div className="text-xs text-muted-foreground">{log.classroom?.name ?? log.child?.ageGroup ?? ""}</div>
+                    </TableCell>
+                    <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "No center"}</TableCell>
+                    <TableCell>
+                      <div>{log.pickupName ?? log.guardian?.fullName ?? "Not captured"}</div>
+                      <div className="text-xs text-muted-foreground">{log.guardian?.email ?? ""}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={log.type === "check_in" ? "default" : "secondary"}>
+                        {log.type === "check_in" ? "Check-in" : "Check-out"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant={log.pinVerified ? "default" : "outline"}>{log.pinVerified ? "PIN" : "No PIN"}</Badge>
+                        <Badge variant={log.signatureCaptured ? "default" : "outline"}>
+                          {log.signatureCaptured ? "Signature" : "No signature"}
+                        </Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        {log.latePickup ? <Badge variant="destructive">Late pickup</Badge> : null}
+                        {log.pickupAuthorizationWarning ? <Badge variant="destructive">Front desk</Badge> : null}
+                        {!log.latePickup && !log.pickupAuthorizationWarning ? (
+                          <span className="text-xs text-muted-foreground">None</span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="rounded-xl border border-dashed p-5 text-sm text-muted-foreground">
+              No kiosk check-in/out activity has been recorded for this service day yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Attendance</CardTitle>

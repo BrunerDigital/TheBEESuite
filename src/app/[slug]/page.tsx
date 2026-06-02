@@ -1806,7 +1806,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const attendanceWhere: Prisma.AttendanceRecordWhereInput = allCenters
       ? {}
       : { classroom: { is: { centerId: scopedCenterIds } } };
-    const [records, total, present, absent] = await Promise.all([
+    const checkLogWhere: Prisma.CheckInOutLogWhereInput = {
+      occurredAt: { gte: startOfDay, lte: endOfDay },
+      ...(allCenters ? {} : { centerId: scopedCenterIds }),
+    };
+    const [records, total, present, absent, checkLogs] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where: attendanceWhere,
         orderBy: { date: "desc" },
@@ -1824,9 +1828,63 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.attendanceRecord.count({ where: attendanceWhere }),
       prisma.attendanceRecord.count({ where: { ...attendanceWhere, status: "present" } }),
       prisma.attendanceRecord.count({ where: { ...attendanceWhere, status: "absent" } }),
+      prisma.checkInOutLog.findMany({
+        where: checkLogWhere,
+        orderBy: { occurredAt: "desc" },
+        take: 200,
+        include: {
+          child: { select: { id: true, fullName: true, ageGroup: true } },
+          guardian: { select: { fullName: true, email: true } },
+          classroom: { select: { name: true } },
+          center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
     ]);
 
-    return <AttendancePage data={{ records, stats: { total, present, absent, other: Math.max(total - present - absent, 0) } }} />;
+    const latestByChild = new Map<string, (typeof checkLogs)[number]>();
+    for (const log of checkLogs) {
+      const current = latestByChild.get(log.childId);
+      if (!current || log.occurredAt > current.occurredAt) latestByChild.set(log.childId, log);
+    }
+    const metadataFor = (value: Prisma.JsonValue | null) =>
+      value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+    const reconciliationLogs = checkLogs.map((log) => {
+      const metadata = metadataFor(log.metadata);
+      return {
+        id: log.id,
+        type: log.type,
+        occurredAt: log.occurredAt,
+        pickupName: log.pickupName,
+        pinVerified: log.pinVerified,
+        signatureCaptured: Boolean(log.signaturePlaceholder || metadata.signatureName),
+        latePickup: metadata.latePickup === true,
+        pickupAuthorizationWarning: metadata.pickupAuthorizationWarning === true,
+        child: log.child,
+        guardian: log.guardian,
+        classroom: log.classroom,
+        center: log.center,
+      };
+    });
+    const stillCheckedIn = Array.from(latestByChild.values()).filter((log) => log.type === "check_in").length;
+
+    return (
+      <AttendancePage
+        data={{
+          records,
+          stats: { total, present, absent, other: Math.max(total - present - absent, 0) },
+          reconciliation: {
+            serviceDate: startOfDay.toISOString(),
+            checkIns: checkLogs.filter((log) => log.type === "check_in").length,
+            checkOuts: checkLogs.filter((log) => log.type === "check_out").length,
+            stillCheckedIn,
+            latePickups: reconciliationLogs.filter((log) => log.latePickup).length,
+            authorizationWarnings: reconciliationLogs.filter((log) => log.pickupAuthorizationWarning).length,
+            signaturesCaptured: reconciliationLogs.filter((log) => log.signatureCaptured).length,
+            logs: reconciliationLogs,
+          },
+        }}
+      />
+    );
   }
 
   if (slug === "daily-reports") {

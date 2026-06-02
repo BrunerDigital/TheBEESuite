@@ -202,7 +202,7 @@ Status legend:
 - [x] Director PIN setting API exists.
 - [x] Attendance/check logs schema exists.
 - [x] Kiosk guardrails exist for PIN security and attendance state.
-- [ ] Complete lobby tablet UX with idle/reset mode and large touch targets.
+- [x] Complete lobby tablet UX with idle/reset mode and large touch targets.
 - [ ] Add signature capture.
 - [ ] Add QR/PIN options.
 - [ ] Add late pickup flag workflow.

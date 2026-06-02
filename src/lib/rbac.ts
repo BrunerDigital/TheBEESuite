@@ -51,6 +51,7 @@ const schoolAdminModules = new Set<ModuleSlug>([
   "team-permissions",
   "audit-logs",
   "ai-command",
+  "staff",
 ]);
 
 const classroomModules = new Set<ModuleSlug>([
@@ -58,7 +59,6 @@ const classroomModules = new Set<ModuleSlug>([
   "attendance",
   "daily-reports",
   "incident-reports",
-  "staff",
   "teacher-portal",
 ]);
 

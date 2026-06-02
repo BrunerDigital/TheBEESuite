@@ -224,7 +224,7 @@ Status legend:
 - [ ] Add batch logging for meals/naps/diapers/activities.
 - [ ] Add classroom ratio warnings and staff assignment actions.
 - [ ] Add offline/poor-connectivity strategy for classroom tablets.
-- [ ] Add teacher permissions separated from director/location users.
+- [x] Add teacher permissions separated from director/location users.
 
 ## Parent Engagement Portal
 

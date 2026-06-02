@@ -355,6 +355,24 @@ test("RBAC permits executive parent portal previews without opening parent porta
   }, "parent-portal"), true);
 });
 
+test("RBAC keeps teacher workflows separate from staff management", () => {
+  const teacher = {
+    role: "TEACHER",
+    accessScope: "center",
+    centerIds: ["center_1"],
+  };
+  const director = {
+    role: "CENTER_DIRECTOR",
+    accessScope: "center",
+    centerIds: ["center_1"],
+  };
+
+  assert.equal(canAccessModule(teacher, "teacher-portal"), true);
+  assert.equal(canAccessModule(teacher, "daily-reports"), true);
+  assert.equal(canAccessModule(teacher, "staff"), false);
+  assert.equal(canAccessModule(director, "staff"), true);
+});
+
 test("executive user edits replace stale access grants with the target grant", () => {
   assert.equal(isSameAccessGrantTarget({
     role: "BRAND_ADMIN",

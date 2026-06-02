@@ -104,7 +104,7 @@ Status legend:
 - [x] Lead routing audit API exists.
 - [x] Manual lead entry exists for directors/location users.
 - [x] Mr. Bee AI assistant API exists for lead communication help.
-- [ ] Build full drag-and-drop pipeline board interaction.
+- [x] Build full drag-and-drop pipeline board interaction.
 - [ ] Add duplicate lead detection/merge workflow.
 - [ ] Add full communication timeline per family/lead.
 - [x] Add CRM saved views, filters, and exports.

@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clipboard,
   Download,
+  GripVertical,
   Mail,
   MapPin,
   Phone,
@@ -299,6 +300,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     getServerCrmSavedViewsSnapshot,
   );
   const [savedViewName, setSavedViewName] = useState("");
+  const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState(initialLeads[0]?.id ?? "");
   const [selectedLeadDetails, setSelectedLeadDetails] = useState<LeadDetails | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -461,6 +463,14 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     link.remove();
     URL.revokeObjectURL(url);
     showStatus(`Exported ${filteredLeads.length.toLocaleString()} visible lead records.`);
+  }
+
+  function moveDraggedLead(stage: EnrollmentStage) {
+    if (!draggingLeadId) return;
+    const draggedLead = leads.find((lead) => lead.id === draggingLeadId);
+    setDraggingLeadId(null);
+    if (!draggedLead || draggedLead.stage === stage) return;
+    updateLeadStage(draggedLead.id, stage);
   }
 
   function updateLeadStage(leadId: string, stage: EnrollmentStage) {
@@ -876,7 +886,20 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
 
           <div className="grid gap-4 xl:grid-cols-4">
             {enrollmentStages.slice(0, 8).map((stage) => (
-              <Card key={stage} className="min-h-72 border-primary/15 bg-card/75">
+              <Card
+                key={stage}
+                onDragOver={(event) => {
+                  if (draggingLeadId) event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  moveDraggedLead(stage);
+                }}
+                className={cn(
+                  "min-h-72 border-primary/15 bg-card/75 transition",
+                  draggingLeadId && "border-dashed border-primary/50 ring-1 ring-primary/25",
+                )}
+              >
                 <CardHeader className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <CardTitle className="text-sm">{stageLabels[stage]}</CardTitle>
@@ -888,17 +911,29 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                     <button
                       key={lead.id}
                       type="button"
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", lead.id);
+                        setDraggingLeadId(lead.id);
+                        selectLead(lead);
+                      }}
+                      onDragEnd={() => setDraggingLeadId(null)}
                       onClick={() => selectLead(lead)}
                       className={cn(
-                        "rounded-xl border bg-background/55 p-3 text-left transition hover:border-primary/60",
+                        "cursor-grab rounded-xl border bg-background/55 p-3 text-left transition hover:border-primary/60 active:cursor-grabbing",
                         selectedLeadId === lead.id && "border-primary bg-primary/10",
+                        draggingLeadId === lead.id && "opacity-60",
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium">{lead.familyName}</div>
-                          <div className="mt-1 truncate text-xs text-muted-foreground">
-                            {lead.center.crmLocationId ?? lead.center.name}
+                        <div className="flex min-w-0 items-start gap-2">
+                          <GripVertical className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{lead.familyName}</div>
+                            <div className="mt-1 truncate text-xs text-muted-foreground">
+                              {lead.center.crmLocationId ?? lead.center.name}
+                            </div>
                           </div>
                         </div>
                         <Badge variant={lead.score >= 75 ? "default" : "outline"}>{lead.score}</Badge>

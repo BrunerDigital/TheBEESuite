@@ -172,7 +172,7 @@ Status legend:
 - [x] `CRON_SECRET` is configured in Vercel production.
 - [x] Google Sheet backup/snapshot structure exists.
 - [ ] Confirm the final reporting week cutoff/due time with Kid City USA operations.
-- [ ] Add full historical FTE trend filters by region/state/owner group.
+- [x] Add full historical FTE trend filters by region/state/owner group.
 - [ ] Add executive manual edit table for inline corrections.
 - [ ] Add email/SMS escalation for missing FTE reports if desired.
 - [ ] Add final Google Sheet two-way reconciliation rules.

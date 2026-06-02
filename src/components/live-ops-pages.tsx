@@ -33,6 +33,7 @@ import { NotificationReadAction } from "@/components/notification-read-actions";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
+import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { MediaReviewActions } from "@/components/media-review-actions";
@@ -2522,6 +2523,7 @@ export type FteReportsPageData = {
     crmLocationId: string | null;
     city: string | null;
     state: string | null;
+    ownerGroup: { name: string; ownerType: string } | null;
   }>;
   stats: {
     centers: number;
@@ -2690,6 +2692,8 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
           </Card>
         </div>
       ) : null}
+
+      {isExecutive ? <FteReportExplorer centers={data.centers} reports={data.fteReports} /> : null}
 
       <FteReportForm
         centers={data.fteCenters}

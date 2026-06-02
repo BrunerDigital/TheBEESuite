@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/integration-retries",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 14 * * *"
     }
   ]
 }

@@ -97,14 +97,14 @@ export function LoginForm() {
                 </Alert>
               ) : null}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email or username</Label>
                 <Input
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="school@kidcityusa.com"
-                  type="email"
-                  autoComplete="email"
+                  placeholder="school@kidcityusa.com or demoschool"
+                  type="text"
+                  autoComplete="username"
                   required
                 />
               </div>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
+import { resolveLoginIdentifier } from "@/lib/demo-accounts";
 
 export const runtime = "nodejs";
 
@@ -12,10 +13,11 @@ function clean(value: unknown) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const email = clean(body.email).toLowerCase();
+  const loginIdentifier = clean(body.email).toLowerCase();
+  const email = resolveLoginIdentifier(loginIdentifier);
   const password = clean(body.password);
   const rate = checkRateLimit({
-    key: `login:${requestIp(request.headers)}:${email || "unknown"}`,
+    key: `login:${requestIp(request.headers)}:${loginIdentifier || "unknown"}`,
     limit: 8,
     windowMs: 15 * 60 * 1000,
   });
@@ -28,7 +30,7 @@ export async function POST(request: NextRequest) {
 
   if (!email || !password) {
     return NextResponse.json(
-      { ok: false, error: "Email and password are required." },
+      { ok: false, error: "Email or username and password are required." },
       { status: 400 },
     );
   }

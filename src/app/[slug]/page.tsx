@@ -1795,7 +1795,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
+    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } };
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
       ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
       : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };

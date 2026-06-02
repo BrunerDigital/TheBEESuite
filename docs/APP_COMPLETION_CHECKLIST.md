@@ -317,9 +317,9 @@ Status legend:
 - [x] Staff counts and teacher counts are represented in dashboard/reporting.
 - [x] Separation between location users/directors and classroom staff has been corrected at the data access level.
 - [x] Dedicated director UI exists for adding/editing teacher profiles and certifications.
-- [ ] Complete staff CRUD UI.
+- [x] Complete staff CRUD UI with safe teacher deactivation instead of destructive deletion.
 - [ ] Add teacher onboarding forms/documents.
-- [ ] Add background check tracking UI.
+- [x] Add background check tracking UI.
 - [ ] Add staff time clock.
 - [ ] Add PTO/unavailability.
 - [ ] Add ratio engine by age group/state rules.

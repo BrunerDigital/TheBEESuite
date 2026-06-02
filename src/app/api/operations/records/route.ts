@@ -533,3 +533,68 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, entity, mode, record: result }, { status: id ? 200 : 201 });
 }
+
+export async function DELETE(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "Record management is not allowed for this role." }, { status: 403 });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const entity = clean(body.entity);
+  const id = clean(body.id);
+  if (!entity || !id) {
+    return NextResponse.json({ ok: false, error: "Entity and ID are required." }, { status: 400 });
+  }
+
+  if (entity === "staff") {
+    const staff = await prisma.staffProfile.findUnique({
+      where: { id },
+      select: { id: true, centerId: true, userId: true },
+    });
+    if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
+    if (!canAccessCenter(user, staff.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
+    }
+
+    const result = await prisma.user.update({
+      where: { id: staff.userId },
+      data: { isActive: false },
+      select: { id: true, email: true, name: true, isActive: true },
+    });
+    await writeAuditLog(user, {
+      centerId: staff.centerId,
+      action: "operations.staff.deactivated",
+      resource: "staff",
+      resourceId: staff.id,
+      metadata: { mode: "deactivated", userId: staff.userId },
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deactivated", record: result });
+  }
+
+  if (entity === "certification") {
+    const certification = await prisma.certification.findUnique({
+      where: { id },
+      select: { id: true, staffId: true, staff: { select: { centerId: true } } },
+    });
+    if (!certification) return NextResponse.json({ ok: false, error: "Certification not found." }, { status: 404 });
+    if (!canAccessCenter(user, certification.staff.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this certification." }, { status: 403 });
+    }
+
+    const result = await prisma.certification.delete({ where: { id } });
+    await writeAuditLog(user, {
+      centerId: certification.staff.centerId,
+      action: "operations.certification.deleted",
+      resource: "certification",
+      resourceId: certification.id,
+      metadata: { mode: "deleted", staffId: certification.staffId },
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result });
+  }
+
+  return NextResponse.json({ ok: false, error: `Delete is not supported for entity: ${entity}` }, { status: 400 });
+}

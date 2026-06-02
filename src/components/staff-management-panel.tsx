@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Save, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CheckCircle2, Save, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -159,6 +159,30 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
     });
   }
 
+  function deactivateTeacher() {
+    if (selectedStaffId === "new") return;
+    const confirmed = window.confirm("Deactivate this teacher account? Historical records stay intact, but the teacher is removed from active staff views.");
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "staff", id: selectedStaffId }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Teacher account could not be deactivated.");
+        return;
+      }
+      setStatusMessage(`Teacher ${json?.mode ?? "deactivated"}.`);
+      setSelectedStaffId("new");
+      resetTeacherForm();
+      router.refresh();
+    });
+  }
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
       <Card className="glass-panel">
@@ -251,10 +275,18 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
                 </Select>
               </div>
             </div>
-            <Button disabled={isPending || !centerId}>
-              <Save data-icon="inline-start" />
-              Save teacher
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={isPending || !centerId}>
+                <Save data-icon="inline-start" />
+                Save teacher
+              </Button>
+              {selectedStaffId !== "new" ? (
+                <Button type="button" variant="outline" disabled={isPending} onClick={deactivateTeacher}>
+                  <Archive data-icon="inline-start" />
+                  Deactivate teacher
+                </Button>
+              ) : null}
+            </div>
           </form>
         </CardContent>
       </Card>

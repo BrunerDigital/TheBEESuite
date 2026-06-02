@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  CheckCheck,
   ChevronDown,
   Command,
   Hexagon,
@@ -85,7 +86,7 @@ function BrandMark() {
 function NotificationDropdown() {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
 
-  useEffect(() => {
+  function loadSummary() {
     let mounted = true;
     fetch("/api/notifications/summary")
       .then((response) => response.json())
@@ -96,7 +97,23 @@ function NotificationDropdown() {
     return () => {
       mounted = false;
     };
+  }
+
+  useEffect(() => {
+    const cleanup = loadSummary();
+    return () => {
+      cleanup();
+    };
   }, []);
+
+  async function markMineRead() {
+    await fetch("/api/notifications/summary", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_all_read" }),
+    }).catch(() => undefined);
+    loadSummary();
+  }
 
   const unread = summary?.stats.unread ?? 0;
   const items = [
@@ -129,6 +146,12 @@ function NotificationDropdown() {
             </div>
             <Badge variant={unread ? "default" : "outline"}>{unread} unread</Badge>
           </div>
+          {unread ? (
+            <Button className="mt-3 w-full" variant="outline" size="sm" onClick={markMineRead}>
+              <CheckCheck data-icon="inline-start" />
+              Mark my notifications read
+            </Button>
+          ) : null}
           {summary ? (
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
               <div className="rounded-lg border bg-background/60 p-2">

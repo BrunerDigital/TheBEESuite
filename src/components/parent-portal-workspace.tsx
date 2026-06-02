@@ -1,7 +1,19 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Building2, CheckCircle2, CreditCard, FileText, MessageSquare, ReceiptText, ShieldCheck } from "lucide-react";
+import {
+  AlertCircle,
+  BellRing,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  CreditCard,
+  FileCheck2,
+  FileText,
+  MessageSquare,
+  ReceiptText,
+  ShieldCheck,
+} from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,8 +25,14 @@ import { Textarea } from "@/components/ui/textarea";
 type Child = {
   id: string;
   fullName: string;
+  preferredName?: string | null;
   ageGroup: string;
   enrollmentStatus: string;
+  startDate?: string | Date | null;
+  schedule?: unknown;
+  photoVideoPermission?: boolean;
+  fieldTripPermission?: boolean;
+  classroom?: { name: string; ageGroup: string } | null;
 };
 
 type Invoice = {
@@ -49,6 +67,10 @@ type DailyReport = {
   teacherNote: string | null;
   suppliesNeeded: string | null;
   child: { fullName: string };
+  meals?: Array<{ id: string; mealType: string; food: string; amount: string | null }>;
+  naps?: Array<{ id: string; startsAt: string | Date; endsAt: string | Date | null }>;
+  diapers?: Array<{ id: string; type: string; occurredAt: string | Date; notes: string | null }>;
+  activities?: Array<{ id: string; title: string; notes: string | null }>;
 };
 
 type Incident = {
@@ -65,8 +87,27 @@ type PortalFamily = {
   id: string;
   name: string;
   billingEmail: string | null;
-  guardians: Array<{ fullName: string; email: string | null; phone: string | null }>;
+  guardians: Array<{
+    id: string;
+    userId?: string | null;
+    fullName: string;
+    email: string | null;
+    phone: string | null;
+    relation?: string | null;
+    preferredCommunication?: string | null;
+  }>;
   children: Child[];
+};
+
+type NotificationPreferences = {
+  portal: boolean;
+  email: boolean;
+  sms: boolean;
+  dailyReports: boolean;
+  photos: boolean;
+  billing: boolean;
+  incidents: boolean;
+  announcements: boolean;
 };
 
 type Props = {
@@ -80,7 +121,21 @@ type Props = {
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null }>;
   media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
+  announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
+  currentGuardianId?: string | null;
+  notificationPreferences?: Partial<NotificationPreferences> | null;
   demoMode?: boolean;
+};
+
+const defaultNotificationPreferences: NotificationPreferences = {
+  portal: true,
+  email: true,
+  sms: false,
+  dailyReports: true,
+  photos: true,
+  billing: true,
+  incidents: true,
+  announcements: true,
 };
 
 function formatDate(value: string | Date | null) {
@@ -90,6 +145,26 @@ function formatDate(value: string | Date | null) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function formatTime(value: string | Date | null) {
+  if (!value) return "Not set";
+  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function scheduleSummary(value: unknown) {
+  if (!value) return "Schedule not set";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (!entries.length) return "Schedule not set";
+    return entries
+      .slice(0, 3)
+      .map(([key, item]) => `${key}: ${Array.isArray(item) ? item.join(", ") : String(item)}`)
+      .join(" · ");
+  }
+  return String(value);
 }
 
 function estimatedAchRecovery(cents: number) {
@@ -111,6 +186,9 @@ export function ParentPortalWorkspace({
   messages,
   documents,
   media = [],
+  announcements = [],
+  currentGuardianId = null,
+  notificationPreferences,
   demoMode,
 }: Props) {
   const [status, setStatus] = useState("");
@@ -118,6 +196,12 @@ export function ParentPortalWorkspace({
   const [subject, setSubject] = useState("Question for the center");
   const [message, setMessage] = useState("");
   const [requestDetails, setRequestDetails] = useState("");
+  const [documentNotes, setDocumentNotes] = useState<Record<string, string>>({});
+  const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<Record<string, boolean>>({});
+  const [preferences, setPreferences] = useState<NotificationPreferences>({
+    ...defaultNotificationPreferences,
+    ...(notificationPreferences ?? {}),
+  });
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
@@ -198,6 +282,42 @@ export function ParentPortalWorkspace({
     });
   }
 
+  function updatePreference(key: keyof NotificationPreferences, checked: boolean) {
+    setPreferences((current) => ({ ...current, [key]: checked }));
+  }
+
+  function saveNotificationPreferences() {
+    if (!currentGuardianId) return;
+    startTransition(async () => {
+      const response = await fetch("/api/parent/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guardianId: currentGuardianId, preferences }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return showError(json?.error || "Notification preferences could not be saved.");
+      showStatus("Notification preferences saved.");
+    });
+  }
+
+  function submitDocument(documentId: string) {
+    startTransition(async () => {
+      const response = await fetch(`/api/parent/documents/${documentId}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note: documentNotes[documentId] || "",
+          signatureAcknowledged: Boolean(signatureAcknowledgements[documentId]),
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return showError(json?.error || "Document could not be submitted.");
+      setDocumentNotes((current) => ({ ...current, [documentId]: "" }));
+      setSignatureAcknowledgements((current) => ({ ...current, [documentId]: false }));
+      showStatus("Document submitted for director review.");
+    });
+  }
+
   if (!family) {
     return (
       <Card className="glass-panel">
@@ -252,6 +372,59 @@ export function ParentPortalWorkspace({
         <Card className="glass-panel"><CardHeader><CardDescription>Open invoices</CardDescription><CardTitle>{openInvoices.length}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Reports</CardDescription><CardTitle>{dailyReports.length}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Need acknowledgment</CardDescription><CardTitle>{unacknowledged.length}</CardTitle></CardHeader></Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Children</CardTitle>
+            <CardDescription>Enrollment, classroom, schedule, and permission snapshot.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 md:grid-cols-2">
+            {family.children.map((child) => (
+              <div key={child.id} className="rounded-xl border bg-background/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{child.fullName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {child.preferredName ? `Preferred: ${child.preferredName} · ` : ""}
+                      {child.ageGroup}
+                    </div>
+                  </div>
+                  <Badge variant="outline">{child.enrollmentStatus.replaceAll("_", " ")}</Badge>
+                </div>
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                  <span>Classroom: {child.classroom?.name ?? "Unassigned"}</span>
+                  <span>Start date: {formatDate(child.startDate ?? null)}</span>
+                  <span>Schedule: {scheduleSummary(child.schedule)}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Badge variant={child.photoVideoPermission ? "default" : "secondary"}>Photo/video {child.photoVideoPermission ? "yes" : "needs review"}</Badge>
+                  <Badge variant={child.fieldTripPermission ? "default" : "secondary"}>Field trips {child.fieldTripPermission ? "yes" : "needs review"}</Badge>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Announcements</CardTitle>
+            <CardDescription>Center updates visible to this family.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {announcements.map((announcement) => (
+              <div key={announcement.id} className="rounded-xl border bg-background/40 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium">{announcement.title}</div>
+                  <div className="text-xs text-muted-foreground">{formatDate(announcement.sendAt)}</div>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{announcement.body}</p>
+              </div>
+            ))}
+            {!announcements.length ? <p className="text-sm text-muted-foreground">No announcements are visible yet.</p> : null}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -401,6 +574,20 @@ export function ParentPortalWorkspace({
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
                 {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
+                <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                  {report.meals?.map((meal) => (
+                    <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
+                  ))}
+                  {report.naps?.map((nap) => (
+                    <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
+                  ))}
+                  {report.diapers?.map((diaper) => (
+                    <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
+                  ))}
+                  {report.activities?.map((activity) => (
+                    <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
+                  ))}
+                </div>
               </div>
             ))}
           </CardContent>
@@ -413,12 +600,35 @@ export function ParentPortalWorkspace({
           </CardHeader>
           <CardContent className="space-y-4">
             {documents.slice(0, 5).map((document) => (
-              <div key={document.id} className="flex items-center justify-between gap-3 rounded-xl border bg-background/40 p-3">
-                <div>
-                  <div className="font-medium">{document.name}</div>
-                  <div className="text-xs text-muted-foreground">{document.type} · expires {formatDate(document.expiresAt)}</div>
+              <div key={document.id} className="space-y-3 rounded-xl border bg-background/40 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">{document.name}</div>
+                    <div className="text-xs text-muted-foreground">{document.type} · expires {formatDate(document.expiresAt)}</div>
+                  </div>
+                  <Badge>{document.status}</Badge>
                 </div>
-                <Badge>{document.status}</Badge>
+                {document.status !== "APPROVED" ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      value={documentNotes[document.id] ?? ""}
+                      onChange={(event) => setDocumentNotes((current) => ({ ...current, [document.id]: event.target.value }))}
+                      placeholder="Optional note for the director"
+                    />
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(signatureAcknowledgements[document.id])}
+                        onChange={(event) => setSignatureAcknowledgements((current) => ({ ...current, [document.id]: event.target.checked }))}
+                      />
+                      I confirm this submission is complete and ready for school review.
+                    </label>
+                    <Button disabled={isPending} onClick={() => submitDocument(document.id)} variant="outline">
+                      <FileCheck2 data-icon="inline-start" />
+                      Submit for Review
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ))}
             <div className="space-y-2">
@@ -449,6 +659,49 @@ export function ParentPortalWorkspace({
             </div>
           ))}
           {!messages.length ? <p className="text-sm text-muted-foreground">No messages have been recorded yet.</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BellRing className="text-primary" />
+            Notification Preferences
+          </CardTitle>
+          <CardDescription>Parents can choose which updates should be emphasized as more delivery channels are enabled.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {([
+            ["portal", "Portal alerts"],
+            ["email", "Email updates"],
+            ["sms", "SMS updates"],
+            ["dailyReports", "Daily reports"],
+            ["photos", "Photos"],
+            ["billing", "Billing reminders"],
+            ["incidents", "Incident notices"],
+            ["announcements", "Center announcements"],
+          ] as Array<[keyof NotificationPreferences, string]>).map(([key, label]) => (
+            <label key={key} className="flex items-center justify-between gap-3 rounded-xl border bg-background/40 p-3 text-sm">
+              <span>{label}</span>
+              <input
+                type="checkbox"
+                checked={preferences[key]}
+                onChange={(event) => updatePreference(key, event.target.checked)}
+                disabled={!currentGuardianId}
+              />
+            </label>
+          ))}
+          <div className="md:col-span-2">
+            <Button disabled={isPending || !currentGuardianId} onClick={saveNotificationPreferences}>
+              <CalendarDays data-icon="inline-start" />
+              Save Preferences
+            </Button>
+            {!currentGuardianId ? (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Preference editing appears when signed in as a linked parent or guardian.
+              </p>
+            ) : null}
+          </div>
         </CardContent>
       </Card>
 

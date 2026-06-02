@@ -9,6 +9,9 @@ import {
   canAccessFamilyRecord,
   canAcknowledgeIncident,
   canCreateFamilyMessage,
+  canInviteGuardianToPortal,
+  canSubmitDocumentForReview,
+  normalizeParentNotificationPreferences,
   validateDailyReportMediaLink,
   validateMediaUploadInput,
 } from "../src/lib/portal-guardrails";
@@ -250,6 +253,86 @@ test("media guard requires secure upload and matching daily report child", () =>
     ok: false,
     status: 403,
     error: "Daily report is not linked to this child.",
+  });
+});
+
+test("parent portal invitation and document guards enforce tenant and family boundaries", () => {
+  assert.deepEqual(canInviteGuardianToPortal({
+    canManageOperations: false,
+    hasCenterAccess: true,
+    guardianEmail: "parent@example.com",
+    targetTenantId: "tenant_a",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Parent portal invitations are not allowed for this role.",
+  });
+
+  assert.deepEqual(canInviteGuardianToPortal({
+    canManageOperations: true,
+    hasCenterAccess: true,
+    guardianEmail: "",
+    targetTenantId: "tenant_a",
+  }), {
+    ok: false,
+    status: 400,
+    error: "Guardian needs an email before parent portal access can be created.",
+  });
+
+  assert.deepEqual(canInviteGuardianToPortal({
+    canManageOperations: true,
+    hasCenterAccess: true,
+    guardianEmail: "parent@example.com",
+    existingUserTenantId: "tenant_b",
+    targetTenantId: "tenant_a",
+  }), {
+    ok: false,
+    status: 409,
+    error: "That guardian email already belongs to another tenant.",
+  });
+
+  assert.deepEqual(canInviteGuardianToPortal({
+    canManageOperations: true,
+    hasCenterAccess: true,
+    guardianEmail: "parent@example.com",
+    existingUserTenantId: "tenant_a",
+    existingUserRole: "PARENT_GUARDIAN",
+    targetTenantId: "tenant_a",
+  }), { ok: true });
+
+  assert.deepEqual(canSubmitDocumentForReview({
+    status: "APPROVED",
+    isLinkedGuardian: true,
+    hasCenterAccess: false,
+  }), {
+    ok: false,
+    status: 400,
+    error: "Approved documents cannot be resubmitted from the parent portal.",
+  });
+
+  assert.deepEqual(canSubmitDocumentForReview({
+    status: "REQUESTED",
+    isLinkedGuardian: false,
+    hasCenterAccess: false,
+  }), {
+    ok: false,
+    status: 403,
+    error: "You do not have access to this document.",
+  });
+
+  assert.deepEqual(normalizeParentNotificationPreferences({
+    email: "false",
+    sms: "true",
+    billing: false,
+  }), {
+    portal: true,
+    email: false,
+    sms: true,
+    dailyReports: true,
+    photos: true,
+    billing: false,
+    incidents: true,
+    announcements: true,
   });
 });
 

@@ -543,16 +543,33 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           : { centerId: scopedCenterIds },
       orderBy: { createdAt: "desc" },
       include: {
-        guardians: { select: { fullName: true, email: true, phone: true } },
-        children: {
+        guardians: {
           select: {
             id: true,
+            userId: true,
             fullName: true,
-            ageGroup: true,
-            enrollmentStatus: true,
+            email: true,
+            phone: true,
+            relation: true,
+            preferredCommunication: true,
+            customFields: true,
           },
-          orderBy: { fullName: "asc" },
         },
+          children: {
+            select: {
+              id: true,
+              fullName: true,
+              preferredName: true,
+              ageGroup: true,
+              enrollmentStatus: true,
+              startDate: true,
+              schedule: true,
+              photoVideoPermission: true,
+              fieldTripPermission: true,
+              classroom: { select: { name: true, ageGroup: true } },
+            },
+            orderBy: { fullName: "asc" },
+          },
       },
     });
 
@@ -562,7 +579,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media] = await Promise.all([
+    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media, announcements] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -598,6 +615,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           teacherNote: true,
           suppliesNeeded: true,
           child: { select: { fullName: true } },
+          meals: { select: { id: true, mealType: true, food: true, amount: true } },
+          naps: { select: { id: true, startsAt: true, endsAt: true } },
+          diapers: { select: { id: true, type: true, occurredAt: true, notes: true } },
+          activities: { select: { id: true, title: true, notes: true } },
         },
       }),
       prisma.incidentReport.findMany({
@@ -632,9 +653,34 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         take: 20,
         select: { id: true, url: true, storageKey: true, caption: true, createdAt: true, child: { select: { fullName: true } } },
       }),
+      prisma.announcement.findMany({
+        where: {
+          OR: [
+            { centerId: family?.centerId ?? "__none__" },
+            { centerId: null },
+          ],
+          status: { in: ["active", "sent", "published"] },
+        },
+        orderBy: [{ sendAt: "desc" }, { id: "desc" }],
+        take: 8,
+        select: { id: true, title: true, body: true, sendAt: true },
+      }),
     ]);
 
     const signedMedia = await signChildMediaRecords(media);
+    const linkedGuardian = user.role === UserRole.PARENT_GUARDIAN
+      ? family?.guardians.find((guardian) => guardian.userId === user.id) ?? null
+      : null;
+    const linkedGuardianCustomFields =
+      linkedGuardian?.customFields && typeof linkedGuardian.customFields === "object" && !Array.isArray(linkedGuardian.customFields)
+        ? linkedGuardian.customFields
+        : {};
+    const notificationPreferences =
+      linkedGuardianCustomFields.notificationPreferences &&
+      typeof linkedGuardianCustomFields.notificationPreferences === "object" &&
+      !Array.isArray(linkedGuardianCustomFields.notificationPreferences)
+        ? linkedGuardianCustomFields.notificationPreferences as Record<string, boolean>
+        : null;
     return (
       <ParentPortalWorkspace
         family={family}
@@ -651,6 +697,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         messages={messages}
         documents={documents}
         media={signedMedia}
+        announcements={announcements}
+        currentGuardianId={linkedGuardian?.id ?? null}
+        notificationPreferences={notificationPreferences}
       />
     );
   }

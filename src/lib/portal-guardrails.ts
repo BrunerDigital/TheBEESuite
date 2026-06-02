@@ -53,6 +53,94 @@ export function canAccessFamilyRecord(input: {
   return { ok: true as const };
 }
 
+export function canInviteGuardianToPortal(input: {
+  canManageOperations: boolean;
+  hasCenterAccess: boolean;
+  guardianEmail: string | null | undefined;
+  existingUserTenantId?: string | null;
+  targetTenantId: string;
+  existingUserRole?: string | null;
+}) {
+  if (!input.canManageOperations) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Parent portal invitations are not allowed for this role.",
+    };
+  }
+  if (!input.hasCenterAccess) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Guardian is outside your center scope.",
+    };
+  }
+  if (!input.guardianEmail) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: "Guardian needs an email before parent portal access can be created.",
+    };
+  }
+  if (input.existingUserTenantId && input.existingUserTenantId !== input.targetTenantId) {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "That guardian email already belongs to another tenant.",
+    };
+  }
+  if (input.existingUserRole && input.existingUserRole !== "PARENT_GUARDIAN") {
+    return {
+      ok: false as const,
+      status: 409,
+      error: "That email is already assigned to a non-parent user.",
+    };
+  }
+  return { ok: true as const };
+}
+
+export function normalizeParentNotificationPreferences(input: Record<string, unknown>) {
+  const bool = (key: string, fallback = true) => {
+    const value = input[key];
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") return value === "true" || value === "1" || value === "on";
+    return fallback;
+  };
+
+  return {
+    portal: bool("portal", true),
+    email: bool("email", true),
+    sms: bool("sms", false),
+    dailyReports: bool("dailyReports", true),
+    photos: bool("photos", true),
+    billing: bool("billing", true),
+    incidents: bool("incidents", true),
+    announcements: bool("announcements", true),
+  };
+}
+
+export function canSubmitDocumentForReview(input: {
+  status: string;
+  isLinkedGuardian: boolean;
+  hasCenterAccess: boolean;
+}) {
+  if (!input.isLinkedGuardian && !input.hasCenterAccess) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "You do not have access to this document.",
+    };
+  }
+  if (input.status === "APPROVED") {
+    return {
+      ok: false as const,
+      status: 400,
+      error: "Approved documents cannot be resubmitted from the parent portal.",
+    };
+  }
+  return { ok: true as const };
+}
+
 export function validateMediaUploadInput(input: {
   hasUploadedFile: boolean;
   photoUrl: string;

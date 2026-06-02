@@ -26,6 +26,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
+import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
+import { NotificationReadAction } from "@/components/notification-read-actions";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
@@ -148,6 +150,9 @@ export type NotificationCenterData = {
 
 export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
   const items = [...data.derived, ...data.notifications].slice(0, 50);
+  const isStoredNotification = (
+    item: (typeof items)[number],
+  ): item is NotificationCenterData["notifications"][number] => "id" in item && "readAt" in item;
 
   return (
     <div className="flex flex-col gap-6">
@@ -169,8 +174,13 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Current Queue</CardTitle>
-          <CardDescription>Newest alerts and derived CRM actions</CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Current Queue</CardTitle>
+              <CardDescription>Newest alerts and derived CRM actions</CardDescription>
+            </div>
+            <NotificationReadAction label="Mark my notifications read" />
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -180,6 +190,7 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
                 <TableHead>Type</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -194,11 +205,18 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
                     <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
                   </TableCell>
                   <TableCell>{"readAt" in item && item.readAt ? "Read" : "Open"}</TableCell>
+                  <TableCell>
+                    {isStoredNotification(item) ? (
+                      <NotificationReadAction notificationId={item.id} readAt={item.readAt} compact />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Derived</span>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
               {!items.length ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-muted-foreground">
+                  <TableCell colSpan={5} className="text-muted-foreground">
                     No notifications are queued for this scope.
                   </TableCell>
                 </TableRow>
@@ -2641,7 +2659,15 @@ export type FamilyProfilesPageData = {
     billingEmail: string | null;
     custodyNotes: string | null;
     createdAt: Date | string;
-    guardians: Array<{ id: string; fullName: string; email: string | null; phone: string | null; relation: string; checkInPinSetAt: Date | string | null }>;
+    guardians: Array<{
+      id: string;
+      fullName: string;
+      email: string | null;
+      phone: string | null;
+      relation: string;
+      userId: string | null;
+      checkInPinSetAt: Date | string | null;
+    }>;
     children: Array<{ fullName: string; ageGroup: string; enrollmentStatus: string }>;
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
   }>;
@@ -2722,6 +2748,30 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
                 guardianId={guardian.id}
                 guardianName={`${guardian.fullName} · ${family.name}`}
                 pinSetAt={guardian.checkInPinSetAt}
+              />
+            )),
+          )}
+          {!data.families.some((family) => family.guardians.length) ? (
+            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
+          ) : null}
+        </CardContent>
+      </Card>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Parent Portal Access</CardTitle>
+          <CardDescription>
+            Create or reset linked parent accounts. Parents only see families connected through their guardian profile.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 lg:grid-cols-2">
+          {data.families.flatMap((family) =>
+            family.guardians.map((guardian) => (
+              <ParentPortalInviteButton
+                key={guardian.id}
+                guardianId={guardian.id}
+                guardianName={`${guardian.fullName} · ${family.name}`}
+                email={guardian.email}
+                linked={Boolean(guardian.userId)}
               />
             )),
           )}

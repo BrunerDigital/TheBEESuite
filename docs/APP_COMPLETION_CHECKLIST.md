@@ -1,6 +1,6 @@
 # The Bee Suite App Completion Checklist
 
-Last updated: June 1, 2026
+Last updated: June 2, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -47,7 +47,8 @@ Status legend:
 - [ ] Complete forced password reset workflow for first production login.
 - [ ] Add MFA option for executive/admin users.
 - [ ] Add session revocation/admin logout-all-devices control.
-- [ ] Add user invite email workflow instead of only admin-created accounts.
+- [x] Add parent portal invitation/password setup workflow for linked guardians.
+- [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 
 ## Multi-Tenant, Franchise, And White-Label Architecture
 
@@ -234,11 +235,11 @@ Status legend:
 - [x] Parent media review API exists.
 - [x] Parent media/photo review flow foundation exists.
 - [x] Parent-facing daily report/media/account schema exists.
-- [ ] Complete parent account invitation/login flow.
-- [ ] Add parent dashboard for real balances, daily reports, photos, documents, and messages.
-- [ ] Add notification preferences.
-- [ ] Add parent document/form completion.
-- [ ] Add parent emergency contact/update request approval workflow.
+- [x] Complete parent account invitation/login flow for linked guardians.
+- [x] Add parent dashboard for real balances, daily reports, photos, documents, announcements, and messages.
+- [x] Add parent notification preferences.
+- [x] Add parent document submission/review workflow foundation.
+- [x] Add parent emergency contact/update request submission and director review queue foundation.
 - [ ] Add push notifications/native app strategy.
 
 ## Billing, Ledger, Tuition, And Payments
@@ -252,7 +253,7 @@ Status legend:
 - [x] Billing guardrails and idempotency tests exist.
 - [x] Schema covers billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, and subscription placeholders.
 - [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, Bee Suite monthly/payment operations fees, and Kid City USA pilot waiver.
-- [ ] Complete parent tuition payment UI in parent portal.
+- [x] Complete parent tuition payment UI in parent portal.
 - [ ] Complete school payout onboarding UI for Stripe Connect.
 - [ ] Finalize surcharge/convenience fee disclosures and legal review.
 - [ ] Add real invoice generation/recurring tuition scheduler.
@@ -367,8 +368,9 @@ Status legend:
 - [x] Notification summary API exists.
 - [x] Derived alerts include inquiries, high-intent leads, tasks, tours, incidents, and FTE due items.
 - [x] Persistent FTE reminder cron route exists.
-- [ ] Add read/unread mutation UI.
-- [ ] Add notification preferences by role/user.
+- [x] Add read/unread mutation UI.
+- [x] Add parent notification preferences.
+- [ ] Add full notification preferences by role/user beyond parent portal.
 - [ ] Add email/SMS/push delivery channels.
 - [ ] Add notification dedupe/retention policy.
 
@@ -433,7 +435,7 @@ Status legend:
 - [x] Consolidate docs into one operator-facing launch handbook.
 - [x] Create school director quick-start guide.
 - [x] Create executive/admin quick-start guide.
-- [ ] Create parent onboarding guide once parent portal is production-ready.
+- [x] Create parent onboarding guide once parent portal is production-ready.
 - [x] Create incident response/support escalation guide.
 
 ## User-Facing Route Checklist
@@ -503,10 +505,10 @@ Status legend:
 - [x] Integrations: push placeholder, signature requests, SMS placeholder.
 - [x] Kiosk: lookup/check.
 - [x] Leads: list/create/detail/update/messages/notes/tasks/tours.
-- [x] Notifications: summary.
+- [x] Notifications: summary and read mutation.
 - [x] Onboarding.
 - [x] Operations records.
-- [x] Parent: contact requests, incident acknowledgement, media review.
+- [x] Parent: contact requests, incident acknowledgement, media review, invitations, preferences, and document submission.
 - [x] Public Kid City locations.
 - [x] Registration.
 - [x] Teacher: attendance, daily reports, incidents, media.
@@ -518,7 +520,7 @@ Status legend:
 
 - [ ] Complete full ProCare import validation with real exports from active Kid City USA locations.
 - [ ] Replace remaining executive-only demo data with real imported classroom/family/teacher data.
-- [ ] Finish parent portal account access, balances, tuition payment, and daily report/photo viewing.
+- [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
 - [ ] Finish teacher classroom tablet workflows for daily logging.
 - [ ] Complete kiosk production UX with authorization/signature/late pickup workflows.
 - [ ] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.

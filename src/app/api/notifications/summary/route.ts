@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage, Prisma } from "@prisma/client";
 import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
@@ -143,4 +143,56 @@ export async function GET() {
     derived,
     notifications,
   });
+}
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export async function PATCH(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const action = clean(body.action) || "mark_read";
+  const notificationId = clean(body.notificationId);
+  const now = new Date();
+
+  if (action === "mark_all_read") {
+    const updated = await prisma.notification.updateMany({
+      where: {
+        userId: user.id,
+        readAt: null,
+      },
+      data: { readAt: now },
+    });
+    return NextResponse.json({ ok: true, updated: updated.count });
+  }
+
+  if (!notificationId) {
+    return NextResponse.json({ ok: false, error: "Notification ID is required." }, { status: 400 });
+  }
+
+  const notification = await prisma.notification.findUnique({
+    where: { id: notificationId },
+    select: { id: true, userId: true, readAt: true },
+  });
+  if (!notification) {
+    return NextResponse.json({ ok: false, error: "Notification not found." }, { status: 404 });
+  }
+  if (notification.userId !== user.id) {
+    return NextResponse.json(
+      { ok: false, error: "Only notifications assigned to you can be marked read." },
+      { status: 403 },
+    );
+  }
+
+  const updated = await prisma.notification.update({
+    where: { id: notification.id },
+    data: { readAt: notification.readAt ?? now },
+  });
+
+  return NextResponse.json({ ok: true, notification: updated });
 }

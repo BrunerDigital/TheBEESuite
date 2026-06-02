@@ -6,7 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordResetRequired: true });
+  if (user?.mustResetPassword) redirect("/reset-password?force=1");
   if (user) redirect("/dashboard");
 
   return (

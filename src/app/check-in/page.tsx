@@ -10,8 +10,9 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function CheckInLauncherPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect("/login?next=/check-in");
+  if (user.mustResetPassword) redirect("/reset-password?force=1&next=/check-in");
 
   const centers = await prisma.center.findMany({
     where: { ...getLeadScopeWhere(user), status: { not: "closed" } },

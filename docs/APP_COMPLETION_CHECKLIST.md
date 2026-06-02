@@ -45,7 +45,7 @@ Status legend:
 - [x] Kid City USA location users can log in with assigned school accounts.
 - [x] Executive users including `brenden@kidcityusa.com`, `marie@kidcityusa.com`, `audrey@kidcityusa.com`, and `kayleen@kidcityusa.com` were added previously.
 - [x] Password reset support exists through the UI/API.
-- [ ] Complete forced password reset workflow for first production login.
+- [x] Complete forced password reset workflow for first production login.
 - [ ] Add MFA option for executive/admin users.
 - [x] Add session revocation/admin logout-all-devices control.
 - [x] Add parent portal invitation/password setup workflow for linked guardians.
@@ -73,7 +73,7 @@ Status legend:
 - [x] Audit logs exist for sensitive actions.
 - [ ] Complete all executive CRUD flows with confirmation states, validation, and error recovery.
 - [ ] Add bulk user/location import for executive admins.
-- [ ] Add password reset email trigger from executive admin, not just password set/reset foundations.
+- [x] Add password reset email trigger from executive admin, not just password set/reset foundations.
 - [ ] Add granular permission editor for roles beyond the current role/access-grant model.
 - [ ] Add support-access/impersonation workflow with explicit audit warnings.
 
@@ -173,7 +173,7 @@ Status legend:
 - [x] Google Sheet backup/snapshot structure exists.
 - [ ] Confirm the final reporting week cutoff/due time with Kid City USA operations.
 - [x] Add full historical FTE trend filters by region/state/owner group.
-- [ ] Add executive manual edit table for inline corrections.
+- [x] Add executive manual edit table for inline corrections.
 - [ ] Add email/SMS escalation for missing FTE reports if desired.
 - [ ] Add final Google Sheet two-way reconciliation rules.
 
@@ -255,7 +255,7 @@ Status legend:
 - [x] Schema covers billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, and subscription placeholders.
 - [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, Bee Suite monthly/payment operations fees, and Kid City USA pilot waiver.
 - [x] Complete parent tuition payment UI in parent portal.
-- [ ] Complete school payout onboarding UI for Stripe Connect.
+- [x] Complete school payout onboarding UI for Stripe Connect.
 - [ ] Finalize surcharge/convenience fee disclosures and legal review.
 - [ ] Add real invoice generation/recurring tuition scheduler.
 - [ ] Add payment method management.

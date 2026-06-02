@@ -135,6 +135,8 @@ export async function POST(request: NextRequest) {
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
+      mustResetPassword: true,
+      sessionVersion: { increment: 1 },
     },
     create: {
       tenantId: center.organization.tenantId,
@@ -143,6 +145,7 @@ export async function POST(request: NextRequest) {
       name: guardian.fullName,
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
+      mustResetPassword: true,
     },
   });
 

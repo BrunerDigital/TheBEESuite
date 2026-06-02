@@ -31,13 +31,20 @@ export function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
 
+      const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean } | null;
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
         setError(data?.error ?? "Unable to sign in.");
         return;
       }
 
-      router.push(next.startsWith("/") ? next : "/dashboard");
+      const safeNext = next.startsWith("/") ? next : "/dashboard";
+      if (data?.requiresPasswordReset) {
+        router.push(`/reset-password?force=1&next=${encodeURIComponent(safeNext)}`);
+        router.refresh();
+        return;
+      }
+
+      router.push(safeNext);
       router.refresh();
     });
   }
@@ -83,6 +90,13 @@ export function LoginForm() {
                   <CheckCircle2 />
                   <AlertTitle>Password updated</AlertTitle>
                   <AlertDescription>Sign in with your new password.</AlertDescription>
+                </Alert>
+              ) : null}
+              {resetStatus === "required" ? (
+                <Alert className="border-amber-500/30 bg-amber-500/10">
+                  <ShieldCheck />
+                  <AlertTitle>Password reset required</AlertTitle>
+                  <AlertDescription>Use your temporary password one more time, then choose a new private password.</AlertDescription>
                 </Alert>
               ) : null}
               {error ? (

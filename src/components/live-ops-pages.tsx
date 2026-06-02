@@ -285,6 +285,7 @@ export type TeamPermissionsData = {
     email: string;
     role: string;
     isActive: boolean;
+    mustResetPassword: boolean;
     accessGrants: Array<{
       id: string;
       role: string;
@@ -361,7 +362,10 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                      {user.mustResetPassword ? <Badge variant="secondary">Reset required</Badge> : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -403,6 +407,7 @@ export type AgencyAdminData = {
     email: string;
     role: string;
     isActive: boolean;
+    mustResetPassword: boolean;
     accessGrants: Array<{
       id: string;
       role: string;

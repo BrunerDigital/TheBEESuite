@@ -172,6 +172,34 @@ export async function upsertSupabaseAuthUserWithPassword({
   return { ok: true, created: true, updated: false };
 }
 
+export async function updateSupabaseAuthUserPasswordByEmail({
+  email,
+  password,
+}: {
+  email: string;
+  password: string;
+}) {
+  const normalizedEmail = email.toLowerCase();
+  const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
+  if (!user) {
+    return {
+      ok: false,
+      error: "Supabase Auth user was not found for this account.",
+    };
+  }
+
+  const { error } = await supabase.auth.admin.updateUserById(user.id, {
+    password,
+    email_confirm: true,
+    user_metadata: {
+      ...(user.user_metadata ?? {}),
+      forced_password_reset_completed_at: new Date().toISOString(),
+    },
+  });
+  if (error) throw error;
+  return { ok: true, updated: true };
+}
+
 export async function verifySupabasePassword(email: string, password: string) {
   const { url, key } = getSupabaseAuthConfig("service");
   const response = await fetch(`${url}/auth/v1/token?grant_type=password`, {

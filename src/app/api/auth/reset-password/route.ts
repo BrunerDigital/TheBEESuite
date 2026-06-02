@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { updateSupabasePassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
@@ -35,6 +36,17 @@ export async function POST(request: NextRequest) {
         { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
         { status: 400 },
       );
+    }
+    const payload = (await response.json().catch(() => null)) as { email?: string; user?: { email?: string } } | null;
+    const email = (payload?.email ?? payload?.user?.email ?? "").toLowerCase();
+    if (email) {
+      await prisma.user.updateMany({
+        where: { email },
+        data: {
+          mustResetPassword: false,
+          sessionVersion: { increment: 1 },
+        },
+      });
     }
   } catch (error) {
     console.error("Supabase password update errored", error);

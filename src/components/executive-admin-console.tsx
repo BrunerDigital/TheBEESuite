@@ -43,6 +43,7 @@ type UserOption = {
   email: string;
   role: string;
   isActive: boolean;
+  mustResetPassword: boolean;
   accessGrants: Array<{
     id: string;
     role: string;
@@ -359,7 +360,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 <UserPlus className="size-5 text-primary" />
                 User and Password Access
               </CardTitle>
-              <CardDescription>Create school users, assign scope, and set or send temporary credentials.</CardDescription>
+              <CardDescription>Create school users, assign scope, and set or send temporary credentials. Temporary-password users must choose a new private password before workspace access.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2">
@@ -471,7 +472,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                       <TableCell>{grant?.scopeType.replaceAll("_", " ") ?? "Role fallback"}</TableCell>
                       <TableCell>{grant?.center?.crmLocationId ?? grant?.center?.name ?? user.staffProfile?.center?.crmLocationId ?? user.staffProfile?.center?.name ?? grant?.ownerGroup?.name ?? "Tenant"}</TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={user.isActive ? "default" : "outline"}>{user.isActive ? "Active" : "Inactive"}</Badge>
+                          {user.mustResetPassword ? <Badge variant="secondary">Reset required</Badge> : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -544,7 +548,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 <KeyRound className="size-5 text-primary" />
                 Password and Session Controls
               </CardTitle>
-              <CardDescription>Send a reset email, set a temporary password, deactivate users, or force a fresh login.</CardDescription>
+              <CardDescription>Send a reset email, set a temporary password, deactivate users, or force a fresh login. Password resets also require the user to replace temporary credentials.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">

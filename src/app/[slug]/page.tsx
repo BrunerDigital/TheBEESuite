@@ -1586,6 +1586,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           email: true,
           role: true,
           isActive: true,
+          mustResetPassword: true,
           accessGrants: {
             where: { isActive: true },
             orderBy: { createdAt: "desc" },
@@ -2174,9 +2175,12 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
     return <AuthLikePage type={slug} />;
   }
 
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
     redirect(`/login?next=/${encodeURIComponent(slug)}`);
+  }
+  if (user.mustResetPassword) {
+    redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
   }
 
   if (!canAccessModule(user, slug)) {

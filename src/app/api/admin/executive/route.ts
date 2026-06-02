@@ -439,6 +439,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   if (!isEmail(email)) throw new Error("A valid user email is required.");
   if (!assignableRoles.has(roleValue)) throw new Error("This role cannot be assigned from the executive console.");
   if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
+  const forcePasswordReset = Boolean(password || payload.sendPasswordReset === true);
 
   const centerId = clean(payload.centerId);
   const ownerGroupId = clean(payload.ownerGroupId);
@@ -465,6 +466,12 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
       role: roleValue,
       organizationId: organization.id,
       isActive: true,
+      ...(forcePasswordReset
+        ? {
+            mustResetPassword: true,
+            sessionVersion: { increment: 1 },
+          }
+        : {}),
     },
     create: {
       tenantId: actor.tenantId,
@@ -473,6 +480,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
       name,
       role: roleValue,
       isActive: true,
+      mustResetPassword: forcePasswordReset,
     },
   });
 
@@ -535,7 +543,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     action: existing ? "executive.user.updated" : "executive.user.created",
     resource: "User",
     resourceId: appUser.id,
-    metadata: { email, role: roleValue, scopeType, centerId: center?.id ?? null, auth },
+    metadata: { email, role: roleValue, scopeType, centerId: center?.id ?? null, forcePasswordReset, auth },
   });
 
   return { user: appUser, auth };
@@ -558,16 +566,25 @@ async function resetUserPassword(payload: Payload, actor: Awaited<ReturnType<typ
         status: response.status,
       }));
 
+  const updated = await prisma.user.update({
+    where: { id: appUser.id },
+    data: {
+      mustResetPassword: true,
+      sessionVersion: { increment: 1 },
+    },
+    select: { id: true, email: true, mustResetPassword: true, sessionVersion: true },
+  });
+
   await audit({
     tenantId: actor.tenantId,
     userId: actor.id,
     action: password ? "executive.user.password_set" : "executive.user.password_reset_sent",
     resource: "User",
     resourceId: appUser.id,
-    metadata: { email, method: password ? "temporary_password" : "reset_email" },
+    metadata: { email, method: password ? "temporary_password" : "reset_email", forcePasswordReset: true },
   });
 
-  return { user: { id: appUser.id, email: appUser.email }, auth };
+  return { user: updated, auth };
 }
 
 async function setUserStatus(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {

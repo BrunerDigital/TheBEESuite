@@ -7,8 +7,9 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function CrmLeadsPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect("/login?next=/crm-leads");
+  if (user.mustResetPassword) redirect("/reset-password?force=1&next=/crm-leads");
   if (!canViewCrmLeads(user)) notFound();
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };

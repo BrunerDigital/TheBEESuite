@@ -11,8 +11,9 @@ import { dashboardLensesForRole } from "@/lib/rbac";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const user = await getCurrentUser();
+  const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect("/login?next=/dashboard");
+  if (user.mustResetPassword) redirect("/reset-password?force=1&next=/dashboard");
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
   const centers = await prisma.center.findMany({

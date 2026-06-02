@@ -23,6 +23,7 @@ export type CurrentUser = {
   name: string;
   role: UserRole;
   organizationId: string | null;
+  mustResetPassword: boolean;
   centerIds: string[];
   primaryCenterId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
@@ -191,7 +192,7 @@ export async function getSession() {
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
 }
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean } = {}): Promise<CurrentUser | null> {
   const session = await getSession();
   if (!session) return null;
   const now = new Date();
@@ -245,6 +246,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
+  if (user.mustResetPassword && !options.allowPasswordResetRequired) return null;
 
   const brandName =
     user.organization?.brand?.settings?.brandName ??
@@ -287,6 +289,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     name: user.name,
     role: user.role,
     organizationId: user.organizationId,
+    mustResetPassword: user.mustResetPassword,
     centerIds,
     primaryCenterId: centerIds[0] ?? null,
     accessScope,

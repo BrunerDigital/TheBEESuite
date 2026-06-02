@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, LockKeyhole } from "lucide-react";
@@ -28,7 +28,11 @@ function readRecoveryTokenFromHash() {
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const forceReset = searchParams.get("force") === "1";
+  const next = searchParams.get("next") || "/dashboard";
   const accessTokenRef = useRef("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
@@ -36,19 +40,20 @@ export function ResetPasswordForm() {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
+    if (forceReset) return;
     const token = readRecoveryTokenFromHash();
     accessTokenRef.current = token;
     if (token && window.location.hash) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
     }
-  }, []);
+  }, [forceReset]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    if (!accessTokenRef.current) {
+    if (!forceReset && !accessTokenRef.current) {
       setError("This reset link is missing or expired. Request a fresh password reset link.");
       return;
     }
@@ -59,10 +64,11 @@ export function ResetPasswordForm() {
     }
 
     startTransition(async () => {
-      const response = await fetch("/api/auth/reset-password", {
+      const endpoint = forceReset ? "/api/auth/force-password-reset" : "/api/auth/reset-password";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessToken: accessTokenRef.current, password }),
+        body: JSON.stringify(forceReset ? { currentPassword, password } : { accessToken: accessTokenRef.current, password }),
       });
       const data = (await response.json().catch(() => null)) as ResetResponse | null;
 
@@ -72,7 +78,7 @@ export function ResetPasswordForm() {
       }
 
       setMessage(data?.message ?? "Password updated. You can now sign in.");
-      setTimeout(() => router.push("/login?reset=complete"), 1200);
+      setTimeout(() => router.push(forceReset ? (next.startsWith("/") ? next : "/dashboard") : "/login?reset=complete"), 1200);
     });
   }
 
@@ -83,7 +89,9 @@ export function ResetPasswordForm() {
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">Create a new secure password.</h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            This screen only works from a valid Supabase recovery link. After updating, sign in again with your school email.
+            {forceReset
+              ? "Temporary passwords must be replaced before workspace access is allowed."
+              : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your school email."}
           </p>
         </div>
         <p className="text-sm text-slate-300">Human review remains required for sensitive child, billing, and compliance workflows.</p>
@@ -97,7 +105,7 @@ export function ResetPasswordForm() {
             </div>
             <CardTitle className="mt-4 text-3xl">Set a new password</CardTitle>
             <CardDescription>
-              Use at least 8 characters. Choose something only you know.
+              {forceReset ? "Enter the temporary password, then choose something only you know." : "Use at least 8 characters. Choose something only you know."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -115,6 +123,19 @@ export function ResetPasswordForm() {
                   <AlertTitle>Password updated</AlertTitle>
                   <AlertDescription>{message}</AlertDescription>
                 </Alert>
+              ) : null}
+              {forceReset ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="currentPassword">Temporary password</Label>
+                  <Input
+                    id="currentPassword"
+                    value={currentPassword}
+                    onChange={(event) => setCurrentPassword(event.target.value)}
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
               ) : null}
               <div className="flex flex-col gap-2">
                 <Label htmlFor="password">New password</Label>
@@ -144,9 +165,15 @@ export function ResetPasswordForm() {
                 {isPending ? "Updating password..." : "Update password"}
               </Button>
             </form>
-            <Link href="/forgot-password" className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
-              Request a fresh reset link
-            </Link>
+            {forceReset ? (
+              <Link href="/login?reset=required" className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+                Back to login
+              </Link>
+            ) : (
+              <Link href="/forgot-password" className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+                Request a fresh reset link
+              </Link>
+            )}
           </CardContent>
         </Card>
       </section>

@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       email: true,
       name: true,
       role: true,
+      mustResetPassword: true,
       sessionVersion: true,
     },
   });
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       name: user.name,
       role: user.role,
     },
+    requiresPasswordReset: user.mustResetPassword,
   });
   response.cookies.set(SESSION_COOKIE, createSessionToken(user), sessionCookieOptions());
   return response;

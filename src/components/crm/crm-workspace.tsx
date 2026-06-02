@@ -6,16 +6,19 @@ import {
   Bot,
   CheckCircle2,
   Clipboard,
+  Download,
   Mail,
   MapPin,
   Phone,
   Plus,
   Search,
   Send,
+  Save,
   Sparkles,
+  Trash2,
   Wand2,
 } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { EnrollmentStage } from "@prisma/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +88,19 @@ type LeadDetails = CrmLead & {
   tours: LeadTour[];
 };
 
+type ScoreFilter = "all" | "high" | "medium" | "low";
+type CreatedRangeFilter = "all" | "7" | "30" | "90";
+
+type CrmSavedView = {
+  id: string;
+  name: string;
+  query: string;
+  center: string;
+  stage: EnrollmentStage | "all";
+  score: ScoreFilter;
+  createdRange: CreatedRangeFilter;
+};
+
 type Props = {
   initialLeads: CrmLead[];
   centers: CenterOption[];
@@ -101,6 +117,25 @@ const programOptions = [
   "Before & After School Care",
   "Summer Camp",
 ];
+
+const crmSavedViewsStorageKey = "bee-suite.crm.savedViews.v1";
+const crmSavedViewsEventName = "bee-suite-crm-saved-views";
+let crmSavedViewsRawSnapshot = "";
+let crmSavedViewsSnapshot: CrmSavedView[] = [];
+
+const scoreFilterLabels: Record<ScoreFilter, string> = {
+  all: "All scores",
+  high: "High intent 75+",
+  medium: "Medium 50-74",
+  low: "Needs review <50",
+};
+
+const createdRangeLabels: Record<CreatedRangeFilter, string> = {
+  all: "All dates",
+  "7": "Last 7 days",
+  "30": "Last 30 days",
+  "90": "Last 90 days",
+};
 
 function safeDate(value: string | Date) {
   return new Intl.DateTimeFormat("en", {
@@ -137,10 +172,133 @@ function makeMrBeeDraft(lead?: CrmLead) {
   return `Hi ${lead.familyName}, this is Kid City USA following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }
 
+function getScoreFilterMatch(score: number, filter: ScoreFilter) {
+  if (filter === "high") return score >= 75;
+  if (filter === "medium") return score >= 50 && score < 75;
+  if (filter === "low") return score < 50;
+  return true;
+}
+
+function getCreatedRangeMatch(value: string | Date, filter: CreatedRangeFilter) {
+  if (filter === "all") return true;
+  const createdAt = new Date(value).getTime();
+  if (Number.isNaN(createdAt)) return false;
+  const days = Number(filter);
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return createdAt >= cutoff;
+}
+
+function safeCsvCell(value: unknown) {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function makeCsvRows(leads: CrmLead[]) {
+  const headers = [
+    "Family Name",
+    "Child Name",
+    "Email",
+    "Phone",
+    "Program",
+    "Age Group",
+    "Pipeline Stage",
+    "Lead Score",
+    "Status",
+    "Lead Source",
+    "Desired Start Date",
+    "Created At",
+    "School",
+    "CRM Location ID",
+    "City",
+    "State",
+  ];
+  const rows = leads.map((lead) => [
+    lead.familyName,
+    lead.childName,
+    lead.email,
+    lead.phone,
+    lead.programInterest,
+    lead.ageGroupInterest,
+    stageLabels[lead.stage],
+    lead.score,
+    lead.status,
+    lead.leadSource,
+    dateInputValue(lead.desiredStartDate),
+    safeDate(lead.createdAt),
+    lead.center.name,
+    lead.center.crmLocationId,
+    lead.center.city,
+    lead.center.state,
+  ]);
+  return [headers, ...rows].map((row) => row.map(safeCsvCell).join(",")).join("\r\n");
+}
+
+function parseSavedViews(value: string | null): CrmSavedView[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as CrmSavedView[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((view) => {
+      if (!view?.id || !view?.name) return [];
+      const stage =
+        view.stage === "all" || enrollmentStages.includes(view.stage as EnrollmentStage)
+          ? view.stage
+          : "all";
+      const score = view.score in scoreFilterLabels ? view.score : "all";
+      const createdRange = view.createdRange in createdRangeLabels ? view.createdRange : "all";
+      return [{
+        id: String(view.id),
+        name: String(view.name),
+        query: String(view.query ?? ""),
+        center: String(view.center ?? "all"),
+        stage,
+        score,
+        createdRange,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function getCrmSavedViewsSnapshot() {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(crmSavedViewsStorageKey) ?? "";
+  if (raw !== crmSavedViewsRawSnapshot) {
+    crmSavedViewsRawSnapshot = raw;
+    crmSavedViewsSnapshot = parseSavedViews(raw);
+  }
+  return crmSavedViewsSnapshot;
+}
+
+function getServerCrmSavedViewsSnapshot() {
+  return [];
+}
+
+function subscribeCrmSavedViews(callback: () => void) {
+  if (typeof window === "undefined") return () => undefined;
+  const listener = () => callback();
+  window.addEventListener("storage", listener);
+  window.addEventListener(crmSavedViewsEventName, listener);
+  return () => {
+    window.removeEventListener("storage", listener);
+    window.removeEventListener(crmSavedViewsEventName, listener);
+  };
+}
+
 export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [leads, setLeads] = useState(initialLeads);
   const [selectedCenter, setSelectedCenter] = useState("all");
   const [query, setQuery] = useState("");
+  const [stageFilter, setStageFilter] = useState<EnrollmentStage | "all">("all");
+  const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
+  const [createdRange, setCreatedRange] = useState<CreatedRangeFilter>("all");
+  const savedViews = useSyncExternalStore(
+    subscribeCrmSavedViews,
+    getCrmSavedViewsSnapshot,
+    getServerCrmSavedViewsSnapshot,
+  );
+  const [savedViewName, setSavedViewName] = useState("");
   const [selectedLeadId, setSelectedLeadId] = useState(initialLeads[0]?.id ?? "");
   const [selectedLeadDetails, setSelectedLeadDetails] = useState<LeadDetails | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
@@ -172,18 +330,24 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   });
 
   const filteredLeads = useMemo(() => {
-    const needle = query.toLowerCase();
+    const needle = query.trim().toLowerCase();
     return leads.filter((lead) => {
       const matchesCenter = selectedCenter === "all" || lead.center.id === selectedCenter;
+      const matchesStage = stageFilter === "all" || lead.stage === stageFilter;
+      const matchesScore = getScoreFilterMatch(lead.score, scoreFilter);
+      const matchesCreatedRange = getCreatedRangeMatch(lead.createdAt, createdRange);
       const matchesQuery =
         !needle ||
         lead.familyName.toLowerCase().includes(needle) ||
+        lead.childName?.toLowerCase().includes(needle) ||
         lead.email?.toLowerCase().includes(needle) ||
         lead.phone?.includes(needle) ||
-        lead.center.name.toLowerCase().includes(needle);
-      return matchesCenter && matchesQuery;
+        lead.programInterest?.toLowerCase().includes(needle) ||
+        lead.center.name.toLowerCase().includes(needle) ||
+        lead.center.crmLocationId?.toLowerCase().includes(needle);
+      return matchesCenter && matchesStage && matchesScore && matchesCreatedRange && matchesQuery;
     });
-  }, [leads, query, selectedCenter]);
+  }, [createdRange, leads, query, scoreFilter, selectedCenter, stageFilter]);
 
   const byStage = useMemo(() => {
     return enrollmentStages.reduce<Record<EnrollmentStage, CrmLead[]>>((acc, stage) => {
@@ -241,6 +405,62 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   function showError(message: string) {
     setStatusMessage("");
     setErrorMessage(message);
+  }
+
+  function persistSavedViews(nextViews: CrmSavedView[]) {
+    window.localStorage.setItem(crmSavedViewsStorageKey, JSON.stringify(nextViews));
+    window.dispatchEvent(new Event(crmSavedViewsEventName));
+  }
+
+  function saveCurrentView() {
+    const fallbackName =
+      selectedCenter === "all"
+        ? `CRM view ${savedViews.length + 1}`
+        : centers.find((center) => center.id === selectedCenter)?.name ?? `CRM view ${savedViews.length + 1}`;
+    const view: CrmSavedView = {
+      id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
+      name: savedViewName.trim() || fallbackName,
+      query,
+      center: selectedCenter,
+      stage: stageFilter,
+      score: scoreFilter,
+      createdRange,
+    };
+    persistSavedViews([view, ...savedViews].slice(0, 12));
+    setSavedViewName("");
+    showStatus("CRM view saved on this device.");
+  }
+
+  function applySavedView(view: CrmSavedView) {
+    setQuery(view.query);
+    setSelectedCenter(view.center === "all" || centers.some((center) => center.id === view.center) ? view.center : "all");
+    setStageFilter(view.stage);
+    setScoreFilter(view.score);
+    setCreatedRange(view.createdRange);
+    showStatus(`Applied saved view: ${view.name}.`);
+  }
+
+  function deleteSavedView(viewId: string) {
+    persistSavedViews(savedViews.filter((view) => view.id !== viewId));
+    showStatus("CRM view removed from this device.");
+  }
+
+  function exportVisibleLeads() {
+    if (filteredLeads.length === 0) {
+      showError("No visible leads to export.");
+      return;
+    }
+    const csv = makeCsvRows(filteredLeads);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `bee-suite-crm-leads-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showStatus(`Exported ${filteredLeads.length.toLocaleString()} visible lead records.`);
   }
 
   function updateLeadStage(leadId: string, stage: EnrollmentStage) {
@@ -543,29 +763,114 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
         <div className="flex flex-col gap-4">
           <Card className="glass-panel">
-            <CardContent className="grid gap-3 p-4 lg:grid-cols-[1fr_18rem]">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  className="pl-10"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search parent, email, phone, or school..."
-                />
+            <CardContent className="flex flex-col gap-3 p-4">
+              <div className="grid gap-3 lg:grid-cols-[1fr_18rem]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    className="pl-10"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search parent, child, email, phone, program, or school..."
+                  />
+                </div>
+                <Select value={selectedCenter} onValueChange={(value) => value && setSelectedCenter(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All schools" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All available schools</SelectItem>
+                    {centers.map((center) => (
+                      <SelectItem key={center.id} value={center.id}>
+                        {getCenterLabel(center)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={selectedCenter} onValueChange={(value) => value && setSelectedCenter(value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All schools" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Kid City USA schools</SelectItem>
-                  {centers.map((center) => (
-                    <SelectItem key={center.id} value={center.id}>
-                      {getCenterLabel(center)}
-                    </SelectItem>
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-[13rem_12rem_12rem_1fr_auto]">
+                <Select
+                  value={stageFilter}
+                  onValueChange={(value) => value && setStageFilter(value as EnrollmentStage | "all")}
+                >
+                  <SelectTrigger aria-label="Pipeline stage filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All stages</SelectItem>
+                    {enrollmentStages.map((stage) => (
+                      <SelectItem key={stage} value={stage}>
+                        {stageLabels[stage]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={scoreFilter}
+                  onValueChange={(value) => value && setScoreFilter(value as ScoreFilter)}
+                >
+                  <SelectTrigger aria-label="Lead score filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(scoreFilterLabels) as ScoreFilter[]).map((filter) => (
+                      <SelectItem key={filter} value={filter}>
+                        {scoreFilterLabels[filter]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={createdRange}
+                  onValueChange={(value) => value && setCreatedRange(value as CreatedRangeFilter)}
+                >
+                  <SelectTrigger aria-label="Lead date filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(createdRangeLabels) as CreatedRangeFilter[]).map((filter) => (
+                      <SelectItem key={filter} value={filter}>
+                        {createdRangeLabels[filter]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={savedViewName}
+                  onChange={(event) => setSavedViewName(event.target.value)}
+                  placeholder="Saved view name"
+                  aria-label="Saved CRM view name"
+                />
+                <div className="grid gap-2 sm:grid-cols-2 xl:flex">
+                  <Button variant="outline" onClick={saveCurrentView}>
+                    <Save data-icon="inline-start" />
+                    Save view
+                  </Button>
+                  <Button variant="outline" onClick={exportVisibleLeads}>
+                    <Download data-icon="inline-start" />
+                    Export CSV
+                  </Button>
+                </div>
+              </div>
+              {savedViews.length > 0 ? (
+                <div className="flex flex-wrap gap-2 border-t pt-3">
+                  {savedViews.map((view) => (
+                    <div key={view.id} className="flex items-center gap-1 rounded-lg border bg-background/55 p-1">
+                      <Button size="xs" variant="ghost" onClick={() => applySavedView(view)}>
+                        {view.name}
+                      </Button>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => deleteSavedView(view.id)}
+                        aria-label={`Delete saved view ${view.name}`}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

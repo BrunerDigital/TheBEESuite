@@ -107,7 +107,7 @@ Status legend:
 - [ ] Build full drag-and-drop pipeline board interaction.
 - [ ] Add duplicate lead detection/merge workflow.
 - [ ] Add full communication timeline per family/lead.
-- [ ] Add CRM saved views, filters, and exports.
+- [x] Add CRM saved views, filters, and exports.
 - [ ] Add lead assignment/owner workflow.
 - [ ] Add automated nurture steps tied to stage transitions.
 
@@ -528,3 +528,4 @@ Status legend:
 - [x] Add automated Playwright smoke tests and CI gate.
 - [x] Add formal production runbook for live school support.
 - [ ] Complete legal/privacy/security review before public SaaS launch beyond Kid City USA pilot.
+

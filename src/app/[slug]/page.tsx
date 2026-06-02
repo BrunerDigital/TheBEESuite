@@ -1631,9 +1631,48 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
   if (slug === "integrations") {
     const env = (key: string) => Boolean(process.env[key]);
+    const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER
+      ? {}
+      : tenantWide
+        ? { tenantId: user.tenantId }
+        : { centerId: scopedCenterIds };
+    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries] = await Promise.all([
+      prisma.integrationDelivery.count({ where: deliveryWhere }),
+      prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
+      prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "pending" } }),
+      prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "failed" } }),
+      prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "skipped" } }),
+      prisma.integrationDelivery.findMany({
+        where: deliveryWhere,
+        orderBy: { createdAt: "desc" },
+        take: 25,
+        select: {
+          id: true,
+          provider: true,
+          purpose: true,
+          status: true,
+          attempts: true,
+          maxAttempts: true,
+          lastError: true,
+          nextAttemptAt: true,
+          deliveredAt: true,
+          createdAt: true,
+          center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
+    ]);
+
     return (
       <IntegrationsPage
         data={{
+          deliveryStats: {
+            total: totalDeliveries,
+            delivered: deliveredDeliveries,
+            pending: pendingDeliveries,
+            failed: failedDeliveries,
+            skipped: skippedDeliveries,
+          },
+          recentDeliveries,
           integrations: [
             {
               name: "Supabase",

@@ -582,6 +582,26 @@ export type IntegrationsData = {
     status: "Connected" | "Configured" | "Missing" | "Placeholder";
     detail: string;
   }>;
+  deliveryStats?: {
+    total: number;
+    delivered: number;
+    pending: number;
+    failed: number;
+    skipped: number;
+  };
+  recentDeliveries?: Array<{
+    id: string;
+    provider: string;
+    purpose: string;
+    status: string;
+    attempts: number;
+    maxAttempts: number;
+    lastError: string | null;
+    nextAttemptAt: Date | string | null;
+    deliveredAt: Date | string | null;
+    createdAt: Date | string;
+    center: { name: string; crmLocationId: string | null } | null;
+  }>;
 };
 
 export function IntegrationsPage({ data }: { data: IntegrationsData }) {
@@ -597,6 +617,15 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           Live environment status without exposing secrets. Credentialed integrations run from server routes with human review and audit logging where sensitive workflows are involved.
         </p>
       </section>
+      {data.deliveryStats ? (
+        <div className="grid gap-4 md:grid-cols-5">
+          <StatCard label="Deliveries" value={data.deliveryStats.total.toLocaleString()} detail="Email and Sheets" />
+          <StatCard label="Delivered" value={data.deliveryStats.delivered.toLocaleString()} />
+          <StatCard label="Pending retry" value={data.deliveryStats.pending.toLocaleString()} />
+          <StatCard label="Failed" value={data.deliveryStats.failed.toLocaleString()} />
+          <StatCard label="Skipped" value={data.deliveryStats.skipped.toLocaleString()} detail="Not configured" />
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {data.integrations.map((integration) => (
           <Card key={integration.name} className="glass-panel">
@@ -623,6 +652,63 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           </Card>
         ))}
       </div>
+      {data.recentDeliveries ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Integration Delivery Health</CardTitle>
+            <CardDescription>
+              Recent outbound inquiry delivery attempts. Pending rows are retried by the daily cron job.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Center</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Attempts</TableHead>
+                  <TableHead>Next retry</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recentDeliveries.map((delivery) => (
+                  <TableRow key={delivery.id}>
+                    <TableCell>{formatDateTime(delivery.createdAt)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{delivery.provider.replaceAll("_", " ")}</div>
+                      <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
+                      {delivery.lastError ? (
+                        <div className="mt-1 max-w-md whitespace-normal text-xs text-destructive">{delivery.lastError}</div>
+                      ) : null}
+                    </TableCell>
+                    <TableCell>{delivery.center?.crmLocationId ?? delivery.center?.name ?? "Tenant-wide"}</TableCell>
+                    <TableCell>
+                      <Badge variant={delivery.status === "failed" ? "destructive" : delivery.status === "delivered" ? "default" : "outline"}>
+                        {delivery.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {delivery.attempts}/{delivery.maxAttempts}
+                    </TableCell>
+                    <TableCell>
+                      {delivery.nextAttemptAt ? formatDateTime(delivery.nextAttemptAt) : delivery.deliveredAt ? "Delivered" : "Not scheduled"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!data.recentDeliveries.length ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      No integration deliveries have been recorded for this scope yet.
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -387,7 +387,7 @@ Status legend:
 - [x] Supabase storage/auth/database integration exists.
 - [x] Google Calendar/Google Business Profile/Meta/Zapier/webhook/signature/cloud storage placeholders exist.
 - [ ] Complete real setup UI for each integration.
-- [ ] Add integration health checks and last-sync logs.
+- [x] Add integration health checks and last-sync logs.
 - [x] Add retry queues for failed outbound integrations.
 - [ ] Add tenant-specific integration credentials instead of only platform env vars.
 

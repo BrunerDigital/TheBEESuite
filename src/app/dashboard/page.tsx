@@ -21,6 +21,7 @@ export default async function DashboardPage() {
     select: {
       id: true,
       name: true,
+      crmLocationId: true,
       city: true,
       state: true,
       licensedCapacity: true,
@@ -218,40 +219,33 @@ export default async function DashboardPage() {
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
   const revenueDollars = Math.round((revenue._sum.totalCents ?? 0) / 100);
-  const inquiryEmbed = canManageCrmLeads(user)
-    ? allCentersAccess
-      ? isKidCityWorkspace
-        ? {
+  const centerEmbedCards = centers.map((center) => {
+    const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
+      .filter(Boolean)
+      .join(" · ");
+    return {
+      title: `${displayName} inquiry form embed`,
+      description:
+        "This center-specific form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup.",
+      embedCode: getCenterInquiryEmbedCode({
+        centerId: center.id,
+        centerName: center.name,
+        brandName,
+      }),
+    };
+  });
+  const inquiryEmbeds = canManageCrmLeads(user)
+    ? allCentersAccess && isKidCityWorkspace
+      ? [
+          {
             title: "Kid City USA inquiry form embed",
             description:
               "Executive users can copy this multi-location form for the Kid City USA website. It routes each selected school to the matching CRM profile, notification email, and Google Sheets backup.",
             embedCode: getKidCityInquiryEmbedCode(),
-          }
-        : centers[0]
-          ? {
-              title: `${brandName} inquiry form embed`,
-              description:
-                "Copy this primary-center form while the trial workspace is being configured. Add center-specific embeds as each location profile is completed.",
-              embedCode: getCenterInquiryEmbedCode({
-                centerId: centers[0].id,
-                centerName: centers[0].name,
-                brandName,
-              }),
-            }
-          : undefined
-      : centers.length === 1
-        ? {
-            title: "School inquiry form embed",
-            description:
-              "This center-specific form sends new inquiries directly into this school's CRM profile and notification routing.",
-            embedCode: getCenterInquiryEmbedCode({
-              centerId: centers[0].id,
-              centerName: centers[0].name,
-              brandName,
-            }),
-          }
-        : undefined
-    : undefined;
+          },
+        ]
+      : centerEmbedCards
+    : [];
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -311,7 +305,8 @@ export default async function DashboardPage() {
     showExecutiveDemoData,
     visibleLenses: dashboardLensesForRole(user),
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
-    inquiryEmbed,
+    inquiryEmbed: inquiryEmbeds[0],
+    inquiryEmbeds,
   };
 
   return (

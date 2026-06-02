@@ -43,6 +43,11 @@ export type LiveDashboardData = {
     description: string;
     embedCode: string;
   };
+  inquiryEmbeds?: Array<{
+    title: string;
+    description: string;
+    embedCode: string;
+  }>;
 };
 
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
@@ -70,6 +75,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isParentMessageDemo = showExecutiveDemoData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
     "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm any sensitive action before sending messages or changing records. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
+  const inquiryEmbeds = live?.inquiryEmbeds?.length
+    ? live.inquiryEmbeds
+    : live?.inquiryEmbed
+      ? [live.inquiryEmbed]
+      : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,12 +150,17 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         </div>
       </section>
 
-      {live?.inquiryEmbed ? (
-        <InquiryEmbedCard
-          title={live.inquiryEmbed.title}
-          description={live.inquiryEmbed.description}
-          embedCode={live.inquiryEmbed.embedCode}
-        />
+      {inquiryEmbeds.length ? (
+        <div className="grid gap-4">
+          {inquiryEmbeds.map((embed) => (
+            <InquiryEmbedCard
+              key={`${embed.title}-${embed.embedCode}`}
+              title={embed.title}
+              description={embed.description}
+              embedCode={embed.embedCode}
+            />
+          ))}
+        </div>
       ) : null}
 
       <Tabs defaultValue={defaultLens} className="flex flex-col gap-4">

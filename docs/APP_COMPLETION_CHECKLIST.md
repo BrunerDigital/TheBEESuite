@@ -120,8 +120,8 @@ Status legend:
 - [x] Google Sheets backup webhook support exists.
 - [x] Public Kid City locations API exists.
 - [x] Inquiry allowed-origin configuration exists.
-- [ ] Add self-service inquiry form builder for every new tenant/location during onboarding.
-- [ ] Add executive dashboard button to copy embed code for each location/brand.
+- [x] Add self-service inquiry form builder for every new tenant/location during onboarding.
+- [x] Add executive dashboard button to copy embed code for each location/brand.
 - [x] Add CAPTCHA/bot protection to public inquiry endpoint.
 - [x] Add UTM/source capture and reporting across all embeds.
 - [ ] Add retry queue for failed email/Google Sheet/CRM forwarding.
@@ -524,7 +524,7 @@ Status legend:
 - [ ] Finish teacher classroom tablet workflows for daily logging.
 - [ ] Complete kiosk production UX with authorization/signature/late pickup workflows.
 - [ ] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
-- [ ] Complete inquiry embed self-service generator for every tenant/location.
+- [x] Complete inquiry embed self-service generator for every tenant/location.
 - [ ] Add automated Playwright smoke tests and CI gate.
 - [x] Add formal production runbook for live school support.
 - [ ] Complete legal/privacy/security review before public SaaS launch beyond Kid City USA pilot.

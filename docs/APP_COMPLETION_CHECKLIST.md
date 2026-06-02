@@ -88,8 +88,8 @@ Status legend:
 - [x] Executive-only demo data exists for classroom and parent engagement sections.
 - [ ] Replace remaining executive demo classroom/parent data with real imported school data.
 - [ ] Add configurable dashboard widgets per role.
-- [ ] Add saved filters and date ranges.
-- [ ] Add export/share actions for dashboard snapshots.
+- [x] Add saved filters and date ranges.
+- [x] Add export/share actions for dashboard snapshots.
 
 ## CRM Leads And Enrollment Pipeline
 

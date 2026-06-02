@@ -22,6 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 
@@ -149,6 +150,16 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           </Card>
         </div>
       </section>
+
+      <DashboardSnapshotControls
+        kpis={dashboardKpis}
+        pipelineStages={dashboardPipeline}
+        centers={dashboardCenters}
+        leads={dashboardLeads}
+        visibleLenses={visibleLenses}
+        defaultLens={defaultLens}
+        aiSummary={aiSummary}
+      />
 
       {inquiryEmbeds.length ? (
         <div className="grid gap-4">

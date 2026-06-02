@@ -1,0 +1,74 @@
+{
+  "checkedAt": "2026-06-02T15:41:27.331Z",
+  "results": [
+    {
+      "viewport": "desktop-1440",
+      "width": 1440,
+      "height": 1200,
+      "screenshot": "docs/assets/responsive-qa/desktop-1440.png",
+      "metrics": {
+        "title": "The Bee Suite",
+        "h1": "The Bee Suite",
+        "hasSaasCopy": true,
+        "hasInquiryCta": true,
+        "scrollWidth": 1440,
+        "viewportWidth": 1440,
+        "horizontalOverflowPx": 0,
+        "clippedInteractiveElements": 0,
+        "selectorsPresent": {
+          "h1": true,
+          "nav": true,
+          "main": true,
+          "footer": true
+        }
+      },
+      "errors": []
+    },
+    {
+      "viewport": "tablet-768",
+      "width": 768,
+      "height": 1024,
+      "screenshot": "docs/assets/responsive-qa/tablet-768.png",
+      "metrics": {
+        "title": "The Bee Suite",
+        "h1": "The Bee Suite",
+        "hasSaasCopy": true,
+        "hasInquiryCta": true,
+        "scrollWidth": 768,
+        "viewportWidth": 768,
+        "horizontalOverflowPx": 0,
+        "clippedInteractiveElements": 0,
+        "selectorsPresent": {
+          "h1": true,
+          "nav": true,
+          "main": true,
+          "footer": true
+        }
+      },
+      "errors": []
+    },
+    {
+      "viewport": "mobile-390",
+      "width": 390,
+      "height": 900,
+      "screenshot": "docs/assets/responsive-qa/mobile-390.png",
+      "metrics": {
+        "title": "The Bee Suite",
+        "h1": "The Bee Suite",
+        "hasSaasCopy": true,
+        "hasInquiryCta": true,
+        "scrollWidth": 390,
+        "viewportWidth": 390,
+        "horizontalOverflowPx": 0,
+        "clippedInteractiveElements": 0,
+        "selectorsPresent": {
+          "h1": true,
+          "nav": true,
+          "main": true,
+          "footer": true
+        }
+      },
+      "errors": []
+    }
+  ]
+}

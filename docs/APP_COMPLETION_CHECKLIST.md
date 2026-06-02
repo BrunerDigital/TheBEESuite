@@ -402,7 +402,7 @@ Status legend:
 - [x] Add RLS policy documentation for every exposed table.
 - [x] Add encryption-at-rest/field-level encryption plan for medical/custody/payment-sensitive fields.
 - [x] Add data retention/deletion policy.
-- [ ] Add audit log viewer filters and export.
+- [x] Add audit log viewer filters and export.
 - [x] Add backup/restore runbook.
 
 ## Testing And Quality Assurance

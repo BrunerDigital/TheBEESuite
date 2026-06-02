@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AuditLogViewer } from "@/components/audit-log-viewer";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
@@ -264,46 +265,7 @@ export function AuditLogsPage({ data }: { data: AuditLogsData }) {
         <StatCard label="Lead actions" value={data.stats.leadActions} detail="CRM workflow changes" />
         <StatCard label="Sensitive markers" value={data.stats.sensitive} detail="Restricted/security events" />
       </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Recent Events</CardTitle>
-          <CardDescription>Actor, action, center, and resource trail</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>When</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>Resource</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>{formatDateTime(log.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{log.user?.name ?? "System"}</div>
-                    <div className="text-xs text-muted-foreground">{log.user?.email ?? "system"}</div>
-                  </TableCell>
-                  <TableCell><Badge variant="outline">{log.action}</Badge></TableCell>
-                  <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "Global"}</TableCell>
-                  <TableCell>{log.resource} {log.resourceId ? log.resourceId.slice(0, 8) : ""}</TableCell>
-                </TableRow>
-              ))}
-              {!data.logs.length ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
-                    No audit events have been recorded for this scope yet.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <AuditLogViewer logs={data.logs} />
     </div>
   );
 }

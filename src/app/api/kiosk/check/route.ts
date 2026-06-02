@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          custodyNotes: true,
           children: {
             where: { id: { in: childIds } },
             select: {
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
   const timeZone = readCenterTimeZone(center.customFields);
   const latePickupCutoff = readLatePickupCutoff(center.customFields);
   const latePickup = type === "check_out" && isLatePickup(occurredAt, timeZone, latePickupCutoff);
+  const pickupAuthorizationWarning = Boolean(guardian.family.custodyNotes);
   const latestLogs = await prisma.checkInOutLog.findMany({
     where: {
       childId: { in: allowedChildren.map((child) => child.id) },
@@ -140,6 +142,7 @@ export async function POST(request: NextRequest) {
             signatureCapturedAt: occurredAt.toISOString(),
             latePickup,
             latePickupCutoff,
+            pickupAuthorizationWarning,
             timeZone,
           },
         },
@@ -163,6 +166,7 @@ export async function POST(request: NextRequest) {
       signatureMethod: "typed",
       latePickup,
       latePickupCutoff,
+      pickupAuthorizationWarning,
       kioskDate: startOfServiceDay(occurredAt, timeZone).toISOString(),
       timeZone,
     },
@@ -174,6 +178,7 @@ export async function POST(request: NextRequest) {
     action: type,
     occurredAt,
     latePickup,
+    pickupAuthorizationWarning,
     children: allowedChildren.map((child) => ({ id: child.id, fullName: child.fullName })),
     logs,
   }, { status: 201 });

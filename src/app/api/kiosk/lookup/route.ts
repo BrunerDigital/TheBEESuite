@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           name: true,
+          custodyNotes: true,
           children: {
             where: { enrollmentStatus: { not: "withdrawn" } },
             orderBy: { fullName: "asc" },
@@ -83,6 +84,12 @@ export async function POST(request: NextRequest) {
     center: { id: center.id, name: center.name, crmLocationId: center.crmLocationId },
     guardian: { id: guardian.id, fullName: guardian.fullName, relation: guardian.relation },
     family: { id: guardian.family.id, name: guardian.family.name },
+    warnings: guardian.family.custodyNotes
+      ? [{
+          type: "protected_pickup_note",
+          message: "A protected pickup note is on file. Please ask the front desk to verify before checkout.",
+        }]
+      : [],
     children: visibleChildren.map((child) => {
       const latest = latestByChild.get(child.id);
       return {

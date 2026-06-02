@@ -21,6 +21,7 @@ type KioskChild = {
 type LookupResult = {
   guardian: { id: string; fullName: string; relation: string };
   family: { id: string; name: string };
+  warnings?: Array<{ type: string; message: string }>;
   children: KioskChild[];
 };
 
@@ -130,12 +131,12 @@ export function KioskCheckIn({ center }: Props) {
           signatureName,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; latePickup?: boolean; children?: Array<{ fullName: string }> } | null;
+      const json = await response.json().catch(() => null) as { error?: string; latePickup?: boolean; pickupAuthorizationWarning?: boolean; children?: Array<{ fullName: string }> } | null;
       if (!response.ok || !json) {
         setError(json?.error || "Check-in/out could not be completed.");
         return;
       }
-      reset(`${json.children?.map((child) => child.fullName).join(", ") || "Children"} ${type === "check_in" ? "checked in" : "checked out"}.${json.latePickup ? " Late pickup flagged for director review." : ""}`);
+      reset(`${json.children?.map((child) => child.fullName).join(", ") || "Children"} ${type === "check_in" ? "checked in" : "checked out"}.${json.latePickup ? " Late pickup flagged for director review." : ""}${json.pickupAuthorizationWarning ? " Protected pickup note logged for director review." : ""}`);
     });
   }
 
@@ -232,6 +233,13 @@ export function KioskCheckIn({ center }: Props) {
               {lookup ? (
                 <>
                   <div className="grid gap-3 md:grid-cols-2">
+                    {lookup.warnings?.length ? (
+                      <Alert variant="destructive" className="md:col-span-2">
+                        <AlertCircle className="size-4" />
+                        <AlertTitle>Front desk verification</AlertTitle>
+                        <AlertDescription>{lookup.warnings[0].message}</AlertDescription>
+                      </Alert>
+                    ) : null}
                     {lookup.children.map((child) => {
                       const checked = selectedIds.includes(child.id);
                       return (

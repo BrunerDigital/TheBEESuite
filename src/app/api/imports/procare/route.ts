@@ -210,6 +210,190 @@ async function findOrCreateClassroom({
   return { id: classroom.id, created: true };
 }
 
+type ImportCenter = {
+  id: string;
+  name: string;
+  crmLocationId: string | null;
+  locationId: string | null;
+  city: string | null;
+  state: string | null;
+};
+
+async function previewImportRows({
+  rows,
+  headers,
+  autoMap,
+  defaultCenter,
+  centerByAlias,
+  sourceType,
+  filename,
+}: {
+  rows: string[][];
+  headers: string[];
+  autoMap: boolean;
+  defaultCenter: ImportCenter;
+  centerByAlias: Map<string, ImportCenter>;
+  sourceType: string;
+  filename: string;
+}) {
+  let familyRows = 0;
+  let staffRows = 0;
+  let matchedFamilies = 0;
+  let newFamilies = 0;
+  let matchedChildren = 0;
+  let newChildren = 0;
+  let matchedStaff = 0;
+  let newStaff = 0;
+  let balanceRows = 0;
+  let attendanceRows = 0;
+  let checkLogRows = 0;
+  let unmappedRows = 0;
+  const centersTouched = new Set<string>();
+  const classroomsReferenced = new Set<string>();
+  const warnings: Array<{ rowNumber: number; message: string }> = [];
+  const rowResults: Array<{
+    rowNumber: number;
+    status: "ready" | "warning";
+    entity: "family_child" | "staff" | "unknown";
+    center: string;
+    action: string;
+    familyName?: string;
+    childName?: string;
+    staffName?: string;
+    message?: string;
+  }> = [];
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
+    const rowNumber = index + 1;
+    const rowCenterValue = value(rawData, [
+      "location id",
+      "crm location id",
+      "school id",
+      "school",
+      "school name",
+      "center",
+      "center name",
+      "location",
+      "site",
+    ]);
+    const targetCenter = autoMap
+      ? centerByAlias.get(centerKey(rowCenterValue)) ?? null
+      : defaultCenter;
+    if (!targetCenter) {
+      unmappedRows += 1;
+      const message = `Could not map row to a center from "${rowCenterValue || "blank location"}".`;
+      warnings.push({ rowNumber, message });
+      rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: "Unmapped", action: "Skipped until mapped", message });
+      continue;
+    }
+
+    centersTouched.add(targetCenter.id);
+    const employeeName = value(rawData, ["employee name", "staff name", "teacher name", "employee", "teacher"]);
+    const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
+    const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
+    const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
+    const familyName = value(rawData, ["family name", "account name", "account", "family", "payer family", "household", "parent name", "primary guardian", "primary payer"]);
+    const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
+    const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+    const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+    const classroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "class", "assigned classroom", "assigned room"]);
+    if (classroomName) classroomsReferenced.add(`${targetCenter.id}:${classroomName}`);
+
+    if (employeeName && !childName && !familyName) {
+      staffRows += 1;
+      const staffEmail = isEmail(employeeEmail) ? employeeEmail.toLowerCase() : stableImportEmail(targetCenter.id, employeeExternalId, rowNumber);
+      const staffUser = await prisma.user.findUnique({ where: { email: staffEmail }, select: { id: true } });
+      const existingStaff = staffUser
+        ? await prisma.staffProfile.findUnique({ where: { userId: staffUser.id }, select: { id: true } })
+        : null;
+      if (existingStaff) matchedStaff += 1; else newStaff += 1;
+      rowResults.push({
+        rowNumber,
+        status: "ready",
+        entity: "staff",
+        center: targetCenter.crmLocationId ?? targetCenter.name,
+        action: existingStaff ? "Update staff" : "Create staff",
+        staffName: employeeName,
+      });
+      continue;
+    }
+
+    if (!familyName && !childName && !email) {
+      const message = "Missing family, child, or email fields.";
+      warnings.push({ rowNumber, message });
+      rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Needs cleanup", message });
+      continue;
+    }
+
+    familyRows += 1;
+    if (cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]))) balanceRows += 1;
+    if (value(rawData, ["attendance date", "date", "absence date", "attendance status", "attendance"])) attendanceRows += 1;
+    if (value(rawData, ["check in", "check-in", "time in", "check out", "check-out", "time out"])) checkLogRows += 1;
+
+    const familyMatchers = [
+      accountExternalId ? { sourceSystem: "procare", externalId: accountExternalId } : undefined,
+      familyName ? { name: familyName } : undefined,
+      email ? { billingEmail: email } : undefined,
+    ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; name?: string; billingEmail?: string }>;
+    const existingFamily = familyMatchers.length
+      ? await prisma.family.findFirst({ where: { centerId: targetCenter.id, OR: familyMatchers }, select: { id: true } })
+      : null;
+    if (existingFamily) matchedFamilies += 1; else newFamilies += 1;
+
+    let existingChild: { id: string } | null = null;
+    if (existingFamily && childName) {
+      existingChild = await prisma.child.findFirst({
+        where: {
+          familyId: existingFamily.id,
+          OR: [
+            childExternalId ? { sourceSystem: "procare", externalId: childExternalId } : undefined,
+            { fullName: childName },
+          ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; fullName?: string }>,
+        },
+        select: { id: true },
+      });
+    }
+    if (childName) {
+      if (existingChild) matchedChildren += 1; else newChildren += 1;
+    }
+    rowResults.push({
+      rowNumber,
+      status: "ready",
+      entity: "family_child",
+      center: targetCenter.crmLocationId ?? targetCenter.name,
+      action: existingFamily ? "Update family" : "Create family",
+      familyName: familyName || email || childName,
+      childName: childName || undefined,
+    });
+  }
+
+  return {
+    center: autoMap ? "Auto-mapped from ProCare export" : defaultCenter.crmLocationId ?? defaultCenter.name,
+    sourceType,
+    filename,
+    rows: Math.max(rows.length - 1, 0),
+    readyRows: rowResults.filter((row) => row.status === "ready").length,
+    warningRows: rowResults.filter((row) => row.status === "warning").length,
+    unmappedRows,
+    familyRows,
+    staffRows,
+    matchedFamilies,
+    newFamilies,
+    matchedChildren,
+    newChildren,
+    matchedStaff,
+    newStaff,
+    classroomsReferenced: classroomsReferenced.size,
+    balanceRows,
+    attendanceRows,
+    checkLogRows,
+    centersTouched: centersTouched.size,
+    warnings: warnings.slice(0, 25),
+    rowResults: rowResults.slice(0, 75),
+  };
+}
+
 const crcTable = Array.from({ length: 256 }, (_, index) => {
   let crc = index;
   for (let bit = 0; bit < 8; bit += 1) {
@@ -350,6 +534,7 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const requestedCenterId = clean(formData.get("centerId"));
   const v10Password = clean(formData.get("v10Password"));
+  const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
@@ -392,6 +577,19 @@ export async function POST(request: NextRequest) {
   const headers = rows[0]?.map((header) => header.trim().toLowerCase()) ?? [];
   if (rows.length < 2 || !headers.length) {
     return NextResponse.json({ ok: false, error: "No import rows found." }, { status: 400 });
+  }
+
+  if (dryRun) {
+    const preview = await previewImportRows({
+      rows,
+      headers,
+      autoMap,
+      defaultCenter: center,
+      centerByAlias,
+      sourceType: importPayload.sourceType,
+      filename: importPayload.filename,
+    });
+    return NextResponse.json({ ok: true, dryRun: true, summary: preview });
   }
 
   let createdFamilies = 0;

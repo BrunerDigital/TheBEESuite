@@ -15,32 +15,80 @@ type CenterOption = {
   name: string;
 };
 
+type ImportPreview = {
+  rows: number;
+  readyRows: number;
+  warningRows: number;
+  unmappedRows: number;
+  familyRows: number;
+  staffRows: number;
+  matchedFamilies: number;
+  newFamilies: number;
+  matchedChildren: number;
+  newChildren: number;
+  matchedStaff: number;
+  newStaff: number;
+  classroomsReferenced: number;
+  balanceRows: number;
+  attendanceRows: number;
+  checkLogRows: number;
+  centersTouched: number;
+  warnings?: Array<{ rowNumber: number; message: string }>;
+  rowResults?: Array<{
+    rowNumber: number;
+    status: "ready" | "warning";
+    entity: string;
+    center: string;
+    action: string;
+    familyName?: string;
+    childName?: string;
+    staffName?: string;
+    message?: string;
+  }>;
+};
+
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
   const [v10Password, setV10Password] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function submit() {
+  function clearPreview() {
+    setPreview(null);
+  }
+
+  function submit(dryRun: boolean) {
     startTransition(async () => {
       setStatus("");
       setError("");
       const formData = new FormData();
       formData.set("centerId", centerId);
+      formData.set("dryRun", String(dryRun));
       if (v10Password.trim()) formData.set("v10Password", v10Password.trim());
       if (csv.trim()) formData.set("csv", csv);
       const file = fileRef.current?.files?.[0];
       if (file) formData.set("file", file);
       const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
-      const json = await response.json().catch(() => null) as { error?: string; summary?: Record<string, number | string> } | null;
+      const json = await response.json().catch(() => null) as {
+        dryRun?: boolean;
+        error?: string;
+        summary?: ImportPreview & Record<string, number | string | unknown>;
+      } | null;
       if (!response.ok) {
         setError(json?.error || "ProCare import could not be processed.");
         return;
       }
+      if (json?.dryRun) {
+        setPreview(json.summary ?? null);
+        setStatus("");
+        return;
+      }
       setCsv("");
+      setPreview(null);
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
       setStatus(
@@ -75,7 +123,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         <div className="grid gap-3 md:grid-cols-[18rem_1fr]">
           <div className="space-y-1">
             <Label>Center</Label>
-            <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
+            <Select value={centerId} onValueChange={(value) => {
+              if (value) setCenterId(value);
+              clearPreview();
+            }}>
               <SelectTrigger><SelectValue placeholder="Choose center" /></SelectTrigger>
               <SelectContent>
                 {allowBulkImport ? (
@@ -99,6 +150,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               id="procare-file"
               type="file"
               accept=".csv,.txt,.v10,text/csv,text/plain,application/zip"
+              onChange={clearPreview}
               className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
@@ -112,7 +164,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 id="procare-v10-password"
                 type="password"
                 value={v10Password}
-                onChange={(event) => setV10Password(event.target.value)}
+                onChange={(event) => {
+                  setV10Password(event.target.value);
+                  clearPreview();
+                }}
                 className="pl-9"
                 autoComplete="off"
               />
@@ -127,14 +182,66 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <Textarea
             id="procare-csv"
             value={csv}
-            onChange={(event) => setCsv(event.target.value)}
+            onChange={(event) => {
+              setCsv(event.target.value);
+              clearPreview();
+            }}
             placeholder="Family Name,Child Name,Guardian Name,Email,Phone,Balance..."
           />
         </div>
-        <Button disabled={isPending || !centerId} onClick={submit}>
-          <Upload data-icon="inline-start" />
-          Import ProCare Export
-        </Button>
+        {preview ? (
+          <Alert>
+            <CheckCircle2 className="size-4" />
+            <AlertTitle>Preview ready</AlertTitle>
+            <AlertDescription>
+              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {preview?.warnings?.length ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="mb-2 text-sm font-medium">Rows needing cleanup before import</div>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              {preview.warnings.slice(0, 8).map((warning) => (
+                <div key={`${warning.rowNumber}-${warning.message}`}>Row {warning.rowNumber}: {warning.message}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {preview?.rowResults?.length ? (
+          <div className="overflow-hidden rounded-xl border">
+            <div className="grid grid-cols-[4rem_1fr_1fr_1fr] gap-2 border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
+              <span>Row</span>
+              <span>Center</span>
+              <span>Action</span>
+              <span>Record</span>
+            </div>
+            <div className="max-h-72 overflow-auto">
+              {preview.rowResults.slice(0, 25).map((row) => (
+                <div key={row.rowNumber} className="grid grid-cols-[4rem_1fr_1fr_1fr] gap-2 border-b px-3 py-2 text-xs last:border-b-0">
+                  <span>{row.rowNumber}</span>
+                  <span>{row.center}</span>
+                  <span>{row.action}</span>
+                  <span>{row.staffName ?? row.childName ?? row.familyName ?? row.message ?? row.entity}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button disabled={isPending || !centerId} onClick={() => submit(true)} variant="outline">
+            Preview Import
+          </Button>
+          <Button disabled={isPending || !centerId || !preview || Boolean(preview.warningRows)} onClick={() => submit(false)}>
+            <Upload data-icon="inline-start" />
+            Commit ProCare Import
+          </Button>
+        </div>
+        {preview?.warningRows ? (
+          <p className="text-xs text-muted-foreground">
+            Resolve or remove warning rows before committing. This prevents partially mapped ProCare data from being written to live school records.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

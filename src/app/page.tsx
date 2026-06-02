@@ -22,7 +22,7 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
-import { BrandIcon, BrandLogo } from "@/components/brand-logo";
+import { BrandLogo } from "@/components/brand-logo";
 import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -41,6 +41,13 @@ const heroProof = [
   ["1 embed", "Inquiry form to CRM, email, and Sheets"],
   ["Human-reviewed AI", "Suggestions with safety guardrails"],
 ];
+
+const heroLogo = {
+  src: "/brand/the-bee-suite/logo-primary-horizontal-white.png",
+  width: 1280,
+  height: 360,
+  alt: "The Bee Suite",
+};
 
 const crmSteps = [
   {
@@ -343,10 +350,17 @@ export default function LandingPage() {
         <div className="absolute right-0 top-0 hidden h-64 w-72 opacity-40 hive-texture lg:block" />
         <div className="relative mx-auto grid max-w-[1540px] gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[0.72fr_1.28fr] lg:px-8 lg:py-16">
           <div className="flex min-h-[680px] flex-col justify-center">
-            <BrandIcon className="mb-6 size-16 rounded-2xl shadow-[0_0_34px_rgba(245,181,27,0.22)]" priority />
-            <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-normal text-white sm:text-6xl xl:text-7xl">
+            <h1 className="sr-only">
               The Bee Suite
             </h1>
+            <Image
+              src={heroLogo.src}
+              alt={heroLogo.alt}
+              width={heroLogo.width}
+              height={heroLogo.height}
+              className="h-auto w-full max-w-[22rem] sm:max-w-[32rem] xl:max-w-[38rem]"
+              priority
+            />
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
               A premium childcare CRM and operations command center for enrollment, tours, family communication, staffing, billing readiness, reporting, and multi-location visibility.
             </p>

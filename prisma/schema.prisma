@@ -60,15 +60,16 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  brands              Brand[]
-  organizations       Organization[]
-  users               User[]
-  auditLogs           AuditLog[]
-  integrations        Integration[]
-  ownerGroups         OwnerGroup[]
-  accessGrants        UserAccessGrant[]
-  brandAssets         BrandAsset[]
-  brandCustomizations BrandCustomization[]
+  brands                Brand[]
+  organizations         Organization[]
+  users                 User[]
+  auditLogs             AuditLog[]
+  integrations          Integration[]
+  integrationDeliveries IntegrationDelivery[]
+  ownerGroups           OwnerGroup[]
+  accessGrants          UserAccessGrant[]
+  brandAssets           BrandAsset[]
+  brandCustomizations   BrandCustomization[]
 }
 
 model Brand {
@@ -131,21 +132,22 @@ model Center {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  organization   Organization         @relation(fields: [organizationId], references: [id])
-  ownerGroup     OwnerGroup?          @relation(fields: [ownerGroupId], references: [id])
-  classrooms     Classroom[]
-  leads          Lead[]
-  tours          Tour[]
-  staff          StaffProfile[]
-  schedules      StaffSchedule[]
-  announcements  Announcement[]
-  auditLogs      AuditLog[]
-  checkLogs      CheckInOutLog[]
-  procareImports ProcareImportBatch[]
-  fteReports     FteReport[]
-  accessGrants   UserAccessGrant[]
-  brandAssets    BrandAsset[]
-  customizations BrandCustomization[]
+  organization          Organization          @relation(fields: [organizationId], references: [id])
+  ownerGroup            OwnerGroup?           @relation(fields: [ownerGroupId], references: [id])
+  classrooms            Classroom[]
+  leads                 Lead[]
+  tours                 Tour[]
+  staff                 StaffProfile[]
+  schedules             StaffSchedule[]
+  announcements         Announcement[]
+  auditLogs             AuditLog[]
+  checkLogs             CheckInOutLog[]
+  procareImports        ProcareImportBatch[]
+  fteReports            FteReport[]
+  accessGrants          UserAccessGrant[]
+  brandAssets           BrandAsset[]
+  customizations        BrandCustomization[]
+  integrationDeliveries IntegrationDelivery[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -184,17 +186,17 @@ model OwnerGroup {
 }
 
 model Classroom {
-  id        String   @id @default(cuid())
-  centerId  String
-  name      String
-  ageGroup  String
-  capacity  Int
-  ratioRule String?
+  id           String   @id @default(cuid())
+  centerId     String
+  name         String
+  ageGroup     String
+  capacity     Int
+  ratioRule    String?
   sourceSystem String?
   externalId   String?
   customFields Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   center       Center             @relation(fields: [centerId], references: [id])
   children     Child[]
@@ -455,11 +457,11 @@ model AuthorizedPickup {
 }
 
 model EmergencyContact {
-  id       String @id @default(cuid())
-  familyId String
-  fullName String
-  phone    String
-  relation String
+  id           String  @id @default(cuid())
+  familyId     String
+  fullName     String
+  phone        String
+  relation     String
   sourceSystem String?
   externalId   String?
   customFields Json?
@@ -534,12 +536,13 @@ model Lead {
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  center      Center       @relation(fields: [centerId], references: [id])
-  tours       Tour[]
-  enrollments Enrollment[]
-  tasks       Task[]
-  notes       Note[]
-  tags        Tag[]        @relation("LeadTags")
+  center                Center                @relation(fields: [centerId], references: [id])
+  tours                 Tour[]
+  enrollments           Enrollment[]
+  tasks                 Task[]
+  notes                 Note[]
+  tags                  Tag[]                 @relation("LeadTags")
+  integrationDeliveries IntegrationDelivery[]
 
   @@unique([centerId, externalId])
   @@index([centerId, stage])
@@ -1073,10 +1076,38 @@ model Integration {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 }
 
+model IntegrationDelivery {
+  id            String    @id @default(cuid())
+  tenantId      String
+  centerId      String?
+  leadId        String?
+  provider      String
+  purpose       String
+  status        String    @default("pending")
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(5)
+  payload       Json
+  lastResult    Json?
+  lastError     String?
+  nextAttemptAt DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id])
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, provider, createdAt])
+  @@index([centerId, createdAt])
+  @@index([leadId])
+}
+
 model StripeWebhookEvent {
-  id          String   @id @default(cuid())
-  eventId     String   @unique
-  dedupeKey   String   @unique
+  id          String    @id @default(cuid())
+  eventId     String    @unique
+  dedupeKey   String    @unique
   type        String
   objectId    String?
   livemode    Boolean?
@@ -1084,8 +1115,8 @@ model StripeWebhookEvent {
   payload     Json?
   error       String?
   processedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([type, createdAt])
   @@index([objectId])

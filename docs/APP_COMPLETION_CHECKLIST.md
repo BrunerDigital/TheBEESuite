@@ -125,7 +125,7 @@ Status legend:
 - [x] Add executive dashboard button to copy embed code for each location/brand.
 - [x] Add CAPTCHA/bot protection to public inquiry endpoint.
 - [x] Add UTM/source capture and reporting across all embeds.
-- [ ] Add retry queue for failed email/Google Sheet/CRM forwarding.
+- [x] Add retry queue for failed email/Google Sheet/CRM forwarding.
 
 ## Family, Guardian, And Child Profiles
 
@@ -388,13 +388,13 @@ Status legend:
 - [x] Google Calendar/Google Business Profile/Meta/Zapier/webhook/signature/cloud storage placeholders exist.
 - [ ] Complete real setup UI for each integration.
 - [ ] Add integration health checks and last-sync logs.
-- [ ] Add retry queues for failed outbound integrations.
+- [x] Add retry queues for failed outbound integrations.
 - [ ] Add tenant-specific integration credentials instead of only platform env vars.
 
 ## Database, Security, Privacy, And Audit
 
 - [x] Prisma schema covers core modules.
-- [x] Migrations exist for CRM import, kiosk/parent engagement, FTE, tenant access/branding, ProCare metadata, Supabase public API hardening, and Stripe hardening.
+- [x] Migrations exist for CRM import, kiosk/parent engagement, FTE, tenant access/branding, ProCare metadata, Supabase public API hardening, Stripe hardening, and integration delivery queues.
 - [x] Audit log schema and audit helper exist.
 - [x] Sensitive workflows use server-side role/scope checks.
 - [x] Supabase public API hardening migration exists.

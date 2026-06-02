@@ -371,6 +371,8 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
   assert.equal(canAccessModule(teacher, "daily-reports"), true);
   assert.equal(canAccessModule(teacher, "staff"), false);
   assert.equal(canAccessModule(director, "staff"), true);
+  assert.equal(canAccessModule(director, "calendar"), true);
+  assert.equal(canAccessModule(teacher, "calendar"), false);
 });
 
 test("executive user edits replace stale access grants with the target grant", () => {

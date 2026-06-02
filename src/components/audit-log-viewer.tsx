@@ -35,6 +35,7 @@ function formatDateTime(value: Date | string | null | undefined) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 
@@ -238,4 +239,3 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
     </Card>
   );
 }
-

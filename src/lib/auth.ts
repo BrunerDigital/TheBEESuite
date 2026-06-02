@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
+import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
 import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE = "bee_suite_session";
@@ -25,6 +26,7 @@ export type CurrentUser = {
   primaryCenterId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
+  branding: WorkspaceBranding;
 };
 
 const tenantWideAccessRoles = new Set<UserRole>([
@@ -186,6 +188,25 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       isActive: true,
     },
     include: {
+      tenant: {
+        select: { name: true, slug: true },
+      },
+      organization: {
+        select: {
+          name: true,
+          brand: {
+            select: {
+              name: true,
+              slug: true,
+              settings: {
+                select: {
+                  brandName: true,
+                },
+              },
+            },
+          },
+        },
+      },
       staffProfile: {
         select: { centerId: true },
       },
@@ -209,6 +230,11 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
   if (!user) return null;
 
+  const brandName =
+    user.organization?.brand?.settings?.brandName ??
+    user.organization?.brand?.name ??
+    user.organization?.name ??
+    user.tenant.name;
   const profileCenterIds = user.staffProfile?.centerId ? [user.staffProfile.centerId] : [];
   const hasProfileCenterAssignment = profileCenterIds.length > 0;
   let centerIds = profileCenterIds;
@@ -249,6 +275,14 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     primaryCenterId: centerIds[0] ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
+    branding: resolveWorkspaceBranding({
+      tenantName: user.tenant.name,
+      tenantSlug: user.tenant.slug,
+      brandName,
+      brandSlug: user.organization?.brand?.slug,
+      organizationName: user.organization?.name,
+      email: user.email,
+    }),
   };
 }
 

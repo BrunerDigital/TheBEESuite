@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   CreditCard,
   FileCheck2,
-  Hexagon,
   LockKeyhole,
   Mail,
   MapPin,
@@ -23,6 +22,7 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
+import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -141,30 +141,6 @@ const reportingRows = [
   ["Executive rollup", "Multi-location pipeline, FTE, revenue, source mix"],
   ["Compliance support", "Expiring docs, incidents, certifications, audit trails"],
 ];
-
-function HiveMark({ className }: { className?: string }) {
-  return (
-    <span className={cn("relative block size-10 text-amber-300", className)} aria-hidden="true">
-      <Hexagon className="absolute left-0 top-1 size-5" strokeWidth={2.2} />
-      <Hexagon className="absolute left-[17px] top-1 size-5" strokeWidth={2.2} />
-      <Hexagon className="absolute left-[8px] top-[17px] size-5" strokeWidth={2.2} />
-    </span>
-  );
-}
-
-function BrandMark({ compact = false }: { compact?: boolean }) {
-  return (
-    <Link href="/" className="flex items-center gap-3" aria-label="The Bee Suite home">
-      <span className="grid size-10 place-items-center rounded-xl border border-amber-300/35 bg-amber-400/15 text-amber-300 shadow-[0_0_28px_rgba(245,181,27,0.18)]">
-        <HiveMark className="scale-75" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-base font-semibold leading-none tracking-normal text-amber-300">The Bee Suite</span>
-        {!compact ? <span className="mt-1 block text-[0.68rem] text-zinc-400">Childcare CRM & Operations</span> : null}
-      </span>
-    </Link>
-  );
-}
 
 function GlassPanel({
   children,
@@ -336,7 +312,7 @@ export default function LandingPage() {
     <main className="min-h-screen overflow-hidden bg-[#05070a] text-white">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#080b0f]/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1540px] items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <BrandMark />
+          <BrandLogo href="/" priority />
           <nav className="ml-auto hidden items-center gap-7 text-sm text-zinc-400 lg:flex">
             {navItems.map(([label, href]) => (
               <a key={label} href={href} className="transition hover:text-white">
@@ -367,6 +343,7 @@ export default function LandingPage() {
         <div className="absolute right-0 top-0 hidden h-64 w-72 opacity-40 hive-texture lg:block" />
         <div className="relative mx-auto grid max-w-[1540px] gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[0.72fr_1.28fr] lg:px-8 lg:py-16">
           <div className="flex min-h-[680px] flex-col justify-center">
+            <BrandIcon className="mb-6 size-16 rounded-2xl shadow-[0_0_34px_rgba(245,181,27,0.22)]" priority />
             <h1 className="max-w-3xl text-5xl font-semibold leading-[0.98] tracking-normal text-white sm:text-6xl xl:text-7xl">
               The Bee Suite
             </h1>
@@ -600,7 +577,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-white/10 bg-[#05070a] px-4 py-6 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
-          <BrandMark compact />
+          <BrandLogo href="/" compact />
           <Button
             variant="outline"
             size="icon"

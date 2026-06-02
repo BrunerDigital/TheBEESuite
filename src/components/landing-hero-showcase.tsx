@@ -18,6 +18,7 @@ import {
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
+import { BrandIcon } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
 const kpis = [
@@ -69,16 +70,6 @@ function GlassPanel({
     >
       {children}
     </div>
-  );
-}
-
-function HiveMark({ className }: { className?: string }) {
-  return (
-    <span className={cn("relative block size-10 text-amber-300", className)} aria-hidden="true">
-      <Hexagon className="absolute left-0 top-1 size-5" strokeWidth={2.2} />
-      <Hexagon className="absolute left-[17px] top-1 size-5" strokeWidth={2.2} />
-      <Hexagon className="absolute left-[8px] top-[17px] size-5" strokeWidth={2.2} />
-    </span>
   );
 }
 
@@ -148,9 +139,7 @@ function CommandCenterPreview() {
     <div className="grid min-h-[560px] lg:grid-cols-[210px_1fr]">
       <aside className="hidden border-r border-white/10 bg-black/25 p-4 lg:block">
         <div className="flex items-center gap-3">
-          <span className="grid size-10 place-items-center rounded-xl border border-amber-300/35 bg-amber-400/15 text-amber-300">
-            <HiveMark className="scale-75" />
-          </span>
+          <BrandIcon className="size-10 rounded-xl border border-amber-300/35 shadow-[0_0_24px_rgba(245,181,27,0.18)]" />
           <div>
             <div className="text-sm font-semibold text-amber-300">The Bee Suite</div>
             <div className="mt-1 text-[0.66rem] text-zinc-500">Childcare CRM</div>

@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { FormEvent, useState, useTransition } from "react";
-import { AlertCircle, ArrowRight, CheckCircle2, Hexagon, LogIn, ShieldCheck } from "lucide-react";
+import { AlertCircle, ArrowRight, CheckCircle2, LogIn, ShieldCheck } from "lucide-react";
+import { BrandIcon, BrandLogo } from "@/components/brand-logo";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,12 +45,7 @@ export function LoginForm() {
   return (
     <div className="grid min-h-screen bg-slate-950 p-4 text-white lg:grid-cols-[1fr_0.86fr]">
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
-        <Link href="/" className="flex w-fit items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground">
-            <Hexagon />
-          </span>
-          <span className="text-sm font-semibold tracking-wide">The Bee Suite</span>
-        </Link>
+        <BrandLogo href="/" size="md" priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">Welcome back to your childcare command center.</h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
@@ -72,8 +68,8 @@ export function LoginForm() {
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
         <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
-            <Link href="/" className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground lg:hidden" aria-label="The Bee Suite home">
-              <Hexagon />
+            <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The Bee Suite home">
+              <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
             <CardTitle className="mt-4 text-3xl">Log in to The Bee Suite</CardTitle>
             <CardDescription>

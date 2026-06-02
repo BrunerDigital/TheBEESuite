@@ -1,6 +1,7 @@
 import "./load-env";
 import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import { readFileSync } from "node:fs";
+import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
 import { prisma } from "@/lib/prisma";
 
 type NormalizedLocation = {
@@ -71,6 +72,39 @@ function scoreImportedLead(lead: NormalizedLead) {
   return Math.min(score, 95);
 }
 
+async function ensureBrandAsset(input: {
+  tenantId: string;
+  brandId: string;
+  assetType: string;
+  url: string;
+  altText: string;
+}) {
+  const existing = await prisma.brandAsset.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      brandId: input.brandId,
+      assetType: input.assetType,
+    },
+    select: { id: true },
+  });
+  const data = {
+    url: input.url,
+    altText: input.altText,
+    metadata: { source: "import-kidcity-crm" },
+  };
+
+  if (existing) return prisma.brandAsset.update({ where: { id: existing.id }, data });
+
+  return prisma.brandAsset.create({
+    data: {
+      tenantId: input.tenantId,
+      brandId: input.brandId,
+      assetType: input.assetType,
+      ...data,
+    },
+  });
+}
+
 async function ensureOrg() {
   const tenant = await prisma.tenant.upsert({
     where: { slug: "kid-city-usa" },
@@ -83,6 +117,44 @@ async function ensureOrg() {
     update: { name: "Kid City USA" },
     create: { tenantId: tenant.id, name: "Kid City USA", slug: "kid-city-usa" },
   });
+
+  await prisma.whiteLabelSettings.upsert({
+    where: { brandId: brand.id },
+    update: {
+      brandName: "Kid City USA",
+      logoUrlPlaceholder: KID_CITY_USA_BRANDING.logoSrc,
+      faviconUrlPlaceholder: KID_CITY_USA_BRANDING.markSrc,
+    },
+    create: {
+      brandId: brand.id,
+      brandName: "Kid City USA",
+      logoUrlPlaceholder: KID_CITY_USA_BRANDING.logoSrc,
+      faviconUrlPlaceholder: KID_CITY_USA_BRANDING.markSrc,
+      primaryColor: "#f5b51b",
+      accentColor: "#10b981",
+      themeMode: "dark",
+      emailSenderPlaceholder: "hello@kidcityusa.com",
+      customDomainPlaceholder: "portal.kidcityusa.com",
+      legalFooterText: "Kid City USA childcare operations powered by The Bee Suite.",
+    },
+  });
+
+  await Promise.all([
+    ensureBrandAsset({
+      tenantId: tenant.id,
+      brandId: brand.id,
+      assetType: "logo",
+      url: KID_CITY_USA_BRANDING.logoSrc,
+      altText: KID_CITY_USA_BRANDING.logoAlt,
+    }),
+    ensureBrandAsset({
+      tenantId: tenant.id,
+      brandId: brand.id,
+      assetType: "favicon",
+      url: KID_CITY_USA_BRANDING.markSrc,
+      altText: "Kid City USA favicon",
+    }),
+  ]);
 
   const organization =
     (await prisma.organization.findFirst({

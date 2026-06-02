@@ -1,5 +1,6 @@
 import "./load-env";
 import { PrismaClient, UserRole } from "@prisma/client";
+import { KID_CITY_USA_BRANDING, isKidCityBrandText } from "@/lib/brand-assets";
 
 const prisma = new PrismaClient();
 
@@ -268,7 +269,7 @@ async function main() {
 
   for (const organization of organizations) {
     const label = `${organization.tenant.name} ${organization.brand?.name ?? organization.name}`;
-    const isKidCity = /kid\s*city/i.test(label);
+    const isKidCity = isKidCityBrandText(label);
     const ownerGroup = await ensureOwnerGroup({
       tenantId: organization.tenantId,
       brandId: organization.brandId,
@@ -288,14 +289,16 @@ async function main() {
     centersAssigned += centerUpdate.count;
 
     const brandName = organization.brand?.settings?.brandName ?? organization.brand?.name ?? organization.name;
+    const logoUrlPlaceholder = organization.brand?.settings?.logoUrlPlaceholder ?? (isKidCity ? KID_CITY_USA_BRANDING.logoSrc : null);
+    const faviconUrlPlaceholder = organization.brand?.settings?.faviconUrlPlaceholder ?? (isKidCity ? KID_CITY_USA_BRANDING.markSrc : null);
     const brandCustomization = await ensureBrandCustomization({
       tenantId: organization.tenantId,
       brandId: organization.brandId,
       organizationId: organization.id,
       scopeType: "BRAND",
       brandName,
-      logoUrlPlaceholder: organization.brand?.settings?.logoUrlPlaceholder,
-      faviconUrlPlaceholder: organization.brand?.settings?.faviconUrlPlaceholder,
+      logoUrlPlaceholder,
+      faviconUrlPlaceholder,
       primaryColor: organization.brand?.settings?.primaryColor,
       accentColor: organization.brand?.settings?.accentColor,
       themeMode: organization.brand?.settings?.themeMode,
@@ -350,12 +353,12 @@ async function main() {
     });
     if (mascot.created) assetsCreated += 1;
 
-    if (organization.brand?.settings?.logoUrlPlaceholder) {
+    if (logoUrlPlaceholder) {
       const logo = await ensureBrandAsset({
         tenantId: organization.tenantId,
         brandId: organization.brandId,
         assetType: "logo",
-        url: organization.brand.settings.logoUrlPlaceholder,
+        url: logoUrlPlaceholder,
         altText: `${brandName} logo`,
       });
       if (logo.created) assetsCreated += 1;

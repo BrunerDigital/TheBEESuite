@@ -100,6 +100,8 @@ async function main() {
       settings: {
         create: {
           brandName: "Kid City USA Enterprises",
+          logoUrlPlaceholder: "/brand/kid-city-usa/logo-horizontal.png",
+          faviconUrlPlaceholder: "/brand/kid-city-usa/logo-square.jpg",
           primaryColor: "#f6bf35",
           accentColor: "#2fbf8f",
           themeMode: "dark",

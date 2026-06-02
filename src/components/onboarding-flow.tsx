@@ -8,12 +8,12 @@ import {
   Building2,
   CheckCircle2,
   Clock3,
-  Hexagon,
   LockKeyhole,
   Mail,
   MapPin,
   ShieldCheck,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -201,12 +201,7 @@ export function OnboardingFlow() {
     <main className="min-h-screen bg-slate-950 text-white">
       <header className="border-b border-white/10 bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link href="/" className="flex items-center gap-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
-              <Hexagon />
-            </span>
-            <span className="text-sm font-semibold tracking-wide">The Bee Suite</span>
-          </Link>
+          <BrandLogo href="/" size="sm" compact priority />
           <Button className="ml-auto border-white/20 bg-white/5 text-white hover:bg-white/10" variant="outline" nativeButton={false} render={<Link href="/login" />}>
             Log in
           </Button>

@@ -8,7 +8,6 @@ import {
   CheckCheck,
   ChevronDown,
   Command,
-  Hexagon,
   Menu,
   Moon,
   LogOut,
@@ -17,6 +16,7 @@ import {
   Sparkles,
   Sun,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,6 +31,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navGroups } from "@/lib/demo-data";
 import { canAccessModule } from "@/lib/rbac";
+import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 
 type ShellUser = {
@@ -39,6 +40,7 @@ type ShellUser = {
   role: string;
   accessScope?: string;
   centerIds?: string[];
+  branding?: WorkspaceBranding;
 };
 
 type NotificationSummary = {
@@ -69,18 +71,8 @@ type NotificationSummary = {
   }>;
 };
 
-function BrandMark() {
-  return (
-    <Link href="/" className="flex items-center gap-3">
-      <span className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-        <Hexagon data-icon="inline-start" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-semibold tracking-wide">The Bee Suite</span>
-        <span className="block text-xs text-muted-foreground">Childcare OS</span>
-      </span>
-    </Link>
-  );
+function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
+  return <BrandLogo href="/" branding={branding} size="md" />;
 }
 
 function NotificationDropdown() {
@@ -208,7 +200,7 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
   return (
     <div className="flex h-full flex-col">
       <div className="p-5">
-        <BrandMark />
+        <BrandMark branding={currentUser?.branding} />
       </div>
       <ScrollArea className="flex-1 px-3">
         <nav className="flex flex-col gap-5 pb-6">

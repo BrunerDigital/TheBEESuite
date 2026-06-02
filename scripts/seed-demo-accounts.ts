@@ -1,6 +1,7 @@
 import "./load-env";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, UserRole } from "@prisma/client";
 import { demoAccountEmails } from "@/lib/demo-accounts";
+import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
 import { hashGuardianPin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
@@ -264,6 +265,39 @@ async function ensureAccessGrant(input: {
 
   if (existing) return prisma.userAccessGrant.update({ where: { id: existing.id }, data });
   return prisma.userAccessGrant.create({ data });
+}
+
+async function ensureBrandAsset(input: {
+  tenantId: string;
+  brandId: string;
+  assetType: string;
+  url: string;
+  altText: string;
+}) {
+  const existing = await prisma.brandAsset.findFirst({
+    where: {
+      tenantId: input.tenantId,
+      brandId: input.brandId,
+      assetType: input.assetType,
+    },
+    select: { id: true },
+  });
+  const data = {
+    url: input.url,
+    altText: input.altText,
+    metadata: { source: DEMO_SOURCE },
+  };
+
+  if (existing) return prisma.brandAsset.update({ where: { id: existing.id }, data });
+
+  return prisma.brandAsset.create({
+    data: {
+      tenantId: input.tenantId,
+      brandId: input.brandId,
+      assetType: input.assetType,
+      ...data,
+    },
+  });
 }
 
 async function upsertStaffProfile(input: {
@@ -924,6 +958,8 @@ async function main() {
     where: { brandId: brand.id },
     update: {
       brandName: DEMO_BRAND_NAME,
+      logoUrlPlaceholder: KID_CITY_USA_BRANDING.logoSrc,
+      faviconUrlPlaceholder: KID_CITY_USA_BRANDING.markSrc,
       primaryColor: "#f5b51b",
       accentColor: "#38bdf8",
       themeMode: "dark",
@@ -936,6 +972,8 @@ async function main() {
     create: {
       brandId: brand.id,
       brandName: DEMO_BRAND_NAME,
+      logoUrlPlaceholder: KID_CITY_USA_BRANDING.logoSrc,
+      faviconUrlPlaceholder: KID_CITY_USA_BRANDING.markSrc,
       primaryColor: "#f5b51b",
       accentColor: "#38bdf8",
       themeMode: "dark",
@@ -946,6 +984,23 @@ async function main() {
       privacyUrl: "https://thebeesuite.io/privacy",
     },
   });
+
+  await Promise.all([
+    ensureBrandAsset({
+      tenantId: tenant.id,
+      brandId: brand.id,
+      assetType: "logo",
+      url: KID_CITY_USA_BRANDING.logoSrc,
+      altText: KID_CITY_USA_BRANDING.logoAlt,
+    }),
+    ensureBrandAsset({
+      tenantId: tenant.id,
+      brandId: brand.id,
+      assetType: "favicon",
+      url: KID_CITY_USA_BRANDING.markSrc,
+      altText: "Kid City USA favicon",
+    }),
+  ]);
 
   const centers = await Promise.all([
     upsertCenter({

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, CreditCard, FileCheck2, ShieldCheck } from "lucide-react";
+import { BrandIcon } from "@/components/brand-logo";
 import { OnlineRegistrationForm } from "@/components/online-registration-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,7 @@ export default async function OnlineRegistrationPage() {
             render={<Link href="/" />}
           >
             <ArrowLeft data-icon="inline-start" />
+            <BrandIcon className="size-6 rounded-md" />
             The Bee Suite
           </Button>
           <Button nativeButton={false} render={<Link href="/login" />}>

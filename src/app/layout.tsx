@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   title: "The Bee Suite",
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
+  icons: {
+    icon: [{ url: "/brand/the-bee-suite/favicon.png", sizes: "512x512", type: "image/png" }],
+    apple: [{ url: "/brand/the-bee-suite/app-icon-yellow.png", sizes: "1024x1024", type: "image/png" }],
+  },
 };
 
 export default function RootLayout({

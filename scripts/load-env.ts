@@ -27,7 +27,7 @@ for (const file of [".env.local", ".env"]) {
 
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
     const parsed = parseEnvLine(line);
-    if (!parsed || process.env[parsed.key] !== undefined) continue;
+    if (!parsed || process.env[parsed.key]?.trim()) continue;
     process.env[parsed.key] = parsed.value;
   }
 }

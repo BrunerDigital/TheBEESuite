@@ -1,6 +1,8 @@
 const demoLoginAliases: Record<string, string> = {
   demoschool: "demoschool@demo.thebeesuite.io",
   demoexec: "demoexec@demo.thebeesuite.io",
+  demoexecutive: "demoexec@demo.thebeesuite.io",
+  demobrand: "demoexec@demo.thebeesuite.io",
 };
 
 export function resolveLoginIdentifier(value: string) {

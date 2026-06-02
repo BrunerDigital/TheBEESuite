@@ -316,6 +316,7 @@ Status legend:
 - [x] Staff profile, schedule, certification schema exists.
 - [x] Staff counts and teacher counts are represented in dashboard/reporting.
 - [x] Separation between location users/directors and classroom staff has been corrected at the data access level.
+- [x] Dedicated director UI exists for adding/editing teacher profiles and certifications.
 - [ ] Complete staff CRUD UI.
 - [ ] Add teacher onboarding forms/documents.
 - [ ] Add background check tracking UI.

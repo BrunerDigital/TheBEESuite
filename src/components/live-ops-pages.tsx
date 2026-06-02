@@ -35,6 +35,7 @@ import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
+import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
 
@@ -1795,14 +1796,17 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
 
 export type StaffPageData = {
   centers: Array<{ id: string; name: string }>;
+  classrooms: Array<{ id: string; centerId: string; name: string; ageGroup: string }>;
   staff: Array<{
     id: string;
+    centerId: string;
+    classroomId: string | null;
     title: string;
     phone: string | null;
     backgroundCheckStatus: string | null;
     user: { name: string; email: string; role: string; isActive: boolean };
-    center: { name: string; crmLocationId: string | null };
-    classroom: { name: string } | null;
+    center: { id: string; name: string; crmLocationId: string | null };
+    classroom: { id: string; name: string } | null;
     certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
   }>;
   stats: {
@@ -1867,8 +1871,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <OperationsActionHub title="Create or Edit Teacher Profile" defaultEntity="staff" compact centers={data.centers} />
-      <OperationsActionHub title="Add or Edit Teacher Certification" defaultEntity="certification" compact />
+      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} />
     </div>
   );
 }

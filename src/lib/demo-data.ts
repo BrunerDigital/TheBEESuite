@@ -71,46 +71,23 @@ export type ModuleSlug =
 
 export const centers = [
   {
-    name: "Kid City USA",
-    region: "North Metro",
-    director: "Amara Lewis",
-    children: 31,
-    capacity: 40,
-    staff: 8,
-    revenue: "$71.4k",
-    compliance: 92,
-  },
-  {
-    name: "Kid City USA",
-    region: "West Valley",
-    director: "Mateo Chen",
-    children: 24,
-    capacity: 34,
-    staff: 6,
-    revenue: "$55.8k",
-    compliance: 88,
-  },
-  {
-    name: "Kid City USA",
-    region: "South Ridge",
-    director: "Nadia Brooks",
-    children: 20,
-    capacity: 32,
-    staff: 6,
-    revenue: "$43.9k",
-    compliance: 95,
+    name: "Kid City USA - Demo",
+    region: "Demo Campus",
+    director: "Demo School Director",
+    children: 57,
+    capacity: 79,
+    staff: 14,
+    revenue: "$131.1k",
+    compliance: 94,
   },
 ];
 
 export const classrooms = [
-  ["Infant Nest", "Infants", 8, 10, "2:8"],
-  ["Clover Crawlers", "Infants", 7, 8, "2:7"],
-  ["Wiggle Room", "Toddlers", 11, 12, "2:11"],
-  ["Acorn Toddlers", "Toddlers", 10, 12, "2:10"],
-  ["Sunflower Pre-K", "Preschool", 15, 18, "2:15"],
-  ["Maple Studio", "Preschool", 13, 16, "2:13"],
-  ["Willow Room", "Pre-K", 7, 10, "1:7"],
-  ["Discovery Lab", "Pre-K", 4, 8, "1:4"],
+  ["Infant Hive", "Infant", 8, 10, "2:8"],
+  ["Toddler Hive", "Toddler", 12, 15, "2:12"],
+  ["3's Hive", "3's", 11, 14, "2:11"],
+  ["Pre-K Hive", "Pre-K", 14, 18, "2:14"],
+  ["Afterschool Hive", "Afterschool", 12, 22, "1:12"],
 ].map(([name, ageGroup, present, capacity, ratio]) => ({
   name,
   ageGroup,
@@ -120,13 +97,13 @@ export const classrooms = [
 }));
 
 export const kpis = [
-  { label: "Active children", value: "75", trend: "+6 this month", tone: "emerald" },
-  { label: "Enrollment capacity", value: "106", trend: "31 open seats", tone: "sky" },
-  { label: "Occupancy", value: "70.8%", trend: "+4.2% vs last month", tone: "amber" },
+  { label: "Active children", value: "57", trend: "+4 this month", tone: "emerald" },
+  { label: "Enrollment capacity", value: "79", trend: "22 open seats", tone: "sky" },
+  { label: "Occupancy", value: "72.2%", trend: "+3.1% vs last month", tone: "amber" },
   { label: "New leads", value: "30", trend: "12 high-fit", tone: "violet" },
   { label: "Tours today", value: "5", trend: "2 need prep", tone: "sky" },
   { label: "Outstanding balances", value: "$18.6k", trend: "8 overdue", tone: "rose" },
-  { label: "Staff present", value: "18/20", trend: "Ratios healthy", tone: "emerald" },
+  { label: "Staff present", value: "13/14", trend: "Ratios healthy", tone: "emerald" },
   { label: "Incidents to review", value: "5", trend: "3 parent acks", tone: "amber" },
 ];
 
@@ -203,7 +180,7 @@ export const messages = [
     sentiment: "Warm",
   },
   {
-    from: "Willow Room",
+    from: "Toddler Hive",
     subject: "Supplies needed",
     status: "Open",
     preview: "Three children need extra clothes added to cubbies today.",
@@ -220,9 +197,9 @@ export const messages = [
 
 export const tasks = [
   "Confirm authorized pickup list for Rivera Family",
-  "Review incident report for Maple Studio",
+  "Review incident report for Pre-K Hive",
   "Send application reminder to Patel Family",
-  "Update Infant Nest immunization checklist",
+  "Update Infant Hive immunization checklist",
   "Prepare Google Calendar tour invite for Thursday",
   "Audit assistant director permissions",
   "Approve AI newsletter draft",
@@ -245,7 +222,7 @@ export const analytics = [
 export const notifications = [
   "5 parent messages need a response",
   "8 compliance reminders due within 14 days",
-  "2 classrooms are within one child of capacity",
+  "5 classrooms have 22 total open seats",
   "3 invoices are overdue by more than 10 days",
   "AI recommends prioritizing 4 high-fit tours",
   "1 incident report needs director review",
@@ -373,7 +350,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "A role-aware operating view for enrollment, ratios, revenue, parent response, safety review, and compliance-ready reminders.",
     owner: "Center director, regional manager, brand admin",
-    metrics: ["75 active children", "70.8% occupancy", "$171k monthly revenue", "5 incidents to review"],
+    metrics: ["57 active children", "72.2% occupancy", "$131k monthly revenue", "5 incidents to review"],
     features: ["Platform, brand, regional, center, teacher, and parent dashboard variants", "AI-generated daily center summary", "Capacity and open-seat visibility by age group", "Staff attendance and ratio snapshot"],
     records: ["KPI cards", "Classroom capacity", "Billing aging", "Compliance reminders"],
     ai: "Suggested only: summarizes priorities and recommends follow-up order.",
@@ -385,7 +362,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Roll up enrollment, occupancy, staffing, compliance reminders, and revenue trends across every owned center.",
     owner: "Brand admin, franchise admin, regional manager",
-    metrics: ["3 centers", "106 licensed capacity", "20 staff", "91.7% documentation health"],
+    metrics: ["1 demo location", "79 licensed capacity", "14 staff", "94% documentation health"],
     features: ["Center comparison table", "Regional occupancy trend", "At-risk enrollment flags", "Open seat forecast"],
     records: centers.map((center) => `${center.name}: ${center.children}/${center.capacity} children`),
     ai: "Highlights centers with preventable enrollment leakage or expiring staff documentation.",
@@ -397,7 +374,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Director-facing view of current children, tours, check-ins, staff coverage, messages, birthdays, incidents, and billing alerts.",
     owner: "Center director, assistant director",
-    metrics: ["31 active children", "5 tours today", "18 check-ins", "2 late pickup risks"],
+    metrics: ["57 active children", "5 tours today", "43 check-ins", "2 late pickup risks"],
     features: ["Today schedule", "Open tasks", "Message response queue", "Licensing reminder lane"],
     records: notifications.slice(0, 6),
     ai: "Drafts the morning summary and flags workflow bottlenecks for human review.",
@@ -461,7 +438,7 @@ export const modules: ModuleDefinition[] = [
     owner: "Director, teacher, authorized admin",
     metrics: ["Peanut allergy", "2 permissions pending", "10 daily reports", "5 incident records"],
     features: ["Medical and allergy protection", "Photo/video and field trip permissions", "Nap, feeding, potty, developmental notes", "Incident and activity history"],
-    records: ["Sofia Rivera, 18 months", "Classroom: Clover Crawlers", "Schedule: Mon-Fri 8:00-4:30"],
+    records: ["Sofia Rivera, infant", "Classroom: Infant Hive", "Schedule: Mon-Fri 8:00-4:30"],
     ai: "Sensitive child, medical, custody, billing, and compliance suggestions require human review.",
     sensitive: true,
   },
@@ -590,7 +567,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Child and staff check-in/out logs, QR/PIN placeholders, signature capture, absences, late pickup flags, and ratio snapshots.",
     owner: "Teacher, director, authorized pickup",
-    metrics: ["58 checked in", "17 absent/scheduled off", "2 late pickup flags", "0 ratio warnings"],
+    metrics: ["43 checked in", "14 absent/scheduled off", "2 late pickup flags", "0 ratio warnings"],
     features: ["Authorized pickup verification placeholder", "Signature capture placeholder", "QR/PIN check-in placeholder", "Attendance reports"],
     records: ["Sofia Rivera checked in 8:12", "Theo Martin absent: sick day", "Staff clock-in 7:45"],
     sensitive: true,
@@ -699,7 +676,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Enrollment funnel, lead sources, tour conversion, occupancy, revenue, balances, attendance, ratios, response time, incidents, compliance, campaigns, reviews, and AI insights.",
     owner: "Brand admin, regional manager, director",
-    metrics: ["42% tour conversion", "70.8% occupancy", "2.1h avg response", "8 enrolled this month"],
+    metrics: ["42% tour conversion", "72.2% occupancy", "2.1h avg response", "8 enrolled this month"],
     features: ["Charts and KPI cards", "Trend indicators", "Center filters", "Export placeholders"],
     records: ["Enrollment funnel", "Capacity utilization", "Incident trends", "Campaign performance"],
     ai: "Explains trends and flags opportunities without replacing operator judgment.",
@@ -750,7 +727,7 @@ export const modules: ModuleDefinition[] = [
     owner: "Platform owner, brand/franchise admin",
     metrics: ["1 brand", "Live centers", "10 roles", "Audit logged"],
     features: ["Location lifecycle", "Owner group containers", "User and password controls", "Impersonation audit warning"],
-    records: ["Kid City USA", "North Metro region", "Feature flag: Kiosk preview"],
+    records: ["Kid City USA Enterprises", "Kid City USA - Demo", "Feature flag: Kiosk preview"],
     sensitive: true,
   },
   {
@@ -762,7 +739,7 @@ export const modules: ModuleDefinition[] = [
     owner: "Brand admin, platform owner",
     metrics: ["3 brand surfaces", "2 theme modes", "1 custom domain placeholder", "4 notification templates"],
     features: ["Logo upload placeholder", "Color controls", "Custom domain placeholder", "Login and parent portal branding"],
-    records: ["Brand: The Bee Suite", "Primary: Honey Gold", "Domain: portal.example.com placeholder"],
+    records: ["Brand: Kid City USA Enterprises", "Primary: Honey Gold", "Domain: portal.example.com placeholder"],
   },
   {
     slug: "team-permissions",

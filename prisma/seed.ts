@@ -14,15 +14,16 @@ const lastNames = [
 ];
 
 const classroomNames = [
-  ["Infant Nest", "Infants", 10, "2:8"],
-  ["Clover Crawlers", "Infants", 8, "2:8"],
-  ["Wiggle Room", "Toddlers", 12, "2:12"],
-  ["Acorn Toddlers", "Toddlers", 12, "2:12"],
-  ["Sunflower Pre-K", "Preschool", 18, "2:18"],
-  ["Maple Studio", "Preschool", 16, "2:16"],
-  ["Willow Room", "Pre-K", 10, "1:10"],
-  ["Discovery Lab", "Pre-K", 8, "1:8"],
+  ["Infant Hive", "Infant", 10, "2:8"],
+  ["Toddler Hive", "Toddler", 15, "2:12"],
+  ["3's Hive", "3's", 14, "2:11"],
+  ["Pre-K Hive", "Pre-K", 18, "2:14"],
+  ["Afterschool Hive", "Afterschool", 22, "1:12"],
 ] as const;
+const classroomRosterTargets = [8, 12, 11, 14, 12] as const;
+const childClassroomAssignments = classroomRosterTargets.flatMap((children, classroomIndex) =>
+  Array.from({ length: children }, () => classroomIndex),
+);
 
 function requireDestructiveSeedConfirmation() {
   const databaseUrl = process.env.DATABASE_URL || "";
@@ -94,15 +95,15 @@ async function main() {
   const brand = await prisma.brand.create({
     data: {
       tenantId: tenant.id,
-      name: "Kid City USA",
-      slug: "honey-hive-group",
+      name: "Kid City USA Enterprises",
+      slug: "kid-city-usa-enterprises-demo",
       settings: {
         create: {
-          brandName: "The Bee Suite",
+          brandName: "Kid City USA Enterprises",
           primaryColor: "#f6bf35",
           accentColor: "#2fbf8f",
           themeMode: "dark",
-          customDomainPlaceholder: "portal.honeyhive.example",
+          customDomainPlaceholder: "portal.kidcityusa-demo.example",
           legalFooterText: "Compliance-ready documentation support. Not legal or licensing advice.",
         },
       },
@@ -110,13 +111,11 @@ async function main() {
   });
 
   const organization = await prisma.organization.create({
-    data: { tenantId: tenant.id, brandId: brand.id, name: "Kid City USA" },
+    data: { tenantId: tenant.id, brandId: brand.id, name: "Kid City USA Enterprises" },
   });
 
   const centerSeeds = [
-    ["Kid City USA", 40],
-    ["Kid City USA", 34],
-    ["Kid City USA", 32],
+    ["Kid City USA - Demo", 79],
   ] as const;
 
   const centers = [];
@@ -152,9 +151,9 @@ async function main() {
 
   const users = [];
   users.push(await prisma.user.create({ data: { tenantId: tenant.id, organizationId: organization.id, name: "Parker Wells", email: "platform@beesuite.example", role: UserRole.PLATFORM_OWNER } }));
-  users.push(await prisma.user.create({ data: { tenantId: tenant.id, organizationId: organization.id, name: "Jordan Vale", email: "brand@honeyhive.example", role: UserRole.BRAND_ADMIN } }));
+  users.push(await prisma.user.create({ data: { tenantId: tenant.id, organizationId: organization.id, name: "Jordan Vale", email: "brand@kidcityusa-demo.example", role: UserRole.BRAND_ADMIN } }));
   for (const name of ["Riley Stone", "Morgan Lee"]) {
-    users.push(await prisma.user.create({ data: { tenantId: tenant.id, organizationId: organization.id, name, email: `${name.toLowerCase().replace(" ", ".")}@honeyhive.example`, role: UserRole.REGIONAL_MANAGER } }));
+    users.push(await prisma.user.create({ data: { tenantId: tenant.id, organizationId: organization.id, name, email: `${name.toLowerCase().replace(" ", ".")}@kidcityusa-demo.example`, role: UserRole.REGIONAL_MANAGER } }));
   }
 
   for (let i = 0; i < 20; i++) {
@@ -163,7 +162,7 @@ async function main() {
         tenantId: tenant.id,
         organizationId: organization.id,
         name: `Staff ${i + 1} ${lastNames[i % lastNames.length]}`,
-        email: `staff${i + 1}@honeyhive.example`,
+        email: `staff${i + 1}@kidcityusa-demo.example`,
         role: i < 3 ? UserRole.CENTER_DIRECTOR : i < 5 ? UserRole.BILLING_ADMIN : UserRole.TEACHER,
       },
     });
@@ -186,6 +185,7 @@ async function main() {
 
   const families = [];
   const children = [];
+  let childIndex = 0;
   for (let i = 0; i < 50; i++) {
     const last = lastNames[i % lastNames.length];
     const family = await prisma.family.create({
@@ -209,16 +209,18 @@ async function main() {
     });
     families.push(family);
 
-    const childCount = i < 25 ? 2 : 1;
+    const childCount = i < 7 ? 2 : 1;
     for (let j = 0; j < childCount; j++) {
+      const classroomIndex = childClassroomAssignments[childIndex] ?? (childIndex % classrooms.length);
+      const birthYear = [2025, 2023, 2022, 2021, 2018][classroomIndex] ?? 2021;
       const child = await prisma.child.create({
         data: {
           familyId: family.id,
-          classroomId: classrooms[(i + j) % classrooms.length].id,
-          fullName: `${firstNames[(i + j) % firstNames.length]} ${last}`,
-          preferredName: firstNames[(i + j) % firstNames.length],
-          dateOfBirth: new Date(2021 + ((i + j) % 5), (i + j) % 12, 8),
-          ageGroup: classroomNames[(i + j) % classroomNames.length][1],
+          classroomId: classrooms[classroomIndex].id,
+          fullName: `${firstNames[childIndex % firstNames.length]} ${last}`,
+          preferredName: firstNames[childIndex % firstNames.length],
+          dateOfBirth: new Date(birthYear, childIndex % 12, 8),
+          ageGroup: classroomNames[classroomIndex][1],
           enrollmentStatus: "active",
           startDate: new Date("2026-05-01"),
           schedule: { days: ["Mon", "Tue", "Wed", "Thu", "Fri"], start: "08:00", end: "16:30" },
@@ -229,6 +231,7 @@ async function main() {
         },
       });
       children.push(child);
+      childIndex += 1;
     }
   }
 

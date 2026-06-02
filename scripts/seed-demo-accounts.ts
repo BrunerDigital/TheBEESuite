@@ -7,8 +7,14 @@ import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 const DEMO_SOURCE = "bee_suite_demo";
 const DEMO_TENANT_SLUG = "bee-suite-isolated-demo";
-const DEMO_BRAND_SLUG = "brightpath-demo";
-const DEMO_ORG_NAME = "BrightPath Early Learning Group";
+const DEMO_BRAND_SLUG = "kid-city-usa-enterprises-demo";
+const LEGACY_DEMO_BRAND_SLUG = "brightpath-demo";
+const DEMO_BRAND_NAME = "Kid City USA Enterprises";
+const DEMO_ORG_NAME = "Kid City USA Enterprises";
+const LEGACY_DEMO_ORG_NAME = "BrightPath Early Learning Group";
+const DEMO_LOCATION_NAME = "Kid City USA - Demo";
+const DEMO_OWNER_GROUP_SLUG = "kid-city-usa-enterprises-demo";
+const LEGACY_DEMO_OWNER_GROUP_SLUG = "brightpath-corporate-demo";
 const demoPassword = process.env.DEMO_PASSWORD ?? "";
 
 if (!demoPassword) {
@@ -55,16 +61,22 @@ async function upsertTenant() {
 }
 
 async function upsertBrand(tenantId: string) {
-  return prisma.brand.upsert({
-    where: { tenantId_slug: { tenantId, slug: DEMO_BRAND_SLUG } },
-    update: { name: "BrightPath Early Learning" },
-    create: { tenantId, slug: DEMO_BRAND_SLUG, name: "BrightPath Early Learning" },
-  });
+  const existing =
+    (await prisma.brand.findFirst({ where: { tenantId, slug: DEMO_BRAND_SLUG } })) ??
+    (await prisma.brand.findFirst({ where: { tenantId, slug: LEGACY_DEMO_BRAND_SLUG } }));
+
+  const data = { name: DEMO_BRAND_NAME, slug: DEMO_BRAND_SLUG };
+  if (existing) return prisma.brand.update({ where: { id: existing.id }, data });
+  return prisma.brand.create({ data: { tenantId, ...data } });
 }
 
 async function upsertOrganization(tenantId: string, brandId: string) {
   const existing = await prisma.organization.findFirst({
-    where: { tenantId, brandId, name: DEMO_ORG_NAME },
+    where: {
+      tenantId,
+      brandId,
+      OR: [{ name: DEMO_ORG_NAME }, { name: LEGACY_DEMO_ORG_NAME }],
+    },
   });
 
   if (existing) {
@@ -84,39 +96,27 @@ async function upsertOwnerGroup(input: {
   brandId: string;
   organizationId: string;
 }) {
-  return prisma.ownerGroup.upsert({
-    where: { tenantId_slug: { tenantId: input.tenantId, slug: "brightpath-corporate-demo" } },
-    update: {
-      brandId: input.brandId,
-      organizationId: input.organizationId,
-      name: "BrightPath Corporate Demo",
-      ownerType: "corporate",
-      billingEmail: "billing.demo@thebeesuite.io",
-      contactName: "Avery Morgan",
-      phone: "(555) 014-2118",
-      status: "active",
-      customFields: {
-        demoWorkspace: true,
-        paymentPlan: "brand_sponsored_trial",
-      },
+  const existing =
+    (await prisma.ownerGroup.findFirst({ where: { tenantId: input.tenantId, slug: DEMO_OWNER_GROUP_SLUG } })) ??
+    (await prisma.ownerGroup.findFirst({ where: { tenantId: input.tenantId, slug: LEGACY_DEMO_OWNER_GROUP_SLUG } }));
+  const data = {
+    brandId: input.brandId,
+    organizationId: input.organizationId,
+    slug: DEMO_OWNER_GROUP_SLUG,
+    name: "Kid City USA Enterprises Demo",
+    ownerType: "corporate",
+    billingEmail: "billing.demo@thebeesuite.io",
+    contactName: "Kid City USA Demo Team",
+    phone: "(555) 014-2118",
+    status: "active",
+    customFields: {
+      demoWorkspace: true,
+      paymentPlan: "brand_sponsored_trial",
     },
-    create: {
-      tenantId: input.tenantId,
-      brandId: input.brandId,
-      organizationId: input.organizationId,
-      slug: "brightpath-corporate-demo",
-      name: "BrightPath Corporate Demo",
-      ownerType: "corporate",
-      billingEmail: "billing.demo@thebeesuite.io",
-      contactName: "Avery Morgan",
-      phone: "(555) 014-2118",
-      status: "active",
-      customFields: {
-        demoWorkspace: true,
-        paymentPlan: "brand_sponsored_trial",
-      },
-    },
-  });
+  };
+
+  if (existing) return prisma.ownerGroup.update({ where: { id: existing.id }, data });
+  return prisma.ownerGroup.create({ data: { tenantId: input.tenantId, ...data } });
 }
 
 async function upsertCenter(input: {
@@ -845,11 +845,31 @@ async function upsertAttendance(input: {
   }
 }
 
-async function upsertFteReports(centerId: string, submittedById: string, baseline: number) {
+async function upsertFteReports(
+  centerId: string,
+  submittedById: string,
+  baseline: number,
+  ageGroupCounts?: {
+    infants: number;
+    toddlers: number;
+    twos: number;
+    preschool: number;
+    preK: number;
+    schoolAge: number;
+  },
+) {
   for (let week = -3; week <= 0; week += 1) {
     const weekStart = startOfWeek(week);
     const fullTime = baseline + week;
     const partTime = Math.max(4, Math.round(baseline / 3) + (week % 2));
+    const counts = ageGroupCounts ?? {
+      infants: Math.max(4, Math.round(baseline * 0.12)),
+      toddlers: Math.max(5, Math.round(baseline * 0.16)),
+      twos: Math.max(5, Math.round(baseline * 0.17)),
+      preschool: Math.max(7, Math.round(baseline * 0.22)),
+      preK: Math.max(6, Math.round(baseline * 0.2)),
+      schoolAge: Math.max(3, Math.round(baseline * 0.13)),
+    };
     await prisma.fteReport.upsert({
       where: { centerId_weekStart: { centerId, weekStart } },
       update: {
@@ -859,12 +879,12 @@ async function upsertFteReports(centerId: string, submittedById: string, baselin
         fullTimeCount: fullTime,
         partTimeCount: partTime,
         fteCount: Number((fullTime + partTime * 0.55).toFixed(2)),
-        infants: Math.max(4, Math.round(baseline * 0.12)),
-        toddlers: Math.max(5, Math.round(baseline * 0.16)),
-        twos: Math.max(5, Math.round(baseline * 0.17)),
-        preschool: Math.max(7, Math.round(baseline * 0.22)),
-        preK: Math.max(6, Math.round(baseline * 0.2)),
-        schoolAge: Math.max(3, Math.round(baseline * 0.13)),
+        infants: counts.infants,
+        toddlers: counts.toddlers,
+        twos: counts.twos,
+        preschool: counts.preschool,
+        preK: counts.preK,
+        schoolAge: counts.schoolAge,
         notes: week === 0 ? "Demo weekly FTE submitted from director dashboard." : "Demo historical FTE report.",
         status: week === 0 ? "submitted" : "approved",
         source: "demo_seed",
@@ -879,12 +899,12 @@ async function upsertFteReports(centerId: string, submittedById: string, baselin
         fullTimeCount: fullTime,
         partTimeCount: partTime,
         fteCount: Number((fullTime + partTime * 0.55).toFixed(2)),
-        infants: Math.max(4, Math.round(baseline * 0.12)),
-        toddlers: Math.max(5, Math.round(baseline * 0.16)),
-        twos: Math.max(5, Math.round(baseline * 0.17)),
-        preschool: Math.max(7, Math.round(baseline * 0.22)),
-        preK: Math.max(6, Math.round(baseline * 0.2)),
-        schoolAge: Math.max(3, Math.round(baseline * 0.13)),
+        infants: counts.infants,
+        toddlers: counts.toddlers,
+        twos: counts.twos,
+        preschool: counts.preschool,
+        preK: counts.preK,
+        schoolAge: counts.schoolAge,
         notes: week === 0 ? "Demo weekly FTE submitted from director dashboard." : "Demo historical FTE report.",
         status: week === 0 ? "submitted" : "approved",
         source: "demo_seed",
@@ -903,24 +923,24 @@ async function main() {
   await prisma.whiteLabelSettings.upsert({
     where: { brandId: brand.id },
     update: {
-      brandName: "BrightPath Early Learning",
+      brandName: DEMO_BRAND_NAME,
       primaryColor: "#f5b51b",
       accentColor: "#38bdf8",
       themeMode: "dark",
-      emailSenderPlaceholder: "hello@brightpath-demo.test",
-      customDomainPlaceholder: "demo.brightpathlearning.test",
+      emailSenderPlaceholder: "hello@kidcityusa-demo.test",
+      customDomainPlaceholder: "demo.kidcityusa.test",
       legalFooterText: "Demo workspace for The Bee Suite sales and training only.",
       termsUrl: "https://thebeesuite.io/terms",
       privacyUrl: "https://thebeesuite.io/privacy",
     },
     create: {
       brandId: brand.id,
-      brandName: "BrightPath Early Learning",
+      brandName: DEMO_BRAND_NAME,
       primaryColor: "#f5b51b",
       accentColor: "#38bdf8",
       themeMode: "dark",
-      emailSenderPlaceholder: "hello@brightpath-demo.test",
-      customDomainPlaceholder: "demo.brightpathlearning.test",
+      emailSenderPlaceholder: "hello@kidcityusa-demo.test",
+      customDomainPlaceholder: "demo.kidcityusa.test",
       legalFooterText: "Demo workspace for The Bee Suite sales and training only.",
       termsUrl: "https://thebeesuite.io/terms",
       privacyUrl: "https://thebeesuite.io/privacy",
@@ -932,53 +952,32 @@ async function main() {
       organizationId: organization.id,
       ownerGroupId: ownerGroup.id,
       externalId: "demo-center-little-harbor",
-      name: "Little Harbor Early Learning",
-      crmLocationId: "DEMO-LITTLE-HARBOR",
-      address: "1840 Harbor View Lane",
-      city: "Charleston",
-      state: "SC",
-      postalCode: "29403",
-      phone: "(843) 555-0138",
-      email: "littleharbor.demo@thebeesuite.io",
-      licensedCapacity: 74,
-    }),
-    upsertCenter({
-      organizationId: organization.id,
-      ownerGroupId: ownerGroup.id,
-      externalId: "demo-center-maple-grove",
-      name: "Maple Grove Preschool",
-      crmLocationId: "DEMO-MAPLE-GROVE",
-      address: "920 Maple Crossing",
-      city: "Columbus",
-      state: "OH",
-      postalCode: "43215",
-      phone: "(614) 555-0184",
-      email: "maplegrove.demo@thebeesuite.io",
-      licensedCapacity: 96,
-    }),
-    upsertCenter({
-      organizationId: organization.id,
-      ownerGroupId: ownerGroup.id,
-      externalId: "demo-center-sunnyside",
-      name: "Sunnyside Childcare House",
-      crmLocationId: "DEMO-SUNNYSIDE",
-      address: "6117 Desert Bloom Road",
-      city: "Phoenix",
-      state: "AZ",
-      postalCode: "85018",
-      phone: "(602) 555-0192",
-      email: "sunnyside.demo@thebeesuite.io",
-      licensedCapacity: 62,
+      name: DEMO_LOCATION_NAME,
+      crmLocationId: DEMO_LOCATION_NAME,
+      address: "123 Demo Hive Lane",
+      city: "Port Orange",
+      state: "FL",
+      postalCode: "32129",
+      phone: "(386) 555-0138",
+      email: "demo@kidcityusa.com",
+      licensedCapacity: 79,
     }),
   ]);
+  await prisma.center.updateMany({
+    where: {
+      sourceSystem: DEMO_SOURCE,
+      externalId: { notIn: centers.map((center) => center.externalId).filter((id): id is string => Boolean(id)) },
+    },
+    data: { status: "closed" },
+  });
   const primaryCenter = centers[0];
 
   const classroomTemplates = [
-    ["infants", "Bumblebee Babies", "Infant", 8, "1:4"],
-    ["toddlers", "Honeycomb Toddlers", "Toddler", 12, "1:5"],
-    ["twos", "Busy Builders", "Twos", 14, "1:7"],
-    ["preschool", "Sunshine Preschool", "Preschool", 18, "1:10"],
-    ["prek", "Discovery Pre-K", "Pre-K", 20, "1:12"],
+    ["infants", "Infant Hive", "Infant", 10, "1:4"],
+    ["toddlers", "Toddler Hive", "Toddler", 15, "1:6"],
+    ["threes", "3's Hive", "3's", 14, "1:9"],
+    ["prek", "Pre-K Hive", "Pre-K", 18, "1:12"],
+    ["afterschool", "Afterschool Hive", "Afterschool", 22, "1:18"],
   ] as const;
 
   const classroomsByCenter = new Map<string, Awaited<ReturnType<typeof upsertClassroom>>[]>();
@@ -1062,9 +1061,10 @@ async function main() {
 
   const teacherInputs = [
     ["Avery Johnson", "avery.teacher.demo@thebeesuite.io", "Lead Infant Teacher", primaryClassrooms[0]?.id],
-    ["Mia Patel", "mia.teacher.demo@thebeesuite.io", "Toddler Teacher", primaryClassrooms[1]?.id],
-    ["Camila Brooks", "camila.teacher.demo@thebeesuite.io", "Preschool Teacher", primaryClassrooms[3]?.id],
-    ["Noah Bennett", "noah.teacher.demo@thebeesuite.io", "Pre-K Teacher", primaryClassrooms[4]?.id],
+    ["Mia Patel", "mia.teacher.demo@thebeesuite.io", "Lead Toddler Teacher", primaryClassrooms[1]?.id],
+    ["Camila Brooks", "camila.teacher.demo@thebeesuite.io", "3's Teacher", primaryClassrooms[2]?.id],
+    ["Noah Bennett", "noah.teacher.demo@thebeesuite.io", "Pre-K Teacher", primaryClassrooms[3]?.id],
+    ["Jordan Carter", "jordan.teacher.demo@thebeesuite.io", "Afterschool Teacher", primaryClassrooms[4]?.id],
   ] as const;
   const teacherUsers = [];
   for (let index = 0; index < teacherInputs.length; index += 1) {
@@ -1104,20 +1104,109 @@ async function main() {
     }
   }
 
-  const familyInputs = [
-    ["rivera", "Rivera Family", "212 Oak Blossom Drive, Charleston, SC", "maria.rivera.demo@example.com", "Lena Rivera", "Mason Rivera", "Infant", fixedDate("2025-02-18"), true],
-    ["chen", "Chen Family", "48 Palmetto Row, Charleston, SC", "grace.chen.demo@example.com", "Grace Chen", "Eli Chen", "Toddler", fixedDate("2023-09-04"), true],
-    ["williams", "Williams Family", "870 Magnolia Street, Charleston, SC", "noah.williams.demo@example.com", "Noah Williams", "Ava Williams", "Twos", fixedDate("2022-11-19"), false],
-    ["thompson", "Thompson Family", "141 Seaside Court, Charleston, SC", "lauren.thompson.demo@example.com", "Lauren Thompson", "Sophie Thompson", "Preschool", fixedDate("2021-08-12"), true],
-    ["nguyen", "Nguyen Family", "332 King Street, Charleston, SC", "anh.nguyen.demo@example.com", "Anh Nguyen", "Lucas Nguyen", "Pre-K", fixedDate("2020-05-26"), true],
-    ["parker", "Parker Family", "76 Marsh Landing, Charleston, SC", "olivia.parker.demo@example.com", "Olivia Parker", "Mila Parker", "Preschool", fixedDate("2021-03-14"), false],
-    ["robinson", "Robinson Family", "505 Harbor Gate, Charleston, SC", "jamal.robinson.demo@example.com", "Jamal Robinson", "Caleb Robinson", "Toddler", fixedDate("2023-01-22"), true],
-    ["martinez", "Martinez Family", "18 Gardenia Way, Charleston, SC", "sofia.martinez.demo@example.com", "Sofia Martinez", "Isabella Martinez", "Pre-K", fixedDate("2020-10-03"), true],
+  type DemoFamilyInput = {
+    key: string;
+    familyName: string;
+    address: string;
+    billingEmail: string;
+    guardianName: string;
+    childName: string;
+    ageGroup: string;
+    dateOfBirth: Date;
+    permission: boolean;
+  };
+
+  const demoRosterTargets = [
+    { ageGroup: "Infant", children: 8 },
+    { ageGroup: "Toddler", children: 12 },
+    { ageGroup: "3's", children: 11 },
+    { ageGroup: "Pre-K", children: 14 },
+    { ageGroup: "Afterschool", children: 12 },
   ] as const;
+  const legacyFamilySeeds = [
+    ["rivera", "Rivera", "212 Oak Blossom Drive, Port Orange, FL", "maria.rivera.demo@example.com", "Lena Rivera"],
+    ["chen", "Chen", "48 Palmetto Row, Port Orange, FL", "grace.chen.demo@example.com", "Grace Chen"],
+    ["williams", "Williams", "870 Magnolia Street, Port Orange, FL", "noah.williams.demo@example.com", "Noah Williams"],
+    ["thompson", "Thompson", "141 Seaside Court, Port Orange, FL", "lauren.thompson.demo@example.com", "Lauren Thompson"],
+    ["nguyen", "Nguyen", "332 Demo Center Way, Port Orange, FL", "anh.nguyen.demo@example.com", "Anh Nguyen"],
+    ["parker", "Parker", "76 Marsh Landing, Port Orange, FL", "olivia.parker.demo@example.com", "Olivia Parker"],
+    ["robinson", "Robinson", "505 Harbor Gate, Port Orange, FL", "jamal.robinson.demo@example.com", "Jamal Robinson"],
+    ["martinez", "Martinez", "18 Gardenia Way, Port Orange, FL", "sofia.martinez.demo@example.com", "Sofia Martinez"],
+  ] as const;
+  const demoChildFirstNames = [
+    "Ari", "Sofia", "Mia", "Eli", "Theo", "Amelie", "Noah", "Lena", "Milo", "Ivy",
+    "Ezra", "Nora", "Kai", "Luca", "Zoe", "Finn", "Ava", "Leo", "Ruby", "Jude",
+    "Cora", "Owen", "Maya", "Remy", "Isla", "Layla", "Mateo", "Harper", "Miles", "Ella",
+    "Jack", "Aria", "Henry", "Nora", "Logan", "Emery", "Caleb", "Violet", "Wyatt", "Lila",
+    "Asher", "Chloe", "Mason", "Hazel", "Ethan", "Lucy", "Samuel", "Grace", "Daniel", "Stella",
+    "Sebastian", "Naomi", "Julian", "Piper", "Hudson", "Quinn", "Evelyn",
+  ];
+  const demoLastNames = [
+    "Baker", "Harris", "Cooper", "Bell", "Foster", "Sullivan", "Reed", "Kelly", "Watson", "Price",
+    "Evans", "Diaz", "Carter", "Brooks", "Allen", "Murphy", "Turner", "Collins", "Stewart", "Morris",
+    "Bailey", "Sanders", "Russell", "Powell", "Perry", "Long", "Bryant", "Coleman", "Jenkins", "Barnes",
+    "Fisher", "Henderson", "Hamilton", "Woods", "West", "Stone", "Hart", "Ford", "Gibson", "Ellis",
+  ];
+  const demoGuardianFirstNames = [
+    "Jordan", "Taylor", "Morgan", "Riley", "Casey", "Avery", "Peyton", "Reese", "Jamie", "Cameron",
+  ];
+
+  function demoDateOfBirth(ageGroup: string, index: number) {
+    const month = String((index % 12) + 1).padStart(2, "0");
+    const day = String(((index * 3) % 20) + 5).padStart(2, "0");
+    if (ageGroup === "Infant") return fixedDate(`2025-${month}-${day}`);
+    if (ageGroup === "Toddler") return fixedDate(`2023-${month}-${day}`);
+    if (ageGroup === "3's") return fixedDate(`2022-${month}-${day}`);
+    if (ageGroup === "Pre-K") return fixedDate(`2021-${month}-${day}`);
+    return fixedDate(`2018-${month}-${day}`);
+  }
+
+  function familySeedAt(index: number) {
+    const legacy = legacyFamilySeeds[index];
+    if (legacy) {
+      const [key, lastName, address, billingEmail, guardianName] = legacy;
+      return { key, lastName, familyName: `${lastName} Family`, address, billingEmail, guardianName };
+    }
+    const lastName = demoLastNames[index % demoLastNames.length];
+    return {
+      key: `${lastName.toLowerCase()}-${String(index + 1).padStart(2, "0")}`,
+      lastName,
+      familyName: `${lastName} Family`,
+      address: `${100 + index} Demo Hive Lane, Port Orange, FL`,
+      billingEmail: `${lastName.toLowerCase()}.${index + 1}.demo@example.com`,
+      guardianName: `${demoGuardianFirstNames[index % demoGuardianFirstNames.length]} ${lastName}`,
+    };
+  }
+
+  function buildDemoFamilyInputs(): DemoFamilyInput[] {
+    const inputs: DemoFamilyInput[] = [];
+    let index = 0;
+    for (const target of demoRosterTargets) {
+      for (let rosterIndex = 0; rosterIndex < target.children; rosterIndex += 1) {
+        const seed = familySeedAt(index);
+        const childFirstName = demoChildFirstNames[index % demoChildFirstNames.length];
+        inputs.push({
+          key: seed.key,
+          familyName: seed.familyName,
+          address: seed.address,
+          billingEmail: seed.billingEmail,
+          guardianName: seed.guardianName,
+          childName: `${childFirstName} ${seed.lastName}`,
+          ageGroup: target.ageGroup,
+          dateOfBirth: demoDateOfBirth(target.ageGroup, index),
+          permission: index % 9 !== 0,
+        });
+        index += 1;
+      }
+    }
+    return inputs;
+  }
+
+  const familyInputs = buildDemoFamilyInputs();
 
   const createdChildren: Array<{ childId: string; classroomId: string; guardianId: string; childName: string }> = [];
   for (let index = 0; index < familyInputs.length; index += 1) {
-    const [key, familyName, address, billingEmail, guardianName, childName, ageGroup, dob, permission] = familyInputs[index];
+    const { key, familyName, address, billingEmail, guardianName, childName, ageGroup, dateOfBirth, permission } = familyInputs[index];
     const classroom = primaryClassrooms.find((item) => item.ageGroup === ageGroup) ?? primaryClassrooms[0];
     const family = await upsertFamily(primaryCenter.id, {
       externalId: `demo-family-${key}`,
@@ -1131,7 +1220,7 @@ async function main() {
       externalId: `demo-guardian-${key}-primary`,
       fullName: guardianName,
       email: billingEmail,
-      phone: `(843) 555-02${String(index).padStart(2, "0")}`,
+      phone: `(386) 555-1${String(index).padStart(3, "0")}`,
       employer: index % 2 === 0 ? "Harbor Health Partners" : "Coastal Design Studio",
       relation: "Parent / Guardian",
       isBillingContact: true,
@@ -1141,7 +1230,7 @@ async function main() {
       externalId: `demo-guardian-${key}-secondary`,
       fullName: `${childName.split(" ")[0]} ${familyName.replace(" Family", "")}`,
       email: `secondary.${key}.demo@example.com`,
-      phone: `(843) 555-03${String(index).padStart(2, "0")}`,
+      phone: `(386) 555-2${String(index).padStart(3, "0")}`,
       employer: "Self-employed",
       relation: "Parent / Guardian",
       isBillingContact: false,
@@ -1150,20 +1239,20 @@ async function main() {
     await prisma.authorizedPickup.deleteMany({ where: { familyId: family.id } });
     await prisma.authorizedPickup.createMany({
       data: [
-        { familyId: family.id, fullName: `${familyName.replace(" Family", "")} Grandparent`, phone: `(843) 555-04${String(index).padStart(2, "0")}`, relation: "Grandparent", verificationNotes: "Photo ID required", sourceSystem: DEMO_SOURCE, externalId: `pickup-${key}` },
+        { familyId: family.id, fullName: `${familyName.replace(" Family", "")} Grandparent`, phone: `(386) 555-3${String(index).padStart(3, "0")}`, relation: "Grandparent", verificationNotes: "Photo ID required", sourceSystem: DEMO_SOURCE, externalId: `pickup-${key}` },
       ],
     });
     await prisma.emergencyContact.deleteMany({ where: { familyId: family.id } });
     await prisma.emergencyContact.createMany({
       data: [
-        { familyId: family.id, fullName: `${familyName.replace(" Family", "")} Emergency Contact`, phone: `(843) 555-05${String(index).padStart(2, "0")}`, relation: "Aunt/Uncle", sourceSystem: DEMO_SOURCE, externalId: `emergency-${key}`, customFields: { demoWorkspace: true } },
+        { familyId: family.id, fullName: `${familyName.replace(" Family", "")} Emergency Contact`, phone: `(386) 555-4${String(index).padStart(3, "0")}`, relation: "Aunt/Uncle", sourceSystem: DEMO_SOURCE, externalId: `emergency-${key}`, customFields: { demoWorkspace: true } },
       ],
     });
     const child = await upsertChild(family.id, classroom.id, {
       externalId: `demo-child-${key}`,
       fullName: childName,
       preferredName: childName.split(" ")[0],
-      dateOfBirth: dob,
+      dateOfBirth,
       ageGroup,
       startDate: dateAt(-45 - index * 7),
       photoVideoPermission: permission,
@@ -1235,15 +1324,15 @@ async function main() {
   const leadNames = [
     ["Baker", "Emma", "Baker", "Oliver Baker", "Infant", "Daycare"],
     ["Harris", "Daniel", "Harris", "Amelia Harris", "Toddler", "Daycare"],
-    ["Cooper", "Nina", "Cooper", "Henry Cooper", "Preschool", "Preschool"],
+    ["Cooper", "Nina", "Cooper", "Henry Cooper", "3's", "Preschool"],
     ["Bell", "Rachel", "Bell", "Ella Bell", "Pre-K", "Preschool"],
-    ["Foster", "Chris", "Foster", "Jack Foster", "Twos", "Daycare"],
-    ["Sullivan", "Paige", "Sullivan", "Liam Sullivan", "School Age", "Before & After School Care"],
-    ["Reed", "Morgan", "Reed", "Aria Reed", "Preschool", "Preschool"],
+    ["Foster", "Chris", "Foster", "Jack Foster", "3's", "Daycare"],
+    ["Sullivan", "Paige", "Sullivan", "Liam Sullivan", "Afterschool", "Before & After School Care"],
+    ["Reed", "Morgan", "Reed", "Aria Reed", "3's", "Preschool"],
     ["Kelly", "Tara", "Kelly", "Leo Kelly", "Toddler", "Daycare"],
     ["Watson", "Miles", "Watson", "Nora Watson", "Pre-K", "Preschool"],
     ["Price", "Dana", "Price", "Theo Price", "Infant", "Daycare"],
-    ["Evans", "Jules", "Evans", "Ruby Evans", "Twos", "Daycare"],
+    ["Evans", "Jules", "Evans", "Ruby Evans", "3's", "Daycare"],
   ] as const;
 
   for (let index = 0; index < leadNames.length; index += 1) {
@@ -1265,8 +1354,9 @@ async function main() {
     });
   }
 
+  const demoFteAgeGroupCounts = { infants: 8, toddlers: 12, twos: 0, preschool: 11, preK: 14, schoolAge: 12 };
   for (let centerIndex = 0; centerIndex < centers.length; centerIndex += 1) {
-    await upsertFteReports(centers[centerIndex].id, centerIndex === 0 ? schoolUser.id : execUser.id, [52, 71, 43][centerIndex]);
+    await upsertFteReports(centers[centerIndex].id, centerIndex === 0 ? schoolUser.id : execUser.id, [43][centerIndex] ?? 43, demoFteAgeGroupCounts);
     const existingAnnouncement = await prisma.announcement.findFirst({
       where: { centerId: centers[centerIndex].id, title: "Demo Family Newsletter" },
     });
@@ -1348,7 +1438,7 @@ async function main() {
       {
         userId: schoolUser.id,
         title: "Demo new inquiry",
-        body: "Emma Baker asked about infant availability at Little Harbor.",
+        body: `Emma Baker asked about infant availability at ${DEMO_LOCATION_NAME}.`,
         type: "lead",
         priority: "high",
       },
@@ -1362,7 +1452,7 @@ async function main() {
       {
         userId: execUser.id,
         title: "Demo executive snapshot",
-        body: "Three centers have current FTE data, active enrollment pipelines, and open invoices.",
+        body: `${DEMO_LOCATION_NAME} has current FTE data, active enrollment pipelines, and open invoices.`,
         type: "executive",
         priority: "normal",
       },
@@ -1381,6 +1471,8 @@ async function main() {
         demoWorkspace: true,
         centers: centers.length,
         families: familyInputs.length,
+        children: createdChildren.length,
+        licensedCapacity: primaryCenter.licensedCapacity,
         leads: leadNames.length,
         schoolLogin: "demoschool",
         executiveLogin: "demoexec",

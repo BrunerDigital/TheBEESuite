@@ -1797,6 +1797,14 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
 export type StaffPageData = {
   centers: Array<{ id: string; name: string }>;
   classrooms: Array<{ id: string; centerId: string; name: string; ageGroup: string }>;
+  schedules: Array<{
+    id: string;
+    startsAt: Date | string;
+    endsAt: Date | string;
+    status: string;
+    staff: { id: string; user: { name: string } };
+    center: { name: string; crmLocationId: string | null };
+  }>;
   staff: Array<{
     id: string;
     centerId: string;
@@ -1871,7 +1879,42 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} />
+      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} schedules={data.schedules} />
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Upcoming Staff Schedule</CardTitle>
+          <CardDescription>Published teacher coverage for the visible school scope</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Teacher</TableHead>
+                <TableHead>Center</TableHead>
+                <TableHead>Start</TableHead>
+                <TableHead>End</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.schedules.map((schedule) => (
+                <TableRow key={schedule.id}>
+                  <TableCell className="font-medium">{schedule.staff.user.name}</TableCell>
+                  <TableCell>{schedule.center.crmLocationId ?? schedule.center.name}</TableCell>
+                  <TableCell>{formatDateTime(schedule.startsAt)}</TableCell>
+                  <TableCell>{formatDateTime(schedule.endsAt)}</TableCell>
+                  <TableCell><Badge variant="outline">{schedule.status}</Badge></TableCell>
+                </TableRow>
+              ))}
+              {!data.schedules.length ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-muted-foreground">No upcoming staff schedules are visible for this scope.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -16,6 +16,7 @@ const entityOptions = [
   ["child", "Child"],
   ["classroom", "Classroom"],
   ["staff", "Teacher profile"],
+  ["staffSchedule", "Teacher schedule"],
   ["announcement", "Announcement"],
   ["campaign", "Campaign"],
   ["automation", "Automation"],

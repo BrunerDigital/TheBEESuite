@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CheckCircle2, Save, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Save, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,11 +22,19 @@ type TeacherRecord = {
   user: { name: string; email: string; isActive: boolean };
   classroom: { id: string; name: string } | null;
 };
+type ScheduleRecord = {
+  id: string;
+  startsAt: Date | string;
+  endsAt: Date | string;
+  status: string;
+  staff: { id: string; user: { name: string } };
+};
 
 type Props = {
   centers: CenterOption[];
   classrooms: ClassroomOption[];
   staff: TeacherRecord[];
+  schedules: ScheduleRecord[];
 };
 
 const backgroundStatuses = [
@@ -44,7 +52,14 @@ const certificationStatuses = [
   ["waived", "Waived"],
 ] as const;
 
-export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
+function toDateTimeLocal(value: Date | string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+export function StaffManagementPanel({ centers, classrooms, staff, schedules }: Props) {
   const router = useRouter();
   const [selectedStaffId, setSelectedStaffId] = useState("new");
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
@@ -58,6 +73,11 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
   const [certName, setCertName] = useState("");
   const [certStatus, setCertStatus] = useState("active");
   const [certExpiresAt, setCertExpiresAt] = useState("");
+  const [scheduleId, setScheduleId] = useState("new");
+  const [scheduleStaffId, setScheduleStaffId] = useState(staff[0]?.id ?? "");
+  const [scheduleStartsAt, setScheduleStartsAt] = useState("");
+  const [scheduleEndsAt, setScheduleEndsAt] = useState("");
+  const [scheduleStatus, setScheduleStatus] = useState("scheduled");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -98,6 +118,22 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
     if (classroomId !== "none" && !classrooms.some((classroom) => classroom.centerId === value && classroom.id === classroomId)) {
       setClassroomId("none");
     }
+  }
+
+  function loadSchedule(value: string) {
+    setScheduleId(value);
+    const schedule = schedules.find((item) => item.id === value);
+    if (!schedule) {
+      setScheduleStaffId(staff[0]?.id ?? "");
+      setScheduleStartsAt("");
+      setScheduleEndsAt("");
+      setScheduleStatus("scheduled");
+      return;
+    }
+    setScheduleStaffId(schedule.staff.id);
+    setScheduleStartsAt(toDateTimeLocal(schedule.startsAt));
+    setScheduleEndsAt(toDateTimeLocal(schedule.endsAt));
+    setScheduleStatus(schedule.status || "scheduled");
   }
 
   function saveTeacher(event: FormEvent<HTMLFormElement>) {
@@ -179,6 +215,61 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
       setStatusMessage(`Teacher ${json?.mode ?? "deactivated"}.`);
       setSelectedStaffId("new");
       resetTeacherForm();
+      router.refresh();
+    });
+  }
+
+  function saveSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "staffSchedule",
+          id: scheduleId === "new" ? undefined : scheduleId,
+          staffId: scheduleStaffId,
+          startsAt: scheduleStartsAt,
+          endsAt: scheduleEndsAt,
+          status: scheduleStatus,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Staff schedule could not be saved.");
+        return;
+      }
+      setStatusMessage(`Staff schedule ${json?.mode ?? "saved"}.`);
+      setScheduleId("new");
+      setScheduleStartsAt("");
+      setScheduleEndsAt("");
+      router.refresh();
+    });
+  }
+
+  function deleteSchedule() {
+    if (scheduleId === "new") return;
+    const confirmed = window.confirm("Delete this staff schedule entry?");
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "staffSchedule", id: scheduleId }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Staff schedule could not be deleted.");
+        return;
+      }
+      setStatusMessage(`Staff schedule ${json?.mode ?? "deleted"}.`);
+      setScheduleId("new");
+      setScheduleStartsAt("");
+      setScheduleEndsAt("");
       router.refresh();
     });
   }
@@ -332,6 +423,77 @@ export function StaffManagementPanel({ centers, classrooms, staff }: Props) {
               <Save data-icon="inline-start" />
               Save certification
             </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel lg:col-span-2">
+        <CardHeader>
+          <CardTitle>
+            <CalendarClock data-icon="inline-start" />
+            Staff Schedule
+          </CardTitle>
+          <CardDescription>Create, edit, or remove upcoming teacher coverage for this school.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-3 md:grid-cols-2 lg:grid-cols-5" onSubmit={saveSchedule}>
+            <div className="space-y-1">
+              <Label>Schedule row</Label>
+              <Select value={scheduleId} onValueChange={(value) => value && loadSchedule(value)}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New schedule</SelectItem>
+                  {schedules.map((schedule) => (
+                    <SelectItem key={schedule.id} value={schedule.id}>
+                      {schedule.staff.user.name} · {new Date(schedule.startsAt).toLocaleDateString()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Teacher</Label>
+              <Select value={scheduleStaffId} onValueChange={(value) => value && setScheduleStaffId(value)}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
+                <SelectContent>
+                  {staff.map((teacher) => (
+                    <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Starts</Label>
+              <Input value={scheduleStartsAt} onChange={(event) => setScheduleStartsAt(event.target.value)} type="datetime-local" required />
+            </div>
+            <div className="space-y-1">
+              <Label>Ends</Label>
+              <Input value={scheduleEndsAt} onChange={(event) => setScheduleEndsAt(event.target.value)} type="datetime-local" required />
+            </div>
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={scheduleStatus} onValueChange={(value) => value && setScheduleStatus(value)}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="called_out">Called out</SelectItem>
+                  <SelectItem value="covered">Covered</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-5">
+              <Button disabled={isPending || !scheduleStaffId}>
+                <Save data-icon="inline-start" />
+                Save schedule
+              </Button>
+              {scheduleId !== "new" ? (
+                <Button type="button" variant="outline" disabled={isPending} onClick={deleteSchedule}>
+                  <Trash2 data-icon="inline-start" />
+                  Delete schedule
+                </Button>
+              ) : null}
+            </div>
           </form>
         </CardContent>
       </Card>

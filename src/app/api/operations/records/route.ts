@@ -493,6 +493,34 @@ export async function POST(request: NextRequest) {
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Certification name is required." }, { status: 400 });
     result = id ? await prisma.certification.update({ where: { id }, data }) : await prisma.certification.create({ data });
+  } else if (entity === "staffSchedule") {
+    const staffId = clean(body.staffId);
+    if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
+    const staff = await prisma.staffProfile.findUnique({ where: { id: staffId }, select: { centerId: true } });
+    if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
+    if (!canAccessCenter(user, staff.centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
+    centerId = staff.centerId;
+    if (id) {
+      const existing = await prisma.staffSchedule.findUnique({ where: { id }, select: { staffId: true, centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Staff schedule", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+      if (existing?.staffId !== staffId) {
+        return NextResponse.json({ ok: false, error: "Schedule is not linked to this teacher profile." }, { status: 403 });
+      }
+    }
+    const startsAt = parseDate(body.startsAt);
+    const endsAt = parseDate(body.endsAt);
+    if (!startsAt || !endsAt || endsAt <= startsAt) {
+      return NextResponse.json({ ok: false, error: "Valid schedule start and end times are required." }, { status: 400 });
+    }
+    const data = {
+      staffId,
+      centerId,
+      startsAt,
+      endsAt,
+      status: clean(body.status) || "scheduled",
+    };
+    result = id ? await prisma.staffSchedule.update({ where: { id }, data }) : await prisma.staffSchedule.create({ data });
   } else if (entity === "product") {
     const data = {
       name: clean(body.name),
@@ -592,6 +620,27 @@ export async function DELETE(request: NextRequest) {
       resource: "certification",
       resourceId: certification.id,
       metadata: { mode: "deleted", staffId: certification.staffId },
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result });
+  }
+
+  if (entity === "staffSchedule") {
+    const schedule = await prisma.staffSchedule.findUnique({
+      where: { id },
+      select: { id: true, staffId: true, centerId: true },
+    });
+    if (!schedule) return NextResponse.json({ ok: false, error: "Staff schedule not found." }, { status: 404 });
+    if (!canAccessCenter(user, schedule.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this schedule." }, { status: 403 });
+    }
+
+    const result = await prisma.staffSchedule.delete({ where: { id } });
+    await writeAuditLog(user, {
+      centerId: schedule.centerId,
+      action: "operations.staffSchedule.deleted",
+      resource: "staffSchedule",
+      resourceId: schedule.id,
+      metadata: { mode: "deleted", staffId: schedule.staffId },
     });
     return NextResponse.json({ ok: true, entity, mode: "deleted", record: result });
   }

@@ -1816,6 +1816,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       take: 300,
       select: { id: true, centerId: true, name: true, ageGroup: true },
     });
+    const schedules = await prisma.staffSchedule.findMany({
+      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay } },
+      orderBy: { startsAt: "asc" },
+      take: 120,
+      include: {
+        staff: { select: { id: true, user: { select: { name: true } } } },
+        center: { select: { name: true, crmLocationId: true } },
+      },
+    });
     const sortedStaff = staff.sort((left, right) => {
       const leftCenter = left.center.crmLocationId ?? left.center.name;
       const rightCenter = right.center.crmLocationId ?? right.center.name;
@@ -1831,6 +1840,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         data={{
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           classrooms,
+          schedules,
           staff: sortedStaff,
           stats: { total, activeUsers, expiringCerts, backgroundPending },
         }}

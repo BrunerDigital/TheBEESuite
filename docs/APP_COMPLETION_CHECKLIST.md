@@ -323,7 +323,7 @@ Status legend:
 - [ ] Add staff time clock.
 - [ ] Add PTO/unavailability.
 - [ ] Add ratio engine by age group/state rules.
-- [ ] Add staff schedule/calendar views.
+- [x] Add staff schedule/calendar views.
 
 ## Calendar And Scheduling
 
@@ -333,7 +333,7 @@ Status legend:
 - [ ] Build full calendar UI with filters by center/classroom/user.
 - [ ] Add Google Calendar real sync.
 - [ ] Add recurring events/closures/holiday management.
-- [ ] Add staff schedule publishing.
+- [x] Add staff schedule publishing.
 - [ ] Add parent event visibility controls.
 
 ## Marketing, Campaigns, Reputation, And Reviews

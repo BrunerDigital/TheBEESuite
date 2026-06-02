@@ -130,12 +130,12 @@ export function KioskCheckIn({ center }: Props) {
           signatureName,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; children?: Array<{ fullName: string }> } | null;
+      const json = await response.json().catch(() => null) as { error?: string; latePickup?: boolean; children?: Array<{ fullName: string }> } | null;
       if (!response.ok || !json) {
         setError(json?.error || "Check-in/out could not be completed.");
         return;
       }
-      reset(`${json.children?.map((child) => child.fullName).join(", ") || "Children"} ${type === "check_in" ? "checked in" : "checked out"}.`);
+      reset(`${json.children?.map((child) => child.fullName).join(", ") || "Children"} ${type === "check_in" ? "checked in" : "checked out"}.${json.latePickup ? " Late pickup flagged for director review." : ""}`);
     });
   }
 

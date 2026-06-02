@@ -205,7 +205,7 @@ Status legend:
 - [x] Complete lobby tablet UX with idle/reset mode and large touch targets.
 - [x] Add signature capture.
 - [ ] Add QR/PIN options.
-- [ ] Add late pickup flag workflow.
+- [x] Add late pickup flag workflow.
 - [ ] Add staff kiosk mode.
 - [ ] Add parent authorization warnings during pickup.
 - [ ] Add end-of-day attendance reconciliation report.

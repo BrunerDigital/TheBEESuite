@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { latestLogMap, normalizeCheckAction, readCenterTimeZone, startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
+import { isLatePickup, latestLogMap, normalizeCheckAction, readCenterTimeZone, readLatePickupCutoff, startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizePin, verifyGuardianPin } from "@/lib/kiosk";
@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
 
   const occurredAt = new Date();
   const timeZone = readCenterTimeZone(center.customFields);
+  const latePickupCutoff = readLatePickupCutoff(center.customFields);
+  const latePickup = type === "check_out" && isLatePickup(occurredAt, timeZone, latePickupCutoff);
   const latestLogs = await prisma.checkInOutLog.findMany({
     where: {
       childId: { in: allowedChildren.map((child) => child.id) },
@@ -136,6 +138,9 @@ export async function POST(request: NextRequest) {
             signatureMethod: "typed",
             signatureName,
             signatureCapturedAt: occurredAt.toISOString(),
+            latePickup,
+            latePickupCutoff,
+            timeZone,
           },
         },
       }));
@@ -156,6 +161,8 @@ export async function POST(request: NextRequest) {
       count: logs.length,
       signatureAccepted: true,
       signatureMethod: "typed",
+      latePickup,
+      latePickupCutoff,
       kioskDate: startOfServiceDay(occurredAt, timeZone).toISOString(),
       timeZone,
     },
@@ -166,6 +173,7 @@ export async function POST(request: NextRequest) {
     center: { id: center.id, name: center.crmLocationId ?? center.name },
     action: type,
     occurredAt,
+    latePickup,
     children: allowedChildren.map((child) => ({ id: child.id, fullName: child.fullName })),
     logs,
   }, { status: 201 });

@@ -86,3 +86,16 @@ export function readCenterTimeZone(customFields: unknown) {
   const value = (customFields as Record<string, unknown>).timeZone ?? (customFields as Record<string, unknown>).timezone;
   return typeof value === "string" && value.trim() ? value.trim() : "America/New_York";
 }
+
+export function readLatePickupCutoff(customFields: unknown) {
+  if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return "18:00";
+  const value = (customFields as Record<string, unknown>).latePickupCutoff;
+  return typeof value === "string" && /^\d{2}:\d{2}$/.test(value) ? value : "18:00";
+}
+
+export function isLatePickup(date: Date, timeZone: string, cutoff = "18:00") {
+  const [cutoffHour, cutoffMinute] = cutoff.split(":").map((part) => Number(part));
+  if (!Number.isFinite(cutoffHour) || !Number.isFinite(cutoffMinute)) return false;
+  const parts = datePartsInTimeZone(date, timeZone);
+  return parts.hour * 60 + parts.minute > cutoffHour * 60 + cutoffMinute;
+}

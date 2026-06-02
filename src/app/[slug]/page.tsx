@@ -10,6 +10,7 @@ import {
   AutomationsPage,
   BillingInvoicesPage,
   BillingSettingsPage,
+  CalendarPage,
   CampaignsPage,
   CenterDashboardPage,
   ChildProfilesPage,
@@ -247,6 +248,17 @@ function buildFteTrendData(
   };
 }
 
+function nextBirthdayInRange(dateOfBirth: Date | null, today: Date, daysAhead = 30) {
+  if (!dateOfBirth) return null;
+  const birthday = new Date(Date.UTC(today.getUTCFullYear(), dateOfBirth.getUTCMonth(), dateOfBirth.getUTCDate(), 12));
+  const start = new Date(today);
+  start.setHours(0, 0, 0, 0);
+  if (birthday < start) birthday.setUTCFullYear(birthday.getUTCFullYear() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + daysAhead);
+  return birthday <= end ? birthday : null;
+}
+
 async function renderLivePage(slug: string, user: CurrentUser) {
   const tenantWide = canAccessAllCenters(user);
   const allCenters = tenantWide;
@@ -431,6 +443,151 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     ]);
 
     return <ToursPage data={{ tours, stats: { upcoming, today: todayTours, completed } }} />;
+  }
+
+  if (slug === "calendar") {
+    const sixtyDays = new Date(today);
+    sixtyDays.setDate(today.getDate() + 60);
+    const centerById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const centerName = (centerId?: string | null) => centerId ? centerById.get(centerId) ?? "Visible center" : "No center";
+    const [calendarTours, staffSchedules, invoices, expiringDocs, enrollmentStarts, birthdayChildren] = await Promise.all([
+      prisma.tour.findMany({
+        where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay, lte: sixtyDays } },
+        orderBy: { startsAt: "asc" },
+        take: 150,
+        include: { lead: { select: { familyName: true, childName: true } }, center: { select: { id: true, name: true, crmLocationId: true } } },
+      }),
+      prisma.staffSchedule.findMany({
+        where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay, lte: sixtyDays } },
+        orderBy: { startsAt: "asc" },
+        take: 150,
+        include: { staff: { select: { user: { select: { name: true } } } }, center: { select: { id: true, name: true, crmLocationId: true } } },
+      }),
+      prisma.invoice.findMany({
+        where: { dueDate: { gte: startOfDay, lte: sixtyDays }, billingAccount: { family: { is: { centerId: scopedCenterIds } } } },
+        orderBy: { dueDate: "asc" },
+        take: 150,
+        include: { billingAccount: { select: { family: { select: { name: true, centerId: true } } } } },
+      }),
+      prisma.document.findMany({
+        where: {
+          expiresAt: { gte: startOfDay, lte: sixtyDays },
+          OR: [
+            { family: { is: { centerId: scopedCenterIds } } },
+            { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
+          ],
+        },
+        orderBy: { expiresAt: "asc" },
+        take: 150,
+        include: {
+          family: { select: { name: true, centerId: true } },
+          child: { select: { fullName: true, family: { select: { centerId: true } }, classroom: { select: { name: true } } } },
+        },
+      }),
+      prisma.child.findMany({
+        where: { startDate: { gte: startOfDay, lte: sixtyDays }, family: { is: { centerId: scopedCenterIds } } },
+        orderBy: { startDate: "asc" },
+        take: 150,
+        include: { family: { select: { name: true, centerId: true } }, classroom: { select: { name: true } } },
+      }),
+      prisma.child.findMany({
+        where: { family: { is: { centerId: scopedCenterIds } } },
+        orderBy: { fullName: "asc" },
+        take: 400,
+        include: { family: { select: { name: true, centerId: true } }, classroom: { select: { name: true } } },
+      }),
+    ]);
+
+    const events = [
+      ...calendarTours.map((tour) => ({
+        id: `tour:${tour.id}`,
+        type: "tour",
+        title: `${tour.lead?.familyName ?? "Family"} tour`,
+        startsAt: tour.startsAt.toISOString(),
+        endsAt: null,
+        centerId: tour.centerId,
+        centerName: tour.center.crmLocationId ?? tour.center.name,
+        classroomName: null,
+        status: tour.status,
+        detail: tour.lead?.childName ? `Child: ${tour.lead.childName}` : "Enrollment tour",
+      })),
+      ...staffSchedules.map((schedule) => ({
+        id: `staff:${schedule.id}`,
+        type: "staff",
+        title: `${schedule.staff.user.name} coverage`,
+        startsAt: schedule.startsAt.toISOString(),
+        endsAt: schedule.endsAt.toISOString(),
+        centerId: schedule.centerId,
+        centerName: schedule.center.crmLocationId ?? schedule.center.name,
+        classroomName: null,
+        status: schedule.status,
+        detail: "Teacher schedule",
+      })),
+      ...invoices.map((invoice) => ({
+        id: `billing:${invoice.id}`,
+        type: "billing",
+        title: `${invoice.billingAccount.family.name} invoice due`,
+        startsAt: invoice.dueDate.toISOString(),
+        endsAt: null,
+        centerId: invoice.billingAccount.family.centerId,
+        centerName: centerName(invoice.billingAccount.family.centerId),
+        classroomName: null,
+        status: invoice.status,
+        detail: `$${Math.round(invoice.totalCents / 100).toLocaleString()} due`,
+      })),
+      ...expiringDocs.map((document) => {
+        const centerId = document.family?.centerId ?? document.child?.family.centerId ?? null;
+        return {
+          id: `document:${document.id}`,
+          type: "compliance",
+          title: `${document.name} expires`,
+          startsAt: document.expiresAt?.toISOString() ?? today.toISOString(),
+          endsAt: null,
+          centerId,
+          centerName: centerName(centerId),
+          classroomName: document.child?.classroom?.name ?? null,
+          status: document.status,
+          detail: document.child?.fullName ?? document.family?.name ?? document.type,
+        };
+      }),
+      ...enrollmentStarts.map((child) => ({
+        id: `start:${child.id}`,
+        type: "enrollment",
+        title: `${child.fullName} starts`,
+        startsAt: child.startDate?.toISOString() ?? today.toISOString(),
+        endsAt: null,
+        centerId: child.family.centerId,
+        centerName: centerName(child.family.centerId),
+        classroomName: child.classroom?.name ?? null,
+        status: child.enrollmentStatus,
+        detail: child.family.name,
+      })),
+      ...birthdayChildren
+        .map((child) => ({ child, birthday: nextBirthdayInRange(child.dateOfBirth, today, 30) }))
+        .filter((item): item is { child: (typeof birthdayChildren)[number]; birthday: Date } => Boolean(item.birthday))
+        .map(({ child, birthday }) => ({
+          id: `birthday:${child.id}`,
+          type: "birthday",
+          title: `${child.preferredName ?? child.fullName} birthday`,
+          startsAt: birthday.toISOString(),
+          endsAt: null,
+          centerId: child.family.centerId,
+          centerName: centerName(child.family.centerId),
+          classroomName: child.classroom?.name ?? null,
+          status: "upcoming",
+          detail: child.family.name,
+        })),
+    ].sort((left, right) => left.startsAt.localeCompare(right.startsAt));
+
+    return (
+      <CalendarPage
+        data={{
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          events,
+          generatedAt: today.toISOString(),
+        }}
+      />
+    );
   }
 
   if (slug === "waitlist") {

@@ -29,6 +29,7 @@ import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { NotificationReadAction } from "@/components/notification-read-actions";
+import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
@@ -1917,6 +1918,16 @@ export function StaffPage({ data }: { data: StaffPageData }) {
       </Card>
     </div>
   );
+}
+
+export type CalendarPageData = {
+  centers: Array<{ id: string; name: string }>;
+  events: CalendarEventRow[];
+  generatedAt: string;
+};
+
+export function CalendarPage({ data }: { data: CalendarPageData }) {
+  return <OperationalCalendar centers={data.centers} events={data.events} generatedAt={data.generatedAt} />;
 }
 
 export type FormsPageData = {

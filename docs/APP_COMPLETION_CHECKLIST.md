@@ -330,7 +330,7 @@ Status legend:
 - [x] Calendar page exists.
 - [x] Tours, child schedules, billing due dates, compliance reminders, birthdays, and staff schedules are represented in schema/module definitions.
 - [x] Google Calendar mock integration is represented in integrations/readiness.
-- [ ] Build full calendar UI with filters by center/classroom/user.
+- [x] Build full calendar UI with filters by center/classroom/user.
 - [ ] Add Google Calendar real sync.
 - [ ] Add recurring events/closures/holiday management.
 - [x] Add staff schedule publishing.

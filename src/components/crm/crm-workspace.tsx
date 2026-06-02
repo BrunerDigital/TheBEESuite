@@ -91,6 +91,14 @@ type LeadDetails = CrmLead & {
   tours: LeadTour[];
 };
 
+type LeadTimelineItem = {
+  id: string;
+  kind: "note" | "email" | "task" | "tour";
+  title: string;
+  body: string;
+  at: string | Date | null;
+};
+
 type ScoreFilter = "all" | "high" | "medium" | "low";
 type CreatedRangeFilter = "all" | "7" | "30" | "90";
 
@@ -221,6 +229,38 @@ function duplicateReasons(primary: CrmLead, candidate: CrmLead) {
   if (primaryChild && candidateChild && primaryChild === candidateChild) reasons.push("same child name");
 
   return reasons;
+}
+
+function leadTimeline(details: LeadDetails | null): LeadTimelineItem[] {
+  if (!details) return [];
+
+  const notes: LeadTimelineItem[] = details.notes.map((note) => ({
+    id: note.id,
+    kind: note.body.toLowerCase().includes("email sent") ? "email" : "note",
+    title: note.body.toLowerCase().includes("email sent") ? "Reviewed email" : "Internal note",
+    body: note.body,
+    at: note.createdAt,
+  }));
+  const tasks: LeadTimelineItem[] = details.tasks.map((task) => ({
+    id: task.id,
+    kind: "task",
+    title: task.title,
+    body: task.status,
+    at: task.dueAt,
+  }));
+  const tours: LeadTimelineItem[] = details.tours.map((tour) => ({
+    id: tour.id,
+    kind: "tour",
+    title: "Tour",
+    body: tour.notes || tour.status,
+    at: tour.startsAt,
+  }));
+
+  return [...notes, ...tasks, ...tours].sort((left, right) => {
+    const leftTime = left.at ? new Date(left.at).getTime() : 0;
+    const rightTime = right.at ? new Date(right.at).getTime() : 0;
+    return rightTime - leftTime;
+  });
 }
 
 function makeCsvRows(leads: CrmLead[]) {
@@ -390,6 +430,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
   const highIntent = filteredLeads.filter((lead) => lead.score >= 75).length;
+  const timeline = useMemo(() => leadTimeline(selectedLeadDetails), [selectedLeadDetails]);
   const duplicateCandidates = useMemo(() => {
     if (!selectedLead) return [];
 
@@ -1371,6 +1412,33 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       ))}
                       {selectedLeadDetails?.tasks?.length === 0 ? (
                         <p className="text-xs text-muted-foreground">No tasks logged yet.</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border bg-background/50 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-medium">Activity timeline</div>
+                      <Badge variant="secondary">{timeline.length}</Badge>
+                    </div>
+                    <div className="mt-3 flex flex-col gap-2">
+                      {timeline.slice(0, 8).map((item) => (
+                        <div key={`${item.kind}-${item.id}`} className="rounded-lg border bg-card/60 p-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="truncate text-xs font-medium">{item.title}</div>
+                            <Badge variant="outline" className="text-[0.65rem]">
+                              {item.kind}
+                            </Badge>
+                          </div>
+                          <div className="mt-1 line-clamp-3 text-[0.7rem] leading-5 text-muted-foreground">
+                            {item.body}
+                          </div>
+                          <div className="mt-1 text-[0.65rem] text-muted-foreground">
+                            {item.at ? (item.kind === "tour" ? formatTourDate(item.at) : safeDate(item.at)) : "No date"}
+                          </div>
+                        </div>
+                      ))}
+                      {timeline.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No activity logged yet.</p>
                       ) : null}
                     </div>
                   </div>

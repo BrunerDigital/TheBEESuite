@@ -107,7 +107,7 @@ Status legend:
 - [x] Mr. Bee AI assistant API exists for lead communication help.
 - [x] Build full drag-and-drop pipeline board interaction.
 - [x] Add duplicate lead detection/merge workflow.
-- [ ] Add full communication timeline per family/lead.
+- [x] Add full communication timeline per family/lead.
 - [x] Add CRM saved views, filters, and exports.
 - [ ] Add lead assignment/owner workflow.
 - [ ] Add automated nurture steps tied to stage transitions.

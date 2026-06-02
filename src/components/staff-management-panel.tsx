@@ -477,6 +477,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                 <SelectContent>
                   <SelectItem value="scheduled">Scheduled</SelectItem>
                   <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="pto">PTO</SelectItem>
+                  <SelectItem value="unavailable">Unavailable</SelectItem>
                   <SelectItem value="called_out">Called out</SelectItem>
                   <SelectItem value="covered">Covered</SelectItem>
                 </SelectContent>

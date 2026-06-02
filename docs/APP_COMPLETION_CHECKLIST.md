@@ -321,7 +321,7 @@ Status legend:
 - [ ] Add teacher onboarding forms/documents.
 - [x] Add background check tracking UI.
 - [ ] Add staff time clock.
-- [ ] Add PTO/unavailability.
+- [x] Add PTO/unavailability.
 - [ ] Add ratio engine by age group/state rules.
 - [x] Add staff schedule/calendar views.
 

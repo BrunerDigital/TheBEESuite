@@ -203,7 +203,7 @@ Status legend:
 - [x] Attendance/check logs schema exists.
 - [x] Kiosk guardrails exist for PIN security and attendance state.
 - [x] Complete lobby tablet UX with idle/reset mode and large touch targets.
-- [ ] Add signature capture.
+- [x] Add signature capture.
 - [ ] Add QR/PIN options.
 - [ ] Add late pickup flag workflow.
 - [ ] Add staff kiosk mode.

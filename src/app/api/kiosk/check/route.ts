@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
   const centerId = clean(body.centerId);
   const pin = normalizePin(body.pin);
   const type = normalizeCheckAction(clean(body.type));
+  const signatureName = clean(body.signatureName);
   const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
   const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
   const ip = requestIp(request.headers);
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
 
   if (!centerId || !pin || !type || !childIds.length) {
     return NextResponse.json({ ok: false, error: "Center, PIN, action, and at least one child are required." }, { status: 400 });
+  }
+  if (!signatureName) {
+    return NextResponse.json({ ok: false, error: "Typed guardian signature is required." }, { status: 400 });
   }
 
   const center = await prisma.center.findFirst({
@@ -124,10 +128,15 @@ export async function POST(request: NextRequest) {
           type,
           occurredAt,
           pickupName: guardian.fullName,
-          signaturePlaceholder: Boolean(body.signatureAccepted),
+          signaturePlaceholder: true,
           verificationStatus: "pin_verified",
           pinVerified: true,
           notes: clean(body.notes) || null,
+          metadata: {
+            signatureMethod: "typed",
+            signatureName,
+            signatureCapturedAt: occurredAt.toISOString(),
+          },
         },
       }));
     }
@@ -145,7 +154,8 @@ export async function POST(request: NextRequest) {
       familyId: guardian.family.id,
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
-      signatureAccepted: Boolean(body.signatureAccepted),
+      signatureAccepted: true,
+      signatureMethod: "typed",
       kioskDate: startOfServiceDay(occurredAt, timeZone).toISOString(),
       timeZone,
     },

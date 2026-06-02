@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type KioskChild = {
@@ -43,6 +44,7 @@ export function KioskCheckIn({ center }: Props) {
   const [pin, setPin] = useState("");
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [signatureName, setSignatureName] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const idleSecondsRef = useRef(idleResetSeconds);
@@ -57,6 +59,7 @@ export function KioskCheckIn({ center }: Props) {
     setPin("");
     setLookup(null);
     setSelectedIds([]);
+    setSignatureName("");
     setError("");
     setStatus(nextStatus);
     idleSecondsRef.current = idleResetSeconds;
@@ -106,6 +109,7 @@ export function KioskCheckIn({ center }: Props) {
       }
       setLookup(json);
       setSelectedIds(json.children.map((child) => child.id));
+      setSignatureName(json.guardian.fullName);
     });
   }
 
@@ -122,7 +126,8 @@ export function KioskCheckIn({ center }: Props) {
           pin,
           childIds: selectedIds,
           type,
-          signatureAccepted: true,
+          signatureAccepted: Boolean(signatureName.trim()),
+          signatureName,
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; children?: Array<{ fullName: string }> } | null;
@@ -254,11 +259,28 @@ export function KioskCheckIn({ center }: Props) {
                     })}
                   </div>
                   <div className="mt-auto grid gap-3 sm:grid-cols-2">
-                    <Button className="h-20 text-xl" disabled={isPending || !selectedChildren.length} onClick={() => submit("check_in")}>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor="signature-name" className="text-base">Guardian signature</Label>
+                      <Input
+                        id="signature-name"
+                        className="h-14 text-lg"
+                        value={signatureName}
+                        onChange={(event) => {
+                          markActivity();
+                          setSignatureName(event.target.value);
+                        }}
+                        placeholder="Type full name"
+                        autoComplete="off"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Typed signature is stored with the PIN-verified check-in/out log.
+                      </p>
+                    </div>
+                    <Button className="h-20 text-xl" disabled={isPending || !selectedChildren.length || !signatureName.trim()} onClick={() => submit("check_in")}>
                       <LogIn data-icon="inline-start" />
                       Check In
                     </Button>
-                    <Button className="h-20 text-xl" variant="secondary" disabled={isPending || !selectedChildren.length} onClick={() => submit("check_out")}>
+                    <Button className="h-20 text-xl" variant="secondary" disabled={isPending || !selectedChildren.length || !signatureName.trim()} onClick={() => submit("check_out")}>
                       <LogOut data-icon="inline-start" />
                       Check Out
                     </Button>

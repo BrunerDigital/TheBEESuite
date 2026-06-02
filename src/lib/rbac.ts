@@ -99,6 +99,7 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (!role) return false;
   if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
+  if (slug === "parent-portal" && isExecutiveRole(role)) return true;
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;
   if (parentRoles.has(role)) return parentModules.has(slug as ModuleSlug);

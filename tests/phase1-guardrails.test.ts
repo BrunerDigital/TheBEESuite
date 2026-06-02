@@ -29,6 +29,7 @@ import {
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
+import { canAccessModule } from "../src/lib/rbac";
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
@@ -334,6 +335,24 @@ test("parent portal invitation and document guards enforce tenant and family bou
     incidents: true,
     announcements: true,
   });
+});
+
+test("RBAC permits executive parent portal previews without opening parent portal to directors", () => {
+  assert.equal(canAccessModule({
+    role: "BRAND_ADMIN",
+    accessScope: "tenant",
+    centerIds: [],
+  }, "parent-portal"), true);
+  assert.equal(canAccessModule({
+    role: "CENTER_DIRECTOR",
+    accessScope: "center",
+    centerIds: ["center_1"],
+  }, "parent-portal"), false);
+  assert.equal(canAccessModule({
+    role: "PARENT_GUARDIAN",
+    accessScope: "family",
+    centerIds: ["center_1"],
+  }, "parent-portal"), true);
 });
 
 test("executive user edits replace stale access grants with the target grant", () => {

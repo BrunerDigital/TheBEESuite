@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { notificationTargetGuard } from "@/lib/notification-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Push notifications are not allowed for this role." }, { status: 403 });
   }
 
-  const body = await request.json();
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const title = clean(body.title);
   const message = clean(body.message);
   const targetUserId = clean(body.userId) || null;
@@ -26,6 +27,43 @@ export async function POST(request: NextRequest) {
 
   if (!title || !message) {
     return NextResponse.json({ ok: false, error: "Title and message are required." }, { status: 400 });
+  }
+  const targetUser = targetUserId
+    ? await prisma.user.findUnique({
+        where: { id: targetUserId },
+        select: {
+          id: true,
+          tenantId: true,
+          staffProfile: { select: { centerId: true } },
+          guardians: { select: { family: { select: { centerId: true } } } },
+          accessGrants: {
+            where: { isActive: true },
+            select: { centerId: true },
+          },
+        },
+      })
+    : null;
+  if (targetUserId && !targetUser) {
+    return NextResponse.json({ ok: false, error: "Notification target not found." }, { status: 404 });
+  }
+  const targetCenterIds = targetUser
+    ? Array.from(new Set([
+        targetUser.staffProfile?.centerId,
+        ...targetUser.guardians.map((guardian) => guardian.family.centerId),
+        ...targetUser.accessGrants.map((grant) => grant.centerId),
+      ].filter((centerId): centerId is string => Boolean(centerId))))
+    : [];
+  const targetGuard = notificationTargetGuard({
+    targetUserId,
+    actorUserId: user.id,
+    actorTenantId: user.tenantId,
+    actorCenterIds: user.centerIds,
+    actorHasTenantWideAccess: canAccessAllCenters(user),
+    targetTenantId: targetUser?.tenantId,
+    targetCenterIds,
+  });
+  if (!targetGuard.ok) {
+    return NextResponse.json({ ok: false, error: targetGuard.error }, { status: targetGuard.status });
   }
 
   const notification = await prisma.notification.create({

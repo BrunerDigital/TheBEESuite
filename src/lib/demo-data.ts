@@ -6,6 +6,7 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  Code2,
   ClipboardCheck,
   CreditCard,
   FileText,
@@ -59,6 +60,7 @@ export type ModuleSlug =
   | "parent-portal"
   | "teacher-portal"
   | "agency-admin"
+  | "developer-dashboard"
   | "white-label"
   | "team-permissions"
   | "integrations"
@@ -339,6 +341,7 @@ export const navGroups = [
     title: "Platform",
     items: [
       ["Executive admin", "agency-admin", Building2],
+      ["Developer", "developer-dashboard", Code2],
       ["White-label", "white-label", Sparkles],
       ["Team permissions", "team-permissions", Users],
       ["Integrations", "integrations", Workflow],

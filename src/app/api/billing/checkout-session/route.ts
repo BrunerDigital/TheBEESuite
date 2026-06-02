@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { isActiveStripeCheckoutPayment, jsonRecord } from "@/lib/billing-guardrails";
 import {
   createStripeCheckoutSession,
   getStripeCheckoutAmounts,
@@ -11,6 +12,7 @@ import {
   shouldWaiveStripePaymentOperationsFee,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
+import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -31,9 +33,15 @@ function requestBaseUrl(request: NextRequest) {
   return request.nextUrl.origin;
 }
 
-async function canAccessInvoice(userId: string, roleScoped: boolean, centerIds: string[], invoiceId: string) {
+async function canAccessInvoice(input: {
+  userId: string;
+  isParentGuardian: boolean;
+  roleScoped: boolean;
+  centerIds: string[];
+  invoiceId: string;
+}) {
   const invoice = await prisma.invoice.findUnique({
-    where: { id: invoiceId },
+    where: { id: input.invoiceId },
     include: {
       billingAccount: {
         include: {
@@ -50,11 +58,15 @@ async function canAccessInvoice(userId: string, roleScoped: boolean, centerIds: 
   if (!invoice) return { ok: false as const, status: 404, error: "Invoice not found." };
 
   const centerId = invoice.billingAccount.family.centerId;
-  const isFamilyGuardian = invoice.billingAccount.family.guardians.some((guardian) => guardian.userId === userId);
-  const hasCenterAccess = !centerId || roleScoped || centerIds.includes(centerId);
-
-  if (!hasCenterAccess && !isFamilyGuardian) {
-    return { ok: false as const, status: 403, error: "You do not have access to this invoice." };
+  const isFamilyGuardian = invoice.billingAccount.family.guardians.some((guardian) => guardian.userId === input.userId);
+  const hasCenterAccess = input.roleScoped || Boolean(centerId && input.centerIds.includes(centerId));
+  const accessGuard = canAccessFamilyRecord({
+    isParentGuardian: input.isParentGuardian,
+    isLinkedGuardian: isFamilyGuardian,
+    hasCenterAccess,
+  });
+  if (!accessGuard.ok) {
+    return { ok: false as const, status: accessGuard.status, error: "You do not have access to this invoice." };
   }
 
   return { ok: true as const, invoice, centerId };
@@ -77,7 +89,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invoice ID is required." }, { status: 400 });
   }
 
-  const access = await canAccessInvoice(user.id, canAccessAllCenters(user), user.centerIds, invoiceId);
+  const access = await canAccessInvoice({
+    userId: user.id,
+    isParentGuardian: isParentGuardian(user),
+    roleScoped: canAccessAllCenters(user),
+    centerIds: user.centerIds,
+    invoiceId,
+  });
   if (!access.ok) {
     return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   }
@@ -164,20 +182,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const payment = await prisma.payment.create({
-    data: {
-      billingAccountId: invoice.billingAccountId,
-      amountCents: invoice.totalCents,
-      status: PaymentStatus.DRAFT,
-      provider: "stripe",
-      externalIdPlaceholder: "checkout_session_pending",
-      customFields: {
-        invoiceAmountCents: invoice.totalCents,
-        status: "checkout_pending",
-      },
-    },
-  });
-
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
   const usesSpecificFeePolicy = requestedPaymentMethodCategory !== "default";
   const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
@@ -205,6 +209,44 @@ export async function POST(request: NextRequest) {
     paymentMethodCategory: effectivePaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
   });
+
+  const draftStripePayments = await prisma.payment.findMany({
+    where: {
+      billingAccountId: invoice.billingAccountId,
+      provider: "stripe",
+      status: PaymentStatus.DRAFT,
+    },
+    select: { id: true, status: true, provider: true, customFields: true },
+  });
+  const activePayment = draftStripePayments.find((item) =>
+    isActiveStripeCheckoutPayment(item) && jsonRecord(item.customFields).invoiceId === invoice.id,
+  );
+  if (activePayment) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "A checkout session is already pending for this invoice. Complete or expire it before creating another payment session.",
+        paymentId: activePayment.id,
+      },
+      { status: 409 },
+    );
+  }
+
+  const payment = await prisma.payment.create({
+    data: {
+      billingAccountId: invoice.billingAccountId,
+      amountCents: invoice.totalCents,
+      status: PaymentStatus.DRAFT,
+      provider: "stripe",
+      externalIdPlaceholder: "checkout_session_pending",
+      customFields: {
+        invoiceId: invoice.id,
+        invoiceAmountCents: invoice.totalCents,
+        status: "checkout_pending",
+      },
+    },
+  });
+
   const session = await createStripeCheckoutSession({
     amountCents: amounts.checkoutTotalCents,
     invoiceAmountCents: amounts.invoiceAmountCents,
@@ -255,6 +297,7 @@ export async function POST(request: NextRequest) {
           paymentMethodConfigurationMissing: usesSpecificFeePolicy && !paymentMethodConfigurationId,
           checkoutTotalCents: amounts.checkoutTotalCents,
           applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+          invoiceId: invoice.id,
           status: "checkout_failed",
           stripeError: session.error || "stripe_checkout_failed",
         },
@@ -273,6 +316,7 @@ export async function POST(request: NextRequest) {
       externalIdPlaceholder: session.id,
       customFields: {
         invoiceAmountCents: amounts.invoiceAmountCents,
+        invoiceId: invoice.id,
         parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
         parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
         beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,

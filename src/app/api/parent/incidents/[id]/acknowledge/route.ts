@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
+import { canAcknowledgeIncident } from "@/lib/portal-guardrails";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
@@ -36,11 +37,8 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const centerId = incident.classroom?.centerId ?? incident.child.family.centerId;
   const isGuardian = incident.child.family.guardians.some((guardian) => guardian.userId === user.id);
-  const hasCenterAccess = canAccessAllCenters(user) || Boolean(centerId && user.centerIds.includes(centerId));
-
-  if (!isGuardian && !hasCenterAccess) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this incident." }, { status: 403 });
-  }
+  const guard = canAcknowledgeIncident({ isLinkedGuardian: isGuardian });
+  if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
 
   const updated = await prisma.incidentReport.update({
     where: { id },
@@ -58,6 +56,7 @@ export async function POST(_request: Request, context: RouteContext) {
     metadata: {
       childId: incident.childId,
       familyId: incident.child.familyId,
+      acknowledgedByGuardianUserId: user.id,
     },
   });
 

@@ -1,0 +1,419 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { PaymentStatus } from "@prisma/client";
+import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
+import { checkoutApplicationGuard, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
+import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
+import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
+import {
+  canAccessFamilyRecord,
+  canAcknowledgeIncident,
+  canCreateFamilyMessage,
+  validateDailyReportMediaLink,
+  validateMediaUploadInput,
+} from "../src/lib/portal-guardrails";
+import { checkRateLimit } from "../src/lib/rate-limit";
+import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
+import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
+import { hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
+import { parseOperationalDate } from "../src/lib/date-guardrails";
+import {
+  calculateFteCount,
+  defaultFteWeekEnd,
+  normalizeFteStatus,
+  resolveFteCenterId,
+  validateFtePeriod,
+} from "../src/lib/fte-report-guardrails";
+import { notificationTargetGuard } from "../src/lib/notification-guardrails";
+import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
+
+test("billing guard applies a checkout payment only once per invoice", () => {
+  assert.deepEqual(checkoutApplicationGuard({
+    invoiceStatus: PaymentStatus.OPEN,
+    invoiceBillingAccountId: "acct_1",
+    invoiceTotalCents: 12500,
+    paymentStatus: PaymentStatus.DRAFT,
+    paymentBillingAccountId: "acct_1",
+    paymentAmountCents: 12500,
+  }), { ok: true });
+
+  assert.deepEqual(checkoutApplicationGuard({
+    invoiceStatus: PaymentStatus.PAID,
+    invoiceBillingAccountId: "acct_1",
+    invoiceTotalCents: 12500,
+    paymentStatus: PaymentStatus.DRAFT,
+    paymentBillingAccountId: "acct_1",
+    paymentAmountCents: 12500,
+  }), { ok: false, reason: "invoice_already_paid" });
+
+  assert.deepEqual(checkoutApplicationGuard({
+    invoiceStatus: PaymentStatus.OPEN,
+    invoiceBillingAccountId: "acct_1",
+    invoiceTotalCents: 12500,
+    paymentStatus: PaymentStatus.DRAFT,
+    paymentBillingAccountId: "acct_2",
+    paymentAmountCents: 12500,
+  }), { ok: false, reason: "billing_account_mismatch" });
+});
+
+test("active Stripe checkout detection only blocks draft checkout sessions", () => {
+  assert.equal(isActiveStripeCheckoutPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "checkout_created" },
+  }), true);
+
+  assert.equal(isActiveStripeCheckoutPayment({
+    status: PaymentStatus.FAILED,
+    provider: "stripe",
+    customFields: { status: "checkout_created" },
+  }), false);
+
+  assert.equal(isActiveStripeCheckoutPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe_mock",
+    customFields: { status: "checkout_created" },
+  }), false);
+});
+
+test("record mutation guard blocks cross-scope updates", () => {
+  assert.deepEqual(scopedUpdateGuard({
+    entity: "Family",
+    expectedScopeId: "center_a",
+    actualScopeId: "center_a",
+    scopeLabel: "center",
+  }), { ok: true });
+
+  assert.deepEqual(scopedUpdateGuard({
+    entity: "Family",
+    expectedScopeId: "center_a",
+    actualScopeId: "center_b",
+    scopeLabel: "center",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Family is not linked to the requested center.",
+  });
+
+  assert.deepEqual(staffTenantGuard("tenant_a", "tenant_b"), {
+    ok: false,
+    status: 409,
+    error: "That email belongs to a different tenant.",
+  });
+
+  assert.deepEqual(classroomFamilyGuard("center_a", "center_b"), {
+    ok: false,
+    status: 403,
+    error: "Classroom is not linked to this family center.",
+  });
+
+  assert.deepEqual(centerScopedAccessGuard({
+    centerId: null,
+    hasTenantWideAccess: false,
+    hasCenterAccess: false,
+    resourceLabel: "Child",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Child is not linked to an accessible center.",
+  });
+});
+
+test("attendance guard blocks duplicate check-ins and checkout-before-checkin", () => {
+  assert.deepEqual(validateNextCheckAction("check_in", null), { ok: true });
+  assert.deepEqual(validateNextCheckAction("check_in", "check_in"), {
+    ok: false,
+    error: "Child is already checked in for today.",
+  });
+  assert.deepEqual(validateNextCheckAction("check_out", "check_in"), { ok: true });
+  assert.deepEqual(validateNextCheckAction("check_out", "check_out"), {
+    ok: false,
+    error: "Child must be checked in before check-out.",
+  });
+  assert.deepEqual(validateSelectedChildren({
+    requestedChildIds: ["child_a", "child_b"],
+    allowedChildIds: ["child_a"],
+  }), {
+    ok: false,
+    status: 403,
+    error: "One or more selected children are not linked to this guardian at this school.",
+    unauthorizedChildIds: ["child_b"],
+  });
+});
+
+test("service day uses the center time zone rather than server-local midnight", () => {
+  assert.equal(
+    startOfServiceDay(new Date("2026-05-27T15:00:00.000Z"), "America/New_York").toISOString(),
+    "2026-05-27T04:00:00.000Z",
+  );
+  assert.equal(
+    startOfServiceDay(new Date("2026-01-27T15:00:00.000Z"), "America/New_York").toISOString(),
+    "2026-01-27T05:00:00.000Z",
+  );
+});
+
+test("kiosk PIN hashing fails closed in production without a PIN secret", () => {
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = mutableEnv.NODE_ENV;
+  const originalPinSecret = mutableEnv.PIN_HASH_SECRET;
+  const originalAuthSecret = mutableEnv.AUTH_SECRET;
+  try {
+    mutableEnv.NODE_ENV = "production";
+    delete mutableEnv.PIN_HASH_SECRET;
+    delete mutableEnv.AUTH_SECRET;
+    assert.throws(() => hashGuardianPin("guardian_1", "1234"), /PIN_HASH_SECRET is required/);
+
+    mutableEnv.PIN_HASH_SECRET = "test-pin-secret";
+    const hash = hashGuardianPin("guardian_1", "1234");
+    assert.equal(verifyGuardianPin("guardian_1", "1234", hash), true);
+    assert.equal(verifyGuardianPin("guardian_1", "4321", hash), false);
+  } finally {
+    if (originalNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+    else mutableEnv.NODE_ENV = originalNodeEnv;
+    if (originalPinSecret === undefined) delete mutableEnv.PIN_HASH_SECRET;
+    else mutableEnv.PIN_HASH_SECRET = originalPinSecret;
+    if (originalAuthSecret === undefined) delete mutableEnv.AUTH_SECRET;
+    else mutableEnv.AUTH_SECRET = originalAuthSecret;
+  }
+});
+
+test("Supabase auth URL has no hardcoded project fallback", () => {
+  assert.equal(cleanSupabaseUrl("https://example.supabase.co/"), "https://example.supabase.co");
+  assert.equal(cleanSupabaseUrl(""), "");
+  assert.equal(cleanSupabaseUrl(undefined), "");
+});
+
+test("login rate limit blocks repeated attempts for the same key", () => {
+  const key = `test-login:${Date.now()}:${Math.random()}`;
+  assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, true);
+  assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, true);
+  assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, false);
+});
+
+test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {
+  assert.deepEqual(canCreateFamilyMessage({
+    isParentGuardian: true,
+    canManageOperations: false,
+    familyId: null,
+  }), {
+    ok: false,
+    status: 400,
+    error: "Parent messages must be linked to a family.",
+  });
+  assert.deepEqual(canCreateFamilyMessage({
+    isParentGuardian: true,
+    canManageOperations: false,
+    familyId: "family_1",
+  }), { ok: true });
+  assert.deepEqual(canAcknowledgeIncident({ isLinkedGuardian: false }), {
+    ok: false,
+    status: 403,
+    error: "Only a linked parent or guardian can acknowledge this incident.",
+  });
+  assert.deepEqual(canAccessFamilyRecord({
+    isParentGuardian: true,
+    isLinkedGuardian: false,
+    hasCenterAccess: true,
+  }), {
+    ok: false,
+    status: 403,
+    error: "You do not have access to this family.",
+  });
+  assert.deepEqual(canAccessFamilyRecord({
+    isParentGuardian: false,
+    isLinkedGuardian: false,
+    hasCenterAccess: false,
+  }), {
+    ok: false,
+    status: 403,
+    error: "You do not have access to this family.",
+  });
+});
+
+test("media guard requires secure upload and matching daily report child", () => {
+  assert.deepEqual(validateMediaUploadInput({
+    hasUploadedFile: false,
+    photoUrl: "https://example.com/photo.jpg",
+  }), {
+    ok: false,
+    status: 400,
+    error: "Photo URLs are not accepted for new media. Upload a photo file so it can be stored securely.",
+  });
+  assert.deepEqual(validateMediaUploadInput({
+    hasUploadedFile: true,
+    photoUrl: "",
+  }), { ok: true });
+  assert.deepEqual(validateDailyReportMediaLink({
+    dailyReportChildId: "child_a",
+    childId: "child_b",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Daily report is not linked to this child.",
+  });
+});
+
+test("executive user edits replace stale access grants with the target grant", () => {
+  assert.equal(isSameAccessGrantTarget({
+    role: "BRAND_ADMIN",
+    scopeType: "TENANT",
+    brandId: "brand_1",
+    organizationId: "org_1",
+  }, {
+    role: "BRAND_ADMIN",
+    scopeType: "TENANT",
+    brandId: "brand_1",
+    organizationId: "org_1",
+  }), true);
+
+  assert.equal(isSameAccessGrantTarget({
+    role: "BRAND_ADMIN",
+    scopeType: "TENANT",
+    brandId: "brand_1",
+    organizationId: "org_1",
+  }, {
+    role: "BRAND_ADMIN",
+    scopeType: "CENTER",
+    brandId: "brand_1",
+    organizationId: "org_1",
+    centerId: "center_1",
+  }), false);
+});
+
+test("readiness guard requires a Supabase URL for Auth readiness", () => {
+  assert.equal(hasSupabaseAuthConfig({
+    SUPABASE_ANON_KEY: "anon",
+    SUPABASE_SERVICE_ROLE_KEY: "service",
+  }), false);
+  assert.equal(hasSupabaseAuthConfig({
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_ANON_KEY: "anon",
+    SUPABASE_SERVICE_ROLE_KEY: "service",
+  }), true);
+});
+
+test("signature requests require valid family child target and recipient", () => {
+  assert.deepEqual(validateSignatureChildTarget({
+    familyId: "family_a",
+    childId: "child_1",
+    childFamilyId: "family_b",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Selected child is not linked to this family.",
+  });
+
+  assert.deepEqual(resolveSignatureRecipient({
+    requestedEmail: "not-an-email",
+    billingEmail: "billing@example.com",
+    guardianEmails: [],
+  }), {
+    ok: false,
+    status: 400,
+    error: "Recipient email must be a valid email address.",
+  });
+
+  assert.deepEqual(resolveSignatureRecipient({
+    requestedEmail: "",
+    billingEmail: "",
+    guardianEmails: ["guardian@example.com"],
+  }), {
+    ok: true,
+    email: "guardian@example.com",
+  });
+});
+
+test("operational date guard rejects malformed childcare timestamps", () => {
+  const fallback = new Date("2026-05-28T12:00:00.000Z");
+  assert.deepEqual(parseOperationalDate("", "Attendance date", fallback), {
+    ok: true,
+    date: fallback,
+    provided: false,
+  });
+
+  assert.deepEqual(parseOperationalDate("not-a-date", "Incident time", fallback), {
+    ok: false,
+    status: 400,
+    error: "Incident time must be a valid date or timestamp.",
+  });
+
+  const parsed = parseOperationalDate("2026-05-28T09:30:00-04:00", "Daily report date", fallback);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.ok ? parsed.date.toISOString() : "", "2026-05-28T13:30:00.000Z");
+});
+
+test("notification target guard blocks cross-scope and center-scoped broadcasts", () => {
+  assert.deepEqual(notificationTargetGuard({
+    targetUserId: null,
+    actorUserId: "user_a",
+    actorTenantId: "tenant_a",
+    actorCenterIds: ["center_a"],
+    actorHasTenantWideAccess: false,
+  }), {
+    ok: false,
+    status: 403,
+    error: "Choose a specific user before queuing a notification from a center-scoped account.",
+  });
+
+  assert.deepEqual(notificationTargetGuard({
+    targetUserId: "user_b",
+    actorUserId: "user_a",
+    actorTenantId: "tenant_a",
+    actorCenterIds: ["center_a"],
+    actorHasTenantWideAccess: false,
+    targetTenantId: "tenant_b",
+    targetCenterIds: ["center_a"],
+  }), {
+    ok: false,
+    status: 403,
+    error: "Notification target is outside your tenant.",
+  });
+
+  assert.deepEqual(notificationTargetGuard({
+    targetUserId: "user_b",
+    actorUserId: "user_a",
+    actorTenantId: "tenant_a",
+    actorCenterIds: ["center_a"],
+    actorHasTenantWideAccess: false,
+    targetTenantId: "tenant_a",
+    targetCenterIds: ["center_a"],
+  }), { ok: true });
+});
+
+test("FTE report guard scopes directors and permits executive corrections", () => {
+  assert.deepEqual(resolveFteCenterId({
+    role: "CENTER_DIRECTOR",
+    requestedCenterId: "center_b",
+    primaryCenterId: "center_a",
+  }), {
+    ok: false,
+    status: 403,
+    error: "Directors can submit FTE reports only for their assigned school.",
+  });
+
+  assert.deepEqual(resolveFteCenterId({
+    role: "CENTER_DIRECTOR",
+    requestedCenterId: "center_a",
+    primaryCenterId: "center_a",
+  }), { ok: true, centerId: "center_a" });
+
+  assert.deepEqual(resolveFteCenterId({
+    role: "BRAND_ADMIN",
+    requestedCenterId: "center_b",
+    primaryCenterId: "center_a",
+    existingReportCenterId: "center_a",
+  }), { ok: true, centerId: "center_b" });
+});
+
+test("FTE report guard normalizes weekly dates and statuses", () => {
+  const start = new Date("2026-05-25T00:00:00.000Z");
+  assert.equal(defaultFteWeekEnd(start).toISOString(), "2026-05-31T00:00:00.000Z");
+  assert.equal(calculateFteCount(12, 5), 14.5);
+  assert.equal(normalizeFteStatus({ requestedStatus: "approved", role: "CENTER_DIRECTOR", isCorrection: false }), "submitted");
+  assert.equal(normalizeFteStatus({ requestedStatus: "approved", role: "BRAND_ADMIN", isCorrection: false }), "approved");
+  assert.deepEqual(validateFtePeriod(start, new Date("2026-06-12T00:00:00.000Z")), {
+    ok: false,
+    status: 400,
+    error: "FTE report periods must be two weeks or shorter.",
+  });
+});

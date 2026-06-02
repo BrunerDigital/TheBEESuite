@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
 import { prisma } from "@/lib/prisma";
 import {
   getPasswordResetRedirectUrl,
@@ -497,17 +498,14 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   if (scopeType === "TENANT" && !tenantAccessRoles.has(roleValue)) {
     throw new Error("Tenant-wide access is limited to executive, regional, or auditor roles.");
   }
-  await ensureAccessGrant({
-    userId: appUser.id,
-    tenantId: actor.tenantId,
+  const accessGrantTarget: AccessGrantTarget & { role: UserRole } = {
     role: roleValue,
     scopeType,
     brandId: organization.brandId,
     organizationId: organization.id,
     ownerGroupId: scopeType === "OWNER_GROUP" ? ownerGroup?.id ?? center?.ownerGroupId ?? null : null,
     centerId: scopeType === "CENTER" ? center?.id ?? null : null,
-  });
-
+  };
   let auth: Prisma.InputJsonValue = { skipped: true };
   if (password) {
     auth = await upsertSupabaseAuthUserWithPassword({ email, name, password, role: roleValue });
@@ -515,6 +513,20 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(requestUrl));
     auth = { passwordResetSent: reset.ok, status: reset.status };
   }
+
+  await prisma.userAccessGrant.updateMany({
+    where: {
+      userId: appUser.id,
+      tenantId: actor.tenantId,
+      isActive: true,
+    },
+    data: { isActive: false },
+  });
+  await ensureAccessGrant({
+    userId: appUser.id,
+    tenantId: actor.tenantId,
+    ...accessGrantTarget,
+  });
 
   await audit({
     tenantId: actor.tenantId,

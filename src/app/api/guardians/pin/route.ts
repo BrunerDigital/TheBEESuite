@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
+import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -36,8 +37,14 @@ export async function POST(request: NextRequest) {
   if (!guardian) {
     return NextResponse.json({ ok: false, error: "Guardian not found." }, { status: 404 });
   }
-  if (!canAccessAllCenters(user) && guardian.family.centerId && !user.centerIds.includes(guardian.family.centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this guardian." }, { status: 403 });
+  const accessGuard = centerScopedAccessGuard({
+    centerId: guardian.family.centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(guardian.family.centerId && user.centerIds.includes(guardian.family.centerId)),
+    resourceLabel: "Guardian",
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
   await prisma.guardian.update({

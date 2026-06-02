@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
+import { validateDailyReportMediaLink, validateMediaUploadInput } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { createChildMediaSignedUrl, uploadChildMediaBuffer } from "@/lib/supabase-storage";
 
@@ -51,14 +53,12 @@ export async function POST(request: NextRequest) {
     sharedWithParents = body.sharedWithParents !== false;
   }
 
-  if (!childId || (!uploadedFile && !photoUrl)) {
+  if (!childId) {
     return NextResponse.json({ ok: false, error: "Child and photo are required." }, { status: 400 });
   }
-  if (photoUrl.startsWith("data:")) {
-    return NextResponse.json({ ok: false, error: "Inline image data is no longer accepted. Upload a photo file so it can be stored securely." }, { status: 400 });
-  }
-  if (photoUrl && !/^https:\/\//i.test(photoUrl)) {
-    return NextResponse.json({ ok: false, error: "Photo URL must use HTTPS." }, { status: 400 });
+  const uploadGuard = validateMediaUploadInput({ hasUploadedFile: Boolean(uploadedFile), photoUrl });
+  if (!uploadGuard.ok) {
+    return NextResponse.json({ ok: false, error: uploadGuard.error }, { status: uploadGuard.status });
   }
 
   const child = await prisma.child.findUnique({
@@ -73,8 +73,26 @@ export async function POST(request: NextRequest) {
   }
 
   const centerId = child.classroom?.centerId ?? child.family.centerId;
-  if (centerId && !canAccessCenter(user, centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this child." }, { status: 403 });
+  const accessGuard = centerScopedAccessGuard({
+    centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+    resourceLabel: "Child",
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
+  }
+
+  if (dailyReportId) {
+    const dailyReport = await prisma.dailyReport.findUnique({
+      where: { id: dailyReportId },
+      select: { childId: true },
+    });
+    const guard = validateDailyReportMediaLink({
+      dailyReportChildId: dailyReport?.childId ?? null,
+      childId,
+    });
+    if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
 
   if (uploadedFile) {

@@ -19,13 +19,18 @@ function attr(value: string) {
     .replace(/>/g, "&gt;");
 }
 
+function turnstileSiteKeyAttribute() {
+  const siteKey = process.env.NEXT_PUBLIC_INQUIRY_TURNSTILE_SITE_KEY || "";
+  return siteKey ? `\n  data-turnstile-site-key="${attr(siteKey)}"` : "";
+}
+
 export function getKidCityInquiryEmbedCode(baseUrl?: string) {
   const appUrl = cleanBaseUrl(baseUrl);
   return `<div id="bee-suite-inquiry-form"></div>
 <script
   src="${appUrl}/kidcity-inquiry-form.js"
   data-target="bee-suite-inquiry-form"
-  data-endpoint="${appUrl}/api/inquiries"
+  data-endpoint="${appUrl}/api/inquiries"${turnstileSiteKeyAttribute()}
   async
 ></script>`;
 }
@@ -44,7 +49,7 @@ export function getCenterInquiryEmbedCode({
   data-endpoint="${appUrl}/api/inquiries"
   data-brand-name="${attr(brandName)}"
   data-center-id="${attr(centerId)}"
-  data-location-name="${attr(centerName)}"
+  data-location-name="${attr(centerName)}"${turnstileSiteKeyAttribute()}
   async
 ></script>`;
 }

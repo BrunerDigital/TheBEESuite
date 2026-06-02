@@ -1,19 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { parseOperationalDate } from "@/lib/date-guardrails";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function parseDate(value: string) {
-  const date = value ? new Date(value) : new Date();
-  return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,6 +31,10 @@ export async function POST(request: NextRequest) {
   if (!childId || !type || !description || !actionTaken) {
     return NextResponse.json({ ok: false, error: "Child, type, description, and action taken are required." }, { status: 400 });
   }
+  const occurredAt = parseOperationalDate(body.occurredAt, "Incident time");
+  if (!occurredAt.ok) {
+    return NextResponse.json({ ok: false, error: occurredAt.error }, { status: occurredAt.status });
+  }
 
   const child = await prisma.child.findUnique({
     where: { id: childId },
@@ -48,8 +49,14 @@ export async function POST(request: NextRequest) {
   }
 
   const centerId = child.classroom?.centerId ?? child.family.centerId;
-  if (centerId && !canAccessCenter(user, centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this child." }, { status: 403 });
+  const accessGuard = centerScopedAccessGuard({
+    centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+    resourceLabel: "Child",
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
   const incident = await prisma.incidentReport.create({
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
       childId,
       classroomId: child.classroom?.id ?? null,
       staffMember: user.name,
-      occurredAt: parseDate(clean(body.occurredAt)),
+      occurredAt: occurredAt.date,
       type,
       description,
       actionTaken,

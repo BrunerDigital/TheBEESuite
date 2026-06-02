@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -49,8 +50,14 @@ async function assertFamilyAccess(user: Awaited<ReturnType<typeof getCurrentUser
   if (!user) throw new Error("Authentication required.");
   const family = await prisma.family.findUnique({ where: { id: familyId }, select: { centerId: true } });
   if (!family) return { ok: false as const, status: 404, error: "Family not found." };
-  if (!canAccessAllCenters(user) && family.centerId && !user.centerIds.includes(family.centerId)) {
-    return { ok: false as const, status: 403, error: "You do not have access to this family." };
+  const guard = centerScopedAccessGuard({
+    centerId: family.centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(family.centerId && canAccessCenter(user, family.centerId)),
+    resourceLabel: "Family",
+  });
+  if (!guard.ok) {
+    return { ok: false as const, status: guard.status, error: guard.error };
   }
   return { ok: true as const, centerId: family.centerId };
 }
@@ -94,6 +101,11 @@ export async function POST(request: NextRequest) {
       ratioRule: clean(body.ratioRule) || clean(body.status) || null,
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Classroom name is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.classroom.findUnique({ where: { id }, select: { centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     result = id ? await prisma.classroom.update({ where: { id }, data }) : await prisma.classroom.create({ data });
   } else if (entity === "family") {
     const requestedCenterId = clean(body.centerId) || clean(body.relatedId) || user.primaryCenterId;
@@ -110,6 +122,11 @@ export async function POST(request: NextRequest) {
       custodyNotes: clean(body.custodyNotes) || null,
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Family name is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.family.findUnique({ where: { id }, select: { centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Family", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     result = id ? await prisma.family.update({ where: { id }, data }) : await prisma.family.create({ data });
   } else if (entity === "guardian") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
@@ -128,6 +145,11 @@ export async function POST(request: NextRequest) {
       isBillingContact: Boolean(body.isBillingContact),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.guardian.findUnique({ where: { id }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     result = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
   } else if (entity === "child") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
@@ -141,6 +163,8 @@ export async function POST(request: NextRequest) {
       if (!classroom || (classroom.centerId && !canAccessCenter(user, classroom.centerId))) {
         return NextResponse.json({ ok: false, error: "You do not have access to this classroom." }, { status: 403 });
       }
+      const guard = classroomFamilyGuard(centerId, classroom.centerId);
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     const data = {
       familyId,
@@ -157,6 +181,11 @@ export async function POST(request: NextRequest) {
       developmentalNotes: clean(body.body) || null,
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.child.findUnique({ where: { id }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
   } else if (entity === "staff") {
     const requestedCenterId = clean(body.centerId) || clean(body.relatedId) || user.primaryCenterId;
@@ -168,6 +197,14 @@ export async function POST(request: NextRequest) {
     const staffName = clean(body.name);
     if (!email || !staffName) return NextResponse.json({ ok: false, error: "Teacher name and email are required." }, { status: 400 });
     const staffRole = UserRole.TEACHER;
+    const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true, tenantId: true } });
+    const tenantGuard = staffTenantGuard(user.tenantId, existingUser?.tenantId);
+    if (!tenantGuard.ok) return NextResponse.json({ ok: false, error: tenantGuard.error }, { status: tenantGuard.status });
+    if (clean(body.classroomId)) {
+      const classroom = await prisma.classroom.findUnique({ where: { id: clean(body.classroomId) }, select: { centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const staffUser = await prisma.user.upsert({
       where: { email },
       update: { name: staffName, role: staffRole, isActive: true, organizationId: access.center.organizationId },
@@ -188,6 +225,14 @@ export async function POST(request: NextRequest) {
       phone: clean(body.phone) || null,
       backgroundCheckStatus: clean(body.backgroundCheckStatus) || "pending",
     };
+    if (id) {
+      const existing = await prisma.staffProfile.findUnique({ where: { id }, select: { centerId: true, userId: true } });
+      const guard = scopedUpdateGuard({ entity: "Teacher profile", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+      if (existing?.userId !== staffUser.id) {
+        return NextResponse.json({ ok: false, error: "Teacher profile is not linked to this user." }, { status: 403 });
+      }
+    }
     result = id
       ? await prisma.staffProfile.update({ where: { id }, data })
       : await prisma.staffProfile.upsert({
@@ -274,8 +319,14 @@ export async function POST(request: NextRequest) {
       });
     }
     if (!account) return NextResponse.json({ ok: false, error: "Family ID or billing account ID is required." }, { status: 400 });
-    if (account.family.centerId && !canAccessCenter(user, account.family.centerId)) {
-      return NextResponse.json({ ok: false, error: "You do not have access to this billing account." }, { status: 403 });
+    const accountAccess = centerScopedAccessGuard({
+      centerId: account.family.centerId,
+      hasTenantWideAccess: canAccessAllCenters(user),
+      hasCenterAccess: Boolean(account.family.centerId && canAccessCenter(user, account.family.centerId)),
+      resourceLabel: "Billing account",
+    });
+    if (!accountAccess.ok) {
+      return NextResponse.json({ ok: false, error: accountAccess.error }, { status: accountAccess.status });
     }
     centerId = account.family.centerId;
     const amountCents = intValue(body.amountCents || dollarsToCents(body.amountDollars));
@@ -304,6 +355,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
     }
     centerId = requestedCenterId;
+    if (id) {
+      const existing = await prisma.announcement.findUnique({ where: { id }, select: { centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Announcement", expectedScopeId: requestedCenterId, actualScopeId: existing?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const data = {
       centerId: requestedCenterId,
       title: clean(body.title),
@@ -316,6 +372,11 @@ export async function POST(request: NextRequest) {
     result = id ? await prisma.announcement.update({ where: { id }, data }) : await prisma.announcement.create({ data });
   } else if (entity === "campaign") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+    if (id) {
+      const existing = await prisma.campaign.findUnique({ where: { id }, select: { brandId: true } });
+      const guard = scopedUpdateGuard({ entity: "Campaign", expectedScopeId: brand?.id ?? null, actualScopeId: existing?.brandId, scopeLabel: "brand" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const data = {
       brandId: brand?.id ?? null,
       name: clean(body.name),
@@ -328,6 +389,11 @@ export async function POST(request: NextRequest) {
     result = id ? await prisma.campaign.update({ where: { id }, data }) : await prisma.campaign.create({ data });
   } else if (entity === "automation") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+    if (id) {
+      const existing = await prisma.automation.findUnique({ where: { id }, select: { brandId: true } });
+      const guard = scopedUpdateGuard({ entity: "Automation", expectedScopeId: brand?.id ?? null, actualScopeId: existing?.brandId, scopeLabel: "brand" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const data = {
       brandId: brand?.id ?? null,
       name: clean(body.name),
@@ -345,9 +411,20 @@ export async function POST(request: NextRequest) {
     const access = await assertFamilyAccess(user, familyId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.centerId;
+    const childId = clean(body.childId) || null;
+    if (childId) {
+      const child = await prisma.child.findUnique({ where: { id: childId }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: child?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    if (id) {
+      const existing = await prisma.document.findUnique({ where: { id }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "Document", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const data = {
       familyId,
-      childId: clean(body.childId) || null,
+      childId,
       name: clean(body.name),
       type: clean(body.type) || "general",
       status: requestedStatus(body.status),
@@ -375,6 +452,18 @@ export async function POST(request: NextRequest) {
       if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
       centerId = access.centerId;
     }
+    if (id) {
+      const existing = await prisma.formSubmission.findUnique({ where: { id }, select: { familyId: true } });
+      if (!existing) return NextResponse.json({ ok: false, error: "FormSubmission not found." }, { status: 404 });
+      if (existing.familyId) {
+        const existingAccess = await assertFamilyAccess(user, existing.familyId);
+        if (!existingAccess.ok) return NextResponse.json({ ok: false, error: existingAccess.error }, { status: existingAccess.status });
+        centerId = existingAccess.centerId;
+      }
+      if (familyId && existing.familyId !== familyId) {
+        return NextResponse.json({ ok: false, error: "FormSubmission is not linked to the requested family." }, { status: 403 });
+      }
+    }
     const data = {
       formId,
       familyId,
@@ -391,6 +480,11 @@ export async function POST(request: NextRequest) {
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     centerId = staff.centerId;
+    if (id) {
+      const existing = await prisma.certification.findUnique({ where: { id }, select: { staffId: true } });
+      const guard = scopedUpdateGuard({ entity: "Certification", expectedScopeId: staffId, actualScopeId: existing?.staffId, scopeLabel: "teacher profile" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
     const data = {
       staffId,
       name: clean(body.name),

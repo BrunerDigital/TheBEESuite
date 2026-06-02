@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -49,8 +50,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   const centerId = media.classroom?.centerId ?? media.child.family.centerId;
-  if (centerId && !canAccessCenter(user, centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this photo." }, { status: 403 });
+  const accessGuard = centerScopedAccessGuard({
+    centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+    resourceLabel: "Photo",
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
   const updated = await prisma.$transaction(async (tx) => {

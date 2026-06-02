@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizePin, verifyGuardianPin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
@@ -7,12 +8,6 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
 }
 
 export async function POST(request: NextRequest) {
@@ -34,7 +29,7 @@ export async function POST(request: NextRequest) {
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true },
+    select: { id: true, name: true, crmLocationId: true, customFields: true },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -58,7 +53,7 @@ export async function POST(request: NextRequest) {
               fullName: true,
               preferredName: true,
               ageGroup: true,
-              classroom: { select: { id: true, name: true } },
+              classroom: { select: { id: true, name: true, centerId: true } },
             },
           },
         },
@@ -71,32 +66,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "PIN was not recognized for this school." }, { status: 401 });
   }
 
-  const childIds = guardian.family.children.map((child) => child.id);
+  const visibleChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId || !child.classroom);
+  const childIds = visibleChildren.map((child) => child.id);
+  const timeZone = readCenterTimeZone(center.customFields);
   const latestLogs = childIds.length
     ? await prisma.checkInOutLog.findMany({
-        where: { childId: { in: childIds }, occurredAt: { gte: startOfToday() } },
+        where: { childId: { in: childIds }, occurredAt: { gte: startOfServiceDay(new Date(), timeZone) } },
         orderBy: { occurredAt: "desc" },
         select: { childId: true, type: true, occurredAt: true },
       })
     : [];
-  const latestByChild = new Map<string, { type: string; occurredAt: Date }>();
-  for (const log of latestLogs) {
-    if (!latestByChild.has(log.childId)) latestByChild.set(log.childId, log);
-  }
+  const latestByChild = latestLogMap(latestLogs);
 
   return NextResponse.json({
     ok: true,
-    center,
+    center: { id: center.id, name: center.name, crmLocationId: center.crmLocationId },
     guardian: { id: guardian.id, fullName: guardian.fullName, relation: guardian.relation },
     family: { id: guardian.family.id, name: guardian.family.name },
-    children: guardian.family.children.map((child) => {
+    children: visibleChildren.map((child) => {
       const latest = latestByChild.get(child.id);
       return {
         id: child.id,
         fullName: child.fullName,
         preferredName: child.preferredName,
         ageGroup: child.ageGroup,
-        classroom: child.classroom,
+        classroom: child.classroom ? { id: child.classroom.id, name: child.classroom.name } : null,
         lastAction: latest ? { type: latest.type, occurredAt: latest.occurredAt } : null,
       };
     }),

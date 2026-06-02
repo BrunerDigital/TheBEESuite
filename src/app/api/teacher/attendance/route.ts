@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { normalizeCheckAction, readCenterTimeZone, startOfServiceDay, validateNextCheckAction } from "@/lib/attendance-state";
+import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { parseOperationalDate } from "@/lib/date-guardrails";
+import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -9,10 +12,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function parseDate(value: string) {
-  const date = value ? new Date(value) : new Date();
-  return Number.isNaN(date.getTime()) ? new Date() : date;
-}
+const ATTENDANCE_STATUSES = new Set(["present", "absent", "checked_out"]);
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -25,14 +25,25 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const childId = clean(body.childId);
-  const status = clean(body.status) || "present";
-  const logType = clean(body.logType);
+  const requestedLogType = clean(body.logType);
+  const logType = requestedLogType ? normalizeCheckAction(requestedLogType) : null;
+  const requestedStatus = clean(body.status) || "present";
   const pickupName = clean(body.pickupName);
   const absenceReason = clean(body.absenceReason);
-  const date = parseDate(clean(body.date));
+  const parsedDate = parseOperationalDate(body.date, "Attendance date");
+  if (!parsedDate.ok) {
+    return NextResponse.json({ ok: false, error: parsedDate.error }, { status: parsedDate.status });
+  }
+  const date = parsedDate.date;
 
   if (!childId) {
     return NextResponse.json({ ok: false, error: "Child ID is required." }, { status: 400 });
+  }
+  if (requestedLogType && !logType) {
+    return NextResponse.json({ ok: false, error: "Check log type must be check_in or check_out." }, { status: 400 });
+  }
+  if (!ATTENDANCE_STATUSES.has(requestedStatus)) {
+    return NextResponse.json({ ok: false, error: "Attendance status must be present, absent, or checked_out." }, { status: 400 });
   }
 
   const child = await prisma.child.findUnique({
@@ -48,10 +59,35 @@ export async function POST(request: NextRequest) {
   }
 
   const centerId = child.classroom?.centerId ?? child.family.centerId;
-  if (centerId && !canAccessCenter(user, centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this child." }, { status: 403 });
+  const accessGuard = centerScopedAccessGuard({
+    centerId,
+    hasTenantWideAccess: canAccessAllCenters(user),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+    resourceLabel: "Child",
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
+  const center = centerId
+    ? await prisma.center.findUnique({ where: { id: centerId }, select: { customFields: true } })
+    : null;
+  const timeZone = readCenterTimeZone(center?.customFields);
+  if (logType) {
+    const latestLog = await prisma.checkInOutLog.findFirst({
+      where: {
+        childId,
+        ...(centerId ? { centerId } : {}),
+        occurredAt: { gte: startOfServiceDay(date, timeZone) },
+      },
+      orderBy: { occurredAt: "desc" },
+      select: { type: true },
+    });
+    const guard = validateNextCheckAction(logType, latestLog?.type);
+    if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: 409 });
+  }
+
+  const status = logType === "check_in" ? "present" : logType === "check_out" ? "checked_out" : requestedStatus;
   const record = await prisma.attendanceRecord.create({
     data: {
       childId,

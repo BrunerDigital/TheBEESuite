@@ -6,6 +6,7 @@ import {
   Building2,
   Camera,
   CheckCircle2,
+  Code2,
   ClipboardCheck,
   CreditCard,
   FileCheck2,
@@ -23,7 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
@@ -343,16 +344,17 @@ export default function LandingPage() {
               </a>
             ))}
           </nav>
-          <div className="ml-auto flex items-center gap-2 lg:ml-4">
-            <Button
-              variant="outline"
-              className="hidden h-10 border-white/15 bg-white/[0.03] px-4 text-white hover:bg-white/10 sm:inline-flex"
-              nativeButton={false}
-              render={<Link href="/login" />}
+          <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-4">
+            <Link
+              href="/login"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "h-10 border-white/15 bg-white/[0.03] px-3 text-white hover:bg-white/10 sm:px-4",
+              )}
             >
               Log in
-            </Button>
-            <Button className="h-10 px-4 shadow-[0_0_28px_rgba(245,181,27,0.22)]" nativeButton={false} render={<Link href="/onboarding" />}>
+            </Link>
+            <Button className="hidden h-10 px-4 shadow-[0_0_28px_rgba(245,181,27,0.22)] sm:inline-flex" nativeButton={false} render={<Link href="/onboarding" />}>
               Start onboarding
               <ArrowRight data-icon="inline-end" />
             </Button>
@@ -595,6 +597,21 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      <footer className="border-t border-white/10 bg-[#05070a] px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
+          <BrandMark compact />
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-9 border-white/15 bg-white/[0.03] text-zinc-400 hover:bg-white/10 hover:text-amber-300"
+            nativeButton={false}
+            render={<Link href="/developer-dashboard" aria-label="Developer dashboard" title="Developer dashboard" />}
+          >
+            <Code2 className="size-4" />
+          </Button>
+        </div>
+      </footer>
     </main>
   );
 }

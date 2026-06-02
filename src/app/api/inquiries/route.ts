@@ -44,10 +44,17 @@ type InquiryPayload = {
   utm_medium?: string;
   utmCampaign?: string;
   utm_campaign?: string;
+  utmTerm?: string;
+  utm_term?: string;
+  utmContent?: string;
+  utm_content?: string;
   brandName?: string;
   brand_name?: string;
   company?: string;
   website?: string;
+  turnstileToken?: string;
+  turnstile_token?: string;
+  "cf-turnstile-response"?: string;
 };
 
 type IntegrationResult = {
@@ -108,6 +115,8 @@ const GOOGLE_SHEET_COLUMNS = [
   { header: "UTM Source", field: "utmSource" },
   { header: "UTM Medium", field: "utmMedium" },
   { header: "UTM Campaign", field: "utmCampaign" },
+  { header: "UTM Term", field: "utmTerm" },
+  { header: "UTM Content", field: "utmContent" },
   { header: "Lead Score", field: "leadScore" },
   { header: "Stage", field: "stage" },
 ] as const;
@@ -211,9 +220,12 @@ function normalizePayload(input: InquiryPayload) {
     utmSource: clean(input.utmSource || input.utm_source),
     utmMedium: clean(input.utmMedium || input.utm_medium),
     utmCampaign: clean(input.utmCampaign || input.utm_campaign),
+    utmTerm: clean(input.utmTerm || input.utm_term),
+    utmContent: clean(input.utmContent || input.utm_content),
     brandName: clean(input.brandName || input.brand_name),
     company: clean(input.company),
     website: clean(input.website),
+    turnstileToken: clean(input.turnstileToken || input.turnstile_token || input["cf-turnstile-response"]),
   };
 }
 
@@ -488,6 +500,51 @@ function sheetValue(value: unknown): GoogleSheetValue {
   return "";
 }
 
+async function verifyTurnstileToken({
+  token,
+  remoteIp,
+}: {
+  token: string;
+  remoteIp: string;
+}) {
+  const secret = process.env.INQUIRY_TURNSTILE_SECRET_KEY;
+  if (!secret) return { ok: true, skipped: true };
+  if (!token) return { ok: false, error: "Bot verification is required." };
+
+  try {
+    const body = new URLSearchParams({
+      secret,
+      response: token,
+    });
+    if (remoteIp) body.set("remoteip", remoteIp);
+
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body,
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) return { ok: false, error: `Bot verification returned ${response.status}.` };
+
+    const result = (await response.json()) as { success?: boolean; "error-codes"?: string[] };
+    if (!result.success) {
+      return {
+        ok: false,
+        error: result["error-codes"]?.length
+          ? `Bot verification failed: ${result["error-codes"].join(", ")}`
+          : "Bot verification failed.",
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Bot verification could not be completed.",
+    };
+  }
+}
+
 async function sendNotificationEmail(
   payload: Record<string, unknown>,
   locationRecipients: string[] = [],
@@ -570,8 +627,9 @@ export async function POST(request: NextRequest) {
     if (!isAllowedOrigin(origin)) {
       return json({ ok: false, error: "Origin is not allowed." }, 403, origin);
     }
+    const ip = requestIp(request.headers);
     const rate = checkRateLimit({
-      key: `inquiry:${requestIp(request.headers)}`,
+      key: `inquiry:${ip}`,
       limit: 30,
       windowMs: 10 * 60 * 1000,
     });
@@ -589,6 +647,14 @@ export async function POST(request: NextRequest) {
 
     if (Object.keys(errors).length) {
       return json({ ok: false, errors }, 400, origin);
+    }
+
+    const botCheck = await verifyTurnstileToken({
+      token: payload.turnstileToken,
+      remoteIp: ip,
+    });
+    if (!botCheck.ok) {
+      return json({ ok: false, error: botCheck.error }, 403, origin);
     }
 
     const center = await getIntakeCenter({
@@ -636,6 +702,8 @@ export async function POST(request: NextRequest) {
           utmSource: payload.utmSource,
           utmMedium: payload.utmMedium,
           utmCampaign: payload.utmCampaign,
+          utmTerm: payload.utmTerm,
+          utmContent: payload.utmContent,
           brandName: payload.brandName,
         },
         tasks: {

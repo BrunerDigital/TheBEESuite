@@ -6,7 +6,10 @@ export function normalizePin(value: unknown) {
 }
 
 function pinSecret() {
-  return process.env.PIN_HASH_SECRET || process.env.AUTH_SECRET || "dev-only-bee-suite-pin-secret";
+  const secret = process.env.PIN_HASH_SECRET || (process.env.NODE_ENV !== "production" ? process.env.AUTH_SECRET : "");
+  if (secret) return secret;
+  if (process.env.NODE_ENV !== "production") return "dev-only-bee-suite-pin-secret";
+  throw new Error("PIN_HASH_SECRET is required in production.");
 }
 
 export function hashGuardianPin(guardianId: string, pin: string) {

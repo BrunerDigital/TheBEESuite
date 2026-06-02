@@ -9,7 +9,16 @@ git remote add origin https://github.com/YOUR_ORG/the-bee-suite.git
 git push -u origin main
 ```
 
-CI runs lint, typecheck, Prisma client generation, and production build on pushes to `main`.
+CI runs lint, typecheck, tests, Prisma client generation, and production build on pushes to `main`.
+
+Local smoke checks can be run before or after deployment:
+
+```bash
+npm run test:smoke
+SMOKE_BASE_URL=https://thebeesuite.io npm run test:smoke
+```
+
+For Kid City USA operations, production smoke testing targets `https://thebeesuite.io`. Local server smoke mode is only for developer troubleshooting and is enabled with `SMOKE_LOCAL=1`.
 
 ## 2. Supabase
 
@@ -73,6 +82,8 @@ SENDGRID_API_KEY
 SENDGRID_FROM_EMAIL
 INQUIRY_NOTIFICATION_EMAILS
 ONBOARDING_NOTIFICATION_EMAILS
+NEXT_PUBLIC_INQUIRY_TURNSTILE_SITE_KEY
+INQUIRY_TURNSTILE_SECRET_KEY
 ```
 
 Use preview deployments first, then promote to production after auth, RBAC, RLS, and integration checks are complete.

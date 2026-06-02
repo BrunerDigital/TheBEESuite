@@ -9,8 +9,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma generate && next build",
+    "vercel-build": "prisma generate && npm run lint && npm run typecheck && npm test && next build",
     "start": "next start",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test:smoke": "tsx scripts/playwright-smoke.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
@@ -26,6 +28,7 @@
     "kidcity:cleanup-location-users": "tsx -r tsconfig-paths/register scripts/cleanup-location-user-staff-profiles.ts",
     "kidcity:audit-location-leads": "tsx -r tsconfig-paths/register scripts/audit-location-user-lead-scope.ts",
     "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",
+    "pilot:check": "tsx -r tsconfig-paths/register scripts/pilot-readiness-check.ts",
     "supabase:setup-storage": "tsx -r tsconfig-paths/register scripts/setup-supabase-storage.ts",
     "supabase:migrate-child-media": "tsx -r tsconfig-paths/register scripts/migrate-inline-child-media-to-storage.ts"
   },

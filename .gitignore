@@ -13,6 +13,9 @@
 # testing
 /coverage
 
+# generated handoff/import/export outputs
+/outputs/
+
 # next.js
 /.next/
 /out/

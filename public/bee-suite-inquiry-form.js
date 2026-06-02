@@ -12,6 +12,7 @@
   const locationName = currentScript.dataset.locationName || currentScript.dataset.centerName || "";
   const locationsUrl = currentScript.dataset.locationsUrl || "";
   const preset = currentScript.dataset.preset || "";
+  const turnstileSiteKey = currentScript.dataset.turnstileSiteKey || "";
   const programs = [
     "Daycare",
     "Preschool",
@@ -36,6 +37,7 @@
     .bee-suite-status{min-height:20px;font-size:13px!important;font-weight:700}
     .bee-suite-status[data-state=success]{color:#198754!important}
     .bee-suite-status[data-state=error]{color:#b42318!important}
+    .bee-suite-turnstile{display:flex;justify-content:center;min-height:65px}
     .bee-suite-honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}
   `;
   document.head.appendChild(style);
@@ -60,6 +62,24 @@
       groups[state].push(location);
       return groups;
     }, {});
+  }
+
+  function queryValue(name) {
+    try {
+      return new URL(window.location.href).searchParams.get(name) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function loadTurnstile() {
+    if (!turnstileSiteKey) return;
+    if (document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]')) return;
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
   }
 
   function renderLocationInput(locations) {
@@ -101,6 +121,7 @@
           <label class="bee-suite-field"><span>Phone Number</span><input name="phone" type="tel" autocomplete="tel" required></label>
           <label class="bee-suite-field"><span>Program</span><select name="program" required><option value="">Choose a program</option>${programs.map((program) => `<option value="${escapeHtml(program)}">${escapeHtml(program)}</option>`).join("")}</select></label>
           ${renderLocationInput(locations)}
+          ${turnstileSiteKey ? `<div class="bee-suite-turnstile"><div class="cf-turnstile" data-sitekey="${escapeHtml(turnstileSiteKey)}"></div></div>` : ""}
           <button class="bee-suite-button" type="submit">Submit inquiry</button>
           <p class="bee-suite-note">By submitting, you agree to be contacted about childcare enrollment.</p>
           <p class="bee-suite-status" role="status" aria-live="polite"></p>
@@ -141,9 +162,15 @@
         locationPhone: selectedLocation?.dataset.locationPhone || "",
         pageUrl: window.location.href,
         leadSource: `${brandName} Website Inquiry`,
+        utmSource: queryValue("utm_source"),
+        utmMedium: queryValue("utm_medium"),
+        utmCampaign: queryValue("utm_campaign"),
+        utmTerm: queryValue("utm_term"),
+        utmContent: queryValue("utm_content"),
         brandName,
         company: String(formData.get("company") || "").trim(),
         website: String(formData.get("website") || "").trim(),
+        turnstileToken: String(formData.get("cf-turnstile-response") || "").trim(),
       };
 
       button.disabled = true;
@@ -161,6 +188,7 @@
       } catch {
         status.dataset.state = "error";
         status.textContent = "We could not submit the inquiry. Please call your preferred school.";
+        if (window.turnstile) window.turnstile.reset();
       } finally {
         button.disabled = false;
         button.textContent = "Submit inquiry";
@@ -169,6 +197,7 @@
   }
 
   const resolvedLocationsUrl = locationsUrl || (preset === "kidcity" ? `${baseUrl}/api/public/kidcity-locations` : "");
+  loadTurnstile();
 
   if (resolvedLocationsUrl) {
     fetch(resolvedLocationsUrl)

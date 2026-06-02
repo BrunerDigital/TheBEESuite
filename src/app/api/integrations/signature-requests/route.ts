@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus } from "@prisma/client";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { resolveSignatureRecipient, validateSignatureChildTarget } from "@/lib/document-guardrails";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
@@ -41,8 +42,26 @@ export async function POST(request: NextRequest) {
   if (!family) {
     return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
   }
-  if (!canAccessAllCenters(user) && family.centerId && !user.centerIds.includes(family.centerId)) {
+  if (!canAccessAllCenters(user) && (!family.centerId || !user.centerIds.includes(family.centerId))) {
     return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
+  }
+  const child = childId
+    ? await prisma.child.findUnique({ where: { id: childId }, select: { id: true, familyId: true } })
+    : null;
+  if (childId && !child) {
+    return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
+  }
+  const childGuard = validateSignatureChildTarget({ familyId, childId, childFamilyId: child?.familyId });
+  if (!childGuard.ok) {
+    return NextResponse.json({ ok: false, error: childGuard.error }, { status: childGuard.status });
+  }
+  const recipient = resolveSignatureRecipient({
+    requestedEmail: recipientEmail,
+    billingEmail: family.billingEmail,
+    guardianEmails: family.guardians.map((guardian) => guardian.email),
+  });
+  if (!recipient.ok) {
+    return NextResponse.json({ ok: false, error: recipient.error }, { status: recipient.status });
   }
 
   const document = await prisma.document.create({
@@ -57,9 +76,8 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const to = recipientEmail || family.billingEmail || family.guardians.map((guardian) => guardian.email).find(Boolean) || "";
   const email = await sendEmail({
-    to: [to],
+    to: [recipient.email],
     subject: `Signature requested: ${name}`,
     text: `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nA DocuSign-style provider can be connected from The Bee Suite integrations.`,
     fromName: "Kid City USA",

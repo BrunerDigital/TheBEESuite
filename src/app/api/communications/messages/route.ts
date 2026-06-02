@@ -4,6 +4,7 @@ import { canAccessAllCenters, canManageOperations, getCurrentUser, isParentGuard
 import { writeAuditLog } from "@/lib/audit";
 import { sendEmail } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { canAccessFamilyRecord, canCreateFamilyMessage } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -30,6 +31,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Message is required." }, { status: 400 });
   }
 
+  const messageGuard = canCreateFamilyMessage({
+    isParentGuardian: isParentGuardian(user),
+    canManageOperations: canManageOperations(user),
+    familyId,
+  });
+  if (!messageGuard.ok) {
+    return NextResponse.json({ ok: false, error: messageGuard.error }, { status: messageGuard.status });
+  }
+
   let family: {
     id: string;
     name: string;
@@ -45,12 +55,15 @@ export async function POST(request: NextRequest) {
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
 
     const isFamilyGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-    const hasCenterAccess = canAccessAllCenters(user) || !family.centerId || user.centerIds.includes(family.centerId);
-    if (!hasCenterAccess && !isFamilyGuardian) {
-      return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
+    const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && user.centerIds.includes(family.centerId));
+    const accessGuard = canAccessFamilyRecord({
+      isParentGuardian: isParentGuardian(user),
+      isLinkedGuardian: isFamilyGuardian,
+      hasCenterAccess,
+    });
+    if (!accessGuard.ok) {
+      return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
     }
-  } else if (!canManageOperations(user) && !isParentGuardian(user)) {
-    return NextResponse.json({ ok: false, error: "Message creation is not allowed for this role." }, { status: 403 });
   }
 
   const created = await prisma.message.create({

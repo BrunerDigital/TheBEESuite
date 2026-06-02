@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -35,9 +36,14 @@ export async function POST(request: NextRequest) {
   }
 
   const isGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
-  const hasCenterAccess = canAccessAllCenters(user) || !family.centerId || user.centerIds.includes(family.centerId);
-  if (!isGuardian && !hasCenterAccess) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
+  const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && user.centerIds.includes(family.centerId));
+  const accessGuard = canAccessFamilyRecord({
+    isParentGuardian: isParentGuardian(user),
+    isLinkedGuardian: isGuardian,
+    hasCenterAccess,
+  });
+  if (!accessGuard.ok) {
+    return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
   const note = await prisma.note.create({

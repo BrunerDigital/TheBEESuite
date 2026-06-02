@@ -21,6 +21,7 @@ const parentRoles = new Set(["PARENT_GUARDIAN"]);
 const executiveOnlyModules = new Set<ModuleSlug>([
   "multi-location-dashboard",
   "agency-admin",
+  "developer-dashboard",
   "white-label",
   "integrations",
 ]);

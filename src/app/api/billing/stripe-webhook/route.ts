@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
+import { checkoutApplicationGuard } from "@/lib/billing-guardrails";
 import { readStripeConnectedAccountId, retrieveStripeConnectedAccount, verifyStripeSignature } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
@@ -628,13 +629,82 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, pending: true });
   }
 
+  let applied = false;
+  let ignoredReason: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       const currentPayment = await tx.payment.findUnique({
         where: { id: paymentId },
-        select: { customFields: true },
+        select: { status: true, billingAccountId: true, amountCents: true, customFields: true },
       });
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        select: { status: true, billingAccountId: true, totalCents: true },
+      });
+      if (!currentPayment || !invoice) {
+        ignoredReason = currentPayment ? "invoice_not_found" : "payment_not_found";
+        return;
+      }
+
+      const guard = checkoutApplicationGuard({
+        invoiceStatus: invoice.status,
+        invoiceBillingAccountId: invoice.billingAccountId,
+        invoiceTotalCents: invoice.totalCents,
+        paymentStatus: currentPayment.status,
+        paymentBillingAccountId: currentPayment.billingAccountId,
+        paymentAmountCents: currentPayment.amountCents,
+      });
+      if (!guard.ok) {
+        ignoredReason = guard.reason;
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: currentPayment.status === PaymentStatus.PAID ? PaymentStatus.PAID : PaymentStatus.VOID,
+            externalIdPlaceholder: session.id,
+            customFields: {
+              ...jsonObject(currentPayment.customFields),
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent || null,
+              stripeEventId: event.id,
+              stripePaymentStatus: session.payment_status || null,
+              stripeAmountTotalCents: session.amount_total ?? null,
+              ignoredReason: guard.reason,
+              requiresManualReview: guard.reason === "invoice_already_paid",
+              status: "checkout_ignored",
+            },
+          },
+        });
+        return;
+      }
+
+      const invoiceClaim = await tx.invoice.updateMany({
+        where: { id: invoiceId, status: { not: PaymentStatus.PAID } },
+        data: { status: PaymentStatus.PAID },
+      });
+      if (invoiceClaim.count !== 1) {
+        ignoredReason = "invoice_already_paid";
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: PaymentStatus.VOID,
+            externalIdPlaceholder: session.id,
+            customFields: {
+              ...jsonObject(currentPayment.customFields),
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent || null,
+              stripeEventId: event.id,
+              stripePaymentStatus: session.payment_status || null,
+              stripeAmountTotalCents: session.amount_total ?? null,
+              ignoredReason,
+              requiresManualReview: true,
+              status: "checkout_ignored",
+            },
+          },
+        });
+        return;
+      }
+
       const payment = await tx.payment.update({
         where: { id: paymentId },
         data: {
@@ -655,10 +725,6 @@ export async function POST(request: NextRequest) {
             status: "paid",
           },
         },
-      });
-      await tx.invoice.update({
-        where: { id: invoiceId },
-        data: { status: PaymentStatus.PAID },
       });
       const updatedAccount = await tx.billingAccount.update({
         where: { id: payment.billingAccountId },
@@ -683,12 +749,20 @@ export async function POST(request: NextRequest) {
           },
         },
       });
+      applied = true;
     });
   } catch (error) {
     if (isDuplicateWebhookEvent(error)) {
       return NextResponse.json({ ok: true, duplicate: true });
     }
     throw error;
+  }
+
+  if (!applied) {
+    if (ignoredReason !== "invoice_not_found" && ignoredReason !== "payment_not_found") {
+      await writeSystemAudit(invoiceId, event.id, session.id, "billing.checkout.ignored");
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: ignoredReason || "not_applied" });
   }
 
   await writeSystemAudit(invoiceId, event.id, session.id, event.type === "checkout.session.async_payment_succeeded" ? "billing.checkout.async_succeeded" : "billing.checkout.completed");

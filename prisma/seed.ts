@@ -24,7 +24,20 @@ const classroomNames = [
   ["Discovery Lab", "Pre-K", 8, "1:8"],
 ] as const;
 
+function requireDestructiveSeedConfirmation() {
+  const databaseUrl = process.env.DATABASE_URL || "";
+  const allowDestructiveSeed = process.env.ALLOW_DESTRUCTIVE_SEED === "true";
+  const localDatabase = /localhost|127\.0\.0\.1|host\.docker\.internal/i.test(databaseUrl);
+  if (allowDestructiveSeed || localDatabase) return;
+
+  throw new Error(
+    "Refusing to run destructive seed against a non-local database. Set ALLOW_DESTRUCTIVE_SEED=true only after confirming this is an approved empty/staging database.",
+  );
+}
+
 async function main() {
+  requireDestructiveSeedConfirmation();
+
   await prisma.auditLog.deleteMany();
   await prisma.aiSuggestion.deleteMany();
   await prisma.aiSummary.deleteMany();

@@ -14,6 +14,7 @@ The preferred Avada embed block is:
   src="https://the-bee-suite-beta.vercel.app/kidcity-inquiry-form.js"
   data-target="bee-suite-inquiry-form"
   data-endpoint="https://the-bee-suite-beta.vercel.app/api/inquiries"
+  data-turnstile-site-key="OPTIONAL_CLOUDFLARE_TURNSTILE_SITE_KEY"
   async
 ></script>
 ```
@@ -42,6 +43,18 @@ The CRM lead is created first. Google Sheets and email failures are returned in 
 The endpoint rejects browser requests from origins outside `INQUIRY_ALLOWED_ORIGINS` and includes hidden `company` / `website` honeypot fields in the hosted embed. Honeypot hits return a non-error response without creating a CRM lead.
 
 The endpoint also applies a best-effort server-side burst limit per requester. It is not a replacement for a WAF or dedicated abuse service, but it reduces accidental or automated repeated submissions during live testing.
+
+When `INQUIRY_TURNSTILE_SECRET_KEY` is configured, the endpoint also requires Cloudflare Turnstile verification. Add `data-turnstile-site-key` to the hosted embed script so the browser can render the challenge and submit `cf-turnstile-response`. If the secret is not configured, existing embeds continue to work with CORS, honeypot, and rate-limit protection only.
+
+Hosted embeds automatically capture these URL parameters from the page where the form is installed:
+
+```text
+utm_source
+utm_medium
+utm_campaign
+utm_term
+utm_content
+```
 
 ## Routing Audit
 
@@ -79,9 +92,12 @@ leadSource
 utmSource
 utmMedium
 utmCampaign
+utmTerm
+utmContent
 brandName
 company
 website
+turnstileToken
 ```
 
 Do not remove the hidden `company` and `website` fields from the hosted embed unless another anti-spam control replaces them.
@@ -100,6 +116,7 @@ SENDGRID_FROM_EMAIL
 INQUIRY_NOTIFICATION_EMAILS
 INQUIRY_ALLOWED_ORIGINS
 INQUIRY_DEFAULT_CENTER_ID
+INQUIRY_TURNSTILE_SECRET_KEY
 ```
 
 `INQUIRY_NOTIFICATION_EMAILS` should be a comma-separated central recipient list. The selected location email is added automatically from the matched center profile:
@@ -161,6 +178,8 @@ Lead Source
 UTM Source
 UTM Medium
 UTM Campaign
+UTM Term
+UTM Content
 ```
 
 ## SendGrid

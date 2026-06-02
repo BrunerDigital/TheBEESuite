@@ -1,13 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
 
-const DEFAULT_SUPABASE_URL = "https://nqjrlktoewiueiwrubas.supabase.co";
-
 type SupabaseAuthKeyPreference = "anon" | "service";
 
 export function cleanSupabaseUrl(value?: string | null) {
-  const url = value?.trim().replace(/\/+$/, "");
-  return url || DEFAULT_SUPABASE_URL;
+  return value?.trim().replace(/\/+$/, "") || "";
 }
 
 export function getSupabaseAuthConfig(preference: SupabaseAuthKeyPreference = "anon") {

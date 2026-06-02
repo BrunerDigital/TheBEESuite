@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { envPresent, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { CHILD_MEDIA_BUCKET, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 export const runtime = "nodejs";
@@ -16,11 +17,7 @@ const allowedRoles = new Set<UserRole>([
 ]);
 
 function env(name: string) {
-  return Boolean(process.env[name]);
-}
-
-function hasAnyEnv(names: string[]) {
-  return names.some((name) => env(name));
+  return envPresent(process.env, name);
 }
 
 function check(name: string, status: ReadinessStatus, detail: string) {
@@ -37,15 +34,19 @@ export async function GET() {
   }
 
   let databaseReady = false;
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    databaseReady = true;
-  } catch {
-    databaseReady = false;
+  let databaseDetail = env("DATABASE_URL") ? "Database query failed." : "DATABASE_URL is not configured.";
+  if (env("DATABASE_URL")) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      databaseReady = true;
+      databaseDetail = "Prisma can query the production database.";
+    } catch {
+      databaseReady = false;
+    }
   }
 
   if (!databaseReady) {
-    const checks = [check("Database", "blocked", "Database query failed.")];
+    const checks = [check("Database", "blocked", databaseDetail)];
     return NextResponse.json({
       ok: false,
       summary: {
@@ -87,7 +88,7 @@ export async function GET() {
     check("Active centers", activeCenters > 0 ? "ready" : "warning", `${activeCenters} active center profile(s) are available.`),
     check(
       "Supabase Auth",
-      hasAnyEnv(["SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]) && env("SUPABASE_SERVICE_ROLE_KEY") ? "ready" : "blocked",
+      hasSupabaseAuthConfig(process.env) ? "ready" : "blocked",
       "Password grant login and password recovery require Supabase URL, anon/publishable key, and server-side service role key.",
     ),
     check(
@@ -126,7 +127,7 @@ export async function GET() {
     ),
     check(
       "Stripe Connect",
-      env("STRIPE_SECRET_KEY") && env("STRIPE_WEBHOOK_SECRET") ? "ready" : "warning",
+      hasStripeBillingConfig(process.env) ? "ready" : "warning",
       "Parent checkout stays blocked until platform keys, webhook secret, and school connected payout accounts are ready.",
     ),
     check(

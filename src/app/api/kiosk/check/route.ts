@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { latestLogMap, normalizeCheckAction, readCenterTimeZone, startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizePin, verifyGuardianPin } from "@/lib/kiosk";
@@ -10,18 +11,13 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function startOfToday() {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const centerId = clean(body.centerId);
   const pin = normalizePin(body.pin);
-  const type = clean(body.type);
-  const childIds = Array.isArray(body.childIds) ? body.childIds.map(clean).filter(Boolean) : [];
+  const type = normalizeCheckAction(clean(body.type));
+  const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
+  const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
   const ip = requestIp(request.headers);
   const limited = checkRateLimit({ key: `kiosk-check:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
   if (!limited.ok) {
@@ -31,13 +27,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!centerId || !pin || !["check_in", "check_out"].includes(type) || !childIds.length) {
+  if (!centerId || !pin || !type || !childIds.length) {
     return NextResponse.json({ ok: false, error: "Center, PIN, action, and at least one child are required." }, { status: 400 });
   }
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -74,8 +70,38 @@ export async function POST(request: NextRequest) {
   if (!allowedChildren.length) {
     return NextResponse.json({ ok: false, error: "No selected children are linked to this guardian at this school." }, { status: 403 });
   }
+  const selectedGuard = validateSelectedChildren({
+    requestedChildIds: childIds,
+    allowedChildIds: allowedChildren.map((child) => child.id),
+  });
+  if (!selectedGuard.ok) {
+    return NextResponse.json(
+      { ok: false, error: selectedGuard.error, unauthorizedChildIds: selectedGuard.unauthorizedChildIds },
+      { status: selectedGuard.status },
+    );
+  }
 
   const occurredAt = new Date();
+  const timeZone = readCenterTimeZone(center.customFields);
+  const latestLogs = await prisma.checkInOutLog.findMany({
+    where: {
+      childId: { in: allowedChildren.map((child) => child.id) },
+      centerId,
+      occurredAt: { gte: startOfServiceDay(occurredAt, timeZone) },
+    },
+    orderBy: { occurredAt: "desc" },
+    select: { childId: true, type: true, occurredAt: true },
+  });
+  const latestByChild = latestLogMap(latestLogs);
+  for (const child of allowedChildren) {
+    const guard = validateNextCheckAction(type, latestByChild.get(child.id)?.type);
+    if (!guard.ok) {
+      return NextResponse.json(
+        { ok: false, error: guard.error, childId: child.id, childName: child.fullName },
+        { status: 409 },
+      );
+    }
+  }
   const status = type === "check_in" ? "present" : "checked_out";
   const logs = await prisma.$transaction(async (tx) => {
     const created = [];
@@ -120,7 +146,8 @@ export async function POST(request: NextRequest) {
       childIds: allowedChildren.map((child) => child.id),
       count: logs.length,
       signatureAccepted: Boolean(body.signatureAccepted),
-      kioskDate: startOfToday().toISOString(),
+      kioskDate: startOfServiceDay(occurredAt, timeZone).toISOString(),
+      timeZone,
     },
   });
 

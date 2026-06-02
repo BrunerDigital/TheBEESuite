@@ -1799,34 +1799,32 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
       ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
       : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };
-    const [staff, total, activeUsers, expiringCerts, backgroundPending] = await Promise.all([
-      prisma.staffProfile.findMany({
-        where: staffWhere,
-        orderBy: [{ center: { state: "asc" } }, { user: { name: "asc" } }],
-        take: 200,
-        include: {
-          user: { select: { name: true, email: true, role: true, isActive: true } },
-          center: { select: { name: true, crmLocationId: true } },
-          classroom: { select: { name: true } },
-          certifications: { orderBy: { expiresAt: "asc" }, take: 4 },
-        },
-      }),
-      prisma.staffProfile.count({ where: staffWhere }),
-      prisma.staffProfile.count({ where: { ...staffWhere, user: { isActive: true } } }),
-      prisma.certification.count({ where: certificationWhere }),
-      prisma.staffProfile.count({
-        where: {
-          ...staffWhere,
-          OR: [{ backgroundCheckStatus: null }, { backgroundCheckStatus: { not: "placeholder_clear" } }],
-        },
-      }),
-    ]);
+    const staff = await prisma.staffProfile.findMany({
+      where: staffWhere,
+      orderBy: [{ title: "asc" }, { id: "asc" }],
+      take: 200,
+      include: {
+        user: { select: { name: true, email: true, role: true, isActive: true } },
+        center: { select: { name: true, crmLocationId: true } },
+        classroom: { select: { name: true } },
+        certifications: { orderBy: { expiresAt: "asc" }, take: 4 },
+      },
+    });
+    const sortedStaff = staff.sort((left, right) => {
+      const leftCenter = left.center.crmLocationId ?? left.center.name;
+      const rightCenter = right.center.crmLocationId ?? right.center.name;
+      return leftCenter.localeCompare(rightCenter) || left.user.name.localeCompare(right.user.name);
+    });
+    const total = sortedStaff.length;
+    const activeUsers = sortedStaff.filter((profile) => profile.user.isActive).length;
+    const expiringCerts = await prisma.certification.count({ where: certificationWhere });
+    const backgroundPending = sortedStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
 
     return (
       <StaffPage
         data={{
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
-          staff,
+          staff: sortedStaff,
           stats: { total, activeUsers, expiringCerts, backgroundPending },
         }}
       />

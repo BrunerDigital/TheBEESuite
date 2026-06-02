@@ -17,6 +17,7 @@ Status legend:
 - [x] Role-based UI and data scoping exists for executive users vs location/director users.
 - [x] Location-level users are scoped to assigned center data for CRM leads and FTE reports.
 - [x] The app name and author metadata have been corrected to `The Bee Suite` and `BrunerDigital`.
+- [x] Production Prisma connection usage is limited to reduce Supabase connection exhaustion during live school traffic.
 - [ ] Complete a fresh production smoke test for every role after each major deployment.
 - [x] Create a formal release checklist before every live-school rollout.
 

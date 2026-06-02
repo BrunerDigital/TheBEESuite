@@ -109,7 +109,7 @@ Status legend:
 - [x] Add duplicate lead detection/merge workflow.
 - [x] Add full communication timeline per family/lead.
 - [x] Add CRM saved views, filters, and exports.
-- [ ] Add lead assignment/owner workflow.
+- [x] Add lead assignment/owner workflow.
 - [x] Add automated nurture steps tied to stage transitions.
 
 ## Inquiry Forms And External Lead Intake

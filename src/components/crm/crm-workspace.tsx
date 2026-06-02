@@ -56,6 +56,7 @@ type CrmLead = {
   stage: EnrollmentStage;
   score: number;
   status: string;
+  customFields?: unknown;
   createdAt: string | Date;
   center: CenterOption;
 };
@@ -177,6 +178,16 @@ function getCenterLabel(center: CenterOption) {
   return place ? `${center.name} (${place})` : center.name;
 }
 
+function getLeadOwner(lead?: CrmLead | null) {
+  const fields = lead?.customFields;
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) return "";
+  const ownerName = "ownerName" in fields ? fields.ownerName : null;
+  const ownerEmail = "ownerEmail" in fields ? fields.ownerEmail : null;
+  return typeof ownerName === "string" && ownerName
+    ? ownerName
+    : typeof ownerEmail === "string" ? ownerEmail : "";
+}
+
 function makeMrBeeDraft(lead?: CrmLead) {
   if (!lead) return "Choose a lead and Mr. Bee will draft a warm, human-reviewed follow-up.";
 
@@ -274,6 +285,7 @@ function makeCsvRows(leads: CrmLead[]) {
     "Pipeline Stage",
     "Lead Score",
     "Status",
+    "Owner",
     "Lead Source",
     "Desired Start Date",
     "Created At",
@@ -292,6 +304,7 @@ function makeCsvRows(leads: CrmLead[]) {
     stageLabels[lead.stage],
     lead.score,
     lead.status,
+    getLeadOwner(lead),
     lead.leadSource,
     dateInputValue(lead.desiredStartDate),
     safeDate(lead.createdAt),
@@ -613,6 +626,29 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
       setEmailDraft(makeMrBeeDraft(json.lead));
       showStatus("Lead details updated and audit logged.");
+    });
+  }
+
+  function updateLeadOwner(ownerAction: "assign_self" | "clear") {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch(`/api/leads/${selectedLead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerAction }),
+      });
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null) as { error?: string } | null;
+        showError(json?.error || "Lead owner could not be updated.");
+        return;
+      }
+
+      const json = (await response.json()) as { lead: CrmLead };
+      setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
+      setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
+      showStatus(ownerAction === "assign_self" ? "Lead assigned to you." : "Lead owner cleared.");
     });
   }
 
@@ -1168,6 +1204,9 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                     <div className="mt-1 flex flex-wrap gap-2">
                       <Badge>{stageLabels[selectedLead.stage]}</Badge>
                       <Badge variant="outline">Score {selectedLead.score}</Badge>
+                      <Badge variant={getLeadOwner(selectedLead) ? "secondary" : "outline"}>
+                        {getLeadOwner(selectedLead) || "Unassigned"}
+                      </Badge>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-muted-foreground">
@@ -1182,6 +1221,24 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                     <div className="flex items-center gap-2">
                       <MapPin className="size-4" />
                       {getCenterLabel(selectedLead.center)}
+                    </div>
+                  </div>
+                  <div className="grid gap-2 rounded-xl border bg-background/50 p-3">
+                    <div>
+                      <div className="text-sm font-medium">Lead owner</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {getLeadOwner(selectedLead)
+                          ? `${getLeadOwner(selectedLead)} owns the next follow-up.`
+                          : "No owner is assigned yet."}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button size="sm" variant="outline" onClick={() => updateLeadOwner("assign_self")} disabled={isPending}>
+                        Assign to me
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => updateLeadOwner("clear")} disabled={isPending || !getLeadOwner(selectedLead)}>
+                        Clear owner
+                      </Button>
                     </div>
                   </div>
                   {duplicateCandidates.length ? (

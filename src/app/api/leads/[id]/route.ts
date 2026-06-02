@@ -23,6 +23,11 @@ function hasField(body: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(body, key);
 }
 
+function jsonObject(value: Prisma.JsonValue | null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return { ...value } as Prisma.JsonObject;
+}
+
 export async function GET(_request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
@@ -95,9 +100,13 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const requestedStage = clean(body.stage);
   const stage = requestedStage ? parseLeadStage(requestedStage) : undefined;
   const status = clean(body.status);
+  const ownerAction = clean(body.ownerAction);
 
   if (requestedStage && !stage) {
     return NextResponse.json({ ok: false, errors: { stage: "Pipeline stage is invalid." } }, { status: 400 });
+  }
+  if (ownerAction && ownerAction !== "assign_self" && ownerAction !== "clear") {
+    return NextResponse.json({ ok: false, errors: { ownerAction: "Lead owner action is invalid." } }, { status: 400 });
   }
 
   const existing = await prisma.lead.findUnique({
@@ -114,6 +123,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       programInterest: true,
       stage: true,
       status: true,
+      customFields: true,
     },
   });
 
@@ -194,6 +204,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     fieldChanges.push("desiredStartDate");
   }
 
+  if (ownerAction) {
+    const customFields = jsonObject(existing.customFields);
+    if (ownerAction === "assign_self") {
+      customFields.ownerUserId = user.id;
+      customFields.ownerName = user.name;
+      customFields.ownerEmail = user.email;
+      customFields.ownerAssignedAt = new Date().toISOString();
+    } else {
+      delete customFields.ownerUserId;
+      delete customFields.ownerName;
+      delete customFields.ownerEmail;
+      delete customFields.ownerAssignedAt;
+    }
+    data.customFields = customFields;
+    fieldChanges.push("owner");
+  }
+
   if (!fieldChanges.length) {
     return NextResponse.json({ ok: false, error: "No lead updates were provided." }, { status: 400 });
   }
@@ -269,6 +296,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ageGroupInterest: existing.ageGroupInterest,
         desiredStartDate: existing.desiredStartDate,
         programInterest: existing.programInterest,
+        ownerUserId: jsonObject(existing.customFields).ownerUserId ?? null,
       },
       after: {
         stage: lead.stage,
@@ -281,6 +309,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ageGroupInterest: lead.ageGroupInterest,
         desiredStartDate: lead.desiredStartDate,
         programInterest: lead.programInterest,
+        ownerUserId: jsonObject(lead.customFields).ownerUserId ?? null,
       },
       fields: fieldChanges,
       nurtureTask: nurtureTaskTitle,

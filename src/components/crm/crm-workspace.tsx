@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clipboard,
   Download,
+  GitMerge,
   GripVertical,
   Mail,
   MapPin,
@@ -16,6 +17,7 @@ import {
   Send,
   Save,
   Sparkles,
+  TriangleAlert,
   Trash2,
   Wand2,
 } from "lucide-react";
@@ -194,6 +196,33 @@ function safeCsvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+function normalizeMatchText(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function normalizePhone(value?: string | null) {
+  return (value ?? "").replace(/\D/g, "");
+}
+
+function duplicateReasons(primary: CrmLead, candidate: CrmLead) {
+  const reasons: string[] = [];
+  const primaryEmail = normalizeMatchText(primary.email);
+  const candidateEmail = normalizeMatchText(candidate.email);
+  const primaryPhone = normalizePhone(primary.phone);
+  const candidatePhone = normalizePhone(candidate.phone);
+  const primaryFamily = normalizeMatchText(primary.familyName);
+  const candidateFamily = normalizeMatchText(candidate.familyName);
+  const primaryChild = normalizeMatchText(primary.childName);
+  const candidateChild = normalizeMatchText(candidate.childName);
+
+  if (primaryEmail && primaryEmail === candidateEmail) reasons.push("same email");
+  if (primaryPhone && candidatePhone && primaryPhone.slice(-7) === candidatePhone.slice(-7)) reasons.push("same phone");
+  if (primaryFamily && primaryFamily === candidateFamily) reasons.push("same family name");
+  if (primaryChild && candidateChild && primaryChild === candidateChild) reasons.push("same child name");
+
+  return reasons;
+}
+
 function makeCsvRows(leads: CrmLead[]) {
   const headers = [
     "Family Name",
@@ -303,6 +332,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [draggingLeadId, setDraggingLeadId] = useState<string | null>(null);
   const [selectedLeadId, setSelectedLeadId] = useState(initialLeads[0]?.id ?? "");
   const [selectedLeadDetails, setSelectedLeadDetails] = useState<LeadDetails | null>(null);
+  const [leadDetailsRefreshKey, setLeadDetailsRefreshKey] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -360,6 +390,30 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
   const highIntent = filteredLeads.filter((lead) => lead.score >= 75).length;
+  const duplicateCandidates = useMemo(() => {
+    if (!selectedLead) return [];
+
+    return leads
+      .filter((lead) => (
+        lead.id !== selectedLead.id &&
+        lead.center.id === selectedLead.center.id &&
+        lead.status !== "merged"
+      ))
+      .map((lead) => {
+        const reasons = duplicateReasons(selectedLead, lead);
+        const confidence = reasons.includes("same email") || reasons.includes("same phone")
+          ? "high"
+          : "medium";
+        return { lead, reasons, confidence };
+      })
+      .filter(({ reasons }) => (
+        reasons.includes("same email") ||
+        reasons.includes("same phone") ||
+        (reasons.includes("same family name") && reasons.includes("same child name"))
+      ))
+      .sort((left, right) => right.reasons.length - left.reasons.length)
+      .slice(0, 4);
+  }, [leads, selectedLead]);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,7 +434,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [selectedLead?.id]);
+  }, [leadDetailsRefreshKey, selectedLead?.id]);
 
   function selectLead(lead: CrmLead) {
     setSelectedLeadId(lead.id);
@@ -614,6 +668,34 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setTourStartsAt("");
       setTourNotes("");
       showStatus("Tour scheduled, pipeline updated, and audit logged.");
+    });
+  }
+
+  function mergeDuplicateLead(duplicateLeadId: string) {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch(`/api/leads/${selectedLead.id}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duplicateLeadId }),
+      });
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null) as { error?: string } | null;
+        showError(json?.error || "Duplicate lead could not be merged.");
+        return;
+      }
+
+      const json = (await response.json()) as { lead: CrmLead; mergedLeadId: string };
+      setLeads((current) =>
+        current
+          .map((lead) => (lead.id === json.lead.id ? json.lead : lead))
+          .filter((lead) => lead.id !== json.mergedLeadId),
+      );
+      selectLead(json.lead);
+      setLeadDetailsRefreshKey((current) => current + 1);
+      showStatus("Duplicate merged, related activity moved, and audit log recorded.");
     });
   }
 
@@ -1060,6 +1142,52 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       {getCenterLabel(selectedLead.center)}
                     </div>
                   </div>
+                  {duplicateCandidates.length ? (
+                    <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 p-3">
+                      <div className="flex items-start gap-2">
+                        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-300" />
+                        <div>
+                          <div className="text-sm font-semibold">Possible duplicate lead</div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            Review before merging. Merges stay inside this school and keep an audit trail.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2">
+                        {duplicateCandidates.map(({ lead, reasons, confidence }) => (
+                          <div key={lead.id} className="rounded-lg border bg-background/60 p-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-semibold">{lead.familyName}</div>
+                                <div className="mt-1 truncate text-[0.7rem] text-muted-foreground">
+                                  {lead.email ?? lead.phone ?? "No contact"} · {stageLabels[lead.stage]}
+                                </div>
+                              </div>
+                              <Badge variant={confidence === "high" ? "default" : "outline"}>
+                                {confidence}
+                              </Badge>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {reasons.map((reason) => (
+                                <Badge key={reason} variant="secondary" className="text-[0.65rem]">
+                                  {reason}
+                                </Badge>
+                              ))}
+                            </div>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              <Button size="sm" variant="outline" onClick={() => selectLead(lead)}>
+                                Review
+                              </Button>
+                              <Button size="sm" onClick={() => mergeDuplicateLead(lead.id)} disabled={isPending}>
+                                <GitMerge data-icon="inline-start" />
+                                Merge
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div className="grid gap-2">
                     <Label htmlFor="edit-family-name">Parent / family name</Label>
                     <Input

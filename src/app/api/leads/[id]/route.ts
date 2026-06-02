@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseLeadStage } from "@/lib/crm";
+import { parseLeadStage, stageNurtureTask } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -225,6 +225,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     },
   });
 
+  const nurtureTaskTitle = fieldChanges.includes("stage")
+    ? stageNurtureTask(lead.stage, lead.familyName)
+    : null;
+
+  if (nurtureTaskTitle) {
+    const existingTask = await prisma.task.findFirst({
+      where: {
+        leadId: lead.id,
+        title: nurtureTaskTitle,
+        status: "open",
+      },
+      select: { id: true },
+    });
+
+    if (!existingTask) {
+      await prisma.task.create({
+        data: {
+          leadId: lead.id,
+          title: nurtureTaskTitle,
+          status: "open",
+          assignedTo: user.id,
+          dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+        },
+      });
+    }
+  }
+
   await writeAuditLog(user, {
     centerId: lead.centerId,
     action: "lead.updated",
@@ -256,6 +283,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         programInterest: lead.programInterest,
       },
       fields: fieldChanges,
+      nurtureTask: nurtureTaskTitle,
     },
   });
 

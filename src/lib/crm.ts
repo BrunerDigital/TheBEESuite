@@ -61,3 +61,23 @@ export function leadScore({
   if (locationId) score += 10;
   return Math.min(score, 95);
 }
+
+export function stageNurtureTask(stage: EnrollmentStage, familyName: string) {
+  const family = familyName.trim() || "family";
+  const tasks: Partial<Record<EnrollmentStage, string>> = {
+    [EnrollmentStage.NEW_INQUIRY]: `Call ${family} within 1 business day`,
+    [EnrollmentStage.CONTACTED]: `Confirm program fit and preferred tour windows for ${family}`,
+    [EnrollmentStage.TOUR_SCHEDULED]: `Prepare tour packet and classroom availability for ${family}`,
+    [EnrollmentStage.TOUR_COMPLETED]: `Send post-tour follow-up to ${family}`,
+    [EnrollmentStage.APPLICATION_SENT]: `Check application progress for ${family}`,
+    [EnrollmentStage.APPLICATION_STARTED]: `Offer application help to ${family}`,
+    [EnrollmentStage.APPLICATION_SUBMITTED]: `Review submitted application for ${family}`,
+    [EnrollmentStage.DOCUMENTS_PENDING]: `Request missing documents from ${family}`,
+    [EnrollmentStage.DEPOSIT_PENDING]: `Confirm deposit next step with ${family}`,
+    [EnrollmentStage.ENROLLED]: `Prepare welcome and first-day checklist for ${family}`,
+    [EnrollmentStage.WAITLISTED]: `Send waitlist status update to ${family}`,
+    [EnrollmentStage.LOST_NOT_A_FIT]: `Archive reason and close loop for ${family}`,
+  };
+
+  return tasks[stage] ?? null;
+}

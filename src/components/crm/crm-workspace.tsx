@@ -587,6 +587,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       }
       const json = (await response.json()) as { lead: CrmLead };
       setLeads((current) => current.map((lead) => (lead.id === leadId ? json.lead : lead)));
+      setLeadDetailsRefreshKey((current) => current + 1);
       showStatus("Pipeline stage updated and logged.");
     });
   }

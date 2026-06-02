@@ -110,7 +110,7 @@ Status legend:
 - [x] Add full communication timeline per family/lead.
 - [x] Add CRM saved views, filters, and exports.
 - [ ] Add lead assignment/owner workflow.
-- [ ] Add automated nurture steps tied to stage transitions.
+- [x] Add automated nurture steps tied to stage transitions.
 
 ## Inquiry Forms And External Lead Intake
 

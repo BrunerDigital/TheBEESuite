@@ -40,3 +40,9 @@ jobs:
 
       - name: Build
         run: npm run vercel-build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test production build
+        run: SMOKE_LOCAL=1 SMOKE_SKIP_BUILD=1 npm run test:smoke

@@ -1,11 +1,12 @@
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { chromium, request as playwrightRequest } from "playwright";
 
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
+const workspaceDir = realpathSync(process.cwd());
 
 type SmokeRoute = {
   name: string;
@@ -54,9 +55,8 @@ function cleanUrl(value?: string) {
 }
 
 function startLocalServer(port: number) {
-  const appDir = process.cwd();
-  const child = spawn(process.execPath, [nextBin, "start", appDir, "--hostname", "127.0.0.1", "--port", String(port)], {
-    cwd: process.cwd(),
+  const child = spawn(process.execPath, [nextBin, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
+    cwd: workspaceDir,
     env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
   });
 
@@ -68,10 +68,10 @@ function startLocalServer(port: number) {
 
 function ensureProductionBuild() {
   if (process.env.SMOKE_SKIP_BUILD === "1") return;
-  if (process.env.SMOKE_REBUILD !== "1" && existsSync(join(process.cwd(), ".next", "BUILD_ID"))) return;
+  if (process.env.SMOKE_REBUILD !== "1" && existsSync(join(workspaceDir, ".next", "BUILD_ID"))) return;
 
-  const result = spawnSync(process.execPath, [nextBin, "build", process.cwd()], {
-    cwd: process.cwd(),
+  const result = spawnSync(process.execPath, [nextBin, "build"], {
+    cwd: workspaceDir,
     env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
     stdio: "inherit",
   });

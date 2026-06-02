@@ -525,6 +525,6 @@ Status legend:
 - [ ] Complete kiosk production UX with authorization/signature/late pickup workflows.
 - [ ] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
 - [x] Complete inquiry embed self-service generator for every tenant/location.
-- [ ] Add automated Playwright smoke tests and CI gate.
+- [x] Add automated Playwright smoke tests and CI gate.
 - [x] Add formal production runbook for live school support.
 - [ ] Complete legal/privacy/security review before public SaaS launch beyond Kid City USA pilot.

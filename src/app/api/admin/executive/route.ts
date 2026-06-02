@@ -598,6 +598,37 @@ async function setUserStatus(payload: Payload, actor: Awaited<ReturnType<typeof 
   return { user: updated };
 }
 
+async function revokeUserSessions(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
+  const email = clean(payload.email).toLowerCase();
+  if (!isEmail(email)) throw new Error("A valid user email is required.");
+
+  const appUser = await prisma.user.findFirst({
+    where: { email, tenantId: actor.tenantId },
+    select: { id: true, email: true, sessionVersion: true },
+  });
+  if (!appUser) throw new Error("User not found in this tenant.");
+  if (appUser.id === actor.id) throw new Error("You cannot revoke your own current session from this control.");
+
+  const updated = await prisma.user.update({
+    where: { id: appUser.id },
+    data: {
+      sessionVersion: { increment: 1 },
+    },
+    select: { id: true, email: true, sessionVersion: true },
+  });
+
+  await audit({
+    tenantId: actor.tenantId,
+    userId: actor.id,
+    action: "executive.user.sessions_revoked",
+    resource: "User",
+    resourceId: updated.id,
+    metadata: { email, priorSessionVersion: appUser.sessionVersion, sessionVersion: updated.sessionVersion, revokedBy: actor.email },
+  });
+
+  return { user: updated, sessionVersion: updated.sessionVersion };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireExecutiveAccess();
@@ -621,6 +652,9 @@ export async function POST(request: NextRequest) {
     }
     if (action === "setUserStatus") {
       return NextResponse.json({ ok: true, ...(await setUserStatus(payload, actor)) });
+    }
+    if (action === "revokeUserSessions") {
+      return NextResponse.json({ ok: true, ...(await revokeUserSessions(payload, actor)) });
     }
 
     return NextResponse.json({ ok: false, error: "Unsupported executive action." }, { status: 400 });

@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       email: true,
       name: true,
       role: true,
+      sessionVersion: true,
     },
   });
 

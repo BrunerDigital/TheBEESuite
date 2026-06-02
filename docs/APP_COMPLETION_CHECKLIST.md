@@ -47,7 +47,7 @@ Status legend:
 - [x] Password reset support exists through the UI/API.
 - [ ] Complete forced password reset workflow for first production login.
 - [ ] Add MFA option for executive/admin users.
-- [ ] Add session revocation/admin logout-all-devices control.
+- [x] Add session revocation/admin logout-all-devices control.
 - [x] Add parent portal invitation/password setup workflow for linked guardians.
 - [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 

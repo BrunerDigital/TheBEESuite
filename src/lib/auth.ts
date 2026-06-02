@@ -13,6 +13,7 @@ export type AppSession = {
   email: string;
   role: UserRole;
   exp: number;
+  sessionVersion?: number;
 };
 
 export type CurrentUser = {
@@ -106,6 +107,17 @@ function canUseTenantWideAccessRole(role: UserRole) {
   return tenantWideAccessRoles.has(role);
 }
 
+export function readSessionVersion(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+export function sessionMatchesCurrentVersion(
+  session: Pick<AppSession, "sessionVersion">,
+  currentVersion: unknown,
+) {
+  return (session.sessionVersion ?? 0) === readSessionVersion(currentVersion);
+}
+
 function getAuthSecret() {
   const secret = process.env.AUTH_SECRET;
   if (secret) return secret;
@@ -136,12 +148,15 @@ function verifySignature(data: string, signature: string) {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role">) {
+export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role"> & {
+  sessionVersion?: number;
+}) {
   const payload: AppSession = {
     userId: user.id,
     email: user.email,
     role: user.role,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+    sessionVersion: readSessionVersion(user.sessionVersion),
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
@@ -229,6 +244,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   });
 
   if (!user) return null;
+  if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
 
   const brandName =
     user.organization?.brand?.settings?.brandName ??

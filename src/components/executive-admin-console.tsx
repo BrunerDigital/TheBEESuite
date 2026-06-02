@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Building2, KeyRound, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Building2, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -210,6 +210,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
 
   function setUserStatus(status: "active" | "inactive") {
     post("setUserStatus", { email: resetForm.email, status }, status === "active" ? "User reactivated." : "User deactivated.");
+  }
+
+  function revokeSessions() {
+    post("revokeUserSessions", { email: resetForm.email }, "Active sessions revoked. The user must log in again.");
   }
 
   function loadUserForEdit(user: UserOption) {
@@ -473,6 +477,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => setResetForm((current) => ({ ...current, email: user.email }))}>Reset</Button>
+                          <Button variant="outline" size="sm" onClick={() => post("revokeUserSessions", { email: user.email }, "Active sessions revoked. The user must log in again.")}>Sessions</Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -537,9 +542,9 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <KeyRound className="size-5 text-primary" />
-                Password Reset
+                Password and Session Controls
               </CardTitle>
-              <CardDescription>Send a reset email, or set a temporary password for a user in this tenant.</CardDescription>
+              <CardDescription>Send a reset email, set a temporary password, deactivate users, or force a fresh login.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -561,6 +566,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                   </Button>
                   <Button variant="outline" onClick={() => setUserStatus("active")} disabled={isPending || !resetForm.email}>
                     Reactivate User
+                  </Button>
+                  <Button variant="outline" onClick={revokeSessions} disabled={isPending || !resetForm.email}>
+                    <LogOut data-icon="inline-start" />
+                    Log Out All Devices
                   </Button>
                 </div>
               </div>

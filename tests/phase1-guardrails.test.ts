@@ -30,6 +30,7 @@ import {
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
+import { readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
@@ -192,6 +193,16 @@ test("login rate limit blocks repeated attempts for the same key", () => {
   assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, true);
   assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, true);
   assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, false);
+});
+
+test("session version guard invalidates stale signed cookies", () => {
+  assert.equal(readSessionVersion(null), 0);
+  assert.equal(readSessionVersion(3), 3);
+  assert.equal(readSessionVersion(-1), 0);
+  assert.equal(sessionMatchesCurrentVersion({ sessionVersion: 3 }, 3), true);
+  assert.equal(sessionMatchesCurrentVersion({ sessionVersion: 2 }, 3), false);
+  assert.equal(sessionMatchesCurrentVersion({}, 1), false);
+  assert.equal(sessionMatchesCurrentVersion({}, 0), true);
 });
 
 test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {

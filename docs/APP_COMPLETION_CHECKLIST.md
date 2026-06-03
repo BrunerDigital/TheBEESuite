@@ -1,6 +1,6 @@
 # The Bee Suite App Completion Checklist
 
-Last updated: June 2, 2026
+Last updated: June 3, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -524,7 +524,7 @@ Status legend:
 - [ ] Replace remaining executive-only demo data with real imported classroom/family/teacher data.
 - [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
 - [ ] Finish teacher classroom tablet workflows for daily logging.
-- [ ] Complete kiosk production UX with authorization/signature/late pickup workflows.
+- [x] Complete kiosk production UX with authorization/signature/late pickup workflows.
 - [ ] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
 - [x] Complete inquiry embed self-service generator for every tenant/location.
 - [x] Add automated Playwright smoke tests and CI gate.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, LockKeyhole, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, LockKeyhole, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,11 +54,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [lastBatchId, setLastBatchId] = useState("");
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
   function clearPreview() {
     setPreview(null);
+  }
+
+  function downloadBackup(batchId: string) {
+    const params = new URLSearchParams();
+    params.set("batchId", batchId);
+    if (batchId === "latest") params.set("centerId", centerId);
+    window.location.href = `/api/imports/procare?${params.toString()}`;
   }
 
   function submit(dryRun: boolean) {
@@ -76,6 +84,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       const json = await response.json().catch(() => null) as {
         dryRun?: boolean;
         error?: string;
+        batchId?: string;
         summary?: ImportPreview & Record<string, number | string | unknown>;
       } | null;
       if (!response.ok) {
@@ -84,11 +93,13 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       }
       if (json?.dryRun) {
         setPreview(json.summary ?? null);
+        setLastBatchId("");
         setStatus("");
         return;
       }
       setCsv("");
       setPreview(null);
+      setLastBatchId(json?.batchId ?? "");
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
       setStatus(
@@ -110,7 +121,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <Alert>
             <CheckCircle2 className="size-4" />
             <AlertTitle>Import complete</AlertTitle>
-            <AlertDescription>{status}</AlertDescription>
+            <AlertDescription className="space-y-3">
+              <p>{status}</p>
+              {lastBatchId ? (
+                <Button size="sm" variant="outline" onClick={() => downloadBackup(lastBatchId)}>
+                  <Download data-icon="inline-start" />
+                  Download Import Backup
+                </Button>
+              ) : null}
+            </AlertDescription>
           </Alert>
         ) : null}
         {error ? (
@@ -235,6 +254,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <Button disabled={isPending || !centerId || !preview || Boolean(preview.warningRows)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
             Commit ProCare Import
+          </Button>
+          <Button disabled={isPending || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
+            <Download data-icon="inline-start" />
+            Download Latest Backup
           </Button>
         </div>
         {preview?.warningRows ? (

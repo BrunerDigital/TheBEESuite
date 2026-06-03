@@ -44,6 +44,7 @@ This note documents how The Bee Suite maps the ProCare data areas visible in the
 - All unmapped ProCare columns are preserved in `customFields.rawData` or row-level import records so no export data is silently discarded.
 - User-defined, tracking, custom, and school-field columns are additionally collected under `customFields.userDefined`.
 - Missing child DOBs are flagged in `Child.customFields.dateOfBirthMissing`; directors should correct those rows before live operations.
+- Committed import batches can be downloaded as scoped JSON backups from the ProCare import panel. Each backup includes the batch summary, center, uploader, row statuses, raw row data, created family/child IDs, and an audit-log entry for the export action.
 
 ## Remaining Validation Needed
 

@@ -522,6 +522,136 @@ async function readImportText(file: FormDataEntryValue | null, pastedCsv: string
   return { text: buffer.toString("utf8"), filename: file.name, sourceType: "csv_file" };
 }
 
+const importBackupInclude = {
+  center: {
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      city: true,
+      state: true,
+    },
+  },
+  uploadedBy: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+  rows: {
+    orderBy: { rowNumber: "asc" as const },
+    select: {
+      id: true,
+      rowNumber: true,
+      status: true,
+      message: true,
+      rawData: true,
+      createdFamilyId: true,
+      createdChildId: true,
+      createdAt: true,
+    },
+  },
+} as const;
+
+function safeBackupFilename(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "procare-import";
+}
+
+export async function GET(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "ProCare import backups are not allowed for this role." }, { status: 403 });
+  }
+
+  const requestedBatchId = clean(request.nextUrl.searchParams.get("batchId") || request.nextUrl.searchParams.get("id"));
+  const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
+  const wantsLatest = !requestedBatchId || requestedBatchId.toLowerCase() === "latest";
+
+  const batch = wantsLatest
+    ? await (async () => {
+        const autoCenter = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase());
+        if (!autoCenter && requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
+          return { forbidden: true as const };
+        }
+        const centerIds = !autoCenter && requestedCenterId
+          ? [requestedCenterId]
+          : user.centerIds.length
+            ? user.centerIds
+            : ["__no_authorized_center__"];
+        return prisma.procareImportBatch.findFirst({
+          where: { centerId: { in: centerIds } },
+          orderBy: { createdAt: "desc" },
+          include: importBackupInclude,
+        });
+      })()
+    : await prisma.procareImportBatch.findUnique({
+        where: { id: requestedBatchId },
+        include: importBackupInclude,
+      });
+
+  if (batch && "forbidden" in batch) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
+  }
+  if (!batch) {
+    return NextResponse.json({ ok: false, error: "ProCare import batch not found." }, { status: 404 });
+  }
+  if (!canAccessCenter(user, batch.centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
+  }
+
+  const exportPayload = {
+    exportType: "procare_import_backup",
+    exportedAt: new Date().toISOString(),
+    exportedBy: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    },
+    batch: {
+      id: batch.id,
+      filename: batch.filename,
+      status: batch.status,
+      summary: batch.summary,
+      createdAt: batch.createdAt,
+      center: batch.center,
+      uploadedBy: batch.uploadedBy,
+    },
+    rows: batch.rows,
+  };
+
+  await writeAuditLog(user, {
+    centerId: batch.centerId,
+    action: "procare.import.backup_exported",
+    resource: "ProcareImportBatch",
+    resourceId: batch.id,
+    metadata: {
+      filename: batch.filename,
+      rowCount: batch.rows.length,
+      status: batch.status,
+    },
+  });
+
+  const centerLabel = batch.center.crmLocationId || batch.center.name;
+  const filename = `${safeBackupFilename(centerLabel)}-${safeBackupFilename(batch.filename)}-${batch.id}.json`;
+  return new Response(JSON.stringify(exportPayload, null, 2), {
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {

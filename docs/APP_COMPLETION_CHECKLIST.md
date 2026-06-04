@@ -206,7 +206,7 @@ Status legend:
 - [x] Add signature capture.
 - [ ] Add QR/PIN options.
 - [x] Add late pickup flag workflow.
-- [ ] Add staff kiosk mode.
+- [x] Add staff kiosk mode.
 - [x] Add parent authorization warnings during pickup.
 - [x] Add end-of-day attendance reconciliation report.
 

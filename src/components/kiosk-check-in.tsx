@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Clock, KeyRound, LogIn, LogOut, QrCode, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, KeyRound, LogIn, LogOut, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 type VerificationMethod = "pin" | "qr";
+type KioskMode = "family" | "staff";
 
 type KioskChild = {
   id: string;
@@ -27,6 +28,23 @@ type LookupResult = {
   verification?: { method: VerificationMethod };
   warnings?: Array<{ type: string; message: string }>;
   children: KioskChild[];
+};
+
+type StaffLookupResult = {
+  staff: {
+    id: string;
+    name: string;
+    email: string;
+    title: string;
+    classroom: { id: string; name: string } | null;
+    clock: {
+      status: "clocked_in" | "clocked_out";
+      lastAction: string | null;
+      lastActionAt: string | null;
+      currentClockInAt: string | null;
+      currentClockOutAt: string | null;
+    };
+  };
 };
 
 type VerifiedCredential =
@@ -49,12 +67,22 @@ function actionLabel(type?: string) {
   return "No kiosk action today";
 }
 
+function clockLabel(value?: string | null) {
+  if (!value) return "No staff clock event today";
+  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
 export function KioskCheckIn({ center }: Props) {
+  const [kioskMode, setKioskMode] = useState<KioskMode>("family");
   const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
   const [qrToken, setQrToken] = useState("");
   const [verifiedCredential, setVerifiedCredential] = useState<VerifiedCredential | null>(null);
   const [lookup, setLookup] = useState<LookupResult | null>(null);
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffPin, setStaffPin] = useState("");
+  const [staffLookup, setStaffLookup] = useState<StaffLookupResult | null>(null);
+  const [staffNotes, setStaffNotes] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [signatureName, setSignatureName] = useState("");
   const [status, setStatus] = useState("");
@@ -67,6 +95,7 @@ export function KioskCheckIn({ center }: Props) {
     [lookup, selectedIds],
   );
   const credentialReady = credentialMode === "pin" ? pin.length === 4 : Boolean(qrToken.trim());
+  const staffCredentialReady = Boolean(staffEmail.trim()) && staffPin.length === 4;
   const verificationLabel = verifiedCredential?.method === "qr" ? "QR scan" : "PIN";
 
   const reset = useCallback((nextStatus = "") => {
@@ -74,6 +103,10 @@ export function KioskCheckIn({ center }: Props) {
     setQrToken("");
     setVerifiedCredential(null);
     setLookup(null);
+    setStaffEmail("");
+    setStaffPin("");
+    setStaffLookup(null);
+    setStaffNotes("");
     setSelectedIds([]);
     setSignatureName("");
     setError("");
@@ -85,6 +118,13 @@ export function KioskCheckIn({ center }: Props) {
   function markActivity() {
     idleSecondsRef.current = idleResetSeconds;
     setIdleSecondsRemaining(idleResetSeconds);
+  }
+
+  function selectKioskMode(mode: KioskMode) {
+    markActivity();
+    if (mode === kioskMode) return;
+    reset();
+    setKioskMode(mode);
   }
 
   function selectCredentialMode(method: VerificationMethod) {
@@ -102,7 +142,7 @@ export function KioskCheckIn({ center }: Props) {
   }
 
   useEffect(() => {
-    const hasPrivateState = Boolean(pin || qrToken || lookup || status || error);
+    const hasPrivateState = Boolean(pin || qrToken || lookup || staffEmail || staffPin || staffLookup || status || error);
     if (!hasPrivateState) return undefined;
 
     const timer = window.setInterval(() => {
@@ -113,13 +153,21 @@ export function KioskCheckIn({ center }: Props) {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [error, lookup, pin, qrToken, reset, status]);
+  }, [error, lookup, pin, qrToken, reset, staffEmail, staffLookup, staffPin, status]);
 
   function appendDigit(digit: string) {
     markActivity();
     setError("");
     setStatus("");
     setPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
+  }
+
+  function appendStaffDigit(digit: string) {
+    markActivity();
+    setError("");
+    setStatus("");
+    setStaffLookup(null);
+    setStaffPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
   }
 
   function lookupCredential() {
@@ -186,6 +234,67 @@ export function KioskCheckIn({ center }: Props) {
     });
   }
 
+  function lookupStaffCredential() {
+    markActivity();
+    if (!staffCredentialReady) {
+      setError("Enter your work email and 4 digit staff code.");
+      return;
+    }
+
+    startTransition(async () => {
+      setError("");
+      setStatus("");
+      const response = await fetch("/api/kiosk/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId: center.id,
+          email: staffEmail,
+          pin: staffPin,
+          action: "lookup",
+        }),
+      });
+      const json = await response.json().catch(() => null) as ({ error?: string } & StaffLookupResult) | null;
+      if (!response.ok || !json) {
+        setError(json?.error || "Staff code could not be verified.");
+        return;
+      }
+      setStaffLookup(json);
+    });
+  }
+
+  function submitStaff(action: "clock_in" | "clock_out") {
+    markActivity();
+    if (!staffCredentialReady) {
+      setError("Enter your work email and 4 digit staff code.");
+      return;
+    }
+
+    startTransition(async () => {
+      setError("");
+      setStatus("");
+      const response = await fetch("/api/kiosk/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId: center.id,
+          email: staffEmail,
+          pin: staffPin,
+          action,
+          notes: staffNotes,
+        }),
+      });
+      const json = await response.json().catch(() => null) as ({ error?: string } & StaffLookupResult) | null;
+      if (!response.ok || !json) {
+        setError(json?.error || "Staff clock action could not be completed.");
+        if (json?.staff) setStaffLookup(json);
+        return;
+      }
+      reset(`${json.staff.name} ${action === "clock_in" ? "clocked in" : "clocked out"}.`);
+      setKioskMode("staff");
+    });
+  }
+
   return (
     <main className="min-h-screen select-none bg-background p-4 text-foreground sm:p-6">
       <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col gap-5">
@@ -235,93 +344,251 @@ export function KioskCheckIn({ center }: Props) {
         <div className="grid flex-1 gap-5 lg:grid-cols-[24rem_1fr]">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>{credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code"}</CardTitle>
-              <CardDescription>{credentialMode === "pin" ? "Use the PIN provided by your school director." : "Use the guardian QR card issued by your school director."}</CardDescription>
+              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in"}</CardTitle>
+              <CardDescription>
+                {kioskMode === "family"
+                  ? credentialMode === "pin"
+                    ? "Use the PIN provided by your school director."
+                    : "Use the guardian QR card issued by your school director."
+                  : "Use your work email and staff kiosk code."}
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
-                <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
-                  <KeyRound data-icon="inline-start" />
-                  PIN
+                <Button type="button" variant={kioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
+                  <ShieldCheck data-icon="inline-start" />
+                  Family
                 </Button>
-                <Button type="button" variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
-                  <QrCode data-icon="inline-start" />
-                  QR
+                <Button type="button" variant={kioskMode === "staff" ? "default" : "ghost"} onClick={() => selectKioskMode("staff")}>
+                  <UserRound data-icon="inline-start" />
+                  Staff
                 </Button>
               </div>
 
-              {credentialMode === "pin" ? (
+              {kioskMode === "family" ? (
                 <>
+                  <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
+                    <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
+                      <KeyRound data-icon="inline-start" />
+                      PIN
+                    </Button>
+                    <Button type="button" variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
+                      <QrCode data-icon="inline-start" />
+                      QR
+                    </Button>
+                  </div>
+
+                  {credentialMode === "pin" ? (
+                    <>
+                      <div className="grid grid-cols-4 gap-3">
+                        {[0, 1, 2, 3].map((index) => (
+                          <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
+                            {pin[index] ? "•" : ""}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                          <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit(digit)}>
+                            {digit}
+                          </Button>
+                        ))}
+                        <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                          markActivity();
+                          setPin("");
+                        }}>Clear</Button>
+                        <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit("0")}>0</Button>
+                        <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                          markActivity();
+                          setPin((current) => current.slice(0, -1));
+                        }}>Back</Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid gap-3">
+                      <Label htmlFor="guardian-qr-token" className="text-base">QR scan</Label>
+                      <Textarea
+                        id="guardian-qr-token"
+                        className="min-h-40 resize-none font-mono text-sm"
+                        value={qrToken}
+                        onChange={(event) => {
+                          markActivity();
+                          setError("");
+                          setStatus("");
+                          setQrToken(event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" && !event.shiftKey) {
+                            event.preventDefault();
+                            if (!isPending && qrToken.trim()) lookupCredential();
+                          }
+                        }}
+                        placeholder="Scan QR code"
+                        autoComplete="off"
+                      />
+                      <Button type="button" variant="outline" onClick={() => {
+                        markActivity();
+                        setQrToken("");
+                      }}>
+                        Clear QR
+                      </Button>
+                    </div>
+                  )}
+
+                  <Button className="h-16 w-full text-xl" disabled={isPending || !credentialReady} onClick={lookupCredential}>
+                    Find Family
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="staff-email" className="text-base">Work email</Label>
+                    <Input
+                      id="staff-email"
+                      className="h-14 text-lg"
+                      value={staffEmail}
+                      onChange={(event) => {
+                        markActivity();
+                        setError("");
+                        setStatus("");
+                        setStaffLookup(null);
+                        setStaffEmail(event.target.value);
+                      }}
+                      type="email"
+                      autoComplete="email"
+                      placeholder="teacher@example.com"
+                    />
+                  </div>
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map((index) => (
                       <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
-                        {pin[index] ? "•" : ""}
+                        {staffPin[index] ? "•" : ""}
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                      <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit(digit)}>
+                      <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendStaffDigit(digit)}>
                         {digit}
                       </Button>
                     ))}
                     <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
                       markActivity();
-                      setPin("");
+                      setStaffLookup(null);
+                      setStaffPin("");
                     }}>Clear</Button>
-                    <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit("0")}>0</Button>
+                    <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendStaffDigit("0")}>0</Button>
                     <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
                       markActivity();
-                      setPin((current) => current.slice(0, -1));
+                      setStaffLookup(null);
+                      setStaffPin((current) => current.slice(0, -1));
                     }}>Back</Button>
                   </div>
-                </>
-              ) : (
-                <div className="grid gap-3">
-                  <Label htmlFor="guardian-qr-token" className="text-base">QR scan</Label>
-                  <Textarea
-                    id="guardian-qr-token"
-                    className="min-h-40 resize-none font-mono text-sm"
-                    value={qrToken}
-                    onChange={(event) => {
-                      markActivity();
-                      setError("");
-                      setStatus("");
-                      setQrToken(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        if (!isPending && qrToken.trim()) lookupCredential();
-                      }
-                    }}
-                    placeholder="Scan QR code"
-                    autoComplete="off"
-                  />
-                  <Button type="button" variant="outline" onClick={() => {
-                    markActivity();
-                    setQrToken("");
-                  }}>
-                    Clear QR
+                  <Button className="h-16 w-full text-xl" disabled={isPending || !staffCredentialReady} onClick={lookupStaffCredential}>
+                    Find Staff
                   </Button>
-                </div>
+                </>
               )}
-
-              <Button className="h-16 w-full text-xl" disabled={isPending || !credentialReady} onClick={lookupCredential}>
-                Find Family
-              </Button>
             </CardContent>
           </Card>
 
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>{lookup ? lookup.family.name : "Select children"}</CardTitle>
+              <CardTitle>
+                {kioskMode === "staff"
+                  ? staffLookup
+                    ? staffLookup.staff.name
+                    : "Staff time clock"
+                  : lookup
+                    ? lookup.family.name
+                    : "Select children"}
+              </CardTitle>
               <CardDescription>
-                {lookup ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.` : "Your children will appear after PIN or QR verification."}
+                {kioskMode === "staff"
+                  ? staffLookup
+                    ? `${staffLookup.staff.title} verified for ${center.name}.`
+                    : "Staff status appears after email and code verification."
+                  : lookup
+                    ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
+                    : "Your children will appear after PIN or QR verification."}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex min-h-96 flex-col gap-4">
-              {lookup ? (
+              {kioskMode === "staff" ? (
+                staffLookup ? (
+                  <>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border bg-background/50 p-5">
+                        <div className="text-xs uppercase text-muted-foreground">Teacher</div>
+                        <div className="mt-2 text-lg font-semibold">{staffLookup.staff.name}</div>
+                        <div className="text-sm text-muted-foreground">{staffLookup.staff.email}</div>
+                      </div>
+                      <div className="rounded-2xl border bg-background/50 p-5">
+                        <div className="text-xs uppercase text-muted-foreground">Classroom</div>
+                        <div className="mt-2 text-lg font-semibold">{staffLookup.staff.classroom?.name ?? "Unassigned"}</div>
+                        <div className="text-sm text-muted-foreground">{staffLookup.staff.title}</div>
+                      </div>
+                      <div className="rounded-2xl border bg-background/50 p-5">
+                        <div className="text-xs uppercase text-muted-foreground">Status</div>
+                        <div className="mt-2">
+                          <Badge variant={staffLookup.staff.clock.status === "clocked_in" ? "default" : "outline"}>
+                            {staffLookup.staff.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}
+                          </Badge>
+                        </div>
+                        <div className="mt-2 text-sm text-muted-foreground">
+                          Last event: {clockLabel(staffLookup.staff.clock.lastActionAt)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-auto grid gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="staff-notes" className="text-base">Notes</Label>
+                        <Textarea
+                          id="staff-notes"
+                          className="min-h-24 resize-none"
+                          value={staffNotes}
+                          onChange={(event) => {
+                            markActivity();
+                            setStaffNotes(event.target.value);
+                          }}
+                          placeholder="Optional shift note"
+                        />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <Button
+                          className="h-20 text-xl"
+                          disabled={isPending || staffLookup.staff.clock.status === "clocked_in"}
+                          onClick={() => submitStaff("clock_in")}
+                        >
+                          <LogIn data-icon="inline-start" />
+                          Clock In
+                        </Button>
+                        <Button
+                          className="h-20 text-xl"
+                          variant="secondary"
+                          disabled={isPending || staffLookup.staff.clock.status !== "clocked_in"}
+                          onClick={() => submitStaff("clock_out")}
+                        >
+                          <LogOut data-icon="inline-start" />
+                          Clock Out
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Staff clock events are stored on the teacher profile and written to the audit log for director review.
+                    </p>
+                  </>
+                ) : (
+                  <div className="grid flex-1 place-items-center rounded-2xl border bg-background/40 p-8 text-center">
+                    <div>
+                      <Label className="text-lg">Ready for staff</Label>
+                      <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                        Enter the teacher work email and staff kiosk code to view current clock status.
+                      </p>
+                    </div>
+                  </div>
+                )
+              ) : lookup ? (
                 <>
                   <div className="grid gap-3 md:grid-cols-2">
                     {lookup.warnings?.length ? (

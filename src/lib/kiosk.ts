@@ -25,6 +25,10 @@ export function hashGuardianPin(guardianId: string, pin: string) {
   return createHmac("sha256", pinSecret()).update(`${guardianId}:${pin}`).digest("hex");
 }
 
+export function hashStaffPin(staffId: string, pin: string) {
+  return createHmac("sha256", pinSecret()).update(`staff:${staffId}:${pin}`).digest("hex");
+}
+
 function safeCompare(value: string, expectedValue: string) {
   const actual = Buffer.from(value);
   const expected = Buffer.from(expectedValue);
@@ -36,6 +40,15 @@ export function verifyGuardianPin(guardianId: string, pin: string, expectedHash:
   const normalized = normalizePin(pin);
   if (!normalized) return false;
   const actual = Buffer.from(hashGuardianPin(guardianId, normalized), "hex");
+  const expected = Buffer.from(expectedHash, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+export function verifyStaffPin(staffId: string, pin: string, expectedHash: string | null | undefined) {
+  if (!expectedHash) return false;
+  const normalized = normalizePin(pin);
+  if (!normalized) return false;
+  const actual = Buffer.from(hashStaffPin(staffId, normalized), "hex");
   const expected = Buffer.from(expectedHash, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

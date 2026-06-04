@@ -32,7 +32,7 @@ export default async function CheckInLauncherPage() {
           </Badge>
           <h1 className="text-3xl font-semibold tracking-tight">Choose a Check-In Kiosk</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Directors can sign into the school account on a lobby tablet or front-desk computer, open the kiosk for the correct school, then leave the tablet on the PIN or QR check-in screen.
+            Directors can sign into the school account on a lobby tablet or front-desk computer, open the kiosk for the correct school, then leave the tablet on the family PIN/QR or staff clock-in screen.
           </p>
         </section>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -43,7 +43,7 @@ export default async function CheckInLauncherPage() {
                   <CardTitle>{center.crmLocationId ?? center.name}</CardTitle>
                   <CardDescription>{[center.city, center.state].filter(Boolean).join(", ") || "School kiosk"}</CardDescription>
                 </CardHeader>
-                <CardContent className="text-sm text-primary">Open parent check-in/out screen</CardContent>
+                <CardContent className="text-sm text-primary">Open family and staff kiosk screen</CardContent>
               </Card>
             </Link>
           ))}

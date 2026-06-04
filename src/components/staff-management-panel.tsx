@@ -70,6 +70,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [title, setTitle] = useState("Teacher");
   const [backgroundCheckStatus, setBackgroundCheckStatus] = useState("pending");
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [staffKioskPin, setStaffKioskPin] = useState("");
   const [sendPasswordReset, setSendPasswordReset] = useState(true);
   const [certStaffId, setCertStaffId] = useState(staff[0]?.id ?? "");
   const [certName, setCertName] = useState("");
@@ -98,6 +99,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setTitle("Teacher");
     setBackgroundCheckStatus("pending");
     setTemporaryPassword("");
+    setStaffKioskPin("");
     setSendPasswordReset(true);
   }
 
@@ -116,6 +118,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setTitle(teacher.title || "Teacher");
     setBackgroundCheckStatus(teacher.backgroundCheckStatus ?? "pending");
     setTemporaryPassword("");
+    setStaffKioskPin("");
     setSendPasswordReset(false);
   }
 
@@ -161,6 +164,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
           title,
           backgroundCheckStatus,
           temporaryPassword: temporaryPassword.trim() || undefined,
+          staffKioskPin: staffKioskPin || undefined,
           sendPasswordReset: temporaryPassword.trim() ? false : sendPasswordReset,
         }),
       });
@@ -180,9 +184,11 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
             ? " Login setup email was requested."
             : " Teacher login was prepared."
           : "";
-      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}`);
+      const kioskStatus = staffKioskPin ? " Staff kiosk code was set." : "";
+      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}`);
       setSelectedStaffId("new");
       setTemporaryPassword("");
+      setStaffKioskPin("");
       setSendPasswordReset(true);
       router.refresh();
     });
@@ -396,6 +402,16 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   autoComplete="new-password"
                 />
               </div>
+              <div className="space-y-1">
+                <Label>Staff kiosk code</Label>
+                <Input
+                  value={staffKioskPin}
+                  onChange={(event) => setStaffKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Optional 4 digit code"
+                  inputMode="numeric"
+                  autoComplete="off"
+                />
+              </div>
               <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
                 <input
                   type="checkbox"
@@ -409,7 +425,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
             </div>
             <div className="flex flex-wrap gap-2">
               <Button disabled={isPending || !centerId}>
-                {temporaryPassword.trim() ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+                {temporaryPassword.trim() || staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                 Save teacher
               </Button>
               {selectedStaffId !== "new" ? (

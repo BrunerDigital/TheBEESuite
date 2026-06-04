@@ -178,7 +178,7 @@ Status legend:
 - [x] Parent authorization warnings exist during pickup.
 - [x] End-of-day attendance reconciliation report exists.
 - [x] Add QR/PIN alternate check-in options.
-- [ ] Add staff kiosk mode.
+- [x] Add staff kiosk mode.
 
 ## FTE Reporting
 

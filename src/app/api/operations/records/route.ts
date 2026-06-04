@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { staffKioskPinFields } from "@/lib/staff-kiosk";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
@@ -286,9 +288,14 @@ export async function POST(request: NextRequest) {
     const staffName = clean(body.name);
     const temporaryPassword = clean(body.temporaryPassword);
     const sendPasswordReset = body.sendPasswordReset === true;
+    const rawStaffKioskPin = clean(body.staffKioskPin);
+    const staffKioskPin = normalizePin(rawStaffKioskPin);
     if (!email || !staffName) return NextResponse.json({ ok: false, error: "Teacher name and email are required." }, { status: 400 });
     if (temporaryPassword && temporaryPassword.length < 8) {
       return NextResponse.json({ ok: false, error: "Temporary passwords must be at least 8 characters." }, { status: 400 });
+    }
+    if (rawStaffKioskPin && !staffKioskPin) {
+      return NextResponse.json({ ok: false, error: "Staff kiosk code must be exactly 4 digits." }, { status: 400 });
     }
     const staffRole = UserRole.TEACHER;
     const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true, tenantId: true } });
@@ -345,6 +352,11 @@ export async function POST(request: NextRequest) {
       organizationId: access.center.organizationId,
       centerId,
     });
+    const existingProfile = await prisma.staffProfile.findUnique({
+      where: { userId: staffUser.id },
+      select: { id: true, customFields: true },
+    });
+    const staffKioskPinSetAt = staffKioskPin ? new Date() : null;
     const data = {
       userId: staffUser.id,
       centerId,
@@ -352,6 +364,16 @@ export async function POST(request: NextRequest) {
       title: clean(body.title) || clean(body.body) || staffRole.replaceAll("_", " "),
       phone: clean(body.phone) || null,
       backgroundCheckStatus: clean(body.backgroundCheckStatus) || "pending",
+      ...(staffKioskPin && existingProfile && staffKioskPinSetAt
+        ? {
+            customFields: staffKioskPinFields({
+              customFields: existingProfile.customFields,
+              pinHash: hashStaffPin(existingProfile.id, staffKioskPin),
+              pinSetAt: staffKioskPinSetAt,
+              pinSetById: user.id,
+            }),
+          }
+        : {}),
     };
     if (id) {
       const existing = await prisma.staffProfile.findUnique({ where: { id }, select: { centerId: true, userId: true } });
@@ -361,14 +383,29 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "Teacher profile is not linked to this user." }, { status: 403 });
       }
     }
-    result = id
+    const savedStaffProfile = id
       ? await prisma.staffProfile.update({ where: { id }, data })
       : await prisma.staffProfile.upsert({
           where: { userId: staffUser.id },
           update: data,
           create: data,
         });
+    result = savedStaffProfile;
+    if (staffKioskPin && !existingProfile && staffKioskPinSetAt) {
+      result = await prisma.staffProfile.update({
+        where: { id: savedStaffProfile.id },
+        data: {
+          customFields: staffKioskPinFields({
+            customFields: savedStaffProfile.customFields,
+            pinHash: hashStaffPin(savedStaffProfile.id, staffKioskPin),
+            pinSetAt: staffKioskPinSetAt,
+            pinSetById: user.id,
+          }),
+        },
+      });
+    }
     auditMetadata.auth = auth as Prisma.InputJsonValue;
+    auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
   } else if (entity === "invoice") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });

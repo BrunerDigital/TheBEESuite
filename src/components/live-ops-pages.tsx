@@ -52,6 +52,7 @@ import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
+import { readStaffClockState } from "@/lib/staff-kiosk";
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "Not set";
@@ -2071,6 +2072,7 @@ export type StaffPageData = {
     title: string;
     phone: string | null;
     backgroundCheckStatus: string | null;
+    customFields: unknown;
     user: { name: string; email: string; role: string; isActive: boolean };
     center: { id: string; name: string; crmLocationId: string | null };
     classroom: { id: string; name: string } | null;
@@ -2083,6 +2085,15 @@ export type StaffPageData = {
     backgroundPending: number;
   };
 };
+
+function staffClockBadge(customFields: unknown) {
+  const state = readStaffClockState(customFields);
+  return {
+    label: state.status === "clocked_in" ? "Clocked in" : "Clocked out",
+    detail: state.lastActionAt ? formatDateTime(state.lastActionAt) : "No staff kiosk event",
+    variant: state.status === "clocked_in" ? "default" as const : "outline" as const,
+  };
+}
 
 export function StaffPage({ data }: { data: StaffPageData }) {
   return (
@@ -2117,23 +2128,33 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                 <TableHead>Classroom</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Background</TableHead>
+                <TableHead>Kiosk</TableHead>
                 <TableHead>Certifications</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.staff.map((staff) => (
-                <TableRow key={staff.id}>
-                  <TableCell>
-                    <div className="font-medium">{staff.user.name}</div>
-                    <div className="text-xs text-muted-foreground">{staff.user.email}</div>
-                  </TableCell>
-                  <TableCell>{staff.center.crmLocationId ?? staff.center.name}</TableCell>
-                  <TableCell>{staff.classroom?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{staff.user.role.replaceAll("_", " ")}</TableCell>
-                  <TableCell><Badge variant={staff.backgroundCheckStatus?.includes("clear") ? "default" : "outline"}>{staff.backgroundCheckStatus ?? "Not set"}</Badge></TableCell>
-                  <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
-                </TableRow>
-              ))}
+              {data.staff.map((staff) => {
+                const clock = staffClockBadge(staff.customFields);
+                return (
+                  <TableRow key={staff.id}>
+                    <TableCell>
+                      <div className="font-medium">{staff.user.name}</div>
+                      <div className="text-xs text-muted-foreground">{staff.user.email}</div>
+                    </TableCell>
+                    <TableCell>{staff.center.crmLocationId ?? staff.center.name}</TableCell>
+                    <TableCell>{staff.classroom?.name ?? "Unassigned"}</TableCell>
+                    <TableCell>{staff.user.role.replaceAll("_", " ")}</TableCell>
+                    <TableCell><Badge variant={staff.backgroundCheckStatus?.includes("clear") ? "default" : "outline"}>{staff.backgroundCheckStatus ?? "Not set"}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={clock.variant}>{clock.label}</Badge>
+                        <span className="text-xs text-muted-foreground">{clock.detail}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

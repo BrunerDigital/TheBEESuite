@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buildIntegrationSetupViews,
+  INTEGRATION_SETUP_DEFINITIONS,
+  normalizeIntegrationSetupStatus,
+  sanitizeIntegrationConfig,
+} from "@/lib/integration-setup";
+
+test("integration setup definitions cover the active setup surface", () => {
+  assert.deepEqual(
+    INTEGRATION_SETUP_DEFINITIONS.map((definition) => definition.provider),
+    ["supabase", "sendgrid", "google_sheets", "openai", "stripe", "twilio"],
+  );
+});
+
+test("integration setup sanitization keeps only approved non-secret fields", () => {
+  const config = sanitizeIntegrationConfig("sendgrid", {
+    fromEmail: " hello@thebeesuite.io ",
+    verifiedDomain: "thebeesuite.io",
+    SENDGRID_API_KEY: "SG.secret",
+    apiKey: "SG.secret",
+    notes: "DNS verified",
+  });
+
+  assert.deepEqual(config, {
+    fromEmail: "hello@thebeesuite.io",
+    verifiedDomain: "thebeesuite.io",
+    notes: "DNS verified",
+  });
+});
+
+test("integration setup views combine saved metadata with runtime environment readiness", () => {
+  const views = buildIntegrationSetupViews([
+    {
+      id: "int_1",
+      provider: "stripe",
+      status: "ready_for_test",
+      lastSyncAt: null,
+      configPlaceholder: {
+        setup: {
+          mode: "live",
+          webhookEndpointPath: "/api/billing/stripe-webhook",
+          feeDisclosureStatus: "approved",
+        },
+      },
+    },
+  ], {
+    STRIPE_SECRET_KEY: "sk_test_present",
+    STRIPE_WEBHOOK_SECRET: "whsec_present",
+  });
+
+  const stripe = views.find((view) => view.provider === "stripe");
+  assert.equal(stripe?.status, "Connected");
+  assert.equal(stripe?.setupStatus, "ready_for_test");
+  assert.equal(stripe?.config.mode, "live");
+  assert.equal(stripe?.env.configured, true);
+});
+
+test("legacy integration statuses normalize into setup statuses", () => {
+  assert.equal(normalizeIntegrationSetupStatus("placeholder"), "not_started");
+  assert.equal(normalizeIntegrationSetupStatus("mock_connected"), "verified");
+  assert.equal(normalizeIntegrationSetupStatus("custom"), "in_progress");
+});

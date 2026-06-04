@@ -47,11 +47,13 @@ import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
+import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
+import type { IntegrationSetupView } from "@/lib/integration-setup";
 import { readStaffClockState } from "@/lib/staff-kiosk";
 
 function formatDate(value: Date | string | null | undefined) {
@@ -623,6 +625,8 @@ export type IntegrationsData = {
     status: "Connected" | "Configured" | "Missing" | "Placeholder";
     detail: string;
   }>;
+  setupIntegrations: IntegrationSetupView[];
+  canManageSetup: boolean;
   deliveryStats?: {
     total: number;
     delivered: number;
@@ -693,6 +697,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           </Card>
         ))}
       </div>
+      <IntegrationSetupPanel integrations={data.setupIntegrations} canManage={data.canManageSetup} />
       {data.recentDeliveries ? (
         <Card className="glass-panel">
           <CardHeader>

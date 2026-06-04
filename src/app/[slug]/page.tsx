@@ -53,6 +53,7 @@ import {
 } from "@/lib/executive-demo-data";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
+import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
@@ -1824,13 +1825,12 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "integrations") {
-    const env = (key: string) => Boolean(process.env[key]);
     const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER
       ? {}
       : tenantWide
         ? { tenantId: user.tenantId }
         : { centerId: scopedCenterIds };
-    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries] = await Promise.all([
+    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries, integrationRecords] = await Promise.all([
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "pending" } }),
@@ -1854,7 +1854,18 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           center: { select: { name: true, crmLocationId: true } },
         },
       }),
+      prisma.integration.findMany({
+        where: { tenantId: user.tenantId },
+        select: {
+          id: true,
+          provider: true,
+          status: true,
+          configPlaceholder: true,
+          lastSyncAt: true,
+        },
+      }),
     ]);
+    const setupIntegrations = buildIntegrationSetupViews(integrationRecords, process.env);
 
     return (
       <IntegrationsPage
@@ -1867,44 +1878,14 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             skipped: skippedDeliveries,
           },
           recentDeliveries,
-          integrations: [
-            {
-              name: "Supabase",
-              purpose: "Database and Auth",
-              status: env("DATABASE_URL") && (env("SUPABASE_ANON_KEY") || env("SUPABASE_SERVICE_ROLE_KEY")) ? "Connected" : "Missing",
-              detail: "Used for Kid City USA users, CRM records, auth, audit logs, and SaaS data storage.",
-            },
-            {
-              name: "SendGrid",
-              purpose: "Inquiry and reviewed lead emails",
-              status: env("SENDGRID_API_KEY") && env("SENDGRID_FROM_EMAIL") ? "Connected" : "Missing",
-              detail: "Sends internal inquiry notifications and human-reviewed Mr. Bee follow-up emails.",
-            },
-            {
-              name: "Google Sheets",
-              purpose: "Lead backup",
-              status: env("GOOGLE_SHEETS_WEBHOOK_URL") || env("GOOGLE_SERVICE_ACCOUNT_EMAIL") ? "Connected" : "Missing",
-              detail: "Backs up every successful website inquiry outside the CRM database.",
-            },
-            {
-              name: "OpenAI",
-              purpose: "Future AI drafting",
-              status: env("OPENAI_API_KEY") ? "Configured" : "Placeholder",
-              detail: "Mr. Bee currently uses a guardrailed drafting layer. Full OpenAI integration remains gated by human review.",
-            },
-            {
-              name: "Stripe",
-              purpose: "Platform payments and school payouts",
-              status: env("STRIPE_SECRET_KEY") && env("STRIPE_WEBHOOK_SECRET") ? "Connected" : env("STRIPE_SECRET_KEY") ? "Configured" : "Placeholder",
-              detail: "Stripe Connect powers parent checkout through the platform account and routes funds to each school's connected payout account.",
-            },
-            {
-              name: "Twilio",
-              purpose: "Future SMS",
-              status: env("TWILIO_ACCOUNT_SID") && env("TWILIO_AUTH_TOKEN") ? "Configured" : "Placeholder",
-              detail: "SMS reminders and emergency alerts are not live yet.",
-            },
-          ],
+          setupIntegrations,
+          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER,
+          integrations: setupIntegrations.map((integration) => ({
+            name: integration.name,
+            purpose: integration.purpose,
+            status: integration.status,
+            detail: integration.detail,
+          })),
         }}
       />
     );

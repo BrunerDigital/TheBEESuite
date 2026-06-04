@@ -268,7 +268,7 @@ Status legend:
 - [x] Guardrail tests cover access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.
 - [x] Lint, typecheck, test, and build scripts exist.
 - [x] Current test suite has 44 passing tests.
-- [ ] Complete real setup UI for each integration.
+- [x] Complete real setup UI for each integration.
 - [ ] Add tenant-specific integration credentials instead of only platform env vars.
 - [ ] Run formal Supabase advisor/security review after schema migrations.
 - [ ] Add staging environment separate from production.

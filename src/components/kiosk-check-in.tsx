@@ -1,13 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Clock, LogIn, LogOut, ShieldCheck } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, KeyRound, LogIn, LogOut, QrCode, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+type VerificationMethod = "pin" | "qr";
 
 type KioskChild = {
   id: string;
@@ -21,9 +24,14 @@ type KioskChild = {
 type LookupResult = {
   guardian: { id: string; fullName: string; relation: string };
   family: { id: string; name: string };
+  verification?: { method: VerificationMethod };
   warnings?: Array<{ type: string; message: string }>;
   children: KioskChild[];
 };
+
+type VerifiedCredential =
+  | { method: "pin"; pin: string }
+  | { method: "qr"; qrToken: string };
 
 type Props = {
   center: {
@@ -42,7 +50,10 @@ function actionLabel(type?: string) {
 }
 
 export function KioskCheckIn({ center }: Props) {
+  const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
+  const [qrToken, setQrToken] = useState("");
+  const [verifiedCredential, setVerifiedCredential] = useState<VerifiedCredential | null>(null);
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [signatureName, setSignatureName] = useState("");
@@ -55,9 +66,13 @@ export function KioskCheckIn({ center }: Props) {
     () => lookup?.children.filter((child) => selectedIds.includes(child.id)) ?? [],
     [lookup, selectedIds],
   );
+  const credentialReady = credentialMode === "pin" ? pin.length === 4 : Boolean(qrToken.trim());
+  const verificationLabel = verifiedCredential?.method === "qr" ? "QR scan" : "PIN";
 
   const reset = useCallback((nextStatus = "") => {
     setPin("");
+    setQrToken("");
+    setVerifiedCredential(null);
     setLookup(null);
     setSelectedIds([]);
     setSignatureName("");
@@ -72,8 +87,22 @@ export function KioskCheckIn({ center }: Props) {
     setIdleSecondsRemaining(idleResetSeconds);
   }
 
+  function selectCredentialMode(method: VerificationMethod) {
+    markActivity();
+    if (method === credentialMode) return;
+    setCredentialMode(method);
+    setPin("");
+    setQrToken("");
+    setVerifiedCredential(null);
+    setLookup(null);
+    setSelectedIds([]);
+    setSignatureName("");
+    setError("");
+    setStatus("");
+  }
+
   useEffect(() => {
-    const hasPrivateState = Boolean(pin || lookup || status || error);
+    const hasPrivateState = Boolean(pin || qrToken || lookup || status || error);
     if (!hasPrivateState) return undefined;
 
     const timer = window.setInterval(() => {
@@ -84,7 +113,7 @@ export function KioskCheckIn({ center }: Props) {
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [error, lookup, pin, reset, status]);
+  }, [error, lookup, pin, qrToken, reset, status]);
 
   function appendDigit(digit: string) {
     markActivity();
@@ -93,22 +122,34 @@ export function KioskCheckIn({ center }: Props) {
     setPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
   }
 
-  function lookupPin() {
+  function lookupCredential() {
     markActivity();
+    const credential: VerifiedCredential = credentialMode === "qr"
+      ? { method: "qr", qrToken: qrToken.trim() }
+      : { method: "pin", pin };
+    if ((credential.method === "pin" && credential.pin.length !== 4) || (credential.method === "qr" && !credential.qrToken)) {
+      setError("Enter a PIN or scan a QR code before finding a family.");
+      return;
+    }
+
     startTransition(async () => {
       setError("");
       setStatus("");
       const response = await fetch("/api/kiosk/lookup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId: center.id, pin }),
+        body: JSON.stringify({
+          centerId: center.id,
+          ...(credential.method === "qr" ? { qrToken: credential.qrToken } : { pin: credential.pin }),
+        }),
       });
       const json = await response.json().catch(() => null) as ({ error?: string } & LookupResult) | null;
       if (!response.ok || !json) {
-        setError(json?.error || "PIN could not be verified.");
+        setError(json?.error || "Credential could not be verified.");
         return;
       }
       setLookup(json);
+      setVerifiedCredential(credential);
       setSelectedIds(json.children.map((child) => child.id));
       setSignatureName(json.guardian.fullName);
     });
@@ -116,6 +157,11 @@ export function KioskCheckIn({ center }: Props) {
 
   function submit(type: "check_in" | "check_out") {
     markActivity();
+    if (!verifiedCredential) {
+      setError("Find the family before completing check-in or check-out.");
+      return;
+    }
+
     startTransition(async () => {
       setError("");
       setStatus("");
@@ -124,7 +170,7 @@ export function KioskCheckIn({ center }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           centerId: center.id,
-          pin,
+          ...(verifiedCredential.method === "qr" ? { qrToken: verifiedCredential.qrToken } : { pin: verifiedCredential.pin }),
           childIds: selectedIds,
           type,
           signatureAccepted: Boolean(signatureName.trim()),
@@ -189,34 +235,79 @@ export function KioskCheckIn({ center }: Props) {
         <div className="grid flex-1 gap-5 lg:grid-cols-[24rem_1fr]">
           <Card className="glass-panel">
             <CardHeader>
-              <CardTitle>Enter 4 digit PIN</CardTitle>
-              <CardDescription>Use the PIN provided by your school director.</CardDescription>
+              <CardTitle>{credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code"}</CardTitle>
+              <CardDescription>{credentialMode === "pin" ? "Use the PIN provided by your school director." : "Use the guardian QR card issued by your school director."}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid grid-cols-4 gap-3">
-                {[0, 1, 2, 3].map((index) => (
-                  <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
-                    {pin[index] ? "•" : ""}
+              <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
+                <Button type="button" variant={credentialMode === "pin" ? "default" : "ghost"} onClick={() => selectCredentialMode("pin")}>
+                  <KeyRound data-icon="inline-start" />
+                  PIN
+                </Button>
+                <Button type="button" variant={credentialMode === "qr" ? "default" : "ghost"} onClick={() => selectCredentialMode("qr")}>
+                  <QrCode data-icon="inline-start" />
+                  QR
+                </Button>
+              </div>
+
+              {credentialMode === "pin" ? (
+                <>
+                  <div className="grid grid-cols-4 gap-3">
+                    {[0, 1, 2, 3].map((index) => (
+                      <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
+                        {pin[index] ? "•" : ""}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                  <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit(digit)}>
-                    {digit}
+                  <div className="grid grid-cols-3 gap-3">
+                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                      <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit(digit)}>
+                        {digit}
+                      </Button>
+                    ))}
+                    <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                      markActivity();
+                      setPin("");
+                    }}>Clear</Button>
+                    <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit("0")}>0</Button>
+                    <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                      markActivity();
+                      setPin((current) => current.slice(0, -1));
+                    }}>Back</Button>
+                  </div>
+                </>
+              ) : (
+                <div className="grid gap-3">
+                  <Label htmlFor="guardian-qr-token" className="text-base">QR scan</Label>
+                  <Textarea
+                    id="guardian-qr-token"
+                    className="min-h-40 resize-none font-mono text-sm"
+                    value={qrToken}
+                    onChange={(event) => {
+                      markActivity();
+                      setError("");
+                      setStatus("");
+                      setQrToken(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        if (!isPending && qrToken.trim()) lookupCredential();
+                      }
+                    }}
+                    placeholder="Scan QR code"
+                    autoComplete="off"
+                  />
+                  <Button type="button" variant="outline" onClick={() => {
+                    markActivity();
+                    setQrToken("");
+                  }}>
+                    Clear QR
                   </Button>
-                ))}
-                <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
-                  markActivity();
-                  setPin("");
-                }}>Clear</Button>
-                <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit("0")}>0</Button>
-                <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
-                  markActivity();
-                  setPin((current) => current.slice(0, -1));
-                }}>Back</Button>
-              </div>
-              <Button className="h-16 w-full text-xl" disabled={isPending || pin.length !== 4} onClick={lookupPin}>
+                </div>
+              )}
+
+              <Button className="h-16 w-full text-xl" disabled={isPending || !credentialReady} onClick={lookupCredential}>
                 Find Family
               </Button>
             </CardContent>
@@ -226,7 +317,7 @@ export function KioskCheckIn({ center }: Props) {
             <CardHeader>
               <CardTitle>{lookup ? lookup.family.name : "Select children"}</CardTitle>
               <CardDescription>
-                {lookup ? `${lookup.guardian.fullName} verified by PIN. Choose who is arriving or leaving.` : "Your children will appear after PIN verification."}
+                {lookup ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.` : "Your children will appear after PIN or QR verification."}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex min-h-96 flex-col gap-4">
@@ -281,7 +372,7 @@ export function KioskCheckIn({ center }: Props) {
                         autoComplete="off"
                       />
                       <p className="text-xs text-muted-foreground">
-                        Typed signature is stored with the PIN-verified check-in/out log.
+                        Typed signature is stored with the verified check-in/out log.
                       </p>
                     </div>
                     <Button className="h-20 text-xl" disabled={isPending || !selectedChildren.length || !signatureName.trim()} onClick={() => submit("check_in")}>
@@ -302,7 +393,7 @@ export function KioskCheckIn({ center }: Props) {
                   <div>
                     <Label className="text-lg">Ready for families</Label>
                     <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                      This lobby screen only reveals child names after a valid center-specific guardian PIN is entered.
+                      This lobby screen only reveals child names after a valid center-specific guardian PIN or QR code is entered.
                     </p>
                   </div>
                 </div>

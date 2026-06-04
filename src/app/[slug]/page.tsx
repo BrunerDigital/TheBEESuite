@@ -2035,6 +2035,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         type: log.type,
         occurredAt: log.occurredAt,
         pickupName: log.pickupName,
+        verificationStatus: log.verificationStatus,
         pinVerified: log.pinVerified,
         signatureCaptured: Boolean(log.signaturePlaceholder || metadata.signatureName),
         latePickup: metadata.latePickup === true,

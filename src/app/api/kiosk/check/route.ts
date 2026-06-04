@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isLatePickup, latestLogMap, normalizeCheckAction, readCenterTimeZone, readLatePickupCutoff, startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
-import { normalizePin, verifyGuardianPin } from "@/lib/kiosk";
+import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -11,38 +11,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const centerId = clean(body.centerId);
-  const pin = normalizePin(body.pin);
-  const type = normalizeCheckAction(clean(body.type));
-  const signatureName = clean(body.signatureName);
-  const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
-  const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
-  const ip = requestIp(request.headers);
-  const limited = checkRateLimit({ key: `kiosk-check:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
-  if (!limited.ok) {
-    return NextResponse.json(
-      { ok: false, error: "Too many kiosk attempts. Please ask the front desk for help." },
-      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limited.resetAt)) } },
-    );
-  }
-
-  if (!centerId || !pin || !type || !childIds.length) {
-    return NextResponse.json({ ok: false, error: "Center, PIN, action, and at least one child are required." }, { status: 400 });
-  }
-  if (!signatureName) {
-    return NextResponse.json({ ok: false, error: "Typed guardian signature is required." }, { status: 400 });
-  }
-
-  const center = await prisma.center.findFirst({
-    where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
-  });
-  if (!center) {
-    return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
-  }
-
+async function findGuardianByPin(centerId: string, pin: string, childIds: string[]) {
   const guardians = await prisma.guardian.findMany({
     where: {
       checkInPinHash: { not: null },
@@ -66,9 +35,90 @@ export async function POST(request: NextRequest) {
       },
     },
   });
-  const guardian = guardians.find((item) => verifyGuardianPin(item.id, pin, item.checkInPinHash));
+  return guardians.find((item) => verifyGuardianPin(item.id, pin, item.checkInPinHash)) ?? null;
+}
+
+async function findGuardianByQrToken(centerId: string, qrToken: string, childIds: string[]) {
+  const parsed = parseGuardianQrToken(qrToken);
+  if (!parsed || parsed.centerId !== centerId) return null;
+
+  const guardian = await prisma.guardian.findFirst({
+    where: {
+      id: parsed.guardianId,
+      checkInPinHash: { not: null },
+      family: { centerId },
+    },
+    include: {
+      family: {
+        select: {
+          id: true,
+          name: true,
+          custodyNotes: true,
+          children: {
+            where: { id: { in: childIds } },
+            select: {
+              id: true,
+              fullName: true,
+              classroom: { select: { id: true, centerId: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!guardian) return null;
+  return verifyGuardianQrToken({
+    token: qrToken,
+    centerId,
+    guardianId: guardian.id,
+    checkInPinSetAt: guardian.checkInPinSetAt,
+    checkInPinHash: guardian.checkInPinHash,
+  }) ? guardian : null;
+}
+
+export async function POST(request: NextRequest) {
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  const centerId = clean(body.centerId);
+  const pin = normalizePin(body.pin);
+  const qrToken = normalizeGuardianQrToken(body.qrToken);
+  const type = normalizeCheckAction(clean(body.type));
+  const signatureName = clean(body.signatureName);
+  const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
+  const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
+  const ip = requestIp(request.headers);
+  const limited = checkRateLimit({ key: `kiosk-check:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
+  if (!limited.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Too many kiosk attempts. Please ask the front desk for help." },
+      { status: 429, headers: { "Retry-After": String(retryAfterSeconds(limited.resetAt)) } },
+    );
+  }
+
+  if (!centerId || (!pin && !qrToken) || !type || !childIds.length) {
+    return NextResponse.json({ ok: false, error: "Center, PIN or QR code, action, and at least one child are required." }, { status: 400 });
+  }
+  if (!signatureName) {
+    return NextResponse.json({ ok: false, error: "Typed guardian signature is required." }, { status: 400 });
+  }
+
+  const center = await prisma.center.findFirst({
+    where: { id: centerId, status: { not: "closed" } },
+    select: { id: true, name: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
+  });
+  if (!center) {
+    return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
+  }
+
+  const verificationMethod = qrToken ? "qr" : "pin";
+  const guardian = qrToken
+    ? await findGuardianByQrToken(centerId, qrToken, childIds)
+    : await findGuardianByPin(centerId, pin, childIds);
   if (!guardian) {
-    return NextResponse.json({ ok: false, error: "PIN was not recognized for this school." }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: verificationMethod === "qr" ? "QR code was not recognized for this school." : "PIN was not recognized for this school." },
+      { status: 401 },
+    );
   }
 
   const allowedChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId || !child.classroom);
@@ -133,10 +183,13 @@ export async function POST(request: NextRequest) {
           occurredAt,
           pickupName: guardian.fullName,
           signaturePlaceholder: true,
-          verificationStatus: "pin_verified",
-          pinVerified: true,
+          verificationStatus: verificationMethod === "qr" ? "qr_verified" : "pin_verified",
+          pinVerified: verificationMethod === "pin",
           notes: clean(body.notes) || null,
           metadata: {
+            verificationMethod,
+            qrVerified: verificationMethod === "qr",
+            pinVerified: verificationMethod === "pin",
             signatureMethod: "typed",
             signatureName,
             signatureCapturedAt: occurredAt.toISOString(),
@@ -164,6 +217,7 @@ export async function POST(request: NextRequest) {
       count: logs.length,
       signatureAccepted: true,
       signatureMethod: "typed",
+      verificationMethod,
       latePickup,
       latePickupCutoff,
       pickupAuthorizationWarning,
@@ -176,6 +230,7 @@ export async function POST(request: NextRequest) {
     ok: true,
     center: { id: center.id, name: center.crmLocationId ?? center.name },
     action: type,
+    verification: { method: verificationMethod },
     occurredAt,
     latePickup,
     pickupAuthorizationWarning,

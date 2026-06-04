@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
+import { createGuardianQrToken, hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
@@ -47,11 +47,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
+  const pinSetAt = new Date();
+  const checkInPinHash = hashGuardianPin(guardian.id, pin);
   await prisma.guardian.update({
     where: { id: guardian.id },
     data: {
-      checkInPinHash: hashGuardianPin(guardian.id, pin),
-      checkInPinSetAt: new Date(),
+      checkInPinHash,
+      checkInPinSetAt: pinSetAt,
       checkInPinSetById: user.id,
     },
   });
@@ -73,7 +75,13 @@ export async function POST(request: NextRequest) {
       id: guardian.id,
       fullName: guardian.fullName,
       familyName: guardian.family.name,
-      pinSetAt: new Date().toISOString(),
+      pinSetAt: pinSetAt.toISOString(),
+      qrToken: createGuardianQrToken({
+        centerId: guardian.family.centerId,
+        guardianId: guardian.id,
+        checkInPinSetAt: pinSetAt,
+        checkInPinHash,
+      }),
     },
   });
 }

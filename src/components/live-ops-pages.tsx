@@ -856,7 +856,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Lobby Check-In Kiosk</CardTitle>
-            <CardDescription>Open this on the lobby tablet or front desk computer for parent PIN check-in/out.</CardDescription>
+            <CardDescription>Open this on the lobby tablet or front desk computer for parent PIN or QR check-in/out.</CardDescription>
           </CardHeader>
           <CardContent>
             <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href={`/check-in/${data.centerId}`} target="_blank" rel="noreferrer">
@@ -1608,6 +1608,7 @@ export type AttendancePageData = {
       type: string;
       occurredAt: Date | string;
       pickupName: string | null;
+      verificationStatus: string | null;
       pinVerified: boolean;
       signatureCaptured: boolean;
       latePickup: boolean;
@@ -1630,7 +1631,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Attendance</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Child attendance records, PIN kiosk check-ins, typed guardian signatures, late pickup flags, and end-of-day reconciliation.
+          Child attendance records, PIN/QR kiosk check-ins, typed guardian signatures, late pickup flags, and end-of-day reconciliation.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -1683,7 +1684,14 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.reconciliation.logs.map((log) => (
+                {data.reconciliation.logs.map((log) => {
+                  const verificationLabel = log.verificationStatus === "qr_verified"
+                    ? "QR"
+                    : log.pinVerified
+                      ? "PIN"
+                      : "No credential";
+                  const verificationVerified = log.verificationStatus === "qr_verified" || log.pinVerified;
+                  return (
                   <TableRow key={log.id}>
                     <TableCell>{formatDateTime(log.occurredAt)}</TableCell>
                     <TableCell>
@@ -1702,7 +1710,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-2">
-                        <Badge variant={log.pinVerified ? "default" : "outline"}>{log.pinVerified ? "PIN" : "No PIN"}</Badge>
+                        <Badge variant={verificationVerified ? "default" : "outline"}>{verificationLabel}</Badge>
                         <Badge variant={log.signatureCaptured ? "default" : "outline"}>
                           {log.signatureCaptured ? "Signature" : "No signature"}
                         </Badge>
@@ -1718,7 +1726,8 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           ) : (
@@ -3006,8 +3015,8 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Lobby Kiosk PINs</CardTitle>
-          <CardDescription>Directors set the 4 digit guardian PIN used on the check-in/check-out tablet.</CardDescription>
+          <CardTitle>Lobby Kiosk Credentials</CardTitle>
+          <CardDescription>Directors set the 4 digit guardian PIN and QR scan payload used on the check-in/check-out tablet.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">
           {data.families.flatMap((family) =>

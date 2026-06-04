@@ -135,6 +135,32 @@ function formatCenterName(center: { name: string; crmLocationId: string | null; 
   ].filter(Boolean).join(" · ");
 }
 
+function recordFromJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringField(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function numberField(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function tuitionAssignmentFromCustomFields(customFields: unknown) {
+  const fields = recordFromJson(customFields);
+  const planId = stringField(fields.tuitionPlanId);
+  return {
+    enabled: fields.tuitionBillingEnabled === true,
+    tuitionPlanId: planId,
+    tuitionPlanName: stringField(fields.tuitionPlanName),
+    amountCents: numberField(fields.tuitionPlanAmountCents),
+    billingDay: numberField(fields.tuitionBillingDay),
+    startsPeriod: stringField(fields.tuitionBillingStartsPeriod),
+    description: stringField(fields.tuitionBillingDescription),
+  };
+}
+
 function serializeFteReport(report: {
   id: string;
   centerId: string;
@@ -1109,7 +1135,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
-    const [invoices, ledgerEntries, total, open, paid, openRows, billingFamilies, billingProducts, tuitionPlans] = await Promise.all([
+    const [invoices, ledgerEntries, total, open, paid, openRows, ledgerRollupRows, billingFamilies, billingProducts, tuitionPlans] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -1141,7 +1167,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.invoice.count({ where: invoiceWhere }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.PAID } }),
-      prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true } }),
+      prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true, dueDate: true } }),
+      prisma.ledgerEntry.findMany({
+        where: { billingAccount: invoiceWhere.billingAccount },
+        orderBy: { effectiveAt: "desc" },
+        take: 1000,
+        select: { type: true, amountCents: true },
+      }),
       prisma.family.findMany({
         where: workbenchFamilyWhere,
         orderBy: { name: "asc" },
@@ -1154,19 +1186,52 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           billingAccount: { select: { balanceCents: true } },
           children: {
             orderBy: { fullName: "asc" },
-            select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true },
+            select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true },
           },
         },
       }),
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], take: 100 }),
       prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { name: "asc" }], take: 100 }),
     ]);
+    const arReport = openRows.reduce(
+      (report, invoice) => {
+        const daysPastDue = Math.floor((startOfDay.getTime() - new Date(invoice.dueDate).getTime()) / 86_400_000);
+        if (daysPastDue <= 0) report.currentCents += invoice.totalCents;
+        else if (daysPastDue <= 30) report.oneToThirtyCents += invoice.totalCents;
+        else if (daysPastDue <= 60) report.thirtyOneToSixtyCents += invoice.totalCents;
+        else report.sixtyOnePlusCents += invoice.totalCents;
+        return report;
+      },
+      {
+        currentCents: 0,
+        oneToThirtyCents: 0,
+        thirtyOneToSixtyCents: 0,
+        sixtyOnePlusCents: 0,
+        chargesCents: 0,
+        paymentsCents: 0,
+        creditsCents: 0,
+      },
+    );
+    for (const entry of ledgerRollupRows) {
+      if (entry.amountCents > 0) arReport.chargesCents += entry.amountCents;
+      if (entry.type === "payment") arReport.paymentsCents += Math.abs(entry.amountCents);
+      if (entry.amountCents < 0 && entry.type !== "payment") arReport.creditsCents += Math.abs(entry.amountCents);
+    }
 
     return (
       <BillingInvoicesPage
         data={{
           workbench: {
-            families: billingFamilies,
+            families: billingFamilies.map((family) => ({
+              ...family,
+              children: family.children.map((child) => ({
+                id: child.id,
+                fullName: child.fullName,
+                ageGroup: child.ageGroup,
+                enrollmentStatus: child.enrollmentStatus,
+                tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
+              })),
+            })),
             centers: centers.map((center) => ({ id: center.id, name: center.name, crmLocationId: center.crmLocationId })),
             products: billingProducts,
             tuitionPlans,
@@ -1174,6 +1239,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           invoices,
           ledgerEntries,
           stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) },
+          arReport,
         }}
       />
     );

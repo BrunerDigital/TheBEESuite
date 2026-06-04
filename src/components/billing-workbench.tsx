@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, BadgeDollarSign, CheckCircle2, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, CalendarClock, CheckCircle2, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,21 @@ export type BillingWorkbenchFamily = {
   name: string;
   billingEmail: string | null;
   billingAccount?: { balanceCents: number } | null;
-  children: Array<{ id: string; fullName: string; ageGroup: string; enrollmentStatus: string }>;
+  children: Array<{
+    id: string;
+    fullName: string;
+    ageGroup: string;
+    enrollmentStatus: string;
+    tuitionAssignment?: {
+      enabled: boolean;
+      tuitionPlanId: string | null;
+      tuitionPlanName: string | null;
+      amountCents: number | null;
+      billingDay: number | null;
+      startsPeriod: string | null;
+      description: string | null;
+    } | null;
+  }>;
 };
 
 export type BillingWorkbenchCenter = {
@@ -80,6 +94,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const [ageGroup, setAgeGroup] = useState("all");
   const [enrollmentStatus, setEnrollmentStatus] = useState("enrolled");
   const [adjustmentType, setAdjustmentType] = useState("credit");
+  const [assignmentChildId, setAssignmentChildId] = useState("");
+  const [assignmentEnabled, setAssignmentEnabled] = useState("true");
+  const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
+  const [assignmentBillingDay, setAssignmentBillingDay] = useState("");
+  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
+  const [assignmentDescription, setAssignmentDescription] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -95,6 +115,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const selectedPlan = tuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
+  const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
+    ? assignmentChildId
+    : selectedChildren[0]?.id ?? "";
+  const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
+  const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
+  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
+  const effectiveAssignmentBillingDay = assignmentBillingDay || String(selectedAssignment?.billingDay ?? 1);
+  const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentBillingPeriod();
+  const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
   const ageGroups = useMemo(
     () => Array.from(new Set([
       ...tuitionPlans.map((plan) => plan.ageGroup).filter(Boolean),
@@ -119,12 +148,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     setCenterId(value);
     setFamilyId("");
     setChildId("none");
+    setAssignmentChildId("");
   }
 
   function handleFamilyChange(value: string | null) {
     if (!value) return;
     setFamilyId(value);
     setChildId("none");
+    setAssignmentChildId("");
   }
 
   function handleTuitionPlanChange(value: string | null) {
@@ -197,6 +228,45 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     });
   }
 
+  function handleAssignmentChildChange(value: string | null) {
+    if (!value) return;
+    const child = selectedChildren.find((item) => item.id === value);
+    const assignment = child?.tuitionAssignment;
+    setAssignmentChildId(value);
+    setAssignmentTuitionPlanId(assignment?.tuitionPlanId || tuitionPlans[0]?.id || "");
+    setAssignmentBillingDay(String(assignment?.billingDay ?? 1));
+    setAssignmentStartPeriod(assignment?.startsPeriod || currentBillingPeriod());
+    setAssignmentDescription(assignment?.description || assignment?.tuitionPlanName || "");
+    setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+  }
+
+  function submitAssignment() {
+    if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving recurring tuition.");
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/tuition-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: selectedFamily.id,
+          childId: selectedAssignmentChild.id,
+          enabled: assignmentEnabled === "true",
+          tuitionPlanId: effectiveAssignmentPlanId,
+          billingDay: effectiveAssignmentBillingDay,
+          billingStartPeriod: effectiveAssignmentStartPeriod,
+          description: effectiveAssignmentDescription,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Recurring tuition could not be saved.");
+        return;
+      }
+      setStatusMessage(`Recurring tuition ${assignmentEnabled === "true" ? "enabled" : "disabled"} for ${selectedAssignmentChild.fullName}.`);
+    });
+  }
+
   return (
     <Card className="glass-panel">
       <CardHeader>
@@ -262,6 +332,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
           <TabsList>
             <TabsTrigger value="single"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
+            <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Recurring</TabsTrigger>
             <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / debit</TabsTrigger>
           </TabsList>
 
@@ -358,6 +429,71 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
             <Button disabled={isPending || !centerId} onClick={submitBatch}>
               <Rows3 data-icon="inline-start" />
               Run Batch
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="recurring" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div className="grid gap-3 md:grid-cols-5">
+              <div className="space-y-1">
+                <Label>Child</Label>
+                <Select value={effectiveAssignmentChildId} onValueChange={handleAssignmentChildChange}>
+                  <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedChildren.map((child) => (
+                      <SelectItem key={child.id} value={child.id}>
+                        {child.fullName}{child.tuitionAssignment?.enabled ? " · active" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={assignmentEnabled} onValueChange={(value) => value && setAssignmentEnabled(value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Enabled</SelectItem>
+                    <SelectItem value="false">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>Tuition plan</Label>
+                <Select value={effectiveAssignmentPlanId} onValueChange={(value) => value && setAssignmentTuitionPlanId(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
+                  <SelectContent>
+                    {tuitionPlans.map((plan) => (
+                      <SelectItem key={plan.id} value={plan.id}>
+                        {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Bill day</Label>
+                <Input
+                  inputMode="numeric"
+                  min={1}
+                  max={28}
+                  type="number"
+                  value={effectiveAssignmentBillingDay}
+                  onChange={(event) => setAssignmentBillingDay(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Start period</Label>
+                <Input
+                  value={effectiveAssignmentStartPeriod}
+                  onChange={(event) => setAssignmentStartPeriod(event.target.value)}
+                  placeholder="2026-06"
+                />
+              </div>
+            </div>
+            <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
+            <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild} onClick={submitAssignment}>
+              <CalendarClock data-icon="inline-start" />
+              Save Recurring Tuition
             </Button>
           </TabsContent>
 

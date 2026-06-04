@@ -123,6 +123,24 @@ function StatCard({
   );
 }
 
+function MetricTile({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-background/40 p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold">{value}</div>
+      {detail ? <div className="mt-1 text-xs text-muted-foreground">{detail}</div> : null}
+    </div>
+  );
+}
+
 function DemoDataNotice({ section }: { section: string }) {
   return (
     <Card className="border-primary/30 bg-primary/10">
@@ -3131,6 +3149,15 @@ export type BillingInvoicesPageData = {
     paid: number;
     outstandingCents: number;
   };
+  arReport: {
+    currentCents: number;
+    oneToThirtyCents: number;
+    thirtyOneToSixtyCents: number;
+    sixtyOnePlusCents: number;
+    chargesCents: number;
+    paymentsCents: number;
+    creditsCents: number;
+  };
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
@@ -3152,6 +3179,25 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
       </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Accounts Receivable Aging</CardTitle>
+          <CardDescription>Open balance by due-date bucket and recent ledger movement.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-4">
+            <MetricTile label="Current" value={money(data.arReport.currentCents)} detail="not past due" />
+            <MetricTile label="1-30 days" value={money(data.arReport.oneToThirtyCents)} />
+            <MetricTile label="31-60 days" value={money(data.arReport.thirtyOneToSixtyCents)} />
+            <MetricTile label="61+ days" value={money(data.arReport.sixtyOnePlusCents)} />
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <MetricTile label="Recent charges" value={money(data.arReport.chargesCents)} detail="latest ledger window" />
+            <MetricTile label="Recent payments" value={money(data.arReport.paymentsCents)} detail="posted credits from payments" />
+            <MetricTile label="Credits/adjustments" value={money(data.arReport.creditsCents)} detail="manual credits and non-payment credits" />
+          </div>
+        </CardContent>
+      </Card>
       <BillingWorkbench
         families={data.workbench.families}
         centers={data.workbench.centers}

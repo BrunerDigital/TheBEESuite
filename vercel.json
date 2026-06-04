@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/integration-retries",
       "schedule": "30 14 * * *"
+    },
+    {
+      "path": "/api/cron/tuition-billing",
+      "schedule": "15 13 * * *"
     }
   ]
 }

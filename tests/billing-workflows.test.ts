@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   billingDedupeKey,
+  normalizeBillingDay,
   normalizeBatchTarget,
   normalizeBillingPeriod,
   parseCurrencyCents,
+  shouldCreateRecurringTuitionInvoice,
 } from "../src/lib/billing-workflows";
 
 test("billing workflow helpers parse family charge amounts", () => {
@@ -18,6 +20,9 @@ test("billing workflow helpers normalize billing periods and batch targets", () 
   assert.equal(normalizeBillingPeriod("June", new Date("2026-07-15T12:00:00.000Z")), "2026-07");
   assert.equal(normalizeBatchTarget("family"), "family");
   assert.equal(normalizeBatchTarget("anything else"), "child");
+  assert.equal(normalizeBillingDay("0"), 1);
+  assert.equal(normalizeBillingDay("31"), 28);
+  assert.equal(normalizeBillingDay("15"), 15);
 });
 
 test("billing dedupe keys are stable across child ordering", () => {
@@ -39,4 +44,46 @@ test("billing dedupe keys are stable across child ordering", () => {
   });
 
   assert.equal(left, right);
+});
+
+test("recurring tuition eligibility waits for start period and billing day", () => {
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 100000,
+    startsPeriod: "2026-07",
+    billingPeriod: "2026-06",
+    billingDay: 1,
+    currentDay: 15,
+  }), false);
+
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 100000,
+    startsPeriod: "2026-06",
+    billingPeriod: "2026-06",
+    billingDay: 20,
+    currentDay: 15,
+  }), false);
+
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 100000,
+    startsPeriod: "2026-06",
+    billingPeriod: "2026-06",
+    billingDay: 15,
+    currentDay: 15,
+  }), true);
+
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: null,
+    amountCents: 100000,
+    startsPeriod: "2026-06",
+    billingPeriod: "2026-06",
+    billingDay: 1,
+    currentDay: 15,
+  }), false);
 });

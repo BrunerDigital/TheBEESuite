@@ -20,6 +20,26 @@ export function normalizeBatchTarget(value: unknown) {
   return clean(value).toLowerCase() === "family" ? "family" : "child";
 }
 
+export function normalizeBillingDay(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(clean(value), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(Math.max(parsed, 1), 28);
+}
+
+export function shouldCreateRecurringTuitionInvoice(input: {
+  enabled: boolean;
+  planId?: string | null;
+  amountCents: number;
+  startsPeriod?: string | null;
+  billingPeriod: string;
+  billingDay: number;
+  currentDay: number;
+}) {
+  if (!input.enabled || !input.planId || input.amountCents <= 0) return false;
+  if (input.startsPeriod && input.startsPeriod > input.billingPeriod) return false;
+  return input.billingDay <= input.currentDay;
+}
+
 export function billingDedupeKey(input: {
   familyId: string;
   chargeSource: string;

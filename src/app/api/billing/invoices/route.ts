@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
+import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
   normalizeBatchTarget,
@@ -14,12 +15,6 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 
 type CurrentBillingUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
-
-type InvoiceLineItem = {
-  description: string;
-  amountCents: number;
-  productId?: string | null;
-};
 
 type ChargeResolution = {
   chargeSource: "tuitionPlan" | "product" | "custom";
@@ -45,17 +40,8 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function invoiceNumber() {
-  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  return `INV-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
-}
-
 function isAll(value: string) {
   return !value || value.toLowerCase() === "all";
-}
-
-function metadataJson(value: Record<string, unknown>) {
-  return value as Prisma.InputJsonObject;
 }
 
 function amountCentsFromBody(body: Record<string, unknown>) {
@@ -152,79 +138,6 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
   };
 }
 
-async function createInvoiceForFamily(
-  tx: Prisma.TransactionClient,
-  input: {
-    familyId: string;
-    dueDate: Date;
-    items: InvoiceLineItem[];
-    description: string;
-    customFields: Record<string, unknown>;
-  },
-) {
-  const totalCents = input.items.reduce((sum, item) => sum + item.amountCents, 0);
-  if (totalCents <= 0) throw new Error("Invoice total must be greater than zero.");
-
-  const billingAccount = await tx.billingAccount.upsert({
-    where: { familyId: input.familyId },
-    update: {},
-    create: { familyId: input.familyId, balanceCents: 0 },
-  });
-
-  const dedupeKey = clean(input.customFields.dedupeKey);
-  if (dedupeKey) {
-    const existing = await tx.invoice.findFirst({
-      where: {
-        billingAccountId: billingAccount.id,
-        customFields: { path: ["dedupeKey"], equals: dedupeKey },
-      },
-      select: { id: true, number: true, totalCents: true },
-    });
-    if (existing) return { invoice: existing, created: false as const, totalCents: 0 };
-  }
-
-  const invoice = await tx.invoice.create({
-    data: {
-      billingAccountId: billingAccount.id,
-      number: invoiceNumber(),
-      status: PaymentStatus.OPEN,
-      dueDate: input.dueDate,
-      totalCents,
-      sourceSystem: "bee_suite",
-      customFields: metadataJson(input.customFields),
-      items: {
-        create: input.items.map((item) => ({
-          description: item.description,
-          amountCents: item.amountCents,
-          productId: item.productId || undefined,
-        })),
-      },
-    },
-    select: { id: true, number: true, totalCents: true },
-  });
-
-  const updatedAccount = await tx.billingAccount.update({
-    where: { id: billingAccount.id },
-    data: { balanceCents: { increment: totalCents } },
-  });
-
-  await tx.ledgerEntry.create({
-    data: {
-      billingAccountId: billingAccount.id,
-      invoiceId: invoice.id,
-      type: "invoice",
-      description: input.description,
-      amountCents: totalCents,
-      balanceAfterCents: updatedAccount.balanceCents,
-      sourceSystem: "bee_suite",
-      externalId: `invoice:${invoice.id}`,
-      metadata: metadataJson(input.customFields),
-    },
-  });
-
-  return { invoice, created: true as const, totalCents };
-}
-
 async function createSingleInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
@@ -251,7 +164,7 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   const itemDescription = child ? `${charge.description} - ${child.fullName}` : charge.description;
 
   const result = await prisma.$transaction((tx) =>
-    createInvoiceForFamily(tx, {
+    createBillingInvoiceForFamily(tx, {
       familyId: familyAccess.family.id,
       dueDate,
       description: itemDescription,
@@ -375,7 +288,7 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
         batchTarget,
         childIds,
       });
-      const createdInvoice = await createInvoiceForFamily(tx, {
+      const createdInvoice = await createBillingInvoiceForFamily(tx, {
         familyId: group.familyId,
         dueDate,
         description: charge.description,

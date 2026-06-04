@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
+import {
+  CRM_LOCATION_ID_EXAMPLE,
+  defaultCenterNameFromCrmLocationId,
+  normalizeCrmLocationId,
+  parseCrmLocationId,
+} from "@/lib/active-school-locations";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -38,6 +44,7 @@ type Payload = {
 };
 
 const editableCenterStatuses = new Set(["active", "trial_setup", "paused", "closed"]);
+const liveCenterStatuses = new Set(["active", "trial_setup", "paused"]);
 const assignableRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
@@ -168,7 +175,7 @@ async function ensureCenterCustomization(input: {
     primaryColor: input.primaryColor ?? "#f5b51b",
     accentColor: input.accentColor ?? "#10b981",
     themeMode: input.themeMode ?? "dark",
-    legalFooterText: `${input.brandName} childcare operations powered by The Bee Suite.`,
+    legalFooterText: `${input.brandName} childcare operations powered by The BEE Suite.`,
   };
 
   if (existing) {
@@ -214,16 +221,27 @@ async function audit(input: {
 
 async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
   const centerId = clean(payload.centerId);
-  const name = clean(payload.name);
+  const requestedStatus = clean(payload.status) || "active";
+  if (!editableCenterStatuses.has(requestedStatus)) throw new Error("Unsupported location status.");
+
+  const rawCrmLocationId = clean(payload.crmLocationId);
+  const crmLocationId = normalizeCrmLocationId(rawCrmLocationId);
+  if (liveCenterStatuses.has(requestedStatus) && !rawCrmLocationId) {
+    throw new Error(`Location ID is required for active schools. Use ST | City, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
+  }
+  if (rawCrmLocationId && !crmLocationId) {
+    throw new Error(`Location ID must use ST | City format, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
+  }
+
+  const parsedCrmLocation = parseCrmLocationId(crmLocationId);
+  const name = clean(payload.name) || defaultCenterNameFromCrmLocationId(crmLocationId);
   if (!name) throw new Error("Location name is required.");
 
   const organization = await getDefaultOrganization(actor.tenantId, clean(payload.organizationId) || actor.organizationId);
   const ownerGroup = await getOwnerGroup(actor.tenantId, organization.id, clean(payload.ownerGroupId));
-  const crmLocationId = clean(payload.crmLocationId);
   const locationId = clean(payload.locationId) || crmLocationId;
   const email = clean(payload.email).toLowerCase();
-  const status = clean(payload.status) || "active";
-  if (!editableCenterStatuses.has(status)) throw new Error("Unsupported location status.");
+  const status = requestedStatus;
   if (email && !isEmail(email)) throw new Error("A valid location email is required.");
 
   if (centerId) {
@@ -239,7 +257,7 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
     const existing = await prisma.center.findFirst({
       where: {
         organization: { tenantId: actor.tenantId },
-        status: { not: "closed" },
+        status: { in: Array.from(liveCenterStatuses) },
         ...(centerId ? { NOT: { id: centerId } } : {}),
         OR: [
           crmLocationId ? { crmLocationId } : undefined,
@@ -258,8 +276,8 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
     crmLocationId: crmLocationId || null,
     locationId: locationId || null,
     address: clean(payload.address) || null,
-    city: clean(payload.city) || null,
-    state: clean(payload.state) || null,
+    city: clean(payload.city) || parsedCrmLocation?.city || null,
+    state: clean(payload.state).toUpperCase() || parsedCrmLocation?.state || null,
     postalCode: clean(payload.postalCode) || null,
     phone: clean(payload.phone) || null,
     email: email || null,

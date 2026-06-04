@@ -2,7 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Building2, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Archive, Building2, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import {
+  CRM_LOCATION_ID_EXAMPLE,
+  defaultCenterNameFromCrmLocationId,
+  isValidCrmLocationId,
+  parseCrmLocationId,
+} from "@/lib/active-school-locations";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +33,7 @@ type CenterOption = {
   licensedCapacity: number;
   ownerGroupId: string | null;
   ownerGroup: { name: string; ownerType: string } | null;
+  _count?: { leads: number; staff: number; classrooms: number };
 };
 
 type OwnerGroupOption = {
@@ -129,13 +136,31 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     () => [...centers].sort((a, b) => shortCenterLabel(a).localeCompare(shortCenterLabel(b))),
     [centers],
   );
+  const activeSchools = useMemo(
+    () => sortedCenters.filter((center) => center.status === "active"),
+    [sortedCenters],
+  );
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.email.localeCompare(b.email)).slice(0, 75),
     [users],
   );
+  const centerLocationIdIsValid = isValidCrmLocationId(centerForm.crmLocationId);
 
   function setCenterField(key: keyof ReturnType<typeof blankCenterForm>, value: string) {
-    setCenterForm((current) => ({ ...current, [key]: value }));
+    setCenterForm((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "crmLocationId") {
+        const parsed = parseCrmLocationId(value);
+        if (parsed) {
+          if (!current.name) next.name = defaultCenterNameFromCrmLocationId(value);
+          if (!current.locationId) next.locationId = parsed.crmLocationId;
+          if (!current.city) next.city = parsed.city;
+          if (!current.state) next.state = parsed.state;
+        }
+      }
+      if (key === "state") next.state = value.toUpperCase();
+      return next;
+    });
   }
 
   function loadCenter(centerId: string) {
@@ -192,7 +217,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
       setError("Select a location first.");
       return;
     }
-    post("setCenterStatus", { centerId: centerForm.centerId, status }, status === "closed" ? "Location archived." : "Location status updated.");
+    setCenterStatusById(centerForm.centerId, status);
+  }
+
+  function setCenterStatusById(centerId: string, status: string) {
+    post("setCenterStatus", { centerId, status }, status === "closed" ? "Location removed from active schools." : "Location status updated.");
   }
 
   function createOwnerGroup() {
@@ -261,13 +290,78 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
         ) : null}
 
         <div className="grid gap-4 xl:grid-cols-2">
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Building2 className="size-5 text-primary" />
+                Active Schools
+              </CardTitle>
+              <CardDescription>Active schools are available to dashboards, CRM routing, and the Kid City USA inquiry dropdown.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Location ID</TableHead>
+                    <TableHead>School</TableHead>
+                    <TableHead>Routing</TableHead>
+                    <TableHead>Records</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activeSchools.map((center) => (
+                    <TableRow key={center.id}>
+                      <TableCell>
+                        <div className="font-medium">{center.crmLocationId ?? "Missing"}</div>
+                        <div className="text-xs text-muted-foreground">{center.locationId ?? center.name}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{center.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {[center.city, center.state].filter(Boolean).join(", ") || center.address || "Address pending"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>{center.email ?? "No routing email"}</div>
+                        <div className="text-xs text-muted-foreground">{center.phone ?? "No phone"}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div>{center.licensedCapacity.toLocaleString()} capacity</div>
+                        <div className="text-xs text-muted-foreground">
+                          {(center._count?.leads ?? 0).toLocaleString()} leads · {(center._count?.staff ?? 0).toLocaleString()} teachers · {(center._count?.classrooms ?? 0).toLocaleString()} rooms
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => loadCenter(center.id)}>Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => setCenterStatusById(center.id, "closed")} disabled={isPending}>
+                            <Archive data-icon="inline-start" />
+                            Remove
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!activeSchools.length ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-muted-foreground">
+                        No active schools are available in this scope yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MapPin className="size-5 text-primary" />
-                Location Profile
+                Add or Edit School
               </CardTitle>
-              <CardDescription>Create a new school or edit/archive an existing one.</CardDescription>
+              <CardDescription>Create a school profile or edit an existing one. Location IDs must use {CRM_LOCATION_ID_EXAMPLE} format.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-1">
@@ -288,8 +382,11 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                   <Input value={centerForm.name} onChange={(event) => setCenterField("name", event.target.value)} placeholder="Kid City USA - New Location" />
                 </div>
                 <div className="space-y-1">
-                  <Label>CRM / location ID</Label>
-                  <Input value={centerForm.crmLocationId} onChange={(event) => setCenterField("crmLocationId", event.target.value)} placeholder="Kid City USA - City" />
+                  <Label>Location ID</Label>
+                  <Input value={centerForm.crmLocationId} onChange={(event) => setCenterField("crmLocationId", event.target.value)} placeholder={CRM_LOCATION_ID_EXAMPLE} />
+                  {centerForm.crmLocationId && !centerLocationIdIsValid ? (
+                    <p className="text-xs text-destructive">Use ST | City format.</p>
+                  ) : null}
                 </div>
                 <div className="space-y-1">
                   <Label>Routing email</Label>
@@ -340,12 +437,12 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={saveCenter} disabled={isPending || !centerForm.name}>
+                <Button onClick={saveCenter} disabled={isPending || !centerLocationIdIsValid}>
                   <Save data-icon="inline-start" />
-                  Save Location
+                  Save School
                 </Button>
                 <Button variant="outline" onClick={() => setCenterStatus("closed")} disabled={isPending || !centerForm.centerId}>
-                  Archive Location
+                  Remove from Active Schools
                 </Button>
                 <Button variant="outline" onClick={() => setCenterStatus("active")} disabled={isPending || !centerForm.centerId}>
                   Reactivate

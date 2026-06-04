@@ -6,6 +6,7 @@ import { resolveSignatureRecipient, validateSignatureChildTarget } from "@/lib/d
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { INTERNAL_SIGNATURE_PENDING_KEY, SIGNATURE_CONSENT_TEXT } from "@/lib/signature-capture";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
   const family = await prisma.family.findUnique({
     where: { id: familyId },
     include: {
-      guardians: { select: { email: true } },
+      guardians: { select: { email: true, userId: true, user: { select: { isActive: true } } } },
     },
   });
 
@@ -73,11 +74,12 @@ export async function POST(request: NextRequest) {
       type,
       status: DocumentStatus.REQUESTED,
       restricted: type.toLowerCase().includes("medical") || type.toLowerCase().includes("custody"),
-      storageKey: "signature_provider_pending",
+      storageKey: INTERNAL_SIGNATURE_PENDING_KEY,
     },
   });
 
-  const signatureText = `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nA DocuSign-style provider can be connected from The Bee Suite integrations.`;
+  const portalUrl = new URL("/parent-portal", process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin).toString();
+  const signatureText = `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nOpen the parent portal to review and sign: ${portalUrl}\n\nSignature consent: ${SIGNATURE_CONSENT_TEXT}`;
   const email = await sendEmail({
     to: [recipient.email],
     subject: `Signature requested: ${name}`,
@@ -97,6 +99,25 @@ export async function POST(request: NextRequest) {
     result: email,
     metadata: { documentId: document.id, familyId, childId },
   });
+  const guardianUserIds = Array.from(new Set(
+    family.guardians
+      .filter((guardian) => guardian.userId && guardian.user?.isActive)
+      .map((guardian) => guardian.userId)
+      .filter((userId): userId is string => typeof userId === "string"),
+  ));
+  await Promise.all(
+    guardianUserIds.map((userId) =>
+      prisma.notification.create({
+        data: {
+          userId,
+          title: `Signature requested: ${name}`,
+          body: `${family.name} has a document ready to sign in the parent portal.`,
+          type: "document_signature",
+          priority: "high",
+        },
+      }),
+    ),
+  );
 
   await writeAuditLog(user, {
     centerId: family.centerId,
@@ -108,7 +129,9 @@ export async function POST(request: NextRequest) {
       childId,
       emailConfigured: email.configured,
       emailSent: email.ok,
-      provider: "signature_placeholder",
+      portalUrl,
+      provider: "internal_signature_capture",
+      parentNotificationCount: guardianUserIds.length,
     },
   });
 

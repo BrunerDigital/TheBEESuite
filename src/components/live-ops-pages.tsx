@@ -51,6 +51,7 @@ import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
+import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import type { FteSnapshot } from "@/lib/fte-reports";
 import type { IntegrationSetupView } from "@/lib/integration-setup";
@@ -2343,6 +2344,7 @@ export type DocumentsPageData = {
     restricted: number;
     pending: number;
   };
+  signatureFamilies: SignatureRequestFamilyOption[];
 };
 
 export function DocumentsPage({ data }: { data: DocumentsPageData }) {
@@ -2364,6 +2366,7 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
         <StatCard label="Restricted" value={data.stats.restricted} />
         <StatCard label="Pending" value={data.stats.pending} />
       </div>
+      <SignatureRequestPanel families={data.signatureFamilies} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Document Records</CardTitle>
@@ -2397,6 +2400,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
                       <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href={document.downloadUrl} target="_blank" rel="noreferrer">
                         Open file
                       </a>
+                    ) : document.storageKey === "internal_signature_pending" || document.storageKey === "signature_provider_pending" ? (
+                      <span className="text-xs text-muted-foreground">Awaiting signature</span>
                     ) : document.storageKey && document.storageKey !== "upload_pending" ? (
                       <span className="text-xs text-muted-foreground">File unavailable</span>
                     ) : (

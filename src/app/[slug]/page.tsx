@@ -2312,7 +2312,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
           ],
         };
-    const [documents, total, expiring, restricted, pending] = await Promise.all([
+    const [documents, total, expiring, restricted, pending, signatureFamilies] = await Promise.all([
       prisma.document.findMany({
         where: documentWhere,
         orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
@@ -2326,10 +2326,22 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.document.count({ where: { ...documentWhere, expiresAt: { lte: thirtyDays } } }),
       prisma.document.count({ where: { ...documentWhere, restricted: true } }),
       prisma.document.count({ where: { ...documentWhere, status: DocumentStatus.REQUESTED } }),
+      prisma.family.findMany({
+        where: allCenters ? {} : { centerId: scopedCenterIds },
+        orderBy: { name: "asc" },
+        take: 250,
+        select: {
+          id: true,
+          name: true,
+          billingEmail: true,
+          guardians: { select: { fullName: true, email: true }, orderBy: { fullName: "asc" } },
+          children: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
+        },
+      }),
     ]);
     const signedDocuments = await signDocumentRecords(documents);
 
-    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending } }} />;
+    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending }, signatureFamilies }} />;
   }
 
   if (slug === "compliance") {

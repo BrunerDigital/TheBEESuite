@@ -249,7 +249,7 @@ Status legend:
 - [x] Add file upload UI tied to Supabase storage.
 - [x] Add director document review states.
 - [x] Add expiration reminders for family/staff/child documents.
-- [ ] Integrate real e-signature provider or complete internal signature capture flow.
+- [x] Integrate real e-signature provider or complete internal signature capture flow.
 - [ ] Add state-specific licensing configuration.
 - [ ] Add medication log workflow.
 - [ ] Add compliance report export.

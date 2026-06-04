@@ -5,6 +5,12 @@ import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canSubmitDocumentForReview } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
+import {
+  buildInternalSignatureCertificate,
+  isInternalSignatureRequest,
+  signatureEvidenceHash,
+  validateSignatureCapture,
+} from "@/lib/signature-capture";
 import { uploadDocumentBuffer } from "@/lib/supabase-storage";
 
 export const runtime = "nodejs";
@@ -40,18 +46,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const contentType = request.headers.get("content-type") || "";
   let noteText = "";
   let signatureAcknowledged = false;
+  let signatureConsentAccepted = false;
+  let signatureName = "";
   let uploadedFile: File | null = null;
 
   if (contentType.includes("multipart/form-data")) {
     const formData = await request.formData();
     noteText = clean(formData.get("note"));
     signatureAcknowledged = clean(formData.get("signatureAcknowledged")) === "true";
+    signatureConsentAccepted = clean(formData.get("signatureConsentAccepted")) === "true";
+    signatureName = clean(formData.get("signatureName"));
     const file = formData.get("file") ?? formData.get("document");
     uploadedFile = file instanceof File && file.size > 0 ? file : null;
   } else {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     noteText = clean(body.note);
     signatureAcknowledged = Boolean(body.signatureAcknowledged);
+    signatureConsentAccepted = Boolean(body.signatureConsentAccepted);
+    signatureName = clean(body.signatureName);
   }
 
   const document = await prisma.document.findUnique({
@@ -91,9 +103,65 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "You do not have access to this document." }, { status: 403 });
   }
 
+  const signatureRequired = isInternalSignatureRequest(document);
+  const signatureGuard = validateSignatureCapture({
+    required: signatureRequired,
+    signerName: signatureName,
+    consentAccepted: signatureConsentAccepted || signatureAcknowledged,
+  });
+  if (!signatureGuard.ok) {
+    return NextResponse.json({ ok: false, error: signatureGuard.error }, { status: signatureGuard.status });
+  }
+
   let nextStorageKey = document.storageKey;
   let uploadedFileName: string | null = null;
-  if (uploadedFile) {
+  let signatureEvidence: { signerName: string; signedAt: Date; evidenceHash: string } | null = null;
+  if (signatureRequired) {
+    const signedAt = new Date();
+    const evidenceHash = signatureEvidenceHash([
+      document.id,
+      family.id,
+      document.childId,
+      user.id,
+      user.email,
+      signatureGuard.signerName,
+      signedAt.toISOString(),
+      request.headers.get("user-agent"),
+      request.headers.get("x-forwarded-for"),
+    ]);
+    const certificate = buildInternalSignatureCertificate({
+      documentId: document.id,
+      documentName: document.name,
+      documentType: document.type,
+      familyName: family.name,
+      childName: document.child?.fullName,
+      signerName: signatureGuard.signerName,
+      signerEmail: user.email,
+      signerUserId: user.id,
+      signedAt,
+      evidenceHash,
+    });
+
+    try {
+      const upload = await uploadDocumentBuffer({
+        bytes: certificate,
+        contentType: "text/plain",
+        originalName: `${document.name}-signed-certificate.txt`,
+        tenantId: user.tenantId,
+        centerId,
+        familyId: family.id,
+        childId: document.childId,
+        documentId: document.id,
+      });
+      nextStorageKey = upload.storageKey;
+      signatureEvidence = { signerName: signatureGuard.signerName, signedAt, evidenceHash };
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, error: error instanceof Error ? error.message : "Signature certificate could not be stored securely." },
+        { status: 502 },
+      );
+    }
+  } else if (uploadedFile) {
     const bytes = Buffer.from(await uploadedFile.arrayBuffer());
     uploadedFileName = uploadedFile.name || "uploaded document";
     try {
@@ -134,6 +202,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           document.childId ? `Child ID: ${document.childId}.` : "",
           uploadedFileName ? `Uploaded file: ${uploadedFileName}.` : "",
           noteText ? `Parent note: ${noteText}` : "",
+          signatureEvidence ? `Typed signature captured from ${signatureEvidence.signerName}.` : "",
           signatureAcknowledged ? "Signature/acknowledgement box checked by parent." : "",
         ].filter(Boolean).join(" "),
         restricted: document.restricted,
@@ -174,8 +243,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       previousStatus: document.status,
       nextStatus: updated.status,
       signatureAcknowledged,
+      signatureCaptured: Boolean(signatureEvidence),
+      signatureName: signatureEvidence?.signerName,
+      signatureEvidenceHash: signatureEvidence?.evidenceHash,
+      signedAt: signatureEvidence?.signedAt.toISOString(),
       uploadedFile: Boolean(uploadedFileName),
-      storageProvider: uploadedFileName ? "supabase" : "unchanged",
+      storageProvider: signatureEvidence || uploadedFileName ? "supabase" : "unchanged",
     },
   });
 

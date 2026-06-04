@@ -139,6 +139,12 @@ const defaultNotificationPreferences: NotificationPreferences = {
   announcements: true,
 };
 
+const signaturePendingStorageKeys = new Set(["internal_signature_pending", "signature_provider_pending"]);
+
+function requiresDocumentSignature(document: { storageKey?: string | null }) {
+  return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
+}
+
 function formatDate(value: string | Date | null) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
@@ -201,6 +207,7 @@ export function ParentPortalWorkspace({
   const [documentNotes, setDocumentNotes] = useState<Record<string, string>>({});
   const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
   const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<Record<string, boolean>>({});
+  const [signatureNames, setSignatureNames] = useState<Record<string, string>>({});
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     ...defaultNotificationPreferences,
     ...(notificationPreferences ?? {}),
@@ -317,6 +324,8 @@ export function ParentPortalWorkspace({
       const formData = new FormData();
       formData.append("note", documentNotes[documentId] || "");
       formData.append("signatureAcknowledged", String(Boolean(signatureAcknowledgements[documentId])));
+      formData.append("signatureConsentAccepted", String(Boolean(signatureAcknowledgements[documentId])));
+      formData.append("signatureName", signatureNames[documentId] || "");
       const file = documentFiles[documentId];
       if (file) formData.append("file", file);
       const response = await fetch(`/api/parent/documents/${documentId}/submit`, {
@@ -328,6 +337,7 @@ export function ParentPortalWorkspace({
       setDocumentNotes((current) => ({ ...current, [documentId]: "" }));
       setDocumentFiles((current) => ({ ...current, [documentId]: null }));
       setSignatureAcknowledgements((current) => ({ ...current, [documentId]: false }));
+      setSignatureNames((current) => ({ ...current, [documentId]: "" }));
       showStatus("Document submitted for director review.");
       router.refresh();
     });
@@ -657,11 +667,19 @@ export function ParentPortalWorkspace({
                 </div>
                 {document.status !== "APPROVED" ? (
                   <div className="space-y-2">
-                    <Input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
-                      onChange={(event) => setDocumentFiles((current) => ({ ...current, [document.id]: event.target.files?.[0] ?? null }))}
-                    />
+                    {requiresDocumentSignature(document) ? (
+                      <Input
+                        value={signatureNames[document.id] ?? ""}
+                        onChange={(event) => setSignatureNames((current) => ({ ...current, [document.id]: event.target.value }))}
+                        placeholder="Typed signature"
+                      />
+                    ) : (
+                      <Input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
+                        onChange={(event) => setDocumentFiles((current) => ({ ...current, [document.id]: event.target.files?.[0] ?? null }))}
+                      />
+                    )}
                     <Textarea
                       value={documentNotes[document.id] ?? ""}
                       onChange={(event) => setDocumentNotes((current) => ({ ...current, [document.id]: event.target.value }))}
@@ -673,11 +691,21 @@ export function ParentPortalWorkspace({
                         checked={Boolean(signatureAcknowledgements[document.id])}
                         onChange={(event) => setSignatureAcknowledgements((current) => ({ ...current, [document.id]: event.target.checked }))}
                       />
-                      I confirm this submission is complete and ready for school review.
+                      {requiresDocumentSignature(document)
+                        ? "I agree that typing my name and submitting this document is my electronic signature."
+                        : "I confirm this submission is complete and ready for school review."}
                     </label>
-                    <Button disabled={isPending} onClick={() => submitDocument(document.id)} variant="outline">
+                    <Button
+                      disabled={
+                        isPending ||
+                        (requiresDocumentSignature(document) &&
+                          (!signatureNames[document.id]?.trim() || !signatureAcknowledgements[document.id]))
+                      }
+                      onClick={() => submitDocument(document.id)}
+                      variant="outline"
+                    >
                       <FileCheck2 data-icon="inline-start" />
-                      Submit for Review
+                      {requiresDocumentSignature(document) ? "Sign and Submit" : "Submit for Review"}
                     </Button>
                   </div>
                 ) : null}

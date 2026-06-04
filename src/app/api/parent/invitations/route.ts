@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -166,19 +167,33 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  const invitationText = [
+    `Hi ${guardian.fullName},`,
+    "",
+    `Your parent portal for ${center.crmLocationId ?? center.name} is ready.`,
+    temporaryPassword
+      ? "Use the temporary password provided by your school director, then reset it after signing in."
+      : "Use the password reset email from The Bee Suite to set your password.",
+    `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/parent-portal`,
+  ].join("\n");
   const emailCopy = await sendEmail({
     to: [email],
     subject: "Your The Bee Suite parent portal is ready",
-    text: [
-      `Hi ${guardian.fullName},`,
-      "",
-      `Your parent portal for ${center.crmLocationId ?? center.name} is ready.`,
-      temporaryPassword
-        ? "Use the temporary password provided by your school director, then reset it after signing in."
-        : "Use the password reset email from The Bee Suite to set your password.",
-      `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/parent-portal`,
-    ].join("\n"),
+    text: invitationText,
     fromName: "The Bee Suite",
+    categories: ["parent_invitation_email"],
+    customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
+  });
+  await recordEmailDeliveryAttempt({
+    tenantId: user.tenantId,
+    centerId: center.id,
+    purpose: "parent_invitation_email",
+    to: [email],
+    subject: "Your The Bee Suite parent portal is ready",
+    text: invitationText,
+    fromName: "The Bee Suite",
+    result: emailCopy,
+    metadata: { guardianId: guardian.id, familyId: guardian.familyId },
   });
 
   await writeAuditLog(user, {

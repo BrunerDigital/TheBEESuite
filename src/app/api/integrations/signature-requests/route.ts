@@ -3,6 +3,7 @@ import { DocumentStatus } from "@prisma/client";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "@/lib/document-guardrails";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
@@ -76,11 +77,25 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  const signatureText = `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nA DocuSign-style provider can be connected from The Bee Suite integrations.`;
   const email = await sendEmail({
     to: [recipient.email],
     subject: `Signature requested: ${name}`,
-    text: `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nA DocuSign-style provider can be connected from The Bee Suite integrations.`,
+    text: signatureText,
     fromName: "Kid City USA",
+    categories: ["signature_request_email"],
+    customArgs: { documentId: document.id, familyId, childId: childId ?? "" },
+  });
+  await recordEmailDeliveryAttempt({
+    tenantId: user.tenantId,
+    centerId: family.centerId,
+    purpose: "signature_request_email",
+    to: [recipient.email],
+    subject: `Signature requested: ${name}`,
+    text: signatureText,
+    fromName: "Kid City USA",
+    result: email,
+    metadata: { documentId: document.id, familyId, childId },
   });
 
   await writeAuditLog(user, {

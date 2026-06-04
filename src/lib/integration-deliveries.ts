@@ -4,11 +4,22 @@ import {
   sendInquiryNotificationEmail,
   type InquiryIntegrationResult,
 } from "@/lib/inquiry-integrations";
-import { sendSms, type IntegrationSendResult } from "@/lib/integrations";
+import { sendEmail, sendSms, type IntegrationSendResult } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
 export type IntegrationDeliveryProvider = "google_sheets" | "sendgrid" | "twilio";
-export type IntegrationDeliveryPurpose = "inquiry_backup" | "inquiry_notification" | "communication_sms";
+export type IntegrationDeliveryPurpose =
+  | "inquiry_backup"
+  | "inquiry_notification"
+  | "communication_email"
+  | "lead_email"
+  | "announcement_email"
+  | "campaign_email"
+  | "registration_email"
+  | "parent_invitation_email"
+  | "signature_request_email"
+  | "onboarding_email"
+  | "communication_sms";
 
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
@@ -38,6 +49,32 @@ type RecordCommunicationSmsDeliveryInput = {
   statusCallbackUrl?: string | null;
   result: IntegrationSendResult;
   maxAttempts?: number;
+};
+
+type RecordEmailDeliveryInput = {
+  tenantId: string;
+  centerId?: string | null;
+  leadId?: string | null;
+  messageId?: string | null;
+  purpose: Extract<
+    IntegrationDeliveryPurpose,
+    | "communication_email"
+    | "lead_email"
+    | "announcement_email"
+    | "campaign_email"
+    | "registration_email"
+    | "parent_invitation_email"
+    | "signature_request_email"
+    | "onboarding_email"
+  >;
+  to: string[];
+  subject: string;
+  text: string;
+  replyTo?: string | null;
+  fromName?: string;
+  result: IntegrationSendResult;
+  maxAttempts?: number;
+  metadata?: Record<string, unknown>;
 };
 
 const RETRY_DELAYS_MINUTES = [5, 15, 60, 180, 720];
@@ -155,6 +192,64 @@ export async function recordCommunicationSmsDeliveryAttempt({
   });
 }
 
+export async function recordEmailDeliveryAttempt({
+  tenantId,
+  centerId,
+  leadId,
+  messageId,
+  purpose,
+  to,
+  subject,
+  text,
+  replyTo,
+  fromName = "The BEE Suite",
+  result,
+  maxAttempts = 5,
+  metadata = {},
+}: RecordEmailDeliveryInput) {
+  const deliveryResult: IntegrationAttemptResult = result.configured
+    ? result
+    : { ...result, skipped: true };
+  const attempts = deliveryResult.skipped ? 0 : 1;
+  const state = computeIntegrationDeliveryState({
+    result: deliveryResult,
+    attempts,
+    maxAttempts,
+  });
+
+  return prisma.integrationDelivery.create({
+    data: {
+      tenantId,
+      centerId,
+      leadId,
+      messageId: messageId ?? null,
+      provider: "sendgrid",
+      providerMessageId: result.id ?? null,
+      purpose,
+      direction: "outbound",
+      recipient: `${to.length} recipient${to.length === 1 ? "" : "s"}`,
+      status: state.status,
+      attempts,
+      maxAttempts,
+      payload: {
+        to,
+        subject,
+        text,
+        replyTo: replyTo ?? null,
+        fromName,
+        centerId: centerId ?? null,
+        leadId: leadId ?? null,
+        messageId: messageId ?? null,
+        ...metadata,
+      } as Prisma.InputJsonObject,
+      lastResult: deliveryResult as Prisma.InputJsonObject,
+      lastError: deliveryResult.error ?? null,
+      nextAttemptAt: state.nextAttemptAt,
+      deliveredAt: state.deliveredAt,
+    },
+  });
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -167,6 +262,17 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+const SENDGRID_EMAIL_PURPOSES = new Set([
+  "communication_email",
+  "lead_email",
+  "announcement_email",
+  "campaign_email",
+  "registration_email",
+  "parent_invitation_email",
+  "signature_request_email",
+  "onboarding_email",
+]);
+
 async function sendDelivery(provider: string, purpose: string, payload: Record<string, unknown>) {
   if (provider === "google_sheets" && purpose === "inquiry_backup") {
     return forwardInquiryToGoogleSheets(payload);
@@ -174,6 +280,23 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
 
   if (provider === "sendgrid" && purpose === "inquiry_notification") {
     return sendInquiryNotificationEmail(payload, stringArray(payload.locationRecipients));
+  }
+
+  if (provider === "sendgrid" && SENDGRID_EMAIL_PURPOSES.has(purpose)) {
+    return sendEmail({
+      to: stringArray(payload.to),
+      subject: stringValue(payload.subject),
+      text: stringValue(payload.text),
+      replyTo: stringValue(payload.replyTo) || null,
+      fromName: stringValue(payload.fromName) || "The BEE Suite",
+      categories: [purpose],
+      customArgs: {
+        purpose,
+        centerId: stringValue(payload.centerId) || undefined,
+        leadId: stringValue(payload.leadId) || undefined,
+        messageId: stringValue(payload.messageId) || undefined,
+      },
+    });
   }
 
   if (provider === "twilio" && purpose === "communication_sms") {

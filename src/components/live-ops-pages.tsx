@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
+import { CommunicationSendButton } from "@/components/communication-send-button";
 import {
   BillingWorkbench,
   type BillingWorkbenchCenter,
@@ -1303,6 +1304,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
                 <TableHead>Audience</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Send time</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1316,11 +1318,14 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
                   <TableCell>{jsonSummary(announcement.audience)}</TableCell>
                   <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{announcement.status}</Badge></TableCell>
                   <TableCell>{formatDateTime(announcement.sendAt)}</TableCell>
+                  <TableCell>
+                    <CommunicationSendButton endpoint={`/api/communications/announcements/${announcement.id}/send`} />
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.announcements.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No announcements have been created for this scope yet.
                   </TableCell>
                 </TableRow>
@@ -1386,6 +1391,7 @@ export function CampaignsPage({ data }: { data: CampaignsPageData }) {
                 <TableHead>Audience</TableHead>
                 <TableHead>Metrics</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1397,11 +1403,14 @@ export function CampaignsPage({ data }: { data: CampaignsPageData }) {
                   <TableCell>{jsonSummary(campaign.audience)}</TableCell>
                   <TableCell>{jsonSummary(campaign.metrics)}</TableCell>
                   <TableCell><Badge variant={campaign.status === "active" ? "default" : "outline"}>{campaign.status}</Badge></TableCell>
+                  <TableCell>
+                    <CommunicationSendButton endpoint={`/api/communications/campaigns/${campaign.id}/send`} requireBody />
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.campaigns.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
+                  <TableCell colSpan={7} className="text-muted-foreground">
                     No campaigns have been configured yet.
                   </TableCell>
                 </TableRow>

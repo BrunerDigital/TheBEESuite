@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
+import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
@@ -154,15 +154,33 @@ export async function POST(request: NextRequest) {
   }
 
   const emailRecipients = senderIsParent ? directors.map((director) => director.email) : parentEmails;
+  const emailSubject = senderIsParent && family ? `Portal message from ${family.name}: ${subject}` : `Message from ${user.name}: ${subject}`;
+  const emailReplyTo = senderIsParent ? family?.billingEmail : user.email;
   const email = sendEmailCopy && family
     ? await sendEmail({
         to: emailRecipients,
-        subject: senderIsParent ? `Portal message from ${family.name}: ${subject}` : `Message from ${user.name}: ${subject}`,
+        subject: emailSubject,
         text: message,
-        replyTo: senderIsParent ? family.billingEmail : user.email,
+        replyTo: emailReplyTo,
         fromName: "The BEE Suite",
+        categories: ["communication_email"],
+        customArgs: { messageId: created.id, familyId: family.id, centerId: family.centerId },
       })
     : { ok: false, configured: false, provider: "sendgrid" as const };
+  if (sendEmailCopy && family) {
+    await recordEmailDeliveryAttempt({
+      tenantId: user.tenantId,
+      centerId: family.centerId,
+      messageId: created.id,
+      purpose: "communication_email",
+      to: emailRecipients,
+      subject: emailSubject,
+      text: message,
+      replyTo: emailReplyTo,
+      result: email,
+      metadata: { familyId: family.id },
+    });
+  }
   const smsRecipients = sendSmsCopy && family && !senderIsParent
     ? uniqueSmsRecipients(
         family.guardians

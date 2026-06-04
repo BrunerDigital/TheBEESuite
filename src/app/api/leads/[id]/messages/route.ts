@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
+import { isEmail, sendEmail } from "@/lib/integrations";
 
 export const runtime = "nodejs";
 
@@ -11,10 +13,6 @@ type RouteContext = {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function isEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -60,42 +58,39 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "This lead does not have a valid email address." }, { status: 400 });
   }
 
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const from = process.env.SENDGRID_FROM_EMAIL;
+  const replyTo = lead.center.email && isEmail(lead.center.email) ? lead.center.email : null;
+  const email = await sendEmail({
+    to: [lead.email],
+    subject,
+    text: message,
+    replyTo,
+    fromName: "Kid City USA",
+    categories: ["lead_email"],
+    customArgs: { leadId: lead.id, centerId: lead.centerId },
+  });
 
-  if (!apiKey || !from) {
+  await recordEmailDeliveryAttempt({
+    tenantId: user.tenantId,
+    centerId: lead.centerId,
+    leadId: lead.id,
+    purpose: "lead_email",
+    to: [lead.email],
+    subject,
+    text: message,
+    replyTo,
+    fromName: "Kid City USA",
+    result: email,
+  });
+
+  if (!email.configured) {
     return NextResponse.json(
-      { ok: false, error: "SendGrid is not configured for outbound lead messages." },
+      { ok: false, error: "SendGrid is not configured for outbound lead messages.", email },
       { status: 503 },
     );
   }
-
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: lead.email }] }],
-      from: { email: from, name: "Kid City USA" },
-      reply_to: lead.center.email && isEmail(lead.center.email)
-        ? { email: lead.center.email, name: lead.center.name }
-        : undefined,
-      subject,
-      content: [
-        {
-          type: "text/plain",
-          value: message,
-        },
-      ],
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  if (!response.ok) {
+  if (!email.ok) {
     return NextResponse.json(
-      { ok: false, error: `SendGrid returned ${response.status}.` },
+      { ok: false, error: email.error || "Lead email could not be queued.", email },
       { status: 502 },
     );
   }
@@ -118,8 +113,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       subject,
       noteId: note.id,
       centerReplyTo: lead.center.email || null,
+      providerMessageId: email.id ?? null,
     },
   });
 
-  return NextResponse.json({ ok: true, note });
+  return NextResponse.json({ ok: true, note, email });
 }

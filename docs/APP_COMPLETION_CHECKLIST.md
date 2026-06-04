@@ -274,7 +274,7 @@ Status legend:
 - [x] Message, announcement, campaign, AI summary, and AI suggestion schema exists.
 - [x] SendGrid and Twilio env/integration placeholders exist.
 - [ ] Complete two-way parent/director/teacher messaging UI.
-- [ ] Add real SendGrid email send paths for all communication workflows.
+- [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
 - [ ] Add message templates and merge fields.
 - [ ] Add broadcast segmentation by classroom, center, status, and tag.

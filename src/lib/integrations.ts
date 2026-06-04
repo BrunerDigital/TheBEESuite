@@ -296,12 +296,16 @@ export async function sendEmail({
   text,
   replyTo,
   fromName = "The Bee Suite",
+  categories,
+  customArgs,
 }: {
   to: string[];
   subject: string;
   text: string;
   replyTo?: string | null;
   fromName?: string;
+  categories?: string[];
+  customArgs?: Record<string, string | number | boolean | null | undefined>;
 }): Promise<IntegrationSendResult> {
   const apiKey = process.env.SENDGRID_API_KEY;
   const from = process.env.SENDGRID_FROM_EMAIL;
@@ -311,27 +315,47 @@ export async function sendEmail({
     return { ok: false, configured: false, provider: "sendgrid", error: "SendGrid is not configured." };
   }
 
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: recipients.map((email) => ({ email })) }],
-      from: { email: from, name: fromName },
-      reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
-      subject,
-      content: [{ type: "text/plain", value: text }],
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: recipients.map((email) => ({
+          to: [{ email }],
+          custom_args: customArgs
+            ? Object.fromEntries(
+                Object.entries(customArgs)
+                  .filter(([, value]) => value !== null && value !== undefined)
+                  .map(([key, value]) => [key, String(value)]),
+              )
+            : undefined,
+        })),
+        from: { email: from, name: fromName },
+        reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
+        subject,
+        categories: categories?.slice(0, 10),
+        content: [{ type: "text/plain", value: text }],
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "sendgrid",
+      error: error instanceof Error ? error.message : "SendGrid request failed.",
+    };
+  }
 
   if (!response.ok) {
     return { ok: false, configured: true, provider: "sendgrid", error: `SendGrid returned ${response.status}.` };
   }
 
-  return { ok: true, configured: true, provider: "sendgrid" };
+  return { ok: true, configured: true, provider: "sendgrid", id: response.headers.get("x-message-id") ?? undefined };
 }
 
 export async function sendSms({

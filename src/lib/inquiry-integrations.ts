@@ -3,6 +3,7 @@ import {
   hasGoogleSheetsApiConfig,
   type GoogleSheetValue,
 } from "@/lib/google-sheets";
+import { sendEmail } from "@/lib/integrations";
 
 export type InquiryIntegrationResult = {
   ok: boolean;
@@ -108,14 +109,12 @@ export async function sendInquiryNotificationEmail(
   payload: Record<string, unknown>,
   locationRecipients: string[] = [],
 ): Promise<InquiryIntegrationResult> {
-  const apiKey = process.env.SENDGRID_API_KEY;
   const recipients = uniqueInquiryEmails([
     ...(process.env.INQUIRY_NOTIFICATION_EMAILS?.split(",") ?? []),
     ...locationRecipients,
   ]);
-  const from = process.env.SENDGRID_FROM_EMAIL;
 
-  if (!apiKey || !recipients.length || !from) {
+  if (!recipients.length) {
     return { ok: true, skipped: true };
   }
 
@@ -134,40 +133,24 @@ export async function sendInquiryNotificationEmail(
     `Bee Suite Lead ID: ${payload.leadId}`,
   ];
 
-  try {
-    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        personalizations: [{ to: recipients.map((email) => ({ email })) }],
-        from: { email: from, name: "The Bee Suite" },
-        subject,
-        content: [
-          {
-            type: "text/plain",
-            value: lines.join("\n"),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
+  const email = await sendEmail({
+    to: recipients,
+    subject,
+    text: lines.join("\n"),
+    fromName: "The Bee Suite",
+    categories: ["inquiry_notification"],
+    customArgs: {
+      leadId: String(payload.leadId || ""),
+      centerId: String(payload.centerId || ""),
+      locationId: String(payload.locationId || ""),
+    },
+  });
 
-    if (!response.ok) {
-      return { ok: false, error: `SendGrid returned ${response.status}.` };
-    }
-
-    return {
-      ok: true,
-      recipients: recipients.length,
-      locationRecipients: uniqueInquiryEmails(locationRecipients).length,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : "Notification email failed.",
-    };
-  }
+  return {
+    ok: email.ok,
+    skipped: !email.configured,
+    error: email.error,
+    recipients: recipients.length,
+    locationRecipients: uniqueInquiryEmails(locationRecipients).length,
+  };
 }

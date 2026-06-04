@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, EnrollmentStage, UserRole } from "@prisma/client";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
@@ -385,6 +386,32 @@ export async function POST(request: NextRequest) {
         `Bee Suite Lead ID: ${lead.id}`,
         `Registration Submission ID: ${submission.id}`,
       ].join("\n"),
+      categories: ["registration_email"],
+      customArgs: { leadId: lead.id, centerId: center.id, submissionId: submission.id },
+    });
+    await recordEmailDeliveryAttempt({
+      tenantId: center.organization.tenantId,
+      centerId: center.id,
+      leadId: lead.id,
+      purpose: "registration_email",
+      to: recipients,
+      replyTo: payload.primaryGuardianEmail,
+      subject: `New Online Registration - ${payload.program} - ${center.crmLocationId ?? center.name}`,
+      text: [
+        `School: ${center.name}`,
+        `Location ID: ${center.crmLocationId ?? ""}`,
+        `Parent: ${payload.primaryGuardianName}`,
+        `Email: ${payload.primaryGuardianEmail}`,
+        `Phone: ${payload.primaryGuardianPhone}`,
+        `Child: ${payload.childFullName}`,
+        `Program: ${payload.program}`,
+        `Schedule: ${payload.schedule}`,
+        `Desired start date: ${payload.desiredStartDate}`,
+        `Bee Suite Lead ID: ${lead.id}`,
+        `Registration Submission ID: ${submission.id}`,
+      ].join("\n"),
+      result: email,
+      metadata: { submissionId: submission.id },
     });
 
     return NextResponse.json(

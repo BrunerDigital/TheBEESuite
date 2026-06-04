@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
+import { sendEmail } from "@/lib/integrations";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
@@ -153,11 +155,9 @@ async function sendOnboardingEmail(
     status: string;
   },
 ) {
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const from = process.env.SENDGRID_FROM_EMAIL;
   const recipients = getNotificationRecipients();
 
-  if (!apiKey || !from || !recipients.length) {
+  if (!recipients.length) {
     return { ok: true, skipped: true, recipients: 0 };
   }
 
@@ -190,26 +190,40 @@ async function sendOnboardingEmail(
     payload.notes || "None provided.",
   ].filter((line) => line !== "");
 
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
+  const subject = `New Bee Suite onboarding intake - ${payload.brandName}`;
+  const text = lines.join("\n");
+  const email = await sendEmail({
+    to: recipients,
+    subject,
+    text,
+    fromName: "The Bee Suite",
+    categories: ["onboarding_email"],
+    customArgs: {
+      notificationId,
+      tenantId: workspace?.tenantId,
+      centerId: workspace?.centerId,
     },
-    body: JSON.stringify({
-      personalizations: [{ to: recipients.map((email) => ({ email })) }],
-      from: { email: from, name: "The Bee Suite" },
-      subject: `New Bee Suite onboarding intake - ${payload.brandName}`,
-      content: [{ type: "text/plain", value: lines.join("\n") }],
-    }),
-    signal: AbortSignal.timeout(8000),
   });
-
-  if (!response.ok) {
-    return { ok: false, skipped: false, recipients: recipients.length, error: `SendGrid returned ${response.status}.` };
+  if (workspace) {
+    await recordEmailDeliveryAttempt({
+      tenantId: workspace.tenantId,
+      centerId: workspace.centerId,
+      purpose: "onboarding_email",
+      to: recipients,
+      subject,
+      text,
+      fromName: "The Bee Suite",
+      result: email,
+      metadata: { notificationId, workspaceStatus: workspace.status },
+    });
   }
 
-  return { ok: true, skipped: false, recipients: recipients.length };
+  return {
+    ok: email.ok,
+    skipped: !email.configured,
+    recipients: recipients.length,
+    error: email.error,
+  };
 }
 
 async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: string) {

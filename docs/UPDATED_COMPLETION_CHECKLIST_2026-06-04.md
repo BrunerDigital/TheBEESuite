@@ -225,7 +225,7 @@ Status legend:
 - [x] Notification dedupe/retention policy exists.
 - [x] Parent notification preferences exist.
 - [x] Complete portal two-way parent/director/teacher messaging UI.
-- [ ] Add real SendGrid email send paths for all communication workflows.
+- [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
 - [ ] Add message templates and merge fields.
 - [ ] Add richer threaded conversation views with per-family reply history and staff assignment.

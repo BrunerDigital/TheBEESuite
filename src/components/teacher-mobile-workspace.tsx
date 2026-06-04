@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, BookOpen, Camera, CheckCircle2, ClipboardCheck, ShieldAlert } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, LogIn, LogOut, Moon, Palette, Plus, ShieldAlert, Trash2, UserX, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ type ChildOption = {
   ageGroup: string;
   enrollmentStatus: string;
   classroom: { id: string; name: string } | null;
+  attendance?: AttendanceSnapshot;
 };
 
 type Props = {
@@ -24,17 +25,117 @@ type Props = {
   teacherName: string;
 };
 
+type AttendanceSnapshot = {
+  status: string;
+  latestLogType: string | null;
+  latestLogAt: string | Date | null;
+  lastMarkedAt: string | Date | null;
+};
+
+const emptyAttendance: AttendanceSnapshot = {
+  status: "not_marked",
+  latestLogType: null,
+  latestLogAt: null,
+  lastMarkedAt: null,
+};
+
+type MealDraft = {
+  id: string;
+  mealType: string;
+  food: string;
+  amount: string;
+};
+
+type NapDraft = {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+};
+
+type DiaperDraft = {
+  id: string;
+  type: string;
+  occurredAt: string;
+  notes: string;
+};
+
+type ActivityDraft = {
+  id: string;
+  title: string;
+  notes: string;
+};
+
+function draftId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function dateInputValue(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function dateTimeInputValue(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}T${hour}:${minute}`;
+}
+
+function formatTime(value: string | Date | null) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function attendanceLabel(snapshot: AttendanceSnapshot) {
+  if (snapshot.latestLogType === "check_in") return "Checked in";
+  if (snapshot.latestLogType === "check_out" || snapshot.status === "checked_out") return "Checked out";
+  if (snapshot.status === "absent") return "Absent";
+  if (snapshot.status === "present") return "Present";
+  return "Not marked";
+}
+
+function attendanceDetail(snapshot: AttendanceSnapshot) {
+  const time = formatTime(snapshot.latestLogAt ?? snapshot.lastMarkedAt);
+  if (!time) return "No time logged";
+  if (snapshot.latestLogType === "check_in") return `In at ${time}`;
+  if (snapshot.latestLogType === "check_out") return `Out at ${time}`;
+  return `Marked at ${time}`;
+}
+
+function createMealDraft(): MealDraft {
+  return { id: draftId("meal"), mealType: "Lunch", food: "", amount: "" };
+}
+
+function createNapDraft(): NapDraft {
+  return { id: draftId("nap"), startsAt: "", endsAt: "" };
+}
+
+function createDiaperDraft(): DiaperDraft {
+  return { id: draftId("diaper"), type: "", occurredAt: dateTimeInputValue(), notes: "" };
+}
+
+function createActivityDraft(): ActivityDraft {
+  return { id: draftId("activity"), title: "", notes: "" };
+}
+
 export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
   const firstChild = roster[0]?.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
+  const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [attendanceStatus, setAttendanceStatus] = useState("present");
   const [logType, setLogType] = useState("check_in");
   const [mood, setMood] = useState("Happy");
   const [teacherNote, setTeacherNote] = useState("");
-  const [meal, setMeal] = useState("");
-  const [activity, setActivity] = useState("");
+  const [reportDate, setReportDate] = useState(() => dateInputValue());
+  const [sendToParent, setSendToParent] = useState(true);
+  const [mealRows, setMealRows] = useState<MealDraft[]>(() => [createMealDraft()]);
+  const [napRows, setNapRows] = useState<NapDraft[]>(() => [createNapDraft()]);
+  const [diaperRows, setDiaperRows] = useState<DiaperDraft[]>(() => [createDiaperDraft()]);
+  const [activityRows, setActivityRows] = useState<ActivityDraft[]>(() => [createActivityDraft()]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoCaption, setPhotoCaption] = useState("");
   const [suppliesNeeded, setSuppliesNeeded] = useState("");
@@ -52,6 +153,10 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
     }, {});
   }, [roster]);
 
+  function attendanceFor(child: ChildOption) {
+    return attendanceOverrides[child.id] ?? child.attendance ?? emptyAttendance;
+  }
+
   function showStatus(next: string) {
     setError("");
     setStatus(next);
@@ -62,41 +167,110 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
     setError(next);
   }
 
-  function submitAttendance() {
+  function updateMeal(id: string, patch: Partial<MealDraft>) {
+    setMealRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function updateNap(id: string, patch: Partial<NapDraft>) {
+    setNapRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function updateDiaper(id: string, patch: Partial<DiaperDraft>) {
+    setDiaperRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function updateActivity(id: string, patch: Partial<ActivityDraft>) {
+    setActivityRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function removeMeal(id: string) {
+    setMealRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createMealDraft()]);
+  }
+
+  function removeNap(id: string) {
+    setNapRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createNapDraft()]);
+  }
+
+  function removeDiaper(id: string) {
+    setDiaperRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createDiaperDraft()]);
+  }
+
+  function removeActivity(id: string) {
+    setActivityRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createActivityDraft()]);
+  }
+
+  function resetDailyReportDrafts() {
+    setTeacherNote("");
+    setSuppliesNeeded("");
+    setMealRows([createMealDraft()]);
+    setNapRows([createNapDraft()]);
+    setDiaperRows([createDiaperDraft()]);
+    setActivityRows([createActivityDraft()]);
+  }
+
+  function submitAttendance(options: { childId?: string; status?: string; logType?: string; label?: string } = {}) {
+    const targetChildId = options.childId ?? selectedChild?.id;
+    const targetChildName = roster.find((child) => child.id === targetChildId)?.fullName ?? selectedChild?.fullName ?? "Child";
+    const targetStatus = options.status ?? attendanceStatus;
+    const targetLogType = options.logType ?? logType;
     startTransition(async () => {
       const response = await fetch("/api/teacher/attendance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: selectedChild?.id, status: attendanceStatus, logType, date: new Date().toISOString() }),
+        body: JSON.stringify({ childId: targetChildId, status: targetStatus, logType: targetLogType, date: new Date().toISOString() }),
       });
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Attendance could not be saved.");
-      showStatus("Attendance saved and audit logged.");
+      if (targetChildId) {
+        const nextStatus = targetLogType === "check_in" ? "present" : targetLogType === "check_out" ? "checked_out" : targetStatus;
+        setAttendanceOverrides((current) => ({
+          ...current,
+          [targetChildId]: {
+            status: nextStatus,
+            latestLogType: targetLogType || null,
+            latestLogAt: targetLogType ? new Date() : null,
+            lastMarkedAt: new Date(),
+          },
+        }));
+      }
+      showStatus(options.label ?? `${targetChildName} attendance saved.`);
     });
   }
 
   function submitDailyReport() {
     startTransition(async () => {
+      const meals = mealRows
+        .filter((row) => row.food.trim())
+        .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
+      const naps = napRows
+        .filter((row) => row.startsAt)
+        .map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt }));
+      const diapers = diaperRows
+        .filter((row) => row.type.trim())
+        .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
+      const activities = activityRows
+        .filter((row) => row.title.trim())
+        .map((row) => ({ title: row.title, notes: row.notes }));
       const response = await fetch("/api/teacher/daily-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           childId: selectedChild?.id,
+          date: `${reportDate}T12:00:00`,
           mood,
           teacherNote,
-          meal,
-          activity,
+          meals,
+          naps,
+          diapers,
+          activities,
           suppliesNeeded,
-          sendToParent: true,
+          sendToParent,
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Daily report could not be saved.");
-      setTeacherNote("");
-      setMeal("");
-      setActivity("");
-      setSuppliesNeeded("");
-      showStatus("Daily report saved for parent view.");
+      resetDailyReportDrafts();
+      showStatus(sendToParent ? "Daily report saved for parent view." : "Daily report saved as an internal draft.");
     });
   }
 
@@ -176,17 +350,71 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
             <div key={classroom} className="rounded-xl border bg-background/40 p-3">
               <div className="mb-2 font-medium">{classroom}</div>
               <div className="grid gap-2">
-                {roster.slice(0, 12).map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className={`rounded-lg border px-3 py-2 text-left text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
-                    onClick={() => setSelectedChildId(child.id)}
-                  >
-                    <span className="font-medium">{child.fullName}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
-                  </button>
-                ))}
+                {roster.slice(0, 12).map((child) => {
+                  const attendance = attendanceFor(child);
+                  const isCheckedIn = attendance.latestLogType === "check_in";
+                  return (
+                    <div
+                      key={child.id}
+                      className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
+                    >
+                      <button type="button" className="flex w-full items-start justify-between gap-2 text-left" onClick={() => setSelectedChildId(child.id)}>
+                        <span className="min-w-0">
+                          <span className="font-medium">{child.fullName}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
+                        </span>
+                        <Badge variant="outline" className="shrink-0">{attendanceLabel(attendance)}</Badge>
+                      </button>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="size-3" />
+                          {attendanceDetail(attendance)}
+                        </span>
+                        <span className="flex flex-wrap gap-1">
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending || isCheckedIn}
+                            onClick={() => {
+                              setSelectedChildId(child.id);
+                              submitAttendance({ childId: child.id, status: "present", logType: "check_in", label: `${child.fullName} checked in.` });
+                            }}
+                          >
+                            <LogIn data-icon="inline-start" />
+                            In
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending || !isCheckedIn}
+                            onClick={() => {
+                              setSelectedChildId(child.id);
+                              submitAttendance({ childId: child.id, status: "checked_out", logType: "check_out", label: `${child.fullName} checked out.` });
+                            }}
+                          >
+                            <LogOut data-icon="inline-start" />
+                            Out
+                          </Button>
+                          <Button
+                            type="button"
+                            size="xs"
+                            variant="outline"
+                            disabled={isPending || isCheckedIn || attendance.status === "absent"}
+                            onClick={() => {
+                              setSelectedChildId(child.id);
+                              submitAttendance({ childId: child.id, status: "absent", logType: "", label: `${child.fullName} marked absent.` });
+                            }}
+                          >
+                            <UserX data-icon="inline-start" />
+                            Absent
+                          </Button>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -223,7 +451,7 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
                 </SelectContent>
               </Select>
             </div>
-            <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitAttendance}>
+            <Button disabled={isPending || !selectedChild} className="w-full" onClick={() => submitAttendance()}>
               <ClipboardCheck data-icon="inline-start" />
               Save Attendance
             </Button>
@@ -245,17 +473,179 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card className="glass-panel lg:col-span-2">
           <CardHeader>
             <CardTitle>Daily Report</CardTitle>
             <CardDescription>Sendable parent summary</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Input value={mood} onChange={(event) => setMood(event.target.value)} placeholder="Mood" />
-            <Input value={meal} onChange={(event) => setMeal(event.target.value)} placeholder="Meal or bottle" />
-            <Input value={activity} onChange={(event) => setActivity(event.target.value)} placeholder="Activity" />
-            <Input value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
-            <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Teacher note" />
+          <CardContent className="space-y-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="daily-report-date">Report date</Label>
+                <Input id="daily-report-date" type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="daily-report-mood">Mood</Label>
+                <Input id="daily-report-mood" value={mood} onChange={(event) => setMood(event.target.value)} placeholder="Happy, calm, tired" />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input type="checkbox" checked={sendToParent} onChange={(event) => setSendToParent(event.target.checked)} />
+              <span>Send to parent portal</span>
+            </label>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <section className="rounded-xl border bg-background/40 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Utensils className="size-4" />
+                    Meals
+                  </div>
+                  <Button type="button" size="xs" variant="outline" onClick={() => setMealRows((current) => [...current, createMealDraft()])}>
+                    <Plus data-icon="inline-start" />
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {mealRows.map((row, index) => (
+                    <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-muted-foreground">Meal {index + 1}</div>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeMeal(row.id)}>
+                          <Trash2 data-icon="inline-start" />
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                        <Select value={row.mealType} onValueChange={(value) => updateMeal(row.id, { mealType: value ?? row.mealType })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Breakfast">Breakfast</SelectItem>
+                            <SelectItem value="Morning snack">Morning snack</SelectItem>
+                            <SelectItem value="Lunch">Lunch</SelectItem>
+                            <SelectItem value="Afternoon snack">Afternoon snack</SelectItem>
+                            <SelectItem value="Bottle">Bottle</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input value={row.food} onChange={(event) => updateMeal(row.id, { food: event.target.value })} placeholder="Food or bottle" />
+                      </div>
+                      <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border bg-background/40 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Moon className="size-4" />
+                    Naps
+                  </div>
+                  <Button type="button" size="xs" variant="outline" onClick={() => setNapRows((current) => [...current, createNapDraft()])}>
+                    <Plus data-icon="inline-start" />
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {napRows.map((row, index) => (
+                    <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-muted-foreground">Nap {index + 1}</div>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeNap(row.id)}>
+                          <Trash2 data-icon="inline-start" />
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Start</Label>
+                          <Input type="datetime-local" value={row.startsAt} onChange={(event) => updateNap(row.id, { startsAt: event.target.value })} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>End</Label>
+                          <Input type="datetime-local" value={row.endsAt} onChange={(event) => updateNap(row.id, { endsAt: event.target.value })} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border bg-background/40 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Baby className="size-4" />
+                    Diaper / Potty
+                  </div>
+                  <Button type="button" size="xs" variant="outline" onClick={() => setDiaperRows((current) => [...current, createDiaperDraft()])}>
+                    <Plus data-icon="inline-start" />
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {diaperRows.map((row, index) => (
+                    <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-muted-foreground">Log {index + 1}</div>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeDiaper(row.id)}>
+                          <Trash2 data-icon="inline-start" />
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                        <Select value={row.type} onValueChange={(value) => updateDiaper(row.id, { type: value ?? "" })}>
+                          <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Wet">Wet</SelectItem>
+                            <SelectItem value="BM">BM</SelectItem>
+                            <SelectItem value="Wet and BM">Wet and BM</SelectItem>
+                            <SelectItem value="Dry">Dry</SelectItem>
+                            <SelectItem value="Potty">Potty</SelectItem>
+                            <SelectItem value="Accident">Accident</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input type="datetime-local" value={row.occurredAt} onChange={(event) => updateDiaper(row.id, { occurredAt: event.target.value })} />
+                      </div>
+                      <Input value={row.notes} onChange={(event) => updateDiaper(row.id, { notes: event.target.value })} placeholder="Notes" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-xl border bg-background/40 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                    <Palette className="size-4" />
+                    Activities
+                  </div>
+                  <Button type="button" size="xs" variant="outline" onClick={() => setActivityRows((current) => [...current, createActivityDraft()])}>
+                    <Plus data-icon="inline-start" />
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {activityRows.map((row, index) => (
+                    <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-medium text-muted-foreground">Activity {index + 1}</div>
+                        <Button type="button" size="xs" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeActivity(row.id)}>
+                          <Trash2 data-icon="inline-start" />
+                          Remove
+                        </Button>
+                      </div>
+                      <Input value={row.title} onChange={(event) => updateActivity(row.id, { title: event.target.value })} placeholder="Activity" />
+                      <Input value={row.notes} onChange={(event) => updateActivity(row.id, { notes: event.target.value })} placeholder="Notes" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
+              <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Teacher note" />
+            </div>
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitDailyReport}>
               <BookOpen data-icon="inline-start" />
               Save Report

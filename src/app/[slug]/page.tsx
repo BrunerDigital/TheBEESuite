@@ -57,6 +57,7 @@ import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/i
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { signChildMediaRecords } from "@/lib/supabase-storage";
+import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 
 export const dynamic = "force-dynamic";
 
@@ -866,6 +867,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       where: { userId: user.id },
       select: { centerId: true, classroomId: true },
     });
+    const teacherCenter = staffProfile?.centerId
+      ? await prisma.center.findUnique({
+          where: { id: staffProfile.centerId },
+          select: { customFields: true },
+        })
+      : null;
+    const serviceDayStart = startOfServiceDay(today, readCenterTimeZone(teacherCenter?.customFields));
     const childWhereForTeacher: Prisma.ChildWhereInput = allCenters
       ? {}
       : staffProfile?.classroomId
@@ -885,8 +893,43 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         classroom: { select: { id: true, name: true } },
       },
     });
+    const childIds = children.map((child) => child.id);
+    const [attendanceRecords, checkLogs] = childIds.length
+      ? await Promise.all([
+          prisma.attendanceRecord.findMany({
+            where: { childId: { in: childIds }, date: { gte: serviceDayStart } },
+            orderBy: { date: "desc" },
+            select: { childId: true, date: true, status: true },
+          }),
+          prisma.checkInOutLog.findMany({
+            where: { childId: { in: childIds }, occurredAt: { gte: serviceDayStart } },
+            orderBy: { occurredAt: "desc" },
+            select: { childId: true, type: true, occurredAt: true },
+          }),
+        ])
+      : [[], []];
+    const attendanceByChild = new Map<string, { status: string; date: Date }>();
+    for (const record of attendanceRecords) {
+      if (record.childId && !attendanceByChild.has(record.childId)) {
+        attendanceByChild.set(record.childId, { status: record.status, date: record.date });
+      }
+    }
+    const latestCheckLogByChild = latestLogMap(checkLogs);
+    const roster = children.map((child) => {
+      const attendance = attendanceByChild.get(child.id);
+      const latestLog = latestCheckLogByChild.get(child.id);
+      return {
+        ...child,
+        attendance: {
+          status: attendance?.status ?? "not_marked",
+          latestLogType: latestLog?.type ?? null,
+          latestLogAt: latestLog?.occurredAt.toISOString() ?? null,
+          lastMarkedAt: attendance?.date.toISOString() ?? null,
+        },
+      };
+    });
 
-    return <TeacherMobileWorkspace roster={children} teacherName={user.name} />;
+    return <TeacherMobileWorkspace roster={roster} teacherName={user.name} />;
   }
 
   if (slug === "messages") {

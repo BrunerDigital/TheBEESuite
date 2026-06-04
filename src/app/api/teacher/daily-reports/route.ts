@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { parseOperationalDate } from "@/lib/date-guardrails";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { parseTeacherDailyReportPayload } from "@/lib/teacher-daily-report";
 
 export const runtime = "nodejs";
-
-function clean(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -21,13 +17,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const childId = clean(body.childId);
-  if (!childId) {
-    return NextResponse.json({ ok: false, error: "Child ID is required." }, { status: 400 });
+  const parsedPayload = parseTeacherDailyReportPayload(body);
+  if (!parsedPayload.ok) {
+    return NextResponse.json({ ok: false, error: parsedPayload.error }, { status: parsedPayload.status });
   }
+  const dailyReport = parsedPayload.report;
 
   const child = await prisma.child.findUnique({
-    where: { id: childId },
+    where: { id: dailyReport.childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
       family: { select: { centerId: true } },
@@ -49,46 +46,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
   }
 
-  const parsedDate = parseOperationalDate(body.date, "Daily report date");
-  if (!parsedDate.ok) {
-    return NextResponse.json({ ok: false, error: parsedDate.error }, { status: parsedDate.status });
-  }
-  const date = parsedDate.date;
-  const meal = clean(body.meal);
-  const activity = clean(body.activity);
-  const napStart = clean(body.napStart);
-  const napEnd = clean(body.napEnd);
-  const diaperType = clean(body.diaperType);
-  const parsedNapStart = napStart ? parseOperationalDate(napStart, "Nap start") : null;
-  if (parsedNapStart && !parsedNapStart.ok) {
-    return NextResponse.json({ ok: false, error: parsedNapStart.error }, { status: parsedNapStart.status });
-  }
-  const parsedNapEnd = napEnd ? parseOperationalDate(napEnd, "Nap end") : null;
-  if (parsedNapEnd && !parsedNapEnd.ok) {
-    return NextResponse.json({ ok: false, error: parsedNapEnd.error }, { status: parsedNapEnd.status });
-  }
-
   const report = await prisma.dailyReport.create({
     data: {
-      childId,
+      childId: dailyReport.childId,
       classroomId: child.classroom?.id ?? null,
-      date,
-      mood: clean(body.mood) || null,
-      teacherNote: clean(body.teacherNote) || null,
-      suppliesNeeded: clean(body.suppliesNeeded) || null,
-      sentAt: Boolean(body.sendToParent) ? new Date() : null,
-      meals: meal
-        ? { create: [{ mealType: clean(body.mealType) || "Meal", food: meal, amount: clean(body.mealAmount) || null }] }
-        : undefined,
-      naps: napStart
-        ? { create: [{ startsAt: parsedNapStart?.date ?? date, endsAt: parsedNapEnd?.date ?? null }] }
-        : undefined,
-      diapers: diaperType
-        ? { create: [{ type: diaperType, occurredAt: date, notes: clean(body.diaperNotes) || null }] }
-        : undefined,
-      activities: activity
-        ? { create: [{ title: activity, notes: clean(body.activityNotes) || null }] }
-        : undefined,
+      date: dailyReport.date,
+      mood: dailyReport.mood,
+      teacherNote: dailyReport.teacherNote,
+      suppliesNeeded: dailyReport.suppliesNeeded,
+      sentAt: dailyReport.sendToParent ? new Date() : null,
+      meals: dailyReport.meals.length ? { create: dailyReport.meals } : undefined,
+      naps: dailyReport.naps.length ? { create: dailyReport.naps } : undefined,
+      diapers: dailyReport.diapers.length ? { create: dailyReport.diapers } : undefined,
+      activities: dailyReport.activities.length ? { create: dailyReport.activities } : undefined,
     },
     include: {
       child: { select: { fullName: true } },
@@ -102,8 +72,14 @@ export async function POST(request: NextRequest) {
     resource: "DailyReport",
     resourceId: report.id,
     metadata: {
-      childId,
-      sentToParent: Boolean(body.sendToParent),
+      childId: dailyReport.childId,
+      sentToParent: dailyReport.sendToParent,
+      entries: {
+        meals: dailyReport.meals.length,
+        naps: dailyReport.naps.length,
+        diapers: dailyReport.diapers.length,
+        activities: dailyReport.activities.length,
+      },
     },
   });
 

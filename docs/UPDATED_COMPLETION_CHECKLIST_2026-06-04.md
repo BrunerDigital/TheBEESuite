@@ -2,9 +2,10 @@
 
 Last updated: June 4, 2026
 
-Current production deployment: `dpl_6knH6bGBW5cELPkkwVnhCgWJqZKz`  
-Current production commit: `89c03b0 Add tuition billing workbench`  
+Current production deployment before messaging/parity pass: `dpl_AvK62vh3RU1esFKDoVEMd9JbV6S3`
+Current production commit before messaging/parity pass: `3649bbd Add recurring tuition billing automation`
 Rollback point before tuition/accounting work: `dpl_AfWhPU6vSvcZownaazgvhK29WCPh`
+Rollback point before messaging/parity work: `dpl_AvK62vh3RU1esFKDoVEMd9JbV6S3`
 
 Status legend:
 - `[x]` Complete, deployed, or ready for live validation.
@@ -20,6 +21,7 @@ Status legend:
 - [x] Current production health check returns OK and database connected.
 - [x] Protected dashboard routes redirect unauthenticated users to login.
 - [x] Protected billing mutation route rejects unauthenticated requests.
+- [x] Procare parity gap map created at `docs/PROCARE_PARITY_GAP_MAP_2026-06-04.md`.
 - [ ] Rotate the GitHub and Supabase tokens that were shared in chat.
 - [ ] Run a full role-by-role production smoke test after the next account/data setup pass.
 
@@ -218,10 +220,11 @@ Status legend:
 - [x] Read/unread mutation UI exists.
 - [x] Notification dedupe/retention policy exists.
 - [x] Parent notification preferences exist.
-- [ ] Complete two-way parent/director/teacher messaging UI.
+- [x] Complete portal two-way parent/director/teacher messaging UI.
 - [ ] Add real SendGrid email send paths for all communication workflows.
 - [ ] Add real Twilio SMS send/receive paths.
 - [ ] Add message templates and merge fields.
+- [ ] Add richer threaded conversation views with per-family reply history and staff assignment.
 - [ ] Add full notification preferences by role/user beyond parent portal.
 - [ ] Add email/SMS/push delivery channels.
 
@@ -257,7 +260,7 @@ Status legend:
 - [x] Audit log viewer exists.
 - [x] Guardrail tests cover access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.
 - [x] Lint, typecheck, test, and build scripts exist.
-- [x] Current test suite has 41 passing tests.
+- [x] Current test suite has 42 passing tests.
 - [ ] Complete real setup UI for each integration.
 - [ ] Add tenant-specific integration credentials instead of only platform env vars.
 - [ ] Run formal Supabase advisor/security review after schema migrations.

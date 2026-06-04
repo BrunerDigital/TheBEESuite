@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessAllCenters, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { sendEmail } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
-import { canAccessFamilyRecord, canCreateFamilyMessage } from "@/lib/portal-guardrails";
+import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -26,14 +26,18 @@ export async function POST(request: NextRequest) {
   const channel = clean(body.channel) || "portal";
   const priority = clean(body.priority) || "normal";
   const sendEmailCopy = Boolean(body.sendEmailCopy);
+  const senderIsParent = isParentGuardian(user);
+  const senderCanManageOperations = canManageOperations(user);
+  const senderCanManageClassroom = canManageClassroomTasks(user);
 
   if (!message) {
     return NextResponse.json({ ok: false, error: "Message is required." }, { status: 400 });
   }
 
   const messageGuard = canCreateFamilyMessage({
-    isParentGuardian: isParentGuardian(user),
-    canManageOperations: canManageOperations(user),
+    isParentGuardian: senderIsParent,
+    canManageOperations: senderCanManageOperations,
+    canManageClassroomTasks: senderCanManageClassroom,
     familyId,
   });
   if (!messageGuard.ok) {
@@ -45,21 +49,40 @@ export async function POST(request: NextRequest) {
     name: string;
     centerId: string | null;
     billingEmail: string | null;
-    guardians: Array<{ userId: string | null; email: string | null }>;
+    guardians: Array<{ userId: string | null; email: string | null; fullName: string }>;
+    children: Array<{ classroomId: string | null }>;
   } | null = null;
   if (familyId) {
     family = await prisma.family.findUnique({
       where: { id: familyId },
-      include: { guardians: { select: { userId: true, email: true } } },
+      include: {
+        guardians: { select: { userId: true, email: true, fullName: true } },
+        children: { select: { classroomId: true } },
+      },
     });
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
 
     const isFamilyGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
     const hasCenterAccess = canAccessAllCenters(user) || Boolean(family.centerId && user.centerIds.includes(family.centerId));
+    let hasClassroomAccess = false;
+    if (!senderCanManageOperations && senderCanManageClassroom && !isFamilyGuardian) {
+      const staffProfile = await prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        select: { classroomId: true },
+      });
+      const classroomGuard = canMessageClassroomFamily({
+        assignedClassroomId: staffProfile?.classroomId,
+        familyChildClassroomIds: family.children.map((child) => child.classroomId),
+      });
+      if (!classroomGuard.ok) {
+        return NextResponse.json({ ok: false, error: classroomGuard.error }, { status: classroomGuard.status });
+      }
+      hasClassroomAccess = true;
+    }
     const accessGuard = canAccessFamilyRecord({
-      isParentGuardian: isParentGuardian(user),
+      isParentGuardian: senderIsParent,
       isLinkedGuardian: isFamilyGuardian,
-      hasCenterAccess,
+      hasCenterAccess: senderCanManageOperations ? hasCenterAccess : hasClassroomAccess,
     });
     if (!accessGuard.ok) {
       return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
@@ -78,11 +101,17 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  const directors = family?.centerId
+  const directors = senderIsParent && family?.centerId
     ? await getCenterLeadershipUsers({
         centerId: family.centerId,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
       })
+    : [];
+  const parentUserIds = !senderIsParent && family
+    ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value))))
+    : [];
+  const parentEmails = family
+    ? [family.billingEmail, ...family.guardians.map((guardian) => guardian.email)].filter((value): value is string => Boolean(value))
     : [];
 
   await Promise.all([
@@ -97,14 +126,38 @@ export async function POST(request: NextRequest) {
         },
       }),
     ),
+    ...parentUserIds.map((userId) =>
+      prisma.notification.create({
+        data: {
+          userId,
+          title: `New school message: ${subject}`,
+          body: `${user.name}: ${message}`,
+          type: "message",
+          priority,
+        },
+      }),
+    ),
   ]);
 
+  if (!senderIsParent && familyId) {
+    await prisma.message.updateMany({
+      where: {
+        familyId,
+        readAt: null,
+        senderId: { not: user.id },
+      },
+      data: { readAt: new Date() },
+    });
+  }
+
+  const emailRecipients = senderIsParent ? directors.map((director) => director.email) : parentEmails;
   const email = sendEmailCopy && family
     ? await sendEmail({
-        to: directors.map((director) => director.email),
-        subject: `Portal message from ${family.name}: ${subject}`,
+        to: emailRecipients,
+        subject: senderIsParent ? `Portal message from ${family.name}: ${subject}` : `Message from ${user.name}: ${subject}`,
         text: message,
-        fromName: "The Bee Suite",
+        replyTo: senderIsParent ? family.billingEmail : user.email,
+        fromName: "The BEE Suite",
       })
     : { ok: false, configured: false, provider: "sendgrid" as const };
 
@@ -117,6 +170,7 @@ export async function POST(request: NextRequest) {
       familyId,
       channel,
       priority,
+      direction: senderIsParent ? "parent_to_school" : family ? "school_to_parent" : "internal",
       emailCopySent: email.ok,
     },
   });

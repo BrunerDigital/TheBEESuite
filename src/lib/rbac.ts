@@ -60,6 +60,7 @@ const classroomModules = new Set<ModuleSlug>([
   "attendance",
   "daily-reports",
   "incident-reports",
+  "messages",
   "teacher-portal",
 ]);
 

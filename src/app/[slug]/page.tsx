@@ -959,10 +959,26 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "messages") {
-    const messageWhere: Prisma.MessageWhereInput = allCenters
-      ? {}
-      : { OR: [{ family: { is: { centerId: scopedCenterIds } } }, { familyId: null }] };
-    const [messages, total, unread, priority, aiReview] = await Promise.all([
+    const teacherMessageScope = user.role === UserRole.TEACHER && !allCenters;
+    const teacherStaffProfile = teacherMessageScope
+      ? await prisma.staffProfile.findUnique({
+          where: { userId: user.id },
+          select: { classroomId: true },
+        })
+      : null;
+    const familyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
+      ? teacherStaffProfile?.classroomId
+        ? { children: { some: { classroomId: teacherStaffProfile.classroomId } } }
+        : { id: "__no_teacher_classroom__" }
+      : allCenters
+        ? {}
+        : { centerId: scopedCenterIds };
+    const messageWhere: Prisma.MessageWhereInput = teacherMessageScope
+      ? { family: { is: familyScopeWhere } }
+      : allCenters
+        ? {}
+        : { OR: [{ family: { is: familyScopeWhere } }, { familyId: null }] };
+    const [messages, families, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
         orderBy: { createdAt: "desc" },
@@ -981,6 +997,17 @@ async function renderLivePage(slug: string, user: CurrentUser) {
               email: true,
             },
           },
+        },
+      }),
+      prisma.family.findMany({
+        where: familyScopeWhere,
+        orderBy: { name: "asc" },
+        take: 500,
+        select: {
+          id: true,
+          name: true,
+          billingEmail: true,
+          centerId: true,
         },
       }),
       prisma.message.count({ where: messageWhere }),
@@ -1003,6 +1030,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
 
     const demoMode = showExecutiveDemoData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : messages;
+    const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const familyOptions = families.map((family) => ({
+      id: family.id,
+      name: family.name,
+      billingEmail: family.billingEmail,
+      centerLabel: family.centerId ? centerLabelById.get(family.centerId) ?? null : null,
+    }));
 
     return (
       <MessagesPage
@@ -1018,6 +1052,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
                 ).length,
               }
             : { total, unread, priority, aiReview },
+          familyOptions: demoMode ? [] : familyOptions,
           demoMode,
         }}
       />

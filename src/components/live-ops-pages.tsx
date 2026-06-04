@@ -37,6 +37,7 @@ import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { NotificationReadAction } from "@/components/notification-read-actions";
+import { MessageReplyPanel, type MessageFamilyOption } from "@/components/message-reply-panel";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
 import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
@@ -1157,6 +1158,7 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
 export type MessagesPageData = {
   messages: Array<{
     id: string;
+    familyId: string | null;
     subject: string | null;
     body: string;
     channel: string;
@@ -1173,6 +1175,7 @@ export type MessagesPageData = {
     priority: number;
     aiReview: number;
   };
+  familyOptions: MessageFamilyOption[];
   demoMode?: boolean;
 };
 
@@ -1196,10 +1199,11 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
         <StatCard label="AI review queue" value={data.stats.aiReview.toLocaleString()} detail="Human approval before sending" />
       </div>
+      <MessageReplyPanel familyOptions={data.familyOptions} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Conversations</CardTitle>
-          <CardDescription>Email, portal, and future SMS-style records</CardDescription>
+          <CardDescription>Email, portal, classroom, and future SMS-style records</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>

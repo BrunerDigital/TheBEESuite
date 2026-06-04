@@ -1,6 +1,7 @@
 export function canCreateFamilyMessage(input: {
   isParentGuardian: boolean;
   canManageOperations: boolean;
+  canManageClassroomTasks?: boolean;
   familyId: string | null;
 }) {
   if (input.isParentGuardian && !input.familyId) {
@@ -15,6 +16,34 @@ export function canCreateFamilyMessage(input: {
       ok: false as const,
       status: 403,
       error: "Message creation is not allowed for this role.",
+    };
+  }
+  if (input.familyId && !input.isParentGuardian && !input.canManageOperations && !input.canManageClassroomTasks) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Message creation is not allowed for this role.",
+    };
+  }
+  return { ok: true as const };
+}
+
+export function canMessageClassroomFamily(input: {
+  assignedClassroomId: string | null | undefined;
+  familyChildClassroomIds: Array<string | null | undefined>;
+}) {
+  if (!input.assignedClassroomId) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Teacher messaging requires an assigned classroom.",
+    };
+  }
+  if (!input.familyChildClassroomIds.includes(input.assignedClassroomId)) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Family is outside your assigned classroom.",
     };
   }
   return { ok: true as const };

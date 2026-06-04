@@ -9,6 +9,7 @@ import {
   canAccessFamilyRecord,
   canAcknowledgeIncident,
   canCreateFamilyMessage,
+  canMessageClassroomFamily,
   canInviteGuardianToPortal,
   canSubmitDocumentForReview,
   normalizeParentNotificationPreferences,
@@ -220,6 +221,34 @@ test("parent portal guards require family-scoped messages and guardian acknowled
     canManageOperations: false,
     familyId: "family_1",
   }), { ok: true });
+  assert.deepEqual(canCreateFamilyMessage({
+    isParentGuardian: false,
+    canManageOperations: false,
+    canManageClassroomTasks: true,
+    familyId: "family_1",
+  }), { ok: true });
+  assert.deepEqual(canCreateFamilyMessage({
+    isParentGuardian: false,
+    canManageOperations: false,
+    canManageClassroomTasks: true,
+    familyId: null,
+  }), {
+    ok: false,
+    status: 403,
+    error: "Message creation is not allowed for this role.",
+  });
+  assert.deepEqual(canMessageClassroomFamily({
+    assignedClassroomId: "classroom_1",
+    familyChildClassroomIds: ["classroom_1", "classroom_2"],
+  }), { ok: true });
+  assert.deepEqual(canMessageClassroomFamily({
+    assignedClassroomId: "classroom_3",
+    familyChildClassroomIds: ["classroom_1", "classroom_2"],
+  }), {
+    ok: false,
+    status: 403,
+    error: "Family is outside your assigned classroom.",
+  });
   assert.deepEqual(canAcknowledgeIncident({ isLinkedGuardian: false }), {
     ok: false,
     status: 403,

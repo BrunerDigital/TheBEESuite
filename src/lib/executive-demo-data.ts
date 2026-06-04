@@ -66,6 +66,7 @@ export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = 
 export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
   {
     id: "exec-demo-message-tour-follow-up",
+    familyId: "exec-demo-family",
     subject: "Tour follow-up and enrollment packet",
     body:
       "Thanks again for the tour. We would love to move forward and wanted to confirm the next steps for the toddler room.",
@@ -79,6 +80,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
   },
   {
     id: "exec-demo-message-supplies",
+    familyId: "exec-demo-family",
     subject: "Supplies needed",
     body: "Please send two extra changes of clothes and a labeled water bottle tomorrow.",
     channel: "email",
@@ -91,6 +93,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
   },
   {
     id: "exec-demo-message-incident-ack",
+    familyId: "exec-demo-family",
     subject: "Incident acknowledgment reminder",
     body:
       "A minor classroom incident report was shared for review. Please acknowledge receipt in the parent portal after reading the note.",

@@ -337,9 +337,11 @@ export async function sendEmail({
 export async function sendSms({
   to,
   body,
+  statusCallbackUrl,
 }: {
   to: string;
   body: string;
+  statusCallbackUrl?: string | null;
 }): Promise<IntegrationSendResult> {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
@@ -355,6 +357,9 @@ export async function sendSms({
     To: normalizedTo,
     Body: body,
   });
+  if (statusCallbackUrl) {
+    form.set("StatusCallback", statusCallbackUrl);
+  }
 
   if (messagingServiceSid) {
     form.set("MessagingServiceSid", messagingServiceSid);

@@ -275,7 +275,7 @@ Status legend:
 - [x] SendGrid and Twilio env/integration placeholders exist.
 - [ ] Complete two-way parent/director/teacher messaging UI.
 - [ ] Add real SendGrid email send paths for all communication workflows.
-- [ ] Add real Twilio SMS send/receive paths.
+- [x] Add real Twilio SMS send/receive paths.
 - [ ] Add message templates and merge fields.
 - [ ] Add broadcast segmentation by classroom, center, status, and tag.
 - [ ] Add AI reply suggestions directly inside message composer.

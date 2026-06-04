@@ -658,7 +658,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
       </section>
       {data.deliveryStats ? (
         <div className="grid gap-4 md:grid-cols-5">
-          <StatCard label="Deliveries" value={data.deliveryStats.total.toLocaleString()} detail="Email and Sheets" />
+          <StatCard label="Deliveries" value={data.deliveryStats.total.toLocaleString()} detail="Email, SMS, and Sheets" />
           <StatCard label="Delivered" value={data.deliveryStats.delivered.toLocaleString()} />
           <StatCard label="Pending retry" value={data.deliveryStats.pending.toLocaleString()} />
           <StatCard label="Failed" value={data.deliveryStats.failed.toLocaleString()} />
@@ -1204,7 +1204,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Conversations</CardTitle>
-          <CardDescription>Email, portal, classroom, and future SMS-style records</CardDescription>
+          <CardDescription>Email, portal, classroom, and SMS records</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>

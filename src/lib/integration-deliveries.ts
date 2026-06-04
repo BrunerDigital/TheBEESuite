@@ -4,10 +4,13 @@ import {
   sendInquiryNotificationEmail,
   type InquiryIntegrationResult,
 } from "@/lib/inquiry-integrations";
+import { sendSms, type IntegrationSendResult } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
-export type IntegrationDeliveryProvider = "google_sheets" | "sendgrid";
-export type IntegrationDeliveryPurpose = "inquiry_backup" | "inquiry_notification";
+export type IntegrationDeliveryProvider = "google_sheets" | "sendgrid" | "twilio";
+export type IntegrationDeliveryPurpose = "inquiry_backup" | "inquiry_notification" | "communication_sms";
+
+type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
 type DeliveryState = {
   status: "delivered" | "failed" | "pending" | "skipped";
@@ -22,7 +25,18 @@ type RecordDeliveryAttemptInput = {
   provider: IntegrationDeliveryProvider;
   purpose: IntegrationDeliveryPurpose;
   payload: Record<string, unknown>;
-  result: InquiryIntegrationResult;
+  result: IntegrationAttemptResult;
+  maxAttempts?: number;
+};
+
+type RecordCommunicationSmsDeliveryInput = {
+  tenantId: string;
+  centerId?: string | null;
+  messageId?: string | null;
+  to: string;
+  body: string;
+  statusCallbackUrl?: string | null;
+  result: IntegrationSendResult;
   maxAttempts?: number;
 };
 
@@ -39,7 +53,7 @@ export function computeIntegrationDeliveryState({
   maxAttempts = 5,
   now = new Date(),
 }: {
-  result: InquiryIntegrationResult;
+  result: IntegrationAttemptResult;
   attempts: number;
   maxAttempts?: number;
   now?: Date;
@@ -95,12 +109,62 @@ export async function recordIntegrationDeliveryAttempt({
   });
 }
 
+export async function recordCommunicationSmsDeliveryAttempt({
+  tenantId,
+  centerId,
+  messageId,
+  to,
+  body,
+  statusCallbackUrl,
+  result,
+  maxAttempts = 5,
+}: RecordCommunicationSmsDeliveryInput) {
+  const deliveryResult: IntegrationAttemptResult = result.configured
+    ? result
+    : { ...result, skipped: true };
+  const attempts = deliveryResult.skipped ? 0 : 1;
+  const state = computeIntegrationDeliveryState({
+    result: deliveryResult,
+    attempts,
+    maxAttempts,
+  });
+
+  return prisma.integrationDelivery.create({
+    data: {
+      tenantId,
+      centerId,
+      messageId: messageId ?? null,
+      provider: "twilio",
+      providerMessageId: result.id ?? null,
+      purpose: "communication_sms",
+      direction: "outbound",
+      recipient: to,
+      status: state.status,
+      attempts,
+      maxAttempts,
+      payload: {
+        to,
+        body,
+        statusCallbackUrl: statusCallbackUrl ?? null,
+      } as Prisma.InputJsonObject,
+      lastResult: deliveryResult as Prisma.InputJsonObject,
+      lastError: deliveryResult.error ?? null,
+      nextAttemptAt: state.nextAttemptAt,
+      deliveredAt: state.deliveredAt,
+    },
+  });
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 async function sendDelivery(provider: string, purpose: string, payload: Record<string, unknown>) {
@@ -110,6 +174,14 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
 
   if (provider === "sendgrid" && purpose === "inquiry_notification") {
     return sendInquiryNotificationEmail(payload, stringArray(payload.locationRecipients));
+  }
+
+  if (provider === "twilio" && purpose === "communication_sms") {
+    return sendSms({
+      to: stringValue(payload.to),
+      body: stringValue(payload.body),
+      statusCallbackUrl: stringValue(payload.statusCallbackUrl) || null,
+    });
   }
 
   return {
@@ -172,6 +244,7 @@ export async function retryPendingIntegrationDeliveries({
     await prisma.integrationDelivery.update({
       where: { id: delivery.id },
       data: {
+        ...("id" in result && result.id ? { providerMessageId: result.id } : {}),
         attempts: nextAttempts,
         status: state.status,
         lastResult: result as Prisma.InputJsonObject,

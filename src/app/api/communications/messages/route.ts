@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { sendEmail } from "@/lib/integrations";
+import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
+import { sendEmail, sendSms } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
+import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const runtime = "nodejs";
 
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
   const channel = clean(body.channel) || "portal";
   const priority = clean(body.priority) || "normal";
   const sendEmailCopy = Boolean(body.sendEmailCopy);
+  const sendSmsCopy = Boolean(body.sendSmsCopy);
   const senderIsParent = isParentGuardian(user);
   const senderCanManageOperations = canManageOperations(user);
   const senderCanManageClassroom = canManageClassroomTasks(user);
@@ -49,14 +52,14 @@ export async function POST(request: NextRequest) {
     name: string;
     centerId: string | null;
     billingEmail: string | null;
-    guardians: Array<{ userId: string | null; email: string | null; fullName: string }>;
+    guardians: Array<{ userId: string | null; email: string | null; fullName: string; phone: string | null; preferredCommunication: string | null }>;
     children: Array<{ classroomId: string | null }>;
   } | null = null;
   if (familyId) {
     family = await prisma.family.findUnique({
       where: { id: familyId },
       include: {
-        guardians: { select: { userId: true, email: true, fullName: true } },
+        guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
         children: { select: { classroomId: true } },
       },
     });
@@ -160,6 +163,45 @@ export async function POST(request: NextRequest) {
         fromName: "The BEE Suite",
       })
     : { ok: false, configured: false, provider: "sendgrid" as const };
+  const smsRecipients = sendSmsCopy && family && !senderIsParent
+    ? uniqueSmsRecipients(
+        family.guardians
+          .filter((guardian) => guardian.preferredCommunication === "sms")
+          .map((guardian) => guardian.phone),
+      )
+    : [];
+  const statusCallbackUrl = smsRecipients.length ? twilioStatusCallbackUrl(request) : null;
+  const smsResults = await Promise.all(
+    smsRecipients.map(async (to) => {
+      const result = await sendSms({ to, body: message, statusCallbackUrl });
+      await recordCommunicationSmsDeliveryAttempt({
+        tenantId: user.tenantId,
+        centerId: family?.centerId ?? null,
+        messageId: created.id,
+        to,
+        body: message,
+        statusCallbackUrl,
+        result,
+      });
+      return {
+        ok: result.ok,
+        configured: result.configured,
+        provider: result.provider,
+        id: result.id ?? null,
+        error: result.error ?? null,
+      };
+    }),
+  );
+  const sms = {
+    attempted: smsRecipients.length,
+    sent: smsResults.filter((result) => result.ok).length,
+    configured: smsResults.some((result) => result.configured),
+    provider: "twilio",
+    error: sendSmsCopy && !senderIsParent && family && smsRecipients.length === 0
+      ? "No SMS-preferred guardian phone numbers are available."
+      : smsResults.find((result) => result.error)?.error ?? null,
+    results: smsResults,
+  };
 
   await writeAuditLog(user, {
     centerId: family?.centerId ?? user.primaryCenterId,
@@ -172,8 +214,11 @@ export async function POST(request: NextRequest) {
       priority,
       direction: senderIsParent ? "parent_to_school" : family ? "school_to_parent" : "internal",
       emailCopySent: email.ok,
+      smsCopyRequested: sendSmsCopy,
+      smsCopyAttempted: sms.attempted,
+      smsCopySent: sms.sent,
     },
   });
 
-  return NextResponse.json({ ok: true, message: created, email }, { status: 201 });
+  return NextResponse.json({ ok: true, message: created, email, sms }, { status: 201 });
 }

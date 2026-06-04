@@ -16,6 +16,7 @@ export type MessageFamilyOption = {
   name: string;
   billingEmail: string | null;
   centerLabel: string | null;
+  smsRecipientCount?: number;
 };
 
 const replyTemplates = [
@@ -59,6 +60,7 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
   const [subject, setSubject] = useState(replyTemplates[0].subject);
   const [message, setMessage] = useState(replyTemplates[0].body);
   const [sendEmailCopy, setSendEmailCopy] = useState(true);
+  const [sendSmsCopy, setSendSmsCopy] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -77,6 +79,7 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
 
   function submit() {
     if (!familyId || !message.trim()) return;
+    const shouldSendSmsCopy = sendSmsCopy && Boolean(selectedFamily?.smsRecipientCount);
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -90,14 +93,20 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
           priority,
           channel: "portal_reply",
           sendEmailCopy,
+          sendSmsCopy: shouldSendSmsCopy,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
+      const json = await response.json().catch(() => null) as { error?: string; sms?: { attempted: number; sent: number; error?: string | null } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Message could not be sent.");
         return;
       }
-      setStatusMessage(`Message sent to ${selectedFamily?.name ?? "the family"}.`);
+      const smsDetail = shouldSendSmsCopy
+        ? json?.sms?.attempted
+          ? ` ${json.sms.sent}/${json.sms.attempted} SMS copies sent or queued.`
+          : ` ${json?.sms?.error ?? "No SMS copy was sent."}`
+        : "";
+      setStatusMessage(`Message sent to ${selectedFamily?.name ?? "the family"}.${smsDetail}`);
       setMessage("");
       router.refresh();
     });
@@ -180,6 +189,16 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
                 onChange={(event) => setSendEmailCopy(event.target.checked)}
               />
               Email a copy to family contacts
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input"
+                checked={sendSmsCopy}
+                disabled={!selectedFamily?.smsRecipientCount}
+                onChange={(event) => setSendSmsCopy(event.target.checked)}
+              />
+              Text a copy to SMS-preferred guardians ({selectedFamily?.smsRecipientCount ?? 0})
             </label>
             <Button disabled={isPending || !familyId || !message.trim()} onClick={submit}>
               <Send data-icon="inline-start" />

@@ -629,8 +629,9 @@ model Message {
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
-  family Family? @relation(fields: [familyId], references: [id])
-  sender User?   @relation("MessageSender", fields: [senderId], references: [id])
+  family                Family?               @relation(fields: [familyId], references: [id])
+  sender                User?                 @relation("MessageSender", fields: [senderId], references: [id])
+  integrationDeliveries IntegrationDelivery[]
 }
 
 model Announcement {
@@ -1079,31 +1080,39 @@ model Integration {
 }
 
 model IntegrationDelivery {
-  id            String    @id @default(cuid())
-  tenantId      String
-  centerId      String?
-  leadId        String?
-  provider      String
-  purpose       String
-  status        String    @default("pending")
-  attempts      Int       @default(0)
-  maxAttempts   Int       @default(5)
-  payload       Json
-  lastResult    Json?
-  lastError     String?
-  nextAttemptAt DateTime?
-  deliveredAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  tenantId          String
+  centerId          String?
+  leadId            String?
+  messageId         String?
+  provider          String
+  providerMessageId String?
+  purpose           String
+  direction         String    @default("outbound")
+  recipient         String?
+  sender            String?
+  status            String    @default("pending")
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(5)
+  payload           Json
+  lastResult        Json?
+  lastError         String?
+  nextAttemptAt     DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id])
-  center Center? @relation(fields: [centerId], references: [id])
-  lead   Lead?   @relation(fields: [leadId], references: [id])
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  center  Center?  @relation(fields: [centerId], references: [id])
+  lead    Lead?    @relation(fields: [leadId], references: [id])
+  message Message? @relation(fields: [messageId], references: [id])
 
   @@index([status, nextAttemptAt])
   @@index([tenantId, provider, createdAt])
   @@index([centerId, createdAt])
   @@index([leadId])
+  @@index([messageId])
+  @@unique([provider, providerMessageId])
 }
 
 model StripeWebhookEvent {

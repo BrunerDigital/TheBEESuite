@@ -58,6 +58,7 @@ import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
+import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
 
@@ -1012,6 +1013,12 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           name: true,
           billingEmail: true,
           centerId: true,
+          guardians: {
+            select: {
+              phone: true,
+              preferredCommunication: true,
+            },
+          },
         },
       }),
       prisma.message.count({ where: messageWhere }),
@@ -1040,6 +1047,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       name: family.name,
       billingEmail: family.billingEmail,
       centerLabel: family.centerId ? centerLabelById.get(family.centerId) ?? null : null,
+      smsRecipientCount: uniqueSmsRecipients(
+        family.guardians
+          .filter((guardian) => guardian.preferredCommunication === "sms")
+          .map((guardian) => guardian.phone),
+      ).length,
     }));
 
     return (

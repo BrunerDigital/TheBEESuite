@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { recordCommunicationSmsDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendSms } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 export const runtime = "nodejs";
 
@@ -31,7 +33,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
 
-  const result = await sendSms({ to, body: message });
+  const statusCallbackUrl = twilioStatusCallbackUrl(request);
+  const result = await sendSms({ to, body: message, statusCallbackUrl });
+  await recordCommunicationSmsDeliveryAttempt({
+    tenantId: user.tenantId,
+    centerId,
+    to,
+    body: message,
+    statusCallbackUrl,
+    result,
+  });
 
   await prisma.notification.create({
     data: {

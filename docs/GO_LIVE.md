@@ -179,7 +179,16 @@ Required for Twilio SMS:
 TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN
 TWILIO_FROM_NUMBER
+TWILIO_MESSAGING_SERVICE_SID
+TWILIO_WEBHOOK_BASE_URL
 ```
+
+Configure the Twilio sender or Messaging Service with these production callbacks:
+
+- Inbound messages: `https://thebeesuite.io/api/twilio/inbound`
+- Delivery status callback: `https://thebeesuite.io/api/twilio/status`
+
+Use `TWILIO_MESSAGING_SERVICE_SID` in production when available; `TWILIO_FROM_NUMBER` remains the fallback sender.
 
 Push notifications currently create in-app notifications and expose a provider hook through `PUSH_PROVIDER_KEY`.
 Signature requests create document records and send email when SendGrid is configured; DocuSign-style API credentials can be added with `DOCUSIGN_INTEGRATION_KEY` / `SIGNATURE_PROVIDER_API_KEY`.

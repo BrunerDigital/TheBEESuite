@@ -31,6 +31,7 @@ import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { NotificationReadAction } from "@/components/notification-read-actions";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
+import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
@@ -2884,22 +2885,12 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 }
 
 export type FamilyProfilesPageData = {
-  families: Array<{
-    id: string;
-    name: string;
-    billingEmail: string | null;
-    custodyNotes: string | null;
+  families: Array<EditableFamilyRecord & {
     createdAt: Date | string;
-    guardians: Array<{
-      id: string;
-      fullName: string;
-      email: string | null;
-      phone: string | null;
-      relation: string;
+    guardians: Array<EditableFamilyRecord["guardians"][number] & {
       userId: string | null;
       checkInPinSetAt: Date | string | null;
     }>;
-    children: Array<{ fullName: string; ageGroup: string; enrollmentStatus: string }>;
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
   }>;
   importCenters: Array<{ id: string; name: string }>;
@@ -2933,6 +2924,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} />
+      <FamilyRecordEditor families={data.families} centers={data.intakeCenters} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Family Directory</CardTitle>

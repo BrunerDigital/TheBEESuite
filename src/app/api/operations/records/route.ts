@@ -1,9 +1,11 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { DocumentStatus, PaymentStatus, UserRole } from "@prisma/client";
+import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { getPasswordResetRedirectUrl, requestSupabasePasswordReset, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -31,6 +33,89 @@ function dollarsToCents(value: unknown) {
 function requestedStatus(value: unknown) {
   const status = clean(value).toUpperCase();
   return Object.values(DocumentStatus).includes(status as DocumentStatus) ? status as DocumentStatus : DocumentStatus.REQUESTED;
+}
+
+async function provisionTeacherLogin(input: {
+  email: string;
+  name: string;
+  temporaryPassword: string;
+  sendPasswordReset: boolean;
+  requestUrl: string;
+}) {
+  if (!input.temporaryPassword && !input.sendPasswordReset) {
+    return { skipped: true };
+  }
+
+  const auth = await upsertSupabaseAuthUserWithPassword({
+    email: input.email,
+    name: input.name,
+    password: input.temporaryPassword || `${randomUUID()}${randomUUID()}`,
+    role: UserRole.TEACHER,
+    source: "bee_suite_school_staff_management",
+  });
+
+  if (!input.temporaryPassword && input.sendPasswordReset) {
+    const reset = await requestSupabasePasswordReset(input.email, getPasswordResetRedirectUrl(input.requestUrl));
+    return {
+      ...auth,
+      passwordResetSent: reset.ok,
+      passwordResetStatus: reset.status,
+    };
+  }
+
+  return auth;
+}
+
+async function ensureTeacherCenterGrant(input: {
+  userId: string;
+  tenantId: string;
+  organizationId: string;
+  centerId: string;
+}) {
+  await prisma.userAccessGrant.updateMany({
+    where: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      isActive: true,
+      centerId: { not: input.centerId },
+    },
+    data: { isActive: false },
+  });
+
+  const existing = await prisma.userAccessGrant.findFirst({
+    where: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      centerId: input.centerId,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    return prisma.userAccessGrant.update({
+      where: { id: existing.id },
+      data: {
+        isActive: true,
+        organizationId: input.organizationId,
+      },
+    });
+  }
+
+  return prisma.userAccessGrant.create({
+    data: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      centerId: input.centerId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      permissions: { createdFromSchoolStaffManagement: true },
+    },
+  });
 }
 
 async function assertCenterAccess(user: Awaited<ReturnType<typeof getCurrentUser>>, centerId: string) {
@@ -72,6 +157,7 @@ export async function POST(request: NextRequest) {
   const entity = clean(body.entity);
   const id = clean(body.id);
   const mode = id ? "updated" : "created";
+  const auditMetadata: Record<string, Prisma.InputJsonValue> = { mode };
 
   if (!entity) {
     return NextResponse.json({ ok: false, error: "Entity is required." }, { status: 400 });
@@ -178,6 +264,9 @@ export async function POST(request: NextRequest) {
       schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
       photoVideoPermission: Boolean(body.photoVideoPermission),
       fieldTripPermission: Boolean(body.fieldTripPermission),
+      napNotes: clean(body.napNotes) || null,
+      feedingNotes: clean(body.feedingNotes) || null,
+      pottyNotes: clean(body.pottyNotes) || null,
       developmentalNotes: clean(body.body) || null,
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
@@ -195,7 +284,12 @@ export async function POST(request: NextRequest) {
     centerId = access.center.id;
     const email = clean(body.email) || clean(body.type);
     const staffName = clean(body.name);
+    const temporaryPassword = clean(body.temporaryPassword);
+    const sendPasswordReset = body.sendPasswordReset === true;
     if (!email || !staffName) return NextResponse.json({ ok: false, error: "Teacher name and email are required." }, { status: 400 });
+    if (temporaryPassword && temporaryPassword.length < 8) {
+      return NextResponse.json({ ok: false, error: "Temporary passwords must be at least 8 characters." }, { status: 400 });
+    }
     const staffRole = UserRole.TEACHER;
     const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true, tenantId: true } });
     const tenantGuard = staffTenantGuard(user.tenantId, existingUser?.tenantId);
@@ -205,9 +299,36 @@ export async function POST(request: NextRequest) {
       const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
+    let auth: Awaited<ReturnType<typeof provisionTeacherLogin>> = { skipped: true };
+    try {
+      auth = await provisionTeacherLogin({
+        email,
+        name: staffName,
+        temporaryPassword,
+        sendPasswordReset,
+        requestUrl: request.url,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, error: error instanceof Error ? error.message : "Teacher login setup failed." },
+        { status: 502 },
+      );
+    }
+    const forcePasswordReset = Boolean(temporaryPassword || sendPasswordReset);
     const staffUser = await prisma.user.upsert({
       where: { email },
-      update: { name: staffName, role: staffRole, isActive: true, organizationId: access.center.organizationId },
+      update: {
+        name: staffName,
+        role: staffRole,
+        isActive: true,
+        organizationId: access.center.organizationId,
+        ...(forcePasswordReset
+          ? {
+              mustResetPassword: true,
+              sessionVersion: { increment: 1 },
+            }
+          : {}),
+      },
       create: {
         tenantId: user.tenantId,
         organizationId: access.center.organizationId,
@@ -215,7 +336,14 @@ export async function POST(request: NextRequest) {
         name: staffName,
         role: staffRole,
         isActive: true,
+        mustResetPassword: forcePasswordReset,
       },
+    });
+    await ensureTeacherCenterGrant({
+      userId: staffUser.id,
+      tenantId: user.tenantId,
+      organizationId: access.center.organizationId,
+      centerId,
     });
     const data = {
       userId: staffUser.id,
@@ -240,6 +368,7 @@ export async function POST(request: NextRequest) {
           update: data,
           create: data,
         });
+    auditMetadata.auth = auth as Prisma.InputJsonValue;
   } else if (entity === "invoice") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
@@ -556,10 +685,10 @@ export async function POST(request: NextRequest) {
     action: `operations.${entity}.${mode}`,
     resource: entity,
     resourceId: id || (typeof result === "object" && result && "id" in result ? String(result.id) : null),
-    metadata: { mode },
+    metadata: auditMetadata as Prisma.InputJsonObject,
   });
 
-  return NextResponse.json({ ok: true, entity, mode, record: result }, { status: id ? 200 : 201 });
+  return NextResponse.json({ ok: true, entity, mode, record: result, ...auditMetadata }, { status: id ? 200 : 201 });
 }
 
 export async function DELETE(request: NextRequest) {

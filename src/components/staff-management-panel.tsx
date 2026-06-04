@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, Save, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, KeyRound, Save, Send, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -69,6 +69,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("Teacher");
   const [backgroundCheckStatus, setBackgroundCheckStatus] = useState("pending");
+  const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [sendPasswordReset, setSendPasswordReset] = useState(true);
   const [certStaffId, setCertStaffId] = useState(staff[0]?.id ?? "");
   const [certName, setCertName] = useState("");
   const [certStatus, setCertStatus] = useState("active");
@@ -95,6 +97,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setPhone("");
     setTitle("Teacher");
     setBackgroundCheckStatus("pending");
+    setTemporaryPassword("");
+    setSendPasswordReset(true);
   }
 
   function loadTeacher(value: string) {
@@ -111,6 +115,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setPhone(teacher.phone ?? "");
     setTitle(teacher.title || "Teacher");
     setBackgroundCheckStatus(teacher.backgroundCheckStatus ?? "pending");
+    setTemporaryPassword("");
+    setSendPasswordReset(false);
   }
 
   function updateCenter(value: string) {
@@ -154,15 +160,30 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
           phone,
           title,
           backgroundCheckStatus,
+          temporaryPassword: temporaryPassword.trim() || undefined,
+          sendPasswordReset: temporaryPassword.trim() ? false : sendPasswordReset,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        mode?: string;
+        auth?: { skipped?: boolean; passwordResetSent?: boolean };
+      } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Teacher profile could not be saved.");
         return;
       }
-      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.`);
+      const loginStatus = temporaryPassword.trim()
+        ? " Login was set with a temporary password."
+        : sendPasswordReset
+          ? json?.auth?.passwordResetSent
+            ? " Login setup email was requested."
+            : " Teacher login was prepared."
+          : "";
+      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}`);
       setSelectedStaffId("new");
+      setTemporaryPassword("");
+      setSendPasswordReset(true);
       router.refresh();
     });
   }
@@ -365,10 +386,30 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>Temporary password</Label>
+                <Input
+                  value={temporaryPassword}
+                  onChange={(event) => setTemporaryPassword(event.target.value)}
+                  placeholder="Optional; minimum 8 characters"
+                  type="text"
+                  autoComplete="new-password"
+                />
+              </div>
+              <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={temporaryPassword.trim() ? false : sendPasswordReset}
+                  disabled={Boolean(temporaryPassword.trim())}
+                  onChange={(event) => setSendPasswordReset(event.target.checked)}
+                />
+                <Send className="size-4 text-primary" />
+                Send password setup email
+              </label>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button disabled={isPending || !centerId}>
-                <Save data-icon="inline-start" />
+                {temporaryPassword.trim() ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                 Save teacher
               </Button>
               {selectedStaffId !== "new" ? (

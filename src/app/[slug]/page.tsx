@@ -1108,7 +1108,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const [invoices, ledgerEntries, total, open, paid, openRows] = await Promise.all([
+    const workbenchFamilyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
+    const [invoices, ledgerEntries, total, open, paid, openRows, billingFamilies, billingProducts, tuitionPlans] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -1141,9 +1142,41 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.OPEN } }),
       prisma.invoice.count({ where: { ...invoiceWhere, status: PaymentStatus.PAID } }),
       prisma.invoice.findMany({ where: { ...invoiceWhere, status: PaymentStatus.OPEN }, select: { totalCents: true } }),
+      prisma.family.findMany({
+        where: workbenchFamilyWhere,
+        orderBy: { name: "asc" },
+        take: 1000,
+        select: {
+          id: true,
+          centerId: true,
+          name: true,
+          billingEmail: true,
+          billingAccount: { select: { balanceCents: true } },
+          children: {
+            orderBy: { fullName: "asc" },
+            select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true },
+          },
+        },
+      }),
+      prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], take: 100 }),
+      prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { name: "asc" }], take: 100 }),
     ]);
 
-    return <BillingInvoicesPage data={{ invoices, ledgerEntries, stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) } }} />;
+    return (
+      <BillingInvoicesPage
+        data={{
+          workbench: {
+            families: billingFamilies,
+            centers: centers.map((center) => ({ id: center.id, name: center.name, crmLocationId: center.crmLocationId })),
+            products: billingProducts,
+            tuitionPlans,
+          },
+          invoices,
+          ledgerEntries,
+          stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) },
+        }}
+      />
+    );
   }
 
   if (slug === "payments") {

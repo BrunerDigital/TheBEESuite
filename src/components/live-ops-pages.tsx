@@ -26,6 +26,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
+import {
+  BillingWorkbench,
+  type BillingWorkbenchCenter,
+  type BillingWorkbenchFamily,
+  type BillingWorkbenchProduct,
+  type BillingWorkbenchTuitionPlan,
+} from "@/components/billing-workbench";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
@@ -3094,6 +3101,12 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 }
 
 export type BillingInvoicesPageData = {
+  workbench: {
+    families: BillingWorkbenchFamily[];
+    centers: BillingWorkbenchCenter[];
+    products: BillingWorkbenchProduct[];
+    tuitionPlans: BillingWorkbenchTuitionPlan[];
+  };
   invoices: Array<{
     id: string;
     number: string;
@@ -3139,6 +3152,12 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         <StatCard label="Paid" value={data.stats.paid} />
         <StatCard label="Outstanding" value={money(data.stats.outstandingCents)} />
       </div>
+      <BillingWorkbench
+        families={data.workbench.families}
+        centers={data.workbench.centers}
+        products={data.workbench.products}
+        tuitionPlans={data.workbench.tuitionPlans}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Invoices</CardTitle>
@@ -3208,7 +3227,6 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           </Table>
         </CardContent>
       </Card>
-      <OperationsActionHub title="Create Invoice or Ledger Adjustment" defaultEntity="invoice" compact />
     </div>
   );
 }

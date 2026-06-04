@@ -205,6 +205,10 @@ export function ParentPortalWorkspace({
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
+  const nextOpenInvoice = useMemo(
+    () => openInvoices.slice().sort((left, right) => new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime())[0] ?? null,
+    [openInvoices],
+  );
   const unacknowledged = useMemo(() => incidents.filter((incident) => !incident.parentAcknowledgedAt), [incidents]);
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
 
@@ -280,6 +284,11 @@ export function ParentPortalWorkspace({
       }
       window.location.href = json.url;
     });
+  }
+
+  function payBalance(paymentMethodCategory: "ach" | "card") {
+    if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
+    payInvoice(nextOpenInvoice.id, paymentMethodCategory);
   }
 
   function updatePreference(key: keyof NotificationPreferences, checked: boolean) {
@@ -448,6 +457,33 @@ export function ParentPortalWorkspace({
                 <div className="mt-1 font-medium">{billingAccount?.autopayPlaceholder ? "Requested" : "Off"}</div>
               </div>
             </div>
+            {nextOpenInvoice ? (
+              <div className="rounded-xl border bg-primary/10 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Next balance payment</div>
+                    <div className="font-medium">
+                      {nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button disabled={isPending} onClick={() => payBalance("ach")}>
+                      <Building2 data-icon="inline-start" />
+                      Pay Balance by Bank
+                    </Button>
+                    <Button disabled={isPending} onClick={() => payBalance("card")} variant="outline">
+                      <CreditCard data-icon="inline-start" />
+                      Pay Balance by Card
+                    </Button>
+                  </div>
+                </div>
+                {openInvoices.length > 1 ? (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {openInvoices.length} open invoices are listed below for separate checkout and receipt tracking.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {invoices.map((invoice) => (
               <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/40 p-4">
                 <div>

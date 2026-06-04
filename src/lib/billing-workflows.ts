@@ -10,6 +10,46 @@ export function parseCurrencyCents(value: unknown) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
 }
 
+export function normalizeAgencyPaymentMetadata(input: {
+  agencyName?: unknown;
+  authorizationNumber?: unknown;
+  externalReference?: unknown;
+  coverageStart?: unknown;
+  coverageEnd?: unknown;
+  notes?: unknown;
+}) {
+  const agencyName = clean(input.agencyName).slice(0, 120);
+  const authorizationNumber = clean(input.authorizationNumber).slice(0, 120);
+  const externalReference = clean(input.externalReference).slice(0, 160);
+  const coverageStart = clean(input.coverageStart);
+  const coverageEnd = clean(input.coverageEnd);
+  const notes = clean(input.notes).slice(0, 1000);
+  return {
+    agencyName,
+    authorizationNumber,
+    externalReference,
+    coverageStart: /^\d{4}-\d{2}-\d{2}$/.test(coverageStart) ? coverageStart : "",
+    coverageEnd: /^\d{4}-\d{2}-\d{2}$/.test(coverageEnd) ? coverageEnd : "",
+    notes,
+  };
+}
+
+export function agencyPaymentDescription(input: {
+  agencyName?: string | null;
+  childName?: string | null;
+  coverageStart?: string | null;
+  coverageEnd?: string | null;
+}) {
+  const agency = clean(input.agencyName) || "Agency subsidy";
+  const child = clean(input.childName);
+  const coverage = input.coverageStart && input.coverageEnd
+    ? ` (${input.coverageStart} to ${input.coverageEnd})`
+    : input.coverageStart
+      ? ` (${input.coverageStart})`
+      : "";
+  return [agency, child].filter(Boolean).join(" - ") + coverage;
+}
+
 export function normalizeBillingPeriod(value: unknown, fallbackDate: Date) {
   const normalized = clean(value);
   if (/^\d{4}-\d{2}$/.test(normalized)) return normalized;

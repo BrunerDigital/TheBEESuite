@@ -1261,13 +1261,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         sixtyOnePlusCents: 0,
         chargesCents: 0,
         paymentsCents: 0,
+        agencyPaymentsCents: 0,
         creditsCents: 0,
       },
     );
     for (const entry of ledgerRollupRows) {
       if (entry.amountCents > 0) arReport.chargesCents += entry.amountCents;
-      if (entry.type === "payment") arReport.paymentsCents += Math.abs(entry.amountCents);
-      if (entry.amountCents < 0 && entry.type !== "payment") arReport.creditsCents += Math.abs(entry.amountCents);
+      if (entry.type === "payment" || entry.type === "agency_payment") arReport.paymentsCents += Math.abs(entry.amountCents);
+      if (entry.type === "agency_payment") arReport.agencyPaymentsCents += Math.abs(entry.amountCents);
+      if (entry.amountCents < 0 && entry.type !== "payment" && entry.type !== "agency_payment") arReport.creditsCents += Math.abs(entry.amountCents);
     }
 
     return (

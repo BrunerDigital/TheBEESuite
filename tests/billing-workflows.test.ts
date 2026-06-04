@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  agencyPaymentDescription,
   billingDedupeKey,
   isoWeekBillingPeriod,
+  normalizeAgencyPaymentMetadata,
   normalizeBillingDay,
   normalizeBillingCadence,
   normalizeBatchTarget,
@@ -19,6 +21,33 @@ test("billing workflow helpers parse family charge amounts", () => {
   assert.equal(parseCurrencyCents("1,250.50"), 125050);
   assert.equal(parseCurrencyCents("$99.99"), 9999);
   assert.equal(parseCurrencyCents(""), 0);
+});
+
+test("agency payment helpers normalize metadata and descriptions", () => {
+  assert.deepEqual(normalizeAgencyPaymentMetadata({
+    agencyName: " Early Learning Coalition ",
+    authorizationNumber: " AUTH-123 ",
+    externalReference: " EFT-9 ",
+    coverageStart: "2026-06-01",
+    coverageEnd: "invalid",
+    notes: " Approved subsidy payment ",
+  }), {
+    agencyName: "Early Learning Coalition",
+    authorizationNumber: "AUTH-123",
+    externalReference: "EFT-9",
+    coverageStart: "2026-06-01",
+    coverageEnd: "",
+    notes: "Approved subsidy payment",
+  });
+  assert.equal(
+    agencyPaymentDescription({
+      agencyName: "Early Learning Coalition",
+      childName: "Ava Bee",
+      coverageStart: "2026-06-01",
+      coverageEnd: "2026-06-30",
+    }),
+    "Early Learning Coalition - Ava Bee (2026-06-01 to 2026-06-30)",
+  );
 });
 
 test("billing workflow helpers normalize billing periods and batch targets", () => {

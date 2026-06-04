@@ -261,7 +261,7 @@ Status legend:
 - [ ] Add payment method management.
 - [ ] Add failed payment/retry workflow.
 - [ ] Add ledger reconciliation reports.
-- [ ] Add subsidy/agency payment tracking.
+- [x] Add subsidy/agency payment tracking.
 
 ## Messaging, Communication, And AI Assistant
 

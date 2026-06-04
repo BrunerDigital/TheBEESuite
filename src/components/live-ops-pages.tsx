@@ -3221,6 +3221,7 @@ export type BillingInvoicesPageData = {
     sixtyOnePlusCents: number;
     chargesCents: number;
     paymentsCents: number;
+    agencyPaymentsCents: number;
     creditsCents: number;
   };
 };
@@ -3256,9 +3257,10 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
             <MetricTile label="31-60 days" value={money(data.arReport.thirtyOneToSixtyCents)} />
             <MetricTile label="61+ days" value={money(data.arReport.sixtyOnePlusCents)} />
           </div>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
             <MetricTile label="Recent charges" value={money(data.arReport.chargesCents)} detail="latest ledger window" />
             <MetricTile label="Recent payments" value={money(data.arReport.paymentsCents)} detail="posted credits from payments" />
+            <MetricTile label="Agency payments" value={money(data.arReport.agencyPaymentsCents)} detail="subsidy and third-party credits" />
             <MetricTile label="Credits/adjustments" value={money(data.arReport.creditsCents)} detail="manual credits and non-payment credits" />
           </div>
         </CardContent>

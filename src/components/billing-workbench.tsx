@@ -27,6 +27,7 @@ export type BillingWorkbenchFamily = {
       enabled: boolean;
       tuitionPlanId: string | null;
       tuitionPlanName: string | null;
+      cadence: string | null;
       amountCents: number | null;
       billingDay: number | null;
       startsPeriod: string | null;
@@ -69,6 +70,34 @@ function todayDate() {
 
 function currentBillingPeriod() {
   return new Date().toISOString().slice(0, 7);
+}
+
+function currentWeeklyPeriod(date = new Date()) {
+  const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = value.getUTCDay() || 7;
+  value.setUTCDate(value.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((value.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+  return `${value.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function normalizeCadence(value: string | null | undefined) {
+  return value?.toLowerCase().startsWith("week") ? "weekly" : "monthly";
+}
+
+function currentPeriodForCadence(cadence: string) {
+  return cadence === "weekly" ? currentWeeklyPeriod() : currentBillingPeriod();
+}
+
+function periodMatchesCadence(value: string, cadence: string) {
+  return cadence === "weekly" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
+}
+
+function normalizeBillingDayForCadence(value: string | number | null | undefined, cadence: string) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return "1";
+  const max = cadence === "weekly" ? 7 : 28;
+  return String(Math.min(Math.max(parsed, 1), max));
 }
 
 function money(cents: number) {
@@ -121,8 +150,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
   const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
-  const effectiveAssignmentBillingDay = assignmentBillingDay || String(selectedAssignment?.billingDay ?? 1);
-  const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentBillingPeriod();
+  const selectedAssignmentPlan = tuitionPlans.find((plan) => plan.id === effectiveAssignmentPlanId) ?? null;
+  const effectiveAssignmentCadence = normalizeCadence(selectedAssignmentPlan?.cadence || selectedAssignment?.cadence);
+  const effectiveAssignmentBillingDay = normalizeBillingDayForCadence(assignmentBillingDay || selectedAssignment?.billingDay, effectiveAssignmentCadence);
+  const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
   const ageGroups = useMemo(
     () => Array.from(new Set([
@@ -234,10 +265,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     const assignment = child?.tuitionAssignment;
     setAssignmentChildId(value);
     setAssignmentTuitionPlanId(assignment?.tuitionPlanId || tuitionPlans[0]?.id || "");
-    setAssignmentBillingDay(String(assignment?.billingDay ?? 1));
-    setAssignmentStartPeriod(assignment?.startsPeriod || currentBillingPeriod());
+    const plan = tuitionPlans.find((item) => item.id === (assignment?.tuitionPlanId || tuitionPlans[0]?.id || ""));
+    const cadence = normalizeCadence(plan?.cadence || assignment?.cadence);
+    setAssignmentBillingDay(normalizeBillingDayForCadence(assignment?.billingDay, cadence));
+    setAssignmentStartPeriod(assignment?.startsPeriod || currentPeriodForCadence(cadence));
     setAssignmentDescription(assignment?.description || assignment?.tuitionPlanName || "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+  }
+
+  function handleAssignmentPlanChange(value: string | null) {
+    if (!value) return;
+    const plan = tuitionPlans.find((item) => item.id === value);
+    const cadence = normalizeCadence(plan?.cadence);
+    setAssignmentTuitionPlanId(value);
+    setAssignmentBillingDay((current) => normalizeBillingDayForCadence(current, cadence));
+    setAssignmentStartPeriod((current) => periodMatchesCadence(current, cadence) ? current : currentPeriodForCadence(cadence));
   }
 
   function submitAssignment() {
@@ -459,7 +501,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
               </div>
               <div className="space-y-1 md:col-span-2">
                 <Label>Tuition plan</Label>
-                <Select value={effectiveAssignmentPlanId} onValueChange={(value) => value && setAssignmentTuitionPlanId(value)}>
+                <Select value={effectiveAssignmentPlanId} onValueChange={handleAssignmentPlanChange}>
                   <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
                   <SelectContent>
                     {tuitionPlans.map((plan) => (
@@ -471,22 +513,37 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Bill day</Label>
-                <Input
-                  inputMode="numeric"
-                  min={1}
-                  max={28}
-                  type="number"
-                  value={effectiveAssignmentBillingDay}
-                  onChange={(event) => setAssignmentBillingDay(event.target.value)}
-                />
+                <Label>{effectiveAssignmentCadence === "weekly" ? "Bill weekday" : "Bill day"}</Label>
+                {effectiveAssignmentCadence === "weekly" ? (
+                  <Select value={effectiveAssignmentBillingDay} onValueChange={(value) => value && setAssignmentBillingDay(value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Monday</SelectItem>
+                      <SelectItem value="2">Tuesday</SelectItem>
+                      <SelectItem value="3">Wednesday</SelectItem>
+                      <SelectItem value="4">Thursday</SelectItem>
+                      <SelectItem value="5">Friday</SelectItem>
+                      <SelectItem value="6">Saturday</SelectItem>
+                      <SelectItem value="7">Sunday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    inputMode="numeric"
+                    min={1}
+                    max={28}
+                    type="number"
+                    value={effectiveAssignmentBillingDay}
+                    onChange={(event) => setAssignmentBillingDay(event.target.value)}
+                  />
+                )}
               </div>
               <div className="space-y-1">
-                <Label>Start period</Label>
+                <Label>{effectiveAssignmentCadence === "weekly" ? "Start week" : "Start period"}</Label>
                 <Input
                   value={effectiveAssignmentStartPeriod}
                   onChange={(event) => setAssignmentStartPeriod(event.target.value)}
-                  placeholder="2026-06"
+                  placeholder={effectiveAssignmentCadence === "weekly" ? "2026-W23" : "2026-06"}
                 />
               </div>
             </div>

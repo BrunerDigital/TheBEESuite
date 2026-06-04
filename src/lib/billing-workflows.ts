@@ -16,6 +16,41 @@ export function normalizeBillingPeriod(value: unknown, fallbackDate: Date) {
   return fallbackDate.toISOString().slice(0, 7);
 }
 
+export function normalizeBillingCadence(value: unknown) {
+  return clean(value).toLowerCase().startsWith("week") ? "weekly" : "monthly";
+}
+
+function utcDateOnly(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+export function isoWeekBillingPeriod(date: Date) {
+  const value = utcDateOnly(date);
+  const day = value.getUTCDay() || 7;
+  value.setUTCDate(value.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((value.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+  return `${value.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+export function normalizeWeeklyBillingPeriod(value: unknown, fallbackDate: Date) {
+  const normalized = clean(value).toUpperCase();
+  const weeklyMatch = normalized.match(/^(\d{4})-W(\d{1,2})$/);
+  if (weeklyMatch) {
+    const week = Number.parseInt(weeklyMatch[2], 10);
+    if (week >= 1 && week <= 53) return `${weeklyMatch[1]}-W${String(week).padStart(2, "0")}`;
+  }
+  if (/^\d{4}-\d{2}$/.test(normalized)) return isoWeekBillingPeriod(new Date(`${normalized}-01T12:00:00.000Z`));
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return isoWeekBillingPeriod(new Date(`${normalized}T12:00:00.000Z`));
+  return isoWeekBillingPeriod(fallbackDate);
+}
+
+export function normalizeRecurringBillingPeriod(value: unknown, fallbackDate: Date, cadence: unknown) {
+  return normalizeBillingCadence(cadence) === "weekly"
+    ? normalizeWeeklyBillingPeriod(value, fallbackDate)
+    : normalizeBillingPeriod(value, fallbackDate);
+}
+
 export function normalizeBatchTarget(value: unknown) {
   return clean(value).toLowerCase() === "family" ? "family" : "child";
 }
@@ -24,6 +59,36 @@ export function normalizeBillingDay(value: unknown) {
   const parsed = typeof value === "number" ? value : Number.parseInt(clean(value), 10);
   if (!Number.isFinite(parsed)) return 1;
   return Math.min(Math.max(parsed, 1), 28);
+}
+
+export function normalizeWeeklyBillingDay(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(clean(value), 10);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.min(Math.max(parsed, 1), 7);
+}
+
+export function normalizeRecurringBillingDay(value: unknown, cadence: unknown) {
+  return normalizeBillingCadence(cadence) === "weekly" ? normalizeWeeklyBillingDay(value) : normalizeBillingDay(value);
+}
+
+export function utcBillingWeekday(date: Date) {
+  return date.getUTCDay() || 7;
+}
+
+export function recurringDueDateForPeriod(period: string, billingDay: number, cadence: unknown) {
+  if (normalizeBillingCadence(cadence) !== "weekly") {
+    return new Date(`${period}-${String(normalizeBillingDay(billingDay)).padStart(2, "0")}T12:00:00.000Z`);
+  }
+
+  const match = period.toUpperCase().match(/^(\d{4})-W(\d{2})$/);
+  const year = match ? Number.parseInt(match[1], 10) : new Date().getUTCFullYear();
+  const week = match ? Number.parseInt(match[2], 10) : 1;
+  const fourthOfJanuary = new Date(Date.UTC(year, 0, 4, 12));
+  const weekOneMonday = new Date(fourthOfJanuary);
+  weekOneMonday.setUTCDate(fourthOfJanuary.getUTCDate() - (fourthOfJanuary.getUTCDay() || 7) + 1);
+  const dueDate = new Date(weekOneMonday);
+  dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7) + normalizeWeeklyBillingDay(billingDay) - 1);
+  return dueDate;
 }
 
 export function shouldCreateRecurringTuitionInvoice(input: {

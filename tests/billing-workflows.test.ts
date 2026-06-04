@@ -2,11 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   billingDedupeKey,
+  isoWeekBillingPeriod,
   normalizeBillingDay,
+  normalizeBillingCadence,
   normalizeBatchTarget,
   normalizeBillingPeriod,
+  normalizeRecurringBillingDay,
+  normalizeRecurringBillingPeriod,
+  recurringDueDateForPeriod,
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
+  utcBillingWeekday,
 } from "../src/lib/billing-workflows";
 
 test("billing workflow helpers parse family charge amounts", () => {
@@ -23,6 +29,20 @@ test("billing workflow helpers normalize billing periods and batch targets", () 
   assert.equal(normalizeBillingDay("0"), 1);
   assert.equal(normalizeBillingDay("31"), 28);
   assert.equal(normalizeBillingDay("15"), 15);
+});
+
+test("billing workflow helpers normalize weekly recurring periods and weekdays", () => {
+  assert.equal(normalizeBillingCadence("Weekly"), "weekly");
+  assert.equal(normalizeBillingCadence("monthly"), "monthly");
+  assert.equal(isoWeekBillingPeriod(new Date("2026-06-04T12:00:00.000Z")), "2026-W23");
+  assert.equal(normalizeRecurringBillingPeriod("2026-W7", new Date("2026-06-04T12:00:00.000Z"), "weekly"), "2026-W07");
+  assert.equal(normalizeRecurringBillingPeriod("2026-06", new Date("2026-07-15T12:00:00.000Z"), "weekly"), "2026-W23");
+  assert.equal(normalizeRecurringBillingPeriod("2026-06", new Date("2026-07-15T12:00:00.000Z"), "monthly"), "2026-06");
+  assert.equal(normalizeRecurringBillingDay("9", "weekly"), 7);
+  assert.equal(normalizeRecurringBillingDay("31", "monthly"), 28);
+  assert.equal(utcBillingWeekday(new Date("2026-06-04T12:00:00.000Z")), 4);
+  assert.equal(recurringDueDateForPeriod("2026-W23", 5, "weekly").toISOString(), "2026-06-05T12:00:00.000Z");
+  assert.equal(recurringDueDateForPeriod("2026-06", 15, "monthly").toISOString(), "2026-06-15T12:00:00.000Z");
 });
 
 test("billing dedupe keys are stable across child ordering", () => {

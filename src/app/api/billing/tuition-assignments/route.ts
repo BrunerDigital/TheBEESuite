@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
-import { normalizeBillingDay, normalizeBillingPeriod } from "@/lib/billing-workflows";
+import { normalizeBillingCadence, normalizeRecurringBillingDay, normalizeRecurringBillingPeriod } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -53,8 +53,6 @@ export async function POST(request: NextRequest) {
   if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
 
   const existingFields = jsonObject(access.child.customFields);
-  const billingDay = normalizeBillingDay(body.billingDay);
-  const billingStartPeriod = normalizeBillingPeriod(body.billingStartPeriod, new Date());
   const description = clean(body.description);
   const tuitionPlanId = clean(body.tuitionPlanId);
 
@@ -87,6 +85,9 @@ export async function POST(request: NextRequest) {
 
   const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+  const cadence = normalizeBillingCadence(plan.cadence);
+  const billingDay = normalizeRecurringBillingDay(body.billingDay, cadence);
+  const billingStartPeriod = normalizeRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
 
   const updated = await prisma.child.update({
     where: { id: childId },
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
         tuitionPlanName: plan.name,
         tuitionPlanAgeGroup: plan.ageGroup,
         tuitionPlanCadence: plan.cadence,
+        tuitionBillingCadence: cadence,
         tuitionPlanAmountCents: plan.amountCents,
         tuitionBillingDay: billingDay,
         tuitionBillingStartsPeriod: billingStartPeriod,
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
       childId,
       tuitionPlanId: plan.id,
       amountCents: plan.amountCents,
+      cadence,
       billingDay,
       billingStartPeriod,
     },

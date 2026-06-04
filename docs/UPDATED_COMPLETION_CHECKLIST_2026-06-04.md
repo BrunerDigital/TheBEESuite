@@ -156,7 +156,7 @@ Status legend:
 - [x] Daily recurring tuition cron route exists and is scheduled in Vercel.
 - [x] Recurring billing creates monthly child tuition invoices idempotently.
 - [x] Billing page includes AR aging and ledger reconciliation reporting.
-- [ ] Add weekly recurring billing cadence rules if schools need weekly tuition billing.
+- [x] Add weekly recurring billing cadence rules if schools need weekly tuition billing.
 - [ ] Add payment method management/autopay through Stripe Setup Intents or customer portal.
 - [ ] Add failed payment retry/dunning workflow.
 - [ ] Add subsidy/agency payment tracking.

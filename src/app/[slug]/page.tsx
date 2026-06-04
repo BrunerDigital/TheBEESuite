@@ -154,6 +154,7 @@ function tuitionAssignmentFromCustomFields(customFields: unknown) {
     enabled: fields.tuitionBillingEnabled === true,
     tuitionPlanId: planId,
     tuitionPlanName: stringField(fields.tuitionPlanName),
+    cadence: stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence),
     amountCents: numberField(fields.tuitionPlanAmountCents),
     billingDay: numberField(fields.tuitionBillingDay),
     startsPeriod: stringField(fields.tuitionBillingStartsPeriod),

@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
-  normalizeBillingDay,
+  normalizeBillingCadence,
   normalizeBillingPeriod,
+  normalizeRecurringBillingDay,
+  normalizeRecurringBillingPeriod,
+  recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
+  utcBillingWeekday,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
@@ -27,10 +31,6 @@ function numeric(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-function dueDateForPeriod(period: string, day: number) {
-  return new Date(`${period}-${String(day).padStart(2, "0")}T12:00:00.000Z`);
-}
-
 export async function GET(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
@@ -40,8 +40,11 @@ export async function GET(request: NextRequest) {
   const asOfParam = request.nextUrl.searchParams.get("asOf");
   const asOf = asOfParam ? new Date(asOfParam) : new Date();
   const safeAsOf = Number.isNaN(asOf.getTime()) ? new Date() : asOf;
-  const billingPeriod = normalizeBillingPeriod(request.nextUrl.searchParams.get("period"), safeAsOf);
-  const currentDay = safeAsOf.getUTCDate();
+  const requestedPeriod = request.nextUrl.searchParams.get("period");
+  const monthlyBillingPeriod = normalizeBillingPeriod(requestedPeriod, safeAsOf);
+  const weeklyBillingPeriod = normalizeRecurringBillingPeriod(requestedPeriod, safeAsOf, "weekly");
+  const currentMonthlyDay = safeAsOf.getUTCDate();
+  const currentWeeklyDay = utcBillingWeekday(safeAsOf);
   const openCenters = await prisma.center.findMany({
     where: { status: { not: "closed" } },
     select: { id: true },
@@ -69,30 +72,38 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const dueChildren = assignedChildren.flatMap((child) => {
+  const candidateChildren = assignedChildren.flatMap((child) => {
     const fields = jsonObject(child.customFields);
-    const startsPeriod = clean(fields.tuitionBillingStartsPeriod) || billingPeriod;
-    const day = normalizeBillingDay(fields.tuitionBillingDay);
     const planId = clean(fields.tuitionPlanId);
     const snapshotAmountCents = numeric(fields.tuitionPlanAmountCents);
     if (!child.family.centerId || !planId || snapshotAmountCents <= 0) return [];
-    if (!shouldCreateRecurringTuitionInvoice({
-      enabled: true,
-      planId,
-      amountCents: snapshotAmountCents,
-      startsPeriod,
-      billingPeriod,
-      billingDay: day,
-      currentDay,
-    })) return [];
-    return [{ child, fields, billingDay: day, planId, snapshotAmountCents }];
+    return [{ child, fields, planId, snapshotAmountCents }];
   });
 
-  const planIds = Array.from(new Set(dueChildren.map((entry) => entry.planId)));
+  const planIds = Array.from(new Set(candidateChildren.map((entry) => entry.planId)));
   const plans = planIds.length
     ? await prisma.tuitionPlan.findMany({ where: { id: { in: planIds } } })
     : [];
   const plansById = new Map(plans.map((plan) => [plan.id, plan]));
+
+  const dueChildren = candidateChildren.flatMap((entry) => {
+    const plan = plansById.get(entry.planId);
+    const cadence = normalizeBillingCadence(plan?.cadence ?? entry.fields.tuitionPlanCadence);
+    const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
+    const startsPeriod = normalizeRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
+    const billingDay = normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
+    const currentDay = cadence === "weekly" ? currentWeeklyDay : currentMonthlyDay;
+    if (!shouldCreateRecurringTuitionInvoice({
+      enabled: true,
+      planId: entry.planId,
+      amountCents: plan?.amountCents ?? entry.snapshotAmountCents,
+      startsPeriod,
+      billingPeriod,
+      billingDay,
+      currentDay,
+    })) return [];
+    return [{ ...entry, cadence, billingPeriod, billingDay }];
+  });
 
   let created = 0;
   let skipped = 0;
@@ -110,12 +121,12 @@ export async function GET(request: NextRequest) {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
         const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
-        const dueDate = dueDateForPeriod(billingPeriod, entry.billingDay);
+        const dueDate = recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
         const dedupeKey = billingDedupeKey({
           familyId: entry.child.familyId,
           chargeSource: "tuitionPlan",
           sourceId: entry.planId,
-          billingPeriod,
+          billingPeriod: entry.billingPeriod,
           batchTarget: "recurring-child",
           childIds: [entry.child.id],
         });
@@ -127,14 +138,15 @@ export async function GET(request: NextRequest) {
           items: [{ description: lineDescription, amountCents }],
           customFields: {
             mode: "recurring",
-            billingPeriod,
+            billingPeriod: entry.billingPeriod,
+            billingCadence: entry.cadence,
             centerId: entry.child.family.centerId,
             childId: entry.child.id,
             childName: entry.child.fullName,
             chargeSource: "tuitionPlan",
             sourceId: entry.planId,
             tuitionPlanName: (plan?.name ?? clean(entry.fields.tuitionPlanName)) || null,
-            tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || null,
+            tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
             dedupeKey,
           },
         });
@@ -169,7 +181,9 @@ export async function GET(request: NextRequest) {
     ok: true,
     dryRun,
     asOf: safeAsOf.toISOString(),
-    billingPeriod,
+    billingPeriod: monthlyBillingPeriod,
+    monthlyBillingPeriod,
+    weeklyBillingPeriod,
     assignedChildren: assignedChildren.length,
     dueChildren: dueChildren.length,
     created,

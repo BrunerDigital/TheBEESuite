@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getCenterInquiryEmbedCode } from "@/lib/inquiry-embed";
@@ -25,6 +26,11 @@ type OnboardingPayload = {
   softwarePlan?: unknown;
   addOnBundle?: unknown;
   merchantFeeStrategy?: unknown;
+  classroomSetup?: unknown;
+  tuitionRateSetup?: unknown;
+  subsidyRules?: unknown;
+  balanceRules?: unknown;
+  invoiceRules?: unknown;
   notes?: unknown;
   pageUrl?: unknown;
 };
@@ -95,6 +101,13 @@ function normalizePayload(input: OnboardingPayload) {
     softwarePlan: clean(input.softwarePlan),
     addOnBundle: clean(input.addOnBundle),
     merchantFeeStrategy: clean(input.merchantFeeStrategy),
+    schoolSetup: normalizeSchoolOnboardingSetup({
+      classroomSetup: input.classroomSetup,
+      tuitionRateSetup: input.tuitionRateSetup,
+      subsidyRules: input.subsidyRules,
+      balanceRules: input.balanceRules,
+      invoiceRules: input.invoiceRules,
+    }),
     notes: clean(input.notes),
     pageUrl: clean(input.pageUrl),
   };
@@ -115,6 +128,11 @@ function validate(payload: NormalizedPayload) {
   if (!payload.softwarePlan) errors.softwarePlan = "Software plan model is required.";
   if (!payload.addOnBundle) errors.addOnBundle = "Add-on bundle is required.";
   if (!payload.merchantFeeStrategy) errors.merchantFeeStrategy = "Merchant fee strategy is required.";
+  for (const section of schoolOnboardingSetupSections) {
+    if (!payload.schoolSetup.sections[section.storageKey].completed) {
+      errors[section.field] = `${section.label} is required.`;
+    }
+  }
   return errors;
 }
 
@@ -156,6 +174,11 @@ async function sendOnboardingEmail(
     `Software plan: ${payload.softwarePlan}`,
     `Add-on bundle: ${payload.addOnBundle}`,
     `Merchant fee strategy: ${payload.merchantFeeStrategy}`,
+    `School setup status: ${payload.schoolSetup.status}`,
+    ...schoolOnboardingSetupSections.map((section) => {
+      const setupSection = payload.schoolSetup.sections[section.storageKey];
+      return `${section.label}: ${setupSection.value || "Not provided."}`;
+    }),
     `Page URL: ${payload.pageUrl || ""}`,
     `Notification ID: ${notificationId}`,
     workspace ? `Workspace tenant ID: ${workspace.tenantId}` : "",
@@ -261,6 +284,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
   const ownerName = ownerNameFromPayload(payload);
   const requestedCenters = Math.max(1, Number.parseInt(payload.centerCount, 10) || 1);
   const centerName = requestedCenters > 1 ? `${payload.brandName} - Primary Center` : `${payload.brandName} Center`;
+  const submittedAt = new Date().toISOString();
   const workspace = await prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
       data: {
@@ -303,6 +327,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           trialWorkspace: true,
           requestedCenterCount: requestedCenters,
           model: requestedCenters > 1 ? "owner_group_multi_location" : "owner_group_single_center",
+          schoolSetupStatus: payload.schoolSetup.status,
         },
       },
       select: { id: true, name: true, slug: true, ownerType: true },
@@ -338,6 +363,12 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           livePaymentsEnabled: false,
           parentEngagementEnabled: false,
           publicInquiryEmbedEnabled: true,
+          schoolOnboardingSetup: {
+            ...payload.schoolSetup,
+            capturedAt: submittedAt,
+            capturedByEmail: payload.workEmail,
+            expectedOwner: "school_director",
+          },
           submittedPageUrl: payload.pageUrl,
         },
       },
@@ -452,6 +483,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
             addOnBundle: payload.addOnBundle,
             merchantFeeStrategy: payload.merchantFeeStrategy,
             platformSurchargeDestination: "the_bee_suite_platform_account",
+            schoolSetupStatus: payload.schoolSetup.status,
             note: "Each school must complete connected payout onboarding before parent checkout is enabled.",
           },
         },
@@ -480,7 +512,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
       data: {
         userId: user.id,
         title: `Trial workspace ready: ${payload.brandName}`,
-        body: `${centerName} is ready for profile setup, inquiry form install, center import, and payout onboarding.`,
+        body: `${centerName} is ready for profile setup, director school setup review, inquiry form install, center import, and payout onboarding.`,
         type: "Onboarding",
         priority: "high",
       },
@@ -503,7 +535,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
           centerId: center.id,
           userId: user.id,
           notificationId: notification.id,
-          submittedAt: new Date().toISOString(),
+          submittedAt,
         },
       },
     });
@@ -543,6 +575,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
     organizationName: workspace.organization.name,
     centerId: workspace.center.id,
     centerName: workspace.center.name,
+    schoolSetupStatus: payload.schoolSetup.status,
     userId: workspace.user.id,
     loginUrl,
     embedCode: getCenterInquiryEmbedCode({

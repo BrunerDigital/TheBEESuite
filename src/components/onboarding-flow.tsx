@@ -7,6 +7,7 @@ import {
   BadgeDollarSign,
   Building2,
   CheckCircle2,
+  ClipboardList,
   Clock3,
   LockKeyhole,
   Mail,
@@ -21,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { schoolOnboardingSetupSections, type SchoolOnboardingSetupField } from "@/lib/onboarding-setup";
 import { cn } from "@/lib/utils";
 
 const steps = [
@@ -33,6 +35,11 @@ const steps = [
     title: "Centers",
     icon: MapPin,
     fields: ["centerCount", "state"],
+  },
+  {
+    title: "School setup",
+    icon: ClipboardList,
+    fields: ["classroomSetup", "tuitionRateSetup", "subsidyRules", "balanceRules", "invoiceRules"],
   },
   {
     title: "Payouts",
@@ -64,6 +71,11 @@ type FormState = {
   softwarePlan: string;
   addOnBundle: string;
   merchantFeeStrategy: string;
+  classroomSetup: string;
+  tuitionRateSetup: string;
+  subsidyRules: string;
+  balanceRules: string;
+  invoiceRules: string;
   notes: string;
 };
 
@@ -82,6 +94,7 @@ type WorkspaceSetup = {
   organizationName?: string;
   centerId?: string;
   centerName?: string;
+  schoolSetupStatus?: string;
   userId?: string;
   loginUrl?: string;
   embedCode?: string;
@@ -113,6 +126,11 @@ const initialForm: FormState = {
   softwarePlan: "",
   addOnBundle: "",
   merchantFeeStrategy: "",
+  classroomSetup: "",
+  tuitionRateSetup: "",
+  subsidyRules: "",
+  balanceRules: "",
+  invoiceRules: "",
   notes: "",
 };
 
@@ -287,6 +305,7 @@ export function OnboardingFlow() {
                     ["Workspace", workspace?.tenantSlug || "Trial setup"],
                     ["Primary center", workspace?.centerName || "Primary Center"],
                     ["Centers requested", form.centerCount],
+                    ["School setup", workspace?.schoolSetupStatus || `${schoolOnboardingSetupSections.length} sections captured`],
                     ["Payout owner", form.payoutAdminName],
                     ["Software plan", form.softwarePlan],
                     ["Priority", form.priority],
@@ -349,6 +368,23 @@ export function OnboardingFlow() {
                 ) : null}
 
                 {activeStep === 2 ? (
+                  <div className="grid gap-4">
+                    {schoolOnboardingSetupSections.map((section) => (
+                      <div key={section.field} className="space-y-2">
+                        <Label htmlFor={section.field}>{section.label}</Label>
+                        <Textarea
+                          id={section.field}
+                          value={form[section.field]}
+                          onChange={(event) => update(section.field as SchoolOnboardingSetupField, event.target.value)}
+                          placeholder={section.placeholder}
+                          required
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {activeStep === 3 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Software plan</Label>
@@ -418,7 +454,7 @@ export function OnboardingFlow() {
                   </div>
                 ) : null}
 
-                {activeStep === 3 ? (
+                {activeStep === 4 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Launch timeline</Label>
@@ -455,7 +491,7 @@ export function OnboardingFlow() {
                   </div>
                 ) : null}
 
-                {activeStep === 4 ? (
+                {activeStep === 5 ? (
                   <div className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       {[
@@ -469,6 +505,11 @@ export function OnboardingFlow() {
                         ["Add-ons", form.addOnBundle || "Missing"],
                         ["Merchant fees", form.merchantFeeStrategy || "Missing"],
                         ["Payout readiness", form.payoutReadiness || "Missing"],
+                        ["Classroom setup", form.classroomSetup ? "Provided" : "Missing"],
+                        ["Tuition/rates", form.tuitionRateSetup ? "Provided" : "Missing"],
+                        ["Subsidy rules", form.subsidyRules ? "Provided" : "Missing"],
+                        ["Balance rules", form.balanceRules ? "Provided" : "Missing"],
+                        ["Invoice rules", form.invoiceRules ? "Provided" : "Missing"],
                         ["Timeline", form.timeline || "Missing"],
                         ["Priority", form.priority || "Missing"],
                       ].map(([label, value]) => (

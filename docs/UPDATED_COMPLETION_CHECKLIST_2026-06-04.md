@@ -64,6 +64,7 @@ Status legend:
 - [x] Staff page includes teacher management and certification/background tracking foundations.
 - [x] Directors can approve or reject submitted family/child document uploads.
 - [x] Director FTE submission flow exists.
+- [x] Onboarding now captures director-provided classroom, tuition/rate, subsidy, balance, and invoice/payment setup sections.
 - [x] Attendance, kiosk, daily reports, incidents, documents, messages, announcements, calendar, billing, and payments pages exist.
 - [ ] Complete custody visibility controls and staff-facing custody warnings throughout the UI.
 - [ ] Complete document upload/review/expiration workflow per family/child/staff.
@@ -266,7 +267,7 @@ Status legend:
 - [x] Audit log viewer exists.
 - [x] Guardrail tests cover access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.
 - [x] Lint, typecheck, test, and build scripts exist.
-- [x] Current test suite has 42 passing tests.
+- [x] Current test suite has 44 passing tests.
 - [ ] Complete real setup UI for each integration.
 - [ ] Add tenant-specific integration credentials instead of only platform env vars.
 - [ ] Run formal Supabase advisor/security review after schema migrations.
@@ -276,11 +277,13 @@ Status legend:
 
 ## Business / User Input Needed
 
-- [ ] Provide current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules for all schools.
+- [x] Create onboarding sections for directors to provide current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.
+- [ ] Have each school director submit or confirm current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.
 - [ ] Confirm which schools are ready for Stripe connected account onboarding.
 - [ ] Confirm convenience fee/processing recovery language with legal/accounting.
 - [ ] Provide teacher/staff rosters per active location.
-- [ ] Provide classroom names, capacities, age ranges, and ratio expectations per active location.
+- [x] Create onboarding sections for directors to provide classroom names, capacities, age ranges, and ratio expectations.
+- [ ] Have each school director submit or confirm classroom names, capacities, age ranges, and ratio expectations per active location.
 - [ ] Provide final registration packet fields and policy acknowledgement documents.
 - [ ] Approve public website copy, testimonials, logos, and real in-school photos.
 - [ ] Confirm FTE cutoff schedule and escalation contacts.

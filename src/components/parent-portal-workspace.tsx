@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   BellRing,
@@ -119,7 +120,7 @@ type Props = {
   dailyReports: DailyReport[];
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
-  documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null }>;
+  documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null; storageKey?: string | null; downloadUrl?: string | null }>;
   media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
   currentGuardianId?: string | null;
@@ -191,12 +192,14 @@ export function ParentPortalWorkspace({
   notificationPreferences,
   demoMode,
 }: Props) {
+  const router = useRouter();
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [subject, setSubject] = useState("Question for the center");
   const [message, setMessage] = useState("");
   const [requestDetails, setRequestDetails] = useState("");
   const [documentNotes, setDocumentNotes] = useState<Record<string, string>>({});
+  const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
   const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<Record<string, boolean>>({});
   const [preferences, setPreferences] = useState<NotificationPreferences>({
     ...defaultNotificationPreferences,
@@ -311,19 +314,22 @@ export function ParentPortalWorkspace({
 
   function submitDocument(documentId: string) {
     startTransition(async () => {
+      const formData = new FormData();
+      formData.append("note", documentNotes[documentId] || "");
+      formData.append("signatureAcknowledged", String(Boolean(signatureAcknowledgements[documentId])));
+      const file = documentFiles[documentId];
+      if (file) formData.append("file", file);
       const response = await fetch(`/api/parent/documents/${documentId}/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          note: documentNotes[documentId] || "",
-          signatureAcknowledged: Boolean(signatureAcknowledgements[documentId]),
-        }),
+        body: formData,
       });
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Document could not be submitted.");
       setDocumentNotes((current) => ({ ...current, [documentId]: "" }));
+      setDocumentFiles((current) => ({ ...current, [documentId]: null }));
       setSignatureAcknowledgements((current) => ({ ...current, [documentId]: false }));
       showStatus("Document submitted for director review.");
+      router.refresh();
     });
   }
 
@@ -641,11 +647,21 @@ export function ParentPortalWorkspace({
                   <div>
                     <div className="font-medium">{document.name}</div>
                     <div className="text-xs text-muted-foreground">{document.type} · expires {formatDate(document.expiresAt)}</div>
+                    {document.downloadUrl ? (
+                      <a className="text-xs font-medium text-primary underline-offset-4 hover:underline" href={document.downloadUrl} target="_blank" rel="noreferrer">
+                        Open uploaded file
+                      </a>
+                    ) : null}
                   </div>
                   <Badge>{document.status}</Badge>
                 </div>
                 {document.status !== "APPROVED" ? (
                   <div className="space-y-2">
+                    <Input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,text/plain"
+                      onChange={(event) => setDocumentFiles((current) => ({ ...current, [document.id]: event.target.files?.[0] ?? null }))}
+                    />
                     <Textarea
                       value={documentNotes[document.id] ?? ""}
                       onChange={(event) => setDocumentNotes((current) => ({ ...current, [document.id]: event.target.value }))}

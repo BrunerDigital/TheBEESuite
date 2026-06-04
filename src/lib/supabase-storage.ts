@@ -3,8 +3,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { cleanSupabaseUrl } from "@/lib/supabase-auth";
 
 export const CHILD_MEDIA_BUCKET = process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
+export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const CHILD_MEDIA_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS || 60 * 60 * 2);
+export const DOCUMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_DOCUMENT_SIGNED_URL_SECONDS || 60 * 60);
 export const CHILD_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 
 type StorageClient = SupabaseClient;
 
@@ -45,7 +48,26 @@ function extensionFor(contentType: string, originalName?: string) {
   if (contentType === "image/png") return "png";
   if (contentType === "image/webp") return "webp";
   if (contentType === "image/gif") return "gif";
+  if (contentType === "application/pdf") return "pdf";
+  if (contentType === "application/msword") return "doc";
+  if (contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") return "docx";
+  if (contentType === "text/plain") return "txt";
   return "jpg";
+}
+
+function assertDocumentContentType(contentType: string) {
+  const allowed = new Set([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/plain",
+  ]);
+  if (!allowed.has(contentType)) {
+    throw new Error("Document must be a PDF, Word document, image, or text file.");
+  }
 }
 
 export function buildChildMediaPath({
@@ -131,6 +153,100 @@ export async function signChildMediaRecords<T extends { url: string; storageKey?
         return { ...record, url: await createChildMediaSignedUrl(record.storageKey) };
       } catch {
         return record;
+      }
+    }),
+  );
+}
+
+export function buildDocumentPath({
+  tenantId,
+  centerId,
+  familyId,
+  childId,
+  documentId,
+  originalName,
+  contentType,
+}: {
+  tenantId: string;
+  centerId?: string | null;
+  familyId: string;
+  childId?: string | null;
+  documentId: string;
+  originalName?: string;
+  contentType: string;
+}) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const ext = extensionFor(contentType, originalName);
+  return [
+    "documents",
+    safePathPart(tenantId),
+    safePathPart(centerId || "center"),
+    safePathPart(familyId),
+    safePathPart(childId || "family"),
+    safePathPart(documentId),
+    String(year),
+    month,
+    `${randomUUID()}.${ext}`,
+  ].join("/");
+}
+
+export async function uploadDocumentBuffer({
+  bytes,
+  contentType,
+  originalName,
+  tenantId,
+  centerId,
+  familyId,
+  childId,
+  documentId,
+}: {
+  bytes: Buffer;
+  contentType: string;
+  originalName?: string;
+  tenantId: string;
+  centerId?: string | null;
+  familyId: string;
+  childId?: string | null;
+  documentId: string;
+}) {
+  assertDocumentContentType(contentType);
+  if (bytes.byteLength > DOCUMENT_MAX_BYTES) throw new Error("Document must be 20MB or smaller.");
+
+  const client = getSupabaseStorageClient();
+  const storageKey = buildDocumentPath({ tenantId, centerId, familyId, childId, documentId, originalName, contentType });
+  const { error: uploadError } = await client.storage.from(DOCUMENT_BUCKET).upload(storageKey, bytes, {
+    cacheControl: "3600",
+    contentType,
+    upsert: false,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const signedUrl = await createDocumentSignedUrl(storageKey);
+  return {
+    bucket: DOCUMENT_BUCKET,
+    storageKey,
+    recordUrl: `supabase://${DOCUMENT_BUCKET}/${storageKey}`,
+    signedUrl,
+  };
+}
+
+export async function createDocumentSignedUrl(storageKey: string, expiresIn = DOCUMENT_SIGNED_URL_SECONDS) {
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(storageKey, expiresIn);
+  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed document URL.");
+  return data.signedUrl;
+}
+
+export async function signDocumentRecords<T extends { storageKey?: string | null }>(records: T[]) {
+  return Promise.all(
+    records.map(async (record) => {
+      if (!record.storageKey || record.storageKey === "upload_pending") return { ...record, downloadUrl: null };
+      try {
+        return { ...record, downloadUrl: await createDocumentSignedUrl(record.storageKey) };
+      } catch {
+        return { ...record, downloadUrl: null };
       }
     }),
   );

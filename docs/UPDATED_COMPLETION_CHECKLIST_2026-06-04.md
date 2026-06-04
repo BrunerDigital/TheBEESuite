@@ -2,10 +2,11 @@
 
 Last updated: June 4, 2026
 
-Current production deployment before messaging/parity pass: `dpl_AvK62vh3RU1esFKDoVEMd9JbV6S3`
-Current production commit before messaging/parity pass: `3649bbd Add recurring tuition billing automation`
+Current production deployment before document upload/review pass: `dpl_2YaFc7tdF4nMDkZaheKzSRxvb6LB`
+Current production commit before document upload/review pass: `35bed54 Add portal family messaging replies`
 Rollback point before tuition/accounting work: `dpl_AfWhPU6vSvcZownaazgvhK29WCPh`
 Rollback point before messaging/parity work: `dpl_AvK62vh3RU1esFKDoVEMd9JbV6S3`
+Rollback point before document upload/review work: `dpl_2YaFc7tdF4nMDkZaheKzSRxvb6LB`
 
 Status legend:
 - `[x]` Complete, deployed, or ready for live validation.
@@ -61,6 +62,7 @@ Status legend:
 - [x] Directors can provision teacher logins by temporary password or setup/reset email.
 - [x] Teacher center grants are created when teacher profiles are saved.
 - [x] Staff page includes teacher management and certification/background tracking foundations.
+- [x] Directors can approve or reject submitted family/child document uploads.
 - [x] Director FTE submission flow exists.
 - [x] Attendance, kiosk, daily reports, incidents, documents, messages, announcements, calendar, billing, and payments pages exist.
 - [ ] Complete custody visibility controls and staff-facing custody warnings throughout the UI.
@@ -98,6 +100,7 @@ Status legend:
 - [x] Parent portal shows daily reports.
 - [x] Parent portal shows teacher-shared photos/media foundation.
 - [x] Parent portal shows documents and document submission/review foundation.
+- [x] Parents can upload document files to family/child document requests for director review.
 - [x] Parent portal shows announcements.
 - [x] Parent portal supports parent-to-center messages.
 - [x] Parent contact/update request API exists.
@@ -238,10 +241,13 @@ Status legend:
 - [x] Incident reports page exists.
 - [x] Teacher incident creation API exists.
 - [x] Parent incident acknowledgement API exists.
+- [x] Parent document upload API stores submitted files in Supabase Storage.
+- [x] Director document review API supports approve/reject decisions with notes and parent notifications.
 - [ ] Build actual form builder UI.
 - [ ] Complete required document checklist per family/staff/child.
-- [ ] Add file upload UI tied to Supabase storage.
-- [ ] Add expiration reminders and document review states.
+- [x] Add file upload UI tied to Supabase storage.
+- [x] Add director document review states.
+- [ ] Add expiration reminders for family/staff/child documents.
 - [ ] Integrate real e-signature provider or complete internal signature capture flow.
 - [ ] Add state-specific licensing configuration.
 - [ ] Add medication log workflow.

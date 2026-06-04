@@ -34,6 +34,7 @@ import {
   type BillingWorkbenchTuitionPlan,
 } from "@/components/billing-workbench";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
+import { DocumentReviewActions } from "@/components/document-review-actions";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { NotificationReadAction } from "@/components/notification-read-actions";
@@ -2287,6 +2288,8 @@ export type DocumentsPageData = {
     status: string;
     expiresAt: Date | string | null;
     restricted: boolean;
+    storageKey?: string | null;
+    downloadUrl?: string | null;
     family: { name: string } | null;
     child: { fullName: string; family: { centerId: string | null } } | null;
   }>;
@@ -2308,7 +2311,7 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Documents</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Family and child documents with status, expiration reminders, restricted visibility markers, and storage integration placeholders.
+          Family and child documents with secure uploads, review status, expiration reminders, and restricted visibility markers.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -2332,6 +2335,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
                 <TableHead>Status</TableHead>
                 <TableHead>Expires</TableHead>
                 <TableHead>Visibility</TableHead>
+                <TableHead>File</TableHead>
+                <TableHead>Review</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2343,6 +2348,18 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
                   <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{document.status}</Badge></TableCell>
                   <TableCell>{formatDate(document.expiresAt)}</TableCell>
                   <TableCell>{document.restricted ? <Badge variant="destructive">Restricted</Badge> : "Standard"}</TableCell>
+                  <TableCell>
+                    {document.downloadUrl ? (
+                      <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href={document.downloadUrl} target="_blank" rel="noreferrer">
+                        Open file
+                      </a>
+                    ) : document.storageKey && document.storageKey !== "upload_pending" ? (
+                      <span className="text-xs text-muted-foreground">File unavailable</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Pending upload</span>
+                    )}
+                  </TableCell>
+                  <TableCell><DocumentReviewActions documentId={document.id} status={document.status} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

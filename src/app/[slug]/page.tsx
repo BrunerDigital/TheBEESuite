@@ -56,7 +56,7 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
-import { signChildMediaRecords } from "@/lib/supabase-storage";
+import { signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 
 export const dynamic = "force-dynamic";
@@ -829,7 +829,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         where: { OR: [{ familyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
         orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, name: true, type: true, status: true, expiresAt: true },
+        select: { id: true, name: true, type: true, status: true, expiresAt: true, storageKey: true },
       }),
       prisma.childMedia.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] }, sharedWithParents: true, status: "shared" },
@@ -851,7 +851,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       }),
     ]);
 
-    const signedMedia = await signChildMediaRecords(media);
+    const [signedDocuments, signedMedia] = await Promise.all([
+      signDocumentRecords(documents),
+      signChildMediaRecords(media),
+    ]);
     const linkedGuardian = user.role === UserRole.PARENT_GUARDIAN
       ? family?.guardians.find((guardian) => guardian.userId === user.id) ?? null
       : null;
@@ -879,7 +882,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         dailyReports={dailyReports}
         incidents={incidents}
         messages={messages}
-        documents={documents}
+        documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}
         currentGuardianId={linkedGuardian?.id ?? null}
@@ -2327,8 +2330,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       prisma.document.count({ where: { ...documentWhere, restricted: true } }),
       prisma.document.count({ where: { ...documentWhere, status: DocumentStatus.REQUESTED } }),
     ]);
+    const signedDocuments = await signDocumentRecords(documents);
 
-    return <DocumentsPage data={{ documents, stats: { total, expiring, restricted, pending } }} />;
+    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending } }} />;
   }
 
   if (slug === "compliance") {

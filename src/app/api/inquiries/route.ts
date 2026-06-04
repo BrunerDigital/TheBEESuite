@@ -6,6 +6,7 @@ import {
   uniqueInquiryEmails,
 } from "@/lib/inquiry-integrations";
 import { recordIntegrationDeliveryAttempt } from "@/lib/integration-deliveries";
+import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
@@ -64,6 +65,7 @@ type IntakeCenter = {
   crmLocationId: string | null;
   locationId: string | null;
   email: string | null;
+  status: string | null;
   tenantId: string;
 };
 
@@ -73,6 +75,7 @@ type IntakeCenterRecord = {
   crmLocationId: string | null;
   locationId: string | null;
   email: string | null;
+  status: string | null;
   organization: {
     tenantId: string;
   };
@@ -100,6 +103,7 @@ const intakeCenterSelect = {
   crmLocationId: true,
   locationId: true,
   email: true,
+  status: true,
   organization: {
     select: {
       tenantId: true,
@@ -114,6 +118,7 @@ function toIntakeCenter(center: IntakeCenterRecord): IntakeCenter {
     crmLocationId: center.crmLocationId,
     locationId: center.locationId,
     email: center.email,
+    status: center.status,
     tenantId: center.organization.tenantId,
   };
 }
@@ -348,7 +353,7 @@ async function getIntakeCenter({
 
   const locationIds = uniqueValues([locationId, publicLocationId ?? ""]);
   if (locationIds.length) {
-    const routedCenter = await prisma.center.findFirst({
+    const routedCenters = await prisma.center.findMany({
       where: {
         status: { not: "closed" },
         OR: [
@@ -358,14 +363,16 @@ async function getIntakeCenter({
         ],
       },
       orderBy: { createdAt: "asc" },
+      take: 20,
       select: intakeCenterSelect,
     });
+    const routedCenter = selectPreferredInquiryCenter(routedCenters, locationIds);
 
     if (routedCenter) return toIntakeCenter(routedCenter);
 
     if (strictLocationRouting) {
       throw new InquiryRoutingError(
-        "The selected Kid City USA location is not currently mapped in The Bee Suite. Please choose another location or contact the center.",
+        "The selected Kid City USA location is not currently mapped in The BEE Suite. Please choose another location or contact the center.",
         "unknown_kidcity_location",
       );
     }

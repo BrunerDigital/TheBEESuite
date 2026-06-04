@@ -14,6 +14,10 @@
     {
       "path": "/api/cron/tuition-billing",
       "schedule": "15 13 * * *"
+    },
+    {
+      "path": "/api/cron/document-expiration-reminders",
+      "schedule": "45 14 * * *"
     }
   ]
 }

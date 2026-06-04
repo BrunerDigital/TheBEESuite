@@ -1040,16 +1040,22 @@ model Survey {
 }
 
 model Notification {
-  id        String    @id @default(cuid())
-  userId    String?
-  title     String
-  body      String
-  type      String
-  priority  String    @default("normal")
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
+  id         String    @id @default(cuid())
+  userId     String?
+  title      String
+  body       String
+  type       String
+  priority   String    @default("normal")
+  dedupeKey  String?   @unique
+  readAt     DateTime?
+  expiresAt  DateTime? @default(dbgenerated("(now() + '180 days'::interval)"))
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
 
   user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, archivedAt, expiresAt, createdAt])
+  @@index([type, createdAt])
 }
 
 model AuditLog {

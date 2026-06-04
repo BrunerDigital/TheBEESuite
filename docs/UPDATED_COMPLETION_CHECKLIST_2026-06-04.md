@@ -248,7 +248,7 @@ Status legend:
 - [ ] Complete required document checklist per family/staff/child.
 - [x] Add file upload UI tied to Supabase storage.
 - [x] Add director document review states.
-- [ ] Add expiration reminders for family/staff/child documents.
+- [x] Add expiration reminders for family/staff/child documents.
 - [ ] Integrate real e-signature provider or complete internal signature capture flow.
 - [ ] Add state-specific licensing configuration.
 - [ ] Add medication log workflow.

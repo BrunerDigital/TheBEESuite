@@ -89,7 +89,7 @@ Status legend:
 - [x] Teachers can upload classroom media/photos to child/family profiles through the teacher media flow foundation.
 - [x] Teacher permissions are separated from director/location users.
 - [x] Add classroom ratio warnings directly in teacher/classroom views.
-- [ ] Add more complete classroom staff assignment/schedule actions.
+- [x] Add more complete classroom staff assignment/schedule actions.
 - [ ] Add offline/poor-connectivity classroom tablet strategy.
 - [ ] Validate teacher login setup with real teacher emails from each active school.
 

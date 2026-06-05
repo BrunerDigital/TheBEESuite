@@ -6,6 +6,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { staffKioskPinFields } from "@/lib/staff-kiosk";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
@@ -406,6 +407,87 @@ export async function POST(request: NextRequest) {
     }
     auditMetadata.auth = auth as Prisma.InputJsonValue;
     auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
+  } else if (entity === "staffAssignment") {
+    const staffId = clean(body.staffId) || id;
+    if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
+    const staff = await prisma.staffProfile.findUnique({
+      where: { id: staffId },
+      select: { id: true, centerId: true, user: { select: { id: true, isActive: true, role: true } } },
+    });
+    if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
+    if (!canAccessCenter(user, staff.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
+    }
+    if (!staff.user.isActive || staff.user.role !== UserRole.TEACHER) {
+      return NextResponse.json({ ok: false, error: "Only active teacher profiles can be assigned to classrooms." }, { status: 400 });
+    }
+    centerId = staff.centerId;
+    const classroomId = clean(body.classroomId) || null;
+    if (classroomId) {
+      const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { centerId: true } });
+      const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: staff.centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    result = await prisma.staffProfile.update({
+      where: { id: staff.id },
+      data: { classroomId },
+      include: {
+        user: { select: { name: true, email: true, isActive: true } },
+        classroom: { select: { id: true, name: true } },
+      },
+    });
+  } else if (entity === "staffScheduleBatch") {
+    const classroomId = clean(body.classroomId);
+    if (!classroomId) return NextResponse.json({ ok: false, error: "Classroom ID is required." }, { status: 400 });
+    const classroom = await prisma.classroom.findUnique({ where: { id: classroomId }, select: { id: true, centerId: true } });
+    if (!classroom) return NextResponse.json({ ok: false, error: "Classroom not found." }, { status: 404 });
+    if (!canAccessCenter(user, classroom.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this classroom." }, { status: 403 });
+    }
+    centerId = classroom.centerId;
+    const requestedStaffIds = Array.isArray(body.staffIds) ? (body.staffIds as unknown[]).map(clean).filter(Boolean) : [];
+    const eligibleStaff = await prisma.staffProfile.findMany({
+      where: {
+        centerId,
+        user: { role: UserRole.TEACHER, isActive: true },
+        ...(requestedStaffIds.length ? { id: { in: requestedStaffIds } } : { classroomId }),
+      },
+      select: { id: true, centerId: true },
+    });
+    if (!eligibleStaff.length) {
+      return NextResponse.json({ ok: false, error: "No active teachers are assigned or selected for this classroom." }, { status: 400 });
+    }
+    const missingStaffIds = requestedStaffIds.filter((staffId: string) => !eligibleStaff.some((staff) => staff.id === staffId));
+    if (missingStaffIds.length) {
+      return NextResponse.json({ ok: false, error: "One or more selected teachers are outside this school or inactive." }, { status: 403 });
+    }
+    const weekStartsAt = parseDate(body.weekStartsAt);
+    const daysOfWeek = normalizeWeekdayIndexes(body.daysOfWeek);
+    if (!weekStartsAt || !daysOfWeek.length) {
+      return NextResponse.json({ ok: false, error: "Week start and at least one schedule day are required." }, { status: 400 });
+    }
+    const scheduleRequests = buildWeeklyStaffScheduleRequests({
+      staffIds: eligibleStaff.map((staff) => staff.id),
+      weekStartsAt,
+      daysOfWeek,
+      startTime: clean(body.startTime),
+      endTime: clean(body.endTime),
+    });
+    if (!scheduleRequests.length) {
+      return NextResponse.json({ ok: false, error: "Valid schedule start and end times are required." }, { status: 400 });
+    }
+    const status = clean(body.status) || "scheduled";
+    result = await prisma.staffSchedule.createMany({
+      data: scheduleRequests.map((schedule) => ({
+        staffId: schedule.staffId,
+        centerId: classroom.centerId,
+        startsAt: schedule.startsAt,
+        endsAt: schedule.endsAt,
+        status,
+      })),
+    });
+    auditMetadata.createdSchedules = scheduleRequests.length;
+    auditMetadata.classroomId = classroom.id;
   } else if (entity === "invoice") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });

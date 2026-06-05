@@ -4,11 +4,13 @@ import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Archive, CalendarClock, CheckCircle2, KeyRound, Save, Send, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
 
 type CenterOption = { id: string; name: string };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
@@ -59,6 +61,12 @@ function toDateTimeLocal(value: Date | string) {
   return local.toISOString().slice(0, 16);
 }
 
+function dateInputValue(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
 export function StaffManagementPanel({ centers, classrooms, staff, schedules }: Props) {
   const router = useRouter();
   const [selectedStaffId, setSelectedStaffId] = useState("new");
@@ -81,6 +89,14 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [scheduleStartsAt, setScheduleStartsAt] = useState("");
   const [scheduleEndsAt, setScheduleEndsAt] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("scheduled");
+  const [assignmentStaffId, setAssignmentStaffId] = useState(staff[0]?.id ?? "");
+  const [assignmentClassroomId, setAssignmentClassroomId] = useState(classrooms[0]?.id ?? "none");
+  const [weeklyClassroomId, setWeeklyClassroomId] = useState(classrooms[0]?.id ?? "");
+  const [weeklyStartsAt, setWeeklyStartsAt] = useState(() => dateInputValue());
+  const [weeklyStartTime, setWeeklyStartTime] = useState("08:00");
+  const [weeklyEndTime, setWeeklyEndTime] = useState("16:30");
+  const [weeklyDays, setWeeklyDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [weeklyStatus, setWeeklyStatus] = useState("scheduled");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -88,6 +104,19 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const classroomOptions = useMemo(
     () => classrooms.filter((classroom) => classroom.centerId === centerId),
     [centerId, classrooms],
+  );
+  const coverageSummaries = useMemo(
+    () => summarizeClassroomCoverage({ classrooms, staff, schedules }),
+    [classrooms, staff, schedules],
+  );
+  const assignmentTeacher = staff.find((teacher) => teacher.id === assignmentStaffId);
+  const assignmentClassrooms = useMemo(
+    () => classrooms.filter((classroom) => !assignmentTeacher || classroom.centerId === assignmentTeacher.centerId),
+    [assignmentTeacher, classrooms],
+  );
+  const weeklyClassroomTeachers = useMemo(
+    () => staff.filter((teacher) => teacher.classroomId === weeklyClassroomId && teacher.user.isActive),
+    [staff, weeklyClassroomId],
   );
 
   function resetTeacherForm() {
@@ -143,6 +172,66 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setScheduleStartsAt(toDateTimeLocal(schedule.startsAt));
     setScheduleEndsAt(toDateTimeLocal(schedule.endsAt));
     setScheduleStatus(schedule.status || "scheduled");
+  }
+
+  function toggleWeeklyDay(day: number) {
+    setWeeklyDays((current) =>
+      current.includes(day)
+        ? current.filter((value) => value !== day)
+        : [...current, day].sort((left, right) => left - right),
+    );
+  }
+
+  function assignTeacherToClassroom() {
+    if (!assignmentStaffId) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "staffAssignment",
+          staffId: assignmentStaffId,
+          classroomId: assignmentClassroomId === "none" ? "" : assignmentClassroomId,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Teacher classroom assignment could not be saved.");
+        return;
+      }
+      setStatusMessage("Teacher classroom assignment updated.");
+      router.refresh();
+    });
+  }
+
+  function generateWeeklySchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "staffScheduleBatch",
+          classroomId: weeklyClassroomId,
+          weekStartsAt: weeklyStartsAt,
+          daysOfWeek: weeklyDays,
+          startTime: weeklyStartTime,
+          endTime: weeklyEndTime,
+          status: weeklyStatus,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; createdSchedules?: number } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Weekly classroom schedule could not be generated.");
+        return;
+      }
+      setStatusMessage(`Weekly classroom coverage generated for ${json?.createdSchedules ?? 0} schedule rows.`);
+      router.refresh();
+    });
   }
 
   function saveTeacher(event: FormEvent<HTMLFormElement>) {
@@ -326,6 +415,158 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               <AlertDescription>{errorMessage}</AlertDescription>
             </Alert>
           ) : null}
+          <section className="grid gap-3 xl:grid-cols-3">
+            {coverageSummaries.slice(0, 9).map((summary) => (
+              <div key={summary.classroomId} className="rounded-xl border bg-background/40 p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-medium">{summary.classroomName}</div>
+                    <div className="text-xs text-muted-foreground">{summary.ageGroup}</div>
+                  </div>
+                  <Badge variant={summary.warning === "none" ? "default" : "destructive"}>
+                    {summary.warning === "none"
+                      ? "Covered"
+                      : summary.warning === "no_teacher_assigned"
+                        ? "Assign teacher"
+                        : "Needs schedule"}
+                  </Badge>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-lg border bg-card/50 p-2">
+                    <div className="text-lg font-semibold">{summary.assignedTeachers}</div>
+                    <div className="text-muted-foreground">Assigned</div>
+                  </div>
+                  <div className="rounded-lg border bg-card/50 p-2">
+                    <div className="text-lg font-semibold">{summary.activeSchedules}</div>
+                    <div className="text-muted-foreground">Active</div>
+                  </div>
+                  <div className="rounded-lg border bg-card/50 p-2">
+                    <div className="text-lg font-semibold">{summary.upcomingSchedules}</div>
+                    <div className="text-muted-foreground">Rows</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {!coverageSummaries.length ? (
+              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground xl:col-span-3">
+                Add classrooms before assigning teacher coverage.
+              </p>
+            ) : null}
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3">
+                <div className="text-sm font-medium">Quick classroom assignment</div>
+                <p className="text-xs text-muted-foreground">Move an existing teacher into a classroom without editing the full profile.</p>
+              </div>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Teacher</Label>
+                  <Select value={assignmentStaffId} onValueChange={(value) => value && setAssignmentStaffId(value)}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
+                    <SelectContent>
+                      {staff.map((teacher) => (
+                        <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Classroom</Label>
+                  <Select value={assignmentClassroomId} onValueChange={(value) => value && setAssignmentClassroomId(value)}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose classroom" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {assignmentClassrooms.map((classroom) => (
+                        <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" disabled={isPending || !assignmentStaffId} onClick={assignTeacherToClassroom}>
+                  <Save data-icon="inline-start" />
+                  Save assignment
+                </Button>
+              </div>
+            </div>
+
+            <form className="rounded-xl border bg-background/40 p-4" onSubmit={generateWeeklySchedule}>
+              <div className="mb-3">
+                <div className="text-sm font-medium">Generate weekly classroom coverage</div>
+                <p className="text-xs text-muted-foreground">
+                  Creates schedule rows for every active teacher assigned to the selected classroom.
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Classroom</Label>
+                  <Select value={weeklyClassroomId} onValueChange={(value) => value && setWeeklyClassroomId(value)}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose classroom" /></SelectTrigger>
+                    <SelectContent>
+                      {classrooms.map((classroom) => (
+                        <SelectItem key={classroom.id} value={classroom.id}>
+                          {classroom.name} · {classroom.ageGroup}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {weeklyClassroomTeachers.length} assigned teacher{weeklyClassroomTeachers.length === 1 ? "" : "s"} will receive rows.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Week starts</Label>
+                  <Input type="date" value={weeklyStartsAt} onChange={(event) => setWeeklyStartsAt(event.target.value)} required />
+                </div>
+                <div className="space-y-1">
+                  <Label>Start time</Label>
+                  <Input type="time" value={weeklyStartTime} onChange={(event) => setWeeklyStartTime(event.target.value)} required />
+                </div>
+                <div className="space-y-1">
+                  <Label>End time</Label>
+                  <Input type="time" value={weeklyEndTime} onChange={(event) => setWeeklyEndTime(event.target.value)} required />
+                </div>
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <Select value={weeklyStatus} onValueChange={(value) => value && setWeeklyStatus(value)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                      <SelectItem value="confirmed">Confirmed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Days</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      [1, "Mon"],
+                      [2, "Tue"],
+                      [3, "Wed"],
+                      [4, "Thu"],
+                      [5, "Fri"],
+                      [6, "Sat"],
+                    ].map(([day, label]) => (
+                      <label key={day} className="flex items-center gap-1 rounded-lg border bg-card/50 px-2 py-1 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={weeklyDays.includes(Number(day))}
+                          onChange={() => toggleWeeklyDay(Number(day))}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <Button className="mt-4" disabled={isPending || !weeklyClassroomId || !weeklyClassroomTeachers.length || !weeklyDays.length}>
+                <CalendarClock data-icon="inline-start" />
+                Generate coverage
+              </Button>
+            </form>
+          </section>
+
           <form className="space-y-4" onSubmit={saveTeacher}>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">

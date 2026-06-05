@@ -66,6 +66,8 @@ model Tenant {
   auditLogs             AuditLog[]
   integrations          Integration[]
   integrationDeliveries IntegrationDelivery[]
+  messageTemplates      MessageTemplate[]
+  notificationPreferences NotificationPreference[]
   ownerGroups           OwnerGroup[]
   accessGrants          UserAccessGrant[]
   brandAssets           BrandAsset[]
@@ -148,6 +150,7 @@ model Center {
   brandAssets           BrandAsset[]
   customizations        BrandCustomization[]
   integrationDeliveries IntegrationDelivery[]
+  messageTemplates      MessageTemplate[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -229,8 +232,11 @@ model User {
   guardians      Guardian[]
   notes          Note[]
   messages       Message[]            @relation("MessageSender")
+  assignedMessages Message[]          @relation("MessageAssignee")
+  createdMessageTemplates MessageTemplate[] @relation("MessageTemplateCreator")
   auditLogs      AuditLog[]
   notifications  Notification[]
+  notificationPreferences NotificationPreference[]
   uploadedMedia  ChildMedia[]
   procareImports ProcareImportBatch[]
   fteReports     FteReport[]          @relation("FteSubmittedBy")
@@ -618,20 +624,57 @@ model CustomField {
 }
 
 model Message {
-  id        String    @id @default(cuid())
-  familyId  String?
-  senderId  String?
-  subject   String?
-  body      String
-  channel   String
-  priority  String    @default("normal")
-  sentiment String?
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
+  id               String    @id @default(cuid())
+  familyId         String?
+  senderId         String?
+  assignedToId     String?
+  templateId       String?
+  replyToMessageId String?
+  threadKey        String?
+  subject          String?
+  body             String
+  channel          String
+  priority         String    @default("normal")
+  sentiment        String?
+  metadata         Json?
+  readAt           DateTime?
+  createdAt        DateTime  @default(now())
 
   family                Family?               @relation(fields: [familyId], references: [id])
   sender                User?                 @relation("MessageSender", fields: [senderId], references: [id])
+  assignedTo            User?                 @relation("MessageAssignee", fields: [assignedToId], references: [id])
+  template              MessageTemplate?      @relation(fields: [templateId], references: [id])
+  replyTo               Message?              @relation("MessageReplies", fields: [replyToMessageId], references: [id])
+  replies               Message[]             @relation("MessageReplies")
   integrationDeliveries IntegrationDelivery[]
+
+  @@index([familyId, createdAt])
+  @@index([threadKey, createdAt])
+  @@index([assignedToId, readAt, createdAt])
+}
+
+model MessageTemplate {
+  id          String   @id @default(cuid())
+  tenantId    String
+  centerId    String?
+  name        String
+  subject     String
+  body        String
+  category    String   @default("general")
+  channel     String   @default("portal")
+  mergeFields Json?
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  center    Center? @relation(fields: [centerId], references: [id])
+  createdBy User?   @relation("MessageTemplateCreator", fields: [createdById], references: [id])
+  messages  Message[]
+
+  @@unique([tenantId, centerId, name])
+  @@index([tenantId, centerId, isActive])
 }
 
 model Announcement {
@@ -1056,6 +1099,28 @@ model Notification {
 
   @@index([userId, archivedAt, expiresAt, createdAt])
   @@index([type, createdAt])
+}
+
+model NotificationPreference {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String?
+  role         UserRole?
+  type         String
+  emailEnabled Boolean  @default(true)
+  smsEnabled   Boolean  @default(false)
+  pushEnabled  Boolean  @default(true)
+  quietHours   Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId, type])
+  @@unique([tenantId, role, type])
+  @@index([tenantId, role])
+  @@index([tenantId, userId])
 }
 
 model AuditLog {

@@ -1,6 +1,6 @@
 # The BEE Suite Updated Completion Checklist
 
-Last updated: June 4, 2026
+Last updated: June 5, 2026
 
 Current production deployment before document upload/review pass: `dpl_2YaFc7tdF4nMDkZaheKzSRxvb6LB`
 Current production commit before document upload/review pass: `35bed54 Add portal family messaging replies`
@@ -227,10 +227,10 @@ Status legend:
 - [x] Complete portal two-way parent/director/teacher messaging UI.
 - [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
-- [ ] Add message templates and merge fields.
-- [ ] Add richer threaded conversation views with per-family reply history and staff assignment.
-- [ ] Add full notification preferences by role/user beyond parent portal.
-- [ ] Add email/SMS/push delivery channels.
+- [x] Add message templates and merge fields.
+- [x] Add richer threaded conversation views with per-family reply history and staff assignment.
+- [x] Add full notification preferences by role/user beyond parent portal.
+- [x] Add email/SMS/push delivery channels.
 
 ## Forms, Documents, Compliance, And E-Signature
 

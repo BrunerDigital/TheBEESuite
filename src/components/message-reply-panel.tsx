@@ -19,48 +19,49 @@ export type MessageFamilyOption = {
   smsRecipientCount?: number;
 };
 
-const replyTemplates = [
-  {
-    id: "general",
-    label: "General",
-    subject: "Follow-up from the school",
-    body: "",
-  },
-  {
-    id: "documents",
-    label: "Documents",
-    subject: "Document request follow-up",
-    body: "Thank you. We reviewed the request and will update your family record after the office completes verification.",
-  },
-  {
-    id: "billing",
-    label: "Billing",
-    subject: "Billing follow-up",
-    body: "We are reviewing the account balance and will follow up with any invoice or payment updates in the parent portal.",
-  },
-  {
-    id: "classroom",
-    label: "Classroom",
-    subject: "Classroom update",
-    body: "Thank you for the note. We will share this with the classroom team and keep the daily report updated.",
-  },
-  {
-    id: "incident",
-    label: "Incident",
-    subject: "Incident report follow-up",
-    body: "Thank you for reviewing the incident note. A director will complete the final review before any additional action is recorded.",
-  },
-];
+export type MessageTemplateOption = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  category: string;
+  channel: string;
+  mergeFields: string[];
+};
 
-export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFamilyOption[] }) {
+export type MessageMergeFieldOption = {
+  token: string;
+  label: string;
+};
+
+export type MessageStaffOption = {
+  id: string;
+  name: string;
+  email: string;
+};
+
+export function MessageReplyPanel({
+  familyOptions,
+  templates,
+  mergeFields,
+  staffOptions,
+}: {
+  familyOptions: MessageFamilyOption[];
+  templates: MessageTemplateOption[];
+  mergeFields: MessageMergeFieldOption[];
+  staffOptions: MessageStaffOption[];
+}) {
   const router = useRouter();
+  const templateOptions = templates.length ? templates : [];
   const [familyId, setFamilyId] = useState(familyOptions[0]?.id ?? "");
-  const [templateId, setTemplateId] = useState(replyTemplates[0].id);
+  const [templateId, setTemplateId] = useState(templateOptions[0]?.id ?? "");
   const [priority, setPriority] = useState("normal");
-  const [subject, setSubject] = useState(replyTemplates[0].subject);
-  const [message, setMessage] = useState(replyTemplates[0].body);
+  const [assignedToId, setAssignedToId] = useState("unassigned");
+  const [subject, setSubject] = useState(templateOptions[0]?.subject ?? "Follow-up from the school");
+  const [message, setMessage] = useState(templateOptions[0]?.body ?? "");
   const [sendEmailCopy, setSendEmailCopy] = useState(true);
   const [sendSmsCopy, setSendSmsCopy] = useState(false);
+  const [sendPushCopy, setSendPushCopy] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -71,10 +72,15 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
   );
 
   function applyTemplate(nextTemplateId: string) {
-    const template = replyTemplates.find((item) => item.id === nextTemplateId) ?? replyTemplates[0];
+    const template = templateOptions.find((item) => item.id === nextTemplateId) ?? templateOptions[0];
+    if (!template) return;
     setTemplateId(template.id);
     setSubject(template.subject);
     setMessage(template.body);
+  }
+
+  function insertMergeField(token: string) {
+    setMessage((current) => `${current}${current.endsWith(" ") || current.endsWith("\n") || !current ? "" : " "}{{${token}}}`);
   }
 
   function submit() {
@@ -91,12 +97,15 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
           subject,
           message,
           priority,
+          templateId,
+          assignedToId: assignedToId === "unassigned" ? null : assignedToId,
           channel: "portal_reply",
           sendEmailCopy,
           sendSmsCopy: shouldSendSmsCopy,
+          sendPushCopy,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; sms?: { attempted: number; sent: number; error?: string | null } } | null;
+      const json = await response.json().catch(() => null) as { error?: string; sms?: { attempted: number; sent: number; error?: string | null }; push?: { attempted: number } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Message could not be sent.");
         return;
@@ -106,7 +115,8 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
           ? ` ${json.sms.sent}/${json.sms.attempted} SMS copies sent or queued.`
           : ` ${json?.sms?.error ?? "No SMS copy was sent."}`
         : "";
-      setStatusMessage(`Message sent to ${selectedFamily?.name ?? "the family"}.${smsDetail}`);
+      const pushDetail = sendPushCopy ? ` ${json?.push?.attempted ?? 0} push/in-app notifications queued.` : "";
+      setStatusMessage(`Message sent to ${selectedFamily?.name ?? "the family"}.${smsDetail}${pushDetail}`);
       setMessage("");
       router.refresh();
     });
@@ -135,7 +145,7 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
         ) : null}
         {familyOptions.length ? (
           <>
-            <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)]">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.8fr)]">
               <div className="space-y-1">
                 <Label>Family</Label>
                 <Select value={familyId} onValueChange={(value) => value && setFamilyId(value)}>
@@ -155,8 +165,8 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
                 <Select value={templateId} onValueChange={(value) => value && applyTemplate(value)}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {replyTemplates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>{template.label}</SelectItem>
+                    {templateOptions.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>{template.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -172,6 +182,18 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>Assigned staff</Label>
+                <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    {staffOptions.map((staff) => (
+                      <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Subject</Label>
@@ -180,6 +202,13 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
             <div className="space-y-1">
               <Label>Message</Label>
               <Textarea value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {mergeFields.map((field) => (
+                <Button key={field.token} type="button" variant="outline" size="sm" onClick={() => insertMergeField(field.token)}>
+                  {field.label}
+                </Button>
+              ))}
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
@@ -199,6 +228,15 @@ export function MessageReplyPanel({ familyOptions }: { familyOptions: MessageFam
                 onChange={(event) => setSendSmsCopy(event.target.checked)}
               />
               Text a copy to SMS-preferred guardians ({selectedFamily?.smsRecipientCount ?? 0})
+            </label>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input"
+                checked={sendPushCopy}
+                onChange={(event) => setSendPushCopy(event.target.checked)}
+              />
+              Queue push/in-app notifications for linked portal users
             </label>
             <Button disabled={isPending || !familyId || !message.trim()} onClick={submit}>
               <Send data-icon="inline-start" />

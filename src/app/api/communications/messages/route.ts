@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -23,12 +24,16 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const familyId = clean(body.familyId) || null;
-  const subject = clean(body.subject) || "Portal message";
-  const message = clean(body.message);
+  const templateId = clean(body.templateId) || null;
+  const assignedToId = clean(body.assignedToId) || null;
+  const replyToMessageId = clean(body.replyToMessageId) || null;
+  let subject = clean(body.subject) || "Portal message";
+  let message = clean(body.message);
   const channel = clean(body.channel) || "portal";
   const priority = clean(body.priority) || "normal";
   const sendEmailCopy = Boolean(body.sendEmailCopy);
   const sendSmsCopy = Boolean(body.sendSmsCopy);
+  const sendPushCopy = body.sendPushCopy === undefined ? true : Boolean(body.sendPushCopy);
   const senderIsParent = isParentGuardian(user);
   const senderCanManageOperations = canManageOperations(user);
   const senderCanManageClassroom = canManageClassroomTasks(user);
@@ -53,14 +58,15 @@ export async function POST(request: NextRequest) {
     centerId: string | null;
     billingEmail: string | null;
     guardians: Array<{ userId: string | null; email: string | null; fullName: string; phone: string | null; preferredCommunication: string | null }>;
-    children: Array<{ classroomId: string | null }>;
+    children: Array<{ fullName: string; classroomId: string | null }>;
   } | null = null;
+  let familyCenter: { name: string; email: string | null; phone: string | null } | null = null;
   if (familyId) {
     family = await prisma.family.findUnique({
       where: { id: familyId },
       include: {
         guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
-        children: { select: { classroomId: true } },
+        children: { select: { fullName: true, classroomId: true } },
       },
     });
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
@@ -90,17 +96,105 @@ export async function POST(request: NextRequest) {
     if (!accessGuard.ok) {
       return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
     }
+    familyCenter = family.centerId
+      ? await prisma.center.findUnique({
+          where: { id: family.centerId },
+          select: { name: true, email: true, phone: true },
+        })
+      : null;
+  }
+
+  if (templateId && !templateId.startsWith("default-")) {
+    const template = await prisma.messageTemplate.findFirst({
+      where: {
+        id: templateId,
+        tenantId: user.tenantId,
+        isActive: true,
+        OR: [{ centerId: null }, ...(family?.centerId ? [{ centerId: family.centerId }] : [])],
+      },
+      select: { subject: true, body: true },
+    });
+    if (template) {
+      subject = clean(body.subject) || template.subject;
+      message = clean(body.message) || template.body;
+    }
+  } else if (templateId) {
+    const template = defaultMessageTemplates.find((item) => item.id === templateId);
+    if (template) {
+      subject = clean(body.subject) || template.subject;
+      message = clean(body.message) || template.body;
+    }
+  }
+
+  const primaryGuardian = family?.guardians[0] ?? null;
+  const [guardianFirstName = ""] = (primaryGuardian?.fullName ?? "").split(" ");
+  const templateContext = {
+    familyName: family?.name,
+    guardianFirstName,
+    guardianFullName: primaryGuardian?.fullName,
+    childNames: family?.children.map((child) => child.fullName),
+    centerName: familyCenter?.name,
+    centerEmail: familyCenter?.email,
+    centerPhone: familyCenter?.phone,
+    senderName: user.name,
+  };
+  subject = renderMessageTemplate(subject, templateContext);
+  message = renderMessageTemplate(message, templateContext);
+
+  if (assignedToId) {
+    const assignee = await prisma.user.findFirst({
+      where: {
+        id: assignedToId,
+        tenantId: user.tenantId,
+        isActive: true,
+        ...(family?.centerId && !canAccessAllCenters(user)
+          ? {
+              OR: [
+                { staffProfile: { centerId: family.centerId } },
+                { accessGrants: { some: { isActive: true, centerId: family.centerId } } },
+              ],
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+    if (!assignee) {
+      return NextResponse.json({ ok: false, error: "Assigned staff user is not available for this family." }, { status: 400 });
+    }
+  }
+
+  if (replyToMessageId) {
+    const parentMessage = await prisma.message.findFirst({
+      where: { id: replyToMessageId, ...(familyId ? { familyId } : {}) },
+      select: { id: true },
+    });
+    if (!parentMessage) {
+      return NextResponse.json({ ok: false, error: "Reply target message is not available." }, { status: 400 });
+    }
   }
 
   const created = await prisma.message.create({
     data: {
       familyId,
       senderId: user.id,
+      assignedToId,
+      replyToMessageId,
+      templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+      threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
       subject,
       body: message,
       channel,
       priority,
       sentiment: priority === "high" ? "needs_review" : "neutral",
+      metadata: {
+        deliveryChannels: {
+          portal: true,
+          email: sendEmailCopy,
+          sms: sendSmsCopy,
+          push: sendPushCopy,
+        },
+        templateId,
+      },
     },
   });
 
@@ -117,9 +211,26 @@ export async function POST(request: NextRequest) {
     ? [family.billingEmail, ...family.guardians.map((guardian) => guardian.email)].filter((value): value is string => Boolean(value))
     : [];
 
-  await Promise.all([
+  const notificationUserIds = sendPushCopy
+    ? [...directors.map((director) => director.id), ...parentUserIds]
+    : [];
+  const notificationPreferenceRows = notificationUserIds.length
+    ? await prisma.notificationPreference.findMany({
+        where: {
+          tenantId: user.tenantId,
+          type: "messages",
+          OR: [
+            { userId: { in: notificationUserIds } },
+            { role: { in: senderIsParent ? [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] : [UserRole.PARENT_GUARDIAN] } },
+          ],
+        },
+        select: { userId: true, role: true, pushEnabled: true },
+      })
+    : [];
+  const pushDisabledUserIds = new Set(notificationPreferenceRows.filter((preference) => preference.userId && !preference.pushEnabled).map((preference) => preference.userId as string));
+  const pushNotifications = await Promise.all([
     ...directors.map((director) =>
-      prisma.notification.create({
+      sendPushCopy && !pushDisabledUserIds.has(director.id) ? prisma.notification.create({
         data: {
           userId: director.id,
           title: `New parent message: ${subject}`,
@@ -127,10 +238,10 @@ export async function POST(request: NextRequest) {
           type: "message",
           priority,
         },
-      }),
+      }) : null,
     ),
     ...parentUserIds.map((userId) =>
-      prisma.notification.create({
+      sendPushCopy && !pushDisabledUserIds.has(userId) ? prisma.notification.create({
         data: {
           userId,
           title: `New school message: ${subject}`,
@@ -138,7 +249,7 @@ export async function POST(request: NextRequest) {
           type: "message",
           priority,
         },
-      }),
+      }) : null,
     ),
   ]);
 
@@ -235,8 +346,23 @@ export async function POST(request: NextRequest) {
       smsCopyRequested: sendSmsCopy,
       smsCopyAttempted: sms.attempted,
       smsCopySent: sms.sent,
+      pushCopyRequested: sendPushCopy,
+      pushCopyQueued: pushNotifications.filter(Boolean).length,
+      assignedToId,
+      templateId,
     },
   });
 
-  return NextResponse.json({ ok: true, message: created, email, sms }, { status: 201 });
+  return NextResponse.json({
+    ok: true,
+    message: created,
+    email,
+    sms,
+    push: {
+      attempted: notificationUserIds.length,
+      queued: pushNotifications.filter(Boolean).length,
+      provider: "in_app_notification",
+      configured: Boolean(process.env.PUSH_PROVIDER_KEY),
+    },
+  }, { status: 201 });
 }

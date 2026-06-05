@@ -39,7 +39,18 @@ import { DocumentReviewActions } from "@/components/document-review-actions";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { NotificationReadAction } from "@/components/notification-read-actions";
-import { MessageReplyPanel, type MessageFamilyOption } from "@/components/message-reply-panel";
+import {
+  MessageReplyPanel,
+  type MessageFamilyOption,
+  type MessageMergeFieldOption,
+  type MessageStaffOption,
+  type MessageTemplateOption,
+} from "@/components/message-reply-panel";
+import {
+  NotificationPreferencesPanel,
+  type NotificationPreferenceRow,
+  type NotificationPreferenceType,
+} from "@/components/notification-preferences-panel";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
 import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
@@ -1172,6 +1183,8 @@ export type MessagesPageData = {
   messages: Array<{
     id: string;
     familyId: string | null;
+    assignedToId?: string | null;
+    threadKey?: string | null;
     subject: string | null;
     body: string;
     channel: string;
@@ -1181,6 +1194,25 @@ export type MessagesPageData = {
     createdAt: Date | string;
     family: { name: string; billingEmail: string | null; centerId: string | null } | null;
     sender: { name: string; email: string } | null;
+    assignedTo?: { name: string; email: string } | null;
+  }>;
+  threads: Array<{
+    key: string;
+    familyName: string;
+    centerLabel: string | null;
+    assignedTo: { name: string; email: string } | null;
+    unread: number;
+    priority: number;
+    lastMessageAt: Date | string;
+    messages: Array<{
+      id: string;
+      subject: string | null;
+      body: string;
+      channel: string;
+      priority: string;
+      createdAt: Date | string;
+      sender: { name: string; email: string } | null;
+    }>;
   }>;
   stats: {
     total: number;
@@ -1189,6 +1221,13 @@ export type MessagesPageData = {
     aiReview: number;
   };
   familyOptions: MessageFamilyOption[];
+  templates: MessageTemplateOption[];
+  mergeFields: MessageMergeFieldOption[];
+  staffOptions: MessageStaffOption[];
+  notificationPreferences: NotificationPreferenceRow[];
+  notificationPreferenceTypes: NotificationPreferenceType[];
+  currentRole: string;
+  canManageRoleDefaults: boolean;
   demoMode?: boolean;
 };
 
@@ -1212,7 +1251,58 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
         <StatCard label="AI review queue" value={data.stats.aiReview.toLocaleString()} detail="Human approval before sending" />
       </div>
-      <MessageReplyPanel familyOptions={data.familyOptions} />
+      <MessageReplyPanel
+        familyOptions={data.familyOptions}
+        templates={data.templates}
+        mergeFields={data.mergeFields}
+        staffOptions={data.staffOptions}
+      />
+      <NotificationPreferencesPanel
+        types={data.notificationPreferenceTypes}
+        preferences={data.notificationPreferences}
+        currentRole={data.currentRole}
+        canManageRoleDefaults={data.canManageRoleDefaults}
+      />
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Family Threads</CardTitle>
+          <CardDescription>Per-family reply history, assigned owner, and delivery channel context</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data.threads.map((thread) => (
+            <div key={thread.key} className="rounded-lg border bg-background/60 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium">{thread.familyName}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {thread.centerLabel ?? "All centers"} · last reply {formatDateTime(thread.lastMessageAt)}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={thread.priority ? "destructive" : "outline"}>{thread.priority} priority</Badge>
+                  <Badge variant={thread.unread ? "default" : "outline"}>{thread.unread} unread</Badge>
+                  <Badge variant="outline">{thread.assignedTo?.name ?? "Unassigned"}</Badge>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {thread.messages.map((message) => (
+                  <div key={message.id} className="rounded-md border bg-card/70 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>{message.sender?.name ?? "System"} · {message.channel}</span>
+                      <span>{formatDateTime(message.createdAt)}</span>
+                    </div>
+                    <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
+                    <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {!data.threads.length ? (
+            <p className="text-sm text-muted-foreground">No family threads are visible for this scope yet.</p>
+          ) : null}
+        </CardContent>
+      </Card>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Conversations</CardTitle>
@@ -1235,7 +1325,10 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                   <TableCell>{formatDateTime(message.createdAt)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{message.subject ?? message.family?.name ?? "Untitled message"}</div>
-                    <div className="text-xs text-muted-foreground">{message.family?.name ?? message.sender?.name ?? "System"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {message.family?.name ?? message.sender?.name ?? "System"}
+                      {message.assignedTo ? ` · assigned to ${message.assignedTo.name}` : ""}
+                    </div>
                     <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{message.body}</div>
                   </TableCell>
                   <TableCell>{message.channel}</TableCell>

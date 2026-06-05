@@ -55,6 +55,7 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
+import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
@@ -1041,7 +1042,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       : allCenters
         ? {}
         : { OR: [{ family: { is: familyScopeWhere } }, { familyId: null }] };
-    const [messages, families, total, unread, priority, aiReview] = await Promise.all([
+    const [messages, families, templates, staffUsers, notificationPreferences, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
         orderBy: { createdAt: "desc" },
@@ -1055,6 +1056,12 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             },
           },
           sender: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
+          assignedTo: {
             select: {
               name: true,
               email: true,
@@ -1078,6 +1085,40 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             },
           },
         },
+      }),
+      prisma.messageTemplate.findMany({
+        where: {
+          tenantId: user.tenantId,
+          isActive: true,
+          ...(allCenters ? {} : { OR: [{ centerId: null }, { centerId: scopedCenterIds }] }),
+        },
+        orderBy: [{ centerId: "asc" }, { category: "asc" }, { name: "asc" }],
+        take: 100,
+      }),
+      prisma.user.findMany({
+        where: {
+          tenantId: user.tenantId,
+          isActive: true,
+          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN, UserRole.TEACHER] },
+          ...(allCenters
+            ? {}
+            : {
+                OR: [
+                  { staffProfile: { centerId: scopedCenterIds } },
+                  { accessGrants: { some: { isActive: true, centerId: scopedCenterIds } } },
+                ],
+              }),
+        },
+        orderBy: { name: "asc" },
+        take: 250,
+        select: { id: true, name: true, email: true },
+      }),
+      prisma.notificationPreference.findMany({
+        where: {
+          tenantId: user.tenantId,
+          OR: [{ userId: user.id }, { role: user.role }],
+        },
+        orderBy: [{ userId: "desc" }, { type: "asc" }],
       }),
       prisma.message.count({ where: messageWhere }),
       prisma.message.count({ where: { ...messageWhere, readAt: null } }),
@@ -1111,11 +1152,79 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           .map((guardian) => guardian.phone),
       ).length,
     }));
+    const templateOptions = templates.length
+      ? templates.map((template) => ({
+          id: template.id,
+          name: template.name,
+          subject: template.subject,
+          body: template.body,
+          category: template.category,
+          channel: template.channel,
+          mergeFields: normalizeMergeFields(template.mergeFields),
+        }))
+      : defaultMessageTemplates;
+    type MessageThread = {
+      key: string;
+      familyName: string;
+      centerLabel: string | null;
+      assignedTo: { name: string; email: string } | null;
+      unread: number;
+      priority: number;
+      lastMessageAt: Date | string;
+      messages: Array<{
+        id: string;
+        subject: string | null;
+        body: string;
+        channel: string;
+        priority: string;
+        createdAt: Date | string;
+        sender: { name: string; email: string } | null;
+      }>;
+    };
+    const threadMap = messages.reduce((map, message) => {
+        const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
+        const existing = map.get(key) ?? {
+          key,
+          familyName: message.family?.name ?? "Internal thread",
+          centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
+          assignedTo: message.assignedTo ?? null,
+          unread: 0,
+          priority: 0,
+          lastMessageAt: message.createdAt,
+          messages: [],
+        };
+        existing.assignedTo = existing.assignedTo ?? message.assignedTo ?? null;
+        existing.unread += message.readAt ? 0 : 1;
+        existing.priority += ["high", "urgent"].includes(message.priority) ? 1 : 0;
+        if (new Date(message.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+          existing.lastMessageAt = message.createdAt;
+        }
+        existing.messages.push({
+          id: message.id,
+          subject: message.subject,
+          body: message.body,
+          channel: message.channel,
+          priority: message.priority,
+          createdAt: message.createdAt,
+          sender: message.sender,
+        });
+        return map;
+      }, new Map<string, MessageThread>());
+    const threads = Array.from(threadMap.values())
+      .map((thread) => ({
+        ...thread,
+        messages: thread.messages
+          .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+          .slice(-5),
+      }))
+      .sort((left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime())
+      .slice(0, 20);
 
     return (
       <MessagesPage
         data={{
           messages: visibleMessages,
+          threads,
           stats: demoMode
             ? {
                 total: visibleMessages.length,
@@ -1127,6 +1236,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
               }
             : { total, unread, priority, aiReview },
           familyOptions: demoMode ? [] : familyOptions,
+          templates: templateOptions,
+          mergeFields: messageMergeFields,
+          staffOptions: staffUsers,
+          notificationPreferences,
+          notificationPreferenceTypes,
+          currentRole: user.role,
+          canManageRoleDefaults: canManageOperations(user),
           demoMode,
         }}
       />

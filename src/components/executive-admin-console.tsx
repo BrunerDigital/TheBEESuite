@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Archive, Building2, FileUp, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Archive, Building2, CheckCircle2, FileUp, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
 import {
   CRM_LOCATION_ID_EXAMPLE,
   defaultCenterNameFromCrmLocationId,
@@ -75,6 +75,13 @@ type Props = {
   users: UserOption[];
 };
 
+type ExecutiveActionResponse = {
+  error?: string;
+  center?: { name?: string; crmLocationId?: string | null; status?: string };
+  user?: { name?: string; email?: string; isActive?: boolean; sessionVersion?: number };
+  auth?: { passwordResetSent?: boolean; authUserCreated?: boolean };
+};
+
 const roles = [
   ["BRAND_ADMIN", "Executive / brand admin"],
   ["REGIONAL_MANAGER", "Regional manager"],
@@ -119,6 +126,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [activeAction, setActiveAction] = useState("");
   const [centerForm, setCenterForm] = useState(blankCenterForm());
   const [ownerGroupForm, setOwnerGroupForm] = useState({ name: "", ownerType: "franchisee", billingEmail: "", contactName: "" });
   const [userForm, setUserForm] = useState({
@@ -192,23 +200,56 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     });
   }
 
-  function post(action: string, payload: Record<string, unknown>, success: string, after?: () => void) {
+  function executiveSuccessDetail(action: string, fallback: string, json: ExecutiveActionResponse | null) {
+    if (action === "saveCenter" && json?.center) {
+      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} saved. Status: ${json.center.status ?? "updated"}.`;
+    }
+    if (action === "setCenterStatus" && json?.center) {
+      return `${json.center.crmLocationId ?? json.center.name ?? "Location"} is now ${json.center.status ?? "updated"}.`;
+    }
+    if (action === "saveUser" && json?.user) {
+      const resetDetail = json.auth?.passwordResetSent ? " Setup/reset email requested." : "";
+      return `${json.user.email ?? json.user.name ?? "User"} saved and scoped.${resetDetail}`;
+    }
+    if (action === "resetUserPassword" && json?.user) {
+      return json.auth?.passwordResetSent
+        ? `Password setup/reset email sent to ${json.user.email ?? "the user"}.`
+        : `Temporary password set for ${json.user.email ?? "the user"}.`;
+    }
+    if (action === "setUserStatus" && json?.user) {
+      return `${json.user.email ?? "User"} ${json.user.isActive ? "reactivated" : "deactivated"}.`;
+    }
+    if (action === "revokeUserSessions" && json?.user) {
+      return `Active sessions revoked for ${json.user.email ?? "the user"}. New session version: ${json.user.sessionVersion ?? "updated"}.`;
+    }
+    return fallback;
+  }
+
+  function post(action: string, payload: Record<string, unknown>, success: string, after?: () => void, confirmation?: string) {
+    if (confirmation && !window.confirm(confirmation)) return;
     startTransition(async () => {
       setMessage("");
       setError("");
-      const response = await fetch("/api/admin/executive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...payload }),
-      });
-      const json = (await response.json().catch(() => null)) as { error?: string } | null;
-      if (!response.ok) {
-        setError(json?.error || "Executive action failed.");
-        return;
+      setActiveAction(success);
+      try {
+        const response = await fetch("/api/admin/executive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, ...payload }),
+        });
+        const json = (await response.json().catch(() => null)) as ExecutiveActionResponse | null;
+        if (!response.ok) {
+          setError(json?.error || "Executive action failed.");
+          return;
+        }
+        setMessage(executiveSuccessDetail(action, success, json));
+        after?.();
+        router.refresh();
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : "Executive action failed before the server responded.");
+      } finally {
+        setActiveAction("");
       }
-      setMessage(success);
-      after?.();
-      router.refresh();
     });
   }
 
@@ -227,7 +268,16 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   }
 
   function setCenterStatusById(centerId: string, status: string) {
-    post("setCenterStatus", { centerId, status }, status === "closed" ? "Location removed from active schools." : "Location status updated.");
+    const center = centers.find((item) => item.id === centerId);
+    post(
+      "setCenterStatus",
+      { centerId, status },
+      status === "closed" ? "Location removed from active schools." : "Location status updated.",
+      undefined,
+      status === "closed"
+        ? `Archive ${center?.crmLocationId ?? center?.name ?? "this location"}? It will be removed from active school dropdowns but CRM, billing, FTE, and audit history will stay intact.`
+        : undefined,
+    );
   }
 
   function createOwnerGroup() {
@@ -241,39 +291,67 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   }
 
   function resetPassword() {
-    post("resetUserPassword", resetForm, resetForm.password ? "Temporary password set." : "Password reset email sent.", () => setResetForm({ email: "", password: "" }));
+    post(
+      "resetUserPassword",
+      resetForm,
+      resetForm.password ? "Temporary password set." : "Password reset email sent.",
+      () => setResetForm({ email: "", password: "" }),
+      resetForm.password
+        ? `Set a temporary password for ${resetForm.email}? The user will be required to replace it.`
+        : `Send a password setup/reset email to ${resetForm.email}?`,
+    );
   }
 
   function setUserStatus(status: "active" | "inactive") {
-    post("setUserStatus", { email: resetForm.email, status }, status === "active" ? "User reactivated." : "User deactivated.");
+    post(
+      "setUserStatus",
+      { email: resetForm.email, status },
+      status === "active" ? "User reactivated." : "User deactivated.",
+      undefined,
+      status === "inactive" ? `Deactivate ${resetForm.email}? The account will lose access until reactivated.` : undefined,
+    );
   }
 
   function revokeSessions() {
-    post("revokeUserSessions", { email: resetForm.email }, "Active sessions revoked. The user must log in again.");
+    post(
+      "revokeUserSessions",
+      { email: resetForm.email },
+      "Active sessions revoked. The user must log in again.",
+      undefined,
+      `Log ${resetForm.email} out of every device? They will need to sign in again.`,
+    );
   }
 
   function importBulkRows() {
+    if (!window.confirm(`Import ${bulkRows.length} executive row${bulkRows.length === 1 ? "" : "s"}? Location rows will be applied before user rows.`)) return;
     startTransition(async () => {
       setMessage("");
       setError("");
+      setActiveAction("Importing executive CSV rows...");
       setBulkResults([]);
-      const response = await fetch("/api/admin/executive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "bulkImport", rows: bulkRows }),
-      });
-      const json = (await response.json().catch(() => null)) as {
-        error?: string;
-        summary?: { imported: number; failed: number };
-        results?: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>;
-      } | null;
-      if (!response.ok) {
-        setError(json?.error || "Bulk import failed.");
-        return;
+      try {
+        const response = await fetch("/api/admin/executive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "bulkImport", rows: bulkRows }),
+        });
+        const json = (await response.json().catch(() => null)) as {
+          error?: string;
+          summary?: { imported: number; failed: number };
+          results?: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>;
+        } | null;
+        if (!response.ok) {
+          setError(json?.error || "Bulk import failed.");
+          return;
+        }
+        setBulkResults(json?.results ?? []);
+        setMessage(`Bulk import finished: ${json?.summary?.imported ?? 0} imported, ${json?.summary?.failed ?? 0} failed.`);
+        router.refresh();
+      } catch (fetchError) {
+        setError(fetchError instanceof Error ? fetchError.message : "Bulk import failed before the server responded.");
+      } finally {
+        setActiveAction("");
       }
-      setBulkResults(json?.results ?? []);
-      setMessage(`Bulk import finished: ${json?.summary?.imported ?? 0} imported, ${json?.summary?.failed ?? 0} failed.`);
-      router.refresh();
     });
   }
 
@@ -313,9 +391,16 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
       <CardContent className="space-y-6">
         {message ? (
           <Alert>
-            <Save className="size-4" />
-            <AlertTitle>Saved</AlertTitle>
+            <CheckCircle2 className="size-4" />
+            <AlertTitle>Completed</AlertTitle>
             <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        ) : null}
+        {isPending && activeAction ? (
+          <Alert className="border-primary/30 bg-primary/10">
+            <Save className="size-4" />
+            <AlertTitle>Working</AlertTitle>
+            <AlertDescription>{activeAction}</AlertDescription>
           </Alert>
         ) : null}
         {error ? (
@@ -714,7 +799,21 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => loadUserForEdit(user)}>Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => setResetForm((current) => ({ ...current, email: user.email }))}>Reset</Button>
-                          <Button variant="outline" size="sm" onClick={() => post("revokeUserSessions", { email: user.email }, "Active sessions revoked. The user must log in again.")}>Sessions</Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              post(
+                                "revokeUserSessions",
+                                { email: user.email },
+                                "Active sessions revoked. The user must log in again.",
+                                undefined,
+                                `Log ${user.email} out of every device? They will need to sign in again.`,
+                              )
+                            }
+                          >
+                            Sessions
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

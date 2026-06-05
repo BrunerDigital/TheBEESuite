@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { validateDailyReportMediaLink, validateMediaUploadInput } from "@/lib/portal-guardrails";
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
     where: { id: childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
-      family: { select: { centerId: true } },
+      family: { select: { centerId: true, custodyNotes: true } },
     },
   });
   if (!child) {
@@ -166,9 +167,11 @@ export async function POST(request: NextRequest) {
       sharedWithParents: canShareWithParents,
       photoVideoPermission: child.photoVideoPermission,
       storageProvider: storageKey ? "supabase" : "external_url",
+      custodyWarning: hasCustodyWarning(child.family),
     },
   });
 
+  const custodyWarning = custodyWarningSummary(child.family);
   return NextResponse.json(
     {
       ok: true,
@@ -176,6 +179,7 @@ export async function POST(request: NextRequest) {
       warning: sharedWithParents && !child.photoVideoPermission
         ? "Photo saved for director review. It is not visible to parents because photo/video permission is not enabled for this child."
         : undefined,
+      custodyWarning,
     },
     { status: 201 },
   );

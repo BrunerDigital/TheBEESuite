@@ -518,7 +518,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         orderBy: { expiresAt: "asc" },
         take: 150,
         include: {
-          family: { select: { name: true, centerId: true } },
+          family: { select: { name: true, centerId: true, custodyNotes: true } },
           child: { select: { fullName: true, family: { select: { centerId: true } }, classroom: { select: { name: true } } } },
         },
       }),
@@ -709,7 +709,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         orderBy: { fullName: "asc" },
         take: 150,
         include: {
-          family: { select: { name: true, centerId: true } },
+          family: { select: { name: true, centerId: true, custodyNotes: true } },
           classroom: {
             select: {
               name: true,
@@ -943,6 +943,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         ageGroup: true,
         enrollmentStatus: true,
         classroom: { select: { id: true, name: true } },
+        family: { select: { custodyNotes: true } },
       },
     });
     const classroomRatios = await prisma.classroom.findMany({
@@ -2722,7 +2723,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         select: {
           id: true,
           fullName: true,
-          family: { select: { name: true, centerId: true } },
+          family: { select: { name: true, centerId: true, custodyNotes: true } },
         },
       }),
     ]);

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 
 type ChildOption = {
   id: string;
@@ -18,6 +19,7 @@ type ChildOption = {
   ageGroup: string;
   enrollmentStatus: string;
   classroom: { id: string; name: string } | null;
+  family?: { custodyNotes: string | null } | null;
   attendance?: AttendanceSnapshot;
 };
 
@@ -155,6 +157,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
   const [isPending, startTransition] = useTransition();
 
   const selectedChild = useMemo(() => roster.find((child) => child.id === selectedChildId) ?? roster[0], [roster, selectedChildId]);
+  const selectedCustodyWarning = custodyWarningSummary(selectedChild?.family);
   const ratioByClassroomId = useMemo(() => {
     return new Map(classroomRatios.map((classroom) => [classroom.classroomId, classroom]));
   }, [classroomRatios]);
@@ -355,6 +358,16 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+      {selectedCustodyWarning ? (
+        <Alert variant="destructive">
+          <ShieldAlert className="size-4" />
+          <AlertTitle>{CUSTODY_WARNING_LABEL}: {selectedChild?.fullName}</AlertTitle>
+          <AlertDescription>
+            {selectedCustodyWarning}
+            {custodyWarningPreview(selectedChild?.family) ? ` Note preview: ${custodyWarningPreview(selectedChild?.family)}` : ""}
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <Card className="glass-panel">
         <CardHeader>
@@ -412,6 +425,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
                         <span className="min-w-0">
                           <span className="font-medium">{child.fullName}</span>
                           <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
+                          {hasCustodyWarning(child.family) ? (
+                            <span className="mt-1 block text-xs font-medium text-destructive">
+                              {CUSTODY_WARNING_LABEL}: review before pickup or parent communication
+                            </span>
+                          ) : null}
                         </span>
                         <Badge variant="outline" className="shrink-0">{attendanceLabel(attendance)}</Badge>
                       </button>

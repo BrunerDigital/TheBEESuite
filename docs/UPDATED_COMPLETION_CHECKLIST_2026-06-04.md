@@ -66,7 +66,7 @@ Status legend:
 - [x] Director FTE submission flow exists.
 - [x] Onboarding now captures director-provided classroom, tuition/rate, subsidy, balance, and invoice/payment setup sections.
 - [x] Attendance, kiosk, daily reports, incidents, documents, messages, announcements, calendar, billing, and payments pages exist.
-- [ ] Complete custody visibility controls and staff-facing custody warnings throughout the UI.
+- [x] Complete custody visibility controls and staff-facing custody warnings throughout the UI.
 - [ ] Complete document upload/review/expiration workflow per family/child/staff.
 - [x] Add family merge/deduplication tools.
 - [x] Add staff time clock.

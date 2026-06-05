@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { parseOperationalDate } from "@/lib/date-guardrails";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     where: { id: childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
-      family: { select: { centerId: true } },
+      family: { select: { centerId: true, custodyNotes: true } },
     },
   });
 
@@ -105,8 +106,9 @@ export async function POST(request: NextRequest) {
       childId,
       parentNotified: incident.parentNotified,
       requiresReview: true,
+      custodyWarning: hasCustodyWarning(child.family),
     },
   });
 
-  return NextResponse.json({ ok: true, incident }, { status: 201 });
+  return NextResponse.json({ ok: true, incident, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
 }

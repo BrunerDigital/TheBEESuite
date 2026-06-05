@@ -23,6 +23,7 @@ import {
   Sparkles,
   Star,
   Workflow,
+  ShieldAlert,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -71,6 +72,7 @@ import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import type { FteSnapshot } from "@/lib/fte-reports";
 import type { IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
@@ -3262,7 +3264,17 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
                   <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
                   <TableCell>{family.children.map((child) => `${child.fullName} (${child.ageGroup})`).join(", ") || "None"}</TableCell>
                   <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
-                  <TableCell>{family.custodyNotes ? <Badge variant="destructive">Custody note</Badge> : "Standard"}</TableCell>
+                  <TableCell>
+                    {hasCustodyWarning(family) ? (
+                      <div className="space-y-1">
+                        <Badge variant="destructive">
+                          <ShieldAlert data-icon="inline-start" />
+                          {CUSTODY_WARNING_LABEL}
+                        </Badge>
+                        <div className="max-w-xs text-xs text-muted-foreground">{custodyWarningPreview(family)}</div>
+                      </div>
+                    ) : "Standard"}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -3331,7 +3343,7 @@ export type ChildProfilesPageData = {
     startDate: Date | string | null;
     photoVideoPermission: boolean;
     fieldTripPermission: boolean;
-    family: { name: string; centerId: string | null };
+    family: { name: string; centerId: string | null; custodyNotes: string | null };
     classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
     _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
   }>;
@@ -3388,10 +3400,23 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
                     <div className="font-medium">{child.fullName}</div>
                     <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
                   </TableCell>
-                  <TableCell>{child.family.name}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{child.family.name}</div>
+                    {hasCustodyWarning(child.family) ? (
+                      <Badge variant="destructive" className="mt-1">
+                        <ShieldAlert data-icon="inline-start" />
+                        {CUSTODY_WARNING_LABEL}
+                      </Badge>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
                   <TableCell>{child.enrollmentStatus}</TableCell>
-                  <TableCell>{child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents</TableCell>
+                  <TableCell>
+                    {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
+                    {hasCustodyWarning(child.family) ? (
+                      <div className="mt-1 text-xs text-destructive">Review custody/pickup restrictions before release or contact changes.</div>
+                    ) : null}
+                  </TableCell>
                   <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
                 </TableRow>
               ))}

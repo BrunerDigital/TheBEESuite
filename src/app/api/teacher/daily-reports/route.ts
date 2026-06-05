@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 import { parseTeacherDailyReportPayload } from "@/lib/teacher-daily-report";
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
     where: { id: dailyReport.childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
-      family: { select: { centerId: true } },
+      family: { select: { centerId: true, custodyNotes: true } },
     },
   });
 
@@ -80,8 +81,9 @@ export async function POST(request: NextRequest) {
         diapers: dailyReport.diapers.length,
         activities: dailyReport.activities.length,
       },
+      custodyWarning: hasCustodyWarning(child.family),
     },
   });
 
-  return NextResponse.json({ ok: true, report }, { status: 201 });
+  return NextResponse.json({ ok: true, report, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
 }

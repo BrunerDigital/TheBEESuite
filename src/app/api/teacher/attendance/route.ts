@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { normalizeCheckAction, readCenterTimeZone, startOfServiceDay, validateNextCheckAction } from "@/lib/attendance-state";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { parseOperationalDate } from "@/lib/date-guardrails";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     where: { id: childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
-      family: { select: { centerId: true } },
+      family: { select: { centerId: true, custodyNotes: true } },
     },
   });
 
@@ -122,8 +123,9 @@ export async function POST(request: NextRequest) {
       childId,
       status,
       checkLogId: checkLog?.id ?? null,
+      custodyWarning: hasCustodyWarning(child.family),
     },
   });
 
-  return NextResponse.json({ ok: true, record, checkLog }, { status: 201 });
+  return NextResponse.json({ ok: true, record, checkLog, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
 }

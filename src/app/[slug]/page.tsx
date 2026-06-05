@@ -923,6 +923,13 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         : staffProfile?.centerId
           ? { classroom: { is: { centerId: staffProfile.centerId } } }
           : { classroom: { is: { centerId: scopedCenterIds } } };
+    const classroomWhereForTeacher: Prisma.ClassroomWhereInput = allCenters
+      ? {}
+      : staffProfile?.classroomId
+        ? { id: staffProfile.classroomId }
+        : staffProfile?.centerId
+          ? { centerId: staffProfile.centerId }
+          : { centerId: scopedCenterIds };
     const children = await prisma.child.findMany({
       where: childWhereForTeacher,
       orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
@@ -933,6 +940,22 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         ageGroup: true,
         enrollmentStatus: true,
         classroom: { select: { id: true, name: true } },
+      },
+    });
+    const classroomRatios = await prisma.classroom.findMany({
+      where: classroomWhereForTeacher,
+      orderBy: { name: "asc" },
+      take: 80,
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        ratioRule: true,
+        _count: {
+          select: {
+            staff: { where: { user: { role: UserRole.TEACHER } } },
+          },
+        },
       },
     });
     const childIds = children.map((child) => child.id);
@@ -971,7 +994,19 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       };
     });
 
-    return <TeacherMobileWorkspace roster={roster} teacherName={user.name} />;
+    return (
+      <TeacherMobileWorkspace
+        roster={roster}
+        teacherName={user.name}
+        classroomRatios={classroomRatios.map((classroom) => ({
+          classroomId: classroom.id,
+          name: classroom.name,
+          capacity: classroom.capacity,
+          ratioRule: classroom.ratioRule,
+          assignedStaff: classroom._count.staff,
+        }))}
+      />
+    );
   }
 
   if (slug === "messages") {

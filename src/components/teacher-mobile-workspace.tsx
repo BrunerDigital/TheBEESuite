@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 
 type ChildOption = {
   id: string;
@@ -23,6 +24,15 @@ type ChildOption = {
 type Props = {
   roster: ChildOption[];
   teacherName: string;
+  classroomRatios?: ClassroomRatioSnapshot[];
+};
+
+type ClassroomRatioSnapshot = {
+  classroomId: string;
+  name: string;
+  capacity: number;
+  ratioRule: string | null;
+  assignedStaff: number;
 };
 
 type AttendanceSnapshot = {
@@ -120,7 +130,7 @@ function createActivityDraft(): ActivityDraft {
   return { id: draftId("activity"), title: "", notes: "" };
 }
 
-export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
+export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = [] }: Props) {
   const firstChild = roster[0]?.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
   const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
@@ -145,12 +155,18 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const selectedChild = useMemo(() => roster.find((child) => child.id === selectedChildId) ?? roster[0], [roster, selectedChildId]);
+  const ratioByClassroomId = useMemo(() => {
+    return new Map(classroomRatios.map((classroom) => [classroom.classroomId, classroom]));
+  }, [classroomRatios]);
   const byClassroom = useMemo(() => {
-    return roster.reduce<Record<string, ChildOption[]>>((acc, child) => {
-      const key = child.classroom?.name ?? "Unassigned";
-      (acc[key] ||= []).push(child);
+    const grouped = roster.reduce<Record<string, { id: string | null; name: string; children: ChildOption[] }>>((acc, child) => {
+      const key = child.classroom?.id ?? "unassigned";
+      acc[key] ||= { id: child.classroom?.id ?? null, name: child.classroom?.name ?? "Unassigned", children: [] };
+      acc[key].children.push(child);
       return acc;
     }, {});
+
+    return Object.values(grouped);
   }, [roster]);
 
   function attendanceFor(child: ChildOption) {
@@ -346,11 +362,45 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
           <CardDescription>{roster.length} children visible to your role</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-2">
-          {Object.entries(byClassroom).map(([classroom, roster]) => (
-            <div key={classroom} className="rounded-xl border bg-background/40 p-3">
-              <div className="mb-2 font-medium">{classroom}</div>
+          {byClassroom.map((classroom) => {
+            const ratioSnapshot = classroom.id ? ratioByClassroomId.get(classroom.id) : null;
+            const presentChildren = classroom.children.filter((child) => {
+              const attendance = attendanceFor(child);
+              return attendance.latestLogType === "check_in" || attendance.status === "present";
+            }).length;
+            const ratioWarning = ratioSnapshot
+              ? evaluateClassroomRatio({
+                  children: presentChildren,
+                  staff: ratioSnapshot.assignedStaff,
+                  capacity: ratioSnapshot.capacity,
+                  ratioRule: ratioSnapshot.ratioRule,
+                })
+              : null;
+
+            return (
+            <div key={classroom.id ?? classroom.name} className="rounded-xl border bg-background/40 p-3">
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <div className="font-medium">{classroom.name}</div>
+                  {ratioSnapshot ? (
+                    <div className="text-xs text-muted-foreground">
+                      {presentChildren} present / {ratioSnapshot.assignedStaff} teacher{ratioSnapshot.assignedStaff === 1 ? "" : "s"} · {ratioSnapshot.ratioRule ?? "ratio not set"}
+                    </div>
+                  ) : null}
+                </div>
+                {ratioWarning ? (
+                  <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
+                ) : null}
+              </div>
+              {ratioWarning && ratioWarning.status !== "healthy" ? (
+                <Alert variant={ratioWarning.tone === "destructive" ? "destructive" : "default"} className="mb-3">
+                  <AlertCircle className="size-4" />
+                  <AlertTitle>{ratioWarning.label}</AlertTitle>
+                  <AlertDescription>{ratioWarning.detail}</AlertDescription>
+                </Alert>
+              ) : null}
               <div className="grid gap-2">
-                {roster.slice(0, 12).map((child) => {
+                {classroom.children.slice(0, 12).map((child) => {
                   const attendance = attendanceFor(child);
                   const isCheckedIn = attendance.latestLogType === "check_in";
                   return (
@@ -417,7 +467,8 @@ export function TeacherMobileWorkspace({ roster, teacherName }: Props) {
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 

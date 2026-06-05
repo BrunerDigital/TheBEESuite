@@ -55,6 +55,7 @@ import { RequiredDocumentChecklistPanel } from "@/components/required-document-c
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import type { FteSnapshot } from "@/lib/fte-reports";
 import type { IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
@@ -1540,6 +1541,18 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
   const children = data.classrooms.reduce((sum, classroom) => sum + classroom._count.children, 0);
   const capacity = data.classrooms.reduce((sum, classroom) => sum + classroom.capacity, 0);
   const staff = data.classrooms.reduce((sum, classroom) => sum + classroom._count.staff, 0);
+  const ratioRows = data.classrooms.map((classroom) => ({
+    classroom,
+    ratioWarning: evaluateClassroomRatio({
+      children: classroom._count.children,
+      staff: classroom._count.staff,
+      capacity: classroom.capacity,
+      ratioRule: classroom.ratioRule,
+    }),
+  }));
+  const ratioWarningCount = ratioRows.filter(({ ratioWarning }) =>
+    ["over_capacity", "over_ratio", "missing_staff"].includes(ratioWarning.status),
+  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -1558,7 +1571,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <StatCard label="Classrooms" value={data.classrooms.length} />
         <StatCard label="Children assigned" value={children} />
         <StatCard label="Licensed seats shown" value={capacity} />
-        <StatCard label="Teachers assigned" value={staff} />
+        <StatCard label="Ratio warnings" value={ratioWarningCount} detail={`${staff} teachers assigned`} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
@@ -1575,11 +1588,12 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
                 <TableHead>Children</TableHead>
                 <TableHead>Teachers</TableHead>
                 <TableHead>Ratio rule</TableHead>
+                <TableHead>Ratio status</TableHead>
                 <TableHead>Incidents</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.classrooms.map((classroom) => (
+              {ratioRows.map(({ classroom, ratioWarning }) => (
                 <TableRow key={classroom.id}>
                   <TableCell className="font-medium">{classroom.name}</TableCell>
                   <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
@@ -1587,6 +1601,12 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
                   <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
                   <TableCell>{classroom._count.staff}</TableCell>
                   <TableCell>{classroom.ratioRule ?? "Not set"}</TableCell>
+                  <TableCell>
+                    <div className="flex max-w-64 flex-col gap-1">
+                      <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
+                      <span className="text-xs text-muted-foreground">{ratioWarning.detail}</span>
+                    </div>
+                  </TableCell>
                   <TableCell>{classroom._count.incidents}</TableCell>
                 </TableRow>
               ))}

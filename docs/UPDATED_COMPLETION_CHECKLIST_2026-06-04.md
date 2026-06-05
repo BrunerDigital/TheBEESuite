@@ -206,7 +206,7 @@ Status legend:
 - [x] Import rollback/export backup exists.
 - [ ] Run final import mapping against real exports from each live Kid City USA location.
 - [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
-- [ ] Add duplicate matching controls for families/children/guardians.
+- [x] Add duplicate matching controls for families/children/guardians.
 - [ ] Add final migration runbook for switching each location off ProCare.
 
 ## Messaging, Notifications, And AI

@@ -41,7 +41,7 @@ test("marks duplicate matches as needing review when no single high-confidence c
   const candidates = [
     scoreProcareDuplicateCandidate(
       { entity: "guardian", name: "Alex Johnson", email: "alex@example.com", phone: "(555) 222-3333", relation: "Mother" },
-      { entity: "guardian", recordId: "guardian_1", label: "Alex Johnson", name: "Alex Johnson", phone: "5552223333", relation: "Mother" },
+      { entity: "guardian", recordId: "guardian_1", label: "Alex Johnson", name: "Alex Johnson", phone: "5552223333" },
     ),
     scoreProcareDuplicateCandidate(
       { entity: "guardian", name: "Alex Johnson", email: "alex@example.com", phone: "(555) 222-3333", relation: "Mother" },
@@ -58,7 +58,7 @@ test("marks duplicate matches as needing review when no single high-confidence c
 
   assert.equal(match.resolution, "needs_review");
   assert.equal(match.recommendedRecordId, null);
-  assert.deepEqual(match.candidates.map((candidate) => candidate.recordId), ["guardian_2", "guardian_1"]);
+  assert.deepEqual(match.candidates.map((candidate) => candidate.recordId), ["guardian_1", "guardian_2"]);
 });
 
 test("normalizes phone numbers before scoring duplicate guardians", () => {

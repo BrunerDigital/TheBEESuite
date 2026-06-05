@@ -39,7 +39,7 @@ const steps = [
   {
     title: "School setup",
     icon: ClipboardList,
-    fields: ["classroomSetup", "tuitionRateSetup", "subsidyRules", "balanceRules", "invoiceRules"],
+    fields: ["classroomSetup", "tuitionRateSetup", "subsidyRules", "balanceRules", "invoiceRules", "licensingSetup"],
   },
   {
     title: "Payouts",
@@ -76,6 +76,7 @@ type FormState = {
   subsidyRules: string;
   balanceRules: string;
   invoiceRules: string;
+  licensingSetup: string;
   notes: string;
 };
 
@@ -131,6 +132,7 @@ const initialForm: FormState = {
   subsidyRules: "",
   balanceRules: "",
   invoiceRules: "",
+  licensingSetup: "",
   notes: "",
 };
 
@@ -510,6 +512,7 @@ export function OnboardingFlow() {
                         ["Subsidy rules", form.subsidyRules ? "Provided" : "Missing"],
                         ["Balance rules", form.balanceRules ? "Provided" : "Missing"],
                         ["Invoice rules", form.invoiceRules ? "Provided" : "Missing"],
+                        ["Licensing setup", form.licensingSetup ? "Provided" : "Missing"],
                         ["Timeline", form.timeline || "Missing"],
                         ["Priority", form.priority || "Missing"],
                       ].map(([label, value]) => (

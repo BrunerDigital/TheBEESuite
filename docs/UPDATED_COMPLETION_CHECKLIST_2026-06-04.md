@@ -250,7 +250,7 @@ Status legend:
 - [x] Add director document review states.
 - [x] Add expiration reminders for family/staff/child documents.
 - [x] Integrate real e-signature provider or complete internal signature capture flow.
-- [ ] Add state-specific licensing configuration.
+- [x] Add state-specific licensing configuration.
 - [ ] Add medication log workflow.
 - [ ] Add compliance report export.
 - [ ] Add incident admin review workflow with parent acknowledgement status.

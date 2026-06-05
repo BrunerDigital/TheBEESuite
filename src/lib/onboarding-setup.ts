@@ -29,6 +29,12 @@ export const schoolOnboardingSetupSections = [
     label: "Invoice and payment rules",
     placeholder: "Invoices sent Fridays\nDue Mondays\nLate fee after Tuesday\nACH/card accepted",
   },
+  {
+    field: "licensingSetup",
+    storageKey: "licensingConfiguration",
+    label: "State licensing configuration",
+    placeholder: "State agency and license number\nInspection and renewal dates\nRequired drills, child documents, staff credentials, medication rules",
+  },
 ] as const;
 
 export type SchoolOnboardingSetupField = (typeof schoolOnboardingSetupSections)[number]["field"];

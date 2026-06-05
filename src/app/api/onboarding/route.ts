@@ -33,6 +33,7 @@ type OnboardingPayload = {
   subsidyRules?: unknown;
   balanceRules?: unknown;
   invoiceRules?: unknown;
+  licensingSetup?: unknown;
   notes?: unknown;
   pageUrl?: unknown;
 };
@@ -109,6 +110,7 @@ function normalizePayload(input: OnboardingPayload) {
       subsidyRules: input.subsidyRules,
       balanceRules: input.balanceRules,
       invoiceRules: input.invoiceRules,
+      licensingSetup: input.licensingSetup,
     }),
     notes: clean(input.notes),
     pageUrl: clean(input.pageUrl),

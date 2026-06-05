@@ -42,7 +42,7 @@ import { AuthLikePage, ModulePage } from "@/components/module-page";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { getModule, modules } from "@/lib/demo-data";
-import { canAccessAllCenters, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -55,6 +55,7 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
+import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
@@ -89,6 +90,7 @@ async function getVisibleCenters(user: CurrentUser) {
       email: true,
       status: true,
       licensedCapacity: true,
+      customFields: true,
       ownerGroupId: true,
       ownerGroup: {
         select: {
@@ -2446,10 +2448,23 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         },
       }),
     ]);
+    const licensingCenters = centers.map((center) => ({
+      id: center.id,
+      name: center.name,
+      crmLocationId: center.crmLocationId,
+      state: center.state,
+      licensedCapacity: center.licensedCapacity,
+      licensingConfiguration: readCenterLicensingConfiguration(center.customFields, {
+        centerState: center.state,
+        licensedCapacity: center.licensedCapacity,
+      }),
+    }));
 
     return (
       <CompliancePage
         data={{
+          centers: licensingCenters,
+          canManageLicensing: canManageOperations(user),
           stats: { pendingIncidents, expiringCertifications, expiringDocuments, allergies: allergyCount, restrictedMedicalNotes },
           certifications,
           allergies,

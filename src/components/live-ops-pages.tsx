@@ -48,6 +48,7 @@ import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
+import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
@@ -2428,6 +2429,8 @@ export function DocumentsPage({ data }: { data: DocumentsPageData }) {
 }
 
 export type CompliancePageData = {
+  centers: LicensingConfigurationCenter[];
+  canManageLicensing: boolean;
   stats: {
     pendingIncidents: number;
     expiringCertifications: number;
@@ -2471,6 +2474,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         <StatCard label="Allergies" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
+      <LicensingConfigurationPanel centers={data.centers} canManage={data.canManageLicensing} />
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>

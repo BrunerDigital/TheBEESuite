@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/document-expiration-reminders",
       "schedule": "45 14 * * *"
+    },
+    {
+      "path": "/api/cron/payment-dunning",
+      "schedule": "0 15 * * *"
     }
   ]
 }

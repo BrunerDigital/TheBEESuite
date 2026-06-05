@@ -56,6 +56,7 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
+import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
@@ -1306,7 +1307,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
     const paymentWhere: Prisma.PaymentWhereInput = allCenters
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const [payments, total, paid, failed, draft, payoutCenters] = await Promise.all([
+    const [paymentRows, total, paid, failed, draft, payoutCenters] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -1328,6 +1329,47 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         select: { id: true, customFields: true },
       }),
     ]);
+    const paymentInvoiceIds = Array.from(new Set(paymentRows
+      .map((payment) => {
+        const fields = payment.customFields && typeof payment.customFields === "object" && !Array.isArray(payment.customFields)
+          ? payment.customFields as Record<string, unknown>
+          : {};
+        return typeof fields.invoiceId === "string" ? fields.invoiceId : null;
+      })
+      .filter((invoiceId): invoiceId is string => typeof invoiceId === "string")));
+    const paymentInvoices = paymentInvoiceIds.length
+      ? await prisma.invoice.findMany({
+          where: { id: { in: paymentInvoiceIds } },
+          select: { id: true, number: true, status: true },
+        })
+      : [];
+    const paymentInvoicesById = new Map(paymentInvoices.map((invoice) => [invoice.id, invoice]));
+    const payments = paymentRows.map((payment) => {
+      const fields = payment.customFields && typeof payment.customFields === "object" && !Array.isArray(payment.customFields)
+        ? payment.customFields as Record<string, unknown>
+        : {};
+      const invoiceId = typeof fields.invoiceId === "string" ? fields.invoiceId : null;
+      const invoice = invoiceId ? paymentInvoicesById.get(invoiceId) : null;
+      const dunning = paymentDunningSummary({
+        paymentStatus: payment.status,
+        customFields: fields,
+        failedAt: typeof fields.dunningLastAttemptAt === "string" ? fields.dunningLastAttemptAt : null,
+        relatedInvoiceStatus: invoice?.status ?? null,
+      });
+
+      return {
+        ...payment,
+        dunningStatus: dunning.status,
+        dunningAttemptCount: dunning.attemptCount,
+        dunningNextAttemptAt: dunning.nextAttemptAt,
+        dunningLastAttemptAt: dunning.lastAttemptAt,
+        failureMessage: dunning.failureMessage,
+        invoiceNumber: invoice?.number ?? null,
+      };
+    });
+    const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;
+    const dunningWaiting = payments.filter((payment) => payment.dunningStatus === "waiting").length;
+    const dunningMaxed = payments.filter((payment) => payment.dunningStatus === "maxed").length;
     const payoutStartedCenters = payoutCenters.filter((center) => {
       const fields = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
         ? center.customFields as Record<string, unknown>
@@ -1354,6 +1396,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
             payoutReadyCenters,
             payoutStartedCenters,
+            dunningReady,
+            dunningWaiting,
+            dunningMaxed,
           },
         }}
       />

@@ -3368,6 +3368,12 @@ export type PaymentsPageData = {
     provider: string;
     externalIdPlaceholder: string | null;
     paidAt: Date | string | null;
+    dunningStatus: string;
+    dunningAttemptCount: number;
+    dunningNextAttemptAt: Date | string | null;
+    dunningLastAttemptAt: Date | string | null;
+    failureMessage: string | null;
+    invoiceNumber: string | null;
     billingAccount: { family: { name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
@@ -3379,6 +3385,9 @@ export type PaymentsPageData = {
     webhookConfigured: boolean;
     payoutReadyCenters: number;
     payoutStartedCenters: number;
+    dunningReady: number;
+    dunningWaiting: number;
+    dunningMaxed: number;
   };
 };
 
@@ -3403,10 +3412,15 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Stripe" value={data.stats.stripeConfigured && data.stats.webhookConfigured ? "Ready" : "Needs keys"} />
         <StatCard label="Payout schools" value={`${data.stats.payoutReadyCenters}/${data.stats.payoutStartedCenters}`} detail="ready / started" />
       </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Dunning ready" value={data.stats.dunningReady} detail="send on next cron run" />
+        <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="future follow-up scheduled" />
+        <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
+      </div>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Payment Attempts</CardTitle>
-          <CardDescription>Provider status, family, and reconciliation marker</CardDescription>
+          <CardDescription>Provider status, family, reconciliation marker, and retry follow-up state</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -3417,6 +3431,8 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                 <TableHead>Status</TableHead>
                 <TableHead>Amount</TableHead>
                 <TableHead>Paid</TableHead>
+                <TableHead>Dunning</TableHead>
+                <TableHead>Failure / Next step</TableHead>
                 <TableHead>External ID</TableHead>
               </TableRow>
             </TableHeader>
@@ -3431,12 +3447,32 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                   <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge></TableCell>
                   <TableCell>{money(payment.amountCents)}</TableCell>
                   <TableCell>{formatDateTime(payment.paidAt)}</TableCell>
+                  <TableCell>
+                    <Badge variant={payment.dunningStatus === "ready" || payment.dunningStatus === "maxed" ? "destructive" : "outline"}>
+                      {payment.dunningStatus}
+                    </Badge>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {payment.dunningAttemptCount} attempt{payment.dunningAttemptCount === 1 ? "" : "s"}
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-sm whitespace-normal text-xs text-muted-foreground">
+                    <div>{payment.failureMessage ?? "No failure detail from provider"}</div>
+                    <div className="mt-1">
+                      {payment.dunningStatus === "waiting"
+                        ? `Next reminder: ${formatDateTime(payment.dunningNextAttemptAt)}`
+                        : payment.dunningStatus === "maxed"
+                          ? "Manual office follow-up needed"
+                          : payment.invoiceNumber
+                            ? `Invoice ${payment.invoiceNumber}`
+                            : "Invoice not linked"}
+                    </div>
+                  </TableCell>
                   <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>
                 </TableRow>
               ))}
               {!data.payments.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
+                  <TableCell colSpan={8} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>

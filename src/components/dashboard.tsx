@@ -92,7 +92,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               <div>
                 <p className="text-sm font-medium text-primary">Monday, May 11, 2026</p>
                 <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                  The Bee Suite command center
+                  The BEE Suite command center
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
                   Enrollment, classroom operations, billing, compliance-ready documentation, and parent trust signals in one white-label operating system.
@@ -443,7 +443,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         <AlertTriangle />
         <AlertTitle>Compliance-ready documentation support</AlertTitle>
         <AlertDescription>
-          The Bee Suite provides workflow and documentation support, but does not provide legal, licensing, medical, custody, billing, or compliance advice.
+          The BEE Suite provides workflow and documentation support, but does not provide legal, licensing, medical, custody, billing, or compliance advice.
         </AlertDescription>
       </Alert>
     </div>

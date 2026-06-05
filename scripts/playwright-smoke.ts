@@ -15,14 +15,14 @@ type SmokeRoute = {
 };
 
 const smokeRoutes: SmokeRoute[] = [
-  { name: "public landing", path: "/", expectedText: /The Bee Suite|childcare/i },
-  { name: "login", path: "/login", expectedText: /Log in to The Bee Suite/i },
+  { name: "public landing", path: "/", expectedText: /The BEE Suite|childcare/i },
+  { name: "login", path: "/login", expectedText: /Log in to The BEE Suite/i },
   { name: "onboarding", path: "/onboarding", expectedText: /onboarding|workspace/i },
-  { name: "crm protected route", path: "/crm-leads", expectedText: /Log in to The Bee Suite|CRM/i },
-  { name: "fte protected route", path: "/fte-reports", expectedText: /Log in to The Bee Suite|FTE/i },
-  { name: "kiosk launcher", path: "/check-in", expectedText: /Log in to The Bee Suite|check/i },
-  { name: "parent portal protected route", path: "/parent-portal", expectedText: /Log in to The Bee Suite|Parent/i },
-  { name: "billing protected route", path: "/billing-invoices", expectedText: /Log in to The Bee Suite|Billing/i },
+  { name: "crm protected route", path: "/crm-leads", expectedText: /Log in to The BEE Suite|CRM/i },
+  { name: "fte protected route", path: "/fte-reports", expectedText: /Log in to The BEE Suite|FTE/i },
+  { name: "kiosk launcher", path: "/check-in", expectedText: /Log in to The BEE Suite|check/i },
+  { name: "parent portal protected route", path: "/parent-portal", expectedText: /Log in to The BEE Suite|Parent/i },
+  { name: "billing protected route", path: "/billing-invoices", expectedText: /Log in to The BEE Suite|Billing/i },
 ];
 
 const apiChecks = [
@@ -168,7 +168,7 @@ async function run() {
     if (loggedIn) {
       await loggedIn.page.goto(`${baseUrl}/dashboard`, { waitUntil: "domcontentloaded" });
       const bodyText = await loggedIn.page.locator("body").innerText();
-      if (/Log in to The Bee Suite/i.test(bodyText)) throw new Error("Credentialed dashboard smoke stayed on login.");
+      if (/Log in to The BEE Suite/i.test(bodyText)) throw new Error("Credentialed dashboard smoke stayed on login.");
       await loggedIn.browser.close();
     }
 

@@ -29,7 +29,7 @@ Locations are not hard-deleted from the UI. The `Archive Location` action sets t
 
 ## Password Handling
 
-Temporary passwords are sent directly to Supabase Auth admin APIs and are not stored in The Bee Suite database. Reset emails use the configured Supabase recovery flow.
+Temporary passwords are sent directly to Supabase Auth admin APIs and are not stored in The BEE Suite database. Reset emails use the configured Supabase recovery flow.
 
 ## Audit Trail
 

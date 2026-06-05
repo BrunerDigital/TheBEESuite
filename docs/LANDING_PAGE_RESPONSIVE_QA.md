@@ -14,7 +14,7 @@ Target: `https://thebeesuite.io`
 
 ## Automated Checks
 
-- Page title rendered as `The Bee Suite`.
+- Page title rendered as `The BEE Suite`.
 - Hero heading rendered.
 - SaaS childcare/preschool positioning copy was present.
 - Primary CTA language was present.

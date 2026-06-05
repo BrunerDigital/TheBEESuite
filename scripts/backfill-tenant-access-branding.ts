@@ -124,8 +124,8 @@ async function ensureBrandCustomization(input: {
     customDomainPlaceholder: input.customDomainPlaceholder ?? null,
     parentPortalName: `${input.brandName} Family Portal`,
     loginScreenTitle: `${input.brandName} operations workspace`,
-    notificationFooterText: `Sent from ${input.brandName} through The Bee Suite.`,
-    legalFooterText: input.legalFooterText ?? `${input.brandName} childcare operations powered by The Bee Suite.`,
+    notificationFooterText: `Sent from ${input.brandName} through The BEE Suite.`,
+    legalFooterText: input.legalFooterText ?? `${input.brandName} childcare operations powered by The BEE Suite.`,
     termsUrl: input.termsUrl ?? null,
     privacyUrl: input.privacyUrl ?? null,
   };
@@ -339,7 +339,7 @@ async function main() {
         accentColor: organization.brand?.settings?.accentColor,
         themeMode: organization.brand?.settings?.themeMode,
         emailSenderPlaceholder: center.email ?? organization.brand?.settings?.emailSenderPlaceholder,
-        legalFooterText: `${center.crmLocationId ?? center.name} childcare operations powered by The Bee Suite.`,
+        legalFooterText: `${center.crmLocationId ?? center.name} childcare operations powered by The BEE Suite.`,
       });
       if (centerCustomization.created) customizationsCreated += 1;
     }

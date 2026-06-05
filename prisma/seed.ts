@@ -89,7 +89,7 @@ async function main() {
   await prisma.tenant.deleteMany();
 
   const tenant = await prisma.tenant.create({
-    data: { name: "The Bee Suite Platform", slug: "bee-suite-demo" },
+    data: { name: "The BEE Suite Platform", slug: "bee-suite-demo" },
   });
 
   const brand = await prisma.brand.create({

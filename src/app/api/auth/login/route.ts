@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
   if (!user) {
     return NextResponse.json(
-      { ok: false, error: "This account is not active in The Bee Suite." },
+      { ok: false, error: "This account is not active in The BEE Suite." },
       { status: 403 },
     );
   }

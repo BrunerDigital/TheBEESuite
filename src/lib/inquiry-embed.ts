@@ -39,7 +39,7 @@ export function getCenterInquiryEmbedCode({
   baseUrl,
   centerId,
   centerName,
-  brandName = "The Bee Suite",
+  brandName = "The BEE Suite",
 }: CenterEmbedInput) {
   const appUrl = cleanBaseUrl(baseUrl);
   return `<div id="bee-suite-inquiry-form"></div>

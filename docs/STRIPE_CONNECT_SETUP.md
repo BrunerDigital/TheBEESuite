@@ -1,6 +1,6 @@
 # Stripe Connect Setup
 
-The Bee Suite is configured as the Stripe platform. Parents pay through platform-owned Checkout Sessions, and each school receives funds through its connected payout account.
+The BEE Suite is configured as the Stripe platform. Parents pay through platform-owned Checkout Sessions, and each school receives funds through its connected payout account.
 
 ## Vercel Environment Variables
 
@@ -71,11 +71,11 @@ Copy the signing secret into `STRIPE_WEBHOOK_SECRET`, then redeploy.
 
 ## School Payout Onboarding
 
-1. Log into The Bee Suite as a billing-capable user.
+1. Log into The BEE Suite as a billing-capable user.
 2. Open `Billing Settings`.
 3. For each school, click `Set up` in the Stripe Connect table.
 4. Complete Stripe-hosted onboarding for that school.
-5. Return to The Bee Suite. The payout table auto-syncs after return.
+5. Return to The BEE Suite. The payout table auto-syncs after return.
 6. Use `Check` to refresh payout status later.
 
 Parent checkout is blocked until the selected school has a connected account and Stripe reports payouts enabled.
@@ -83,7 +83,7 @@ Parent checkout is blocked until the selected school has a connected account and
 ## Test Mode Checklist
 
 - Create at least one connected school payout account in Stripe test mode.
-- Create or reuse a test invoice in The Bee Suite.
+- Create or reuse a test invoice in The BEE Suite.
 - Start checkout from the parent portal.
 - Complete payment with a Stripe test card.
 - Confirm the invoice changes to `PAID`.
@@ -97,4 +97,4 @@ Parent checkout is blocked until the selected school has a connected account and
 - Confirm who owns negative balances, disputes, refunds, and school payout support.
 - Do not set `STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=true` for real parent payments.
 - Keep Stripe keys server-side only. Never paste secret keys into WordPress.
-- Keep school payout onboarding behind authenticated Bee Suite sessions.
+- Keep school payout onboarding behind authenticated BEE Suite sessions.

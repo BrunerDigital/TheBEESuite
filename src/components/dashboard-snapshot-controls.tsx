@@ -190,7 +190,7 @@ export function DashboardSnapshotControls({
     const topKpis = kpis.slice(0, 4).map((kpi) => `${kpi.label}: ${kpi.value} (${kpi.trend})`).join("\n");
     const topLeads = leads.slice(0, 3).map((lead) => `${lead.family}: ${lead.stage}, score ${lead.score}`).join("\n");
     return [
-      `The Bee Suite dashboard snapshot`,
+      `The BEE Suite dashboard snapshot`,
       `Range: ${dateRangeLabels[dateRange]}`,
       `Lens: ${lensLabels[lens] ?? lens}`,
       "",

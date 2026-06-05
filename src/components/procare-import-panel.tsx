@@ -33,6 +33,28 @@ type ImportPreview = {
   attendanceRows: number;
   checkLogRows: number;
   centersTouched: number;
+  duplicateMatches?: number;
+  duplicateReviewRows?: number;
+  duplicateMatchesByEntity?: {
+    families: number;
+    children: number;
+    guardians: number;
+  };
+  duplicateMatchMode?: string;
+  duplicateMatchDetails?: Array<{
+    rowNumber: number;
+    entity: "family" | "child" | "guardian";
+    importLabel: string;
+    recommendedRecordId: string | null;
+    resolution: "auto_match" | "needs_review" | "create_new";
+    candidates: Array<{
+      recordId: string;
+      label: string;
+      confidence: "high" | "medium" | "low";
+      score: number;
+      reasons: string[];
+    }>;
+  }>;
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -51,6 +73,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
   const [v10Password, setV10Password] = useState("");
+  const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
+  const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -60,6 +84,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function clearPreview() {
     setPreview(null);
+    setDuplicateReviewConfirmed(false);
   }
 
   function downloadBackup(batchId: string) {
@@ -76,6 +101,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       const formData = new FormData();
       formData.set("centerId", centerId);
       formData.set("dryRun", String(dryRun));
+      formData.set("duplicateMatchMode", duplicateMatchMode);
+      formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
       if (v10Password.trim()) formData.set("v10Password", v10Password.trim());
       if (csv.trim()) formData.set("csv", csv);
       const file = fileRef.current?.files?.[0];
@@ -93,12 +120,14 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       }
       if (json?.dryRun) {
         setPreview(json.summary ?? null);
+        setDuplicateReviewConfirmed(false);
         setLastBatchId("");
         setStatus("");
         return;
       }
       setCsv("");
       setPreview(null);
+      setDuplicateReviewConfirmed(false);
       setLastBatchId(json?.batchId ?? "");
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
@@ -107,6 +136,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       );
     });
   }
+
+  const duplicateReviewRows = preview?.duplicateReviewRows ?? 0;
+  const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
+  const commitNeedsDuplicateConfirmation = duplicateReviewRows > 0 && !duplicateReviewConfirmed;
 
   return (
     <Card className="glass-panel">
@@ -193,8 +226,42 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </div>
           </div>
           <p className="self-end text-xs leading-5 text-muted-foreground">
-            Only used server-side to unlock encrypted ProCare v10 exports. It is not saved to The Bee Suite.
+            Only used server-side to unlock encrypted ProCare v10 exports. It is not saved to The BEE Suite.
           </p>
+        </div>
+        <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[18rem_1fr]">
+          <div className="space-y-1">
+            <Label>Duplicate matching</Label>
+            <Select value={duplicateMatchMode} onValueChange={(value) => {
+              setDuplicateMatchMode(value || "review");
+              clearPreview();
+            }}>
+              <SelectTrigger><SelectValue placeholder="Choose matching mode" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="review">Balanced review</SelectItem>
+                <SelectItem value="strict">Strict review</SelectItem>
+                <SelectItem value="auto">Auto-match exact records</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 text-xs leading-5 text-muted-foreground">
+            <p>
+              Balanced review flags ambiguous family, child, and guardian matches. Strict review flags every likely duplicate. Auto-match still stops on ambiguous matches, but lets high-confidence exact matches proceed.
+            </p>
+            {duplicateReviewRows ? (
+              <label className="flex items-start gap-2 rounded-lg border bg-background p-3 text-foreground">
+                <input
+                  type="checkbox"
+                  checked={duplicateReviewConfirmed}
+                  onChange={(event) => setDuplicateReviewConfirmed(event.target.checked)}
+                  className="mt-0.5 size-4"
+                />
+                <span>
+                  I reviewed the duplicate match candidates and approve committing the import with these match decisions.
+                </span>
+              </label>
+            ) : null}
+          </div>
         </div>
         <div className="space-y-1">
           <Label htmlFor="procare-csv">Or paste CSV text</Label>
@@ -213,9 +280,40 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <CheckCircle2 className="size-4" />
             <AlertTitle>Preview ready</AlertTitle>
             <AlertDescription>
-              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows.
+              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. Duplicate scan found {preview.duplicateMatches ?? 0} possible match groups across {duplicateReviewRows} review row(s).
             </AlertDescription>
           </Alert>
+        ) : null}
+        {preview?.duplicateMatchDetails?.length ? (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm font-medium">Duplicate match review</div>
+              <div className="text-xs text-muted-foreground">
+                Families {preview.duplicateMatchesByEntity?.families ?? 0} / Children {preview.duplicateMatchesByEntity?.children ?? 0} / Guardians {preview.duplicateMatchesByEntity?.guardians ?? 0}
+              </div>
+            </div>
+            <div className="space-y-3 text-xs">
+              {preview.duplicateMatchDetails.slice(0, 10).map((match) => (
+                <div key={`${match.rowNumber}-${match.entity}-${match.importLabel}`} className="rounded-lg border bg-background p-3">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="font-medium">Row {match.rowNumber}</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 uppercase text-muted-foreground">{match.entity}</span>
+                    <span>{match.importLabel}</span>
+                    <span className="text-muted-foreground">
+                      {match.resolution === "auto_match" ? "High-confidence match" : "Needs review"}
+                    </span>
+                  </div>
+                  <div className="space-y-1 text-muted-foreground">
+                    {match.candidates.slice(0, 3).map((candidate) => (
+                      <div key={candidate.recordId}>
+                        {candidate.label} / {candidate.confidence} / score {candidate.score} / {candidate.reasons.join(", ")}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
         {preview?.warnings?.length ? (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
@@ -251,7 +349,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           <Button disabled={isPending || !centerId} onClick={() => submit(true)} variant="outline">
             Preview Import
           </Button>
-          <Button disabled={isPending || !centerId || !preview || Boolean(preview.warningRows)} onClick={() => submit(false)}>
+          <Button disabled={isPending || !centerId || !preview || blockingWarningRows > 0 || commitNeedsDuplicateConfirmation} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
             Commit ProCare Import
           </Button>
@@ -262,7 +360,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         </div>
         {preview?.warningRows ? (
           <p className="text-xs text-muted-foreground">
-            Resolve or remove warning rows before committing. This prevents partially mapped ProCare data from being written to live school records.
+            {blockingWarningRows
+              ? "Resolve or remove non-duplicate warning rows before committing. This prevents partially mapped ProCare data from being written to live school records."
+              : duplicateReviewRows && !duplicateReviewConfirmed
+                ? "Review and confirm the duplicate match candidates before committing this ProCare import."
+                : "Duplicate-review rows are confirmed. The API will still block the import if the uploaded file changes and new cleanup warnings appear."}
           </p>
         ) : null}
       </CardContent>

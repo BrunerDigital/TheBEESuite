@@ -1,4 +1,4 @@
-# The Bee Suite User Types and Feature Access Map
+# The BEE Suite User Types and Feature Access Map
 
 This visual is based on the current repo roles in `prisma/schema.prisma`, the module list in `README.md`, and the live routes/API surfaces in `src/app`.
 
@@ -148,7 +148,7 @@ Legend: Full = manage broadly inside assigned scope. Manage = create/update oper
 
 | User type | Primary purpose | Main features |
 |---|---|---|
-| Platform owner | Operates the entire Bee Suite tenant/platform. | Multi-location dashboards, agency admin, all locations, owner groups, users, access grants, billing setup, integrations, reports, audit logs, AI summaries, readiness checks. |
+| Platform owner | Operates the entire BEE Suite tenant/platform. | Multi-location dashboards, agency admin, all locations, owner groups, users, access grants, billing setup, integrations, reports, audit logs, AI summaries, readiness checks. |
 | Brand admin | Runs a franchise/brand workspace such as Kid City USA. | Brand/location management, scoped users, CRM, enrollment, operations rollups, billing oversight, white-label settings, communications, reports, integrations. |
 | Regional manager | Oversees assigned owner groups or centers. | Multi-center dashboards, CRM/enrollment visibility, center operations oversight, reports, compliance follow-up, communications, audit visibility within assigned scope. |
 | Center director | Runs a single school or assigned schools. | Center dashboard, leads/tours, enrollment, family/child records, classrooms, staff, attendance, incidents, daily reports, parent messages, documents, reports. |

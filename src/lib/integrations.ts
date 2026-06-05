@@ -303,7 +303,7 @@ export async function sendEmail({
   subject,
   text,
   replyTo,
-  fromName = "The Bee Suite",
+  fromName = "The BEE Suite",
   categories,
   customArgs,
 }: {

@@ -2,7 +2,7 @@
 
 Last updated: June 1, 2026
 
-This document defines the production security operating plan for The Bee Suite. It does not replace legal review, state licensing review, or Supabase's own security advisor output.
+This document defines the production security operating plan for The BEE Suite. It does not replace legal review, state licensing review, or Supabase's own security advisor output.
 
 ## Access Model
 
@@ -129,6 +129,7 @@ Default retention should be conservative until legal review finalizes state-spec
 | Billing invoices/ledger/payments | 7 years | Retain non-card financial records for accounting. |
 | Child media/photos | 12 months by default | Delete sooner on approved parent/school request when permitted. |
 | Messages/announcements | 3 years | Archive or delete by tenant policy. |
+| In-app notifications | 180 days by default | Hide expired/archived notifications from user surfaces; use dedupe keys for repeatable system reminders. |
 | Audit logs | 7 years | Append-only; do not edit. |
 | Import batches/source rows | 12 months after validated cutover | Delete raw imports after validation and backup period. |
 | Support artifacts/screenshots | 90 days unless tied to incident | Redact or delete after issue closure. |

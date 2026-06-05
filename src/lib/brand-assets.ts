@@ -16,8 +16,8 @@ export type WorkspaceBranding = {
 
 export const BEE_SUITE_BRANDING: WorkspaceBranding = {
   kind: "bee-suite",
-  name: "The Bee Suite",
-  shortName: "Bee Suite",
+  name: "The BEE Suite",
+  shortName: "BEE Suite",
   tagline: "Childcare CRM & Operations",
   logoSrc: "/brand/the-bee-suite/app-icon-dark.png",
   logoWidth: 1024,
@@ -25,7 +25,7 @@ export const BEE_SUITE_BRANDING: WorkspaceBranding = {
   markSrc: "/brand/the-bee-suite/favicon-dark.png",
   markWidth: 512,
   markHeight: 512,
-  logoAlt: "The Bee Suite logo",
+  logoAlt: "The BEE Suite logo",
 };
 
 export const KID_CITY_USA_BRANDING: WorkspaceBranding = {

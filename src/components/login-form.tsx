@@ -75,10 +75,10 @@ export function LoginForm() {
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
         <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
-            <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The Bee Suite home">
+            <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
-            <CardTitle className="mt-4 text-3xl">Log in to The Bee Suite</CardTitle>
+            <CardTitle className="mt-4 text-3xl">Log in to The BEE Suite</CardTitle>
             <CardDescription>
               Existing users can access the live workspace. New childcare brands should start with onboarding.
             </CardDescription>
@@ -141,7 +141,7 @@ export function LoginForm() {
               </button>
             </form>
             <div className="mt-5 rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-              New to The Bee Suite?{" "}
+              New to The BEE Suite?{" "}
               <Link href="/onboarding" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                 Start onboarding <ArrowRight className="ml-1 size-3.5" />
               </Link>

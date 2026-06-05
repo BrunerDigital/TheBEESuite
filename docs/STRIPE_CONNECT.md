@@ -1,6 +1,6 @@
 # Stripe Connect Setup
 
-The Bee Suite uses Stripe Checkout with Connect destination charges for parent tuition payments.
+The BEE Suite uses Stripe Checkout with Connect destination charges for parent tuition payments.
 
 ## Flow
 
@@ -8,7 +8,7 @@ The Bee Suite uses Stripe Checkout with Connect destination charges for parent t
 2. They start Stripe Connect onboarding for a school.
 3. Stripe collects payout, identity, and bank information directly from the school.
 4. Parent portal invoice payments create a Checkout Session only after that school has an active connected account.
-5. The Checkout Session charges the parent, routes funds to the school connected account, and retains the configured Bee Suite application fee.
+5. The Checkout Session charges the parent, routes funds to the school connected account, and retains the configured BEE Suite application fee.
 6. The webhook at `/api/billing/stripe-webhook` marks payments paid, closes invoices, writes ledger credits, and stores processed Stripe event IDs for idempotency.
 
 ## Required Stripe Settings
@@ -88,7 +88,7 @@ The preferred tuition model is method-specific processing recovery:
 - Card: parent pays tuition plus grossed-up card processing recovery. Current policy uses 2.9% + $0.30 gross-up so the school can still receive the invoice amount.
 - Payment method configurations should be created in Stripe Dashboard and wired into `STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID` and `STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID`. Keep `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` so an ACH-fee checkout cannot accidentally allow card payment methods.
 
-Bee Suite payment operations fees are school/brand-side economics, not an extra parent card surcharge:
+BEE Suite payment operations fees are school/brand-side economics, not an extra parent card surcharge:
 
 - `STRIPE_PAYMENT_OPS_FEE_BPS`
 - `STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS`
@@ -110,12 +110,12 @@ Example:
 Invoice tuition: $1,000.00
 ACH parent processing recovery: $5.00
 ACH checkout total: $1,005.00
-Application fee: $5.00 processing recovery + Bee Suite payment operations fee, if not waived
+Application fee: $5.00 processing recovery + BEE Suite payment operations fee, if not waived
 Family ledger credit: $1,000.00
 
 Credit card parent processing recovery: about $30.18
 Card checkout total: about $1,030.18
-Application fee: card processing recovery + Bee Suite payment operations fee, if not waived
+Application fee: card processing recovery + BEE Suite payment operations fee, if not waived
 Family ledger credit: $1,000.00
 ```
 

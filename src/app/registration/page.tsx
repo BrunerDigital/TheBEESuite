@@ -42,7 +42,7 @@ export default async function OnlineRegistrationPage() {
           >
             <ArrowLeft data-icon="inline-start" />
             <BrandIcon className="size-6 rounded-md" />
-            The Bee Suite
+            The BEE Suite
           </Button>
           <Button nativeButton={false} render={<Link href="/login" />}>
             Parent login
@@ -58,7 +58,7 @@ export default async function OnlineRegistrationPage() {
               </div>
               <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">Start a childcare registration packet.</h1>
               <p className="mt-5 text-sm leading-6 text-zinc-300">
-                Families can submit registration details online. The Bee Suite routes the packet to the selected school, creates or updates the CRM lead, and queues a director review task.
+                Families can submit registration details online. The BEE Suite routes the packet to the selected school, creates or updates the CRM lead, and queues a director review task.
               </p>
             </div>
 

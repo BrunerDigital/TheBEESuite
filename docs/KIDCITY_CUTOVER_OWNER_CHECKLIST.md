@@ -9,7 +9,7 @@ These are the items that require the business owner, account admin, ProCare user
 - [ ] Confirm the exact Kid City USA open-location list and mark any closed locations that should remain archived only.
 - [ ] Confirm each location's official school email, director email, phone, address, CRM location ID, and location ID.
 - [ ] Have each director verify their center dashboard after import: children, classrooms, families, teachers, balances, and kiosk route.
-- [ ] Decide whether existing parent PINs should be imported from ProCare if available, or reset manually by directors in The Bee Suite.
+- [ ] Decide whether existing parent PINs should be imported from ProCare if available, or reset manually by directors in The BEE Suite.
 - [ ] Tell directors not to use the lobby kiosk for live sign-in/out until their center data has been imported and verified.
 
 ## Security And Access
@@ -33,18 +33,18 @@ These are the items that require the business owner, account admin, ProCare user
 
 ## Email, SMS, And Google Sheets
 
-- [ ] Verify email sending domains and DNS records for The Bee Suite and/or Kid City USA notification sending.
+- [ ] Verify email sending domains and DNS records for The BEE Suite and/or Kid City USA notification sending.
 - [ ] Confirm notification recipients for global inquiries and each school location.
 - [ ] Confirm Twilio messaging sender/phone number usage and SMS consent language before real SMS.
 - [ ] Share final Google Sheet backup URLs and confirm Apps Script web app permissions remain set to receive submissions.
-- [ ] Confirm FTE Google Sheet format or approve The Bee Suite as the source of truth with Sheet backup only.
+- [ ] Confirm FTE Google Sheet format or approve The BEE Suite as the source of truth with Sheet backup only.
 
 ## Public Website And Inquiry Forms
 
-- [ ] Replace old Kid City USA website forms with the latest Bee Suite inquiry embed code.
+- [ ] Replace old Kid City USA website forms with the latest BEE Suite inquiry embed code.
 - [ ] Test one inquiry per location group/state after installing the form.
-- [ ] Confirm each test lead appears in The Bee Suite, the backup Google Sheet, global notification emails, and the correct location email.
-- [ ] Remove or archive any old CRM forms/webhooks after The Bee Suite routing is confirmed.
+- [ ] Confirm each test lead appears in The BEE Suite, the backup Google Sheet, global notification emails, and the correct location email.
+- [ ] Remove or archive any old CRM forms/webhooks after The BEE Suite routing is confirmed.
 
 ## Final Go/No-Go
 

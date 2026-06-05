@@ -192,13 +192,13 @@ async function sendOnboardingEmail(
     payload.notes || "None provided.",
   ].filter((line) => line !== "");
 
-  const subject = `New Bee Suite onboarding intake - ${payload.brandName}`;
+  const subject = `New BEE Suite onboarding intake - ${payload.brandName}`;
   const text = lines.join("\n");
   const email = await sendEmail({
     to: recipients,
     subject,
     text,
-    fromName: "The Bee Suite",
+    fromName: "The BEE Suite",
     categories: ["onboarding_email"],
     customArgs: {
       notificationId,
@@ -214,7 +214,7 @@ async function sendOnboardingEmail(
       to: recipients,
       subject,
       text,
-      fromName: "The Bee Suite",
+      fromName: "The BEE Suite",
       result: email,
       metadata: { notificationId, workspaceStatus: workspace.status },
     });
@@ -251,7 +251,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
     const notification = await prisma.notification.create({
       data: {
         title: `Existing workspace requested: ${payload.brandName}`,
-        body: `${payload.workEmail} already has Bee Suite access. Sent account recovery when possible.`,
+        body: `${payload.workEmail} already has BEE Suite access. Sent account recovery when possible.`,
         type: "Onboarding",
         priority: "normal",
         userId: existingUser.id,
@@ -431,7 +431,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
         themeMode: "dark",
         emailSenderPlaceholder: payload.workEmail,
         customDomainPlaceholder: "",
-        legalFooterText: `${payload.brandName} childcare operations powered by The Bee Suite.`,
+        legalFooterText: `${payload.brandName} childcare operations powered by The BEE Suite.`,
       },
     });
 
@@ -450,8 +450,8 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
         customDomainPlaceholder: "",
         parentPortalName: `${payload.brandName} Family Portal`,
         loginScreenTitle: `${payload.brandName} operations workspace`,
-        notificationFooterText: `Sent from ${payload.brandName} through The Bee Suite.`,
-        legalFooterText: `${payload.brandName} childcare operations powered by The Bee Suite.`,
+        notificationFooterText: `Sent from ${payload.brandName} through The BEE Suite.`,
+        legalFooterText: `${payload.brandName} childcare operations powered by The BEE Suite.`,
       },
     });
 

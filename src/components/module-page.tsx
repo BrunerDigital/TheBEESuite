@@ -283,7 +283,7 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
             <Sparkles />
           </div>
           <CardTitle className="mt-4 text-3xl">
-            {isLogin ? "Welcome to The Bee Suite" : isForgot ? "Reset your password" : "Set up your childcare brand"}
+            {isLogin ? "Welcome to The BEE Suite" : isForgot ? "Reset your password" : "Set up your childcare brand"}
           </CardTitle>
           <CardDescription>
             {isLogin

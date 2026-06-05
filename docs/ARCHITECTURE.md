@@ -1,6 +1,6 @@
-# The Bee Suite Architecture
+# The BEE Suite Architecture
 
-The Bee Suite is structured as a white-label, multi-tenant childcare operating system.
+The BEE Suite is structured as a white-label, multi-tenant childcare operating system.
 
 ## Tenant Hierarchy
 

@@ -141,7 +141,7 @@ function CommandCenterPreview() {
         <div className="flex items-center gap-3">
           <BrandIcon className="size-10 rounded-xl border border-amber-300/35 shadow-[0_0_24px_rgba(245,181,27,0.18)]" />
           <div>
-            <div className="text-sm font-semibold text-amber-300">The Bee Suite</div>
+            <div className="text-sm font-semibold text-amber-300">The BEE Suite</div>
             <div className="mt-1 text-[0.66rem] text-zinc-500">Childcare CRM</div>
           </div>
         </div>

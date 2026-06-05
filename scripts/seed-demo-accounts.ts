@@ -56,8 +56,8 @@ function weekEnd(weekStart: Date) {
 async function upsertTenant() {
   return prisma.tenant.upsert({
     where: { slug: DEMO_TENANT_SLUG },
-    update: { name: "The Bee Suite Demo Workspace" },
-    create: { slug: DEMO_TENANT_SLUG, name: "The Bee Suite Demo Workspace" },
+    update: { name: "The BEE Suite Demo Workspace" },
+    create: { slug: DEMO_TENANT_SLUG, name: "The BEE Suite Demo Workspace" },
   });
 }
 
@@ -965,7 +965,7 @@ async function main() {
       themeMode: "dark",
       emailSenderPlaceholder: "hello@kidcityusa-demo.test",
       customDomainPlaceholder: "demo.kidcityusa.test",
-      legalFooterText: "Demo workspace for The Bee Suite sales and training only.",
+      legalFooterText: "Demo workspace for The BEE Suite sales and training only.",
       termsUrl: "https://thebeesuite.io/terms",
       privacyUrl: "https://thebeesuite.io/privacy",
     },
@@ -979,7 +979,7 @@ async function main() {
       themeMode: "dark",
       emailSenderPlaceholder: "hello@kidcityusa-demo.test",
       customDomainPlaceholder: "demo.kidcityusa.test",
-      legalFooterText: "Demo workspace for The Bee Suite sales and training only.",
+      legalFooterText: "Demo workspace for The BEE Suite sales and training only.",
       termsUrl: "https://thebeesuite.io/terms",
       privacyUrl: "https://thebeesuite.io/privacy",
     },

@@ -234,7 +234,7 @@ export function OnboardingFlow() {
             Set up your childcare brand.
           </h1>
           <p className="mt-4 text-base leading-7 text-slate-300">
-            This creates a gated Bee Suite trial workspace for your childcare brand, then walks you through profile setup,
+            This creates a gated BEE Suite trial workspace for your childcare brand, then walks you through profile setup,
             inquiry form install, center imports, user invitations, and payout readiness before any live payment workflows are enabled.
           </p>
           <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -279,7 +279,7 @@ export function OnboardingFlow() {
               <CardContent className="space-y-5 text-slate-200">
                 <p className="leading-7">
                   {workspace?.existingWorkspace
-                    ? `${form.workEmail} already has Bee Suite access. We sent an account recovery email when Supabase Auth accepted the request.`
+                    ? `${form.workEmail} already has BEE Suite access. We sent an account recovery email when Supabase Auth accepted the request.`
                     : `${form.brandName || "Your brand"} now has a trial workspace with an ownership container, primary center profile, brand settings, setup integrations, and an owner account.`}
                   {" "}Use the dashboard to finish center profiles, invite staff, install the inquiry form, and prepare payout onboarding.
                 </p>
@@ -423,8 +423,8 @@ export function OnboardingFlow() {
                           <SelectValue placeholder="Choose fee handling" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Stripe processing plus Bee Suite surcharge passed to payer">Stripe processing plus Bee Suite surcharge passed to payer</SelectItem>
-                          <SelectItem value="School absorbs Stripe processing; Bee Suite surcharge invoiced monthly">School absorbs Stripe processing; Bee Suite surcharge invoiced monthly</SelectItem>
+                          <SelectItem value="Stripe processing plus BEE Suite surcharge passed to payer">Stripe processing plus BEE Suite surcharge passed to payer</SelectItem>
+                          <SelectItem value="School absorbs Stripe processing; BEE Suite surcharge invoiced monthly">School absorbs Stripe processing; BEE Suite surcharge invoiced monthly</SelectItem>
                           <SelectItem value="Enterprise negotiated merchant services">Enterprise negotiated merchant services</SelectItem>
                         </SelectContent>
                       </Select>

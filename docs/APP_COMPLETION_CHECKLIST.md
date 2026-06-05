@@ -1,4 +1,4 @@
-# The Bee Suite App Completion Checklist
+# The BEE Suite App Completion Checklist
 
 Last updated: June 3, 2026
 
@@ -16,7 +16,7 @@ Status legend:
 - [x] Kid City USA pilot tenant, centers, users, leads, FTE, and core CRM workflows are live.
 - [x] Role-based UI and data scoping exists for executive users vs location/director users.
 - [x] Location-level users are scoped to assigned center data for CRM leads and FTE reports.
-- [x] The app name and author metadata have been corrected to `The Bee Suite` and `BrunerDigital`.
+- [x] The app name and author metadata have been corrected to `The BEE Suite` and `BrunerDigital`.
 - [x] Production Prisma connection usage is limited to reduce Supabase connection exhaustion during live school traffic.
 - [ ] Complete a fresh production smoke test for every role after each major deployment.
 - [x] Create a formal release checklist before every live-school rollout.
@@ -25,7 +25,7 @@ Status legend:
 
 - [x] Public landing page exists.
 - [x] Landing page is positioned for childcare centers and preschool operators broadly, not only Kid City USA.
-- [x] Hero visual style has been upgraded toward the dark, premium Bee Suite direction.
+- [x] Hero visual style has been upgraded toward the dark, premium BEE Suite direction.
 - [x] Sections include platform explanation, operational value, and feature previews.
 - [x] Pricing/payment revenue visual materials exist in docs.
 - [x] Social/media marketing asset package exists in docs.
@@ -220,9 +220,9 @@ Status legend:
 - [x] Teacher media upload API exists.
 - [x] Daily reports, meals, naps, diaper/potty logs, activities, incidents, and child media schema exists.
 - [x] Supabase child media storage/signing support exists.
-- [ ] Complete teacher mobile task-entry workflow for all daily report fields.
-- [ ] Add classroom roster attendance board with fast check-in/check-out states.
-- [ ] Add batch logging for meals/naps/diapers/activities.
+- [x] Complete teacher mobile task-entry workflow for all daily report fields.
+- [x] Add classroom roster attendance board with fast check-in/check-out states.
+- [x] Add batch logging for meals/naps/diapers/activities.
 - [ ] Add classroom ratio warnings and staff assignment actions.
 - [ ] Add offline/poor-connectivity strategy for classroom tablets.
 - [x] Add teacher permissions separated from director/location users.
@@ -253,7 +253,7 @@ Status legend:
 - [x] Stripe webhook route exists.
 - [x] Billing guardrails and idempotency tests exist.
 - [x] Schema covers billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, and subscription placeholders.
-- [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, Bee Suite monthly/payment operations fees, and Kid City USA pilot waiver.
+- [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, BEE Suite monthly/payment operations fees, and Kid City USA pilot waiver.
 - [x] Complete parent tuition payment UI in parent portal.
 - [x] Complete school payout onboarding UI for Stripe Connect.
 - [ ] Finalize surcharge/convenience fee disclosures and legal review.
@@ -291,8 +291,8 @@ Status legend:
 - [ ] Build actual form builder UI.
 - [ ] Complete required document checklist per family/staff/child.
 - [ ] Add file upload UI tied to Supabase storage.
-- [ ] Add expiration reminders and document review states.
-- [ ] Integrate real e-signature provider or build internal signature capture.
+- [x] Add expiration reminders and document review states.
+- [x] Integrate real e-signature provider or build internal signature capture.
 - [ ] Add export package for licensing/records requests.
 
 ## Compliance And Incident Reporting
@@ -374,7 +374,7 @@ Status legend:
 - [x] Add parent notification preferences.
 - [ ] Add full notification preferences by role/user beyond parent portal.
 - [ ] Add email/SMS/push delivery channels.
-- [ ] Add notification dedupe/retention policy.
+- [x] Add notification dedupe/retention policy.
 
 ## Integrations
 

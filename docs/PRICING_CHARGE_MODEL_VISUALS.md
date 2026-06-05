@@ -1,6 +1,6 @@
-# The Bee Suite Pricing Charge Model Visuals
+# The BEE Suite Pricing Charge Model Visuals
 
-This folder contains a three-page visual board for reviewing how The Bee Suite can charge childcare locations, franchises, and multi-location operators.
+This folder contains a three-page visual board for reviewing how The BEE Suite can charge childcare locations, franchises, and multi-location operators.
 
 ## Files
 
@@ -20,7 +20,7 @@ Start with a simple per-location SaaS subscription, then add optional revenue li
 
 ## Stripe Fee Positioning
 
-The Bee Suite platform fee should stay separate from Stripe processing fees. Stripe processing is a pass-through processor cost, while The Bee Suite platform fee is the revenue line for payment facilitation, reporting, ledger workflows, and payout routing.
+The BEE Suite platform fee should stay separate from Stripe processing fees. Stripe processing is a pass-through processor cost, while The BEE Suite platform fee is the revenue line for payment facilitation, reporting, ledger workflows, and payout routing.
 
 For launch planning, treat the bps ranges shown in the visuals as illustrative only. Final payment economics should be confirmed against Stripe pricing, expected tuition volume, support cost, state tax rules, and customer contract language.
 

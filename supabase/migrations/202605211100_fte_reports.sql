@@ -1,4 +1,4 @@
--- Weekly FTE reporting submitted from The Bee Suite.
+-- Weekly FTE reporting submitted from The BEE Suite.
 CREATE TABLE IF NOT EXISTS "FteReport" (
   "id" TEXT NOT NULL,
   "centerId" TEXT NOT NULL,

@@ -46,7 +46,7 @@ const heroLogo = {
   src: "/brand/the-bee-suite/logo-primary-horizontal-white.png",
   width: 1280,
   height: 360,
-  alt: "The Bee Suite",
+  alt: "The BEE Suite",
 };
 
 const crmSteps = [
@@ -351,7 +351,7 @@ export default function LandingPage() {
         <div className="relative mx-auto grid max-w-[1540px] gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[0.72fr_1.28fr] lg:px-8 lg:py-16">
           <div className="flex min-h-[680px] flex-col justify-center">
             <h1 className="sr-only">
-              The Bee Suite
+              The BEE Suite
             </h1>
             <Image
               src={heroLogo.src}
@@ -437,7 +437,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             title="Designed for how schools actually use the system."
-            body="The Bee Suite is not just a back-office dashboard. It supports the lobby, the classroom, the enrollment desk, and the executive view with role-aware screens."
+            body="The BEE Suite is not just a back-office dashboard. It supports the lobby, the classroom, the enrollment desk, and the executive view with role-aware screens."
           />
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
             {schoolScenes.map((scene, index) => (
@@ -484,7 +484,7 @@ export default function LandingPage() {
           <div>
             <SectionHeading
               title="Executive reporting without losing the school-level truth."
-              body="The Bee Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
+              body="The BEE Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
             />
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {reportingRows.map(([title, body]) => (

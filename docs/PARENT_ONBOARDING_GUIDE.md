@@ -1,4 +1,4 @@
-# The Bee Suite Parent Onboarding Guide
+# The BEE Suite Parent Onboarding Guide
 
 Use this guide when a school is ready to invite families into the parent portal.
 

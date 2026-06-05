@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { notificationDedupeKey, notificationExpiresAt } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
   const weekLabel = dueState.weekStart.toISOString().slice(0, 10);
   const centerIds = missingCenters.map((center) => center.id);
   const tenantIds = Array.from(new Set(missingCenters.map((center) => center.organization.tenantId)));
-  const [platformOwners, executives, staffDirectors, grantDirectors, existingNotifications] = await Promise.all([
+  const [platformOwners, executives, staffDirectors, grantDirectors] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true, role: UserRole.PLATFORM_OWNER },
       select: { id: true },
@@ -72,13 +73,7 @@ export async function GET(request: NextRequest) {
       },
       take: 1000,
     }),
-    prisma.notification.findMany({
-      where: { type: "fte_due", createdAt: { gte: dueState.weekStart } },
-      select: { userId: true, title: true },
-      take: 5000,
-    }),
   ]);
-  const existingKeys = new Set(existingNotifications.map((notification) => `${notification.userId ?? ""}|${notification.title}`));
   const executivesByTenant = new Map<string, string[]>();
   for (const user of executives) {
     const users = executivesByTenant.get(user.tenantId) ?? [];
@@ -102,7 +97,9 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const notificationData = [];
+  const notificationData: Prisma.NotificationCreateManyInput[] = [];
+  const localDedupeKeys = new Set<string>();
+  const expiresAt = notificationExpiresAt();
 
   for (const center of missingCenters) {
     const label = centerName(center);
@@ -115,21 +112,44 @@ export async function GET(request: NextRequest) {
     ]));
 
     for (const userId of recipientIds) {
-      const existingKey = `${userId}|${title}`;
-      if (existingKeys.has(existingKey)) continue;
-      existingKeys.add(existingKey);
+      const dedupeKey = notificationDedupeKey(["fte_due", weekLabel, dueState.phase, center.id, userId]);
+      if (!dedupeKey || localDedupeKeys.has(dedupeKey)) continue;
+      localDedupeKeys.add(dedupeKey);
       notificationData.push({
         userId,
         title,
         body,
         type: "fte_due",
         priority: dueState.priority,
+        dedupeKey,
+        expiresAt,
       });
     }
   }
 
-  if (!dryRun && notificationData.length) {
-    await prisma.notification.createMany({ data: notificationData });
+  const notificationDedupeKeys = notificationData
+    .map((notification) => notification.dedupeKey)
+    .filter((dedupeKey): dedupeKey is string => typeof dedupeKey === "string" && dedupeKey.length > 0);
+  const existingNotifications = notificationDedupeKeys.length
+    ? await prisma.notification.findMany({
+        where: { dedupeKey: { in: notificationDedupeKeys } },
+        select: { dedupeKey: true },
+        take: 5000,
+      })
+    : [];
+  const existingDedupeKeys = new Set(
+    existingNotifications
+      .map((notification) => notification.dedupeKey)
+      .filter((dedupeKey): dedupeKey is string => typeof dedupeKey === "string" && dedupeKey.length > 0),
+  );
+  const pendingNotificationData = notificationData.filter(
+    (notification) => typeof notification.dedupeKey === "string" && !existingDedupeKeys.has(notification.dedupeKey),
+  );
+  let notificationsCreated = 0;
+
+  if (!dryRun && pendingNotificationData.length) {
+    const created = await prisma.notification.createMany({ data: pendingNotificationData, skipDuplicates: true });
+    notificationsCreated = created.count;
   }
 
   return NextResponse.json({
@@ -139,8 +159,8 @@ export async function GET(request: NextRequest) {
     dueAt: dueState.dueAt,
     phase: dueState.phase,
     missingCenters: missingCenters.length,
-    notificationsCreated: dryRun ? 0 : notificationData.length,
-    notificationsWouldCreate: dryRun ? notificationData.length : 0,
+    notificationsCreated,
+    notificationsWouldCreate: dryRun ? pendingNotificationData.length : 0,
     notificationsSkipped: existingNotifications.length,
   });
 }

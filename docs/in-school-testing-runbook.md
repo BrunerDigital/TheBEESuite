@@ -1,4 +1,4 @@
-# The Bee Suite In-School Testing Runbook
+# The BEE Suite In-School Testing Runbook
 
 Use this before any Kid City USA location tests the app with live staff workflows.
 

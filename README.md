@@ -1,8 +1,8 @@
-# The Bee Suite
+# The BEE Suite
 
 Childcare & Preschool CRM/Operations Platform
 
-The Bee Suite is a white-label childcare CRM and operations command center for leads, tours, enrollment, families, children, classrooms, staff workflows, billing, parent communication, compliance-ready documentation, reporting, and human-reviewed AI assistance.
+The BEE Suite is a white-label childcare CRM and operations command center for leads, tours, enrollment, families, children, classrooms, staff workflows, billing, parent communication, compliance-ready documentation, reporting, and human-reviewed AI assistance.
 
 ## Built
 

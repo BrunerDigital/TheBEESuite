@@ -2,7 +2,7 @@
 
 Last updated: June 1, 2026
 
-This is the central operator-facing index for launching and supporting The Bee Suite with Kid City USA and future childcare operators.
+This is the central operator-facing index for launching and supporting The BEE Suite with Kid City USA and future childcare operators.
 
 ## Core Runbooks
 

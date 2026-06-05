@@ -39,7 +39,7 @@ export function InquiryEmbedCard({ title, description, embedCode }: InquiryEmbed
         />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-muted-foreground">
-            Paste this into the school website, landing page, or marketing platform where inquiries should enter The Bee Suite CRM.
+            Paste this into the school website, landing page, or marketing platform where inquiries should enter The BEE Suite CRM.
           </p>
           <Button onClick={copyEmbedCode} className="shrink-0">
             {copied ? <CheckCircle2 data-icon="inline-start" /> : <Clipboard data-icon="inline-start" />}

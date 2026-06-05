@@ -173,14 +173,14 @@ export async function POST(request: NextRequest) {
     `Your parent portal for ${center.crmLocationId ?? center.name} is ready.`,
     temporaryPassword
       ? "Use the temporary password provided by your school director, then reset it after signing in."
-      : "Use the password reset email from The Bee Suite to set your password.",
+      : "Use the password reset email from The BEE Suite to set your password.",
     `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/parent-portal`,
   ].join("\n");
   const emailCopy = await sendEmail({
     to: [email],
-    subject: "Your The Bee Suite parent portal is ready",
+    subject: "Your The BEE Suite parent portal is ready",
     text: invitationText,
-    fromName: "The Bee Suite",
+    fromName: "The BEE Suite",
     categories: ["parent_invitation_email"],
     customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
   });
@@ -189,9 +189,9 @@ export async function POST(request: NextRequest) {
     centerId: center.id,
     purpose: "parent_invitation_email",
     to: [email],
-    subject: "Your The Bee Suite parent portal is ready",
+    subject: "Your The BEE Suite parent portal is ready",
     text: invitationText,
-    fromName: "The Bee Suite",
+    fromName: "The BEE Suite",
     result: emailCopy,
     metadata: { guardianId: guardian.id, familyId: guardian.familyId },
   });

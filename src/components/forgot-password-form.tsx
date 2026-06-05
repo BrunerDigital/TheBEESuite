@@ -51,7 +51,7 @@ export function ForgotPasswordForm() {
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">Get back into your school workspace.</h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            We’ll send a secure Supabase Auth recovery link so your Kid City USA or Bee Suite account can set a fresh password.
+            We’ll send a secure Supabase Auth recovery link so your Kid City USA or BEE Suite account can set a fresh password.
           </p>
         </div>
         <p className="text-sm text-slate-300">Reset links should only be used by the account owner and expire through Supabase Auth.</p>
@@ -60,7 +60,7 @@ export function ForgotPasswordForm() {
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
         <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
-            <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The Bee Suite home">
+            <Link href="/" className="mx-auto block w-fit lg:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />
             </Link>
             <CardTitle className="mt-4 text-3xl">Reset your password</CardTitle>

@@ -19,7 +19,7 @@ export type InquiryIntegrationResult = {
 
 const GOOGLE_SHEET_COLUMNS = [
   { header: "Submitted At", field: "submittedAt" },
-  { header: "Bee Suite Lead ID", field: "leadId" },
+  { header: "BEE Suite Lead ID", field: "leadId" },
   { header: "Parent Name", field: "parentName" },
   { header: "Email", field: "email" },
   { header: "Phone", field: "phone" },
@@ -130,14 +130,14 @@ export async function sendInquiryNotificationEmail(
     `Location: ${payload.locationName || ""}`,
     `City/State: ${payload.city || ""}, ${payload.state || ""}`,
     `Page: ${payload.pageUrl || ""}`,
-    `Bee Suite Lead ID: ${payload.leadId}`,
+    `BEE Suite Lead ID: ${payload.leadId}`,
   ];
 
   const email = await sendEmail({
     to: recipients,
     subject,
     text: lines.join("\n"),
-    fromName: "The Bee Suite",
+    fromName: "The BEE Suite",
     categories: ["inquiry_notification"],
     customArgs: {
       leadId: String(payload.leadId || ""),

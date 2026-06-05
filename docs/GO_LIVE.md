@@ -122,7 +122,7 @@ The public `/api/onboarding` route creates a gated trial workspace: tenant, bran
 The server routes are live-ready but remain safe when credentials are missing.
 See `docs/STRIPE_CONNECT_SETUP.md` for the dedicated Stripe Connect platform and school payout runbook.
 
-Stripe should be configured as a Connect platform. The Bee Suite platform account creates Checkout Sessions for parent payments, retains the configured platform fee, and transfers the remainder to the selected school's connected payout account.
+Stripe should be configured as a Connect platform. The BEE Suite platform account creates Checkout Sessions for parent payments, retains the configured platform fee, and transfers the remainder to the selected school's connected payout account.
 
 Required for Stripe Checkout and Connect:
 
@@ -165,10 +165,10 @@ v2.core.account[requirements].updated
 New customer payout workflow:
 
 1. Add the platform Stripe keys in Vercel.
-2. Open `Billing Settings` in The Bee Suite.
+2. Open `Billing Settings` in The BEE Suite.
 3. For each school, click `Set up` or `Continue` in the Stripe Connect payout table.
 4. The authenticated school owner or payout admin completes Stripe-hosted onboarding.
-5. Return to The Bee Suite; the payout table auto-syncs status, and the `Check` button can refresh it later.
+5. Return to The BEE Suite; the payout table auto-syncs status, and the `Check` button can refresh it later.
 6. Parent checkout remains blocked for that school until Stripe reports payouts are enabled.
 
 Use destination-charge Checkout Sessions for parent payments. Do not enable platform-only parent payments except for a controlled internal test, because those funds would remain on the platform account instead of routing to the school.

@@ -57,6 +57,7 @@ import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
+import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
@@ -1627,10 +1628,14 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   }
 
   if (slug === "notifications") {
+    const now = new Date();
     const [notifications, openTasks, highIntentLeads, pendingIncidents] = await Promise.all([
       prisma.notification.findMany({
         where: {
-          OR: [{ userId: null }, { userId: user.id }],
+          AND: [
+            activeNotificationWhere(now),
+            { OR: [{ userId: null }, { userId: user.id }] },
+          ],
         },
         orderBy: { createdAt: "desc" },
         take: 40,

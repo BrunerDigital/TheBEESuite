@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { inflateRawSync } from "node:zlib";
-import { PaymentStatus, UserRole } from "@prisma/client";
+import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import {
+  buildProcareDuplicateMatch,
+  scoreProcareDuplicateCandidate,
+  type ProcareDuplicateMatch,
+} from "@/lib/procare-duplicate-matching";
 
 export const runtime = "nodejs";
 
@@ -219,6 +224,208 @@ type ImportCenter = {
   state: string | null;
 };
 
+type DuplicateMatchMode = "review" | "strict" | "auto";
+
+function duplicateMatchMode(input: string): DuplicateMatchMode {
+  return input === "strict" || input === "auto" ? input : "review";
+}
+
+function duplicateMatchNeedsReview(match: ProcareDuplicateMatch, mode: DuplicateMatchMode) {
+  if (!match.candidates.length) return false;
+  if (mode === "strict") return true;
+  return match.resolution === "needs_review";
+}
+
+async function findProcareDuplicateMatches({
+  rowNumber,
+  targetCenterId,
+  rawData,
+}: {
+  rowNumber: number;
+  targetCenterId: string;
+  rawData: Record<string, string>;
+}) {
+  const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+  const familyName = value(rawData, ["family name", "account name", "account", "family", "payer family", "household", "parent name", "primary guardian", "primary payer"]);
+  const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
+  const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+  const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
+  const guardianExternalId = externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]);
+  const guardianName = value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]);
+  const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
+  const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]);
+  const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
+  const relation = value(rawData, ["guardian relation", "parent relation", "payer relation"]) || "Guardian";
+  const matches: ProcareDuplicateMatch[] = [];
+
+  const familyWhere: Prisma.FamilyWhereInput[] = [
+    accountExternalId ? { sourceSystem: "procare", externalId: accountExternalId } : undefined,
+    familyName ? { name: familyName } : undefined,
+    email ? { billingEmail: email } : undefined,
+    address ? { address } : undefined,
+    childName ? { children: { some: { fullName: childName } } } : undefined,
+    guardianName ? { guardians: { some: { fullName: guardianName } } } : undefined,
+    email ? { guardians: { some: { email } } } : undefined,
+    phone ? { guardians: { some: { phone } } } : undefined,
+  ].filter(Boolean) as Prisma.FamilyWhereInput[];
+  if (familyName || childName || email || phone || accountExternalId) {
+    const familyCandidates = familyWhere.length
+      ? await prisma.family.findMany({
+          where: { centerId: targetCenterId, OR: familyWhere },
+          take: 8,
+          include: {
+            guardians: { select: { fullName: true, email: true, phone: true } },
+            children: { select: { fullName: true, dateOfBirth: true } },
+          },
+        })
+      : [];
+    const scoredFamilies = familyCandidates
+      .map((candidate) => scoreProcareDuplicateCandidate(
+        {
+          entity: "family",
+          externalId: accountExternalId,
+          name: familyName || childName || email,
+          email,
+          phone,
+          address,
+          childName,
+          dateOfBirth: childDob,
+          guardianName,
+        },
+        {
+          entity: "family",
+          recordId: candidate.id,
+          label: candidate.name,
+          externalId: candidate.externalId,
+          name: candidate.name,
+          email: candidate.billingEmail,
+          address: candidate.address,
+          childNames: candidate.children.map((child) => child.fullName),
+          childDatesOfBirth: candidate.children.map((child) => child.dateOfBirth),
+          guardianNames: candidate.guardians.map((guardian) => guardian.fullName),
+          guardianEmails: candidate.guardians.map((guardian) => guardian.email),
+          guardianPhones: candidate.guardians.map((guardian) => guardian.phone),
+        },
+      ))
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
+    if (scoredFamilies.length) {
+      matches.push(buildProcareDuplicateMatch({
+        rowNumber,
+        entity: "family",
+        importLabel: familyName || childName || email,
+        candidates: scoredFamilies,
+      }));
+    }
+  }
+
+  const childWhere: Prisma.ChildWhereInput[] = [
+    childExternalId ? { sourceSystem: "procare", externalId: childExternalId } : undefined,
+    childName ? { fullName: childName } : undefined,
+  ].filter(Boolean) as Prisma.ChildWhereInput[];
+  if (childName && childWhere.length) {
+    const childCandidates = await prisma.child.findMany({
+      where: { family: { centerId: targetCenterId }, OR: childWhere },
+      take: 8,
+      include: { family: { select: { name: true } } },
+    });
+    const scoredChildren = childCandidates
+      .map((candidate) => scoreProcareDuplicateCandidate(
+        {
+          entity: "child",
+          externalId: childExternalId,
+          name: childName,
+          familyName,
+          dateOfBirth: childDob,
+        },
+        {
+          entity: "child",
+          recordId: candidate.id,
+          label: `${candidate.fullName} (${candidate.family.name})`,
+          externalId: candidate.externalId,
+          name: candidate.fullName,
+          familyName: candidate.family.name,
+          dateOfBirth: candidate.dateOfBirth,
+        },
+      ))
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
+    if (scoredChildren.length) {
+      matches.push(buildProcareDuplicateMatch({
+        rowNumber,
+        entity: "child",
+        importLabel: childName,
+        candidates: scoredChildren,
+      }));
+    }
+  }
+
+  const guardianImports = [
+    {
+      externalId: guardianExternalId,
+      name: guardianName,
+      email,
+      phone,
+      relation,
+    },
+    {
+      externalId: externalValue(rawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
+      name: value(rawData, ["secondary guardian", "secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"]),
+      email: value(rawData, ["secondary email", "secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"]).toLowerCase(),
+      phone: value(rawData, ["secondary phone", "secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"]),
+      relation: value(rawData, ["secondary relation", "secondary guardian relation", "parent 2 relation"]) || "Secondary Guardian",
+    },
+  ].filter((guardian) => guardian.externalId || guardian.name || guardian.email || guardian.phone);
+
+  for (const guardianImport of guardianImports) {
+    const guardianWhere: Prisma.GuardianWhereInput[] = [
+      guardianImport.externalId ? { sourceSystem: "procare", externalId: guardianImport.externalId } : undefined,
+      guardianImport.email ? { email: guardianImport.email } : undefined,
+      guardianImport.phone ? { phone: guardianImport.phone } : undefined,
+      guardianImport.name ? { fullName: guardianImport.name } : undefined,
+    ].filter(Boolean) as Prisma.GuardianWhereInput[];
+    const guardianCandidates = guardianWhere.length
+      ? await prisma.guardian.findMany({
+          where: { family: { centerId: targetCenterId }, OR: guardianWhere },
+          take: 8,
+          include: { family: { select: { name: true } } },
+        })
+      : [];
+    const scoredGuardians = guardianCandidates
+      .map((candidate) => scoreProcareDuplicateCandidate(
+        {
+          entity: "guardian",
+          externalId: guardianImport.externalId,
+          name: guardianImport.name,
+          email: guardianImport.email,
+          phone: guardianImport.phone,
+          familyName,
+          relation: guardianImport.relation,
+        },
+        {
+          entity: "guardian",
+          recordId: candidate.id,
+          label: `${candidate.fullName} (${candidate.family.name})`,
+          externalId: candidate.externalId,
+          name: candidate.fullName,
+          email: candidate.email,
+          phone: candidate.phone,
+          familyName: candidate.family.name,
+          relation: candidate.relation,
+        },
+      ))
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
+    if (scoredGuardians.length) {
+      matches.push(buildProcareDuplicateMatch({
+        rowNumber,
+        entity: "guardian",
+        importLabel: guardianImport.name || guardianImport.email || guardianImport.phone,
+        candidates: scoredGuardians,
+      }));
+    }
+  }
+
+  return matches;
+}
+
 async function previewImportRows({
   rows,
   headers,
@@ -227,6 +434,7 @@ async function previewImportRows({
   centerByAlias,
   sourceType,
   filename,
+  duplicateMode,
 }: {
   rows: string[][];
   headers: string[];
@@ -235,6 +443,7 @@ async function previewImportRows({
   centerByAlias: Map<string, ImportCenter>;
   sourceType: string;
   filename: string;
+  duplicateMode: DuplicateMatchMode;
 }) {
   let familyRows = 0;
   let staffRows = 0;
@@ -250,6 +459,8 @@ async function previewImportRows({
   let unmappedRows = 0;
   const centersTouched = new Set<string>();
   const classroomsReferenced = new Set<string>();
+  const duplicateReviewRows = new Set<number>();
+  const duplicateMatches: ProcareDuplicateMatch[] = [];
   const warnings: Array<{ rowNumber: number; message: string }> = [];
   const rowResults: Array<{
     rowNumber: number;
@@ -357,14 +568,23 @@ async function previewImportRows({
     if (childName) {
       if (existingChild) matchedChildren += 1; else newChildren += 1;
     }
+    const rowDuplicateMatches = await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData });
+    const rowDuplicateWarnings = rowDuplicateMatches.filter((match) => duplicateMatchNeedsReview(match, duplicateMode));
+    if (rowDuplicateMatches.length) duplicateMatches.push(...rowDuplicateMatches);
+    if (rowDuplicateWarnings.length) {
+      duplicateReviewRows.add(rowNumber);
+      const message = `Review possible duplicate ${rowDuplicateWarnings.map((match) => match.entity).join(", ")} match before import.`;
+      warnings.push({ rowNumber, message });
+    }
     rowResults.push({
       rowNumber,
-      status: "ready",
+      status: rowDuplicateWarnings.length ? "warning" : "ready",
       entity: "family_child",
       center: targetCenter.crmLocationId ?? targetCenter.name,
-      action: existingFamily ? "Update family" : "Create family",
+      action: rowDuplicateWarnings.length ? "Review duplicate matches" : existingFamily ? "Update family" : "Create family",
       familyName: familyName || email || childName,
       childName: childName || undefined,
+      message: rowDuplicateWarnings.length ? rowDuplicateWarnings.map((match) => `${match.entity}: ${match.importLabel}`).join("; ") : undefined,
     });
   }
 
@@ -389,6 +609,15 @@ async function previewImportRows({
     attendanceRows,
     checkLogRows,
     centersTouched: centersTouched.size,
+    duplicateMatches: duplicateMatches.length,
+    duplicateReviewRows: duplicateReviewRows.size,
+    duplicateMatchesByEntity: {
+      families: duplicateMatches.filter((match) => match.entity === "family").length,
+      children: duplicateMatches.filter((match) => match.entity === "child").length,
+      guardians: duplicateMatches.filter((match) => match.entity === "guardian").length,
+    },
+    duplicateMatchMode: duplicateMode,
+    duplicateMatchDetails: duplicateMatches.slice(0, 50),
     warnings: warnings.slice(0, 25),
     rowResults: rowResults.slice(0, 75),
   };
@@ -665,6 +894,8 @@ export async function POST(request: NextRequest) {
   const requestedCenterId = clean(formData.get("centerId"));
   const v10Password = clean(formData.get("v10Password"));
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
+  const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
+  const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
@@ -718,8 +949,33 @@ export async function POST(request: NextRequest) {
       centerByAlias,
       sourceType: importPayload.sourceType,
       filename: importPayload.filename,
+      duplicateMode,
     });
     return NextResponse.json({ ok: true, dryRun: true, summary: preview });
+  }
+
+  const validationPreview = await previewImportRows({
+    rows,
+    headers,
+    autoMap,
+    defaultCenter: center,
+    centerByAlias,
+    sourceType: importPayload.sourceType,
+    filename: importPayload.filename,
+    duplicateMode,
+  });
+  const blockingWarningRows = Math.max(validationPreview.warningRows - validationPreview.duplicateReviewRows, 0);
+  if (blockingWarningRows > 0) {
+    return NextResponse.json(
+      { ok: false, error: `${blockingWarningRows} ProCare row(s) still need cleanup before import. Run Preview Import and fix the warning rows first.`, summary: validationPreview },
+      { status: 400 },
+    );
+  }
+  if (validationPreview.duplicateReviewRows > 0 && !duplicateReviewConfirmed) {
+    return NextResponse.json(
+      { ok: false, error: `${validationPreview.duplicateReviewRows} row(s) have possible duplicate family, child, or guardian matches. Review and confirm the duplicate matching controls before committing.`, summary: validationPreview },
+      { status: 400 },
+    );
   }
 
   let createdFamilies = 0;

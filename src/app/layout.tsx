@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "The Bee Suite",
+  title: "The BEE Suite",
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
   icons: {

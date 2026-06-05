@@ -40,7 +40,7 @@ export default async function DashboardPage() {
       },
     },
   });
-  const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The Bee Suite";
+  const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
   const showExecutiveDemoData = canViewExecutiveDemoData(user);
   const centerIds = centers.map((center) => center.id);

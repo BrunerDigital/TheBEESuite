@@ -19,7 +19,7 @@ The preferred Avada embed block is:
 ></script>
 ```
 
-Executive and center users can also copy live embed code from their Bee Suite dashboard:
+Executive and center users can also copy live embed code from their BEE Suite dashboard:
 
 - Kid City USA executive users receive the multi-location embed above.
 - Single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
@@ -29,7 +29,7 @@ The hosted embed currently loads 94 Kid City USA open-school options from `/api/
 
 ## What Happens
 
-1. The Bee Suite validates the form payload.
+1. The BEE Suite validates the form payload.
 2. The selected `locationId` is matched to a center by CRM location ID, public location ID, or center name.
 3. A CRM `Lead` is created in Supabase.
 4. A follow-up `Task` is created.
@@ -146,7 +146,7 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL="your-service-account@project.iam.gserviceaccount.c
 GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
-When configured, The Bee Suite creates the `Inquiries` tab if needed, writes headers when the first row is empty, and appends each inquiry after the CRM lead is created.
+When configured, The BEE Suite creates the `Inquiries` tab if needed, writes headers when the first row is empty, and appends each inquiry after the CRM lead is created.
 
 ### Webhook fallback
 
@@ -162,7 +162,7 @@ Suggested sheet columns:
 
 ```text
 Submitted At
-Bee Suite Lead ID
+BEE Suite Lead ID
 Parent Name
 Email
 Phone

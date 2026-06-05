@@ -1,6 +1,6 @@
 # ProCare Field Coverage for Kid City USA Cutover
 
-This note documents how The Bee Suite maps the ProCare data areas visible in the Longmont environment and in the installed ProCare report catalog. It avoids storing private child, family, or staff details in documentation.
+This note documents how The BEE Suite maps the ProCare data areas visible in the Longmont environment and in the installed ProCare report catalog. It avoids storing private child, family, or staff details in documentation.
 
 ## Sources Reviewed
 
@@ -9,9 +9,9 @@ This note documents how The Bee Suite maps the ProCare data areas visible in the
 - Installed ProCare report catalog under `C:\Program Files\Procare\Client\Reports`, including family data, child enrollment, relationships, immunizations, FTE, rollcall, schedules, sign-in/out, employee records, attendance, account balances, aging, charge/credit activity, statements, deposits, tuition variance, and payment reports.
 - Uploaded Longmont `.v10` export structure. The file is encrypted; the provided app login did not unlock the archive payload, so final field validation still requires the actual export password or a CSV export.
 
-## Current Bee Suite Coverage
+## Current BEE Suite Coverage
 
-| ProCare area | Bee Suite destination |
+| ProCare area | BEE Suite destination |
 | --- | --- |
 | Location / school / center identifiers | `Center.crmLocationId`, `Center.locationId`, `Center.sourceSystem`, `Center.externalId`, `Center.customFields` |
 | Franchise / owner grouping | `Tenant`, `Brand`, `Organization`, `OwnerGroup`, `UserAccessGrant`, `BrandCustomization`, `BrandAsset` |

@@ -2608,7 +2608,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Latest submitted FTE" value={data.stats.latestFteTotal.toLocaleString()} detail="Most recent report per school" />
-        <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The Bee Suite" />
+        <StatCard label="FTE rows" value={data.stats.submittedFteReports.toLocaleString()} detail="Editable weekly reports in The BEE Suite" />
         <StatCard label="Schools due" value={data.stats.missingFteReports.toLocaleString()} detail="No current-week FTE report" />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
@@ -3421,7 +3421,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Payments</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Stripe Checkout and webhook reconciliation are live in the server layer. Parent payments are routed through The Bee Suite platform account to each school&apos;s connected payout account.
+          Stripe Checkout and webhook reconciliation are live in the server layer. Parent payments are routed through The BEE Suite platform account to each school&apos;s connected payout account.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-6">
@@ -3948,7 +3948,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
           <CardHeader>
             <CardTitle>Platform Fee Flow</CardTitle>
             <CardDescription>
-              The configured application fee is retained by The Bee Suite while the remaining payment amount is routed to the school payout account.
+              The configured application fee is retained by The BEE Suite while the remaining payment amount is routed to the school payout account.
             </CardDescription>
           </CardHeader>
         </Card>

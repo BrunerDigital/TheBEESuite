@@ -135,7 +135,7 @@ async function ensureOrg() {
       themeMode: "dark",
       emailSenderPlaceholder: "hello@kidcityusa.com",
       customDomainPlaceholder: "portal.kidcityusa.com",
-      legalFooterText: "Kid City USA childcare operations powered by The Bee Suite.",
+      legalFooterText: "Kid City USA childcare operations powered by The BEE Suite.",
     },
   });
 

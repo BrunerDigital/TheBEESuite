@@ -58,7 +58,7 @@ function ensureHeader_(sheet) {
 
   sheet.appendRow([
     "Submitted At",
-    "Bee Suite Lead ID",
+    "BEE Suite Lead ID",
     "Parent Name",
     "Email",
     "Phone",

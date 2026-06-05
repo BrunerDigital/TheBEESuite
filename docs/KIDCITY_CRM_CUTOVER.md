@@ -1,14 +1,14 @@
 # Kid City USA CRM Cutover
 
-This is the live-test cutover path for moving Kid City USA from the old CRM export into The Bee Suite enrollment CRM.
+This is the live-test cutover path for moving Kid City USA from the old CRM export into The BEE Suite enrollment CRM.
 
 ## What Is Ready
 
 - Kid City USA tenant, brand, organization, center/location profiles, users, and historical leads can be imported from the old CRM export.
-- Supabase Auth login is wired into The Bee Suite. Kid City school users can sign in with their school email and the approved temporary password.
+- Supabase Auth login is wired into The BEE Suite. Kid City school users can sign in with their school email and the approved temporary password.
 - CRM pages and lead APIs are protected by signed HttpOnly app sessions.
 - School users only see and update leads for their assigned center. Brand, regional, and platform roles can see broader views.
-- The public inquiry endpoint creates leads in The Bee Suite and routes them by `crm_location_id`, `Location ID`, or center name.
+- The public inquiry endpoint creates leads in The BEE Suite and routes them by `crm_location_id`, `Location ID`, or center name.
 - The endpoint can also forward every inquiry to a Google Sheet through the direct Sheets API or a webhook fallback, and send notification emails with SendGrid.
 - Inquiry notifications are sent to the central recipient list plus the selected center's `Center.email` when one exists.
 - The WordPress/Avada embed block lives at `wordpress-avada/kidcity-inquiry-form-embed.html`.
@@ -41,7 +41,7 @@ npm run kidcity:create-auth-users
 
 The Kid City cutover scripts also load `.env.local` / `.env` automatically when those files are present, so local one-off imports can use the same environment file as the app without committing credentials.
 
-Require password reset after live testing begins if this becomes production access. The Bee Suite now has a Supabase-backed reset flow at `/forgot-password` and `/reset-password`; make sure the Supabase Auth redirect allow-list includes `https://the-bee-suite-beta.vercel.app/reset-password` before inviting school users.
+Require password reset after live testing begins if this becomes production access. The BEE Suite now has a Supabase-backed reset flow at `/forgot-password` and `/reset-password`; make sure the Supabase Auth redirect allow-list includes `https://the-bee-suite-beta.vercel.app/reset-password` before inviting school users.
 
 ## CRM Access Rules
 
@@ -100,7 +100,7 @@ Recommended sheet columns:
 - State
 - Page URL
 - Lead Source
-- Bee Suite Lead ID
+- BEE Suite Lead ID
 
 ## Notification Emails
 

@@ -181,11 +181,11 @@ export function StripeConnectPanel({
             </Badge>
             <CardTitle>School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              The Bee Suite platform account can collect parent payments, retain the configured platform fee, and route the remaining funds to each school&apos;s connected Stripe payout account.
+              The BEE Suite platform account can collect parent payments, retain the configured platform fee, and route the remaining funds to each school&apos;s connected Stripe payout account.
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Bee Suite fee</div>
+            <div className="font-medium">BEE Suite fee</div>
             <div className="text-2xl font-semibold">{percentFromBps(applicationFeeBps)}{centsLabel(applicationFeeFixedCents)}</div>
             <div className="mt-1 text-xs text-muted-foreground">Retained from each parent checkout</div>
           </div>

@@ -29,6 +29,7 @@ import {
   validateFtePeriod,
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
+import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
 import { readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
@@ -540,6 +541,20 @@ test("notification target guard blocks cross-scope and center-scoped broadcasts"
     targetTenantId: "tenant_a",
     targetCenterIds: ["center_a"],
   }), { ok: true });
+});
+
+test("notification policy normalizes dedupe keys and active retention filters", () => {
+  const createdAt = new Date("2026-06-03T12:00:00.000Z");
+  assert.equal(notificationExpiresAt(createdAt, 7).toISOString(), "2026-06-10T12:00:00.000Z");
+  assert.equal(
+    notificationDedupeKey(["FTE Due", "2026-06-01", "Overdue", "center 1", "USER 1"]),
+    "fte-due:2026-06-01:overdue:center-1:user-1",
+  );
+  assert.equal(notificationDedupeKey(["", null, undefined]), null);
+  assert.deepEqual(activeNotificationWhere(createdAt), {
+    archivedAt: null,
+    OR: [{ expiresAt: null }, { expiresAt: { gt: createdAt } }],
+  });
 });
 
 test("FTE report guard scopes directors and permits executive corrections", () => {

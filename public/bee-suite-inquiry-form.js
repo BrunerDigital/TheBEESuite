@@ -7,7 +7,7 @@
 
   if (!target) return;
 
-  const brandName = currentScript.dataset.brandName || "The Bee Suite";
+  const brandName = currentScript.dataset.brandName || "The BEE Suite";
   const centerId = currentScript.dataset.centerId || "";
   const locationName = currentScript.dataset.locationName || currentScript.dataset.centerName || "";
   const locationsUrl = currentScript.dataset.locationsUrl || "";

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage, Prisma } from "@prisma/client";
 import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { activeNotificationWhere } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -23,11 +24,14 @@ export async function GET() {
   const centerIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(centerIds);
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds };
-  const tenantWide = canAccessAllCenters(user);
-  const notificationUserWhere = tenantWide
-    ? { OR: [{ userId: user.id }, { userId: null }] }
-    : { userId: user.id };
   const now = new Date();
+  const tenantWide = canAccessAllCenters(user);
+  const notificationUserWhere: Prisma.NotificationWhereInput = {
+    AND: [
+      activeNotificationWhere(now),
+      tenantWide ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: user.id },
+    ],
+  };
   const fteDueState = getFteDueState(now);
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);

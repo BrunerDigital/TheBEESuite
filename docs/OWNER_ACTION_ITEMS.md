@@ -43,7 +43,7 @@ These are the items BrunerDigital cannot safely complete without business approv
 
 ## Live Rollout Coordination
 
-- Pick the pilot order for schools switching from ProCare to The Bee Suite.
+- Pick the pilot order for schools switching from ProCare to The BEE Suite.
 - Confirm one director/admin owner per location for cutover.
 - Schedule cutover windows and fallback procedures.
 - Have each school validate imported families, children, classrooms, balances, and staff before using operational modules live.

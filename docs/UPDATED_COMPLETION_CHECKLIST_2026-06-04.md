@@ -24,7 +24,7 @@ Status legend:
 - [x] Protected billing mutation route rejects unauthenticated requests.
 - [x] Procare parity gap map created at `docs/PROCARE_PARITY_GAP_MAP_2026-06-04.md`.
 - [ ] Rotate the GitHub and Supabase tokens that were shared in chat.
-- [ ] Run a full role-by-role production smoke test after the next account/data setup pass.
+- [ ] Run a full role-by-role production smoke test after the next account/data setup pass. Baseline production smoke passed on June 5, 2026; full credentialed role smoke is blocked until dedicated smoke credentials are configured and parent/guardian login users exist. See `docs/ROLE_SMOKE_TEST_REPORT_2026-06-05.md`.
 
 ## Executive Level
 

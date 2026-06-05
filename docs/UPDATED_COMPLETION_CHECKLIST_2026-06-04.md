@@ -245,7 +245,7 @@ Status legend:
 - [x] Parent document upload API stores submitted files in Supabase Storage.
 - [x] Director document review API supports approve/reject decisions with notes and parent notifications.
 - [ ] Build actual form builder UI.
-- [ ] Complete required document checklist per family/staff/child.
+- [x] Complete required document checklist per family/staff/child.
 - [x] Add file upload UI tied to Supabase storage.
 - [x] Add director document review states.
 - [x] Add expiration reminders for family/staff/child documents.

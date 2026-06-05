@@ -57,6 +57,7 @@ import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
+import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import { signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -2312,7 +2313,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
           ],
         };
-    const [documents, total, expiring, restricted, pending, signatureFamilies] = await Promise.all([
+    const [documents, total, expiring, restricted, pending, signatureFamilies, checklistFamilies, checklistStaff] = await Promise.all([
       prisma.document.findMany({
         where: documentWhere,
         orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
@@ -2338,10 +2339,54 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           children: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
         },
       }),
+      prisma.family.findMany({
+        where: allCenters ? {} : { centerId: scopedCenterIds },
+        orderBy: { name: "asc" },
+        take: 250,
+        select: {
+          id: true,
+          name: true,
+          centerId: true,
+          documents: { select: { id: true, name: true, type: true, status: true, expiresAt: true } },
+          children: {
+            select: {
+              id: true,
+              fullName: true,
+              documents: { select: { id: true, name: true, type: true, status: true, expiresAt: true } },
+            },
+            orderBy: { fullName: "asc" },
+          },
+        },
+      }),
+      prisma.staffProfile.findMany({
+        where: allCenters ? { user: { isActive: true } } : { centerId: scopedCenterIds, user: { isActive: true } },
+        orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
+        take: 250,
+        select: {
+          id: true,
+          title: true,
+          user: { select: { name: true } },
+          center: { select: { name: true, crmLocationId: true } },
+          certifications: { select: { id: true, name: true, status: true, expiresAt: true } },
+        },
+      }),
     ]);
     const signedDocuments = await signDocumentRecords(documents);
+    const centersById = new Map(centers.map((center) => [center.id, { name: center.name, crmLocationId: center.crmLocationId }]));
+    const requiredChecklistItems = buildRequiredDocumentChecklist({
+      families: checklistFamilies.map((family) => ({
+        ...family,
+        center: family.centerId ? centersById.get(family.centerId) ?? null : null,
+      })),
+      staff: checklistStaff,
+      now: today,
+    });
+    const requiredChecklist = {
+      items: requiredChecklistItems,
+      summary: summarizeRequiredDocumentChecklist(requiredChecklistItems),
+    };
 
-    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending }, signatureFamilies }} />;
+    return <DocumentsPage data={{ documents: signedDocuments, stats: { total, expiring, restricted, pending }, requiredChecklist, signatureFamilies }} />;
   }
 
   if (slug === "compliance") {

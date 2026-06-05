@@ -40,7 +40,7 @@ Status legend:
 - [x] Executive user/access management foundation exists.
 - [x] Audit logging exists for sensitive admin actions.
 - [ ] Finish all executive CRUD flows with polished confirmation/error states.
-- [ ] Add bulk user/location import tools for executives.
+- [x] Add bulk user/location import tools for executives.
 - [ ] Add granular permission editor beyond the current role/access-grant model.
 - [ ] Add explicit support-access/impersonation workflow with audit warnings.
 

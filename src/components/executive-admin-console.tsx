@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Archive, Building2, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Archive, Building2, FileUp, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
 import {
   CRM_LOCATION_ID_EXAMPLE,
   defaultCenterNameFromCrmLocationId,
@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { parseExecutiveBulkImportCsv, summarizeExecutiveBulkImport } from "@/lib/executive-bulk-import";
 
 type CenterOption = {
   id: string;
@@ -131,6 +133,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     sendPasswordReset: "no",
   });
   const [resetForm, setResetForm] = useState({ email: "", password: "" });
+  const [bulkCsv, setBulkCsv] = useState("");
+  const [bulkResults, setBulkResults] = useState<Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>>([]);
 
   const sortedCenters = useMemo(
     () => [...centers].sort((a, b) => shortCenterLabel(a).localeCompare(shortCenterLabel(b))),
@@ -145,6 +149,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     [users],
   );
   const centerLocationIdIsValid = isValidCrmLocationId(centerForm.crmLocationId);
+  const bulkRows = useMemo(() => parseExecutiveBulkImportCsv(bulkCsv), [bulkCsv]);
+  const bulkSummary = useMemo(() => summarizeExecutiveBulkImport(bulkRows), [bulkRows]);
 
   function setCenterField(key: keyof ReturnType<typeof blankCenterForm>, value: string) {
     setCenterForm((current) => {
@@ -244,6 +250,37 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
 
   function revokeSessions() {
     post("revokeUserSessions", { email: resetForm.email }, "Active sessions revoked. The user must log in again.");
+  }
+
+  function importBulkRows() {
+    startTransition(async () => {
+      setMessage("");
+      setError("");
+      setBulkResults([]);
+      const response = await fetch("/api/admin/executive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bulkImport", rows: bulkRows }),
+      });
+      const json = (await response.json().catch(() => null)) as {
+        error?: string;
+        summary?: { imported: number; failed: number };
+        results?: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>;
+      } | null;
+      if (!response.ok) {
+        setError(json?.error || "Bulk import failed.");
+        return;
+      }
+      setBulkResults(json?.results ?? []);
+      setMessage(`Bulk import finished: ${json?.summary?.imported ?? 0} imported, ${json?.summary?.failed ?? 0} failed.`);
+      router.refresh();
+    });
+  }
+
+  async function loadBulkFile(file: File | null) {
+    if (!file) return;
+    setBulkCsv(await file.text());
+    setBulkResults([]);
   }
 
   function loadUserForEdit(user: UserOption) {
@@ -352,6 +389,105 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                   ) : null}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileUp className="size-5 text-primary" />
+                Bulk User and Location Import
+              </CardTitle>
+              <CardDescription>
+                Paste or upload CSV rows for locations and users. Location rows are imported first, then center-scoped users are matched by Location ID.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="space-y-1">
+                  <Label htmlFor="executive-bulk-csv">CSV</Label>
+                  <Textarea
+                    id="executive-bulk-csv"
+                    value={bulkCsv}
+                    onChange={(event) => {
+                      setBulkCsv(event.target.value);
+                      setBulkResults([]);
+                    }}
+                    rows={8}
+                    placeholder={"type,name,email,role,locationId,capacity,title,sendPasswordReset\nlocation,,school@example.com,,FL | Sarasota,120,,\nuser,Jane Director,jane@example.com,CENTER_DIRECTOR,FL | Sarasota,,Center Director,yes"}
+                  />
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="executive-bulk-file">CSV file</Label>
+                    <Input id="executive-bulk-file" type="file" accept=".csv,text/csv" onChange={(event) => void loadBulkFile(event.target.files?.[0] ?? null)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-lg border bg-background/40 p-3">
+                      <div className="text-lg font-semibold">{bulkSummary.locations}</div>
+                      <div className="text-muted-foreground">Locations</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/40 p-3">
+                      <div className="text-lg font-semibold">{bulkSummary.users}</div>
+                      <div className="text-muted-foreground">Users</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/40 p-3">
+                      <div className="text-lg font-semibold">{bulkSummary.total}</div>
+                      <div className="text-muted-foreground">Rows</div>
+                    </div>
+                    <div className="rounded-lg border bg-background/40 p-3">
+                      <div className="text-lg font-semibold">{bulkSummary.errors}</div>
+                      <div className="text-muted-foreground">Errors</div>
+                    </div>
+                  </div>
+                  <Button onClick={importBulkRows} disabled={isPending || !bulkRows.length || bulkSummary.errors > 0}>
+                    <FileUp data-icon="inline-start" />
+                    Import rows
+                  </Button>
+                </div>
+              </div>
+              {bulkRows.length ? (
+                <div className="rounded-xl border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Row</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Location ID</TableHead>
+                        <TableHead>Email / role</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bulkRows.slice(0, 12).map((row) => {
+                        const result = bulkResults.find((item) => item.rowNumber === row.rowNumber);
+                        return (
+                          <TableRow key={`${row.rowNumber}-${row.type}`}>
+                            <TableCell>{row.rowNumber}</TableCell>
+                            <TableCell><Badge variant="outline">{row.type}</Badge></TableCell>
+                            <TableCell>{row.name || "Missing"}</TableCell>
+                            <TableCell>{row.crmLocationId || row.locationId || "None"}</TableCell>
+                            <TableCell>
+                              <div>{row.email || "No email"}</div>
+                              <div className="text-xs text-muted-foreground">{row.role || "No role"}</div>
+                            </TableCell>
+                            <TableCell>
+                              {row.errors.length ? (
+                                <Badge variant="destructive">{row.errors.join(" ")}</Badge>
+                              ) : result ? (
+                                <Badge variant={result.ok ? "default" : "destructive"}>{result.ok ? "Imported" : result.error}</Badge>
+                              ) : (
+                                <Badge variant="secondary">Ready</Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

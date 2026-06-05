@@ -8,6 +8,7 @@ import {
 } from "@/lib/active-school-locations";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
+import { parseExecutiveBulkImportCsv, type ExecutiveBulkImportRow } from "@/lib/executive-bulk-import";
 import { prisma } from "@/lib/prisma";
 import {
   getPasswordResetRedirectUrl,
@@ -41,6 +42,8 @@ type Payload = {
   password?: unknown;
   accessScopeType?: unknown;
   sendPasswordReset?: unknown;
+  csvText?: unknown;
+  rows?: unknown;
 };
 
 const editableCenterStatuses = new Set(["active", "trial_setup", "paused", "closed"]);
@@ -664,6 +667,133 @@ async function revokeUserSessions(payload: Payload, actor: Awaited<ReturnType<ty
   return { user: updated, sessionVersion: updated.sessionVersion };
 }
 
+function normalizeBulkRows(payload: Payload) {
+  const csvText = clean(payload.csvText);
+  if (csvText) return parseExecutiveBulkImportCsv(csvText);
+  if (!Array.isArray(payload.rows)) return [];
+  return payload.rows.map((raw, index) => {
+    const row = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Partial<ExecutiveBulkImportRow> : {};
+    return {
+      rowNumber: Number(row.rowNumber) || index + 1,
+      type: row.type === "user" ? "user" as const : "location" as const,
+      name: clean(row.name),
+      email: clean(row.email).toLowerCase(),
+      role: clean(row.role),
+      crmLocationId: normalizeCrmLocationId(clean(row.crmLocationId)),
+      locationId: clean(row.locationId),
+      status: clean(row.status) || "active",
+      address: clean(row.address),
+      city: clean(row.city),
+      state: clean(row.state).toUpperCase(),
+      postalCode: clean(row.postalCode),
+      phone: clean(row.phone),
+      licensedCapacity: clean(row.licensedCapacity),
+      title: clean(row.title),
+      accessScopeType: clean(row.accessScopeType),
+      ownerGroupId: clean(row.ownerGroupId),
+      password: clean(row.password),
+      sendPasswordReset: row.sendPasswordReset === true,
+      errors: Array.isArray(row.errors) ? row.errors.map(clean).filter(Boolean) : [],
+    };
+  });
+}
+
+async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>, requestUrl: string) {
+  const rows = normalizeBulkRows(payload);
+  if (!rows.length) throw new Error("Bulk import needs CSV rows.");
+  if (rows.length > 250) throw new Error("Executive bulk import is limited to 250 rows per batch.");
+
+  const results: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }> = [];
+  const centerIdsByLocation = new Map<string, string>();
+  const existingCenters = await prisma.center.findMany({
+    where: {
+      organization: { tenantId: actor.tenantId },
+      OR: [
+        { crmLocationId: { in: rows.map((row) => row.crmLocationId).filter(Boolean) } },
+        { locationId: { in: rows.map((row) => row.locationId).filter(Boolean) } },
+      ],
+    },
+    select: { id: true, crmLocationId: true, locationId: true },
+  });
+  for (const center of existingCenters) {
+    if (center.crmLocationId) centerIdsByLocation.set(center.crmLocationId, center.id);
+    if (center.locationId) centerIdsByLocation.set(center.locationId, center.id);
+  }
+
+  for (const row of rows.filter((item) => item.type === "location")) {
+    try {
+      if (row.errors.length) throw new Error(row.errors.join(" "));
+      const existingCenterId = centerIdsByLocation.get(row.crmLocationId) ?? centerIdsByLocation.get(row.locationId) ?? "";
+      const result = await saveCenter({
+        centerId: existingCenterId,
+        name: row.name,
+        crmLocationId: row.crmLocationId,
+        locationId: row.locationId || row.crmLocationId,
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postalCode,
+        phone: row.phone,
+        email: row.email,
+        status: row.status,
+        licensedCapacity: row.licensedCapacity,
+        ownerGroupId: row.ownerGroupId,
+      }, actor);
+      if (result.center.crmLocationId) centerIdsByLocation.set(result.center.crmLocationId, result.center.id);
+      if (result.center.locationId) centerIdsByLocation.set(result.center.locationId, result.center.id);
+      results.push({ rowNumber: row.rowNumber, type: row.type, ok: true, id: result.center.id });
+    } catch (error) {
+      results.push({ rowNumber: row.rowNumber, type: row.type, ok: false, error: error instanceof Error ? error.message : "Location import failed." });
+    }
+  }
+
+  for (const row of rows.filter((item) => item.type === "user")) {
+    try {
+      if (row.errors.length) throw new Error(row.errors.join(" "));
+      const centerId = row.accessScopeType === "CENTER"
+        ? centerIdsByLocation.get(row.crmLocationId) ?? centerIdsByLocation.get(row.locationId) ?? ""
+        : "";
+      const result = await saveUser({
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        centerId,
+        ownerGroupId: row.ownerGroupId,
+        accessScopeType: row.accessScopeType,
+        title: row.title,
+        password: row.password,
+        sendPasswordReset: row.sendPasswordReset,
+      }, actor, requestUrl);
+      results.push({ rowNumber: row.rowNumber, type: row.type, ok: true, id: result.user.id });
+    } catch (error) {
+      results.push({ rowNumber: row.rowNumber, type: row.type, ok: false, error: error instanceof Error ? error.message : "User import failed." });
+    }
+  }
+
+  await audit({
+    tenantId: actor.tenantId,
+    userId: actor.id,
+    action: "executive.bulk_import.completed",
+    resource: "ExecutiveBulkImport",
+    metadata: {
+      rows: rows.length,
+      imported: results.filter((result) => result.ok).length,
+      failed: results.filter((result) => !result.ok).length,
+    },
+  });
+
+  return {
+    summary: {
+      rows: rows.length,
+      locations: rows.filter((row) => row.type === "location").length,
+      users: rows.filter((row) => row.type === "user").length,
+      imported: results.filter((result) => result.ok).length,
+      failed: results.filter((result) => !result.ok).length,
+    },
+    results,
+  };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const actor = await requireExecutiveAccess();
@@ -690,6 +820,9 @@ export async function POST(request: NextRequest) {
     }
     if (action === "revokeUserSessions") {
       return NextResponse.json({ ok: true, ...(await revokeUserSessions(payload, actor)) });
+    }
+    if (action === "bulkImport") {
+      return NextResponse.json({ ok: true, ...(await bulkImport(payload, actor, request.url)) });
     }
 
     return NextResponse.json({ ok: false, error: "Unsupported executive action." }, { status: 400 });

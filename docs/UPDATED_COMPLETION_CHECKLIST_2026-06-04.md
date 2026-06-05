@@ -194,7 +194,7 @@ Status legend:
 - [x] Vercel cron route exists for persistent missing-FTE notifications.
 - [x] `CRON_SECRET` is configured in Vercel production.
 - [ ] Confirm final reporting week cutoff/due time with Kid City USA operations.
-- [ ] Add email/SMS escalation for missing FTE reports if desired.
+- [x] Add email/SMS escalation for missing FTE reports if desired.
 - [ ] Add final Google Sheet two-way reconciliation rules.
 
 ## ProCare Import And Cutover

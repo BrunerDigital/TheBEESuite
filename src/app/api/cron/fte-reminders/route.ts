@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
+import {
+  fteEscalationCopy,
+  resolveFteEscalationChannels,
+  shouldSendExternalFteEscalation,
+  type FteEscalationPreference,
+  type FteEscalationRecipient,
+} from "@/lib/fte-escalations";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
+import { sendEmail, sendSms, uniqueEmails } from "@/lib/integrations";
 import { notificationDedupeKey, notificationExpiresAt } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
+import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const runtime = "nodejs";
 
@@ -49,23 +59,27 @@ export async function GET(request: NextRequest) {
   const [platformOwners, executives, staffDirectors, grantDirectors] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true, role: UserRole.PLATFORM_OWNER },
-      select: { id: true },
+      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { phone: true } } },
       take: 100,
     }),
     prisma.user.findMany({
       where: { isActive: true, tenantId: { in: tenantIds }, role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] } },
-      select: { id: true, tenantId: true },
+      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { phone: true } } },
       take: 500,
     }),
     prisma.user.findMany({
       where: { isActive: true, role: { in: directorRoles }, staffProfile: { is: { centerId: { in: centerIds } } } },
-      select: { id: true, staffProfile: { select: { centerId: true } } },
+      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { centerId: true, phone: true } } },
       take: 1000,
     }),
     prisma.user.findMany({
       where: { isActive: true, accessGrants: { some: { isActive: true, centerId: { in: centerIds }, role: { in: directorRoles } } } },
       select: {
         id: true,
+        tenantId: true,
+        email: true,
+        role: true,
+        staffProfile: { select: { phone: true } },
         accessGrants: {
           where: { isActive: true, centerId: { in: centerIds }, role: { in: directorRoles } },
           select: { centerId: true },
@@ -74,6 +88,28 @@ export async function GET(request: NextRequest) {
       take: 1000,
     }),
   ]);
+
+  const allRecipientsById = new Map<string, FteEscalationRecipient>();
+  for (const user of [...platformOwners, ...executives, ...staffDirectors, ...grantDirectors]) {
+    allRecipientsById.set(user.id, {
+      id: user.id,
+      role: user.role,
+      email: user.email,
+      phone: user.staffProfile?.phone ?? null,
+    });
+  }
+  const notificationPreferences: FteEscalationPreference[] = await prisma.notificationPreference.findMany({
+    where: {
+      tenantId: { in: tenantIds },
+      type: "fte_reports",
+      OR: [
+        { userId: { in: Array.from(allRecipientsById.keys()) } },
+        { role: { in: [UserRole.PLATFORM_OWNER, UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, ...directorRoles] } },
+      ],
+    },
+    select: { userId: true, role: true, emailEnabled: true, smsEnabled: true },
+    take: 5000,
+  });
   const executivesByTenant = new Map<string, string[]>();
   for (const user of executives) {
     const users = executivesByTenant.get(user.tenantId) ?? [];
@@ -98,6 +134,12 @@ export async function GET(request: NextRequest) {
   }
 
   const notificationData: Prisma.NotificationCreateManyInput[] = [];
+  const externalMetaByDedupeKey = new Map<string, {
+    centerId: string;
+    tenantId: string;
+    centerLabel: string;
+    userId: string;
+  }>();
   const localDedupeKeys = new Set<string>();
   const expiresAt = notificationExpiresAt();
 
@@ -124,6 +166,12 @@ export async function GET(request: NextRequest) {
         dedupeKey,
         expiresAt,
       });
+      externalMetaByDedupeKey.set(dedupeKey, {
+        centerId: center.id,
+        tenantId: center.organization.tenantId,
+        centerLabel: label,
+        userId,
+      });
     }
   }
 
@@ -146,10 +194,89 @@ export async function GET(request: NextRequest) {
     (notification) => typeof notification.dedupeKey === "string" && !existingDedupeKeys.has(notification.dedupeKey),
   );
   let notificationsCreated = 0;
+  let emailsAttempted = 0;
+  let emailsSent = 0;
+  let smsAttempted = 0;
+  let smsSent = 0;
+  const shouldSendExternal = shouldSendExternalFteEscalation(dueState.phase);
 
   if (!dryRun && pendingNotificationData.length) {
     const created = await prisma.notification.createMany({ data: pendingNotificationData, skipDuplicates: true });
     notificationsCreated = created.count;
+  }
+
+  if (!dryRun && shouldSendExternal && pendingNotificationData.length) {
+    const statusCallbackUrl = twilioStatusCallbackUrl(request);
+    for (const notification of pendingNotificationData) {
+      if (typeof notification.dedupeKey !== "string") continue;
+      if (typeof notification.userId !== "string") continue;
+      const meta = externalMetaByDedupeKey.get(notification.dedupeKey);
+      const recipient = allRecipientsById.get(notification.userId);
+      if (!meta || !recipient) continue;
+
+      const channels = resolveFteEscalationChannels(recipient, notificationPreferences);
+      const copy = fteEscalationCopy({
+        centerName: meta.centerLabel,
+        weekLabel,
+        phase: dueState.phase,
+        reminder: dueState.reminder,
+      });
+
+      if (channels.email) {
+        const to = uniqueEmails([recipient.email]);
+        if (to.length) {
+          emailsAttempted += 1;
+          const email = await sendEmail({
+            to,
+            subject: copy.subject,
+            text: copy.body,
+            fromName: "The BEE Suite",
+            categories: ["fte_reminder_email"],
+            customArgs: {
+              purpose: "fte_reminder_email",
+              centerId: meta.centerId,
+              weekStart: weekLabel,
+              phase: dueState.phase,
+              userId: recipient.id,
+            },
+            tenantId: meta.tenantId,
+          });
+          if (email.ok) emailsSent += 1;
+          await recordEmailDeliveryAttempt({
+            tenantId: meta.tenantId,
+            centerId: meta.centerId,
+            purpose: "fte_reminder_email",
+            to,
+            subject: copy.subject,
+            text: copy.body,
+            result: email,
+            metadata: {
+              weekStart: weekLabel,
+              phase: dueState.phase,
+              userId: recipient.id,
+            },
+          });
+        }
+      }
+
+      if (channels.sms) {
+        const smsRecipients = uniqueSmsRecipients([recipient.phone]);
+        for (const to of smsRecipients) {
+          smsAttempted += 1;
+          const sms = await sendSms({ to, body: copy.sms, statusCallbackUrl, tenantId: meta.tenantId });
+          if (sms.ok) smsSent += 1;
+          await recordCommunicationSmsDeliveryAttempt({
+            tenantId: meta.tenantId,
+            centerId: meta.centerId,
+            to,
+            body: copy.sms,
+            statusCallbackUrl,
+            result: sms,
+            purpose: "fte_reminder_sms",
+          });
+        }
+      }
+    }
   }
 
   return NextResponse.json({
@@ -162,5 +289,10 @@ export async function GET(request: NextRequest) {
     notificationsCreated,
     notificationsWouldCreate: dryRun ? pendingNotificationData.length : 0,
     notificationsSkipped: existingNotifications.length,
+    externalEscalationEnabled: shouldSendExternal,
+    emailsAttempted,
+    emailsSent,
+    smsAttempted,
+    smsSent,
   });
 }

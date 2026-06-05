@@ -19,7 +19,9 @@ export type IntegrationDeliveryPurpose =
   | "parent_invitation_email"
   | "signature_request_email"
   | "onboarding_email"
-  | "communication_sms";
+  | "fte_reminder_email"
+  | "communication_sms"
+  | "fte_reminder_sms";
 
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
@@ -48,6 +50,7 @@ type RecordCommunicationSmsDeliveryInput = {
   body: string;
   statusCallbackUrl?: string | null;
   result: IntegrationSendResult;
+  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms">;
   maxAttempts?: number;
 };
 
@@ -66,6 +69,7 @@ type RecordEmailDeliveryInput = {
     | "parent_invitation_email"
     | "signature_request_email"
     | "onboarding_email"
+    | "fte_reminder_email"
   >;
   to: string[];
   subject: string;
@@ -154,6 +158,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
   body,
   statusCallbackUrl,
   result,
+  purpose = "communication_sms",
   maxAttempts = 5,
 }: RecordCommunicationSmsDeliveryInput) {
   const deliveryResult: IntegrationAttemptResult = result.configured
@@ -173,7 +178,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
       messageId: messageId ?? null,
       provider: "twilio",
       providerMessageId: result.id ?? null,
-      purpose: "communication_sms",
+      purpose,
       direction: "outbound",
       recipient: to,
       status: state.status,
@@ -273,6 +278,7 @@ const SENDGRID_EMAIL_PURPOSES = new Set([
   "parent_invitation_email",
   "signature_request_email",
   "onboarding_email",
+  "fte_reminder_email",
 ]);
 
 async function sendDelivery(provider: string, purpose: string, payload: Record<string, unknown>) {
@@ -302,7 +308,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
     });
   }
 
-  if (provider === "twilio" && purpose === "communication_sms") {
+  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms")) {
     return sendSms({
       to: stringValue(payload.to),
       body: stringValue(payload.body),

@@ -113,4 +113,5 @@ export const notificationPreferenceTypes = [
   { type: "incidents", label: "Incidents and health" },
   { type: "classroom", label: "Classroom activity" },
   { type: "enrollment", label: "Enrollment and leads" },
+  { type: "fte_reports", label: "FTE reports" },
 ];

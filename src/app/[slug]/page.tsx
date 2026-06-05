@@ -2656,12 +2656,31 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       ? { restricted: true }
       : { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } };
 
-    const [pendingIncidents, expiringCertifications, expiringDocuments, allergyCount, restrictedMedicalNotes, certifications, allergies] = await Promise.all([
+    const medicationWhere: Prisma.MedicationLogWhereInput = allCenters
+      ? {}
+      : { child: { family: { is: { centerId: scopedCenterIds } } } };
+    const childWhere: Prisma.ChildWhereInput = allCenters
+      ? {}
+      : { family: { is: { centerId: scopedCenterIds } } };
+
+    const [
+      pendingIncidents,
+      expiringCertifications,
+      expiringDocuments,
+      allergyCount,
+      restrictedMedicalNotes,
+      medicationLogCount,
+      certifications,
+      allergies,
+      medicationLogs,
+      medicationChildren,
+    ] = await Promise.all([
       prisma.incidentReport.count({ where: incidentWhere }),
       prisma.certification.count({ where: certificationWhere }),
       prisma.document.count({ where: documentWhere }),
       prisma.allergy.count({ where: allergyWhere }),
       prisma.childMedicalNote.count({ where: medicalWhere }),
+      prisma.medicationLog.count({ where: medicationWhere }),
       prisma.certification.findMany({
         where: certificationWhere,
         orderBy: { expiresAt: "asc" },
@@ -2683,6 +2702,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           child: { select: { fullName: true, family: { select: { centerId: true } } } },
         },
       }),
+      prisma.medicationLog.findMany({
+        where: medicationWhere,
+        orderBy: { administeredAt: "desc" },
+        take: 50,
+        include: {
+          child: { select: { fullName: true, family: { select: { name: true, centerId: true } } } },
+          administeredBy: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.child.findMany({
+        where: childWhere,
+        orderBy: [{ family: { name: "asc" } }, { fullName: "asc" }],
+        take: 500,
+        select: {
+          id: true,
+          fullName: true,
+          family: { select: { name: true, centerId: true } },
+        },
+      }),
     ]);
     const licensingCenters = centers.map((center) => ({
       id: center.id,
@@ -2695,15 +2733,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         licensedCapacity: center.licensedCapacity,
       }),
     }));
+    const complianceCentersById = new Map(centers.map((center) => [center.id, { name: center.name, crmLocationId: center.crmLocationId }]));
 
     return (
       <CompliancePage
         data={{
           centers: licensingCenters,
           canManageLicensing: canManageOperations(user),
-          stats: { pendingIncidents, expiringCertifications, expiringDocuments, allergies: allergyCount, restrictedMedicalNotes },
+          stats: { pendingIncidents, expiringCertifications, expiringDocuments, allergies: allergyCount, restrictedMedicalNotes, medicationLogs: medicationLogCount },
           certifications,
           allergies,
+          medicationLogs,
+          medicationChildren: medicationChildren.map((child) => ({
+            id: child.id,
+            fullName: child.fullName,
+            familyName: child.family.name,
+            centerLabel: child.family.centerId
+              ? complianceCentersById.get(child.family.centerId)?.crmLocationId ?? complianceCentersById.get(child.family.centerId)?.name ?? null
+              : null,
+          })),
         }}
       />
     );

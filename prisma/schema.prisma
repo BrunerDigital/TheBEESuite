@@ -237,6 +237,7 @@ model User {
   auditLogs      AuditLog[]
   notifications  Notification[]
   notificationPreferences NotificationPreference[]
+  medicationLogs MedicationLog[]
   uploadedMedia  ChildMedia[]
   procareImports ProcareImportBatch[]
   fteReports     FteReport[]          @relation("FteSubmittedBy")
@@ -444,6 +445,7 @@ model Child {
   incidents    IncidentReport[]
   documents    Document[]
   media        ChildMedia[]
+  medicationLogs MedicationLog[]
 
   @@index([sourceSystem, externalId])
 }
@@ -907,6 +909,27 @@ model IncidentReport {
 
   child     Child      @relation(fields: [childId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
+}
+
+model MedicationLog {
+  id               String   @id @default(cuid())
+  childId          String
+  administeredById String?
+  medicationName   String
+  dosage           String
+  route            String?
+  administeredAt   DateTime
+  notes            String?
+  parentNotified   Boolean  @default(false)
+  status           String   @default("administered")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  child          Child @relation(fields: [childId], references: [id])
+  administeredBy User? @relation(fields: [administeredById], references: [id])
+
+  @@index([childId, administeredAt])
+  @@index([administeredById, administeredAt])
 }
 
 model StaffProfile {

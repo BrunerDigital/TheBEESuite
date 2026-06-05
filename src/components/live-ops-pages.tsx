@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import {
   Activity,
   BadgeDollarSign,
@@ -8,6 +9,7 @@ import {
   Building2,
   CheckCircle2,
   ClipboardCheck,
+  Download,
   FileText,
   HeartHandshake,
   Image as ImageIcon,
@@ -59,8 +61,10 @@ import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
+import { IncidentReviewActions } from "@/components/incident-review-actions";
 import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
+import { MedicationLogPanel, type MedicationLogChildOption } from "@/components/medication-log-panel";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
@@ -2110,6 +2114,7 @@ export type IncidentReportsPageData = {
     parentNotified: boolean;
     parentAcknowledgedAt: Date | string | null;
     adminReviewStatus: string;
+    followUpTasks: unknown;
     child: { fullName: string };
     classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
   }>;
@@ -2154,7 +2159,9 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                 <TableHead>Classroom</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Review</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Summary</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2165,7 +2172,27 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                   <TableCell>{incident.classroom?.name ?? "No classroom"}</TableCell>
                   <TableCell>{incident.type}</TableCell>
                   <TableCell><Badge variant={incident.adminReviewStatus === "pending" ? "destructive" : "outline"}>{incident.adminReviewStatus}</Badge></TableCell>
-                  <TableCell className="max-w-md whitespace-normal text-muted-foreground">{incident.description} Action: {incident.actionTaken}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1 text-xs">
+                      <Badge variant={incident.parentNotified ? "outline" : "destructive"}>{incident.parentNotified ? "Parent notified" : "Notify parent"}</Badge>
+                      <Badge variant={incident.parentAcknowledgedAt ? "default" : "outline"}>
+                        {incident.parentAcknowledgedAt ? "Acknowledged" : "Awaiting acknowledgement"}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-md whitespace-normal text-muted-foreground">
+                    {incident.description} Action: {incident.actionTaken}
+                    {Array.isArray(incident.followUpTasks) && incident.followUpTasks.length ? (
+                      <div className="mt-1 text-xs">Follow-up: {incident.followUpTasks.join("; ")}</div>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    <IncidentReviewActions
+                      incidentId={incident.id}
+                      currentStatus={incident.adminReviewStatus}
+                      parentNotified={incident.parentNotified}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2550,6 +2577,7 @@ export type CompliancePageData = {
     expiringDocuments: number;
     allergies: number;
     restrictedMedicalNotes: number;
+    medicationLogs: number;
   };
   certifications: Array<{
     id: string;
@@ -2564,6 +2592,19 @@ export type CompliancePageData = {
     severity: string;
     actionPlan: string | null;
     child: { fullName: string; family: { centerId: string | null } };
+  }>;
+  medicationChildren: MedicationLogChildOption[];
+  medicationLogs: Array<{
+    id: string;
+    medicationName: string;
+    dosage: string;
+    route: string | null;
+    administeredAt: Date | string;
+    status: string;
+    parentNotified: boolean;
+    notes: string | null;
+    child: { fullName: string; family: { name: string; centerId: string | null } };
+    administeredBy: { name: string; email: string } | null;
   }>;
 };
 
@@ -2580,14 +2621,65 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
           Compliance-ready workflows and documentation support for licensing checklists, certifications, incident review, immunization placeholders, allergies, and audit readiness. This is not legal or licensing advice.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-6">
         <StatCard label="Incidents pending" value={data.stats.pendingIncidents} />
         <StatCard label="Certs expiring" value={data.stats.expiringCertifications} />
         <StatCard label="Docs expiring" value={data.stats.expiringDocuments} />
         <StatCard label="Allergies" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
+        <StatCard label="Medication logs" value={data.stats.medicationLogs} />
+      </div>
+      <div className="flex justify-end">
+        <Link
+          href="/api/compliance/export"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+        >
+          <Download data-icon="inline-start" />
+          Export Compliance CSV
+        </Link>
       </div>
       <LicensingConfigurationPanel centers={data.centers} canManage={data.canManageLicensing} />
+      <MedicationLogPanel childrenOptions={data.medicationChildren} />
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Recent Medication Logs</CardTitle>
+          <CardDescription>Medication administration records in the current compliance scope</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Medication</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Parent</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.medicationLogs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>{formatDateTime(log.administeredAt)}</TableCell>
+                  <TableCell className="font-medium">{log.child.fullName}</TableCell>
+                  <TableCell>
+                    <div>{log.medicationName} · {log.dosage}{log.route ? ` · ${log.route}` : ""}</div>
+                    {log.notes ? <div className="text-xs text-muted-foreground">{log.notes}</div> : null}
+                  </TableCell>
+                  <TableCell><Badge variant={log.status === "administered" ? "default" : "outline"}>{log.status}</Badge></TableCell>
+                  <TableCell>{log.administeredBy?.name ?? "Unknown"}</TableCell>
+                  <TableCell>{log.parentNotified ? "Notified" : "Not recorded"}</TableCell>
+                </TableRow>
+              ))}
+              {!data.medicationLogs.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">No medication logs have been recorded for this scope yet.</TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>

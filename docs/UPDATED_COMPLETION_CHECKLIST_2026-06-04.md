@@ -251,9 +251,9 @@ Status legend:
 - [x] Add expiration reminders for family/staff/child documents.
 - [x] Integrate real e-signature provider or complete internal signature capture flow.
 - [x] Add state-specific licensing configuration.
-- [ ] Add medication log workflow.
-- [ ] Add compliance report export.
-- [ ] Add incident admin review workflow with parent acknowledgement status.
+- [x] Add medication log workflow.
+- [x] Add compliance report export.
+- [x] Add incident admin review workflow with parent acknowledgement status.
 
 ## Integrations, Security, And Operations
 

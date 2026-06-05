@@ -157,7 +157,7 @@ Status legend:
 - [x] Recurring billing creates monthly child tuition invoices idempotently.
 - [x] Billing page includes AR aging and ledger reconciliation reporting.
 - [x] Add weekly recurring billing cadence rules if schools need weekly tuition billing.
-- [ ] Add payment method management/autopay through Stripe Setup Intents or customer portal.
+- [x] Add payment method management/autopay through Stripe Setup Intents or customer portal.
 - [x] Add failed payment retry/dunning workflow.
 - [x] Add subsidy/agency payment tracking.
 - [ ] Finalize surcharge/convenience fee disclosures and legal review.

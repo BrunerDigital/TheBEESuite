@@ -113,7 +113,20 @@ type NotificationPreferences = {
 
 type Props = {
   family: PortalFamily | null;
-  billingAccount?: { id: string; balanceCents: number; autopayPlaceholder: boolean } | null;
+  billingAccount?: {
+    id: string;
+    balanceCents: number;
+    autopayPlaceholder: boolean;
+    paymentMethodManagement?: {
+      autopayEnabled: boolean;
+      autopayStatus: "enabled" | "disabled" | "pending";
+      hasStripeCustomer: boolean;
+      hasSavedPaymentMethod: boolean;
+      stripeCustomerId: string | null;
+      stripeDefaultPaymentMethodId: string | null;
+      lastUpdatedAt: string | null;
+    };
+  } | null;
   invoices: Invoice[];
   payments?: Payment[];
   ledgerEntries?: LedgerEntry[];
@@ -221,6 +234,8 @@ export function ParentPortalWorkspace({
   );
   const unacknowledged = useMemo(() => incidents.filter((incident) => !incident.parentAcknowledgedAt), [incidents]);
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
+  const paymentMethodManagement = billingAccount?.paymentMethodManagement;
+  const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
 
   function showStatus(next: string) {
     setError("");
@@ -299,6 +314,25 @@ export function ParentPortalWorkspace({
   function payBalance(paymentMethodCategory: "ach" | "card") {
     if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
     payInvoice(nextOpenInvoice.id, paymentMethodCategory);
+  }
+
+  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay") {
+    if (!billingAccount) return showError("A billing account is required before saving payment methods.");
+    startTransition(async () => {
+      const response = await fetch("/api/billing/payment-method-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ billingAccountId: billingAccount.id, action }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!response.ok) return showError(json?.error || "Payment method management is not configured yet.");
+      if (json?.url) {
+        window.location.href = json.url;
+        return;
+      }
+      showStatus(action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated.");
+      router.refresh();
+    });
   }
 
   function updatePreference(key: keyof NotificationPreferences, checked: boolean) {
@@ -470,7 +504,41 @@ export function ParentPortalWorkspace({
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Autopay</div>
-                <div className="mt-1 font-medium">{billingAccount?.autopayPlaceholder ? "Requested" : "Off"}</div>
+                <div className="mt-1 font-medium capitalize">{autopayStatus}</div>
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium">Payment Method And Autopay</div>
+                  <div className="text-xs text-muted-foreground">
+                    {paymentMethodManagement?.hasSavedPaymentMethod
+                      ? `Saved with Stripe${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
+                      : paymentMethodManagement?.autopayStatus === "pending"
+                        ? "A Stripe setup session is pending."
+                        : "Save a payment method with Stripe to enable autopay."}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup")}>
+                    <CreditCard data-icon="inline-start" />
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Method" : "Save Method"}
+                  </Button>
+                  <Button
+                    disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
+                    onClick={() => managePaymentMethod("portal")}
+                    variant="outline"
+                  >
+                    Manage In Stripe
+                  </Button>
+                  <Button
+                    disabled={isPending || autopayStatus === "disabled" || !billingAccount}
+                    onClick={() => managePaymentMethod("disable_autopay")}
+                    variant="outline"
+                  >
+                    Disable Autopay
+                  </Button>
+                </div>
               </div>
             </div>
             {nextOpenInvoice ? (

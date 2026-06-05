@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { checkoutApplicationGuard } from "@/lib/billing-guardrails";
-import { readStripeConnectedAccountId, retrieveStripeConnectedAccount, verifyStripeSignature } from "@/lib/integrations";
+import {
+  readStripeConnectedAccountId,
+  retrieveStripeConnectedAccount,
+  retrieveStripeSetupIntent,
+  verifyStripeSignature,
+} from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -9,10 +14,15 @@ export const runtime = "nodejs";
 type StripeCheckoutSessionCompleted = {
   id: string;
   object: "checkout.session";
+  mode?: string | null;
   payment_status?: string;
   amount_total?: number;
   payment_intent?: string | null;
+  setup_intent?: string | null;
+  customer?: string | null;
   metadata?: {
+    setupFlow?: string;
+    billingAccountId?: string;
     invoiceId?: string;
     paymentId?: string;
     familyId?: string;
@@ -266,6 +276,37 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent) {
 }
 
 async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  if (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method") {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await recordStripeWebhookEvent(tx, event);
+        if (!session.metadata?.billingAccountId) return;
+        const account = await tx.billingAccount.findUnique({
+          where: { id: session.metadata.billingAccountId },
+          select: { customFields: true },
+        });
+        await tx.billingAccount.update({
+          where: { id: session.metadata.billingAccountId },
+          data: {
+            customFields: {
+              ...jsonObject(account?.customFields),
+              stripeSetupCheckoutSessionId: session.id,
+              stripeEventId: event.id,
+              paymentMethodManagementStatus: "setup_session_expired",
+              autopayStatus: "disabled",
+            },
+          },
+        });
+      });
+    } catch (error) {
+      if (isDuplicateWebhookEvent(error)) {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      throw error;
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   const paymentId = session.metadata?.paymentId;
   if (!paymentId) {
     return NextResponse.json({ ok: false, error: "Missing payment metadata." }, { status: 400 });
@@ -300,6 +341,62 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
   if (session.metadata?.invoiceId) {
     await writeSystemAudit(session.metadata.invoiceId, event.id, session.id, "billing.checkout.expired");
   }
+  return NextResponse.json({ ok: true });
+}
+
+async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  const billingAccountId = session.metadata?.billingAccountId;
+  if (!billingAccountId) {
+    return NextResponse.json({ ok: false, error: "Missing billing account metadata." }, { status: 400 });
+  }
+
+  const setupIntentId = clean(session.setup_intent);
+  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId) : null;
+  if (setupIntent && !setupIntent.ok) {
+    return NextResponse.json(
+      { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Stripe setup intent could not be retrieved." },
+      { status: setupIntent.configured ? 502 : 503 },
+    );
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const billingAccount = await tx.billingAccount.findUnique({
+        where: { id: billingAccountId },
+        select: { customFields: true },
+      });
+      if (!billingAccount) return;
+
+      const customerId = setupIntent?.setupIntent?.customerId || clean(session.customer) || clean(jsonObject(billingAccount.customFields).stripeCustomerId);
+      const paymentMethodId = setupIntent?.setupIntent?.paymentMethodId || clean(jsonObject(billingAccount.customFields).stripeDefaultPaymentMethodId);
+      await tx.billingAccount.update({
+        where: { id: billingAccountId },
+        data: {
+          autopayPlaceholder: Boolean(paymentMethodId),
+          customFields: {
+            ...jsonObject(billingAccount.customFields),
+            stripeCustomerId: customerId || null,
+            stripeDefaultPaymentMethodId: paymentMethodId || null,
+            stripeSetupIntentId: setupIntentId || null,
+            stripeSetupIntentStatus: setupIntent?.setupIntent?.status || null,
+            stripeSetupCheckoutSessionId: session.id,
+            stripeEventId: event.id,
+            stripePaymentMethodSavedAt: new Date().toISOString(),
+            autopayEnabled: Boolean(paymentMethodId),
+            autopayStatus: paymentMethodId ? "enabled" : "pending",
+            paymentMethodManagementStatus: paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method",
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
   return NextResponse.json({ ok: true });
 }
 
@@ -555,6 +652,10 @@ export async function POST(request: NextRequest) {
   }
 
   const session = event.data.object as StripeCheckoutSessionCompleted;
+  if (event.type === "checkout.session.completed" && (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method")) {
+    return handlePaymentMethodSetupCompleted(event, session);
+  }
+
   const invoiceId = session.metadata?.invoiceId;
   const paymentId = session.metadata?.paymentId;
 

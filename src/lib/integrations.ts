@@ -19,6 +19,14 @@ export type StripeCheckoutFeePolicy = {
   waiveBeeSuitePaymentOperationsFee?: boolean;
 };
 
+export type StripeSetupIntentSnapshot = {
+  id: string;
+  customerId?: string | null;
+  paymentMethodId?: string | null;
+  status?: string | null;
+  raw?: unknown;
+};
+
 export type StripeConnectedAccountSnapshot = {
   id: string;
   displayName?: string | null;
@@ -513,6 +521,188 @@ export async function createStripeCheckoutSession({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+}
+
+export async function createStripeCustomer({
+  email,
+  name,
+  metadata,
+}: {
+  email?: string | null;
+  name?: string | null;
+  metadata?: Record<string, string>;
+}): Promise<IntegrationSendResult> {
+  const apiKey = stripeSecretKey();
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+
+  const body = new URLSearchParams();
+  if (email && isEmail(email)) body.set("email", email);
+  if (name) body.set("name", name);
+  Object.entries(metadata ?? {}).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+
+  const response = await fetch("https://api.stripe.com/v1/customers", {
+    method: "POST",
+    headers: stripeHeaders("form"),
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: json.id };
+}
+
+export async function createStripeSetupCheckoutSession({
+  customerId,
+  customerEmail,
+  successUrl,
+  cancelUrl,
+  metadata,
+}: {
+  customerId?: string | null;
+  customerEmail?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+  metadata: Record<string, string>;
+}): Promise<IntegrationSendResult> {
+  const apiKey = stripeSecretKey();
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+
+  const body = new URLSearchParams({
+    mode: "setup",
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    client_reference_id: metadata.billingAccountId || metadata.familyId || "payment-method-setup",
+  });
+  if (customerId) {
+    body.set("customer", customerId);
+  } else if (customerEmail && isEmail(customerEmail)) {
+    body.set("customer_email", customerEmail);
+  }
+  Object.entries(metadata).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+    body.set(`setup_intent_data[metadata][${key}]`, value);
+  });
+
+  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: stripeHeaders("form"),
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.url) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+}
+
+export async function createStripeBillingPortalSession({
+  customerId,
+  returnUrl,
+}: {
+  customerId: string;
+  returnUrl: string;
+}): Promise<IntegrationSendResult> {
+  const apiKey = stripeSecretKey();
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+
+  const body = new URLSearchParams({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+  const response = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
+    method: "POST",
+    headers: stripeHeaders("form"),
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.url) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+}
+
+export async function retrieveStripeSetupIntent(setupIntentId: string): Promise<{
+  ok: boolean;
+  configured: boolean;
+  provider: "stripe";
+  setupIntent?: StripeSetupIntentSnapshot;
+  error?: string;
+}> {
+  const apiKey = stripeSecretKey();
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+
+  const response = await fetch(`https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as {
+    id?: string;
+    customer?: string | null;
+    payment_method?: string | null;
+    status?: string | null;
+    error?: { message?: string };
+  } | null;
+
+  if (!response.ok || !json?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    setupIntent: {
+      id: json.id,
+      customerId: clean(json.customer) || null,
+      paymentMethodId: clean(json.payment_method) || null,
+      status: clean(json.status) || null,
+      raw: json,
+    },
+  };
 }
 
 export async function createStripeConnectedAccount({

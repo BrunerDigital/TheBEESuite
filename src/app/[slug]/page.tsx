@@ -57,6 +57,7 @@ import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
+import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
@@ -777,6 +778,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           id: true,
           balanceCents: true,
           autopayPlaceholder: true,
+          customFields: true,
           payments: {
             orderBy: [{ paidAt: "desc" }, { id: "desc" }],
             take: 10,
@@ -882,6 +884,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           id: billingAccount.id,
           balanceCents: billingAccount.balanceCents,
           autopayPlaceholder: billingAccount.autopayPlaceholder,
+          paymentMethodManagement: paymentMethodManagementSummary({
+            autopayPlaceholder: billingAccount.autopayPlaceholder,
+            customFields: billingAccount.customFields,
+          }),
         } : null}
         invoices={invoices}
         payments={billingAccount?.payments ?? []}

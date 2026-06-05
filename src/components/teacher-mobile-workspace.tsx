@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, LogIn, LogOut, Moon, Palette, Plus, ShieldAlert, Trash2, UserX, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import {
+  CLASSROOM_OFFLINE_QUEUE_KEY,
+  createClassroomOfflineAction,
+  parseClassroomOfflineQueue,
+  serializeClassroomOfflineQueue,
+  type ClassroomOfflineAction,
+} from "@/lib/classroom-offline-queue";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 
 type ChildOption = {
@@ -154,6 +161,8 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
   const [incidentType, setIncidentType] = useState("Minor injury");
   const [incidentDescription, setIncidentDescription] = useState("");
   const [actionTaken, setActionTaken] = useState("");
+  const [offlineQueue, setOfflineQueue] = useState<ClassroomOfflineAction[]>([]);
+  const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
 
   const selectedChild = useMemo(() => roster.find((child) => child.id === selectedChildId) ?? roster[0], [roster, selectedChildId]);
@@ -171,6 +180,145 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
 
     return Object.values(grouped);
   }, [roster]);
+
+  useEffect(() => {
+    async function syncStoredQueue() {
+      const queued = parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY));
+      if (!queued.length) return;
+
+      const remaining: ClassroomOfflineAction[] = [];
+      let synced = 0;
+      for (const action of queued) {
+        try {
+          const response = await fetch(action.endpoint, {
+            method: action.method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(action.body),
+          });
+          if (response.ok) {
+            synced += 1;
+          } else {
+            remaining.push(action);
+          }
+        } catch {
+          remaining.push(action);
+        }
+      }
+
+      window.localStorage.setItem(CLASSROOM_OFFLINE_QUEUE_KEY, serializeClassroomOfflineQueue(remaining));
+      setOfflineQueue(remaining);
+      if (!remaining.length) {
+        showStatus(`${synced} queued classroom action${synced === 1 ? "" : "s"} synced.`);
+      }
+    }
+
+    const loadStoredState = window.setTimeout(() => {
+      setIsOnline(navigator.onLine);
+      setOfflineQueue(parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY)));
+      if (navigator.onLine) void syncStoredQueue();
+    }, 0);
+
+    function updateOnlineState() {
+      const nextOnline = navigator.onLine;
+      setIsOnline(nextOnline);
+      if (nextOnline) void syncStoredQueue();
+    }
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+    return () => {
+      window.clearTimeout(loadStoredState);
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+    };
+  }, []);
+
+  function persistOfflineQueue(next: ClassroomOfflineAction[]) {
+    const trimmed = next.slice(0, 50);
+    try {
+      window.localStorage.setItem(CLASSROOM_OFFLINE_QUEUE_KEY, serializeClassroomOfflineQueue(trimmed));
+    } catch {
+      showError("This tablet could not store the offline queue. Reconnect before submitting more classroom actions.");
+    }
+    setOfflineQueue(trimmed);
+    return trimmed;
+  }
+
+  function queueOfflineAction(input: { endpoint: string; body: unknown; label: string }) {
+    const action = createClassroomOfflineAction(input);
+    const currentStoredQueue = parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY));
+    persistOfflineQueue([...(currentStoredQueue.length ? currentStoredQueue : offlineQueue), action]);
+    showStatus(`${input.label} queued on this tablet and will sync when the connection is back.`);
+  }
+
+  async function postJsonOrQueue({
+    endpoint,
+    body,
+    label,
+    onSuccess,
+    onQueued,
+  }: {
+    endpoint: string;
+    body: unknown;
+    label: string;
+    onSuccess: (json: Record<string, unknown> | null) => void;
+    onQueued?: () => void;
+  }) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      queueOfflineAction({ endpoint, body, label });
+      onQueued?.();
+      return;
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      queueOfflineAction({ endpoint, body, label });
+      onQueued?.();
+      return;
+    }
+
+    const json = await response.json().catch(() => null) as { error?: string } | null;
+    if (!response.ok) {
+      showError(json?.error || `${label} could not be saved.`);
+      return;
+    }
+    onSuccess(json as Record<string, unknown> | null);
+  }
+
+  function flushOfflineQueue() {
+    if (!offlineQueue.length) return;
+    startTransition(async () => {
+      const remaining: ClassroomOfflineAction[] = [];
+      let synced = 0;
+      for (const action of offlineQueue) {
+        try {
+          const response = await fetch(action.endpoint, {
+            method: action.method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(action.body),
+          });
+          if (response.ok) {
+            synced += 1;
+          } else {
+            remaining.push(action);
+          }
+        } catch {
+          remaining.push(action);
+        }
+      }
+      persistOfflineQueue(remaining);
+      if (remaining.length) {
+        showError(`${synced} queued action${synced === 1 ? "" : "s"} synced. ${remaining.length} still need connection or review.`);
+      } else {
+        showStatus(`${synced} queued action${synced === 1 ? "" : "s"} synced.`);
+      }
+    });
+  }
 
   function attendanceFor(child: ChildOption) {
     return attendanceOverrides[child.id] ?? child.attendance ?? emptyAttendance;
@@ -232,14 +380,8 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
     const targetChildName = roster.find((child) => child.id === targetChildId)?.fullName ?? selectedChild?.fullName ?? "Child";
     const targetStatus = options.status ?? attendanceStatus;
     const targetLogType = options.logType ?? logType;
-    startTransition(async () => {
-      const response = await fetch("/api/teacher/attendance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ childId: targetChildId, status: targetStatus, logType: targetLogType, date: new Date().toISOString() }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) return showError(json?.error || "Attendance could not be saved.");
+    const payload = { childId: targetChildId, status: targetStatus, logType: targetLogType, date: new Date().toISOString() };
+    const applyLocalAttendance = () => {
       if (targetChildId) {
         const nextStatus = targetLogType === "check_in" ? "present" : targetLogType === "check_out" ? "checked_out" : targetStatus;
         setAttendanceOverrides((current) => ({
@@ -252,7 +394,18 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
           },
         }));
       }
-      showStatus(options.label ?? `${targetChildName} attendance saved.`);
+    };
+    startTransition(async () => {
+      await postJsonOrQueue({
+        endpoint: "/api/teacher/attendance",
+        body: payload,
+        label: `${targetChildName} attendance`,
+        onQueued: applyLocalAttendance,
+        onSuccess: () => {
+          applyLocalAttendance();
+          showStatus(options.label ?? `${targetChildName} attendance saved.`);
+        },
+      });
     });
   }
 
@@ -270,10 +423,9 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
       const activities = activityRows
         .filter((row) => row.title.trim())
         .map((row) => ({ title: row.title, notes: row.notes }));
-      const response = await fetch("/api/teacher/daily-reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await postJsonOrQueue({
+        endpoint: "/api/teacher/daily-reports",
+        body: {
           childId: selectedChild?.id,
           date: `${reportDate}T12:00:00`,
           mood,
@@ -284,38 +436,48 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
           activities,
           suppliesNeeded,
           sendToParent,
-        }),
+        },
+        label: `${selectedChild?.fullName ?? "Child"} daily report`,
+        onQueued: resetDailyReportDrafts,
+        onSuccess: () => {
+          resetDailyReportDrafts();
+          showStatus(sendToParent ? "Daily report saved for parent view." : "Daily report saved as an internal draft.");
+        },
       });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) return showError(json?.error || "Daily report could not be saved.");
-      resetDailyReportDrafts();
-      showStatus(sendToParent ? "Daily report saved for parent view." : "Daily report saved as an internal draft.");
     });
   }
 
   function submitIncident() {
     startTransition(async () => {
-      const response = await fetch("/api/teacher/incidents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      await postJsonOrQueue({
+        endpoint: "/api/teacher/incidents",
+        body: {
           childId: selectedChild?.id,
           type: incidentType,
           description: incidentDescription,
           actionTaken,
           parentNotified: false,
-        }),
+        },
+        label: `${selectedChild?.fullName ?? "Child"} incident report`,
+        onQueued: () => {
+          setIncidentDescription("");
+          setActionTaken("");
+        },
+        onSuccess: () => {
+          setIncidentDescription("");
+          setActionTaken("");
+          showStatus("Incident report created and queued for director review.");
+        },
       });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) return showError(json?.error || "Incident could not be created.");
-      setIncidentDescription("");
-      setActionTaken("");
-      showStatus("Incident report created and queued for director review.");
     });
   }
 
   function submitPhoto() {
     if (!selectedChild?.id || !photo) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      showError("Photo uploads need an active connection. Attendance, daily reports, and incidents can still be queued offline.");
+      return;
+    }
     startTransition(async () => {
       const formData = new FormData();
       formData.set("childId", selectedChild.id);
@@ -368,6 +530,22 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
           </AlertDescription>
         </Alert>
       ) : null}
+      <Alert className={isOnline ? "border-primary/30 bg-primary/10" : "border-amber-300/50 bg-amber-50 text-slate-900"}>
+        <Clock className="size-4" />
+        <AlertTitle>{isOnline ? "Tablet online" : "Tablet offline"}</AlertTitle>
+        <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            {offlineQueue.length
+              ? `${offlineQueue.length} classroom action${offlineQueue.length === 1 ? "" : "s"} waiting to sync from this tablet.`
+              : "Attendance, daily report, and incident actions will queue locally if the connection drops."}
+          </span>
+          {offlineQueue.length ? (
+            <Button type="button" size="sm" variant="outline" disabled={isPending || !isOnline} onClick={flushOfflineQueue}>
+              Sync queued actions
+            </Button>
+          ) : null}
+        </AlertDescription>
+      </Alert>
 
       <Card className="glass-panel">
         <CardHeader>

@@ -72,7 +72,7 @@ Status legend:
 - [x] Add staff time clock.
 - [x] Add ratio engine by age group/state rules.
 - [x] Add classroom ratio warnings and staff assignment actions.
-- [ ] Add offline/poor-connectivity strategy for classroom tablets.
+- [x] Add offline/poor-connectivity strategy for classroom tablets.
 
 ## Teacher / Classroom Level
 
@@ -90,7 +90,7 @@ Status legend:
 - [x] Teacher permissions are separated from director/location users.
 - [x] Add classroom ratio warnings directly in teacher/classroom views.
 - [x] Add more complete classroom staff assignment/schedule actions.
-- [ ] Add offline/poor-connectivity classroom tablet strategy.
+- [x] Add offline/poor-connectivity classroom tablet strategy.
 - [ ] Validate teacher login setup with real teacher emails from each active school.
 
 ## Parent / Family Level

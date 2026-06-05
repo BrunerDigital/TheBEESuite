@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The BEE Suite Updated Completion Checklist</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171717;
+      --muted: #5f5f5f;
+      --line: #ded6c5;
+      --paper: #fffdf8;
+      --back: #f6f0e2;
+      --gold: #c58a04;
+      --ok: #087f5b;
+      --warn: #9a3412;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--back);
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 34px 28px 64px;
+      background: var(--paper);
+    }
+    .hero {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 24px;
+      margin-bottom: 26px;
+      color: #fff;
+      background: linear-gradient(135deg, #171717, #332405 62%, #815b05);
+    }
+    .hero h1 { margin: 0 0 8px; font-size: 34px; letter-spacing: 0; }
+    .hero p { margin: 0; color: #f1dfae; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 20px;
+    }
+    .stat {
+      border: 1px solid rgba(255, 255, 255, .18);
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(255, 255, 255, .08);
+    }
+    .stat strong { display: block; font-size: 25px; }
+    .stat span { color: #f1dfae; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 0 20px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 253, 248, .94);
+      backdrop-filter: blur(8px);
+    }
+    .toolbar input {
+      min-width: min(100%, 340px);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      background: #fff;
+      font: inherit;
+    }
+    .toolbar button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+    }
+    h1, h2, h3 { break-after: avoid; }
+    h1 { font-size: 30px; margin: 30px 0 8px; }
+    h2 {
+      font-size: 20px;
+      margin: 30px 0 12px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+      color: #3c2b04;
+    }
+    h3 { font-size: 16px; margin: 18px 0 8px; color: #4b5563; }
+    p { margin: 8px 0; color: var(--muted); }
+    ul { margin: 0 0 10px; padding: 0; list-style: none; }
+    li { break-inside: avoid; }
+    .checklist li {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 7px 0;
+      border-bottom: 1px solid #f0eadc;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .box {
+      width: 17px;
+      height: 17px;
+      border: 1.5px solid #9c8f76;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      margin-top: 1px;
+    }
+    .done .box { background: var(--ok); border-color: var(--ok); color: #fff; }
+    .open .box { background: #fff; }
+    .done span:last-child { color: #374151; }
+    .open span:last-child { color: #111827; font-weight: 520; }
+    .dot { color: var(--gold); font-weight: 800; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: #f5ebd4;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    mark { background: #fde68a; color: inherit; padding: 0 2px; border-radius: 3px; }
+    .hidden { display: none !important; }
+    @media (max-width: 760px) {
+      main { padding: 24px 16px 44px; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero h1 { font-size: 28px; }
+    }
+    @media print {
+      body { background: #fff; }
+      main { padding: 0; max-width: none; }
+      .hero { color-adjust: exact; print-color-adjust: exact; }
+      .toolbar { display: none; }
+      h2 { page-break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <h1>The BEE Suite Updated Completion Checklist</h1>
+      <p>Generated from <code>docs/UPDATED_COMPLETION_CHECKLIST_2026-06-04.md</code>. Last updated: June 4, 2026.</p>
+      <div class="stats">
+        <div class="stat"><strong>235</strong><span>Total Items</span></div>
+        <div class="stat"><strong>190</strong><span>Checked</span></div>
+        <div class="stat"><strong>45</strong><span>Open</span></div>
+        <div class="stat"><strong>81%</strong><span>Complete</span></div>
+      </div>
+    </section>
+    <section class="toolbar" aria-label="Checklist tools">
+      <input id="filter" type="search" placeholder="Filter checklist items..." aria-label="Filter checklist items">
+      <div>
+        <button type="button" data-filter="all">All</button>
+        <button type="button" data-filter="open">Open only</button>
+        <button type="button" data-filter="done">Complete only</button>
+        <button type="button" onclick="window.print()">Print</button>
+      </div>
+    </section>
+    <section id="content">
+
+<h1>The BEE Suite Updated Completion Checklist</h1>
+
+
+<p>Last updated: June 4, 2026</p>
+
+
+<p>Current production deployment before document upload/review pass: <code>dpl_2YaFc7tdF4nMDkZaheKzSRxvb6LB</code></p>
+
+<p>Current production commit before document upload/review pass: <code>35bed54 Add portal family messaging replies</code></p>
+
+<p>Rollback point before tuition/accounting work: <code>dpl_AfWhPU6vSvcZownaazgvhK29WCPh</code></p>
+
+<p>Rollback point before messaging/parity work: <code>dpl_AvK62vh3RU1esFKDoVEMd9JbV6S3</code></p>
+
+<p>Rollback point before document upload/review work: <code>dpl_2YaFc7tdF4nMDkZaheKzSRxvb6LB</code></p>
+
+
+<p>Status legend:</p>
+<ul class="checklist notes">
+<li class="note"><span class="dot">•</span><span><code>[x]</code> Complete, deployed, or ready for live validation.</span></li>
+<li class="note"><span class="dot">•</span><span><code>[ ]</code> Still needs build work, data, approval, or production validation.</span></li>
+</ul>
+
+<h2>Production Baseline</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Next.js app deployed on Vercel production.</span></li>
+<li class="done"><span class="box">✓</span><span>Production domain connected at <code>thebeesuite.io</code>.</span></li>
+<li class="done"><span class="box">✓</span><span>GitHub <code>main</code> pushes trigger production deployment.</span></li>
+<li class="done"><span class="box">✓</span><span>Supabase/PostgreSQL production database connected.</span></li>
+<li class="done"><span class="box">✓</span><span>Prisma schema covers the core childcare operating model.</span></li>
+<li class="done"><span class="box">✓</span><span>Current production health check returns OK and database connected.</span></li>
+<li class="done"><span class="box">✓</span><span>Protected dashboard routes redirect unauthenticated users to login.</span></li>
+<li class="done"><span class="box">✓</span><span>Protected billing mutation route rejects unauthenticated requests.</span></li>
+<li class="done"><span class="box">✓</span><span>Procare parity gap map created at <code>docs/PROCARE_PARITY_GAP_MAP_2026-06-04.md</code>.</span></li>
+<li class="open"><span class="box"></span><span>Rotate the GitHub and Supabase tokens that were shared in chat.</span></li>
+<li class="open"><span class="box"></span><span>Run a full role-by-role production smoke test after the next account/data setup pass.</span></li>
+</ul>
+
+<h2>Executive Level</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Executive/admin dashboard foundation exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Multi-location dashboard exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Executive users can view multi-school CRM/FTE/operations data.</span></li>
+<li class="done"><span class="box">✓</span><span>Executive Active Schools table exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Executives can add/remove active school locations.</span></li>
+<li class="done"><span class="box">✓</span><span>Added active locations flow updates the public inquiry location dropdown.</span></li>
+<li class="done"><span class="box">✓</span><span>Active school records support the <code>ST | City</code> Location ID format.</span></li>
+<li class="done"><span class="box">✓</span><span>Active school list currently exposes 94 active locations through the public locations API.</span></li>
+<li class="done"><span class="box">✓</span><span>New active schools create the school/location structure needed for dashboards and routing.</span></li>
+<li class="done"><span class="box">✓</span><span>Executive user/access management foundation exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Audit logging exists for sensitive admin actions.</span></li>
+<li class="open"><span class="box"></span><span>Finish all executive CRUD flows with polished confirmation/error states.</span></li>
+<li class="done"><span class="box">✓</span><span>Add bulk user/location import tools for executives.</span></li>
+<li class="open"><span class="box"></span><span>Add granular permission editor beyond the current role/access-grant model.</span></li>
+<li class="open"><span class="box"></span><span>Add explicit support-access/impersonation workflow with audit warnings.</span></li>
+</ul>
+
+<h2>Director / School Level</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Center dashboard exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors/location users are scoped to assigned school data.</span></li>
+<li class="done"><span class="box">✓</span><span>CRM lead list/create/update workflows are available to directors.</span></li>
+<li class="done"><span class="box">✓</span><span>Manual lead entry exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Lead notes, tasks, messages, and tours APIs exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Family profiles page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Child profiles page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can add and edit family data through the Family Record Editor.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can update guardian contact data.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can manage guardian check-in PINs.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can create/edit child profile details and classroom assignment data.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can add classrooms for their school.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can add/edit teacher profiles.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can provision teacher logins by temporary password or setup/reset email.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher center grants are created when teacher profiles are saved.</span></li>
+<li class="done"><span class="box">✓</span><span>Staff page includes teacher management and certification/background tracking foundations.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can approve or reject submitted family/child document uploads.</span></li>
+<li class="done"><span class="box">✓</span><span>Director FTE submission flow exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Onboarding now captures director-provided classroom, tuition/rate, subsidy, balance, and invoice/payment setup sections.</span></li>
+<li class="done"><span class="box">✓</span><span>Attendance, kiosk, daily reports, incidents, documents, messages, announcements, calendar, billing, and payments pages exist.</span></li>
+<li class="open"><span class="box"></span><span>Complete custody visibility controls and staff-facing custody warnings throughout the UI.</span></li>
+<li class="open"><span class="box"></span><span>Complete document upload/review/expiration workflow per family/child/staff.</span></li>
+<li class="done"><span class="box">✓</span><span>Add family merge/deduplication tools.</span></li>
+<li class="done"><span class="box">✓</span><span>Add staff time clock.</span></li>
+<li class="done"><span class="box">✓</span><span>Add ratio engine by age group/state rules.</span></li>
+<li class="done"><span class="box">✓</span><span>Add classroom ratio warnings and staff assignment actions.</span></li>
+<li class="open"><span class="box"></span><span>Add offline/poor-connectivity strategy for classroom tablets.</span></li>
+</ul>
+
+<h2>Teacher / Classroom Level</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Teacher portal/mobile view exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher attendance API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher daily report API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher incident API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher media upload API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher portal roster shows check-in/check-out/absent status.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher portal supports quick check-in/check-out actions.</span></li>
+<li class="done"><span class="box">✓</span><span>Daily reports support meals, naps, diaper/potty entries, activities, supplies, notes, mood, and parent-send toggle.</span></li>
+<li class="done"><span class="box">✓</span><span>Daily report parser supports both legacy single-field payloads and new batched entries.</span></li>
+<li class="done"><span class="box">✓</span><span>Teachers can create incident reports.</span></li>
+<li class="done"><span class="box">✓</span><span>Teachers can upload classroom media/photos to child/family profiles through the teacher media flow foundation.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher permissions are separated from director/location users.</span></li>
+<li class="done"><span class="box">✓</span><span>Add classroom ratio warnings directly in teacher/classroom views.</span></li>
+<li class="done"><span class="box">✓</span><span>Add more complete classroom staff assignment/schedule actions.</span></li>
+<li class="open"><span class="box"></span><span>Add offline/poor-connectivity classroom tablet strategy.</span></li>
+<li class="open"><span class="box"></span><span>Validate teacher login setup with real teacher emails from each active school.</span></li>
+</ul>
+
+<h2>Parent / Family Level</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Parent portal page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent account invitation/login flow exists for linked guardians.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows family, children, classroom, schedule, and permission snapshots.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows daily reports.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows teacher-shared photos/media foundation.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows documents and document submission/review foundation.</span></li>
+<li class="done"><span class="box">✓</span><span>Parents can upload document files to family/child document requests for director review.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows announcements.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal supports parent-to-center messages.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent contact/update request API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent incident acknowledgement API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent notification preferences exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows billing balance, open invoices, recent payments, and ledger history.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal has ACH/card Stripe Checkout buttons on open invoices.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal now includes a top-level Pay Balance by Bank/Card action tied to the next open invoice.</span></li>
+<li class="open"><span class="box"></span><span>Add push notification/native app strategy.</span></li>
+<li class="open"><span class="box"></span><span>Add full guardian self-service change request approval workflow.</span></li>
+<li class="open"><span class="box"></span><span>Validate parent account creation with real families at each pilot school.</span></li>
+</ul>
+
+<h2>CRM, Inquiry Routing, And Active Schools</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Public inquiry API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Kid City USA inquiry embed exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Public active locations API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Public locations API returns 94 active schools.</span></li>
+<li class="done"><span class="box">✓</span><span>Public locations include <code>crmLocationId</code> values such as <code>FL | Sarasota</code> and <code>IN | Westfield</code>.</span></li>
+<li class="done"><span class="box">✓</span><span>Inquiry form selected Location ID routes leads to the correct CRM school profile.</span></li>
+<li class="done"><span class="box">✓</span><span>Inquiry routing prefers active centers over lead queue placeholders.</span></li>
+<li class="done"><span class="box">✓</span><span>Test leads were sent to every active location in batch <code>qa-routing-20260604-120828</code>.</span></li>
+<li class="done"><span class="box">✓</span><span>Test lead routing verified 94 leads, tasks, and notes with zero missing/duplicate location routes.</span></li>
+<li class="done"><span class="box">✓</span><span>Inquiry notifications route to global and location-specific recipients.</span></li>
+<li class="done"><span class="box">✓</span><span>Google Sheets backup webhook support exists.</span></li>
+<li class="done"><span class="box">✓</span><span>UTM/source capture exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Retry queue exists for failed outbound integration deliveries.</span></li>
+<li class="done"><span class="box">✓</span><span>Reconfirm all director notification emails for the active schools before final rollout. Verified 94/94 active Kid City USA schools via live read-only Supabase audit; see <code>docs/DIRECTOR_NOTIFICATION_EMAIL_AUDIT_2026-06-04.md</code>.</span></li>
+<li class="open"><span class="box"></span><span>Remove or archive test leads if operations does not want them retained in live CRM history.</span></li>
+</ul>
+
+<h2>Tuition, Billing, Ledger, And Payments</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Billing accounts, invoices, invoice items, payments, ledger entries, products, and tuition plans exist in schema.</span></li>
+<li class="done"><span class="box">✓</span><span>Billing and Invoices page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Payments page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Billing Settings page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe Connect onboarding/status/refresh routes exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe Checkout route exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe webhook route exists and verifies signatures.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe checkout uses hosted Checkout Sessions.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe payment reconciliation applies one payment to one invoice with guardrails.</span></li>
+<li class="done"><span class="box">✓</span><span>Billing guardrail tests exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Director Billing Workbench is live on the Billing and Invoices page.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can create a single-family invoice.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can create tuition/product/custom charges.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can run batch tuition/fee billing by school, age group, enrollment status, and per-child/per-family target.</span></li>
+<li class="done"><span class="box">✓</span><span>Batch billing has duplicate protection by family, source, billing period, target, and child scope.</span></li>
+<li class="done"><span class="box">✓</span><span>Directors can post family account credits and debits.</span></li>
+<li class="done"><span class="box">✓</span><span>Billing actions update invoice records, invoice line items, ledger entries, and billing account balances together.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent portal shows balances and lets parents pay through Stripe Checkout.</span></li>
+<li class="done"><span class="box">✓</span><span>Recurring tuition assignment endpoint exists for child-level plan scheduling.</span></li>
+<li class="done"><span class="box">✓</span><span>Daily recurring tuition cron route exists and is scheduled in Vercel.</span></li>
+<li class="done"><span class="box">✓</span><span>Recurring billing creates monthly child tuition invoices idempotently.</span></li>
+<li class="done"><span class="box">✓</span><span>Billing page includes AR aging and ledger reconciliation reporting.</span></li>
+<li class="done"><span class="box">✓</span><span>Add weekly recurring billing cadence rules if schools need weekly tuition billing.</span></li>
+<li class="done"><span class="box">✓</span><span>Add payment method management/autopay through Stripe Setup Intents or customer portal.</span></li>
+<li class="done"><span class="box">✓</span><span>Add failed payment retry/dunning workflow.</span></li>
+<li class="done"><span class="box">✓</span><span>Add subsidy/agency payment tracking.</span></li>
+<li class="open"><span class="box"></span><span>Finalize surcharge/convenience fee disclosures and legal review.</span></li>
+<li class="open"><span class="box"></span><span>Complete Stripe connected account onboarding for every school/payout owner before accepting live parent payments at that school.</span></li>
+</ul>
+
+<h2>Attendance, Check-In, And Kiosk</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Attendance page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Check-in page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Center-specific check-in page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Kiosk lookup/check APIs exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Guardian PIN hashing and verification exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Director PIN management exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Kiosk state guardrails prevent invalid duplicate check-ins/check-outs.</span></li>
+<li class="done"><span class="box">✓</span><span>Lobby tablet UX foundation exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Signature capture exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Late pickup flag workflow exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent authorization warnings exist during pickup.</span></li>
+<li class="done"><span class="box">✓</span><span>End-of-day attendance reconciliation report exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Add QR/PIN alternate check-in options.</span></li>
+<li class="done"><span class="box">✓</span><span>Add staff kiosk mode.</span></li>
+</ul>
+
+<h2>FTE Reporting</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>FTE schema and migration exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Director FTE submission form exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Executive FTE review/correction/approval exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Current-week missing report tracker exists.</span></li>
+<li class="done"><span class="box">✓</span><span>CSV export exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Executive bulk FTE CSV import/correction exists.</span></li>
+<li class="done"><span class="box">✓</span><span>FTE trend visuals and school snapshots exist.</span></li>
+<li class="done"><span class="box">✓</span><span>FTE notification dropdown escalation exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Vercel cron route exists for persistent missing-FTE notifications.</span></li>
+<li class="done"><span class="box">✓</span><span><code>CRON_SECRET</code> is configured in Vercel production.</span></li>
+<li class="open"><span class="box"></span><span>Confirm final reporting week cutoff/due time with Kid City USA operations.</span></li>
+<li class="open"><span class="box"></span><span>Add email/SMS escalation for missing FTE reports if desired.</span></li>
+<li class="open"><span class="box"></span><span>Add final Google Sheet two-way reconciliation rules.</span></li>
+</ul>
+
+<h2>ProCare Import And Cutover</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>ProCare import page/panel exists.</span></li>
+<li class="done"><span class="box">✓</span><span>ProCare import API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Import supports CSV and encrypted <code>.v10</code> workflow foundation.</span></li>
+<li class="done"><span class="box">✓</span><span>Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.</span></li>
+<li class="done"><span class="box">✓</span><span>Import preview/diff UI exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Import rollback/export backup exists.</span></li>
+<li class="open"><span class="box"></span><span>Run final import mapping against real exports from each live Kid City USA location.</span></li>
+<li class="open"><span class="box"></span><span>Confirm every ProCare field used by the schools is mapped or intentionally excluded.</span></li>
+<li class="open"><span class="box"></span><span>Add duplicate matching controls for families/children/guardians.</span></li>
+<li class="open"><span class="box"></span><span>Add final migration runbook for switching each location off ProCare.</span></li>
+</ul>
+
+<h2>Messaging, Notifications, And AI</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Messages page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Communications API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Lead message API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Announcements page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Campaigns page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Automations page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Mr. Bee AI route exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Notification center page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Notification dropdown exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Notification summary API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Read/unread mutation UI exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Notification dedupe/retention policy exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent notification preferences exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Complete portal two-way parent/director/teacher messaging UI.</span></li>
+<li class="done"><span class="box">✓</span><span>Add real SendGrid email send paths for all communication workflows.</span></li>
+<li class="done"><span class="box">✓</span><span>Add real Twilio SMS send/receive paths.</span></li>
+<li class="open"><span class="box"></span><span>Add message templates and merge fields.</span></li>
+<li class="open"><span class="box"></span><span>Add richer threaded conversation views with per-family reply history and staff assignment.</span></li>
+<li class="open"><span class="box"></span><span>Add full notification preferences by role/user beyond parent portal.</span></li>
+<li class="open"><span class="box"></span><span>Add email/SMS/push delivery channels.</span></li>
+</ul>
+
+<h2>Forms, Documents, Compliance, And E-Signature</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Forms page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Documents page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Registration page and API exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Signature request mock integration API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Compliance dashboard exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Incident reports page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Teacher incident creation API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent incident acknowledgement API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Parent document upload API stores submitted files in Supabase Storage.</span></li>
+<li class="done"><span class="box">✓</span><span>Director document review API supports approve/reject decisions with notes and parent notifications.</span></li>
+<li class="open"><span class="box"></span><span>Build actual form builder UI.</span></li>
+<li class="done"><span class="box">✓</span><span>Complete required document checklist per family/staff/child.</span></li>
+<li class="done"><span class="box">✓</span><span>Add file upload UI tied to Supabase storage.</span></li>
+<li class="done"><span class="box">✓</span><span>Add director document review states.</span></li>
+<li class="done"><span class="box">✓</span><span>Add expiration reminders for family/staff/child documents.</span></li>
+<li class="done"><span class="box">✓</span><span>Integrate real e-signature provider or complete internal signature capture flow.</span></li>
+<li class="done"><span class="box">✓</span><span>Add state-specific licensing configuration.</span></li>
+<li class="open"><span class="box"></span><span>Add medication log workflow.</span></li>
+<li class="open"><span class="box"></span><span>Add compliance report export.</span></li>
+<li class="open"><span class="box"></span><span>Add incident admin review workflow with parent acknowledgement status.</span></li>
+</ul>
+
+<h2>Integrations, Security, And Operations</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Integrations page exists.</span></li>
+<li class="done"><span class="box">✓</span><span>System readiness API exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Stripe integration foundation exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Supabase storage/auth/database integration exists.</span></li>
+<li class="done"><span class="box">✓</span><span>SendGrid/Twilio integration foundations exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Google Sheets backup support exists for inquiries and FTE.</span></li>
+<li class="done"><span class="box">✓</span><span>Integration health checks and retry queues exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Audit log viewer exists.</span></li>
+<li class="done"><span class="box">✓</span><span>Guardrail tests cover access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.</span></li>
+<li class="done"><span class="box">✓</span><span>Lint, typecheck, test, and build scripts exist.</span></li>
+<li class="done"><span class="box">✓</span><span>Current test suite has 56 passing tests.</span></li>
+<li class="done"><span class="box">✓</span><span>Complete real setup UI for each integration.</span></li>
+<li class="open"><span class="box"></span><span>Add tenant-specific integration credentials instead of only platform env vars.</span></li>
+<li class="open"><span class="box"></span><span>Run formal Supabase advisor/security review after schema migrations.</span></li>
+<li class="open"><span class="box"></span><span>Add staging environment separate from production.</span></li>
+<li class="open"><span class="box"></span><span>Add seed/test fixtures for every major role.</span></li>
+<li class="open"><span class="box"></span><span>Add error monitoring and uptime monitoring.</span></li>
+</ul>
+
+<h2>Business / User Input Needed</h2>
+
+<ul class="checklist">
+<li class="done"><span class="box">✓</span><span>Create onboarding sections for directors to provide current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.</span></li>
+<li class="open"><span class="box"></span><span>Have each school director submit or confirm current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.</span></li>
+<li class="open"><span class="box"></span><span>Confirm which schools are ready for Stripe connected account onboarding.</span></li>
+<li class="open"><span class="box"></span><span>Confirm convenience fee/processing recovery language with legal/accounting.</span></li>
+<li class="open"><span class="box"></span><span>Provide teacher/staff rosters per active location.</span></li>
+<li class="done"><span class="box">✓</span><span>Create onboarding sections for directors to provide classroom names, capacities, age ranges, and ratio expectations.</span></li>
+<li class="open"><span class="box"></span><span>Have each school director submit or confirm classroom names, capacities, age ranges, and ratio expectations per active location.</span></li>
+<li class="open"><span class="box"></span><span>Provide final registration packet fields and policy acknowledgement documents.</span></li>
+<li class="open"><span class="box"></span><span>Approve public website copy, testimonials, logos, and real in-school photos.</span></li>
+<li class="open"><span class="box"></span><span>Confirm FTE cutoff schedule and escalation contacts.</span></li>
+<li class="open"><span class="box"></span><span>Confirm pilot school rollout order and cutover windows.</span></li>
+</ul>
+
+    </section>
+  </main>
+  <script>
+    const searchInput = document.querySelector("#filter");
+    const buttons = document.querySelectorAll("[data-filter]");
+    let statusFilter = "all";
+
+    function applyFilters() {
+      const query = searchInput.value.trim().toLowerCase();
+      document.querySelectorAll(".checklist li").forEach((item) => {
+        const statusMatch = statusFilter === "all" || item.classList.contains(statusFilter);
+        const queryMatch = !query || item.textContent.toLowerCase().includes(query);
+        item.classList.toggle("hidden", !(statusMatch && queryMatch));
+      });
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        statusFilter = button.dataset.filter;
+        applyFilters();
+      });
+    });
+    searchInput.addEventListener("input", applyFilters);
+  </script>
+</body>
+</html>

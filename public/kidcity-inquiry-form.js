@@ -47,8 +47,7 @@
   }
 
   function optionLabel(location) {
-    const place = [location.city, location.state].filter(Boolean).join(", ");
-    return place ? `${location.name} - ${place}` : location.name;
+    return location.crmLocationId || location.locationId || location.name;
   }
 
   function groupLocations(locations) {

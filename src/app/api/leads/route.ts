@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
   const leads = await prisma.lead.findMany({
     where: {
       centerId: centerId ?? { in: visibleCenterIds },
-      status: { not: "merged" },
+      status: { notIn: ["closed", "merged"] },
       ...(parsedStage ? { stage: parsedStage } : {}),
     },
     orderBy: { createdAt: "desc" },

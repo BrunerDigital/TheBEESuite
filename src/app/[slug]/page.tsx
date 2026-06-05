@@ -303,7 +303,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(visibleCenterIds);
-  const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds };
+  const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();
   const thirtyDays = new Date(today);
   thirtyDays.setDate(today.getDate() + 30);

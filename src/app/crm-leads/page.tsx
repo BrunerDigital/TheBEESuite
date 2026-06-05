@@ -28,7 +28,7 @@ export default async function CrmLeadsPage() {
   const visibleCenterIds = centers.map((center) => center.id);
   const leadWhere = {
     centerId: visibleCenterIds.length ? { in: visibleCenterIds } : { in: ["__no_visible_centers__"] },
-    status: { not: "merged" },
+    status: { notIn: ["closed", "merged"] },
   };
 
   const leads = await prisma.lead.findMany({

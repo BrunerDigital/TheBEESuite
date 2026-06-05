@@ -130,7 +130,7 @@ Status legend:
 - [x] UTM/source capture exists.
 - [x] Retry queue exists for failed outbound integration deliveries.
 - [x] Reconfirm all director notification emails for the active schools before final rollout. Verified 94/94 active Kid City USA schools via live read-only Supabase audit; see `docs/DIRECTOR_NOTIFICATION_EMAIL_AUDIT_2026-06-04.md`.
-- [ ] Remove or archive test leads if operations does not want them retained in live CRM history.
+- [x] Remove or archive test leads if operations does not want them retained in live CRM history.
 
 ## Tuition, Billing, Ledger, And Payments
 

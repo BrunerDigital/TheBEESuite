@@ -48,6 +48,7 @@ export default async function DashboardPage() {
   const allCentersAccess = canAccessAllCenters(user);
   const leadWhere = {
     centerId: scopedCenterFilter,
+    status: { notIn: ["closed", "merged"] },
   };
   const today = new Date();
   const startOfDay = new Date(today);

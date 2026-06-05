@@ -23,7 +23,7 @@ export async function GET() {
   });
   const centerIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(centerIds);
-  const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds };
+  const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const now = new Date();
   const tenantWide = canAccessAllCenters(user);
   const notificationUserWhere: Prisma.NotificationWhereInput = {
@@ -56,7 +56,7 @@ export async function GET() {
       where: { readAt: null, ...notificationUserWhere },
     }),
     prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.NEW_INQUIRY } }),
-    prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 }, status: "open" } }),
+    prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
     prisma.task.count({ where: { status: "open", lead: leadWhere } }),
     prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: now, lte: sevenDays } } }),
     prisma.incidentReport.count({

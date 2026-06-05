@@ -594,6 +594,7 @@ export async function POST(request: NextRequest) {
     const integrationPayload = {
       ...payload,
       centerId: center.id,
+      tenantId: center.tenantId,
       resolvedCenterName: center.name,
       resolvedCrmLocationId: center.crmLocationId,
       resolvedLocationId: center.locationId,

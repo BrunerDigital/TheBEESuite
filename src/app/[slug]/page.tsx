@@ -2053,7 +2053,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       : tenantWide
         ? { tenantId: user.tenantId }
         : { centerId: scopedCenterIds };
-    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries, integrationRecords] = await Promise.all([
+    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries, integrationRecords, integrationCredentials] = await Promise.all([
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "pending" } }),
@@ -2087,8 +2087,12 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           lastSyncAt: true,
         },
       }),
+      prisma.integrationCredential.findMany({
+        where: { tenantId: user.tenantId },
+        select: { provider: true, key: true, lastFour: true },
+      }),
     ]);
-    const setupIntegrations = buildIntegrationSetupViews(integrationRecords, process.env);
+    const setupIntegrations = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
 
     return (
       <IntegrationsPage

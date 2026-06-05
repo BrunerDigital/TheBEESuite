@@ -88,6 +88,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     fromName: campaign.brand?.name ?? "The BEE Suite",
     categories: ["campaign_email"],
     customArgs: { campaignId: campaign.id },
+    tenantId: user.tenantId,
   });
 
   await recordEmailDeliveryAttempt({

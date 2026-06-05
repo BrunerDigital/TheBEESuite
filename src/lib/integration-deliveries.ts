@@ -183,6 +183,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
         to,
         body,
         statusCallbackUrl: statusCallbackUrl ?? null,
+        tenantId,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,
       lastError: deliveryResult.error ?? null,
@@ -240,6 +241,7 @@ export async function recordEmailDeliveryAttempt({
         centerId: centerId ?? null,
         leadId: leadId ?? null,
         messageId: messageId ?? null,
+        tenantId,
         ...metadata,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,
@@ -296,6 +298,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
         leadId: stringValue(payload.leadId) || undefined,
         messageId: stringValue(payload.messageId) || undefined,
       },
+      tenantId: stringValue(payload.tenantId) || null,
     });
   }
 
@@ -304,6 +307,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
       to: stringValue(payload.to),
       body: stringValue(payload.body),
       statusCallbackUrl: stringValue(payload.statusCallbackUrl) || null,
+      tenantId: stringValue(payload.tenantId) || null,
     });
   }
 
@@ -334,6 +338,7 @@ export async function retryPendingIntegrationDeliveries({
     take: Math.max(1, Math.min(limit, 100)),
     select: {
       id: true,
+      tenantId: true,
       provider: true,
       purpose: true,
       attempts: true,
@@ -356,7 +361,10 @@ export async function retryPendingIntegrationDeliveries({
     }
 
     const nextAttempts = delivery.attempts + 1;
-    const payload = asRecord(delivery.payload);
+    const payload = {
+      ...asRecord(delivery.payload),
+      tenantId: delivery.tenantId,
+    };
     const result = await sendDelivery(delivery.provider, delivery.purpose, payload);
     const state = computeIntegrationDeliveryState({
       result,

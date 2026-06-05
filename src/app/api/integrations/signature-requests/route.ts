@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
     fromName: "Kid City USA",
     categories: ["signature_request_email"],
     customArgs: { documentId: document.id, familyId, childId: childId ?? "" },
+    tenantId: user.tenantId,
   });
   await recordEmailDeliveryAttempt({
     tenantId: user.tenantId,

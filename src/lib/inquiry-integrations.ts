@@ -144,6 +144,7 @@ export async function sendInquiryNotificationEmail(
       centerId: String(payload.centerId || ""),
       locationId: String(payload.locationId || ""),
     },
+    tenantId: String(payload.tenantId || "") || null,
   });
 
   return {

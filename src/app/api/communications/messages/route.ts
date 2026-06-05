@@ -274,9 +274,10 @@ export async function POST(request: NextRequest) {
         text: message,
         replyTo: emailReplyTo,
         fromName: "The BEE Suite",
-        categories: ["communication_email"],
-        customArgs: { messageId: created.id, familyId: family.id, centerId: family.centerId },
-      })
+      categories: ["communication_email"],
+      customArgs: { messageId: created.id, familyId: family.id, centerId: family.centerId },
+      tenantId: user.tenantId,
+    })
     : { ok: false, configured: false, provider: "sendgrid" as const };
   if (sendEmailCopy && family) {
     await recordEmailDeliveryAttempt({
@@ -302,7 +303,7 @@ export async function POST(request: NextRequest) {
   const statusCallbackUrl = smsRecipients.length ? twilioStatusCallbackUrl(request) : null;
   const smsResults = await Promise.all(
     smsRecipients.map(async (to) => {
-      const result = await sendSms({ to, body: message, statusCallbackUrl });
+      const result = await sendSms({ to, body: message, statusCallbackUrl, tenantId: user.tenantId });
       await recordCommunicationSmsDeliveryAttempt({
         tenantId: user.tenantId,
         centerId: family?.centerId ?? null,

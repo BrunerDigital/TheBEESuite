@@ -67,6 +67,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     fromName: "Kid City USA",
     categories: ["lead_email"],
     customArgs: { leadId: lead.id, centerId: lead.centerId },
+    tenantId: user.tenantId,
   });
 
   await recordEmailDeliveryAttempt({

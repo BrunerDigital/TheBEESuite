@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 
 export type IntegrationSendResult = {
   ok: boolean;
@@ -306,6 +307,7 @@ export async function sendEmail({
   fromName = "The BEE Suite",
   categories,
   customArgs,
+  tenantId,
 }: {
   to: string[];
   subject: string;
@@ -314,9 +316,11 @@ export async function sendEmail({
   fromName?: string;
   categories?: string[];
   customArgs?: Record<string, string | number | boolean | null | undefined>;
+  tenantId?: string | null;
 }): Promise<IntegrationSendResult> {
-  const apiKey = process.env.SENDGRID_API_KEY;
-  const from = process.env.SENDGRID_FROM_EMAIL;
+  const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "sendgrid");
+  const apiKey = credentialEnvValue(tenantCredentials, "SENDGRID_API_KEY");
+  const from = credentialEnvValue(tenantCredentials, "SENDGRID_FROM_EMAIL");
   const recipients = uniqueEmails(to);
 
   if (!apiKey || !from || !recipients.length) {
@@ -370,15 +374,18 @@ export async function sendSms({
   to,
   body,
   statusCallbackUrl,
+  tenantId,
 }: {
   to: string;
   body: string;
   statusCallbackUrl?: string | null;
+  tenantId?: string | null;
 }): Promise<IntegrationSendResult> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+  const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "twilio");
+  const accountSid = credentialEnvValue(tenantCredentials, "TWILIO_ACCOUNT_SID");
+  const authToken = credentialEnvValue(tenantCredentials, "TWILIO_AUTH_TOKEN");
+  const from = credentialEnvValue(tenantCredentials, "TWILIO_FROM_NUMBER");
+  const messagingServiceSid = credentialEnvValue(tenantCredentials, "TWILIO_MESSAGING_SERVICE_SID");
   const normalizedTo = clean(to);
 
   if (!accountSid || !authToken || (!from && !messagingServiceSid) || !normalizedTo) {

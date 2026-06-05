@@ -65,6 +65,7 @@ model Tenant {
   users                 User[]
   auditLogs             AuditLog[]
   integrations          Integration[]
+  integrationCredentials IntegrationCredential[]
   integrationDeliveries IntegrationDelivery[]
   messageTemplates      MessageTemplate[]
   notificationPreferences NotificationPreference[]
@@ -1171,6 +1172,24 @@ model Integration {
   lastSyncAt        DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model IntegrationCredential {
+  id             String   @id @default(cuid())
+  tenantId       String
+  provider       String
+  key            String
+  encryptedValue String
+  lastFour       String?
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, provider, key])
+  @@index([tenantId, provider])
 }
 
 model IntegrationDelivery {

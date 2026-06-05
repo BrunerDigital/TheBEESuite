@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const statusCallbackUrl = twilioStatusCallbackUrl(request);
-  const result = await sendSms({ to, body: message, statusCallbackUrl });
+  const result = await sendSms({ to, body: message, statusCallbackUrl, tenantId: user.tenantId });
   await recordCommunicationSmsDeliveryAttempt({
     tenantId: user.tenantId,
     centerId,

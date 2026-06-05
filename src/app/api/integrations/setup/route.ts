@@ -10,6 +10,7 @@ import {
   normalizeIntegrationSetupStatus,
   sanitizeIntegrationConfig,
 } from "@/lib/integration-setup";
+import { sanitizeCredentialInput, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -41,7 +42,16 @@ export async function POST(request: NextRequest) {
   }
 
   const action = actionValue(body?.action);
-  const runtimeStatus = getIntegrationRuntimeStatus(provider, process.env);
+  const credentialInput = sanitizeCredentialInput(provider, body?.credentials);
+  const existingCredentials = await prisma.integrationCredential.findMany({
+    where: { tenantId: user.tenantId, provider },
+    select: { key: true, lastFour: true, provider: true },
+  });
+  const runtimeStatus = getIntegrationRuntimeStatus(
+    provider,
+    process.env,
+    Array.from(new Set([...existingCredentials.map((credential) => credential.key), ...Object.keys(credentialInput)])),
+  );
   const checkedAt = action === "check" ? new Date() : null;
   const setupStatus = action === "check"
     ? runtimeStatus.configured ? "verified" : "needs_credentials"
@@ -51,6 +61,12 @@ export async function POST(request: NextRequest) {
     config,
     checkedAt,
     checkedById: checkedAt ? user.id : null,
+  });
+  const savedCredentialKeys = await upsertTenantIntegrationCredentials({
+    tenantId: user.tenantId,
+    provider,
+    credentials: credentialInput,
+    userId: user.id,
   });
 
   const existing = await prisma.integration.findFirst({
@@ -86,8 +102,13 @@ export async function POST(request: NextRequest) {
       setupStatus,
       runtimeConfigured: runtimeStatus.configured,
       configKeys: Object.keys(config),
-      storesTenantSecrets: false,
+      tenantCredentialKeys: savedCredentialKeys,
+      storesTenantSecrets: true,
     },
+  });
+  const credentials = await prisma.integrationCredential.findMany({
+    where: { tenantId: user.tenantId },
+    select: { provider: true, key: true, lastFour: true },
   });
 
   const integration = buildIntegrationSetupViews([
@@ -98,7 +119,7 @@ export async function POST(request: NextRequest) {
       configPlaceholder: saved.configPlaceholder,
       lastSyncAt: saved.lastSyncAt,
     },
-  ], process.env).find((item) => item.provider === provider);
+  ], process.env, credentials).find((item) => item.provider === provider);
 
   return NextResponse.json({ ok: true, integration });
 }

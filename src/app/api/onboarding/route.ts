@@ -205,6 +205,7 @@ async function sendOnboardingEmail(
       tenantId: workspace?.tenantId,
       centerId: workspace?.centerId,
     },
+    tenantId: workspace?.tenantId ?? null,
   });
   if (workspace) {
     await recordEmailDeliveryAttempt({

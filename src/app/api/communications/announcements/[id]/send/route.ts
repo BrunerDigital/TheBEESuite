@@ -83,6 +83,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     fromName: announcement.center?.name ?? "The BEE Suite",
     categories: ["announcement_email"],
     customArgs: { announcementId: announcement.id, centerId: announcement.centerId },
+    tenantId: user.tenantId,
   });
 
   await recordEmailDeliveryAttempt({

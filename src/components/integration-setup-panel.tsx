@@ -20,6 +20,8 @@ type IntegrationSetupRow = {
   setupStatus: IntegrationSetupStatus;
   config: Record<string, string | boolean>;
   fields: IntegrationSetupField[];
+  credentialFields: Array<{ key: string; label: string; placeholder?: string }>;
+  credentials: Array<{ key: string; configured: boolean; lastFour: string | null }>;
   env: {
     configured: boolean;
     configuredRequirements: string[];
@@ -73,6 +75,13 @@ function statusMap(integrations: IntegrationSetupRow[]) {
   return Object.fromEntries(integrations.map((integration) => [integration.provider, integration.setupStatus])) as Record<IntegrationProvider, IntegrationSetupStatus>;
 }
 
+function credentialMap(integrations: IntegrationSetupRow[]) {
+  return Object.fromEntries(integrations.map((integration) => [
+    integration.provider,
+    Object.fromEntries(integration.credentialFields.map((field) => [field.key, ""])),
+  ])) as Record<IntegrationProvider, Record<string, string>>;
+}
+
 export function IntegrationSetupPanel({ integrations, canManage }: Props) {
   const [rows, setRows] = useState(integrations);
   const [activeProvider, setActiveProvider] = useState<IntegrationProvider>(integrations[0]?.provider ?? "supabase");
@@ -81,10 +90,12 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
     [activeProvider, rows],
   );
   const [drafts, setDrafts] = useState(() => draftMap(integrations));
+  const [credentialDrafts, setCredentialDrafts] = useState(() => credentialMap(integrations));
   const [setupStatusesByProvider, setSetupStatusesByProvider] = useState(() => statusMap(integrations));
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const draft = active ? drafts[active.provider] ?? active.config : {};
+  const credentialDraft = active ? credentialDrafts[active.provider] ?? {} : {};
   const setupStatus = active ? setupStatusesByProvider[active.provider] ?? active.setupStatus : "not_started";
 
   function updateDraft(key: string, value: string | boolean) {
@@ -103,6 +114,17 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
     setSetupStatusesByProvider((current) => ({ ...current, [active.provider]: value }));
   }
 
+  function updateCredentialDraft(key: string, value: string) {
+    if (!active) return;
+    setCredentialDrafts((current) => ({
+      ...current,
+      [active.provider]: {
+        ...(current[active.provider] ?? {}),
+        [key]: value,
+      },
+    }));
+  }
+
   function submit(action: "save" | "check") {
     if (!active) return;
     startTransition(async () => {
@@ -115,6 +137,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
           action,
           setupStatus,
           config: draft,
+          credentials: credentialDraft,
         }),
       });
       const json = await response.json().catch(() => null) as { ok?: boolean; error?: string; integration?: IntegrationSetupRow } | null;
@@ -125,6 +148,10 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
       const savedIntegration = json.integration;
       setRows((current) => current.map((row) => row.provider === savedIntegration.provider ? savedIntegration : row));
       setDrafts((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.config }));
+      setCredentialDrafts((current) => ({
+        ...current,
+        [savedIntegration.provider]: Object.fromEntries(savedIntegration.credentialFields.map((field) => [field.key, ""])),
+      }));
       setSetupStatusesByProvider((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.setupStatus }));
       setMessage(action === "check" ? "Server configuration checked." : "Integration setup saved.");
     });
@@ -139,7 +166,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
           <div>
             <CardTitle>Integration Setup</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              Setup records track owners, public identifiers, review status, and server environment readiness without storing tenant secrets.
+              Setup records track owners, public identifiers, review status, tenant-specific encrypted credentials, and server environment readiness.
             </CardDescription>
           </div>
           <Badge variant={canManage ? "default" : "outline"}>
@@ -272,6 +299,42 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
               </div>
             ))}
           </div>
+
+          {active.credentialFields.length ? (
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="flex flex-col gap-1">
+                <div className="font-medium">Tenant Credentials</div>
+                <p className="text-sm text-muted-foreground">
+                  Saved credentials are encrypted server-side and hidden after save. Leave a field blank to keep the existing value.
+                </p>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {active.credentialFields.map((field) => {
+                  const presence = active.credentials.find((credential) => credential.key === field.key);
+                  return (
+                    <div key={field.key} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label>{field.label}</Label>
+                        {presence?.configured ? (
+                          <Badge variant="outline">Saved{presence.lastFour ? ` ••••${presence.lastFour}` : ""}</Badge>
+                        ) : (
+                          <Badge variant="secondary">Not saved</Badge>
+                        )}
+                      </div>
+                      <Input
+                        type="password"
+                        value={credentialDraft[field.key] ?? ""}
+                        onChange={(event) => updateCredentialDraft(field.key, event.target.value)}
+                        placeholder={field.placeholder ?? (presence?.configured ? "Leave blank to keep saved value" : "Enter tenant credential")}
+                        disabled={!canManage || isPending}
+                        autoComplete="off"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
 

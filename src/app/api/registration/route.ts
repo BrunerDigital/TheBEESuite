@@ -388,6 +388,7 @@ export async function POST(request: NextRequest) {
       ].join("\n"),
       categories: ["registration_email"],
       customArgs: { leadId: lead.id, centerId: center.id, submissionId: submission.id },
+      tenantId: center.organization.tenantId,
     });
     await recordEmailDeliveryAttempt({
       tenantId: center.organization.tenantId,

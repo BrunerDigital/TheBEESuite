@@ -183,6 +183,7 @@ export async function POST(request: NextRequest) {
     fromName: "The BEE Suite",
     categories: ["parent_invitation_email"],
     customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
+    tenantId: user.tenantId,
   });
   await recordEmailDeliveryAttempt({
     tenantId: user.tenantId,

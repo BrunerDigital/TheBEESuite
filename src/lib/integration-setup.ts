@@ -1,3 +1,5 @@
+import { credentialPresenceFromKeys, integrationCredentialFields, type IntegrationCredentialField, type IntegrationCredentialPresence } from "@/lib/integration-credentials";
+
 export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "openai" | "stripe" | "twilio";
 
 export type IntegrationDisplayStatus = "Connected" | "Configured" | "Missing" | "Placeholder";
@@ -52,6 +54,8 @@ export type IntegrationSetupView = {
   setupStatus: IntegrationSetupStatus;
   config: Record<string, string | boolean>;
   fields: IntegrationSetupField[];
+  credentialFields: IntegrationCredentialField[];
+  credentials: IntegrationCredentialPresence[];
   env: IntegrationRuntimeStatus;
   lastSyncAt: Date | string | null;
 };
@@ -238,19 +242,19 @@ export function normalizeIntegrationSetupStatus(value: unknown): IntegrationSetu
   return setupStatuses.has(normalized as IntegrationSetupStatus) ? normalized as IntegrationSetupStatus : "in_progress";
 }
 
-function isEnvPresent(env: EnvMap, name: string) {
-  return Boolean(env[name]?.trim());
+function isConfiguredValue(env: EnvMap, credentialKeys: Set<string>, name: string) {
+  return Boolean(env[name]?.trim()) || credentialKeys.has(name);
 }
 
-function runtimeFromRequirements(definition: IntegrationSetupDefinition, env: EnvMap): IntegrationRuntimeStatus {
+function runtimeFromRequirements(definition: IntegrationSetupDefinition, env: EnvMap, credentialKeys: Set<string>): IntegrationRuntimeStatus {
   const configuredRequirements: string[] = [];
   const missingRequirements: string[] = [];
 
   for (const requirement of definition.envRequirements) {
     const mode = requirement.mode ?? "all";
     const configured = mode === "any"
-      ? requirement.names.some((name) => isEnvPresent(env, name))
-      : requirement.names.every((name) => isEnvPresent(env, name));
+      ? requirement.names.some((name) => isConfiguredValue(env, credentialKeys, name))
+      : requirement.names.every((name) => isConfiguredValue(env, credentialKeys, name));
 
     if (configured) configuredRequirements.push(requirement.label);
     else missingRequirements.push(requirement.label);
@@ -272,17 +276,18 @@ function runtimeFromRequirements(definition: IntegrationSetupDefinition, env: En
   return { status, configured, configuredRequirements, missingRequirements };
 }
 
-export function getIntegrationRuntimeStatus(provider: IntegrationProvider, env: EnvMap): IntegrationRuntimeStatus {
+export function getIntegrationRuntimeStatus(provider: IntegrationProvider, env: EnvMap, credentialKeysInput: string[] = []): IntegrationRuntimeStatus {
   const definition = getIntegrationDefinition(provider);
+  const credentialKeys = new Set(credentialKeysInput);
   if (!definition) {
     return { status: "Placeholder", configured: false, configuredRequirements: [], missingRequirements: ["Unknown integration"] } satisfies IntegrationRuntimeStatus;
   }
   if (provider === "google_sheets") {
-    const webhook = isEnvPresent(env, "GOOGLE_SHEETS_WEBHOOK_URL");
+    const webhook = isConfiguredValue(env, credentialKeys, "GOOGLE_SHEETS_WEBHOOK_URL");
     const serviceAccount = (
-      (isEnvPresent(env, "GOOGLE_SERVICE_ACCOUNT_EMAIL") || isEnvPresent(env, "GOOGLE_CLIENT_EMAIL")) &&
-      (isEnvPresent(env, "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY") || isEnvPresent(env, "GOOGLE_PRIVATE_KEY")) &&
-      (isEnvPresent(env, "GOOGLE_SHEETS_SPREADSHEET_ID") || isEnvPresent(env, "GOOGLE_SHEETS_SPREADSHEET_URL"))
+      (isConfiguredValue(env, credentialKeys, "GOOGLE_SERVICE_ACCOUNT_EMAIL") || isConfiguredValue(env, credentialKeys, "GOOGLE_CLIENT_EMAIL")) &&
+      (isConfiguredValue(env, credentialKeys, "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY") || isConfiguredValue(env, credentialKeys, "GOOGLE_PRIVATE_KEY")) &&
+      (isConfiguredValue(env, credentialKeys, "GOOGLE_SHEETS_SPREADSHEET_ID") || isConfiguredValue(env, credentialKeys, "GOOGLE_SHEETS_SPREADSHEET_URL"))
     );
     const configuredRequirements = [
       webhook ? "Apps Script webhook" : "",
@@ -297,7 +302,7 @@ export function getIntegrationRuntimeStatus(provider: IntegrationProvider, env: 
       missingRequirements: configured ? [] : ["Apps Script webhook or service account API"],
     };
   }
-  return runtimeFromRequirements(definition, env);
+  return runtimeFromRequirements(definition, env, credentialKeys);
 }
 
 function fieldValue(field: IntegrationSetupField, raw: unknown) {
@@ -350,11 +355,22 @@ export function readIntegrationConfig(value: unknown) {
   return result;
 }
 
-export function buildIntegrationSetupViews(records: StoredIntegrationSetup[], env: EnvMap): IntegrationSetupView[] {
+export function buildIntegrationSetupViews(
+  records: StoredIntegrationSetup[],
+  env: EnvMap,
+  credentialRecords: Array<{ provider: string; key: string; lastFour: string | null }> = [],
+): IntegrationSetupView[] {
   return INTEGRATION_SETUP_DEFINITIONS.map((definition) => {
     const existing = records.find((record) => record.provider === definition.provider);
     const setupStatus = normalizeIntegrationSetupStatus(existing?.status || "not_started");
-    const runtime = getIntegrationRuntimeStatus(definition.provider, env);
+    const credentialFields = integrationCredentialFields(definition.provider);
+    const providerCredentials = credentialRecords.filter((credential) => credential.provider === definition.provider);
+    const credentialPresence = credentialPresenceFromKeys(credentialFields, providerCredentials);
+    const runtime = getIntegrationRuntimeStatus(
+      definition.provider,
+      env,
+      providerCredentials.map((credential) => credential.key),
+    );
     return {
       id: existing?.id ?? null,
       provider: definition.provider,
@@ -365,6 +381,8 @@ export function buildIntegrationSetupViews(records: StoredIntegrationSetup[], en
       setupStatus,
       config: sanitizeIntegrationConfig(definition.provider, readIntegrationConfig(existing?.configPlaceholder)),
       fields: definition.fields,
+      credentialFields,
+      credentials: credentialPresence,
       env: runtime,
       lastSyncAt: existing?.lastSyncAt ? new Date(existing.lastSyncAt).toISOString() : null,
     };
@@ -384,6 +402,6 @@ export function integrationRecordConfig({
     setup: config,
     checkedAt: checkedAt ? checkedAt.toISOString() : null,
     checkedById: checkedById || null,
-    storesTenantSecrets: false,
+    storesTenantSecrets: true,
   };
 }

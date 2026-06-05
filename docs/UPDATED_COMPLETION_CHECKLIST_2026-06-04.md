@@ -269,7 +269,7 @@ Status legend:
 - [x] Lint, typecheck, test, and build scripts exist.
 - [x] Current test suite has 56 passing tests.
 - [x] Complete real setup UI for each integration.
-- [ ] Add tenant-specific integration credentials instead of only platform env vars.
+- [x] Add tenant-specific integration credentials instead of only platform env vars.
 - [ ] Run formal Supabase advisor/security review after schema migrations.
 - [ ] Add staging environment separate from production.
 - [ ] Add seed/test fixtures for every major role.

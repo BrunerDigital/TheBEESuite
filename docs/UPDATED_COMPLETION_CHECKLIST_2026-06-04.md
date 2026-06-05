@@ -68,10 +68,10 @@ Status legend:
 - [x] Attendance, kiosk, daily reports, incidents, documents, messages, announcements, calendar, billing, and payments pages exist.
 - [ ] Complete custody visibility controls and staff-facing custody warnings throughout the UI.
 - [ ] Complete document upload/review/expiration workflow per family/child/staff.
-- [ ] Add family merge/deduplication tools.
-- [ ] Add staff time clock.
-- [ ] Add ratio engine by age group/state rules.
-- [ ] Add classroom ratio warnings and staff assignment actions.
+- [x] Add family merge/deduplication tools.
+- [x] Add staff time clock.
+- [x] Add ratio engine by age group/state rules.
+- [x] Add classroom ratio warnings and staff assignment actions.
 - [ ] Add offline/poor-connectivity strategy for classroom tablets.
 
 ## Teacher / Classroom Level

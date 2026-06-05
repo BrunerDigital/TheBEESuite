@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { evaluateClassroomRatio, parseRatioRule } from "@/lib/classroom-ratios";
+import { evaluateClassroomRatio, parseRatioRule, resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 
 test("classroom ratio parser accepts licensing ratio text", () => {
   assert.deepEqual(parseRatioRule("1:4 target"), {
@@ -88,4 +88,26 @@ test("classroom ratio evaluator flags missing rules", () => {
 
   assert.equal(warning.status, "missing_rule");
   assert.equal(warning.requiredStaff, null);
+});
+
+test("classroom ratio resolver uses age group lines from licensing configuration", () => {
+  assert.equal(
+    resolveClassroomRatioRule({
+      ageGroup: "Toddler",
+      state: "FL",
+      licensingRatioRules: "Infants 1:4\nToddlers 1:6\nPreschool 1:10",
+    }),
+    "Toddlers 1:6",
+  );
+});
+
+test("classroom ratio resolver keeps classroom-specific rules first", () => {
+  assert.equal(
+    resolveClassroomRatioRule({
+      ratioRule: "1:5 override",
+      ageGroup: "Infant",
+      licensingRatioRules: "Infants 1:4",
+    }),
+    "1:5 override",
+  );
 });

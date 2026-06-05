@@ -7,13 +7,17 @@ import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
-import { staffKioskPinFields } from "@/lib/staff-kiosk";
+import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function jsonObject(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function intValue(value: unknown, fallback = 0) {
@@ -217,6 +221,120 @@ export async function POST(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     result = id ? await prisma.family.update({ where: { id }, data }) : await prisma.family.create({ data });
+  } else if (entity === "familyMerge") {
+    const primaryFamilyId = clean(body.primaryFamilyId) || clean(body.familyId);
+    const duplicateFamilyId = clean(body.duplicateFamilyId) || clean(body.relatedId);
+    if (!primaryFamilyId || !duplicateFamilyId) {
+      return NextResponse.json({ ok: false, error: "Primary and duplicate family IDs are required." }, { status: 400 });
+    }
+    if (primaryFamilyId === duplicateFamilyId) {
+      return NextResponse.json({ ok: false, error: "Choose two different family accounts to merge." }, { status: 400 });
+    }
+    const [primaryAccess, duplicateAccess] = await Promise.all([
+      assertFamilyAccess(user, primaryFamilyId),
+      assertFamilyAccess(user, duplicateFamilyId),
+    ]);
+    if (!primaryAccess.ok) return NextResponse.json({ ok: false, error: primaryAccess.error }, { status: primaryAccess.status });
+    if (!duplicateAccess.ok) return NextResponse.json({ ok: false, error: duplicateAccess.error }, { status: duplicateAccess.status });
+    if (primaryAccess.centerId !== duplicateAccess.centerId) {
+      return NextResponse.json({ ok: false, error: "Family accounts must belong to the same school before merging." }, { status: 400 });
+    }
+    centerId = primaryAccess.centerId;
+    const mergedAt = new Date();
+    result = await prisma.$transaction(async (tx) => {
+      const [primary, duplicate] = await Promise.all([
+        tx.family.findUnique({ where: { id: primaryFamilyId }, include: { billingAccount: true } }),
+        tx.family.findUnique({ where: { id: duplicateFamilyId }, include: { billingAccount: true } }),
+      ]);
+      if (!primary || !duplicate) throw new Error("Family account not found.");
+
+      await Promise.all([
+        tx.guardian.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.child.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.authorizedPickup.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.emergencyContact.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.message.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.document.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.note.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+        tx.formSubmission.updateMany({ where: { familyId: duplicateFamilyId }, data: { familyId: primaryFamilyId } }),
+      ]);
+
+      if (duplicate.billingAccount && primary.billingAccount) {
+        await Promise.all([
+          tx.invoice.updateMany({
+            where: { billingAccountId: duplicate.billingAccount.id },
+            data: { billingAccountId: primary.billingAccount.id },
+          }),
+          tx.payment.updateMany({
+            where: { billingAccountId: duplicate.billingAccount.id },
+            data: { billingAccountId: primary.billingAccount.id },
+          }),
+          tx.ledgerEntry.updateMany({
+            where: { billingAccountId: duplicate.billingAccount.id },
+            data: { billingAccountId: primary.billingAccount.id },
+          }),
+        ]);
+        const updatedAccount = await tx.billingAccount.update({
+          where: { id: primary.billingAccount.id },
+          data: { balanceCents: { increment: duplicate.billingAccount.balanceCents } },
+        });
+        if (duplicate.billingAccount.balanceCents) {
+          await tx.ledgerEntry.create({
+            data: {
+              billingAccountId: primary.billingAccount.id,
+              type: "family_merge",
+              description: `Merged balance from ${duplicate.name}`,
+              amountCents: duplicate.billingAccount.balanceCents,
+              balanceAfterCents: updatedAccount.balanceCents,
+              sourceSystem: "bee_suite",
+              externalId: `family-merge:${duplicateFamilyId}:${mergedAt.getTime()}`,
+              metadata: { duplicateFamilyId, primaryFamilyId, mergedBy: user.email },
+            },
+          });
+        }
+        await tx.billingAccount.delete({ where: { id: duplicate.billingAccount.id } });
+      } else if (duplicate.billingAccount && !primary.billingAccount) {
+        await tx.billingAccount.update({
+          where: { id: duplicate.billingAccount.id },
+          data: { familyId: primaryFamilyId },
+        });
+      }
+
+      await tx.family.update({
+        where: { id: primaryFamilyId },
+        data: {
+          notes: [primary.notes, `Merged duplicate family "${duplicate.name}" on ${mergedAt.toISOString()} by ${user.email}.`]
+            .filter(Boolean)
+            .join("\n"),
+          customFields: {
+            ...jsonObject(primary.customFields),
+            lastFamilyMerge: { duplicateFamilyId, duplicateName: duplicate.name, mergedAt: mergedAt.toISOString(), mergedBy: user.email },
+          },
+        },
+      });
+
+      const archivedDuplicate = await tx.family.update({
+        where: { id: duplicateFamilyId },
+        data: {
+          centerId: null,
+          name: `[Merged] ${duplicate.name}`,
+          notes: [duplicate.notes, `Merged into ${primary.name} (${primaryFamilyId}) on ${mergedAt.toISOString()} by ${user.email}.`]
+            .filter(Boolean)
+            .join("\n"),
+          customFields: {
+            ...jsonObject(duplicate.customFields),
+            mergedIntoFamilyId: primaryFamilyId,
+            mergedIntoFamilyName: primary.name,
+            mergedAt: mergedAt.toISOString(),
+            mergedBy: user.email,
+          },
+        },
+      });
+
+      return { primaryFamilyId, duplicateFamilyId, archivedDuplicateId: archivedDuplicate.id };
+    });
+    auditMetadata.primaryFamilyId = primaryFamilyId;
+    auditMetadata.duplicateFamilyId = duplicateFamilyId;
   } else if (entity === "guardian") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
@@ -436,6 +554,41 @@ export async function POST(request: NextRequest) {
         classroom: { select: { id: true, name: true } },
       },
     });
+  } else if (entity === "staffTimeClock") {
+    const staffId = clean(body.staffId) || id;
+    if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
+    const action = normalizeStaffClockAction(clean(body.action) || clean(body.status));
+    if (!action) return NextResponse.json({ ok: false, error: "Clock action must be clock_in or clock_out." }, { status: 400 });
+    const staff = await prisma.staffProfile.findUnique({
+      where: { id: staffId },
+      select: { id: true, centerId: true, customFields: true, user: { select: { name: true, isActive: true, role: true } } },
+    });
+    if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
+    if (!canAccessCenter(user, staff.centerId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
+    }
+    if (!staff.user.isActive || staff.user.role !== UserRole.TEACHER) {
+      return NextResponse.json({ ok: false, error: "Only active teacher profiles can use staff time clock actions." }, { status: 400 });
+    }
+    const state = readStaffClockState(staff.customFields);
+    const validation = validateNextStaffClockAction(action, state);
+    if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
+    const occurredAt = parseDate(body.occurredAt) ?? new Date();
+    centerId = staff.centerId;
+    result = await prisma.staffProfile.update({
+      where: { id: staff.id },
+      data: {
+        customFields: staffClockFields({
+          customFields: staff.customFields,
+          action,
+          occurredAt,
+          notes: clean(body.notes) || `Director action by ${user.email}`,
+        }),
+      },
+      select: { id: true, customFields: true, user: { select: { name: true, email: true } } },
+    });
+    auditMetadata.action = action;
+    auditMetadata.occurredAt = occurredAt.toISOString();
   } else if (entity === "staffScheduleBatch") {
     const classroomId = clean(body.classroomId);
     if (!classroomId) return NextResponse.json({ ok: false, error: "Classroom ID is required." }, { status: 400 });

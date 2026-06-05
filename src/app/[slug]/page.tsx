@@ -55,6 +55,7 @@ import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { buildIntegrationSetupViews } from "@/lib/integration-setup";
 import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
+import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
@@ -949,8 +950,10 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       select: {
         id: true,
         name: true,
+        ageGroup: true,
         capacity: true,
         ratioRule: true,
+        center: { select: { state: true, licensedCapacity: true, customFields: true } },
         _count: {
           select: {
             staff: { where: { user: { role: UserRole.TEACHER } } },
@@ -1002,7 +1005,15 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           classroomId: classroom.id,
           name: classroom.name,
           capacity: classroom.capacity,
-          ratioRule: classroom.ratioRule,
+          ratioRule: resolveClassroomRatioRule({
+            ratioRule: classroom.ratioRule,
+            ageGroup: classroom.ageGroup,
+            state: classroom.center.state,
+            licensingRatioRules: readCenterLicensingConfiguration(classroom.center.customFields, {
+              centerState: classroom.center.state,
+              licensedCapacity: classroom.center.licensedCapacity,
+            }).ratioRules.value,
+          }),
           assignedStaff: classroom._count.staff,
         }))}
       />
@@ -2049,7 +2060,7 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
       take: 150,
       include: {
-        center: { select: { name: true, crmLocationId: true } },
+        center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
         _count: { select: { children: true, staff: { where: { user: { role: UserRole.TEACHER } } }, dailyReports: true, incidents: true } },
       },
     });
@@ -2060,7 +2071,25 @@ async function renderLivePage(slug: string, user: CurrentUser) {
       <ClassroomDashboardPage
         data={{
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
-          classrooms: demoMode ? executiveClassroomDemoRows : classrooms,
+          classrooms: demoMode
+            ? executiveClassroomDemoRows
+            : classrooms.map((classroom) => ({
+                id: classroom.id,
+                name: classroom.name,
+                ageGroup: classroom.ageGroup,
+                capacity: classroom.capacity,
+                center: { name: classroom.center.name, crmLocationId: classroom.center.crmLocationId },
+                _count: classroom._count,
+                ratioRule: resolveClassroomRatioRule({
+                  ratioRule: classroom.ratioRule,
+                  ageGroup: classroom.ageGroup,
+                  state: classroom.center.state,
+                  licensingRatioRules: readCenterLicensingConfiguration(classroom.center.customFields, {
+                    centerState: classroom.center.state,
+                    licensedCapacity: classroom.center.licensedCapacity,
+                  }).ratioRules.value,
+                }),
+              })),
           demoMode,
         }}
       />

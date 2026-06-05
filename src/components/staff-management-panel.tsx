@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, KeyRound, Save, Send, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, KeyRound, Save, Send, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
+import { readStaffClockState } from "@/lib/staff-kiosk";
 
 type CenterOption = { id: string; name: string };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
@@ -21,6 +22,7 @@ type TeacherRecord = {
   title: string;
   phone: string | null;
   backgroundCheckStatus: string | null;
+  customFields?: unknown;
   user: { name: string; email: string; isActive: boolean };
   classroom: { id: string; name: string } | null;
 };
@@ -97,6 +99,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [weeklyEndTime, setWeeklyEndTime] = useState("16:30");
   const [weeklyDays, setWeeklyDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [weeklyStatus, setWeeklyStatus] = useState("scheduled");
+  const [clockStaffId, setClockStaffId] = useState(staff[0]?.id ?? "");
+  const [clockNotes, setClockNotes] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -118,6 +122,9 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     () => staff.filter((teacher) => teacher.classroomId === weeklyClassroomId && teacher.user.isActive),
     [staff, weeklyClassroomId],
   );
+  const clockTeacher = staff.find((teacher) => teacher.id === clockStaffId) ?? staff[0] ?? null;
+  const clockState = readStaffClockState(clockTeacher?.customFields);
+  const clockAction = clockState.status === "clocked_in" ? "clock_out" : "clock_in";
 
   function resetTeacherForm() {
     setCenterId(centers[0]?.id ?? "");
@@ -230,6 +237,32 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
         return;
       }
       setStatusMessage(`Weekly classroom coverage generated for ${json?.createdSchedules ?? 0} schedule rows.`);
+      router.refresh();
+    });
+  }
+
+  function saveClockAction() {
+    if (!clockTeacher) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "staffTimeClock",
+          staffId: clockTeacher.id,
+          action: clockAction,
+          notes: clockNotes,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Staff clock action could not be saved.");
+        return;
+      }
+      setStatusMessage(`${clockTeacher.user.name} ${clockAction === "clock_in" ? "clocked in" : "clocked out"}.`);
+      setClockNotes("");
       router.refresh();
     });
   }
@@ -565,6 +598,42 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                 Generate coverage
               </Button>
             </form>
+          </section>
+
+          <section className="rounded-xl border bg-background/40 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Staff time clock</div>
+                <p className="text-xs text-muted-foreground">Director override for classroom staff clock-in and clock-out history.</p>
+              </div>
+              <Badge variant={clockState.status === "clocked_in" ? "default" : "outline"}>
+                {clockState.status === "clocked_in" ? "Clocked in" : "Clocked out"}
+              </Badge>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
+              <div className="space-y-1">
+                <Label>Teacher</Label>
+                <Select value={clockTeacher?.id ?? ""} onValueChange={(value) => value && setClockStaffId(value)}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
+                  <SelectContent>
+                    {staff.map((teacher) => (
+                      <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Last action: {clockState.lastActionAt ? new Date(clockState.lastActionAt).toLocaleString() : "No clock history"}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label>Notes</Label>
+                <Input value={clockNotes} onChange={(event) => setClockNotes(event.target.value)} placeholder="Optional director note" />
+              </div>
+              <Button type="button" className="self-end" disabled={isPending || !clockTeacher} onClick={saveClockAction}>
+                <Clock data-icon="inline-start" />
+                {clockAction === "clock_in" ? "Clock in" : "Clock out"}
+              </Button>
+            </div>
           </section>
 
           <form className="space-y-4" onSubmit={saveTeacher}>

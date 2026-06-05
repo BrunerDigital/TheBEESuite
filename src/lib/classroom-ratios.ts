@@ -30,6 +30,51 @@ export function parseRatioRule(value: string | null | undefined) {
   };
 }
 
+function normalizeLabel(value: unknown) {
+  return typeof value === "string" ? value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() : "";
+}
+
+function ratioRuleLines(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/\r?\n|;/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+export function resolveClassroomRatioRule(input: {
+  ratioRule?: string | null;
+  ageGroup?: string | null;
+  state?: string | null;
+  licensingRatioRules?: string | null;
+}) {
+  if (parseRatioRule(input.ratioRule)) return input.ratioRule?.trim() ?? null;
+
+  const ageGroup = normalizeLabel(input.ageGroup);
+  const state = normalizeLabel(input.state);
+  const lines = ratioRuleLines(input.licensingRatioRules);
+  if (!ageGroup || !lines.length) return null;
+
+  const exact = lines.find((line) => {
+    const label = normalizeLabel(line.replace(/\d+\s*:\s*\d+.*/, ""));
+    return label === ageGroup || label.endsWith(` ${ageGroup}`) || ageGroup.endsWith(` ${label}`);
+  });
+  if (exact && parseRatioRule(exact)) return exact;
+
+  const fuzzy = lines.find((line) => {
+    const label = normalizeLabel(line.replace(/\d+\s*:\s*\d+.*/, ""));
+    return label && (label.includes(ageGroup) || ageGroup.includes(label));
+  });
+  if (fuzzy && parseRatioRule(fuzzy)) return fuzzy;
+
+  if (state) {
+    const stateFallback = lines.find((line) => normalizeLabel(line).startsWith(state) && parseRatioRule(line));
+    if (stateFallback) return stateFallback;
+  }
+
+  const generic = lines.find((line) => parseRatioRule(line));
+  return generic ?? null;
+}
+
 export function evaluateClassroomRatio(input: ClassroomRatioInput): ClassroomRatioWarning {
   const children = Math.max(0, Math.floor(input.children));
   const staff = Math.max(0, Math.floor(input.staff));

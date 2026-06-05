@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Save, UserPen } from "lucide-react";
+import { AlertCircle, CheckCircle2, GitMerge, Save, UserPen } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { findFamilyDuplicateCandidates } from "@/lib/family-dedupe";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -122,6 +123,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [developmentalNotes, setDevelopmentalNotes] = useState(selectedChild?.developmentalNotes ?? "");
   const [photoVideoPermission, setPhotoVideoPermission] = useState(Boolean(selectedChild?.photoVideoPermission));
   const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(selectedChild?.fieldTripPermission));
+  const [duplicateFamilyId, setDuplicateFamilyId] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -129,6 +131,11 @@ export function FamilyRecordEditor({ families, centers }: Props) {
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
+  const duplicateCandidates = useMemo(
+    () => selectedFamily ? findFamilyDuplicateCandidates(families, selectedFamily.id) : [],
+    [families, selectedFamily],
+  );
+  const selectedDuplicateId = duplicateFamilyId || duplicateCandidates[0]?.candidateId || "";
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -170,6 +177,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setCustodyNotes(family?.custodyNotes ?? "");
     loadGuardian(family?.guardians[0] ?? null);
     loadChild(family?.children[0] ?? null);
+    setDuplicateFamilyId("");
   }
 
   function loadGuardianById(guardianId: string) {
@@ -195,6 +203,34 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      router.refresh();
+    });
+  }
+
+  function mergeDuplicateFamily() {
+    if (!selectedFamily || !selectedDuplicateId) return;
+    const duplicate = families.find((family) => family.id === selectedDuplicateId);
+    const confirmed = window.confirm(`Merge ${duplicate?.name ?? "this duplicate family"} into ${selectedFamily.name}? The kept family will receive children, guardians, documents, messages, and billing history.`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "familyMerge",
+          primaryFamilyId: selectedFamily.id,
+          duplicateFamilyId: selectedDuplicateId,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Family merge could not be completed.");
+        return;
+      }
+      setStatusMessage("Duplicate family merged into the selected family.");
+      setDuplicateFamilyId("");
       router.refresh();
     });
   }
@@ -303,6 +339,48 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             <Save data-icon="inline-start" />
             Save family
           </Button>
+        </section>
+
+        <section className="rounded-xl border bg-background/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">Family deduplication</div>
+              <p className="text-xs text-muted-foreground">
+                Review same-school matches before merging duplicate guardians, children, documents, messages, and billing history.
+              </p>
+            </div>
+            <Badge variant={duplicateCandidates.length ? "secondary" : "outline"}>
+              {duplicateCandidates.length} candidate{duplicateCandidates.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+          {duplicateCandidates.length ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+              <div className="space-y-1">
+                <Label>Duplicate to merge into selected family</Label>
+                <Select value={selectedDuplicateId} onValueChange={(value) => value && setDuplicateFamilyId(value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {duplicateCandidates.map((candidate) => {
+                      const family = families.find((item) => item.id === candidate.candidateId);
+                      return (
+                        <SelectItem key={candidate.candidateId} value={candidate.candidateId}>
+                          {family?.name ?? "Duplicate family"} · {candidate.confidence} · {candidate.reasons.join(", ")}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" className="self-end" disabled={isPending || !selectedFamily || !selectedDuplicateId} onClick={mergeDuplicateFamily}>
+                <GitMerge data-icon="inline-start" />
+                Merge duplicate
+              </Button>
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+              No likely duplicates found for the selected family.
+            </p>
+          )}
         </section>
 
         <section className="space-y-3">

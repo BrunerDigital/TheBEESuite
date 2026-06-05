@@ -160,7 +160,8 @@ Status legend:
 - [x] Add payment method management/autopay through Stripe Setup Intents or customer portal.
 - [x] Add failed payment retry/dunning workflow.
 - [x] Add subsidy/agency payment tracking.
-- [ ] Finalize surcharge/convenience fee disclosures and legal review.
+- [x] Add surcharge/convenience fee and payment processing recovery disclosure language to parent/admin payment flows.
+- [ ] Complete final legal/accounting review of surcharge/convenience fee and processing recovery policy before enforcing live pass-through fees.
 - [ ] Complete Stripe connected account onboarding for every school/payout owner before accepting live parent payments at that school.
 
 ## Attendance, Check-In, And Kiosk

@@ -12,6 +12,7 @@ import {
   shouldWaiveStripePaymentOperationsFee,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
+import { PAYMENT_PROCESSING_RECOVERY_DISCLOSURE } from "@/lib/payment-disclosures";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 
@@ -272,6 +273,7 @@ export async function POST(request: NextRequest) {
       paymentMethodConfigurationMissing: String(usesSpecificFeePolicy && !paymentMethodConfigurationId),
       checkoutTotalCents: String(amounts.checkoutTotalCents),
       applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
+      feeDisclosureVersion: "payment-processing-recovery-2026-06-05",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     connectedAccountId,
@@ -355,5 +357,11 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, url: session.url, paymentId: payment.id, stripeSessionId: session.id });
+  return NextResponse.json({
+    ok: true,
+    url: session.url,
+    paymentId: payment.id,
+    stripeSessionId: session.id,
+    feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
+  });
 }

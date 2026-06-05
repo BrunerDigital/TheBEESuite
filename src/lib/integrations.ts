@@ -1,5 +1,9 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
+import {
+  PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION,
+  PAYMENT_PROCESSING_RECOVERY_LABEL,
+} from "@/lib/payment-disclosures";
 
 export type IntegrationSendResult = {
   ok: boolean;
@@ -479,7 +483,8 @@ export async function createStripeCheckoutSession({
     body.set("line_items[1][quantity]", "1");
     body.set("line_items[1][price_data][currency]", "usd");
     body.set("line_items[1][price_data][unit_amount]", String(parentSurchargeAmountCents));
-    body.set("line_items[1][price_data][product_data][name]", "Payment processing recovery");
+    body.set("line_items[1][price_data][product_data][name]", PAYMENT_PROCESSING_RECOVERY_LABEL);
+    body.set("line_items[1][price_data][product_data][description]", PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION);
   }
 
   if (customerEmail && isEmail(customerEmail)) {

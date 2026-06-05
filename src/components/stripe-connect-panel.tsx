@@ -7,6 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
+  PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE,
+} from "@/lib/payment-disclosures";
 
 export type StripeConnectCenter = {
   id: string;
@@ -292,7 +296,7 @@ export function StripeConnectPanel({
           Parent checkout is blocked for a school until its connected payout account exists and Stripe reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. Any configured parent surcharge is added as a separate Checkout line item and included in the Stripe application fee so the school payout can still receive the invoice amount. Confirm fee disclosures and card-network/state surcharge rules before enabling this in live mode.
+          Fee behavior: the tuition invoice remains the family ledger amount. Any configured parent convenience fee or processing recovery is added as a separate Checkout line item and included in the Stripe application fee so the school payout can still receive the invoice amount. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
       </CardContent>
     </Card>

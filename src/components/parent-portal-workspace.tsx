@@ -22,6 +22,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
+  paymentProcessingRecoverySummary,
+} from "@/lib/payment-disclosures";
 
 type Child = {
   id: string;
@@ -490,7 +494,9 @@ export function ParentPortalWorkspace({
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Billing</CardTitle>
-            <CardDescription>Stripe Checkout is used when platform keys and the school payout account are ready.</CardDescription>
+            <CardDescription>
+              Stripe Checkout is used when platform keys and the school payout account are ready. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-3">
@@ -591,8 +597,11 @@ export function ParentPortalWorkspace({
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">
-                  Est. ACH recovery {money(estimatedAchRecovery(invoice.totalCents))}; card processing recovery{" "}
-                  {money(estimatedCardRecovery(invoice.totalCents))}. Exact total is shown in Stripe Checkout before payment.
+                  {paymentProcessingRecoverySummary({
+                    achRecovery: estimatedAchRecovery(invoice.totalCents),
+                    cardRecovery: estimatedCardRecovery(invoice.totalCents),
+                    formatMoney: money,
+                  })}
                 </div>
               </div>
             ))}

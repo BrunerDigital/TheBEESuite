@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, Archive, Building2, CheckCircle2, FileUp, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
+import { AlertCircle, Archive, Building2, CheckCircle2, Copy, FileUp, KeyRound, LogOut, MapPin, Save, ShieldCheck, UserPlus } from "lucide-react";
 import {
   CRM_LOCATION_ID_EXAMPLE,
   defaultCenterNameFromCrmLocationId,
@@ -80,6 +80,12 @@ type ExecutiveActionResponse = {
   center?: { name?: string; crmLocationId?: string | null; status?: string };
   user?: { name?: string; email?: string; isActive?: boolean; sessionVersion?: number };
   auth?: { passwordResetSent?: boolean; authUserCreated?: boolean };
+  login?: TeacherLoginResponse;
+};
+
+type TeacherLoginResponse = {
+  email: string;
+  temporary_password: string;
 };
 
 const roles = [
@@ -142,7 +148,8 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   });
   const [resetForm, setResetForm] = useState({ email: "", password: "" });
   const [bulkCsv, setBulkCsv] = useState("");
-  const [bulkResults, setBulkResults] = useState<Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>>([]);
+  const [bulkResults, setBulkResults] = useState<Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string; loginEmail?: string }>>([]);
+  const [generatedLogin, setGeneratedLogin] = useState<TeacherLoginResponse | null>(null);
 
   const sortedCenters = useMemo(
     () => [...centers].sort((a, b) => shortCenterLabel(a).localeCompare(shortCenterLabel(b))),
@@ -159,6 +166,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   const centerLocationIdIsValid = isValidCrmLocationId(centerForm.crmLocationId);
   const bulkRows = useMemo(() => parseExecutiveBulkImportCsv(bulkCsv), [bulkCsv]);
   const bulkSummary = useMemo(() => summarizeExecutiveBulkImport(bulkRows), [bulkRows]);
+  const userFormIsTeacher = userForm.role === "TEACHER";
 
   function setCenterField(key: keyof ReturnType<typeof blankCenterForm>, value: string) {
     setCenterForm((current) => {
@@ -230,6 +238,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     startTransition(async () => {
       setMessage("");
       setError("");
+      setGeneratedLogin(null);
       setActiveAction(success);
       try {
         const response = await fetch("/api/admin/executive", {
@@ -243,6 +252,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
           return;
         }
         setMessage(executiveSuccessDetail(action, success, json));
+        if (action === "saveUser" && json?.login) setGeneratedLogin(json.login);
         after?.();
         router.refresh();
       } catch (fetchError) {
@@ -285,9 +295,18 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
   }
 
   function saveUser() {
-    post("saveUser", { ...userForm, sendPasswordReset: userForm.sendPasswordReset === "yes" }, "User saved and access scoped.", () =>
+    post("saveUser", {
+      ...userForm,
+      password: userFormIsTeacher ? "" : userForm.password,
+      sendPasswordReset: userFormIsTeacher ? false : userForm.sendPasswordReset === "yes",
+    }, "User saved and access scoped.", () =>
       setUserForm((current) => ({ ...current, name: "", email: "", password: "" })),
     );
+  }
+
+  function copyGeneratedLogin() {
+    if (!generatedLogin || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nTemporary password: ${generatedLogin.temporary_password}`);
   }
 
   function resetPassword() {
@@ -338,7 +357,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
         const json = (await response.json().catch(() => null)) as {
           error?: string;
           summary?: { imported: number; failed: number };
-          results?: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }>;
+          results?: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string; loginEmail?: string }>;
         } | null;
         if (!response.ok) {
           setError(json?.error || "Bulk import failed.");
@@ -499,7 +518,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                       setBulkResults([]);
                     }}
                     rows={8}
-                    placeholder={"type,name,email,role,locationId,capacity,title,sendPasswordReset\nlocation,,school@example.com,,FL | Sarasota,120,,\nuser,Jane Director,jane@example.com,CENTER_DIRECTOR,FL | Sarasota,,Center Director,yes"}
+                    placeholder={"type,name,email,role,locationId,capacity,title,sendPasswordReset\nlocation,,school@example.com,,FL | Sarasota,120,,\nuser,Jane Director,jane@example.com,CENTER_DIRECTOR,FL | Sarasota,,Center Director,yes\nteacher,Sarah Johnson,,TEACHER,FL | Sarasota,,Lead Teacher,"}
                   />
                 </div>
                 <div className="space-y-3">
@@ -561,7 +580,10 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                               {row.errors.length ? (
                                 <Badge variant="destructive">{row.errors.join(" ")}</Badge>
                               ) : result ? (
-                                <Badge variant={result.ok ? "default" : "destructive"}>{result.ok ? "Imported" : result.error}</Badge>
+                                <div className="space-y-1">
+                                  <Badge variant={result.ok ? "default" : "destructive"}>{result.ok ? "Imported" : result.error}</Badge>
+                                  {result.loginEmail ? <div className="break-all text-xs text-muted-foreground">{result.loginEmail}</div> : null}
+                                </div>
                               ) : (
                                 <Badge variant="secondary">Ready</Badge>
                               )}
@@ -681,13 +703,37 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
               <CardDescription>Create school users, assign scope, and set or send temporary credentials. Temporary-password users must choose a new private password before workspace access.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {generatedLogin ? (
+                <Alert>
+                  <KeyRound className="size-4" />
+                  <AlertTitle>Teacher login</AlertTitle>
+                  <AlertDescription>
+                    <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <div className="grid gap-2 text-sm sm:grid-cols-2">
+                        <div>
+                          <div className="text-xs font-medium uppercase text-muted-foreground">Username</div>
+                          <div className="break-all font-mono">{generatedLogin.email}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs font-medium uppercase text-muted-foreground">Temporary password</div>
+                          <div className="font-mono">{generatedLogin.temporary_password}</div>
+                        </div>
+                      </div>
+                      <Button type="button" size="sm" variant="outline" onClick={copyGeneratedLogin}>
+                        <Copy data-icon="inline-start" />
+                        Copy
+                      </Button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <Label>Name</Label>
                   <Input value={userForm.name} onChange={(event) => setUserForm((current) => ({ ...current, name: event.target.value }))} />
                 </div>
                 <div className="space-y-1">
-                  <Label>Email</Label>
+                  <Label>{userFormIsTeacher ? "Contact email" : "Email"}</Label>
                   <Input value={userForm.email} onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))} type="email" />
                 </div>
                 <div className="space-y-1">
@@ -734,22 +780,26 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1">
-                  <Label>Temporary password</Label>
-                  <Input value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} type="password" placeholder="Optional" />
-                </div>
-                <div className="space-y-1">
-                  <Label>Password reset email</Label>
-                  <Select value={userForm.sendPasswordReset} onValueChange={(value) => setUserForm((current) => ({ ...current, sendPasswordReset: value ?? current.sendPasswordReset }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="no">Do not send</SelectItem>
-                      <SelectItem value="yes">Send setup/reset email</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {!userFormIsTeacher ? (
+                  <>
+                    <div className="space-y-1">
+                      <Label>Temporary password</Label>
+                      <Input value={userForm.password} onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))} type="password" placeholder="Optional" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Password reset email</Label>
+                      <Select value={userForm.sendPasswordReset} onValueChange={(value) => setUserForm((current) => ({ ...current, sendPasswordReset: value ?? current.sendPasswordReset }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="no">Do not send</SelectItem>
+                          <SelectItem value="yes">Send setup/reset email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                ) : null}
               </div>
-              <Button onClick={saveUser} disabled={isPending || !userForm.email || !userForm.name}>
+              <Button onClick={saveUser} disabled={isPending || !userForm.name || (!userFormIsTeacher && !userForm.email) || (userFormIsTeacher && !userForm.centerId)}>
                 <UserPlus data-icon="inline-start" />
                 Save User
               </Button>

@@ -97,14 +97,16 @@ export function parseExecutiveBulkImportCsv(csvText: string) {
     const crmLocationId = normalizeCrmLocationId(rawLocationId);
     const parsedLocation = parseCrmLocationId(crmLocationId);
     const email = valueFor(record, ["email", "routingEmail", "userEmail"]);
-    const type = inferType(valueFor(record, ["type", "rowType", "kind"]), email);
+    const rawType = valueFor(record, ["type", "rowType", "kind"]);
+    const type = inferType(rawType, email);
     const name = valueFor(record, ["name", type === "user" ? "userName" : "schoolName", "fullName"]);
+    const defaultUserRole = ["staff", "teacher"].includes(rawType.toLowerCase()) ? "TEACHER" : "CENTER_DIRECTOR";
     const row: ExecutiveBulkImportRow = {
       rowNumber: index + 1,
       type,
       name: name || (type === "location" ? defaultCenterNameFromCrmLocationId(crmLocationId) : ""),
       email,
-      role: valueFor(record, ["role"]) || (type === "user" ? "CENTER_DIRECTOR" : ""),
+      role: valueFor(record, ["role"]) || (type === "user" ? defaultUserRole : ""),
       crmLocationId,
       locationId: valueFor(record, ["locationId", "location id"]) || crmLocationId,
       status: valueFor(record, ["status"]) || "active",
@@ -124,7 +126,7 @@ export function parseExecutiveBulkImportCsv(csvText: string) {
 
     if (type === "location" && !row.crmLocationId) row.errors.push("Location rows need a valid ST | City Location ID.");
     if (type === "location" && !row.name) row.errors.push("Location rows need a school name.");
-    if (type === "user" && !row.email) row.errors.push("User rows need an email.");
+    if (type === "user" && !row.email && row.role.toUpperCase() !== "TEACHER") row.errors.push("User rows need an email.");
     if (type === "user" && !row.name) row.errors.push("User rows need a name.");
     if (type === "user" && row.accessScopeType === "CENTER" && !row.crmLocationId && !row.locationId) {
       row.errors.push("Center-scoped user rows need a Location ID.");

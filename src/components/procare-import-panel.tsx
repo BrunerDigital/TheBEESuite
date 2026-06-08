@@ -28,6 +28,12 @@ type ImportPreview = {
   newChildren: number;
   matchedStaff: number;
   newStaff: number;
+  createdFamilies?: number;
+  createdChildren?: number;
+  createdClassrooms?: number;
+  createdStaff?: number;
+  createdStaffLogins?: number;
+  invoiceRows?: number;
   classroomsReferenced: number;
   balanceRows: number;
   attendanceRows: number;
@@ -132,7 +138,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       if (fileRef.current) fileRef.current.value = "";
       const summary = json?.summary;
       setStatus(
-        `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
+        `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
       );
     });
   }

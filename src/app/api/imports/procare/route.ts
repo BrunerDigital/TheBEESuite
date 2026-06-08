@@ -9,6 +9,8 @@ import {
   scoreProcareDuplicateCandidate,
   type ProcareDuplicateMatch,
 } from "@/lib/procare-duplicate-matching";
+import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { generateTeacherLoginCredentials } from "@/lib/teacher-login";
 
 export const runtime = "nodejs";
 
@@ -157,11 +159,6 @@ function splitPeopleList(input: string) {
     .filter(Boolean);
 }
 
-function stableImportEmail(centerId: string, externalId: string | null, rowNumber: number) {
-  const key = (externalId || `row-${rowNumber}`).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return `procare-${centerId}-${key || rowNumber}@thebeesuite.local`;
-}
-
 function intValue(input: string, fallback: number) {
   const parsed = Number.parseInt(input.replace(/[^0-9-]/g, ""), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -223,6 +220,88 @@ type ImportCenter = {
   city: string | null;
   state: string | null;
 };
+
+type TeacherCenterGrantDb = Pick<Prisma.TransactionClient, "userAccessGrant">;
+
+async function ensureTeacherCenterGrant(input: {
+  userId: string;
+  tenantId: string;
+  organizationId?: string | null;
+  centerId: string;
+}, db: TeacherCenterGrantDb = prisma) {
+  await db.userAccessGrant.updateMany({
+    where: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      isActive: true,
+      centerId: { not: input.centerId },
+    },
+    data: { isActive: false },
+  });
+
+  const existing = await db.userAccessGrant.findFirst({
+    where: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      centerId: input.centerId,
+    },
+    select: { id: true },
+  });
+
+  if (existing) {
+    return db.userAccessGrant.update({
+      where: { id: existing.id },
+      data: {
+        isActive: true,
+        organizationId: input.organizationId ?? null,
+      },
+    });
+  }
+
+  return db.userAccessGrant.create({
+    data: {
+      userId: input.userId,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? null,
+      centerId: input.centerId,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      permissions: { createdFromProcareImport: true },
+    },
+  });
+}
+
+function normalizedStaffContactEmail(value: string) {
+  return isEmail(value) ? value.toLowerCase() : "";
+}
+
+async function findExistingImportedStaffProfile(input: {
+  centerId: string;
+  externalId: string | null;
+  contactEmail: string;
+}) {
+  const matchers: Prisma.StaffProfileWhereInput[] = [];
+  if (input.externalId) matchers.push({ sourceSystem: "procare", externalId: input.externalId });
+  if (input.contactEmail) matchers.push({ customFields: { path: ["staffContactEmail"], equals: input.contactEmail } });
+  if (!matchers.length) return null;
+
+  return prisma.staffProfile.findFirst({
+    where: {
+      centerId: input.centerId,
+      OR: matchers,
+    },
+    select: {
+      id: true,
+      userId: true,
+      customFields: true,
+      user: { select: { id: true, email: true } },
+    },
+  });
+}
 
 type DuplicateMatchMode = "review" | "strict" | "auto";
 
@@ -513,11 +592,12 @@ async function previewImportRows({
 
     if (employeeName && !childName && !familyName) {
       staffRows += 1;
-      const staffEmail = isEmail(employeeEmail) ? employeeEmail.toLowerCase() : stableImportEmail(targetCenter.id, employeeExternalId, rowNumber);
-      const staffUser = await prisma.user.findUnique({ where: { email: staffEmail }, select: { id: true } });
-      const existingStaff = staffUser
-        ? await prisma.staffProfile.findUnique({ where: { userId: staffUser.id }, select: { id: true } })
-        : null;
+      const staffContactEmail = normalizedStaffContactEmail(employeeEmail);
+      const existingStaff = await findExistingImportedStaffProfile({
+        centerId: targetCenter.id,
+        externalId: employeeExternalId,
+        contactEmail: staffContactEmail,
+      });
       if (existingStaff) matchedStaff += 1; else newStaff += 1;
       rowResults.push({
         rowNumber,
@@ -985,6 +1065,7 @@ export async function POST(request: NextRequest) {
   let createdClassrooms = 0;
   let createdStaff = 0;
   let updatedStaff = 0;
+  let createdStaffLogins = 0;
   let emergencyContacts = 0;
   let authorizedPickups = 0;
   let medicalRows = 0;
@@ -1029,7 +1110,28 @@ export async function POST(request: NextRequest) {
       const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
       const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
       if (employeeName && !value(rawData, ["child name", "student name", "student", "child", "name"]) && !value(rawData, ["family name", "account name", "account", "family"])) {
-        const staffEmail = isEmail(employeeEmail) ? employeeEmail.toLowerCase() : stableImportEmail(targetCenter.id, employeeExternalId, index + 1);
+        const staffContactEmail = normalizedStaffContactEmail(employeeEmail);
+        const existingStaff = await findExistingImportedStaffProfile({
+          centerId: targetCenter.id,
+          externalId: employeeExternalId,
+          contactEmail: staffContactEmail,
+        });
+        const generatedLogin = existingStaff
+          ? undefined
+          : await generateTeacherLoginCredentials({
+              fullName: employeeName,
+              emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
+            });
+        if (generatedLogin) {
+          await upsertSupabaseAuthUserWithPassword({
+            email: generatedLogin.email,
+            name: employeeName,
+            password: generatedLogin.temporary_password,
+            role: UserRole.TEACHER,
+            source: "bee_suite_procare_staff_import",
+          });
+          createdStaffLogins += 1;
+        }
         const staffClassroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "assigned classroom", "assigned room"]);
         let staffClassroomId: string | null = null;
         if (staffClassroomName) {
@@ -1042,27 +1144,42 @@ export async function POST(request: NextRequest) {
           staffClassroomId = classroom.id;
           if (classroom.created) createdClassrooms += 1;
         }
-        const staffUser = await prisma.user.upsert({
-          where: { email: staffEmail },
-          update: {
-            name: employeeName,
-            role: UserRole.TEACHER,
-            isActive: isEmail(employeeEmail),
-          },
-          create: {
+        const staffWrite = await prisma.$transaction(async (tx) => {
+          const staffUser = existingStaff
+            ? await tx.user.update({
+                where: { id: existingStaff.userId },
+                data: {
+                  name: employeeName,
+                  role: UserRole.TEACHER,
+                  isActive: true,
+                  organizationId: user.organizationId,
+                },
+                select: { id: true },
+              })
+            : await tx.user.create({
+                data: {
+                  tenantId: user.tenantId,
+                  organizationId: user.organizationId,
+                  email: generatedLogin!.email,
+                  name: employeeName,
+                  role: UserRole.TEACHER,
+                  isActive: true,
+                  mustResetPassword: true,
+                },
+                select: { id: true },
+              });
+          await ensureTeacherCenterGrant({
+            userId: staffUser.id,
             tenantId: user.tenantId,
             organizationId: user.organizationId,
-            email: staffEmail,
-            name: employeeName,
-            role: UserRole.TEACHER,
-            isActive: isEmail(employeeEmail),
-          },
-          select: { id: true },
-        });
-        const existingStaff = await prisma.staffProfile.findUnique({ where: { userId: staffUser.id }, select: { id: true } });
-        await prisma.staffProfile.upsert({
-          where: { userId: staffUser.id },
-          update: {
+            centerId: targetCenter.id,
+          }, tx);
+          const customFields = metadataFromRow(rawData, {
+            mappedCenterId: targetCenter.id,
+            ...(staffContactEmail ? { staffContactEmail } : {}),
+            ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email } : {}),
+          });
+          const data = {
             centerId: targetCenter.id,
             classroomId: staffClassroomId || undefined,
             title: value(rawData, ["title", "position", "job title", "role"]) || "Teacher",
@@ -1070,25 +1187,44 @@ export async function POST(request: NextRequest) {
             backgroundCheckStatus: value(rawData, ["background check", "background check status"]) || null,
             sourceSystem: "procare",
             externalId: employeeExternalId,
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id }),
-          },
-          create: {
-            userId: staffUser.id,
-            centerId: targetCenter.id,
-            classroomId: staffClassroomId,
-            title: value(rawData, ["title", "position", "job title", "role"]) || "Teacher",
-            phone: value(rawData, ["employee phone", "staff phone", "teacher phone", "phone"]) || null,
-            backgroundCheckStatus: value(rawData, ["background check", "background check status"]) || null,
-            sourceSystem: "procare",
-            externalId: employeeExternalId,
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id }),
-          },
+            customFields,
+          };
+          if (existingStaff) {
+            await tx.staffProfile.update({ where: { id: existingStaff.id }, data });
+          } else {
+            await tx.staffProfile.create({
+              data: {
+                userId: staffUser.id,
+                ...data,
+                classroomId: staffClassroomId,
+              },
+            });
+          }
+          return { staffUserId: staffUser.id };
         });
+        if (generatedLogin) {
+          await writeAuditLog(user, {
+            centerId: targetCenter.id,
+            action: "teacher_user_created",
+            resource: "User",
+            resourceId: staffWrite.staffUserId,
+            metadata: {
+              email: generatedLogin.email,
+              source: "procare_import",
+              batchId: batch.id,
+            },
+          });
+        }
         if (existingStaff) updatedStaff += 1; else createdStaff += 1;
         rowResults.push({
           rowNumber: index + 1,
           status: "imported",
-          rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedEntity: "staff" },
+          rawData: {
+            ...rawData,
+            mappedCenterId: targetCenter.id,
+            mappedEntity: "staff",
+            ...(generatedLogin ? { teacherLoginEmail: generatedLogin.email } : {}),
+          },
         });
         continue;
       }
@@ -1609,6 +1745,7 @@ export async function POST(request: NextRequest) {
     createdClassrooms,
     createdStaff,
     updatedStaff,
+    createdStaffLogins,
     emergencyContacts,
     authorizedPickups,
     medicalRows,

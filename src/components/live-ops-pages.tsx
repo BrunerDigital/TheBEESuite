@@ -64,6 +64,7 @@ import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
+import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
 import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
 import { MedicationLogPanel, type MedicationLogChildOption } from "@/components/medication-log-panel";
@@ -4141,6 +4142,16 @@ export type BillingSettingsPageData = {
   parentSurchargeBps: number;
   tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
+  kidCitySoftwareInvoice: {
+    period: string;
+    invoiceNumber: string;
+    unitAmountCents: number;
+    activeSchoolUserCount: number;
+    totalAmountCents: number;
+    description: string;
+    daysUntilDue: number;
+    stripeCustomerConfigured: boolean;
+  };
 };
 
 export function BillingSettingsPage({ data }: { data: BillingSettingsPageData }) {
@@ -4176,6 +4187,39 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <CardTitle>Kid City USA Enterprises Monthly Software Invoice</CardTitle>
+              <CardDescription className="mt-2 max-w-3xl">
+                Corporate software access is billed monthly at $49 per active school user. This invoice is separate from parent tuition payments and school payout fees.
+              </CardDescription>
+            </div>
+            <Badge variant={data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "default" : "destructive"}>
+              {data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "Stripe customer ready" : "Stripe customer needed"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <StatCard label="Invoice period" value={data.kidCitySoftwareInvoice.period} />
+            <StatCard label="School users" value={data.kidCitySoftwareInvoice.activeSchoolUserCount} />
+            <StatCard label="Per user" value={money(data.kidCitySoftwareInvoice.unitAmountCents)} />
+            <StatCard label="Invoice total" value={money(data.kidCitySoftwareInvoice.totalAmountCents)} />
+          </div>
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="text-sm font-medium">{data.kidCitySoftwareInvoice.invoiceNumber}</div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">{data.kidCitySoftwareInvoice.description}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Due {data.kidCitySoftwareInvoice.daysUntilDue} day(s) after sending.</p>
+            <div className="mt-4">
+              <KidCitySoftwareInvoiceButton
+                disabled={!data.kidCitySoftwareInvoice.stripeCustomerConfigured || data.kidCitySoftwareInvoice.totalAmountCents <= 0}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>

@@ -15,6 +15,7 @@ import {
   requestSupabasePasswordReset,
   upsertSupabaseAuthUserWithPassword,
 } from "@/lib/supabase-auth";
+import { generateTeacherLoginCredentials } from "@/lib/teacher-login";
 
 export const runtime = "nodejs";
 
@@ -408,6 +409,8 @@ async function createOwnerGroup(payload: Payload, actor: Awaited<ReturnType<type
   return { ownerGroup };
 }
 
+type AccessGrantDb = Pick<Prisma.TransactionClient, "userAccessGrant">;
+
 async function ensureAccessGrant(input: {
   userId: string;
   tenantId: string;
@@ -417,8 +420,8 @@ async function ensureAccessGrant(input: {
   organizationId?: string | null;
   ownerGroupId?: string | null;
   centerId?: string | null;
-}) {
-  const existing = await prisma.userAccessGrant.findFirst({
+}, db: AccessGrantDb = prisma) {
+  const existing = await db.userAccessGrant.findFirst({
     where: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -433,10 +436,10 @@ async function ensureAccessGrant(input: {
   });
 
   if (existing) {
-    return prisma.userAccessGrant.update({ where: { id: existing.id }, data: { isActive: true } });
+    return db.userAccessGrant.update({ where: { id: existing.id }, data: { isActive: true } });
   }
 
-  return prisma.userAccessGrant.create({
+  return db.userAccessGrant.create({
     data: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -452,15 +455,12 @@ async function ensureAccessGrant(input: {
 }
 
 async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>, requestUrl: string) {
-  const email = clean(payload.email).toLowerCase();
+  const submittedEmail = clean(payload.email).toLowerCase();
   const name = clean(payload.name);
   const roleValue = clean(payload.role) as UserRole;
-  const password = clean(payload.password);
+  let password = clean(payload.password);
   if (!name) throw new Error("User name is required.");
-  if (!isEmail(email)) throw new Error("A valid user email is required.");
   if (!assignableRoles.has(roleValue)) throw new Error("This role cannot be assigned from the executive console.");
-  if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
-  const forcePasswordReset = Boolean(password || payload.sendPasswordReset === true);
 
   const centerId = clean(payload.centerId);
   const ownerGroupId = clean(payload.ownerGroupId);
@@ -475,50 +475,22 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   }
 
   const organization = center?.organization ?? await getDefaultOrganization(actor.tenantId, actor.organizationId);
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = isEmail(submittedEmail) ? await prisma.user.findUnique({ where: { email: submittedEmail } }) : null;
+  const shouldGenerateTeacherLogin = Boolean(center && classroomStaffProfileRoles.has(roleValue) && !existing);
+  if (!shouldGenerateTeacherLogin && !isEmail(submittedEmail)) throw new Error("A valid user email is required.");
   if (existing && existing.tenantId !== actor.tenantId) {
     throw new Error("That email belongs to a different tenant.");
   }
-
-  const appUser = await prisma.user.upsert({
-    where: { email },
-    update: {
-      name,
-      role: roleValue,
-      organizationId: organization.id,
-      isActive: true,
-      ...(forcePasswordReset
-        ? {
-            mustResetPassword: true,
-            sessionVersion: { increment: 1 },
-          }
-        : {}),
-    },
-    create: {
-      tenantId: actor.tenantId,
-      organizationId: organization.id,
-      email,
-      name,
-      role: roleValue,
-      isActive: true,
-      mustResetPassword: forcePasswordReset,
-    },
-  });
-
-  if (center && classroomStaffProfileRoles.has(roleValue)) {
-    await prisma.staffProfile.upsert({
-      where: { userId: appUser.id },
-      update: {
-        centerId: center.id,
-        title: clean(payload.title) || roleValue.replaceAll("_", " ").toLowerCase(),
-      },
-      create: {
-        userId: appUser.id,
-        centerId: center.id,
-        title: clean(payload.title) || roleValue.replaceAll("_", " ").toLowerCase(),
-      },
-    });
-  }
+  const generatedLogin = shouldGenerateTeacherLogin
+    ? await generateTeacherLoginCredentials({
+        fullName: name,
+        emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
+      })
+    : undefined;
+  const email = generatedLogin?.email ?? submittedEmail;
+  if (generatedLogin) password = generatedLogin.temporary_password;
+  if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
+  const forcePasswordReset = Boolean(generatedLogin || password || payload.sendPasswordReset === true);
 
   const scopeType = clean(payload.accessScopeType) || (center ? "CENTER" : ownerGroupId ? "OWNER_GROUP" : "TENANT");
   const ownerGroup = ownerGroupId ? await getOwnerGroup(actor.tenantId, organization.id, ownerGroupId) : null;
@@ -536,26 +508,83 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     centerId: scopeType === "CENTER" ? center?.id ?? null : null,
   };
   let auth: Prisma.InputJsonValue = { skipped: true };
-  if (password) {
+  if (generatedLogin) {
+    auth = await upsertSupabaseAuthUserWithPassword({
+      email,
+      name,
+      password,
+      role: roleValue,
+      source: "bee_suite_executive_teacher_management",
+    });
+  }
+
+  const appUser = await prisma.$transaction(async (tx) => {
+    const savedUser = await tx.user.upsert({
+      where: { email },
+      update: {
+        name,
+        role: roleValue,
+        organizationId: organization.id,
+        isActive: true,
+        ...(forcePasswordReset
+          ? {
+              mustResetPassword: true,
+              sessionVersion: { increment: 1 },
+            }
+          : {}),
+      },
+      create: {
+        tenantId: actor.tenantId,
+        organizationId: organization.id,
+        email,
+        name,
+        role: roleValue,
+        isActive: true,
+        mustResetPassword: forcePasswordReset,
+      },
+    });
+
+    if (center && classroomStaffProfileRoles.has(roleValue)) {
+      const contactEmail = generatedLogin && isEmail(submittedEmail) ? submittedEmail : "";
+      await tx.staffProfile.upsert({
+        where: { userId: savedUser.id },
+        update: {
+          centerId: center.id,
+          title: clean(payload.title) || roleValue.replaceAll("_", " ").toLowerCase(),
+          ...(contactEmail ? { customFields: { staffContactEmail: contactEmail } } : {}),
+        },
+        create: {
+          userId: savedUser.id,
+          centerId: center.id,
+          title: clean(payload.title) || roleValue.replaceAll("_", " ").toLowerCase(),
+          ...(contactEmail ? { customFields: { staffContactEmail: contactEmail } } : {}),
+        },
+      });
+    }
+
+    await tx.userAccessGrant.updateMany({
+      where: {
+        userId: savedUser.id,
+        tenantId: actor.tenantId,
+        isActive: true,
+      },
+      data: { isActive: false },
+    });
+    await ensureAccessGrant({
+      userId: savedUser.id,
+      tenantId: actor.tenantId,
+      ...accessGrantTarget,
+    }, tx);
+
+    return savedUser;
+  });
+
+  if (!generatedLogin && password) {
     auth = await upsertSupabaseAuthUserWithPassword({ email, name, password, role: roleValue });
-  } else if (payload.sendPasswordReset === true) {
+  } else if (!generatedLogin && payload.sendPasswordReset === true) {
     const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(requestUrl));
     auth = { passwordResetSent: reset.ok, status: reset.status };
   }
-
-  await prisma.userAccessGrant.updateMany({
-    where: {
-      userId: appUser.id,
-      tenantId: actor.tenantId,
-      isActive: true,
-    },
-    data: { isActive: false },
-  });
-  await ensureAccessGrant({
-    userId: appUser.id,
-    tenantId: actor.tenantId,
-    ...accessGrantTarget,
-  });
 
   await audit({
     tenantId: actor.tenantId,
@@ -564,10 +593,30 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     action: existing ? "executive.user.updated" : "executive.user.created",
     resource: "User",
     resourceId: appUser.id,
-    metadata: { email, role: roleValue, scopeType, centerId: center?.id ?? null, forcePasswordReset, auth },
+    metadata: {
+      email,
+      role: roleValue,
+      scopeType,
+      centerId: center?.id ?? null,
+      forcePasswordReset,
+      auth,
+      ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email } : {}),
+    },
   });
 
-  return { user: appUser, auth };
+  if (generatedLogin) {
+    await audit({
+      tenantId: actor.tenantId,
+      centerId: center?.id,
+      userId: actor.id,
+      action: "teacher_user_created",
+      resource: "User",
+      resourceId: appUser.id,
+      metadata: { email: generatedLogin.email },
+    });
+  }
+
+  return { user: appUser, auth, ...(generatedLogin ? { login: generatedLogin } : {}) };
 }
 
 async function resetUserPassword(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>, requestUrl: string) {
@@ -703,7 +752,7 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
   if (!rows.length) throw new Error("Bulk import needs CSV rows.");
   if (rows.length > 250) throw new Error("Executive bulk import is limited to 250 rows per batch.");
 
-  const results: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string }> = [];
+  const results: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string; loginEmail?: string }> = [];
   const centerIdsByLocation = new Map<string, string>();
   const existingCenters = await prisma.center.findMany({
     where: {
@@ -764,7 +813,7 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
         password: row.password,
         sendPasswordReset: row.sendPasswordReset,
       }, actor, requestUrl);
-      results.push({ rowNumber: row.rowNumber, type: row.type, ok: true, id: result.user.id });
+      results.push({ rowNumber: row.rowNumber, type: row.type, ok: true, id: result.user.id, loginEmail: result.login?.email });
     } catch (error) {
       results.push({ rowNumber: row.rowNumber, type: row.type, ok: false, error: error instanceof Error ? error.message : "User import failed." });
     }

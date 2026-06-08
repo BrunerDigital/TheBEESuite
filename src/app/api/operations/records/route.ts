@@ -1,14 +1,14 @@
-import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
-import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "@/lib/operations-guardrails";
+import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
-import { getPasswordResetRedirectUrl, requestSupabasePasswordReset, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
+import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -98,43 +98,39 @@ function normalizeFormSchema(value: unknown): Prisma.InputJsonObject {
 }
 
 async function provisionTeacherLogin(input: {
-  email: string;
+  login: TeacherLoginCredentials;
   name: string;
-  temporaryPassword: string;
-  sendPasswordReset: boolean;
-  requestUrl: string;
 }) {
-  if (!input.temporaryPassword && !input.sendPasswordReset) {
-    return { skipped: true };
-  }
-
-  const auth = await upsertSupabaseAuthUserWithPassword({
-    email: input.email,
+  return upsertSupabaseAuthUserWithPassword({
+    email: input.login.email,
     name: input.name,
-    password: input.temporaryPassword || `${randomUUID()}${randomUUID()}`,
+    password: input.login.temporary_password,
     role: UserRole.TEACHER,
     source: "bee_suite_school_staff_management",
   });
-
-  if (!input.temporaryPassword && input.sendPasswordReset) {
-    const reset = await requestSupabasePasswordReset(input.email, getPasswordResetRedirectUrl(input.requestUrl));
-    return {
-      ...auth,
-      passwordResetSent: reset.ok,
-      passwordResetStatus: reset.status,
-    };
-  }
-
-  return auth;
 }
+
+function staffProfileCustomFields(existingCustomFields: unknown, submittedEmail: string) {
+  const fields = jsonObject(existingCustomFields);
+  const contactEmail = submittedEmail.toLowerCase();
+  if (contactEmail && !isGeneratedTeacherLoginEmail(contactEmail)) {
+    return {
+      ...fields,
+      staffContactEmail: contactEmail,
+    } as Prisma.InputJsonObject;
+  }
+  return Object.keys(fields).length ? fields as Prisma.InputJsonObject : undefined;
+}
+
+type TeacherCenterGrantDb = Pick<Prisma.TransactionClient, "userAccessGrant">;
 
 async function ensureTeacherCenterGrant(input: {
   userId: string;
   tenantId: string;
   organizationId: string;
   centerId: string;
-}) {
-  await prisma.userAccessGrant.updateMany({
+}, db: TeacherCenterGrantDb = prisma) {
+  await db.userAccessGrant.updateMany({
     where: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -146,7 +142,7 @@ async function ensureTeacherCenterGrant(input: {
     data: { isActive: false },
   });
 
-  const existing = await prisma.userAccessGrant.findFirst({
+  const existing = await db.userAccessGrant.findFirst({
     where: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -158,7 +154,7 @@ async function ensureTeacherCenterGrant(input: {
   });
 
   if (existing) {
-    return prisma.userAccessGrant.update({
+    return db.userAccessGrant.update({
       where: { id: existing.id },
       data: {
         isActive: true,
@@ -167,7 +163,7 @@ async function ensureTeacherCenterGrant(input: {
     });
   }
 
-  return prisma.userAccessGrant.create({
+  return db.userAccessGrant.create({
     data: {
       userId: input.userId,
       tenantId: input.tenantId,
@@ -233,6 +229,7 @@ export async function POST(request: NextRequest) {
   }
 
   let result: unknown;
+  let login: TeacherLoginCredentials | undefined;
   let centerId: string | null = user.primaryCenterId;
 
   if (entity === "classroom") {
@@ -458,127 +455,146 @@ export async function POST(request: NextRequest) {
     const access = await assertCenterAccess(user, requestedCenterId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.center.id;
-    const email = clean(body.email) || clean(body.type);
+    const scopedCenterId = access.center.id;
+    const submittedEmail = (clean(body.email) || clean(body.type)).toLowerCase();
     const staffName = clean(body.name);
-    const temporaryPassword = clean(body.temporaryPassword);
-    const sendPasswordReset = body.sendPasswordReset === true;
     const rawStaffKioskPin = clean(body.staffKioskPin);
     const staffKioskPin = normalizePin(rawStaffKioskPin);
-    if (!email || !staffName) return NextResponse.json({ ok: false, error: "Teacher name and email are required." }, { status: 400 });
-    if (temporaryPassword && temporaryPassword.length < 8) {
-      return NextResponse.json({ ok: false, error: "Temporary passwords must be at least 8 characters." }, { status: 400 });
-    }
+    if (!staffName) return NextResponse.json({ ok: false, error: "Teacher name is required." }, { status: 400 });
     if (rawStaffKioskPin && !staffKioskPin) {
       return NextResponse.json({ ok: false, error: "Staff kiosk code must be exactly 4 digits." }, { status: 400 });
     }
     const staffRole = UserRole.TEACHER;
-    const existingUser = await prisma.user.findUnique({ where: { email }, select: { id: true, tenantId: true } });
-    const tenantGuard = staffTenantGuard(user.tenantId, existingUser?.tenantId);
-    if (!tenantGuard.ok) return NextResponse.json({ ok: false, error: tenantGuard.error }, { status: tenantGuard.status });
+    const existingProfileForEdit = id
+      ? await prisma.staffProfile.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            centerId: true,
+            userId: true,
+            customFields: true,
+            user: { select: { id: true, email: true, tenantId: true } },
+          },
+        })
+      : null;
+    if (id) {
+      const guard = scopedUpdateGuard({ entity: "Teacher profile", expectedScopeId: centerId, actualScopeId: existingProfileForEdit?.centerId, scopeLabel: "center" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+      if (existingProfileForEdit?.user.tenantId !== user.tenantId) {
+        return NextResponse.json({ ok: false, error: "Teacher profile belongs to a different tenant." }, { status: 403 });
+      }
+    }
     if (clean(body.classroomId)) {
       const classroom = await prisma.classroom.findUnique({ where: { id: clean(body.classroomId) }, select: { centerId: true } });
       const guard = scopedUpdateGuard({ entity: "Classroom", expectedScopeId: centerId, actualScopeId: classroom?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    let auth: Awaited<ReturnType<typeof provisionTeacherLogin>> = { skipped: true };
+    let auth: Prisma.InputJsonValue = { skipped: true };
+    const generatedLogin = id
+      ? undefined
+      : await generateTeacherLoginCredentials({
+          fullName: staffName,
+          emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
+        });
     try {
-      auth = await provisionTeacherLogin({
-        email,
-        name: staffName,
-        temporaryPassword,
-        sendPasswordReset,
-        requestUrl: request.url,
-      });
+      if (generatedLogin) {
+        auth = await provisionTeacherLogin({ login: generatedLogin, name: staffName });
+        login = generatedLogin;
+      }
     } catch (error) {
       return NextResponse.json(
         { ok: false, error: error instanceof Error ? error.message : "Teacher login setup failed." },
         { status: 502 },
       );
     }
-    const forcePasswordReset = Boolean(temporaryPassword || sendPasswordReset);
-    const staffUser = await prisma.user.upsert({
-      where: { email },
-      update: {
-        name: staffName,
-        role: staffRole,
-        isActive: true,
-        organizationId: access.center.organizationId,
-        ...(forcePasswordReset
-          ? {
+    const staffKioskPinSetAt = staffKioskPin ? new Date() : null;
+    const staffWrite = await prisma.$transaction(async (tx) => {
+      const staffUser = existingProfileForEdit
+        ? await tx.user.update({
+            where: { id: existingProfileForEdit.userId },
+            data: {
+              name: staffName,
+              role: staffRole,
+              isActive: true,
+              organizationId: access.center.organizationId,
+            },
+          })
+        : await tx.user.create({
+            data: {
+              tenantId: user.tenantId,
+              organizationId: access.center.organizationId,
+              email: generatedLogin!.email,
+              name: staffName,
+              role: staffRole,
+              isActive: true,
               mustResetPassword: true,
-              sessionVersion: { increment: 1 },
-            }
-          : {}),
-      },
-      create: {
+            },
+          });
+
+      await ensureTeacherCenterGrant({
+        userId: staffUser.id,
         tenantId: user.tenantId,
         organizationId: access.center.organizationId,
-        email,
-        name: staffName,
-        role: staffRole,
-        isActive: true,
-        mustResetPassword: forcePasswordReset,
-      },
-    });
-    await ensureTeacherCenterGrant({
-      userId: staffUser.id,
-      tenantId: user.tenantId,
-      organizationId: access.center.organizationId,
-      centerId,
-    });
-    const existingProfile = await prisma.staffProfile.findUnique({
-      where: { userId: staffUser.id },
-      select: { id: true, customFields: true },
-    });
-    const staffKioskPinSetAt = staffKioskPin ? new Date() : null;
-    const data = {
-      userId: staffUser.id,
-      centerId,
-      classroomId: clean(body.classroomId) || null,
-      title: clean(body.title) || clean(body.body) || staffRole.replaceAll("_", " "),
-      phone: clean(body.phone) || null,
-      backgroundCheckStatus: clean(body.backgroundCheckStatus) || "pending",
-      ...(staffKioskPin && existingProfile && staffKioskPinSetAt
-        ? {
+        centerId: scopedCenterId,
+      }, tx);
+
+      const existingProfile = await tx.staffProfile.findUnique({
+        where: { userId: staffUser.id },
+        select: { id: true, customFields: true },
+      });
+      const baseCustomFields = staffProfileCustomFields(existingProfile?.customFields ?? existingProfileForEdit?.customFields, submittedEmail);
+      const data = {
+        userId: staffUser.id,
+        centerId: scopedCenterId,
+        classroomId: clean(body.classroomId) || null,
+        title: clean(body.title) || clean(body.body) || staffRole.replaceAll("_", " "),
+        phone: clean(body.phone) || null,
+        backgroundCheckStatus: clean(body.backgroundCheckStatus) || "pending",
+        ...(baseCustomFields ? { customFields: baseCustomFields } : {}),
+        ...(staffKioskPin && existingProfile && staffKioskPinSetAt
+          ? {
+              customFields: staffKioskPinFields({
+                customFields: baseCustomFields ?? existingProfile.customFields,
+                pinHash: hashStaffPin(existingProfile.id, staffKioskPin),
+                pinSetAt: staffKioskPinSetAt,
+                pinSetById: user.id,
+              }),
+            }
+          : {}),
+      };
+      let savedStaffProfile = existingProfileForEdit
+        ? await tx.staffProfile.update({ where: { id: existingProfileForEdit.id }, data })
+        : await tx.staffProfile.create({ data });
+      if (staffKioskPin && !existingProfile && staffKioskPinSetAt) {
+        savedStaffProfile = await tx.staffProfile.update({
+          where: { id: savedStaffProfile.id },
+          data: {
             customFields: staffKioskPinFields({
-              customFields: existingProfile.customFields,
-              pinHash: hashStaffPin(existingProfile.id, staffKioskPin),
+              customFields: savedStaffProfile.customFields,
+              pinHash: hashStaffPin(savedStaffProfile.id, staffKioskPin),
               pinSetAt: staffKioskPinSetAt,
               pinSetById: user.id,
             }),
-          }
-        : {}),
-    };
-    if (id) {
-      const existing = await prisma.staffProfile.findUnique({ where: { id }, select: { centerId: true, userId: true } });
-      const guard = scopedUpdateGuard({ entity: "Teacher profile", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
-      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
-      if (existing?.userId !== staffUser.id) {
-        return NextResponse.json({ ok: false, error: "Teacher profile is not linked to this user." }, { status: 403 });
-      }
-    }
-    const savedStaffProfile = id
-      ? await prisma.staffProfile.update({ where: { id }, data })
-      : await prisma.staffProfile.upsert({
-          where: { userId: staffUser.id },
-          update: data,
-          create: data,
+          },
         });
-    result = savedStaffProfile;
-    if (staffKioskPin && !existingProfile && staffKioskPinSetAt) {
-      result = await prisma.staffProfile.update({
-        where: { id: savedStaffProfile.id },
-        data: {
-          customFields: staffKioskPinFields({
-            customFields: savedStaffProfile.customFields,
-            pinHash: hashStaffPin(savedStaffProfile.id, staffKioskPin),
-            pinSetAt: staffKioskPinSetAt,
-            pinSetById: user.id,
-          }),
+      }
+      return { staffUser, savedStaffProfile };
+    });
+    result = staffWrite.savedStaffProfile;
+    if (login) {
+      auditMetadata.generatedTeacherLoginEmail = login.email;
+      await writeAuditLog(user, {
+        centerId,
+        action: "teacher_user_created",
+        resource: "User",
+        resourceId: staffWrite.staffUser.id,
+        metadata: {
+          email: login.email,
+          staffProfileId: staffWrite.savedStaffProfile.id,
         },
       });
     }
-    auditMetadata.auth = auth as Prisma.InputJsonValue;
+    auditMetadata.auth = auth;
     auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
   } else if (entity === "staffAssignment") {
     const staffId = clean(body.staffId) || id;
@@ -1015,7 +1031,7 @@ export async function POST(request: NextRequest) {
     metadata: auditMetadata as Prisma.InputJsonObject,
   });
 
-  return NextResponse.json({ ok: true, entity, mode, record: result, ...auditMetadata }, { status: id ? 200 : 201 });
+  return NextResponse.json({ ok: true, entity, mode, record: result, ...auditMetadata, ...(login ? { login } : {}) }, { status: id ? 200 : 201 });
 }
 
 export async function DELETE(request: NextRequest) {

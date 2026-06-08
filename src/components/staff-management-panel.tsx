@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, KeyRound, Save, Send, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, KeyRound, Save, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,10 @@ type ScheduleRecord = {
   endsAt: Date | string;
   status: string;
   staff: { id: string; user: { name: string } };
+};
+type TeacherLoginResponse = {
+  email: string;
+  temporary_password: string;
 };
 
 type Props = {
@@ -79,9 +83,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [phone, setPhone] = useState("");
   const [title, setTitle] = useState("Teacher");
   const [backgroundCheckStatus, setBackgroundCheckStatus] = useState("pending");
-  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [staffKioskPin, setStaffKioskPin] = useState("");
-  const [sendPasswordReset, setSendPasswordReset] = useState(true);
+  const [generatedLogin, setGeneratedLogin] = useState<TeacherLoginResponse | null>(null);
   const [certStaffId, setCertStaffId] = useState(staff[0]?.id ?? "");
   const [certName, setCertName] = useState("");
   const [certStatus, setCertStatus] = useState("active");
@@ -134,9 +137,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setPhone("");
     setTitle("Teacher");
     setBackgroundCheckStatus("pending");
-    setTemporaryPassword("");
     setStaffKioskPin("");
-    setSendPasswordReset(true);
+    setGeneratedLogin(null);
   }
 
   function loadTeacher(value: string) {
@@ -153,9 +155,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setPhone(teacher.phone ?? "");
     setTitle(teacher.title || "Teacher");
     setBackgroundCheckStatus(teacher.backgroundCheckStatus ?? "pending");
-    setTemporaryPassword("");
     setStaffKioskPin("");
-    setSendPasswordReset(false);
+    setGeneratedLogin(null);
   }
 
   function updateCenter(value: string) {
@@ -194,6 +195,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      setGeneratedLogin(null);
       const response = await fetch("/api/operations/records", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -285,35 +287,32 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
           phone,
           title,
           backgroundCheckStatus,
-          temporaryPassword: temporaryPassword.trim() || undefined,
           staffKioskPin: staffKioskPin || undefined,
-          sendPasswordReset: temporaryPassword.trim() ? false : sendPasswordReset,
         }),
       });
       const json = await response.json().catch(() => null) as {
         error?: string;
         mode?: string;
         auth?: { skipped?: boolean; passwordResetSent?: boolean };
+        login?: TeacherLoginResponse;
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Teacher profile could not be saved.");
         return;
       }
-      const loginStatus = temporaryPassword.trim()
-        ? " Login was set with a temporary password."
-        : sendPasswordReset
-          ? json?.auth?.passwordResetSent
-            ? " Login setup email was requested."
-            : " Teacher login was prepared."
-          : "";
+      if (json?.login) setGeneratedLogin(json.login);
+      const loginStatus = json?.login ? " Bee Suite login was generated." : "";
       const kioskStatus = staffKioskPin ? " Staff kiosk code was set." : "";
       setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}`);
       setSelectedStaffId("new");
-      setTemporaryPassword("");
       setStaffKioskPin("");
-      setSendPasswordReset(true);
       router.refresh();
     });
+  }
+
+  function copyGeneratedLogin() {
+    if (!generatedLogin || !navigator.clipboard) return;
+    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nTemporary password: ${generatedLogin.temporary_password}`);
   }
 
   function saveCertification(event: FormEvent<HTMLFormElement>) {
@@ -446,6 +445,30 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               <AlertCircle className="size-4" />
               <AlertTitle>Needs attention</AlertTitle>
               <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+          {generatedLogin ? (
+            <Alert>
+              <KeyRound className="size-4" />
+              <AlertTitle>Teacher login</AlertTitle>
+              <AlertDescription>
+                <div className="mt-2 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                  <div className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs font-medium uppercase text-muted-foreground">Username</div>
+                      <div className="break-all font-mono">{generatedLogin.email}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-medium uppercase text-muted-foreground">Temporary password</div>
+                      <div className="font-mono">{generatedLogin.temporary_password}</div>
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={copyGeneratedLogin}>
+                    <Copy data-icon="inline-start" />
+                    Copy
+                  </Button>
+                </div>
+              </AlertDescription>
             </Alert>
           ) : null}
           <section className="grid gap-3 xl:grid-cols-3">
@@ -666,8 +689,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                 <Input value={name} onChange={(event) => setName(event.target.value)} required autoComplete="name" />
               </div>
               <div className="space-y-1">
-                <Label>Email</Label>
-                <Input value={email} onChange={(event) => setEmail(event.target.value)} required type="email" autoComplete="email" />
+                <Label>Contact email</Label>
+                <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
               </div>
               <div className="space-y-1">
                 <Label>Phone</Label>
@@ -703,16 +726,6 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>Temporary password</Label>
-                <Input
-                  value={temporaryPassword}
-                  onChange={(event) => setTemporaryPassword(event.target.value)}
-                  placeholder="Optional; minimum 8 characters"
-                  type="text"
-                  autoComplete="new-password"
-                />
-              </div>
-              <div className="space-y-1">
                 <Label>Staff kiosk code</Label>
                 <Input
                   value={staffKioskPin}
@@ -722,20 +735,10 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   autoComplete="off"
                 />
               </div>
-              <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={temporaryPassword.trim() ? false : sendPasswordReset}
-                  disabled={Boolean(temporaryPassword.trim())}
-                  onChange={(event) => setSendPasswordReset(event.target.checked)}
-                />
-                <Send className="size-4 text-primary" />
-                Send password setup email
-              </label>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button disabled={isPending || !centerId}>
-                {temporaryPassword.trim() || staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
+                {staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                 Save teacher
               </Button>
               {selectedStaffId !== "new" ? (

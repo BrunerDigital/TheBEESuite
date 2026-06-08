@@ -576,6 +576,169 @@ export async function createStripeCustomer({
   return { ok: true, configured: true, provider: "stripe", id: json.id };
 }
 
+export async function createStripeInvoice({
+  customerId,
+  amountCents,
+  description,
+  invoiceNumber,
+  daysUntilDue = 15,
+  metadata,
+  sendInvoice = false,
+}: {
+  customerId: string;
+  amountCents: number;
+  description: string;
+  invoiceNumber: string;
+  daysUntilDue?: number;
+  metadata: Record<string, string>;
+  sendInvoice?: boolean;
+}): Promise<IntegrationSendResult & { hostedInvoiceUrl?: string | null; invoicePdf?: string | null }> {
+  const apiKey = stripeSecretKey();
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+  if (!customerId.startsWith("cus_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A Stripe customer ID is required for corporate invoices." };
+  }
+  if (amountCents <= 0) {
+    return { ok: false, configured: true, provider: "stripe", error: "Invoice amount must be greater than zero." };
+  }
+
+  const itemBody = new URLSearchParams({
+    customer: customerId,
+    amount: String(amountCents),
+    currency: "usd",
+    description,
+  });
+  Object.entries(metadata).forEach(([key, value]) => {
+    itemBody.set(`metadata[${key}]`, value);
+  });
+
+  const itemResponse = await fetch("https://api.stripe.com/v1/invoiceitems", {
+    method: "POST",
+    headers: {
+      ...stripeHeaders("form"),
+      "Idempotency-Key": `${invoiceNumber}:item`,
+    },
+    body: itemBody,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const itemJson = await itemResponse.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!itemResponse.ok || !itemJson?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: itemJson?.error?.message || `Stripe returned ${itemResponse.status}.`,
+    };
+  }
+
+  const invoiceBody = new URLSearchParams({
+    customer: customerId,
+    collection_method: "send_invoice",
+    days_until_due: String(Math.max(1, Math.floor(daysUntilDue))),
+    auto_advance: "false",
+    description,
+    number: invoiceNumber,
+  });
+  Object.entries(metadata).forEach(([key, value]) => {
+    invoiceBody.set(`metadata[${key}]`, value);
+  });
+
+  const invoiceResponse = await fetch("https://api.stripe.com/v1/invoices", {
+    method: "POST",
+    headers: {
+      ...stripeHeaders("form"),
+      "Idempotency-Key": `${invoiceNumber}:invoice`,
+    },
+    body: invoiceBody,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const invoiceJson = await invoiceResponse.json().catch(() => null) as {
+    id?: string;
+    hosted_invoice_url?: string | null;
+    invoice_pdf?: string | null;
+    error?: { message?: string };
+  } | null;
+  if (!invoiceResponse.ok || !invoiceJson?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: invoiceJson?.error?.message || `Stripe returned ${invoiceResponse.status}.`,
+    };
+  }
+
+  const finalizeResponse = await fetch(`https://api.stripe.com/v1/invoices/${invoiceJson.id}/finalize`, {
+    method: "POST",
+    headers: {
+      ...stripeHeaders("form"),
+      "Idempotency-Key": `${invoiceNumber}:finalize`,
+    },
+    body: new URLSearchParams({}),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const finalizedJson = await finalizeResponse.json().catch(() => null) as {
+    id?: string;
+    hosted_invoice_url?: string | null;
+    invoice_pdf?: string | null;
+    error?: { message?: string };
+  } | null;
+  if (!finalizeResponse.ok || !finalizedJson?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: finalizedJson?.error?.message || `Stripe returned ${finalizeResponse.status}.`,
+    };
+  }
+
+  if (sendInvoice) {
+    const sendResponse = await fetch(`https://api.stripe.com/v1/invoices/${finalizedJson.id}/send`, {
+      method: "POST",
+      headers: {
+        ...stripeHeaders("form"),
+        "Idempotency-Key": `${invoiceNumber}:send`,
+      },
+      body: new URLSearchParams({}),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const sentJson = await sendResponse.json().catch(() => null) as {
+      id?: string;
+      hosted_invoice_url?: string | null;
+      invoice_pdf?: string | null;
+      error?: { message?: string };
+    } | null;
+    if (!sendResponse.ok || !sentJson?.id) {
+      return {
+        ok: false,
+        configured: true,
+        provider: "stripe",
+        error: sentJson?.error?.message || `Stripe returned ${sendResponse.status}.`,
+      };
+    }
+    return {
+      ok: true,
+      configured: true,
+      provider: "stripe",
+      id: sentJson.id,
+      url: sentJson.hosted_invoice_url || undefined,
+      hostedInvoiceUrl: sentJson.hosted_invoice_url || null,
+      invoicePdf: sentJson.invoice_pdf || null,
+    };
+  }
+
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: finalizedJson.id,
+    url: finalizedJson.hosted_invoice_url || undefined,
+    hostedInvoiceUrl: finalizedJson.hosted_invoice_url || null,
+    invoicePdf: finalizedJson.invoice_pdf || null,
+  };
+}
+
 export async function createStripeSetupCheckoutSession({
   customerId,
   customerEmail,

@@ -49,6 +49,7 @@ Status legend:
 - [ ] Add MFA option for executive/admin users.
 - [x] Add session revocation/admin logout-all-devices control.
 - [x] Add parent portal invitation/password setup workflow for linked guardians.
+- [x] Add automatic Bee Suite teacher login generation for new teacher/staff profiles.
 - [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 
 ## Multi-Tenant, Franchise, And White-Label Architecture
@@ -189,6 +190,7 @@ Status legend:
 - [x] Schema includes ProCare import batch/row tracking.
 - [x] ProCare field coverage documentation exists.
 - [x] Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.
+- [x] ProCare staff import creates generated teacher logins and center-scoped teacher access for new staff.
 - [ ] Run final import mapping against real exports from each live Kid City USA location.
 - [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
 - [x] Add import preview/diff UI before committing records.
@@ -322,6 +324,7 @@ Status legend:
 - [x] Separation between location users/directors and classroom staff has been corrected at the data access level.
 - [x] Dedicated director UI exists for adding/editing teacher profiles and certifications.
 - [x] Complete staff CRUD UI with safe teacher deactivation instead of destructive deletion.
+- [x] New teacher profile saves return generated Bee Suite username and temporary password for handoff.
 - [ ] Add teacher onboarding forms/documents.
 - [x] Add background check tracking UI.
 - [ ] Add staff time clock.

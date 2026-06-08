@@ -17,6 +17,7 @@ import {
   ClassroomDashboardPage,
   AttendancePage,
   CompliancePage,
+  CorporateBillingPage,
   DailyReportsPage,
   DocumentsPage,
   EnrollmentPipelinePage,
@@ -1832,6 +1833,11 @@ async function renderLivePage(slug: string, user: CurrentUser) {
         }}
       />
     );
+  }
+
+  if (slug === "corporate-billing") {
+    const kidCitySoftwareInvoice = await getKidCitySoftwareInvoiceSnapshot(prisma);
+    return <CorporateBillingPage data={{ kidCitySoftwareInvoice }} />;
   }
 
   if (slug === "notifications") {

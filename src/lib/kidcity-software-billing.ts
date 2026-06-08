@@ -18,6 +18,10 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
 function yyyymm(date: Date) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
@@ -91,9 +95,52 @@ export function kidCitySchoolUserWhere(now = new Date()): Prisma.UserWhereInput 
   };
 }
 
+async function getKidCityBillingOwnerGroup(db: PrismaLike) {
+  return db.ownerGroup.findFirst({
+    where: {
+      status: { not: "closed" },
+      tenant: {
+        OR: [
+          { slug: "kid-city-usa" },
+          { name: { contains: "Kid City", mode: "insensitive" } },
+        ],
+      },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      billingEmail: true,
+      customFields: true,
+    },
+  });
+}
+
+function readStoredStripeCustomerId(customFields: unknown) {
+  const fields = asRecord(customFields);
+  const value = fields.stripeKidCitySoftwareCustomerId || fields.stripeCorporateSoftwareCustomerId;
+  return typeof value === "string" && value.startsWith("cus_") ? value : null;
+}
+
+export async function saveKidCitySoftwareStripeCustomerId(db: PrismaLike, customerId: string) {
+  if (!customerId.startsWith("cus_")) throw new Error("A valid Stripe customer ID is required.");
+  const ownerGroup = await getKidCityBillingOwnerGroup(db);
+  if (!ownerGroup) throw new Error("Kid City owner group was not found for corporate billing.");
+  await db.ownerGroup.update({
+    where: { id: ownerGroup.id },
+    data: {
+      customFields: {
+        ...asRecord(ownerGroup.customFields),
+        stripeKidCitySoftwareCustomerId: customerId,
+      },
+    },
+  });
+}
+
 export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = new Date()) {
   const period = getKidCitySoftwareInvoicePeriod(date);
   const unitAmountCents = getKidCitySoftwareFeeUnitAmountCents();
+  const billingOwnerGroup = await getKidCityBillingOwnerGroup(db);
   const schoolUsers = await db.user.findMany({
     where: kidCitySchoolUserWhere(date),
     orderBy: [{ name: "asc" }, { email: "asc" }],
@@ -122,7 +169,8 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
   });
   const activeSchoolUserCount = schoolUsers.length;
   const totalAmountCents = getKidCitySoftwareInvoiceAmount(activeSchoolUserCount, unitAmountCents);
-  const customerId = clean(process.env.STRIPE_KIDCITY_ENTERPRISES_CUSTOMER_ID);
+  const customerId = clean(process.env.STRIPE_KIDCITY_ENTERPRISES_CUSTOMER_ID) ||
+    readStoredStripeCustomerId(billingOwnerGroup?.customFields);
 
   return {
     period,
@@ -134,6 +182,7 @@ export async function getKidCitySoftwareInvoiceSnapshot(db: PrismaLike, date = n
     daysUntilDue: getKidCitySoftwareInvoiceDaysUntilDue(),
     stripeCustomerId: customerId || null,
     stripeCustomerConfigured: Boolean(customerId),
+    billingEmail: billingOwnerGroup?.billingEmail || "accounting@kidcityusa.com",
     schoolUsers: schoolUsers.map((user) => ({
       id: user.id,
       name: user.name,

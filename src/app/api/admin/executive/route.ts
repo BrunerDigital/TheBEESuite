@@ -41,6 +41,7 @@ type Payload = {
   role?: unknown;
   title?: unknown;
   password?: unknown;
+  mustResetPassword?: unknown;
   accessScopeType?: unknown;
   sendPasswordReset?: unknown;
   csvText?: unknown;
@@ -64,6 +65,7 @@ const classroomStaffProfileRoles = new Set<UserRole>([
 const tenantAccessRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
+  UserRole.BILLING_ADMIN,
   UserRole.READ_ONLY_AUDITOR,
 ]);
 
@@ -490,7 +492,12 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
   const email = generatedLogin?.email ?? submittedEmail;
   if (generatedLogin) password = generatedLogin.temporary_password;
   if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
-  const forcePasswordReset = Boolean(generatedLogin || password || payload.sendPasswordReset === true);
+  const requestedMustResetPassword = payload.mustResetPassword === true
+    ? true
+    : payload.mustResetPassword === false
+      ? false
+      : undefined;
+  const forcePasswordReset = requestedMustResetPassword ?? Boolean(generatedLogin || password || payload.sendPasswordReset === true);
 
   const scopeType = clean(payload.accessScopeType) || (center ? "CENTER" : ownerGroupId ? "OWNER_GROUP" : "TENANT");
   const ownerGroup = ownerGroupId ? await getOwnerGroup(actor.tenantId, organization.id, ownerGroupId) : null;
@@ -526,9 +533,9 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
         role: roleValue,
         organizationId: organization.id,
         isActive: true,
-        ...(forcePasswordReset
+        ...(requestedMustResetPassword !== undefined || forcePasswordReset
           ? {
-              mustResetPassword: true,
+              mustResetPassword: forcePasswordReset,
               sessionVersion: { increment: 1 },
             }
           : {}),
@@ -539,8 +546,8 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
         email,
         name,
         role: roleValue,
-        isActive: true,
-        mustResetPassword: forcePasswordReset,
+      isActive: true,
+      mustResetPassword: forcePasswordReset,
       },
     });
 
@@ -599,6 +606,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
       scopeType,
       centerId: center?.id ?? null,
       forcePasswordReset,
+      requestedMustResetPassword: requestedMustResetPassword ?? null,
       auth,
       ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email } : {}),
     },

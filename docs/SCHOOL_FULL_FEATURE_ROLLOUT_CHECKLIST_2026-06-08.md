@@ -120,13 +120,13 @@ Complete this for each school before that school uses operational modules live.
 - [x] Forgot password/reset password routes exist.
 - [x] Forced password reset workflow exists for first production login.
 - [x] Parent portal invitation/password setup workflow exists for linked guardians.
-- [x] Directors can provision teacher logins by temporary password or setup/reset email.
+- [x] Teacher/staff profile creation automatically generates Bee Suite teacher login usernames with default temporary passwords through Supabase Auth.
 - [x] Teacher center grants are created when teacher profiles are saved.
 - [ ] Create dedicated smoke credentials for all production roles.
 - [ ] Create live accounts for each school director, assistant director, billing admin, teacher, and parent/guardian launch group.
 - [ ] Validate every user can only see the intended tenant/brand/center/classroom/family/child scope.
 - [ ] Link guardians to parent login users for each pilot school.
-- [ ] Validate teacher login setup with real teacher emails from each active school.
+- [ ] Validate generated teacher login setup with real teacher/staff rosters from each active school.
 - [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 - [ ] Confirm executive/admin MFA policy and rollout timing.
 - [ ] Document who can add/remove locations, reset passwords, import ProCare files, edit FTE reports, and manage billing.
@@ -211,6 +211,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] ProCare import API exists.
 - [x] Import supports CSV and encrypted `.v10` workflow foundation.
 - [x] Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.
+- [x] Staff imported through ProCare receive generated Bee Suite teacher login usernames and center-scoped teacher access.
 - [x] Import preview/diff UI exists.
 - [x] Import rollback/export backup exists.
 - [x] Duplicate matching controls for families/children/guardians exist.
@@ -255,7 +256,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Classroom ratio warnings and staff assignment/schedule actions exist.
 - [x] Offline/poor-connectivity classroom tablet strategy exists.
 - [ ] Load real classroom rosters and teacher assignments for each school.
-- [ ] Validate teacher login with real teacher emails.
+- [ ] Validate generated teacher login with real teacher/staff rosters.
 - [ ] Run teacher workflow test: roster, attendance, daily report, batch logs, incident, media upload, ratio warning, staff assignment, and offline queue behavior.
 - [ ] Train teachers on what is parent-visible, what requires director review, and what stays internal.
 

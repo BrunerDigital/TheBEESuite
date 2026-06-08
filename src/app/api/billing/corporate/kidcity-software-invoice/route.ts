@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { createStripeInvoice } from "@/lib/integrations";
-import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
+import { createStripeCustomer, createStripeInvoice } from "@/lib/integrations";
+import {
+  getKidCitySoftwareInvoiceSnapshot,
+  saveKidCitySoftwareStripeCustomerId,
+} from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -12,14 +15,16 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function canManageCorporateBilling(role: UserRole) {
-  return role === UserRole.PLATFORM_OWNER || role === UserRole.BRAND_ADMIN;
+function canManageCorporateBilling(user: { role: UserRole; email: string }) {
+  return user.role === UserRole.PLATFORM_OWNER ||
+    user.role === UserRole.BRAND_ADMIN ||
+    user.email.toLowerCase() === "accounting@kidcityusa.com";
 }
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCorporateBilling(user.role)) {
+  if (!canManageCorporateBilling(user)) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
   }
 
@@ -30,26 +35,41 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCorporateBilling(user.role)) {
+  if (!canManageCorporateBilling(user)) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
   }
 
   const body = jsonObject(await request.json().catch(() => ({})));
   const sendInvoice = body.sendInvoice === true;
-  const snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
+  let snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
 
   if (!sendInvoice) {
     return NextResponse.json({ ok: true, mode: "preview", invoice: snapshot });
   }
-  if (!snapshot.stripeCustomerId) {
-    return NextResponse.json({
-      ok: false,
-      error: "STRIPE_KIDCITY_ENTERPRISES_CUSTOMER_ID is required before sending the Kid City corporate software invoice.",
-      invoice: snapshot,
-    }, { status: 400 });
-  }
   if (snapshot.totalAmountCents <= 0 || snapshot.activeSchoolUserCount <= 0) {
     return NextResponse.json({ ok: false, error: "No active Kid City school users were found for this invoice.", invoice: snapshot }, { status: 400 });
+  }
+  if (!snapshot.stripeCustomerId) {
+    const customer = await createStripeCustomer({
+      email: snapshot.billingEmail || "accounting@kidcityusa.com",
+      name: "Kid City USA Enterprises",
+      metadata: {
+        customerType: "kidcity_enterprises_monthly_software",
+        createdBy: user.email,
+      },
+    });
+    if (!customer.ok || !customer.id) {
+      return NextResponse.json({
+        ok: false,
+        error: customer.error || "Stripe customer could not be created for Kid City USA Enterprises.",
+        invoice: snapshot,
+      }, { status: customer.configured ? 502 : 400 });
+    }
+    await saveKidCitySoftwareStripeCustomerId(prisma, customer.id);
+    snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
+  }
+  if (!snapshot.stripeCustomerId) {
+    return NextResponse.json({ ok: false, error: "Stripe customer setup did not complete.", invoice: snapshot }, { status: 502 });
   }
 
   const stripeInvoice = await createStripeInvoice({

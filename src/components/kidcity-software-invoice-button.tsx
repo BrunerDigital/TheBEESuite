@@ -74,7 +74,7 @@ export function KidCitySoftwareInvoiceButton({ disabled }: Props) {
       ) : null}
       <Button disabled={disabled || isPending} onClick={sendInvoice} className="w-full">
         {isPending ? <FileText data-icon="inline-start" /> : <Send data-icon="inline-start" />}
-        {isPending ? "Creating Stripe invoice..." : "Create and Send Kid City Invoice"}
+        {isPending ? "Preparing Stripe invoice..." : "View / Pay Monthly Invoice"}
       </Button>
     </div>
   );

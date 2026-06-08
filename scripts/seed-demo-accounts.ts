@@ -1154,6 +1154,14 @@ async function main() {
       phone: `(843) 555-01${20 + index}`,
       externalId: `demo-teacher-${index + 1}`,
     });
+    await ensureAccessGrant({
+      userId: user.id,
+      tenantId: tenant.id,
+      role: UserRole.TEACHER,
+      scopeType: "CENTER",
+      organizationId: organization.id,
+      centerId: primaryCenter.id,
+    });
     const staff = await prisma.staffProfile.findUnique({ where: { userId: user.id } });
     if (staff) {
       await prisma.certification.deleteMany({ where: { staffId: staff.id } });

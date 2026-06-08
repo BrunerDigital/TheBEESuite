@@ -4151,8 +4151,77 @@ export type BillingSettingsPageData = {
     description: string;
     daysUntilDue: number;
     stripeCustomerConfigured: boolean;
+    billingEmail?: string | null;
   };
 };
+
+export type CorporateBillingPageData = {
+  kidCitySoftwareInvoice: BillingSettingsPageData["kidCitySoftwareInvoice"];
+};
+
+export function CorporateBillingPage({ data }: { data: CorporateBillingPageData }) {
+  const invoice = data.kidCitySoftwareInvoice;
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <BadgeDollarSign data-icon="inline-start" />
+          Corporate invoice
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Kid City USA Enterprises Software Invoice</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          View and pay the monthly The BEE Suite software access invoice for Kid City USA Enterprises. The amount is calculated as $49 times the number of active school users.
+        </p>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Invoice period" value={invoice.period} />
+        <StatCard label="Active school users" value={invoice.activeSchoolUserCount} />
+        <StatCard label="Monthly rate" value={money(invoice.unitAmountCents)} />
+        <StatCard label="Amount due" value={money(invoice.totalAmountCents)} />
+      </div>
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <CardTitle>{invoice.invoiceNumber}</CardTitle>
+              <CardDescription className="mt-2 max-w-3xl">{invoice.description}</CardDescription>
+            </div>
+            <Badge variant={invoice.stripeCustomerConfigured ? "default" : "destructive"}>
+              {invoice.stripeCustomerConfigured ? "Ready for Stripe payment" : "Stripe customer will be created"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-5 lg:grid-cols-[1fr_340px]">
+          <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
+            <div className="font-medium text-foreground">Monthly software access</div>
+            <p className="mt-2">
+              Kid City USA Enterprises is billed for active school users at the corporate level. This invoice is separate from parent tuition billing, parent card processing recovery, and school tuition payout fees.
+            </p>
+            <p className="mt-2">Payment terms: due {invoice.daysUntilDue} day(s) after the Stripe invoice is sent.</p>
+          </div>
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="text-sm font-medium">Pay through Stripe</div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              The button creates the current monthly invoice in Stripe and opens the hosted invoice link for secure payment.
+            </p>
+            <div className="mt-4">
+              <KidCitySoftwareInvoiceButton
+                disabled={invoice.totalAmountCents <= 0}
+              />
+            </div>
+            {!invoice.stripeCustomerConfigured ? (
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                The first payment attempt will create and remember a Stripe customer for Kid City USA Enterprises.
+              </p>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function BillingSettingsPage({ data }: { data: BillingSettingsPageData }) {
   return (
@@ -4197,7 +4266,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
               </CardDescription>
             </div>
             <Badge variant={data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "default" : "destructive"}>
-              {data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "Stripe customer ready" : "Stripe customer needed"}
+              {data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "Stripe customer ready" : "Stripe customer will be created"}
             </Badge>
           </div>
         </CardHeader>
@@ -4214,7 +4283,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
             <p className="mt-2 text-xs text-muted-foreground">Due {data.kidCitySoftwareInvoice.daysUntilDue} day(s) after sending.</p>
             <div className="mt-4">
               <KidCitySoftwareInvoiceButton
-                disabled={!data.kidCitySoftwareInvoice.stripeCustomerConfigured || data.kidCitySoftwareInvoice.totalAmountCents <= 0}
+                disabled={data.kidCitySoftwareInvoice.totalAmountCents <= 0}
               />
             </div>
           </div>

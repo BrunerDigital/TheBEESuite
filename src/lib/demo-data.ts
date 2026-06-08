@@ -53,6 +53,7 @@ export type ModuleSlug =
   | "staff"
   | "billing-invoices"
   | "payments"
+  | "corporate-billing"
   | "compliance"
   | "reputation"
   | "analytics"
@@ -307,6 +308,7 @@ export const navGroups = [
     items: [
       ["Billing & invoices", "billing-invoices", BadgeDollarSign],
       ["Payments", "payments", CreditCard],
+      ["Software invoice", "corporate-billing", CreditCard],
       ["Forms", "forms", FileText],
       ["Documents", "documents", FileText],
       ["Compliance", "compliance", ShieldCheck],
@@ -631,6 +633,18 @@ export const modules: ModuleDefinition[] = [
     metrics: ["20 invoices", "$18.6k outstanding", "$4.2k deposits", "3 failed mock payments"],
     features: ["Tuition plans", "Products and one-time charges", "Registration fees", "Stripe mock integration"],
     records: ["Rivera invoice #1042 - due", "Patel deposit - paid", "Morgan subsidy placeholder - pending"],
+    sensitive: true,
+  },
+  {
+    slug: "corporate-billing",
+    title: "Software Invoice",
+    eyebrow: "Corporate billing",
+    description:
+      "Kid City USA Enterprises monthly software invoice view for The BEE Suite access, calculated from active school users.",
+    owner: "Kid City USA accounting, platform owner, brand admin",
+    metrics: ["$49 per active school user", "Monthly invoice", "Stripe hosted payment", "Audit logged"],
+    features: ["Current invoice preview", "Active school-user count", "Stripe hosted invoice link", "Corporate billing audit trail"],
+    records: ["Kid City USA Enterprises monthly software access invoice"],
     sensitive: true,
   },
   {

@@ -42,6 +42,61 @@ function requestedStatus(value: unknown) {
   return Object.values(DocumentStatus).includes(status as DocumentStatus) ? status as DocumentStatus : DocumentStatus.REQUESTED;
 }
 
+function normalizeFormSchema(value: unknown): Prisma.InputJsonObject {
+  const text = clean(value);
+  if (!text) return { fields: [] };
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) {
+      return {
+        fields: parsed
+          .filter((field) => field && typeof field === "object")
+          .map((field) => {
+            const row = field as Record<string, unknown>;
+            return {
+              key: clean(row.key),
+              label: clean(row.label),
+              type: clean(row.type) || "text",
+              required: Boolean(row.required),
+              parentVisible: Boolean(row.parentVisible),
+              staffOnly: Boolean(row.staffOnly),
+              helpText: clean(row.helpText) || null,
+              options: Array.isArray(row.options)
+                ? row.options.map((option) => clean(option)).filter(Boolean)
+                : clean(row.options)
+                  ? clean(row.options).split(",").map((option) => option.trim()).filter(Boolean)
+                  : [],
+            };
+          })
+          .filter((field) => field.key && field.label),
+      };
+    }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Prisma.InputJsonObject;
+    }
+  } catch {
+    return {
+      fields: text
+        .split(",")
+        .map((field) => field.trim())
+        .filter(Boolean)
+        .map((field) => ({
+          key: field.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
+          label: field,
+          type: "text",
+          required: false,
+          parentVisible: true,
+          staffOnly: false,
+          helpText: null,
+          options: [],
+        })),
+    };
+  }
+
+  return { fields: [] };
+}
+
 async function provisionTeacherLogin(input: {
   email: string;
   name: string;
@@ -839,7 +894,7 @@ export async function POST(request: NextRequest) {
     const data = {
       name: clean(body.name),
       type: clean(body.type) || "custom",
-      schema: { fields: clean(body.fields) ? clean(body.fields).split(",").map((field) => field.trim()) : [] },
+      schema: normalizeFormSchema(body.fields),
       status: clean(body.status) || "active",
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Form name is required." }, { status: 400 });

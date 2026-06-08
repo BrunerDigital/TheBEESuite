@@ -1668,7 +1668,8 @@ async function renderLivePage(slug: string, user: CurrentUser) {
             { organizationId: user.organizationId ?? "__none__" },
           ],
         };
-    const [settings, customizations, assets] = await Promise.all([
+    const canManageControls = (user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN) && canAccessAllCenters(user);
+    const [settings, customizations, assets, brands, ownerGroups, supportRequests] = await Promise.all([
       prisma.whiteLabelSettings.findMany({
         where: { brand: { tenantId: user.tenantId } },
         orderBy: { brandName: "asc" },
@@ -1703,9 +1704,95 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           center: { select: { name: true, crmLocationId: true } },
         },
       }),
+      prisma.brand.findMany({
+        where: { tenantId: user.tenantId },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, slug: true },
+      }),
+      prisma.ownerGroup.findMany({
+        where: tenantWide
+          ? { tenantId: user.tenantId }
+          : { tenantId: user.tenantId, centers: { some: { id: scopedCenterIds } } },
+        orderBy: [{ status: "asc" }, { name: "asc" }],
+        select: { id: true, name: true, slug: true },
+        take: 100,
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          tenantId: user.tenantId,
+          action: "tenant_controls.support_access.requested",
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: { user: { select: { name: true, email: true } } },
+      }),
     ]);
 
-    return <WhiteLabelPage data={{ settings, customizations, assets }} />;
+    const customizationRows = customizations.map((setting) => ({
+      id: setting.id,
+      scopeType: setting.scopeType,
+      brandId: setting.brandId,
+      ownerGroupId: setting.ownerGroupId,
+      centerId: setting.centerId,
+      brandName: setting.brandName,
+      logoUrlPlaceholder: setting.logoUrlPlaceholder,
+      faviconUrlPlaceholder: setting.faviconUrlPlaceholder,
+      mascotUrlPlaceholder: setting.mascotUrlPlaceholder,
+      primaryColor: setting.primaryColor,
+      accentColor: setting.accentColor,
+      themeMode: setting.themeMode,
+      emailSenderPlaceholder: setting.emailSenderPlaceholder,
+      customDomainPlaceholder: setting.customDomainPlaceholder,
+      parentPortalName: setting.parentPortalName,
+      loginScreenTitle: setting.loginScreenTitle,
+      notificationFooterText: setting.notificationFooterText,
+      legalFooterText: setting.legalFooterText,
+      termsUrl: setting.termsUrl,
+      privacyUrl: setting.privacyUrl,
+      customCss: setting.customCss,
+      brand: setting.brand,
+      ownerGroup: setting.ownerGroup,
+      center: setting.center,
+      containerLabel: setting.center?.crmLocationId ?? setting.center?.name ?? setting.ownerGroup?.name ?? setting.brand?.name ?? "Tenant",
+    }));
+    const assetRows = assets.map((asset) => ({
+      id: asset.id,
+      assetType: asset.assetType,
+      url: asset.url,
+      storageKey: asset.storageKey,
+      altText: asset.altText,
+      brandId: asset.brandId,
+      ownerGroupId: asset.ownerGroupId,
+      centerId: asset.centerId,
+      brand: asset.brand,
+      ownerGroup: asset.ownerGroup,
+      center: asset.center,
+      containerLabel: asset.center?.crmLocationId ?? asset.center?.name ?? asset.ownerGroup?.name ?? asset.brand?.name ?? "Tenant",
+    }));
+
+    return (
+      <WhiteLabelPage
+        data={{
+          settings,
+          customizations: customizationRows,
+          assets: assetRows,
+          canManageControls,
+          controlCustomizations: customizationRows,
+          controlAssets: assetRows,
+          brands: brands.map((brand) => ({ id: brand.id, label: `${brand.name} (${brand.slug})` })),
+          ownerGroups: ownerGroups.map((group) => ({ id: group.id, label: group.name })),
+          centers: centers.map((center) => ({ id: center.id, label: formatCenterName(center) })),
+          supportRequests: supportRequests.map((request) => ({
+            id: request.id,
+            action: request.action,
+            resourceId: request.resourceId,
+            createdAt: request.createdAt.toISOString(),
+            actor: request.user?.name ?? request.user?.email ?? "System",
+            metadata: request.metadata,
+          })),
+        }}
+      />
+    );
   }
 
   if (slug === "billing-settings") {

@@ -60,6 +60,7 @@ import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
+import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
@@ -71,6 +72,13 @@ import { RequiredDocumentChecklistPanel } from "@/components/required-document-c
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import {
+  TenantControlsPanel,
+  type SupportAccessAuditRow,
+  type TenantAssetControl,
+  type TenantContainerOption,
+  type TenantCustomizationControl,
+} from "@/components/tenant-controls-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import type { FteSnapshot } from "@/lib/fte-reports";
@@ -2427,7 +2435,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <OperationsActionHub title="Create or Edit Form Record" defaultEntity="form" compact />
+      <FormBuilderPanel forms={data.forms} />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Recent Submissions</CardTitle>
@@ -3923,7 +3931,13 @@ export type WhiteLabelPageData = {
   customizations: Array<{
     id: string;
     scopeType: string;
+    brandId: string | null;
+    ownerGroupId: string | null;
+    centerId: string | null;
     brandName: string;
+    logoUrlPlaceholder: string | null;
+    faviconUrlPlaceholder: string | null;
+    mascotUrlPlaceholder: string | null;
     primaryColor: string;
     accentColor: string;
     themeMode: string;
@@ -3931,7 +3945,12 @@ export type WhiteLabelPageData = {
     customDomainPlaceholder: string | null;
     parentPortalName: string | null;
     loginScreenTitle: string | null;
+    notificationFooterText: string | null;
     legalFooterText: string | null;
+    termsUrl: string | null;
+    privacyUrl: string | null;
+    customCss: unknown;
+    containerLabel: string;
     brand: { name: string; slug: string } | null;
     ownerGroup: { name: string } | null;
     center: { name: string; crmLocationId: string | null } | null;
@@ -3942,10 +3961,21 @@ export type WhiteLabelPageData = {
     url: string | null;
     storageKey: string | null;
     altText: string | null;
+    brandId: string | null;
+    ownerGroupId: string | null;
+    centerId: string | null;
+    containerLabel: string;
     brand: { name: string } | null;
     ownerGroup: { name: string } | null;
     center: { name: string; crmLocationId: string | null } | null;
   }>;
+  canManageControls: boolean;
+  controlCustomizations: TenantCustomizationControl[];
+  controlAssets: TenantAssetControl[];
+  brands: TenantContainerOption[];
+  ownerGroups: TenantContainerOption[];
+  centers: TenantContainerOption[];
+  supportRequests: SupportAccessAuditRow[];
 };
 
 export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
@@ -3966,6 +3996,15 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
         <StatCard label="Customization layers" value={data.customizations.length} detail="Brand, owner group, and center-scoped overrides" />
         <StatCard label="Brand assets" value={data.assets.length} detail="Logos, favicon, mascot, and portal media references" />
       </div>
+      <TenantControlsPanel
+        canManage={data.canManageControls}
+        customizations={data.controlCustomizations}
+        assets={data.controlAssets}
+        brands={data.brands}
+        ownerGroups={data.ownerGroups}
+        centers={data.centers}
+        supportRequests={data.supportRequests}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Customization Layers</CardTitle>

@@ -1,6 +1,6 @@
 # The BEE Suite App Completion Checklist
 
-Last updated: June 3, 2026
+Last updated: June 8, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -59,9 +59,12 @@ Status legend:
 - [x] Brand/center customization data model exists.
 - [x] Executive admin console can manage location/user structures at a high level.
 - [x] Access grant model exists for broader than one-center access.
-- [ ] Finish UI for every brand customization field, logo upload, favicon, parent portal branding, and legal footer settings.
-- [ ] Add self-service domain verification/onboarding.
-- [ ] Add tenant-level feature flags in the UI.
+- [x] Add tenant controls UI for branding fields, parent portal labels, legal/footer settings, asset references, feature flags, DNS verification requests, and support-access audit requests.
+- [x] Add tenant-level feature flags in the UI.
+- [x] Add self-service custom domain DNS verification request UI with generated TXT record values.
+- [ ] Add actual logo/favicon upload storage and preview flows.
+- [ ] Add custom domain DNS validation, activation, and deployment binding.
+- [ ] Add separate approval/grant flow if support impersonation is ever enabled.
 - [ ] Add complete owner-group management views for franchisees who own multiple locations inside a larger brand.
 
 ## Executive Admin
@@ -75,7 +78,8 @@ Status legend:
 - [ ] Add bulk user/location import for executive admins.
 - [x] Add password reset email trigger from executive admin, not just password set/reset foundations.
 - [ ] Add granular permission editor for roles beyond the current role/access-grant model.
-- [ ] Add support-access/impersonation workflow with explicit audit warnings.
+- [x] Add support-access request workflow with explicit audit warnings.
+- [ ] Add support-access approval/grant workflow if support impersonation is ever enabled.
 
 ## Dashboards
 
@@ -288,7 +292,7 @@ Status legend:
 - [x] Registration form API exists.
 - [x] Signature request mock integration API exists.
 - [x] Document/form/form submission schema exists.
-- [ ] Build actual form builder UI.
+- [x] Build actual form builder UI.
 - [ ] Complete required document checklist per family/staff/child.
 - [ ] Add file upload UI tied to Supabase storage.
 - [x] Add expiration reminders and document review states.

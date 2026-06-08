@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, BadgeDollarSign, CalendarClock, CheckCircle2, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -109,6 +110,7 @@ function centerLabel(center: BillingWorkbenchCenter) {
 }
 
 export function BillingWorkbench({ families, centers, products, tuitionPlans }: Props) {
+  const router = useRouter();
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
   const [familyId, setFamilyId] = useState("");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
@@ -138,6 +140,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const [assignmentBillingDay, setAssignmentBillingDay] = useState("");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
+  const [planEditorId, setPlanEditorId] = useState(tuitionPlans[0]?.id ?? "new");
+  const [planName, setPlanName] = useState(tuitionPlans[0]?.name ?? "");
+  const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? "Preschool");
+  const [planCadence, setPlanCadence] = useState(normalizeCadence(tuitionPlans[0]?.cadence));
+  const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -258,6 +265,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     });
   }
 
+  function submitAssignmentChargeNow() {
+    if (!selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId) {
+      return setErrorMessage("Choose a family, child, and tuition plan before charging tuition.");
+    }
+    submit({
+      mode: "single",
+      familyId: selectedFamily.id,
+      childId: selectedAssignmentChild.id,
+      dueDate: todayDate(),
+      billingPeriod: currentPeriodForCadence(effectiveAssignmentCadence),
+      chargeSource: "tuitionPlan",
+      tuitionPlanId: effectiveAssignmentPlanId,
+      description: effectiveAssignmentDescription,
+    });
+  }
+
   function submitBatch() {
     submit({
       mode: "batch",
@@ -350,6 +373,58 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     });
   }
 
+  function handlePlanEditorChange(value: string | null) {
+    if (!value) return;
+    setPlanEditorId(value);
+    if (value === "new") {
+      setPlanName("");
+      setPlanAgeGroup("Preschool");
+      setPlanCadence("weekly");
+      setPlanAmountDollars("");
+      return;
+    }
+    const plan = tuitionPlans.find((item) => item.id === value);
+    if (!plan) return;
+    setPlanName(plan.name);
+    setPlanAgeGroup(plan.ageGroup || "Preschool");
+    setPlanCadence(normalizeCadence(plan.cadence));
+    setPlanAmountDollars(String(plan.amountCents / 100));
+  }
+
+  function saveTuitionPlan() {
+    if (!planName.trim() || !planAmountDollars.trim()) {
+      return setErrorMessage("Tuition plan name and amount are required.");
+    }
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "tuitionPlan",
+          id: planEditorId === "new" ? undefined : planEditorId,
+          name: planName,
+          ageGroup: planAgeGroup,
+          cadence: planCadence,
+          amountDollars: planAmountDollars,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Tuition plan could not be saved.");
+        return;
+      }
+      setStatusMessage(`Tuition plan ${planEditorId === "new" ? "created" : "updated"}.`);
+      if (json?.record?.id) {
+        setPlanEditorId(json.record.id);
+        setTuitionPlanId(json.record.id);
+        setAssignmentTuitionPlanId(json.record.id);
+      }
+      router.refresh();
+    });
+  }
+
   return (
     <Card className="glass-panel">
       <CardHeader>
@@ -408,6 +483,61 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
           <div className="rounded-lg border bg-background/40 p-3">
             <div className="text-xs text-muted-foreground">Selected balance</div>
             <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-background/35 p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">Tuition rate setup</div>
+              <p className="text-xs text-muted-foreground">
+                School users can add or edit weekly/monthly rates here, then assign them to children for scheduled billing or charge a family manually.
+              </p>
+            </div>
+            <Badge variant="outline">School-managed rates</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-6">
+            <div className="space-y-1 md:col-span-2">
+              <Label>Rate record</Label>
+              <Select value={planEditorId} onValueChange={handlePlanEditorChange}>
+                <SelectTrigger><SelectValue placeholder="New or existing rate" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New tuition rate</SelectItem>
+                  {tuitionPlans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 md:col-span-2">
+              <Label>Plan name</Label>
+              <Input value={planName} onChange={(event) => setPlanName(event.target.value)} placeholder="Infant weekly tuition" />
+            </div>
+            <div className="space-y-1">
+              <Label>Age group</Label>
+              <Input value={planAgeGroup} onChange={(event) => setPlanAgeGroup(event.target.value)} placeholder="Infant" />
+            </div>
+            <div className="space-y-1">
+              <Label>Amount</Label>
+              <Input inputMode="decimal" value={planAmountDollars} onChange={(event) => setPlanAmountDollars(event.target.value)} placeholder="250.00" />
+            </div>
+            <div className="space-y-1">
+              <Label>Cadence</Label>
+              <Select value={planCadence} onValueChange={(value) => value && setPlanCadence(value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">
+                Save Rate
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -590,10 +720,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
               </div>
             </div>
             <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
-            <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild} onClick={submitAssignment}>
-              <CalendarClock data-icon="inline-start" />
-              Save Recurring Tuition
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild} onClick={submitAssignment}>
+                <CalendarClock data-icon="inline-start" />
+                Save Recurring Tuition
+              </Button>
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId} onClick={submitAssignmentChargeNow} variant="outline">
+                <ReceiptText data-icon="inline-start" />
+                Charge This Child Now
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Recurring billing creates the child&apos;s invoice on the selected weekday or monthly day when the tuition cron runs. Charge now posts the selected rate immediately to the family balance and parent portal.
+            </p>
           </TabsContent>
 
           <TabsContent value="agency" className="space-y-4 rounded-lg border bg-background/35 p-4">

@@ -10,6 +10,7 @@ import {
   normalizeAgencyPaymentMetadata,
   normalizeBatchTarget,
   normalizeBillingPeriod,
+  normalizeRecurringBillingPeriod,
   parseCurrencyCents,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
@@ -25,6 +26,7 @@ type ChargeResolution = {
   amountCents: number;
   productId?: string | null;
   ageGroup?: string | null;
+  cadence?: string | null;
 };
 
 function clean(value: unknown) {
@@ -120,6 +122,7 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
         description: clean(body.description) || plan.name,
         amountCents: plan.amountCents,
         ageGroup: plan.ageGroup,
+        cadence: plan.cadence,
       },
     };
   }
@@ -148,7 +151,9 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   if (!chargeResult.ok) return NextResponse.json({ ok: false, error: chargeResult.error }, { status: chargeResult.status });
 
   const dueDate = parseDate(body.dueDate);
-  const billingPeriod = normalizeBillingPeriod(body.billingPeriod, dueDate);
+  const billingPeriod = chargeResult.ok && chargeResult.charge.chargeSource === "tuitionPlan"
+    ? normalizeRecurringBillingPeriod(body.billingPeriod, dueDate, chargeResult.charge.cadence)
+    : normalizeBillingPeriod(body.billingPeriod, dueDate);
   const childId = clean(body.childId);
   const child = childId ? familyAccess.family.children.find((item) => item.id === childId) : null;
   if (childId && !child) {
@@ -214,7 +219,9 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
 
   const charge = chargeResult.charge;
   const dueDate = parseDate(body.dueDate);
-  const billingPeriod = normalizeBillingPeriod(body.billingPeriod, dueDate);
+  const billingPeriod = charge.chargeSource === "tuitionPlan"
+    ? normalizeRecurringBillingPeriod(body.billingPeriod, dueDate, charge.cadence)
+    : normalizeBillingPeriod(body.billingPeriod, dueDate);
   const batchTarget = normalizeBatchTarget(body.batchTarget);
   const enrollmentStatus = clean(body.enrollmentStatus) || "enrolled";
   const ageGroup = clean(body.ageGroup) || charge.ageGroup || "";

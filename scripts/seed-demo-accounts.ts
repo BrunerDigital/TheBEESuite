@@ -5,6 +5,7 @@ import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
 import { hashGuardianPin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { buildTeacherLoginEmail, getDefaultTeacherInitialPassword } from "@/lib/teacher-login";
 
 const DEMO_SOURCE = "bee_suite_demo";
 const DEMO_TENANT_SLUG = "bee-suite-isolated-demo";
@@ -202,6 +203,7 @@ async function upsertUser(input: {
   email: string;
   name: string;
   role: UserRole;
+  mustResetPassword?: boolean;
 }) {
   return prisma.user.upsert({
     where: { email: input.email },
@@ -211,6 +213,7 @@ async function upsertUser(input: {
       name: input.name,
       role: input.role,
       isActive: true,
+      ...(input.mustResetPassword === undefined ? {} : { mustResetPassword: input.mustResetPassword }),
     },
     create: {
       tenantId: input.tenantId,
@@ -219,6 +222,7 @@ async function upsertUser(input: {
       name: input.name,
       role: input.role,
       isActive: true,
+      ...(input.mustResetPassword === undefined ? {} : { mustResetPassword: input.mustResetPassword }),
     },
   });
 }
@@ -1115,21 +1119,31 @@ async function main() {
   });
 
   const teacherInputs = [
-    ["Avery Johnson", "avery.teacher.demo@thebeesuite.io", "Lead Infant Teacher", primaryClassrooms[0]?.id],
-    ["Mia Patel", "mia.teacher.demo@thebeesuite.io", "Lead Toddler Teacher", primaryClassrooms[1]?.id],
-    ["Camila Brooks", "camila.teacher.demo@thebeesuite.io", "3's Teacher", primaryClassrooms[2]?.id],
-    ["Noah Bennett", "noah.teacher.demo@thebeesuite.io", "Pre-K Teacher", primaryClassrooms[3]?.id],
-    ["Jordan Carter", "jordan.teacher.demo@thebeesuite.io", "Afterschool Teacher", primaryClassrooms[4]?.id],
+    ["Avery Johnson", "Lead Infant Teacher", primaryClassrooms[0]?.id],
+    ["Mia Patel", "Lead Toddler Teacher", primaryClassrooms[1]?.id],
+    ["Camila Brooks", "3's Teacher", primaryClassrooms[2]?.id],
+    ["Noah Bennett", "Pre-K Teacher", primaryClassrooms[3]?.id],
+    ["Jordan Carter", "Afterschool Teacher", primaryClassrooms[4]?.id],
   ] as const;
+  const teacherInitialPassword = getDefaultTeacherInitialPassword();
   const teacherUsers = [];
   for (let index = 0; index < teacherInputs.length; index += 1) {
-    const [name, email, title, classroomId] = teacherInputs[index];
+    const [name, title, classroomId] = teacherInputs[index];
+    const email = buildTeacherLoginEmail({ fullName: name });
     const user = await upsertUser({
       tenantId: tenant.id,
       organizationId: organization.id,
       email,
       name,
       role: UserRole.TEACHER,
+      mustResetPassword: true,
+    });
+    await upsertSupabaseAuthUserWithPassword({
+      email,
+      name,
+      password: teacherInitialPassword,
+      role: UserRole.TEACHER,
+      source: DEMO_SOURCE,
     });
     teacherUsers.push(user);
     await upsertStaffProfile({

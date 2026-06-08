@@ -1,0 +1,908 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The BEE Suite Product Explainer Graphics</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070a;
+      --panel: rgba(255, 255, 255, 0.078);
+      --panel-strong: rgba(255, 255, 255, 0.11);
+      --line: rgba(255, 255, 255, 0.14);
+      --ink: #f8fafc;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --gold: #f5b51b;
+      --gold-soft: #fde68a;
+      --sky: #38bdf8;
+      --emerald: #34d399;
+      --violet: #a78bfa;
+      --rose: #fb7185;
+      --orange: #fb923c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      padding: 36px;
+      background:
+        radial-gradient(circle at 12% 4%, rgba(245, 181, 27, 0.18), transparent 28rem),
+        radial-gradient(circle at 88% 20%, rgba(56, 189, 248, 0.12), transparent 31rem),
+        linear-gradient(135deg, #090d12 0%, #05070a 58%, #1c1406 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      opacity: 0.13;
+      pointer-events: none;
+      background-image:
+        linear-gradient(30deg, rgba(245, 181, 27, 0.26) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.26) 87.5%, rgba(245, 181, 27, 0.26)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.2) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.2) 87.5%, rgba(245, 181, 27, 0.2)),
+        linear-gradient(30deg, rgba(245, 181, 27, 0.16) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.16) 87.5%, rgba(245, 181, 27, 0.16)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.14) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.14) 87.5%, rgba(245, 181, 27, 0.14));
+      background-position: 0 0, 0 0, 18px 31px, 18px 31px;
+      background-size: 36px 62px;
+      mask-image: linear-gradient(to bottom, black, transparent 72%);
+    }
+
+    .stack {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 36px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .graphic {
+      position: relative;
+      overflow: hidden;
+      width: 1600px;
+      min-height: 1000px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 44px;
+      background:
+        radial-gradient(circle at 8% 2%, rgba(245, 181, 27, 0.2), transparent 25rem),
+        radial-gradient(circle at 94% 14%, rgba(56, 189, 248, 0.11), transparent 28rem),
+        radial-gradient(circle at 58% 88%, rgba(167, 139, 250, 0.09), transparent 30rem),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)),
+        linear-gradient(135deg, #090d12 0%, #05070a 58%, #1c1406 100%);
+      box-shadow: 0 34px 100px rgba(0, 0, 0, 0.48);
+    }
+
+    .graphic::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.08;
+      pointer-events: none;
+      background-image:
+        linear-gradient(30deg, rgba(245, 181, 27, 0.3) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.3) 87.5%, rgba(245, 181, 27, 0.3)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.26) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.26) 87.5%, rgba(245, 181, 27, 0.26));
+      background-size: 42px 72px;
+    }
+
+    .content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--gold-soft);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      color: #171207;
+      font-size: 19px;
+      font-weight: 950;
+      background: linear-gradient(135deg, #facc15, var(--gold));
+      clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+      box-shadow: 0 0 38px rgba(245, 181, 27, 0.32);
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 8px 12px;
+      border: 1px solid rgba(245, 181, 27, 0.3);
+      border-radius: 999px;
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.1);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    h1 {
+      max-width: 1020px;
+      margin: 0;
+      font-size: 58px;
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 1040px;
+      margin: 18px 0 0;
+      color: var(--soft);
+      font-size: 21px;
+      line-height: 1.48;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+        rgba(9, 13, 18, 0.75);
+      box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
+      backdrop-filter: blur(18px);
+    }
+
+    .panel h2,
+    .panel h3 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    .panel p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.48;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 30px;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 30px;
+    }
+
+    .card {
+      padding: 22px;
+      min-height: 190px;
+    }
+
+    .card h3 {
+      color: var(--ink);
+      font-size: 23px;
+      line-height: 1.1;
+    }
+
+    .eyebrow {
+      margin-bottom: 10px;
+      color: var(--gold-soft);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    ul {
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      position: relative;
+      margin-top: 8px;
+      padding-left: 17px;
+      color: var(--soft);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.6em;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 12px rgba(245, 181, 27, 0.55);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 34px;
+      align-items: stretch;
+    }
+
+    .step {
+      position: relative;
+      min-height: 250px;
+      padding: 20px;
+    }
+
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -14px;
+      width: 14px;
+      height: 2px;
+      background: linear-gradient(to right, rgba(245, 181, 27, 0.85), rgba(245, 181, 27, 0.1));
+    }
+
+    .num {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      margin-bottom: 16px;
+      border-radius: 12px;
+      color: #171207;
+      background: var(--gold);
+      font-size: 18px;
+      font-weight: 950;
+    }
+
+    .step h3 {
+      font-size: 22px;
+    }
+
+    .layer-wrap {
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 24px;
+      margin-top: 30px;
+      align-items: stretch;
+    }
+
+    .stacked {
+      display: grid;
+      gap: 14px;
+    }
+
+    .layer {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 16px;
+      align-items: center;
+      padding: 18px;
+    }
+
+    .layer-name {
+      color: var(--gold-soft);
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      color: #f4f4f5;
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 12px;
+      font-weight: 780;
+      line-height: 1.1;
+    }
+
+    .chip.gold {
+      border-color: rgba(245, 181, 27, 0.34);
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.1);
+    }
+
+    .chip.sky {
+      border-color: rgba(56, 189, 248, 0.34);
+      color: #bae6fd;
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .chip.emerald {
+      border-color: rgba(52, 211, 153, 0.34);
+      color: #bbf7d0;
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .chip.violet {
+      border-color: rgba(167, 139, 250, 0.34);
+      color: #ddd6fe;
+      background: rgba(167, 139, 250, 0.1);
+    }
+
+    .big-center {
+      display: grid;
+      place-items: center;
+      min-height: 530px;
+      padding: 28px;
+      text-align: center;
+    }
+
+    .hex {
+      display: grid;
+      place-items: center;
+      width: 230px;
+      height: 202px;
+      margin: 0 auto 22px;
+      color: #171207;
+      background: linear-gradient(135deg, #facc15, var(--gold));
+      clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+      box-shadow: 0 0 70px rgba(245, 181, 27, 0.3);
+      font-size: 70px;
+      font-weight: 950;
+    }
+
+    .big-center h2 {
+      font-size: 36px;
+    }
+
+    .rings {
+      display: grid;
+      gap: 14px;
+      margin-top: 30px;
+    }
+
+    .ring {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 14px;
+      align-items: center;
+      padding: 16px;
+    }
+
+    .ring b {
+      color: var(--gold-soft);
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .footer-note {
+      position: absolute;
+      left: 44px;
+      right: 44px;
+      bottom: 30px;
+      z-index: 1;
+      color: rgba(212, 212, 216, 0.7);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .timeline .step {
+      min-height: 270px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      margin-top: 30px;
+    }
+
+    .hero-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    .metric {
+      padding: 18px;
+      min-height: 116px;
+    }
+
+    .metric b {
+      display: block;
+      color: var(--gold);
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .metric span {
+      display: block;
+      margin-top: 8px;
+      color: var(--soft);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+      }
+
+      .stack {
+        gap: 0;
+      }
+
+      .graphic {
+        border-radius: 0;
+        break-after: page;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stack">
+    <section class="graphic" data-shot="1">
+      <div class="content">
+        <div class="topline">
+          <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+          <div class="label">Graphic 1 of 5</div>
+        </div>
+        <h1>The Childcare Operating System In One View</h1>
+        <p class="subtitle">The BEE Suite connects enrollment, school operations, classrooms, parent communication, billing, compliance, and executive visibility around one shared center record.</p>
+        <div class="layer-wrap">
+          <div class="panel big-center">
+            <div>
+              <div class="hex">B</div>
+              <h2>One shared source of truth</h2>
+              <p>Every role sees the same underlying school, family, child, classroom, billing, and compliance data through a permission-safe dashboard.</p>
+              <div class="chips" style="justify-content:center;margin-top:22px">
+                <span class="chip gold">Tenant scoped</span>
+                <span class="chip sky">School scoped</span>
+                <span class="chip emerald">Classroom scoped</span>
+                <span class="chip violet">Family scoped</span>
+              </div>
+            </div>
+          </div>
+          <div class="stacked">
+            <div class="panel layer">
+              <div class="layer-name">Enrollment</div>
+              <div class="chips">
+                <span class="chip sky">Website inquiries</span>
+                <span class="chip sky">CRM leads</span>
+                <span class="chip sky">Tours</span>
+                <span class="chip sky">Waitlist</span>
+                <span class="chip sky">Pipeline</span>
+              </div>
+            </div>
+            <div class="panel layer">
+              <div class="layer-name">Operations</div>
+              <div class="chips">
+                <span class="chip emerald">Classrooms</span>
+                <span class="chip emerald">Attendance</span>
+                <span class="chip emerald">Daily reports</span>
+                <span class="chip emerald">Incidents</span>
+                <span class="chip emerald">FTE</span>
+              </div>
+            </div>
+            <div class="panel layer">
+              <div class="layer-name">Families</div>
+              <div class="chips">
+                <span class="chip violet">Parents</span>
+                <span class="chip violet">Children</span>
+                <span class="chip violet">Guardians</span>
+                <span class="chip violet">Pickups</span>
+                <span class="chip violet">Messages</span>
+              </div>
+            </div>
+            <div class="panel layer">
+              <div class="layer-name">Business</div>
+              <div class="chips">
+                <span class="chip gold">Tuition</span>
+                <span class="chip gold">Invoices</span>
+                <span class="chip gold">Payments</span>
+                <span class="chip gold">Subsidy rules</span>
+                <span class="chip gold">Reports</span>
+              </div>
+            </div>
+            <div class="panel layer">
+              <div class="layer-name">Platform</div>
+              <div class="chips">
+                <span class="chip sky">Active schools</span>
+                <span class="chip sky">RBAC</span>
+                <span class="chip sky">Integrations</span>
+                <span class="chip sky">Audit logs</span>
+                <span class="chip sky">White-label</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">Use this graphic to explain that The BEE Suite is not a single CRM or parent app. It is the operating layer that connects the full childcare business.</div>
+    </section>
+
+    <section class="graphic" data-shot="2">
+      <div class="content">
+        <div class="topline">
+          <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+          <div class="label">Graphic 2 of 5</div>
+        </div>
+        <h1>From Website Inquiry To Enrolled Family</h1>
+        <p class="subtitle">A prospective parent can enter from the public website, get routed to the right school by Location ID, and move through the enrollment workflow without losing context.</p>
+        <div class="flow">
+          <article class="panel step">
+            <div class="num">1</div>
+            <h3>Website inquiry</h3>
+            <p>Parent selects the active school using the CRM Location ID format.</p>
+            <ul>
+              <li>ST | City dropdown</li>
+              <li>Inquiry form capture</li>
+              <li>Source attribution</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">2</div>
+            <h3>School CRM</h3>
+            <p>The lead lands in the matching school dashboard and location pipeline.</p>
+            <ul>
+              <li>Duplicate matching</li>
+              <li>Family timeline</li>
+              <li>Follow-up task</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">3</div>
+            <h3>Tour and nurture</h3>
+            <p>Staff schedule tours, send reminders, and use templates with merge fields.</p>
+            <ul>
+              <li>Tour calendar</li>
+              <li>Email/SMS/push</li>
+              <li>Staff assignment</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">4</div>
+            <h3>Enrollment decision</h3>
+            <p>Family moves to enrolled, waitlisted, or follow-up status based on capacity.</p>
+            <ul>
+              <li>Waitlist planning</li>
+              <li>Classroom fit</li>
+              <li>Documents pending</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">5</div>
+            <h3>Family setup</h3>
+            <p>Guardians, children, pickups, PINs, documents, and billing rules are created.</p>
+            <ul>
+              <li>Child profile</li>
+              <li>Guardian records</li>
+              <li>Parent portal</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">6</div>
+            <h3>School operations</h3>
+            <p>The family becomes part of classrooms, attendance, billing, and reporting.</p>
+            <ul>
+              <li>Daily reports</li>
+              <li>Invoices/payments</li>
+              <li>Compliance evidence</li>
+            </ul>
+          </article>
+        </div>
+        <div class="hero-strip">
+          <div class="panel metric"><b>1</b><span>Location ID controls routing to the right school dashboard.</span></div>
+          <div class="panel metric"><b>0</b><span>Manual spreadsheet handoff needed once school data is configured.</span></div>
+          <div class="panel metric"><b>6</b><span>Core stages from inquiry to active classroom operation.</span></div>
+          <div class="panel metric"><b>All</b><span>Messages, tasks, billing, and documents stay tied to the family record.</span></div>
+        </div>
+      </div>
+      <div class="footer-note">Use this graphic when explaining the website-to-CRM flow, active school dropdown, and why the Location ID format matters.</div>
+    </section>
+
+    <section class="graphic" data-shot="3">
+      <div class="content">
+        <div class="topline">
+          <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+          <div class="label">Graphic 3 of 5</div>
+        </div>
+        <h1>Permission-Safe Data Model</h1>
+        <p class="subtitle">The product is designed so every user gets the right level of access: executives see the business, directors run the school, teachers manage classrooms, and parents see their own family.</p>
+        <div class="layer-wrap">
+          <div class="panel big-center">
+            <div>
+              <div class="hex">RBAC</div>
+              <h2>One permission model</h2>
+              <p>Access is evaluated by role, tenant, school, classroom, family, child, and sensitive field restrictions.</p>
+              <div class="chips" style="justify-content:center;margin-top:22px">
+                <span class="chip gold">Sensitive data gates</span>
+                <span class="chip sky">Audit logs</span>
+                <span class="chip emerald">Scoped records</span>
+                <span class="chip violet">Family privacy</span>
+              </div>
+            </div>
+          </div>
+          <div class="rings">
+            <div class="panel ring">
+              <b>Platform</b>
+              <div class="chips">
+                <span class="chip gold">Platform owner</span>
+                <span class="chip gold">Brand admin</span>
+                <span class="chip gold">Regional manager</span>
+              </div>
+            </div>
+            <div class="panel ring">
+              <b>School</b>
+              <div class="chips">
+                <span class="chip sky">Center director</span>
+                <span class="chip sky">Assistant director</span>
+                <span class="chip sky">Billing admin</span>
+                <span class="chip sky">Auditor</span>
+              </div>
+            </div>
+            <div class="panel ring">
+              <b>Classroom</b>
+              <div class="chips">
+                <span class="chip emerald">Teacher</span>
+                <span class="chip emerald">Roster</span>
+                <span class="chip emerald">Daily reports</span>
+                <span class="chip emerald">Incidents</span>
+              </div>
+            </div>
+            <div class="panel ring">
+              <b>Family</b>
+              <div class="chips">
+                <span class="chip violet">Parent/guardian</span>
+                <span class="chip violet">Own children</span>
+                <span class="chip violet">Own messages</span>
+                <span class="chip violet">Own balances</span>
+              </div>
+            </div>
+            <div class="panel ring">
+              <b>Pickup</b>
+              <div class="chips">
+                <span class="chip emerald">Authorized pickup</span>
+                <span class="chip emerald">PIN only</span>
+                <span class="chip emerald">Check-in/out evidence</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grid-4">
+          <div class="panel card"><div class="eyebrow">Executive</div><h3>Business visibility</h3><p>Multi-location trends, active schools, users, billing, integrations, audits, and reports.</p></div>
+          <div class="panel card"><div class="eyebrow">Director</div><h3>School control</h3><p>Families, staff, classrooms, CRM, documents, tuition, incidents, and compliance.</p></div>
+          <div class="panel card"><div class="eyebrow">Teacher</div><h3>Classroom actions</h3><p>Assigned roster, attendance, daily logs, notes, incident submission, and family messages.</p></div>
+          <div class="panel card"><div class="eyebrow">Parent</div><h3>Own family only</h3><p>Child updates, messages, documents, balances, payments, notifications, and acknowledgments.</p></div>
+        </div>
+      </div>
+      <div class="footer-note">Use this graphic to explain trust, privacy, and why each role sees a different dashboard without duplicating the product.</div>
+    </section>
+
+    <section class="graphic" data-shot="4">
+      <div class="content">
+        <div class="topline">
+          <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+          <div class="label">Graphic 4 of 5</div>
+        </div>
+        <h1>School Go-Live Setup Path</h1>
+        <p class="subtitle">Each school needs local configuration before production use. The onboarding path captures the information directors already know and turns it into working dashboards, dropdowns, users, classrooms, and billing rules.</p>
+        <div class="timeline">
+          <article class="panel step">
+            <div class="num">1</div>
+            <h3>Active school</h3>
+            <p>Add the school using the CRM Location ID.</p>
+            <ul>
+              <li>ST | City format</li>
+              <li>School email</li>
+              <li>Dashboard created</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">2</div>
+            <h3>Director setup</h3>
+            <p>Director confirms school-specific operating rules.</p>
+            <ul>
+              <li>Rates and fees</li>
+              <li>Subsidy rules</li>
+              <li>Balance rules</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">3</div>
+            <h3>Classrooms</h3>
+            <p>Rooms, capacities, age groups, and teacher assignments are loaded.</p>
+            <ul>
+              <li>Roster structure</li>
+              <li>Ratio planning</li>
+              <li>Teacher logins</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">4</div>
+            <h3>Families</h3>
+            <p>Family, child, guardian, pickup, PIN, and document data gets prepared.</p>
+            <ul>
+              <li>Parent access</li>
+              <li>Child profiles</li>
+              <li>Pickup permissions</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">5</div>
+            <h3>Inquiry routing</h3>
+            <p>The public form dropdown is matched to active CRM school profiles.</p>
+            <ul>
+              <li>Website dropdown</li>
+              <li>Lead routing</li>
+              <li>Test inquiries</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">6</div>
+            <h3>Billing rules</h3>
+            <p>Tuition, invoices, fees, reminders, and parent balance visibility are checked.</p>
+            <ul>
+              <li>Invoice rules</li>
+              <li>Processing language</li>
+              <li>Payment shell</li>
+            </ul>
+          </article>
+          <article class="panel step">
+            <div class="num">7</div>
+            <h3>Smoke test</h3>
+            <p>Role-by-role production smoke test confirms the school is ready.</p>
+            <ul>
+              <li>Executive</li>
+              <li>Director</li>
+              <li>Teacher</li>
+              <li>Parent</li>
+            </ul>
+          </article>
+        </div>
+        <div class="two-col">
+          <div class="panel card">
+            <div class="eyebrow">Director-filled sections</div>
+            <h3>Local school settings</h3>
+            <p>Rates, classrooms, schedules, subsidy handling, balance rules, invoice timing, contact preferences, compliance reminders, and notification defaults.</p>
+          </div>
+          <div class="panel card">
+            <div class="eyebrow">Executive-controlled sections</div>
+            <h3>System and rollout controls</h3>
+            <p>Active school list, user accounts, website dropdown, tenant credentials, feature flags, audit logs, rollback point, and go-live approval.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">Use this graphic for new center onboarding, internal rollout planning, and explaining what has to be configured before a school is live.</div>
+    </section>
+
+    <section class="graphic" data-shot="5">
+      <div class="content">
+        <div class="topline">
+          <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+          <div class="label">Graphic 5 of 5</div>
+        </div>
+        <h1>The Daily Operating Loop</h1>
+        <p class="subtitle">The BEE Suite is built around the actual rhythm of a childcare center: morning readiness, drop-off, classroom documentation, parent communication, billing, compliance, and executive follow-up.</p>
+        <div class="grid-5">
+          <article class="panel card">
+            <div class="eyebrow">Morning</div>
+            <h3>Command check</h3>
+            <p>Directors review today&apos;s tours, staffing, ratios, messages, birthdays, incidents, and licensing reminders.</p>
+            <ul>
+              <li>Center dashboard</li>
+              <li>Notifications</li>
+              <li>AI summary</li>
+            </ul>
+          </article>
+          <article class="panel card">
+            <div class="eyebrow">Drop-off</div>
+            <h3>Attendance and ratios</h3>
+            <p>Families and staff check in, classrooms fill, and leadership watches ratio and late arrival signals.</p>
+            <ul>
+              <li>Check-in/out</li>
+              <li>Classroom roster</li>
+              <li>Pickup verification</li>
+            </ul>
+          </article>
+          <article class="panel card">
+            <div class="eyebrow">Classroom day</div>
+            <h3>Teacher logs</h3>
+            <p>Teachers record meals, naps, bottles, diapers, activities, notes, media, and incident reports.</p>
+            <ul>
+              <li>Daily reports</li>
+              <li>Medication logs</li>
+              <li>Incident creation</li>
+            </ul>
+          </article>
+          <article class="panel card">
+            <div class="eyebrow">Family loop</div>
+            <h3>Parent communication</h3>
+            <p>Parents receive updates, messages, documents, invoices, acknowledgments, and notification choices.</p>
+            <ul>
+              <li>Threaded messages</li>
+              <li>Parent portal</li>
+              <li>Email/SMS/push</li>
+            </ul>
+          </article>
+          <article class="panel card">
+            <div class="eyebrow">Closeout</div>
+            <h3>Reports and follow-up</h3>
+            <p>Leadership reviews billing, compliance, FTE, incidents, overdue tasks, and multi-location rollups.</p>
+            <ul>
+              <li>FTE reports</li>
+              <li>Billing status</li>
+              <li>Executive rollup</li>
+            </ul>
+          </article>
+        </div>
+        <div class="grid-3">
+          <div class="panel card">
+            <div class="eyebrow">What staff gains</div>
+            <h3>Less chasing</h3>
+            <p>Daily tasks, messages, incidents, reports, and family details are connected instead of scattered across texts, spreadsheets, binders, and paper forms.</p>
+          </div>
+          <div class="panel card">
+            <div class="eyebrow">What parents gain</div>
+            <h3>More clarity</h3>
+            <p>Parents see child updates, balances, documents, communication history, and required acknowledgments from one family portal.</p>
+          </div>
+          <div class="panel card">
+            <div class="eyebrow">What executives gain</div>
+            <h3>Real visibility</h3>
+            <p>Owners and operators see enrollment, revenue, staffing, compliance, and school health without waiting on manual reports.</p>
+          </div>
+        </div>
+      </div>
+      <div class="footer-note">Use this graphic to explain the everyday value of the platform to directors, teachers, parents, and executives.</div>
+    </section>
+  </main>
+</body>
+</html>

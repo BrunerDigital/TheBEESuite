@@ -54,7 +54,7 @@ import {
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { buildIntegrationSetupViews } from "@/lib/integration-setup";
-import { getStripeApplicationFeeBps, getStripeParentSurchargeBps } from "@/lib/integrations";
+import { getStripeParentSurchargeBps } from "@/lib/integrations";
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
@@ -1822,9 +1822,9 @@ async function renderLivePage(slug: string, user: CurrentUser) {
           centers: billingCenters,
           stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
           webhookConfigured: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
-          applicationFeeBps: getStripeApplicationFeeBps(),
+          tuitionFeatureFeeBps: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_BPS || "150", 10) || 150,
           parentSurchargeBps: getStripeParentSurchargeBps(),
-          applicationFeeFixedCents: Number.parseInt(process.env.STRIPE_APPLICATION_FEE_FIXED_CENTS || "0", 10) || 0,
+          tuitionFeatureFeeFixedCents: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS || "0", 10) || 0,
           parentSurchargeFixedCents: Number.parseInt(process.env.STRIPE_PARENT_SURCHARGE_FIXED_CENTS || "0", 10) || 0,
         }}
       />

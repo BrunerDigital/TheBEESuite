@@ -128,7 +128,7 @@ export function getStripePaymentOperationsFeeAmount(amountCents: number, waived 
   return Math.min(
     feeFromParts(
       amountCents,
-      basisPointsEnv("STRIPE_PAYMENT_OPS_FEE_BPS"),
+      basisPointsEnv("STRIPE_PAYMENT_OPS_FEE_BPS", 150),
       nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS"),
       nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_MAX_CENTS"),
     ),
@@ -159,9 +159,9 @@ export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMe
   if (paymentMethodCategory === "ach") {
     return feeFromParts(
       amountCents,
-      basisPointsEnv("STRIPE_ACH_PROCESSING_RECOVERY_BPS", 80),
+      basisPointsEnv("STRIPE_ACH_PROCESSING_RECOVERY_BPS"),
       nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS"),
-      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS", 500),
+      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS"),
     );
   }
 
@@ -198,9 +198,9 @@ export function shouldWaiveStripePaymentOperationsFee({
   brandSlug?: string | null;
   brandName?: string | null;
 }) {
-  const waivedTenantSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS", ["kid-city-usa"]);
-  const waivedBrandSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS", ["kid-city-usa"]);
-  const waivedNames = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES", ["kid city usa"]);
+  const waivedTenantSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS");
+  const waivedBrandSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS");
+  const waivedNames = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES");
   const tenantSlugKey = normalizeKey(tenantSlug);
   const brandSlugKey = normalizeKey(brandSlug);
   const tenantNameKey = normalizeKey(tenantName);

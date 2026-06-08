@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   ["Product", "#product"],
   ["How it works", "#workflows"],
+  ["Product maps", "#product-maps"],
   ["Schools", "#school-use"],
   ["Registration", "/registration"],
   ["Testimonials", "#testimonials"],
@@ -103,6 +104,44 @@ const workflowCards = [
     body: "A provider can run one school, a franchisee can own a few locations, and a brand admin can manage the larger network without crossing data boundaries.",
     icon: ShieldCheck,
     steps: ["Tenant", "Brand", "Owner group", "Center"],
+  },
+];
+
+const explainerGraphics = [
+  {
+    title: "Childcare operating system",
+    body: "Shows how enrollment, operations, families, billing, reporting, and platform controls connect around one shared school record.",
+    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_01-childcare-operating-system_2026-06-08.png",
+    width: 1600,
+    height: 1000,
+  },
+  {
+    title: "Inquiry to enrolled family",
+    body: "Explains the website form, Location ID routing, CRM follow-up, family setup, and school operations handoff.",
+    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png",
+    width: 1600,
+    height: 1000,
+  },
+  {
+    title: "Permission-safe data model",
+    body: "Clarifies why executives, directors, teachers, parents, auditors, and pickup users each see the right scope.",
+    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_03-permission-safe-data-model_2026-06-08.png",
+    width: 1600,
+    height: 1077,
+  },
+  {
+    title: "School go-live setup path",
+    body: "Walks a new school through active location setup, director configuration, classrooms, families, billing, routing, and smoke testing.",
+    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_04-school-go-live-setup-path_2026-06-08.png",
+    width: 1600,
+    height: 1001,
+  },
+  {
+    title: "Daily operating loop",
+    body: "Frames the everyday school rhythm from morning command check through drop-off, teacher logs, parent communication, and closeout reporting.",
+    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_05-daily-operating-loop_2026-06-08.png",
+    width: 1600,
+    height: 1001,
   },
 ];
 
@@ -232,6 +271,34 @@ function WorkflowGraphic({
             </div>
           ))}
         </div>
+      </div>
+    </GlassPanel>
+  );
+}
+
+function ExplainerGraphicCard({
+  graphic,
+  featured = false,
+}: {
+  graphic: (typeof explainerGraphics)[number];
+  featured?: boolean;
+}) {
+  return (
+    <GlassPanel className={cn("group overflow-hidden", featured && "border-amber-300/20")}>
+      <div className="relative overflow-hidden border-b border-white/10 bg-black/30">
+        <Image
+          src={graphic.src}
+          alt={`${graphic.title} product explainer graphic`}
+          width={graphic.width}
+          height={graphic.height}
+          sizes={featured ? "(max-width: 1024px) 100vw, 62vw" : "(max-width: 1024px) 100vw, 31vw"}
+          className="h-auto w-full transition duration-500 group-hover:scale-[1.015]"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-transparent" />
+      </div>
+      <div className={cn("p-5", featured && "lg:p-6")}>
+        <h3 className={cn("font-semibold tracking-normal text-white", featured ? "text-2xl" : "text-xl")}>{graphic.title}</h3>
+        <p className="mt-2 text-sm leading-6 text-zinc-400">{graphic.body}</p>
       </div>
     </GlassPanel>
   );
@@ -427,6 +494,39 @@ export default function LandingPage() {
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {workflowCards.map((workflow) => (
               <WorkflowGraphic key={workflow.title} {...workflow} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="product-maps" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(245,181,27,0.12),transparent_26rem),radial-gradient(circle_at_86%_28%,rgba(56,189,248,0.1),transparent_28rem)]" />
+        <div className="absolute right-0 top-8 hidden h-72 w-96 opacity-20 hive-texture lg:block" />
+        <div className="relative mx-auto max-w-[1400px]">
+          <div className="grid gap-8 lg:grid-cols-[0.7fr_1fr] lg:items-end">
+            <SectionHeading
+              title="Product maps that make the system easier to explain."
+              body="These visual guides help new users, school leaders, and franchise teams understand what The BEE Suite does before they touch the dashboard."
+            />
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Sales calls", "Show the full operating model without opening every tab."],
+                ["Onboarding", "Explain what schools configure before going live."],
+                ["Training", "Teach each role how their dashboard connects to the rest of the suite."],
+              ].map(([title, body]) => (
+                <GlassPanel key={title} className="p-4">
+                  <div className="text-sm font-semibold text-amber-300">{title}</div>
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">{body}</p>
+                </GlassPanel>
+              ))}
+            </div>
+          </div>
+          <div className="mt-10">
+            <ExplainerGraphicCard graphic={explainerGraphics[0]} featured />
+          </div>
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
+            {explainerGraphics.slice(1).map((graphic) => (
+              <ExplainerGraphicCard key={graphic.title} graphic={graphic} />
             ))}
           </div>
         </div>

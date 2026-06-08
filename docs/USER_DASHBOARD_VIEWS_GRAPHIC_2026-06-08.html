@@ -1,0 +1,974 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The BEE Suite Dashboard Views By User Type</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070a;
+      --bg-2: #080b0f;
+      --panel: rgba(255, 255, 255, 0.074);
+      --panel-strong: rgba(255, 255, 255, 0.105);
+      --line: rgba(255, 255, 255, 0.13);
+      --line-strong: rgba(245, 181, 27, 0.34);
+      --ink: #f8fafc;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --gold: #f5b51b;
+      --gold-soft: #fde68a;
+      --sky: #38bdf8;
+      --emerald: #34d399;
+      --violet: #a78bfa;
+      --rose: #fb7185;
+      --amber-dark: #1c1406;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 12% 6%, rgba(245, 181, 27, 0.18), transparent 28rem),
+        radial-gradient(circle at 86% 16%, rgba(56, 189, 248, 0.13), transparent 30rem),
+        radial-gradient(circle at 54% 72%, rgba(167, 139, 250, 0.08), transparent 34rem),
+        linear-gradient(135deg, #090d12 0%, #05070a 54%, #1c1406 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.16;
+      background-image:
+        linear-gradient(30deg, rgba(245, 181, 27, 0.28) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.28) 87.5%, rgba(245, 181, 27, 0.28)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.24) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.24) 87.5%, rgba(245, 181, 27, 0.24)),
+        linear-gradient(30deg, rgba(245, 181, 27, 0.18) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.18) 87.5%, rgba(245, 181, 27, 0.18)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.15) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.15) 87.5%, rgba(245, 181, 27, 0.15));
+      background-position: 0 0, 0 0, 18px 31px, 18px 31px;
+      background-size: 36px 62px;
+      mask-image: linear-gradient(to bottom, black, transparent 74%);
+    }
+
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+      gap: 26px;
+      min-height: 390px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035)),
+        linear-gradient(135deg, rgba(9, 13, 18, 0.98), rgba(28, 20, 6, 0.92));
+      box-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
+      backdrop-filter: blur(22px);
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -170px;
+      top: -180px;
+      width: 520px;
+      height: 520px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(245, 181, 27, 0.28), transparent 68%);
+    }
+
+    .hero-copy,
+    .hero-side {
+      position: relative;
+      z-index: 1;
+      padding: 36px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--gold-soft);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      color: #171207;
+      font-size: 18px;
+      font-weight: 950;
+      background: linear-gradient(135deg, #facc15, var(--gold));
+      clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+      box-shadow: 0 0 38px rgba(245, 181, 27, 0.32);
+    }
+
+    h1 {
+      margin: 24px 0 0;
+      max-width: 880px;
+      font-size: 64px;
+      line-height: 0.96;
+      letter-spacing: 0;
+    }
+
+    .hero-copy p {
+      max-width: 850px;
+      margin: 20px 0 0;
+      color: var(--soft);
+      font-size: 20px;
+      line-height: 1.55;
+    }
+
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .tag,
+    .mini-tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 7px 10px;
+      border: 1px solid rgba(245, 181, 27, 0.28);
+      border-radius: 999px;
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.1);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+    }
+
+    .hero-side {
+      display: grid;
+      gap: 14px;
+      align-content: center;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(18px);
+    }
+
+    .stat b {
+      display: block;
+      color: var(--gold);
+      font-size: 34px;
+      line-height: 1;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 8px;
+      color: var(--soft);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .section {
+      margin-top: 32px;
+    }
+
+    .section-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: end;
+      margin: 0 0 16px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      max-width: 620px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+      text-align: right;
+    }
+
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .role-card,
+    .module-card,
+    .access-card,
+    .system-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+        rgba(9, 13, 18, 0.72);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(18px);
+    }
+
+    .role-card {
+      min-height: 560px;
+    }
+
+    .role-top {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, rgba(245, 181, 27, 0.14), rgba(255, 255, 255, 0.03)),
+        rgba(255, 255, 255, 0.035);
+    }
+
+    .role-top[data-tone="sky"] {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(255, 255, 255, 0.03));
+    }
+
+    .role-top[data-tone="emerald"] {
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.16), rgba(255, 255, 255, 0.03));
+    }
+
+    .role-top[data-tone="violet"] {
+      background: linear-gradient(135deg, rgba(167, 139, 250, 0.18), rgba(255, 255, 255, 0.03));
+    }
+
+    .role-label {
+      color: var(--gold-soft);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .role-top h3 {
+      margin: 10px 0 8px;
+      font-size: 25px;
+      line-height: 1.08;
+    }
+
+    .role-top p {
+      margin: 0;
+      color: var(--soft);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .role-body {
+      padding: 18px;
+    }
+
+    .feature-block {
+      margin-top: 16px;
+    }
+
+    .feature-block:first-child {
+      margin-top: 0;
+    }
+
+    .feature-block h4 {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    ul {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      position: relative;
+      margin-top: 7px;
+      padding-left: 16px;
+      color: var(--soft);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.62em;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 12px rgba(245, 181, 27, 0.5);
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .module-card {
+      padding: 20px;
+      min-height: 265px;
+    }
+
+    .module-card h3,
+    .access-card h3,
+    .system-card h3 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .module-card p,
+    .access-card p,
+    .system-card p {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 6px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 999px;
+      color: #f4f4f5;
+      background: rgba(255, 255, 255, 0.065);
+      font-size: 11.5px;
+      font-weight: 750;
+      line-height: 1.2;
+    }
+
+    .chip.gold {
+      border-color: rgba(245, 181, 27, 0.34);
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.1);
+    }
+
+    .chip.sky {
+      border-color: rgba(56, 189, 248, 0.35);
+      color: #bae6fd;
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    .chip.emerald {
+      border-color: rgba(52, 211, 153, 0.35);
+      color: #bbf7d0;
+      background: rgba(52, 211, 153, 0.1);
+    }
+
+    .chip.violet {
+      border-color: rgba(167, 139, 250, 0.35);
+      color: #ddd6fe;
+      background: rgba(167, 139, 250, 0.1);
+    }
+
+    .access-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .access-card,
+    .system-card {
+      padding: 20px;
+    }
+
+    .system-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+    }
+
+    .matrix {
+      width: 100%;
+      margin-top: 16px;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .matrix th,
+    .matrix td {
+      border-bottom: 1px solid var(--line);
+      padding: 11px 12px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 12.5px;
+      line-height: 1.38;
+    }
+
+    .matrix th {
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.09);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .matrix tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .yes {
+      color: var(--emerald);
+      font-weight: 900;
+    }
+
+    .limited {
+      color: var(--gold);
+      font-weight: 900;
+    }
+
+    .view {
+      color: var(--sky);
+      font-weight: 900;
+    }
+
+    .footer {
+      margin-top: 30px;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.055);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    @media print {
+      body {
+        background: #05070a;
+      }
+
+      main {
+        max-width: none;
+        padding: 24px;
+      }
+
+      .hero,
+      .role-card,
+      .module-card,
+      .access-card,
+      .system-card,
+      .footer {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="brand"><span class="brand-mark">B</span><span>The BEE Suite</span></div>
+        <h1>Dashboard Views and Feature Access Map</h1>
+        <p>
+          A role-by-role view of the dashboards, tabs, workflows, and built module surfaces in The BEE Suite.
+          This version is aligned to the app's current RBAC gates and module catalog.
+        </p>
+        <div class="hero-tags">
+          <span class="tag">Executive command</span>
+          <span class="tag">School operations</span>
+          <span class="tag">Classroom workflow</span>
+          <span class="tag">Parent portal</span>
+          <span class="tag">Tenant-scoped data</span>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="stat"><b>4</b><span>Primary dashboard experiences: Executive, Director, Teacher, and Parent.</span></div>
+        <div class="stat"><b>40+</b><span>Built module tabs and supporting workflow screens represented in the app catalog.</span></div>
+        <div class="stat"><b>10</b><span>Role profiles including billing admin, assistant director, auditor, and authorized pickup.</span></div>
+        <div class="stat"><b>1</b><span>Shared permission model for scoped center, classroom, family, and platform access.</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Primary User Dashboard Views</h2>
+        <p>Each view below lists the tabs and functional areas that should be visible for that user type after authentication and tenant scoping.</p>
+      </div>
+      <div class="role-grid">
+        <article class="role-card">
+          <div class="role-top">
+            <div class="role-label">Platform owner / brand admin / regional manager</div>
+            <h3>Executive Dashboard</h3>
+            <p>Multi-location command center for enrollment, revenue, operations, compliance, integrations, and tenant-level controls.</p>
+          </div>
+          <div class="role-body">
+            <div class="feature-block">
+              <h4>Command Tabs</h4>
+              <ul>
+                <li>Executive Dashboard with platform, brand, regional, and director lenses.</li>
+                <li>Multi-location Dashboard with center comparison, occupancy, staffing, revenue, and risk flags.</li>
+                <li>Notifications and AI Command Center for reviewed summaries, follow-ups, and action queues.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Enrollment and Growth</h4>
+              <ul>
+                <li>CRM Leads, Enrollment Pipeline, Tours, Waitlist, Campaigns, Automations, Reputation, and Analytics.</li>
+                <li>Lead source tracking, stage conversion, task queues, tour follow-up, inquiry routing, and waitlist planning.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Operations Oversight</h4>
+              <ul>
+                <li>Center Dashboard, FTE Reports, Attendance, Staff, Classroom, Daily Reports, Incidents, Compliance, Forms, and Documents.</li>
+                <li>Review health, ratios, open seats, incidents, documentation, school submissions, and export-ready reports.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Platform Controls</h4>
+              <ul>
+                <li>Executive Admin, White-label, Team Permissions, Integrations, Billing Settings, Audit Logs, Developer Dashboard, Help.</li>
+                <li>Location lifecycle, school users, feature flags, tenant credentials, branding, impersonation warnings, and audit evidence.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="role-card">
+          <div class="role-top" data-tone="sky">
+            <div class="role-label">Center director / assistant director</div>
+            <h3>Director Dashboard</h3>
+            <p>School-specific operating view for admissions, family records, classroom management, billing, documents, and compliance.</p>
+          </div>
+          <div class="role-body">
+            <div class="feature-block">
+              <h4>School Command</h4>
+              <ul>
+                <li>Center Dashboard, Calendar, FTE Reports, Notifications, AI Command, Analytics, and Help.</li>
+                <li>Daily tasks, tours, birthdays, billing alerts, parent response queue, licensing reminders, and staffing snapshots.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Enrollment and Families</h4>
+              <ul>
+                <li>CRM Leads, Pipeline, Tours, Waitlist, Family Detail, Child Profile, Messages, Announcements, Forms, and Documents.</li>
+                <li>Family timelines, guardian contacts, authorized pickups, emergency contacts, child medical notes, custom forms, and document checklists.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Classroom Operations</h4>
+              <ul>
+                <li>Classroom Dashboard, Attendance, Daily Reports, Incident Reports, Staff/Teachers, Parent Media Review, and Teacher Portal oversight.</li>
+                <li>Classroom creation, teacher assignment, roster management, photo review, incident admin review, and parent acknowledgment status.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Business and Compliance</h4>
+              <ul>
+                <li>Billing & Invoices, Payments, Billing Settings where allowed, Compliance, Audit Logs, Team Permissions, Reputation.</li>
+                <li>Tuition plans, fees, processing recovery language, balances, subsidy placeholders, medication logs, export reports, and role-limited audits.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="role-card">
+          <div class="role-top" data-tone="emerald">
+            <div class="role-label">Teacher / classroom staff</div>
+            <h3>Teacher Dashboard</h3>
+            <p>Touch-friendly classroom workflow for daily operations, attendance, reports, incidents, media, and parent updates.</p>
+          </div>
+          <div class="role-body">
+            <div class="feature-block">
+              <h4>Classroom Tabs</h4>
+              <ul>
+                <li>Teacher Portal, Classroom Dashboard, Attendance, Daily Reports, Incident Reports, Messages, Notifications, and Help.</li>
+                <li>Roster filter, child cards, room transfers, check-in/out, supplies, staff notes, and quick log buttons.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Daily Child Logs</h4>
+              <ul>
+                <li>Meals, bottles, naps, diapers, potty, activities, mood, learning notes, supplies, observations, and parent-facing daily reports.</li>
+                <li>Photo/video upload workflow routed through permission-aware director review before parent sharing.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Safety and Incidents</h4>
+              <ul>
+                <li>Incident creation with child, room, staff, type, description, action taken, attachments placeholder, and director review.</li>
+                <li>Medication log visibility and restricted child details only where the assigned role is allowed.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Communication</h4>
+              <ul>
+                <li>Parent/classroom conversations, per-family reply history, template-based replies, staff assignment, and notification preferences.</li>
+                <li>AI can polish notes and wording, but teacher submissions remain human-reviewed for sensitive workflows.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+
+        <article class="role-card">
+          <div class="role-top" data-tone="violet">
+            <div class="role-label">Parent / guardian</div>
+            <h3>Parent Portal</h3>
+            <p>Own-family dashboard for messages, child updates, documents, balances, payments, incidents, and preferences.</p>
+          </div>
+          <div class="role-body">
+            <div class="feature-block">
+              <h4>Family Tabs</h4>
+              <ul>
+                <li>Parent Portal, Messages, Documents, Billing & Invoices, Payments, Notifications, and Help.</li>
+                <li>Child profile summary, announcements, calendar items, daily reports, forms, and school contact options.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Child Updates</h4>
+              <ul>
+                <li>Daily reports, meals, naps, activities, teacher notes, photos/videos after approval, incident notices, and parent acknowledgments.</li>
+                <li>Emergency contact and authorized pickup change requests flow to the director instead of directly overwriting protected records.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Billing and Documents</h4>
+              <ul>
+                <li>Balances, invoices, payment placeholders, receipts, tuition policy notes, processing recovery language, and required documents.</li>
+                <li>Parent sees only own-family billing, documents, messages, children, and notification settings.</li>
+              </ul>
+            </div>
+            <div class="feature-block">
+              <h4>Preferences</h4>
+              <ul>
+                <li>Email, SMS, push, and portal notification preferences when channels are enabled by the school or tenant.</li>
+                <li>Language, delivery, reminder, and digest preferences are scoped to the parent user.</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Full Built Module Coverage</h2>
+        <p>This is the tab inventory represented in the app module catalog. It should stay in sync with the sidebar, route map, onboarding, and permission matrix.</p>
+      </div>
+      <div class="module-grid">
+        <article class="module-card">
+          <h3>Command</h3>
+          <p>Daily operating command surfaces and action queues.</p>
+          <div class="chips">
+            <span class="chip gold">Dashboard</span>
+            <span class="chip gold">Multi-location</span>
+            <span class="chip gold">Notifications</span>
+            <span class="chip gold">AI Command</span>
+          </div>
+          <ul>
+            <li>Daily summaries, KPI cards, open-seat visibility, ratio snapshots, response queues, and human-reviewed AI suggestions.</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>Enrollment CRM</h3>
+          <p>Lead capture through enrollment, waitlist, and retention workflows.</p>
+          <div class="chips">
+            <span class="chip sky">CRM Leads</span>
+            <span class="chip sky">Pipeline</span>
+            <span class="chip sky">Tours</span>
+            <span class="chip sky">Waitlist</span>
+            <span class="chip sky">Campaigns</span>
+            <span class="chip sky">Automations</span>
+          </div>
+          <ul>
+            <li>Website inquiries, location ID routing, source tracking, duplicate matching controls, follow-up tasks, templates, merge fields, and conversion analytics.</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>Operations</h3>
+          <p>School, classroom, attendance, incident, and staff operations.</p>
+          <div class="chips">
+            <span class="chip emerald">Center Dashboard</span>
+            <span class="chip emerald">FTE Reports</span>
+            <span class="chip emerald">Classroom</span>
+            <span class="chip emerald">Attendance</span>
+            <span class="chip emerald">Daily Reports</span>
+            <span class="chip emerald">Incidents</span>
+            <span class="chip emerald">Teachers</span>
+            <span class="chip emerald">Calendar</span>
+          </div>
+          <ul>
+            <li>Classrooms, teacher logins, rosters, daily logs, check-in/out, medication logs, incident review, parent acknowledgments, and FTE cron/reporting flow.</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>Families</h3>
+          <p>Family records, child records, communications, media, and portals.</p>
+          <div class="chips">
+            <span class="chip violet">Family Detail</span>
+            <span class="chip violet">Child Profile</span>
+            <span class="chip violet">Messages</span>
+            <span class="chip violet">Media Review</span>
+            <span class="chip violet">Parent Portal</span>
+            <span class="chip violet">Teacher Portal</span>
+          </div>
+          <ul>
+            <li>Guardians, children, siblings, pickups, PIN data, emergency contacts, custody restrictions, threaded conversations, staff assignment, and parent media visibility.</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>Business</h3>
+          <p>Tuition, payments, forms, documents, compliance, analytics, and reviews.</p>
+          <div class="chips">
+            <span class="chip gold">Billing & Invoices</span>
+            <span class="chip gold">Payments</span>
+            <span class="chip gold">Forms</span>
+            <span class="chip gold">Documents</span>
+            <span class="chip gold">Compliance</span>
+            <span class="chip gold">Analytics</span>
+            <span class="chip gold">Reputation</span>
+          </div>
+          <ul>
+            <li>Rates, fees, subsidy rules, balance rules, invoice rules, processing recovery language, compliance exports, document expiration, and school onboarding sections.</li>
+          </ul>
+        </article>
+
+        <article class="module-card">
+          <h3>Platform</h3>
+          <p>Enterprise admin, branding, credentials, permissions, and support controls.</p>
+          <div class="chips">
+            <span class="chip sky">Executive Admin</span>
+            <span class="chip sky">Developer</span>
+            <span class="chip sky">White-label</span>
+            <span class="chip sky">Team Permissions</span>
+            <span class="chip sky">Integrations</span>
+            <span class="chip sky">Billing Settings</span>
+            <span class="chip sky">Audit Logs</span>
+            <span class="chip sky">Help</span>
+          </div>
+          <ul>
+            <li>Active schools, tenant-specific integration credentials, user lifecycle, school onboarding, feature flags, safe rollback posture, and audit-safe evidence.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Specialized Access Profiles</h2>
+        <p>These accounts are not primary dashboard personas, but they are supported by the permission design and should be visible in account setup.</p>
+      </div>
+      <div class="access-grid">
+        <article class="access-card">
+          <h3>Billing Admin</h3>
+          <p>Finance-focused center user for tuition, balances, invoices, processing notes, subsidy placeholders, payment history, reports, and family billing messages.</p>
+          <div class="chips">
+            <span class="chip gold">Billing & Invoices</span>
+            <span class="chip gold">Payments</span>
+            <span class="chip gold">Billing Settings</span>
+            <span class="chip gold">Messages</span>
+            <span class="chip gold">Analytics</span>
+          </div>
+        </article>
+
+        <article class="access-card">
+          <h3>Authorized Pickup / Kiosk</h3>
+          <p>Limited identity used for pickup verification, PIN/QR flow placeholders, signature capture, and attendance evidence. No parent app, billing, or messaging access.</p>
+          <div class="chips">
+            <span class="chip emerald">Check-in/out</span>
+            <span class="chip emerald">Pickup PIN</span>
+            <span class="chip emerald">Signature</span>
+            <span class="chip emerald">Child pickup only</span>
+          </div>
+        </article>
+
+        <article class="access-card">
+          <h3>Read-only Auditor</h3>
+          <p>Evidence-first access for reports, compliance, audit logs, FTE, incidents, documents, attendance, and analytics without edit authority.</p>
+          <div class="chips">
+            <span class="chip sky">Reports</span>
+            <span class="chip sky">Compliance</span>
+            <span class="chip sky">Audit Logs</span>
+            <span class="chip sky">Exports</span>
+            <span class="chip sky">View-only</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Permission Snapshot</h2>
+        <p>Practical visibility map for the current account levels. "Limited" means scoped by assigned centers, classrooms, own family, or review-only status.</p>
+      </div>
+      <div class="system-grid">
+        <article class="system-card">
+          <h3>Role Access Matrix</h3>
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Executive</th>
+                <th>Director</th>
+                <th>Teacher</th>
+                <th>Parent</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Multi-location, active schools, tenant settings, white-label, integrations</td>
+                <td class="yes">Full</td>
+                <td class="view">View/none</td>
+                <td>-</td>
+                <td>-</td>
+              </tr>
+              <tr>
+                <td>School dashboard, staff, classrooms, FTE, compliance, forms, documents</td>
+                <td class="yes">Full</td>
+                <td class="yes">Manage</td>
+                <td class="view">Scoped</td>
+                <td>-</td>
+              </tr>
+              <tr>
+                <td>CRM, leads, pipeline, tours, waitlist, campaigns, automations</td>
+                <td class="yes">Full</td>
+                <td class="yes">Manage</td>
+                <td>-</td>
+                <td>-</td>
+              </tr>
+              <tr>
+                <td>Classroom, attendance, daily reports, incidents, teacher portal</td>
+                <td class="yes">Full</td>
+                <td class="yes">Manage</td>
+                <td class="yes">Submit</td>
+                <td class="view">Own child</td>
+              </tr>
+              <tr>
+                <td>Billing, invoices, payments, balances, processing recovery notices</td>
+                <td class="yes">Full</td>
+                <td class="yes">Manage</td>
+                <td>-</td>
+                <td class="limited">Own family</td>
+              </tr>
+              <tr>
+                <td>Messages, documents, notifications, help</td>
+                <td class="yes">Full</td>
+                <td class="yes">Manage</td>
+                <td class="limited">Classroom</td>
+                <td class="limited">Own family</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+
+        <article class="system-card">
+          <h3>System Rules To Preserve</h3>
+          <ul>
+            <li>Every record stays tenant-scoped and school-scoped before role permissions are evaluated.</li>
+            <li>Location ID format remains "ST | City" so website inquiries sort to the correct CRM school profile.</li>
+            <li>School onboarding captures local rates, classrooms, subsidy rules, balance rules, invoice rules, compliance preferences, and notification defaults.</li>
+            <li>Parent and teacher views are limited to assigned family or classroom context. Sensitive child, custody, medical, billing, and incident data needs explicit access.</li>
+            <li>AI output is draft-only for safety, medical, custody, legal, billing, and compliance-sensitive workflows.</li>
+            <li>Live changes should remain rollback-friendly with audit logs, exports, and last-known-healthy deployment awareness.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Feature Inventory Checklist</h2>
+        <p>Condensed list of the features represented across the current product build and completion checklist.</p>
+      </div>
+      <div class="module-grid">
+        <article class="module-card">
+          <h3>Enrollment and CRM</h3>
+          <ul>
+            <li>Website inquiry intake, active school dropdown, CRM location matching, duplicate family/child/guardian matching, lead archive/remove test lead controls.</li>
+            <li>Lead stages, pipeline, tours, waitlist, campaign templates, message templates, merge fields, tasks, automations, source tracking, and analytics.</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>School and Classroom</h3>
+          <ul>
+            <li>Active school management, school user setup, director onboarding sections, classrooms, teacher accounts, rosters, daily reports, attendance, check-in/out, and FTE cron/reporting.</li>
+            <li>Photo/media upload and review, medication logs, incident workflow, parent acknowledgment status, compliance reports, staff records, and classroom operations.</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>Families and Parents</h3>
+          <ul>
+            <li>Family profiles, guardian contacts, authorized pickups, child profiles, PIN details, emergency contacts, parent portal, daily updates, documents, balances, payments, and notification preferences.</li>
+            <li>Threaded conversations, per-family reply history, staff assignment, email/SMS/push channel settings, documents, incident acknowledgments, and own-family data privacy.</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>Billing and Accounting</h3>
+          <ul>
+            <li>Tuition plans, school rates, fees, balance rules, invoice rules, subsidy placeholders, discounts, family ledgers, payment placeholders, Stripe-ready shell, convenience fee and processing recovery language.</li>
+            <li>Parent balance visibility, payment history, failed payment tracking, billing reports, exports, and director/billing admin workflows.</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>Platform and Integrations</h3>
+          <ul>
+            <li>Tenant-specific credentials, platform env fallback, Supabase-backed data, storage, active schools, role-based access, audit logs, white-label settings, and integration connection status.</li>
+            <li>Vercel deployment posture, GitHub workflow, rollback awareness, smoke test checklist, and production readiness tracking.</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>Reporting and Compliance</h3>
+          <ul>
+            <li>FTE reports, compliance exports, incident reports, medication logs, document expiration, attendance evidence, audit logs, analytics dashboards, and read-only auditor view.</li>
+            <li>Director review queues, parent acknowledgments, CSV/export-ready records, notification routing, and role-specific operational evidence.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <div class="footer">
+      Source alignment: The role access groupings are based on the current app permission model in src/lib/rbac.ts and the module inventory in src/lib/demo-data.ts. This visual is intended as the working product map for The BEE Suite dashboard completion effort.
+    </div>
+  </main>
+</body>
+</html>

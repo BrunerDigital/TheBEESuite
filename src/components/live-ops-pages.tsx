@@ -4137,9 +4137,9 @@ export type BillingSettingsPageData = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
-  applicationFeeBps: number;
+  tuitionFeatureFeeBps: number;
   parentSurchargeBps: number;
-  applicationFeeFixedCents: number;
+  tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
 };
 
@@ -4171,9 +4171,9 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         centers={data.centers}
         stripeConfigured={data.stripeConfigured}
         webhookConfigured={data.webhookConfigured}
-        applicationFeeBps={data.applicationFeeBps}
+        tuitionFeatureFeeBps={data.tuitionFeatureFeeBps}
         parentSurchargeBps={data.parentSurchargeBps}
-        applicationFeeFixedCents={data.applicationFeeFixedCents}
+        tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
       <div className="grid gap-4 lg:grid-cols-3">
@@ -4197,7 +4197,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
           <CardHeader>
             <CardTitle>Platform Fee Flow</CardTitle>
             <CardDescription>
-              The configured application fee is retained by The BEE Suite while the remaining payment amount is routed to the school payout account.
+              The configured school-paid tuition payments feature fee is retained by The BEE Suite while the remaining payment amount is routed to the school payout account.
             </CardDescription>
           </CardHeader>
         </Card>

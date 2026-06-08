@@ -24,9 +24,9 @@ type StripeConnectPanelProps = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
-  applicationFeeBps: number;
+  tuitionFeatureFeeBps: number;
   parentSurchargeBps: number;
-  applicationFeeFixedCents: number;
+  tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
 };
 
@@ -74,9 +74,9 @@ export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
-  applicationFeeBps,
+  tuitionFeatureFeeBps,
   parentSurchargeBps,
-  applicationFeeFixedCents,
+  tuitionFeatureFeeFixedCents,
   parentSurchargeFixedCents,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
@@ -185,18 +185,18 @@ export function StripeConnectPanel({
             </Badge>
             <CardTitle>School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              The BEE Suite platform account can collect parent payments, retain the configured platform fee, and route the remaining funds to each school&apos;s connected Stripe payout account.
+              The BEE Suite platform account can collect parent payments, retain the configured school-paid tuition payments feature fee, and route the remaining funds to each school&apos;s connected Stripe payout account.
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">BEE Suite fee</div>
-            <div className="text-2xl font-semibold">{percentFromBps(applicationFeeBps)}{centsLabel(applicationFeeFixedCents)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Retained from each parent checkout</div>
+            <div className="font-medium">Tuition feature fee</div>
+            <div className="text-2xl font-semibold">{percentFromBps(tuitionFeatureFeeBps)}{centsLabel(tuitionFeatureFeeFixedCents)}</div>
+            <div className="mt-1 text-xs text-muted-foreground">School-paid BEE Suite fee retained from tuition payout</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Parent surcharge</div>
+            <div className="font-medium">Parent card recovery</div>
             <div className="text-2xl font-semibold">{percentFromBps(parentSurchargeBps)}{centsLabel(parentSurchargeFixedCents)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Added above tuition when configured</div>
+            <div className="mt-1 text-xs text-muted-foreground">Only added above tuition for card or other higher-cost methods</div>
           </div>
         </div>
       </CardHeader>
@@ -296,7 +296,7 @@ export function StripeConnectPanel({
           Parent checkout is blocked for a school until its connected payout account exists and Stripe reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. Any configured parent convenience fee or processing recovery is added as a separate Checkout line item and included in the Stripe application fee so the school payout can still receive the invoice amount. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the Stripe application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout because there is no separate monthly software fee for the tuition billing and payment module. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
       </CardContent>
     </Card>

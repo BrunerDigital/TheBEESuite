@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The BEE Suite Payments Architecture</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070a;
+      --panel: rgba(255, 255, 255, 0.078);
+      --line: rgba(255, 255, 255, 0.14);
+      --ink: #f8fafc;
+      --muted: #a1a1aa;
+      --soft: #d4d4d8;
+      --gold: #f5b51b;
+      --gold-soft: #fde68a;
+      --sky: #38bdf8;
+      --emerald: #34d399;
+      --violet: #a78bfa;
+      --rose: #fb7185;
+      --orange: #fb923c;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      padding: 32px;
+      background:
+        radial-gradient(circle at 12% 4%, rgba(245, 181, 27, 0.18), transparent 28rem),
+        radial-gradient(circle at 88% 20%, rgba(56, 189, 248, 0.12), transparent 31rem),
+        linear-gradient(135deg, #090d12 0%, #05070a 58%, #1c1406 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      opacity: 0.13;
+      pointer-events: none;
+      background-image:
+        linear-gradient(30deg, rgba(245, 181, 27, 0.26) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.26) 87.5%, rgba(245, 181, 27, 0.26)),
+        linear-gradient(150deg, rgba(245, 181, 27, 0.2) 12%, transparent 12.5%, transparent 87%, rgba(245, 181, 27, 0.2) 87.5%, rgba(245, 181, 27, 0.2));
+      background-position: 0 0, 0 0;
+      background-size: 42px 72px;
+      mask-image: linear-gradient(to bottom, black, transparent 76%);
+    }
+
+    .graphic {
+      position: relative;
+      z-index: 1;
+      overflow: hidden;
+      width: 1600px;
+      min-height: 1120px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 44px;
+      background:
+        radial-gradient(circle at 10% 5%, rgba(245, 181, 27, 0.19), transparent 26rem),
+        radial-gradient(circle at 92% 12%, rgba(56, 189, 248, 0.1), transparent 28rem),
+        radial-gradient(circle at 54% 94%, rgba(167, 139, 250, 0.08), transparent 30rem),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)),
+        linear-gradient(135deg, #090d12 0%, #05070a 58%, #1c1406 100%);
+      box-shadow: 0 34px 100px rgba(0, 0, 0, 0.48);
+    }
+
+    .topline {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      align-items: start;
+      margin-bottom: 28px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--gold-soft);
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      color: #171207;
+      font-size: 19px;
+      font-weight: 950;
+      background: linear-gradient(135deg, #facc15, var(--gold));
+      clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+      box-shadow: 0 0 38px rgba(245, 181, 27, 0.32);
+    }
+
+    .label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 8px 12px;
+      border: 1px solid rgba(245, 181, 27, 0.3);
+      border-radius: 999px;
+      color: var(--gold-soft);
+      background: rgba(245, 181, 27, 0.1);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    h1 {
+      max-width: 1120px;
+      margin: 0;
+      font-size: 58px;
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 1120px;
+      margin: 18px 0 0;
+      color: var(--soft);
+      font-size: 21px;
+      line-height: 1.48;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+        rgba(9, 13, 18, 0.75);
+      box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
+      backdrop-filter: blur(18px);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 0.95fr 1.05fr;
+      gap: 22px;
+      margin-top: 30px;
+    }
+
+    .left,
+    .right {
+      display: grid;
+      gap: 18px;
+    }
+
+    .flow {
+      padding: 22px;
+    }
+
+    .flow h2,
+    .card h3,
+    .rule h3 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    .flow h2 {
+      font-size: 25px;
+    }
+
+    .flow p,
+    .card p,
+    .rule p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.48;
+    }
+
+    .lane {
+      display: grid;
+      grid-template-columns: 155px 1fr 1fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 18px;
+    }
+
+    .node {
+      position: relative;
+      min-height: 112px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .node::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -13px;
+      width: 13px;
+      height: 2px;
+      background: linear-gradient(to right, rgba(245, 181, 27, 0.86), transparent);
+    }
+
+    .node:last-child::after {
+      display: none;
+    }
+
+    .node b {
+      display: block;
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.15;
+    }
+
+    .node span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.38;
+    }
+
+    .stripe {
+      border-color: rgba(99, 102, 241, 0.36);
+      background: rgba(99, 102, 241, 0.12);
+    }
+
+    .bee {
+      border-color: rgba(245, 181, 27, 0.35);
+      background: rgba(245, 181, 27, 0.1);
+    }
+
+    .school {
+      border-color: rgba(52, 211, 153, 0.35);
+      background: rgba(52, 211, 153, 0.09);
+    }
+
+    .parent {
+      border-color: rgba(56, 189, 248, 0.35);
+      background: rgba(56, 189, 248, 0.09);
+    }
+
+    .card {
+      padding: 22px;
+    }
+
+    .card h3 {
+      font-size: 23px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .mini {
+      min-height: 182px;
+      padding: 18px;
+    }
+
+    .mini h3 {
+      font-size: 18px;
+    }
+
+    .mini strong {
+      color: var(--gold);
+      font-size: 24px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      color: #f4f4f5;
+      background: rgba(255, 255, 255, 0.07);
+      font-size: 12px;
+      font-weight: 780;
+      line-height: 1.1;
+    }
+
+    .chip.gold { border-color: rgba(245, 181, 27, 0.34); color: var(--gold-soft); background: rgba(245, 181, 27, 0.1); }
+    .chip.sky { border-color: rgba(56, 189, 248, 0.34); color: #bae6fd; background: rgba(56, 189, 248, 0.1); }
+    .chip.emerald { border-color: rgba(52, 211, 153, 0.34); color: #bbf7d0; background: rgba(52, 211, 153, 0.1); }
+    .chip.rose { border-color: rgba(251, 113, 133, 0.34); color: #fecdd3; background: rgba(251, 113, 133, 0.1); }
+
+    ul {
+      margin: 13px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    li {
+      position: relative;
+      margin-top: 8px;
+      padding-left: 17px;
+      color: var(--soft);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.6em;
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--gold);
+      box-shadow: 0 0 12px rgba(245, 181, 27, 0.55);
+    }
+
+    .rule-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .rule {
+      padding: 18px;
+      min-height: 158px;
+    }
+
+    .rule h3 {
+      font-size: 18px;
+    }
+
+    .recommendation {
+      padding: 24px;
+      border-color: rgba(245, 181, 27, 0.35);
+      background:
+        linear-gradient(135deg, rgba(245, 181, 27, 0.14), rgba(255, 255, 255, 0.03)),
+        rgba(9, 13, 18, 0.78);
+    }
+
+    .footer {
+      margin-top: 24px;
+      color: rgba(212, 212, 216, 0.76);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main class="graphic">
+    <div class="topline">
+      <div class="brand"><span class="mark">B</span><span>The BEE Suite</span></div>
+      <div class="label">Payments architecture draft</div>
+    </div>
+    <h1>Separate SaaS Revenue From Parent Tuition Money</h1>
+    <p class="subtitle">
+      The clean structure is two payment systems under one billing module: subscriptions for access to The BEE Suite, and tuition/payment collection for schools and parents.
+    </p>
+
+    <section class="grid">
+      <div class="left">
+        <article class="panel flow">
+          <h2>1. Kid City USA corporate subscription</h2>
+          <p>Corporate pays one recurring monthly amount that covers all Kid City USA locations.</p>
+          <div class="lane">
+            <div class="node school"><b>Kid City corporate</b><span>Master customer record and billing contact.</span></div>
+            <div class="node stripe"><b>Stripe Billing</b><span>Monthly subscription, invoice, dunning, payment method updates.</span></div>
+            <div class="node bee"><b>The BEE Suite</b><span>All Kid City locations remain active under the covered corporate plan.</span></div>
+          </div>
+        </article>
+
+        <article class="panel flow">
+          <h2>2. Independent school subscription</h2>
+          <p>Single-location or small multi-location schools enter payment details during onboarding.</p>
+          <div class="lane">
+            <div class="node school"><b>School owner</b><span>Chooses plan and enters billing info during onboarding.</span></div>
+            <div class="node stripe"><b>Checkout + Billing</b><span>Creates subscription, saves payment method, manages renewals.</span></div>
+            <div class="node bee"><b>Tenant access</b><span>Plan controls active locations, users, feature flags, and billing status.</span></div>
+          </div>
+        </article>
+
+        <article class="panel flow">
+          <h2>3. Parent tuition payments</h2>
+          <p>Parent tuition should not be mixed with SaaS subscription revenue.</p>
+          <div class="lane">
+            <div class="node parent"><b>Parent portal</b><span>ACH preferred, card optional, fee disclosure before payment.</span></div>
+            <div class="node stripe"><b>Stripe Connect</b><span>School connected account receives tuition funds; optional platform fee if approved.</span></div>
+            <div class="node school"><b>School ledger</b><span>Invoice, payment, refund, balance, and payout reconciliation stay school-scoped.</span></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="right">
+        <article class="panel recommendation">
+          <h2>Recommended default model</h2>
+          <p>
+            Use Stripe Billing for BEE Suite subscriptions. Use Stripe Connect for tuition, with each school as the merchant/connected account. Make ACH the default parent payment path and make card payments optional with compliant fee recovery language.
+          </p>
+          <div class="chips">
+            <span class="chip gold">Stripe Billing for SaaS</span>
+            <span class="chip emerald">Stripe Connect for schools</span>
+            <span class="chip sky">ACH-first parent payments</span>
+            <span class="chip rose">Card fee policy needs review</span>
+          </div>
+        </article>
+
+        <div class="cards">
+          <article class="panel mini">
+            <h3>SaaS access fee</h3>
+            <p><strong>Cleanest</strong></p>
+            <ul>
+              <li>Corporate or school pays The BEE Suite.</li>
+              <li>Use subscription products and prices.</li>
+              <li>No parent tuition funds involved.</li>
+            </ul>
+          </article>
+          <article class="panel mini">
+            <h3>Tuition ACH</h3>
+            <p><strong>Lowest cost</strong></p>
+            <ul>
+              <li>Preferred default for recurring tuition.</li>
+              <li>Lower processing cost than cards.</li>
+              <li>Best way to compete with Tuition Express.</li>
+            </ul>
+          </article>
+          <article class="panel mini">
+            <h3>Tuition card</h3>
+            <p><strong>Optional</strong></p>
+            <ul>
+              <li>Convenient but expensive.</li>
+              <li>Use clear parent disclosure.</li>
+              <li>Debit/card surcharge rules need review.</li>
+            </ul>
+          </article>
+        </div>
+
+        <article class="panel card">
+          <h3>Fee strategy decision tree</h3>
+          <div class="rule-grid">
+            <div class="panel rule">
+              <h3>If parent pays ACH</h3>
+              <p>Charge no parent convenience fee or a very small school-approved service fee. Platform margin should mostly come from SaaS subscription, not tuition markup.</p>
+            </div>
+            <div class="panel rule">
+              <h3>If parent pays card</h3>
+              <p>Show a disclosed processing recovery line before confirmation. Keep it at or below the Procare/Tuition Express benchmark once verified.</p>
+            </div>
+            <div class="panel rule">
+              <h3>If school absorbs fees</h3>
+              <p>Parent sees a cleaner experience, but the school bears card costs. Offer ACH autopay nudges and reporting to reduce card usage.</p>
+            </div>
+            <div class="panel rule">
+              <h3>If platform takes margin</h3>
+              <p>Use an approved platform/application fee only where the school has opted in. Track it separately from tuition and processor fees.</p>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel card">
+          <h3>What we still need before building production tuition payments</h3>
+          <ul>
+            <li>Actual Kid City / Procare Tuition Express merchant statement or fee schedule for ACH, credit, debit, returns, chargebacks, and funding speed.</li>
+            <li>Decision on whether each school or The BEE Suite is merchant of record for tuition. Recommendation: school is merchant/connected account.</li>
+            <li>Legal/compliance review for convenience fee, surcharge, debit card, state rules, parent authorization, ACH returns, refunds, and disclosures.</li>
+            <li>Final policy: ACH default, card optional, school absorbs vs parent pays vs mixed by school setting.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <div class="footer">
+      Pricing reference: Stripe public pricing as checked on June 8, 2026 lists domestic cards at 2.9% + 30c and ACH Direct Debit at 0.8% with a $5 cap. Stripe Billing pay-as-you-go is listed at 0.7% of Billing volume. Procare public docs describe Tuition Express funding/reporting and merchant statements, but do not publish a complete current fee schedule.
+    </div>
+  </main>
+</body>
+</html>

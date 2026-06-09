@@ -235,6 +235,7 @@ model User {
   isActive          Boolean  @default(true)
   mustResetPassword Boolean  @default(false)
   sessionVersion    Int      @default(0)
+  customFields      Json?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -1360,6 +1361,7 @@ model IntegrationDelivery {
   centerId          String?
   leadId            String?
   messageId         String?
+  dedupeKey         String?   @unique
   provider          String
   providerMessageId String?
   purpose           String

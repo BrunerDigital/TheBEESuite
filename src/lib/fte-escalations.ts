@@ -1,3 +1,5 @@
+import type { FteExternalEscalationWindow } from "@/lib/fte-report-guardrails";
+
 export type FteEscalationPhase = "open" | "due_soon" | "overdue";
 
 export type FteEscalationRecipient = {
@@ -14,8 +16,8 @@ export type FteEscalationPreference = {
   smsEnabled: boolean;
 };
 
-export function shouldSendExternalFteEscalation(phase: FteEscalationPhase) {
-  return phase === "due_soon" || phase === "overdue";
+export function shouldSendExternalFteEscalation(window: FteExternalEscalationWindow | null | undefined) {
+  return Boolean(window);
 }
 
 export function resolveFteEscalationChannels(
@@ -37,6 +39,7 @@ export function fteEscalationCopy(input: {
   weekLabel: string;
   phase: FteEscalationPhase;
   reminder: string;
+  escalationLabel?: string | null;
 }) {
   const urgency = input.phase === "overdue" ? "Overdue" : "Due soon";
   const subject = `FTE ${urgency}: ${input.centerName} (${input.weekLabel})`;
@@ -45,9 +48,10 @@ export function fteEscalationCopy(input: {
     "",
     `Missing FTE report: ${input.centerName}`,
     `Reporting week: ${input.weekLabel}`,
+    input.escalationLabel ? `Escalation checkpoint: ${input.escalationLabel}` : "",
     "",
     "Please submit the weekly FTE report in The BEE Suite so operations has the current enrollment count.",
-  ].join("\n");
+  ].filter((line, index, lines) => line || lines[index - 1]).join("\n");
   const sms = `${subject}. Submit the weekly FTE report in The BEE Suite.`;
 
   return { subject, body, sms };

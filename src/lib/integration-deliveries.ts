@@ -35,6 +35,7 @@ type RecordDeliveryAttemptInput = {
   tenantId: string;
   centerId?: string | null;
   leadId?: string | null;
+  dedupeKey?: string | null;
   provider: IntegrationDeliveryProvider;
   purpose: IntegrationDeliveryPurpose;
   payload: Record<string, unknown>;
@@ -46,6 +47,7 @@ type RecordCommunicationSmsDeliveryInput = {
   tenantId: string;
   centerId?: string | null;
   messageId?: string | null;
+  dedupeKey?: string | null;
   to: string;
   body: string;
   statusCallbackUrl?: string | null;
@@ -59,6 +61,7 @@ type RecordEmailDeliveryInput = {
   centerId?: string | null;
   leadId?: string | null;
   messageId?: string | null;
+  dedupeKey?: string | null;
   purpose: Extract<
     IntegrationDeliveryPurpose,
     | "communication_email"
@@ -118,6 +121,7 @@ export async function recordIntegrationDeliveryAttempt({
   tenantId,
   centerId,
   leadId,
+  dedupeKey,
   provider,
   purpose,
   payload,
@@ -136,6 +140,7 @@ export async function recordIntegrationDeliveryAttempt({
       tenantId,
       centerId,
       leadId,
+      dedupeKey: dedupeKey ?? null,
       provider,
       purpose,
       status: state.status,
@@ -154,6 +159,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
   tenantId,
   centerId,
   messageId,
+  dedupeKey,
   to,
   body,
   statusCallbackUrl,
@@ -176,6 +182,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
       tenantId,
       centerId,
       messageId: messageId ?? null,
+      dedupeKey: dedupeKey ?? null,
       provider: "twilio",
       providerMessageId: result.id ?? null,
       purpose,
@@ -189,6 +196,7 @@ export async function recordCommunicationSmsDeliveryAttempt({
         body,
         statusCallbackUrl: statusCallbackUrl ?? null,
         tenantId,
+        dedupeKey: dedupeKey ?? null,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,
       lastError: deliveryResult.error ?? null,
@@ -203,6 +211,7 @@ export async function recordEmailDeliveryAttempt({
   centerId,
   leadId,
   messageId,
+  dedupeKey,
   purpose,
   to,
   subject,
@@ -229,6 +238,7 @@ export async function recordEmailDeliveryAttempt({
       centerId,
       leadId,
       messageId: messageId ?? null,
+      dedupeKey: dedupeKey ?? null,
       provider: "sendgrid",
       providerMessageId: result.id ?? null,
       purpose,
@@ -247,6 +257,7 @@ export async function recordEmailDeliveryAttempt({
         leadId: leadId ?? null,
         messageId: messageId ?? null,
         tenantId,
+        dedupeKey: dedupeKey ?? null,
         ...metadata,
       } as Prisma.InputJsonObject,
       lastResult: deliveryResult as Prisma.InputJsonObject,

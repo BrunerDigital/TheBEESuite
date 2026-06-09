@@ -1,4 +1,17 @@
 const executiveFteRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"]);
+const fteReportingDeadlineDayOffset = 4;
+const fteReportingDeadlineHour = 12;
+const fteReportingDeadlineMinute = 0;
+const ftePreDeadlineEscalationHour = 8;
+const ftePostDeadlineEscalationHour = 13;
+const fteEscalationMinute = 0;
+
+export const FTE_REPORTING_DEADLINE_TIME_ZONE = "America/New_York";
+export const FTE_REPORTING_DEADLINE_LABEL = "Friday by 12:00 PM ET";
+export const FTE_PRE_DEADLINE_ESCALATION_LABEL = "Friday 8:00 AM ET";
+export const FTE_POST_DEADLINE_ESCALATION_LABEL = "Friday 1:00 PM ET";
+
+export type FteExternalEscalationWindow = "friday_8am" | "friday_1pm";
 
 export function isExecutiveFteManager(role?: string | null) {
   return Boolean(role && executiveFteRoles.has(role));
@@ -44,11 +57,90 @@ export function defaultFteWeekEnd(weekStart: Date) {
   return end;
 }
 
+function timeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = Number(values.hour === "24" ? "0" : values.hour);
+  const zonedAsUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    hour,
+    Number(values.minute),
+    Number(values.second),
+  );
+  return zonedAsUtc - date.getTime();
+}
+
+function utcDateForZonedTime(date: Date, input: { timeZone: string; hour: number; minute: number }) {
+  const utcGuess = new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+    input.hour,
+    input.minute,
+    0,
+    0,
+  ));
+  return new Date(utcGuess.getTime() - timeZoneOffsetMs(utcGuess, input.timeZone));
+}
+
 export function fteDueAtForWeek(weekStart: Date) {
-  const dueAt = new Date(weekStart);
-  dueAt.setUTCDate(dueAt.getUTCDate() + 4);
-  dueAt.setUTCHours(22, 0, 0, 0);
-  return dueAt;
+  const dueDate = new Date(weekStart);
+  dueDate.setUTCDate(dueDate.getUTCDate() + fteReportingDeadlineDayOffset);
+  return utcDateForZonedTime(dueDate, {
+    timeZone: FTE_REPORTING_DEADLINE_TIME_ZONE,
+    hour: fteReportingDeadlineHour,
+    minute: fteReportingDeadlineMinute,
+  });
+}
+
+function fteFridayEscalationAtForWeek(weekStart: Date, hour: number) {
+  const escalationDate = new Date(weekStart);
+  escalationDate.setUTCDate(escalationDate.getUTCDate() + fteReportingDeadlineDayOffset);
+  return utcDateForZonedTime(escalationDate, {
+    timeZone: FTE_REPORTING_DEADLINE_TIME_ZONE,
+    hour,
+    minute: fteEscalationMinute,
+  });
+}
+
+export function fteExternalEscalationWindow(now = new Date()) {
+  const weekStart = startOfFteWeek(now);
+  const dueAt = fteDueAtForWeek(weekStart);
+  const preDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePreDeadlineEscalationHour);
+  const postDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePostDeadlineEscalationHour);
+
+  if (now.getTime() >= preDeadlineAt.getTime() && now.getTime() < dueAt.getTime()) {
+    return {
+      key: "friday_8am" as const,
+      label: FTE_PRE_DEADLINE_ESCALATION_LABEL,
+      startsAt: preDeadlineAt,
+      weekStart,
+      deadlineAt: dueAt,
+    };
+  }
+
+  if (now.getTime() >= postDeadlineAt.getTime()) {
+    return {
+      key: "friday_1pm" as const,
+      label: FTE_POST_DEADLINE_ESCALATION_LABEL,
+      startsAt: postDeadlineAt,
+      weekStart,
+      deadlineAt: dueAt,
+    };
+  }
+
+  return null;
 }
 
 export function getFteDueState(now = new Date()) {
@@ -56,16 +148,23 @@ export function getFteDueState(now = new Date()) {
   const dueAt = fteDueAtForWeek(weekStart);
   const msUntilDue = dueAt.getTime() - now.getTime();
   const daysUntilDue = Math.ceil(msUntilDue / 86_400_000);
+  const dueDateKey = dateInputString(dueAt);
+  const todayKey = dateInputString(now);
+  const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+  const tomorrowKey = dateInputString(tomorrow);
+  const dueSoonLabel = dueDateKey === todayKey ? "Due today" : dueDateKey === tomorrowKey ? "Due tomorrow" : `Due in ${daysUntilDue} days`;
+  const reminder = `Current-week FTE reports are due ${FTE_REPORTING_DEADLINE_LABEL}.`;
 
   if (msUntilDue < 0) {
     return {
       weekStart,
       dueAt,
+      deadlineLabel: FTE_REPORTING_DEADLINE_LABEL,
       daysUntilDue,
       phase: "overdue" as const,
       priority: "high" as const,
       label: "Overdue",
-      reminder: "Current-week FTE reports are past the Friday due window.",
+      reminder: "Current-week FTE reports are past the Friday noon deadline.",
     };
   }
 
@@ -73,22 +172,24 @@ export function getFteDueState(now = new Date()) {
     return {
       weekStart,
       dueAt,
+      deadlineLabel: FTE_REPORTING_DEADLINE_LABEL,
       daysUntilDue,
       phase: "due_soon" as const,
       priority: "high" as const,
-      label: daysUntilDue <= 0 ? "Due today" : "Due tomorrow",
-      reminder: "Current-week FTE reports are due by Friday afternoon.",
+      label: dueSoonLabel,
+      reminder,
     };
   }
 
   return {
     weekStart,
     dueAt,
+    deadlineLabel: FTE_REPORTING_DEADLINE_LABEL,
     daysUntilDue,
     phase: "open" as const,
     priority: "normal" as const,
     label: `Due in ${daysUntilDue} days`,
-    reminder: "Current-week FTE reports are due by Friday afternoon.",
+    reminder,
   };
 }
 

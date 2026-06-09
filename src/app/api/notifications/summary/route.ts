@@ -125,7 +125,7 @@ export async function GET() {
     missingFteReports
       ? {
           title: `${missingFteReports.toLocaleString()} FTE reports ${fteDueState.phase === "overdue" ? "overdue" : "due"}`,
-          body: `${fteDueState.reminder} Deadline: ${fteDueState.dueAt.toISOString().slice(0, 10)}.`,
+          body: `${fteDueState.reminder} Deadline: ${fteDueState.dueAt.toISOString().slice(0, 10)} · ${fteDueState.deadlineLabel}.`,
           type: "fte",
           priority: fteDueState.priority,
           href: "/fte-reports",

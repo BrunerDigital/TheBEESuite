@@ -3586,6 +3586,7 @@ export type FteReportsPageData = {
     phase: "open" | "due_soon" | "overdue";
     priority: "normal" | "high";
     dueAt: string;
+    deadlineLabel: string;
     reminder: string;
   };
   trendWeeks: Array<{
@@ -3642,7 +3643,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
         <div className="mt-5 rounded-xl border bg-background/45 p-4">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-sm font-semibold">Weekly deadline: {formatUtcDate(data.dueState.dueAt)}</div>
+              <div className="text-sm font-semibold">Weekly deadline: {formatUtcDate(data.dueState.dueAt)} · {data.dueState.deadlineLabel}</div>
               <div className="text-sm text-muted-foreground">{data.dueState.reminder}</div>
             </div>
             <Badge variant={data.dueState.priority === "high" ? "destructive" : "outline"}>{data.dueState.label}</Badge>

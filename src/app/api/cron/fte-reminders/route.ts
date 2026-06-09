@@ -7,7 +7,7 @@ import {
   type FteEscalationPreference,
   type FteEscalationRecipient,
 } from "@/lib/fte-escalations";
-import { getFteDueState } from "@/lib/fte-report-guardrails";
+import { fteExternalEscalationWindow, getFteDueState } from "@/lib/fte-report-guardrails";
 import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms, uniqueEmails } from "@/lib/integrations";
 import { notificationDedupeKey, notificationExpiresAt } from "@/lib/notification-policy";
@@ -17,6 +17,13 @@ import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messa
 export const runtime = "nodejs";
 
 const directorRoles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR];
+
+type FteExternalEscalationTarget = {
+  centerId: string;
+  tenantId: string;
+  centerLabel: string;
+  userId: string;
+};
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -36,7 +43,9 @@ export async function GET(request: NextRequest) {
   }
 
   const dryRun = request.nextUrl.searchParams.get("dryRun") === "1";
-  const dueState = getFteDueState(new Date());
+  const now = new Date();
+  const dueState = getFteDueState(now);
+  const escalationWindow = fteExternalEscalationWindow(now);
   const missingCenters = await prisma.center.findMany({
     where: {
       status: { not: "closed" },
@@ -134,14 +143,10 @@ export async function GET(request: NextRequest) {
   }
 
   const notificationData: Prisma.NotificationCreateManyInput[] = [];
-  const externalMetaByDedupeKey = new Map<string, {
-    centerId: string;
-    tenantId: string;
-    centerLabel: string;
-    userId: string;
-  }>();
+  const externalEscalationTargets: FteExternalEscalationTarget[] = [];
   const localDedupeKeys = new Set<string>();
-  const expiresAt = notificationExpiresAt();
+  const localExternalTargetKeys = new Set<string>();
+  const expiresAt = notificationExpiresAt(now);
 
   for (const center of missingCenters) {
     const label = centerName(center);
@@ -166,12 +171,22 @@ export async function GET(request: NextRequest) {
         dedupeKey,
         expiresAt,
       });
-      externalMetaByDedupeKey.set(dedupeKey, {
-        centerId: center.id,
-        tenantId: center.organization.tenantId,
-        centerLabel: label,
+      const externalTargetKey = notificationDedupeKey([
+        "fte_external_target",
+        weekLabel,
+        escalationWindow?.key,
+        center.id,
         userId,
-      });
+      ]);
+      if (escalationWindow && externalTargetKey && !localExternalTargetKeys.has(externalTargetKey)) {
+        localExternalTargetKeys.add(externalTargetKey);
+        externalEscalationTargets.push({
+          centerId: center.id,
+          tenantId: center.organization.tenantId,
+          centerLabel: label,
+          userId,
+        });
+      }
     }
   }
 
@@ -196,84 +211,162 @@ export async function GET(request: NextRequest) {
   let notificationsCreated = 0;
   let emailsAttempted = 0;
   let emailsSent = 0;
+  let emailsSkipped = 0;
   let smsAttempted = 0;
   let smsSent = 0;
-  const shouldSendExternal = shouldSendExternalFteEscalation(dueState.phase);
+  let smsSkipped = 0;
+  const shouldSendExternal = shouldSendExternalFteEscalation(escalationWindow?.key);
+  const externalDeliveryKeys = new Set<string>();
+
+  if (shouldSendExternal && escalationWindow) {
+    for (const target of externalEscalationTargets) {
+      const recipient = allRecipientsById.get(target.userId);
+      if (!recipient) continue;
+      const channels = resolveFteEscalationChannels(recipient, notificationPreferences);
+
+      if (channels.email && uniqueEmails([recipient.email]).length) {
+        const emailKey = notificationDedupeKey([
+          "fte_external_email",
+          weekLabel,
+          escalationWindow.key,
+          target.centerId,
+          recipient.id,
+        ]);
+        if (emailKey) externalDeliveryKeys.add(emailKey);
+      }
+
+      if (channels.sms) {
+        for (const to of uniqueSmsRecipients([recipient.phone])) {
+          const smsKey = notificationDedupeKey([
+            "fte_external_sms",
+            weekLabel,
+            escalationWindow.key,
+            target.centerId,
+            recipient.id,
+            to,
+          ]);
+          if (smsKey) externalDeliveryKeys.add(smsKey);
+        }
+      }
+    }
+  }
+
+  const existingExternalDeliveries = externalDeliveryKeys.size
+    ? await prisma.integrationDelivery.findMany({
+        where: { dedupeKey: { in: Array.from(externalDeliveryKeys) } },
+        select: { dedupeKey: true },
+      })
+    : [];
+  const existingExternalDeliveryKeys = new Set(
+    existingExternalDeliveries
+      .map((delivery) => delivery.dedupeKey)
+      .filter((dedupeKey): dedupeKey is string => typeof dedupeKey === "string" && dedupeKey.length > 0),
+  );
 
   if (!dryRun && pendingNotificationData.length) {
     const created = await prisma.notification.createMany({ data: pendingNotificationData, skipDuplicates: true });
     notificationsCreated = created.count;
   }
 
-  if (!dryRun && shouldSendExternal && pendingNotificationData.length) {
+  if (!dryRun && shouldSendExternal && escalationWindow && externalEscalationTargets.length) {
     const statusCallbackUrl = twilioStatusCallbackUrl(request);
-    for (const notification of pendingNotificationData) {
-      if (typeof notification.dedupeKey !== "string") continue;
-      if (typeof notification.userId !== "string") continue;
-      const meta = externalMetaByDedupeKey.get(notification.dedupeKey);
-      const recipient = allRecipientsById.get(notification.userId);
-      if (!meta || !recipient) continue;
+    for (const target of externalEscalationTargets) {
+      const recipient = allRecipientsById.get(target.userId);
+      if (!recipient) continue;
 
       const channels = resolveFteEscalationChannels(recipient, notificationPreferences);
       const copy = fteEscalationCopy({
-        centerName: meta.centerLabel,
+        centerName: target.centerLabel,
         weekLabel,
         phase: dueState.phase,
         reminder: dueState.reminder,
+        escalationLabel: escalationWindow.label,
       });
 
       if (channels.email) {
         const to = uniqueEmails([recipient.email]);
         if (to.length) {
-          emailsAttempted += 1;
-          const email = await sendEmail({
-            to,
-            subject: copy.subject,
-            text: copy.body,
-            fromName: "The BEE Suite",
-            categories: ["fte_reminder_email"],
-            customArgs: {
+          const emailDedupeKey = notificationDedupeKey([
+            "fte_external_email",
+            weekLabel,
+            escalationWindow.key,
+            target.centerId,
+            recipient.id,
+          ]);
+          if (emailDedupeKey && existingExternalDeliveryKeys.has(emailDedupeKey)) {
+            emailsSkipped += 1;
+          } else {
+            emailsAttempted += 1;
+            const email = await sendEmail({
+              to,
+              subject: copy.subject,
+              text: copy.body,
+              fromName: "The BEE Suite",
+              categories: ["fte_reminder_email"],
+              customArgs: {
+                purpose: "fte_reminder_email",
+                centerId: target.centerId,
+                weekStart: weekLabel,
+                phase: dueState.phase,
+                escalationWindow: escalationWindow.key,
+                userId: recipient.id,
+                dedupeKey: emailDedupeKey ?? undefined,
+              },
+              tenantId: target.tenantId,
+            });
+            if (email.ok) emailsSent += 1;
+            await recordEmailDeliveryAttempt({
+              tenantId: target.tenantId,
+              centerId: target.centerId,
+              dedupeKey: emailDedupeKey,
               purpose: "fte_reminder_email",
-              centerId: meta.centerId,
-              weekStart: weekLabel,
-              phase: dueState.phase,
-              userId: recipient.id,
-            },
-            tenantId: meta.tenantId,
-          });
-          if (email.ok) emailsSent += 1;
-          await recordEmailDeliveryAttempt({
-            tenantId: meta.tenantId,
-            centerId: meta.centerId,
-            purpose: "fte_reminder_email",
-            to,
-            subject: copy.subject,
-            text: copy.body,
-            result: email,
-            metadata: {
-              weekStart: weekLabel,
-              phase: dueState.phase,
-              userId: recipient.id,
-            },
-          });
+              to,
+              subject: copy.subject,
+              text: copy.body,
+              result: email,
+              metadata: {
+                weekStart: weekLabel,
+                phase: dueState.phase,
+                escalationWindow: escalationWindow.key,
+                escalationLabel: escalationWindow.label,
+                userId: recipient.id,
+              },
+            });
+            if (emailDedupeKey) existingExternalDeliveryKeys.add(emailDedupeKey);
+          }
         }
       }
 
       if (channels.sms) {
         const smsRecipients = uniqueSmsRecipients([recipient.phone]);
         for (const to of smsRecipients) {
+          const smsDedupeKey = notificationDedupeKey([
+            "fte_external_sms",
+            weekLabel,
+            escalationWindow.key,
+            target.centerId,
+            recipient.id,
+            to,
+          ]);
+          if (smsDedupeKey && existingExternalDeliveryKeys.has(smsDedupeKey)) {
+            smsSkipped += 1;
+            continue;
+          }
+
           smsAttempted += 1;
-          const sms = await sendSms({ to, body: copy.sms, statusCallbackUrl, tenantId: meta.tenantId });
+          const sms = await sendSms({ to, body: copy.sms, statusCallbackUrl, tenantId: target.tenantId });
           if (sms.ok) smsSent += 1;
           await recordCommunicationSmsDeliveryAttempt({
-            tenantId: meta.tenantId,
-            centerId: meta.centerId,
+            tenantId: target.tenantId,
+            centerId: target.centerId,
+            dedupeKey: smsDedupeKey,
             to,
             body: copy.sms,
             statusCallbackUrl,
             result: sms,
             purpose: "fte_reminder_sms",
           });
+          if (smsDedupeKey) existingExternalDeliveryKeys.add(smsDedupeKey);
         }
       }
     }
@@ -290,9 +383,17 @@ export async function GET(request: NextRequest) {
     notificationsWouldCreate: dryRun ? pendingNotificationData.length : 0,
     notificationsSkipped: existingNotifications.length,
     externalEscalationEnabled: shouldSendExternal,
+    externalEscalationWindow: escalationWindow?.key ?? null,
+    externalEscalationLabel: escalationWindow?.label ?? null,
+    externalEscalationsWouldSend: dryRun
+      ? Math.max(0, externalDeliveryKeys.size - existingExternalDeliveries.length)
+      : 0,
+    externalEscalationsSkipped: dryRun ? existingExternalDeliveries.length : emailsSkipped + smsSkipped,
     emailsAttempted,
     emailsSent,
+    emailsSkipped,
     smsAttempted,
     smsSent,
+    smsSkipped,
   });
 }

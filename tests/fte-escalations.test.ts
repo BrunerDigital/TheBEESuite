@@ -6,10 +6,11 @@ import {
   shouldSendExternalFteEscalation,
 } from "../src/lib/fte-escalations";
 
-test("FTE external escalations wait until reports are due soon or overdue", () => {
-  assert.equal(shouldSendExternalFteEscalation("open"), false);
-  assert.equal(shouldSendExternalFteEscalation("due_soon"), true);
-  assert.equal(shouldSendExternalFteEscalation("overdue"), true);
+test("FTE external escalations only send during configured Friday checkpoints", () => {
+  assert.equal(shouldSendExternalFteEscalation(null), false);
+  assert.equal(shouldSendExternalFteEscalation(undefined), false);
+  assert.equal(shouldSendExternalFteEscalation("friday_8am"), true);
+  assert.equal(shouldSendExternalFteEscalation("friday_1pm"), true);
 });
 
 test("FTE escalation channel preferences prefer user settings over role defaults", () => {
@@ -30,10 +31,12 @@ test("FTE escalation copy includes school, week, and urgency", () => {
     weekLabel: "2026-06-01",
     phase: "overdue",
     reminder: "Current-week FTE reports are past the Friday due window.",
+    escalationLabel: "Friday 1:00 PM ET",
   });
 
   assert.match(copy.subject, /FTE Overdue/);
   assert.match(copy.body, /FL \| Sarasota/);
   assert.match(copy.body, /2026-06-01/);
+  assert.match(copy.body, /Friday 1:00 PM ET/);
   assert.match(copy.sms, /Submit the weekly FTE report/);
 });

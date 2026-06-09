@@ -4,6 +4,8 @@ import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
 import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
+import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
+import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { dashboardLensesForRole } from "@/lib/rbac";
@@ -28,17 +30,27 @@ export default async function DashboardPage() {
       licensedCapacity: true,
     },
   });
-  const tenantBrand = await prisma.tenant.findUnique({
-    where: { id: user.tenantId },
-    select: {
-      name: true,
-      slug: true,
-      brands: {
-        take: 1,
-        orderBy: { createdAt: "asc" },
-        select: { name: true, slug: true },
+  const [tenantBrand, dashboardPreferenceUser] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: {
+        name: true,
+        slug: true,
+        brands: {
+          take: 1,
+          orderBy: { createdAt: "asc" },
+          select: { name: true, slug: true },
+        },
       },
-    },
+    }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { customFields: true },
+    }),
+  ]);
+  const dashboardWidgetConfig = normalizeDashboardWidgetPreferences({
+    role: user.role,
+    value: getDashboardWidgetPreferenceValue(dashboardPreferenceUser?.customFields),
   });
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
@@ -296,15 +308,17 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
-  const dashboardNotifications = [
-    unreadMessages ? `${unreadMessages.toLocaleString()} parent messages need a response` : null,
-    expiringDocuments ? `${expiringDocuments.toLocaleString()} documents expire within 30 days` : null,
-    totalOpenSeats ? `${totalOpenSeats.toLocaleString()} open seats across visible centers` : null,
-    pendingIncidents ? `${pendingIncidents.toLocaleString()} incident reports need review` : null,
-    highIntentLeadCount ? `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` : null,
-    openTasks ? `${openTasks.toLocaleString()} CRM follow-up tasks are open` : null,
-    toursToday ? `${toursToday.toLocaleString()} tours are scheduled today` : null,
-  ].filter((item): item is string => Boolean(item));
+  type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
+  const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
+    unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
+    expiringDocuments ? { widgetId: "complianceQueue" as const, text: `${expiringDocuments.toLocaleString()} documents expire within 30 days` } : null,
+    totalOpenSeats ? { widgetId: "classroomCapacity" as const, text: `${totalOpenSeats.toLocaleString()} open seats across visible centers` } : null,
+    pendingIncidents ? { widgetId: "complianceQueue" as const, text: `${pendingIncidents.toLocaleString()} incident reports need review` } : null,
+    highIntentLeadCount ? { widgetId: "enrollmentPipeline" as const, text: `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` } : null,
+    openTasks ? { widgetId: "toursAndTasks" as const, text: `${openTasks.toLocaleString()} CRM follow-up tasks are open` } : null,
+    toursToday ? { widgetId: "toursAndTasks" as const, text: `${toursToday.toLocaleString()} tours are scheduled today` } : null,
+  ];
+  const dashboardNotifications = dashboardNotificationRows.filter((item): item is DashboardNotificationRow => Boolean(item));
   const aiHighlights = [
     `${highIntentLeadCount.toLocaleString()} high-fit leads`,
     `${expiringDocuments.toLocaleString()} expiring docs`,
@@ -399,6 +413,8 @@ export default async function DashboardPage() {
     asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
     showDemoFallbackData,
     visibleLenses: dashboardLensesForRole(user),
+    dashboardWidgets: dashboardWidgetConfig.widgets,
+    dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
     inquiryEmbed: inquiryEmbeds[0],
     inquiryEmbeds,

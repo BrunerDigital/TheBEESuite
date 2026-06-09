@@ -751,6 +751,7 @@ async function renderLivePage(
             phase: fteDueState.phase,
             priority: fteDueState.priority,
             dueAt: fteDueState.dueAt.toISOString(),
+            deadlineLabel: fteDueState.deadlineLabel,
             reminder: fteDueState.reminder,
           },
           trendWeeks: trend.trendWeeks,

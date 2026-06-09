@@ -22,12 +22,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
+import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
+const kpiWidgetIds: readonly DashboardWidgetId[] = [
+  "attendanceSnapshot",
+  "classroomCapacity",
+  "attendanceSnapshot",
+  "enrollmentPipeline",
+  "toursAndTasks",
+  "billingRevenue",
+  "staffingRatios",
+  "complianceQueue",
+];
 type DashboardLens = "platform" | "brand" | "regional" | "director" | "teacher" | "parent";
+type DashboardNotification = string | { text: string; widgetId?: DashboardWidgetId };
+
+function notificationText(item: DashboardNotification) {
+  return typeof item === "string" ? item : item.text;
+}
 
 export type LiveDashboardData = {
   kpis: typeof kpis;
@@ -38,11 +55,13 @@ export type LiveDashboardData = {
   aiHighlights?: string[];
   analytics?: typeof analytics;
   classroomSnapshots?: typeof classrooms;
-  notifications?: typeof notifications;
+  notifications?: DashboardNotification[];
   parentMessages?: typeof messages;
   asOfLabel?: string;
   showDemoFallbackData?: boolean;
   visibleLenses?: readonly DashboardLens[];
+  dashboardWidgets?: DashboardWidgetView[];
+  dashboardWidgetRoleLabel?: string;
   inquiryEmbed?: {
     title: string;
     description: string;
@@ -66,16 +85,39 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const defaultLens = visibleLenses.includes("director") ? "director" : visibleLenses[0] ?? "director";
   const secondaryLenses = visibleLenses.filter((lens) => lens !== "director");
   const showDemoFallbackData = Boolean(live?.showDemoFallbackData);
+  const configuredWidgets = live?.dashboardWidgets?.length ? live.dashboardWidgets : [];
+  const hasWidgetConfiguration = configuredWidgets.length > 0;
+  const visibleWidgetIdSet = new Set(configuredWidgets.filter((widget) => widget.visible).map((widget) => widget.id));
+  const widgetOrder = new Map(configuredWidgets.map((widget, index) => [widget.id, index]));
+  const isWidgetVisible = (widgetId: DashboardWidgetId) => !hasWidgetConfiguration || visibleWidgetIdSet.has(widgetId);
+  const isAnyWidgetVisible = (widgetIds: DashboardWidgetId[]) => widgetIds.some((widgetId) => isWidgetVisible(widgetId));
+  const dashboardKpiRows = dashboardKpis
+    .map((kpi, index) => ({
+      kpi,
+      index,
+      Icon: iconMap[index] ?? Baby,
+      widgetId: kpiWidgetIds[index] ?? "executiveRollup",
+    }))
+    .filter((row) => isWidgetVisible(row.widgetId))
+    .sort((left, right) => {
+      const leftOrder = widgetOrder.get(left.widgetId) ?? left.index + 100;
+      const rightOrder = widgetOrder.get(right.widgetId) ?? right.index + 100;
+      return leftOrder - rightOrder || left.index - right.index;
+    });
+  const visibleDashboardKpis = dashboardKpiRows.map((row) => row.kpi);
+  const topKpiRows = dashboardKpiRows.filter((row) => row.index < 4);
+  const lowerKpiRows = dashboardKpiRows.filter((row) => row.index >= 4);
   const dashboardAnalytics = live?.analytics?.length
     ? live.analytics
     : showDemoFallbackData
       ? analytics
       : [];
-  const actionQueue = live?.notifications?.length
+  const rawActionQueue = live?.notifications?.length
     ? live.notifications
     : showDemoFallbackData
       ? notifications
       : [];
+  const actionQueue = rawActionQueue.filter((item) => typeof item === "string" || !item.widgetId || isWidgetVisible(item.widgetId));
   const classroomSnapshots = live?.classroomSnapshots?.length
     ? live.classroomSnapshots
     : showDemoFallbackData
@@ -116,12 +158,38 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ? [live.inquiryEmbed]
       : [];
   const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
+  const kpiValue = (label: string, fallback = "0") => dashboardKpis.find((kpi) => kpi.label === label)?.value ?? fallback;
+  const kpiTrend = (label: string, fallback = "") => dashboardKpis.find((kpi) => kpi.label === label)?.trend ?? fallback;
+  const showAiBrief = isWidgetVisible("aiBrief");
+  const showEnrollment = isWidgetVisible("enrollmentPipeline");
+  const showClassroomCapacity = isWidgetVisible("classroomCapacity");
+  const showFamilyCommunication = isWidgetVisible("familyCommunication");
+  const showExecutiveRollup = isWidgetVisible("executiveRollup");
+  const visibleSnapshotPipeline = showEnrollment ? dashboardPipeline : [];
+  const visibleSnapshotLeads = isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? dashboardLeads : [];
+  const visibleSnapshotCenters = isAnyWidgetVisible(["executiveRollup", "attendanceSnapshot", "classroomCapacity", "staffingRatios"])
+    ? dashboardCenters
+    : [];
+  const visibleConfiguredWidgets = hasWidgetConfiguration ? configuredWidgets.filter((widget) => widget.visible) : [];
+  const widgetSummaries: Partial<Record<DashboardWidgetId, { value: string; detail: string; href: string }>> = {
+    aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Human review required", href: "/ai-command" },
+    executiveRollup: { value: `${dashboardCenters.length}`, detail: "Visible centers", href: "/multi-location-dashboard" },
+    enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Live enrollment pipeline"), href: "/crm-leads" },
+    toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tour and CRM tasks"), href: "/tours" },
+    attendanceSnapshot: { value: kpiValue("Active children"), detail: kpiTrend("Occupancy", "Attendance and occupancy"), href: "/attendance" },
+    classroomCapacity: { value: `${totalOpenSeats}`, detail: "Open seats by age group", href: "/center-dashboard" },
+    billingRevenue: { value: kpiValue("Outstanding balances"), detail: kpiTrend("Outstanding balances", "Billing snapshot"), href: "/billing-invoices" },
+    staffingRatios: { value: kpiValue("Teachers"), detail: kpiTrend("Teachers", "Teacher coverage"), href: "/staff" },
+    complianceQueue: { value: kpiValue("Incidents to review"), detail: kpiTrend("Incidents to review", "Review queue"), href: "/compliance" },
+    familyCommunication: { value: `${parentMessages.length}`, detail: "Recent family messages", href: "/messages" },
+    parentAccount: { value: "Portal", detail: "Family account view", href: "/parent-portal" },
+  };
 
   return (
     <div className="flex flex-col gap-6">
       <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
         <div className="hive-texture absolute inset-0 opacity-[0.08]" />
-        <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
+        <div className={showAiBrief ? "relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]" : "relative grid gap-6"}>
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -134,19 +202,19 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button>
+                {showAiBrief ? <Button>
                   <Sparkles data-icon="inline-start" />
                   Review AI brief
-                </Button>
-                <Button variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
+                </Button> : null}
+                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
                   <ArrowUpRight data-icon="inline-start" />
                   Open pipeline
-                </Button>
+                </Button> : null}
               </div>
             </div>
+            {topKpiRows.length ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {dashboardKpis.slice(0, 4).map((kpi, index) => {
-                const Icon = iconMap[index];
+              {topKpiRows.map(({ kpi, Icon }) => {
                 return (
                   <Card key={kpi.label} className="glass-panel">
                     <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -161,7 +229,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 );
               })}
             </div>
+            ) : null}
           </div>
+          {showAiBrief ? (
           <Card className="border-primary/30 bg-primary/10">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -185,20 +255,29 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               ) : null}
             </CardContent>
           </Card>
+          ) : null}
         </div>
       </section>
 
+      {configuredWidgets.length ? (
+        <DashboardWidgetConfigurator
+          key={configuredWidgets.map((widget) => `${widget.id}:${widget.visible}`).join("|")}
+          initialWidgets={configuredWidgets}
+          roleLabel={live?.dashboardWidgetRoleLabel ?? "Current role"}
+        />
+      ) : null}
+
       <DashboardSnapshotControls
-        kpis={dashboardKpis}
-        pipelineStages={dashboardPipeline}
-        centers={dashboardCenters}
-        leads={dashboardLeads}
+        kpis={visibleDashboardKpis}
+        pipelineStages={visibleSnapshotPipeline}
+        centers={visibleSnapshotCenters}
+        leads={visibleSnapshotLeads}
         visibleLenses={visibleLenses}
         defaultLens={defaultLens}
         aiSummary={aiSummary}
       />
 
-      {inquiryEmbeds.length ? (
+      {inquiryEmbeds.length && isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
         <div className="grid gap-4">
           {inquiryEmbeds.map((embed) => (
             <InquiryEmbedCard
@@ -223,9 +302,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0">
           <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
             <div className="grid gap-6">
+              {lowerKpiRows.length ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {dashboardKpis.slice(4).map((kpi, index) => {
-                  const Icon = iconMap[index + 4];
+                {lowerKpiRows.map(({ kpi, Icon }) => {
                   return (
                     <Card key={kpi.label} className="glass-panel">
                       <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
@@ -240,7 +319,10 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   );
                 })}
               </div>
+              ) : null}
+              {isAnyWidgetVisible(["enrollmentPipeline", "billingRevenue", "classroomCapacity", "staffingRatios"]) ? (
               <div className="grid gap-6 xl:grid-cols-2">
+                {isAnyWidgetVisible(["enrollmentPipeline", "billingRevenue"]) ? (
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Enrollment and revenue snapshot</CardTitle>
@@ -272,6 +354,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     )}
                   </CardContent>
                 </Card>
+                ) : null}
+                {isAnyWidgetVisible(["classroomCapacity", "staffingRatios"]) ? (
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Capacity by classroom</CardTitle>
@@ -299,8 +383,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     ) : null}
                   </CardContent>
                 </Card>
+                ) : null}
               </div>
+              ) : null}
+              {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
               <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                {showEnrollment ? (
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Pipeline foundation</CardTitle>
@@ -318,6 +406,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     ))}
                   </CardContent>
                 </Card>
+                ) : null}
+                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Lead scoring and tours</CardTitle>
@@ -348,9 +438,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     ) : null}
                   </CardContent>
                 </Card>
+                ) : null}
               </div>
+              ) : null}
             </div>
             <aside className="flex flex-col gap-6">
+              {isAnyWidgetVisible(["toursAndTasks", "complianceQueue", "familyCommunication", "classroomCapacity", "enrollmentPipeline"]) ? (
               <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle>Action queue</CardTitle>
@@ -358,11 +451,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {actionQueue.slice(0, 8).map((item, index) => (
-                    <div key={item} className="flex items-start gap-3 rounded-xl border bg-background/50 p-3">
+                    <div key={notificationText(item)} className="flex items-start gap-3 rounded-xl border bg-background/50 p-3">
                       <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
                         {index + 1}
                       </span>
-                      <p className="text-sm leading-5">{item}</p>
+                      <p className="text-sm leading-5">{notificationText(item)}</p>
                     </div>
                   ))}
                   {!actionQueue.length ? (
@@ -372,6 +465,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   ) : null}
                 </CardContent>
               </Card>
+              ) : null}
+              {showFamilyCommunication ? (
               <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle>Parent messages</CardTitle>
@@ -401,6 +496,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   ) : null}
                 </CardContent>
               </Card>
+              ) : null}
             </aside>
           </div>
         </TabsContent> : null}
@@ -409,12 +505,35 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <Card className="glass-panel">
               <CardHeader>
                 <CardTitle className="capitalize">{tab} dashboard lens</CardTitle>
-                <CardDescription>
-                  This v1 includes a role-aware dashboard pattern. Production auth will filter widgets and records by tenant, center, classroom, family, and permission scope.
-                </CardDescription>
+                <CardDescription>{live?.dashboardWidgetRoleLabel ?? "Role"} widgets from the current permission scope</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
-                {dashboardCenters.map((center) => (
+                {visibleConfiguredWidgets.map((widget) => {
+                  const summary = widgetSummaries[widget.id];
+                  return (
+                    <div key={widget.id} className="flex flex-col gap-3 rounded-xl border bg-background/50 p-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{widget.category}</Badge>
+                        <span className="text-sm font-medium">{widget.title}</span>
+                      </div>
+                      <p className="text-xs leading-5 text-muted-foreground">{widget.description}</p>
+                      {summary ? (
+                        <>
+                          <Separator />
+                          <div>
+                            <div className="text-2xl font-semibold">{summary.value}</div>
+                            <p className="text-xs text-muted-foreground">{summary.detail}</p>
+                          </div>
+                          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={summary.href} />}>
+                            <ArrowUpRight data-icon="inline-start" />
+                            Open
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {showExecutiveRollup ? dashboardCenters.map((center) => (
                   <div key={center.name} className="rounded-xl border bg-background/50 p-4">
                     <div className="font-medium">{center.name}</div>
                     <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>
@@ -425,14 +544,21 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       <div><b>{center.compliance}%</b><span className="block text-xs text-muted-foreground">Docs</span></div>
                     </div>
                   </div>
-                ))}
+                )) : null}
+                {!visibleConfiguredWidgets.length && (!showExecutiveRollup || !dashboardCenters.length) ? (
+                  <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                    No dashboard widgets are visible for this login yet.
+                  </p>
+                ) : null}
               </CardContent>
             </Card>
           </TabsContent>
         ))}
       </Tabs>
 
+      {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks", "classroomCapacity"]) ? (
       <section className="grid gap-6 lg:grid-cols-2">
+        {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Enrollment funnel</CardTitle>
@@ -459,6 +585,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             )}
           </CardContent>
         </Card>
+        ) : null}
+        {showClassroomCapacity ? (
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Open seats by age group</CardTitle>
@@ -492,7 +620,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             )}
           </CardContent>
         </Card>
+        ) : null}
       </section>
+      ) : null}
 
       <Alert className="border-amber-400/30 bg-amber-400/10">
         <AlertTriangle />

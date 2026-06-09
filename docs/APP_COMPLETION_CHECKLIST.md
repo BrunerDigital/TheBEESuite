@@ -94,7 +94,7 @@ Status legend:
 - [x] Executive-level Kid City USA views can show CRM/FTE/reporting data.
 - [x] Demo-login-only data exists for classroom and parent engagement sections.
 - [ ] Replace remaining demo-login classroom/parent fallbacks with real imported school data.
-- [ ] Add configurable dashboard widgets per role.
+- [x] Add configurable dashboard widgets per role.
 - [x] Add saved filters and date ranges.
 - [x] Add export/share actions for dashboard snapshots.
 
@@ -177,10 +177,10 @@ Status legend:
 - [x] Vercel cron route exists for persistent missing-FTE notifications.
 - [x] `CRON_SECRET` is configured in Vercel production.
 - [x] Google Sheet backup/snapshot structure exists.
-- [ ] Confirm the final reporting week cutoff/due time with Kid City USA operations.
+- [x] Confirm the final reporting week cutoff/due time with Kid City USA operations: Friday by 12:00 PM ET.
 - [x] Add full historical FTE trend filters by region/state/owner group.
 - [x] Add executive manual edit table for inline corrections.
-- [ ] Add email/SMS escalation for missing FTE reports if desired.
+- [x] Add email/SMS escalation for missing FTE reports at Friday 8:00 AM ET and Friday 1:00 PM ET.
 - [ ] Add final Google Sheet two-way reconciliation rules.
 
 ## ProCare Import And Cutover

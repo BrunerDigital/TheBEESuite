@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
+import { isDemoAccountEmail } from "@/lib/demo-accounts";
 import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE = "bee_suite_session";
@@ -76,19 +77,6 @@ const billingWriteRoles = new Set<UserRole>([
   UserRole.CENTER_DIRECTOR,
   UserRole.ASSISTANT_DIRECTOR,
   UserRole.BILLING_ADMIN,
-]);
-
-const executiveDemoRoles = new Set<UserRole>([
-  UserRole.PLATFORM_OWNER,
-  UserRole.BRAND_ADMIN,
-  UserRole.REGIONAL_MANAGER,
-]);
-
-const executiveDemoEmails = new Set([
-  "brenden@kidcityusa.com",
-  "marie@kidcityusa.com",
-  "audrey@kidcityusa.com",
-  "kayleen@kidcityusa.com",
 ]);
 
 type ActiveAccessGrant = {
@@ -415,8 +403,8 @@ export function canManageBilling(user: Pick<CurrentUser, "role">) {
   return billingWriteRoles.has(user.role);
 }
 
-export function canViewExecutiveDemoData(user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "email">>) {
-  return executiveDemoRoles.has(user.role) || executiveDemoEmails.has(user.email?.toLowerCase() ?? "");
+export function canViewDemoFallbackData(user: Partial<Pick<CurrentUser, "email" | "role">>) {
+  return isDemoAccountEmail(user.email);
 }
 
 export function isParentGuardian(user: Pick<CurrentUser, "role">) {

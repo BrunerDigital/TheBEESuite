@@ -75,7 +75,7 @@ Status legend:
 - [x] Corporate users can create/archive locations and manage users through UI foundations.
 - [x] Access grant replacement guardrails exist.
 - [x] Audit logs exist for sensitive actions.
-- [ ] Complete all executive CRUD flows with confirmation states, validation, and error recovery.
+- [x] Complete all executive CRUD flows with confirmation states, validation, and error recovery.
 - [ ] Add bulk user/location import for executive admins.
 - [x] Add password reset email trigger from executive admin, not just password set/reset foundations.
 - [ ] Add granular permission editor for roles beyond the current role/access-grant model.
@@ -85,14 +85,15 @@ Status legend:
 ## Dashboards
 
 - [x] Main dashboard page exists.
+- [x] Director school setup command center exists for full-feature launch configuration.
 - [x] Multi-location dashboard exists.
 - [x] Center dashboard exists.
 - [x] Classroom dashboard exists.
 - [x] Teacher portal/mobile view exists.
 - [x] Parent portal view exists.
 - [x] Executive-level Kid City USA views can show CRM/FTE/reporting data.
-- [x] Executive-only demo data exists for classroom and parent engagement sections.
-- [ ] Replace remaining executive demo classroom/parent data with real imported school data.
+- [x] Demo-login-only data exists for classroom and parent engagement sections.
+- [ ] Replace remaining demo-login classroom/parent fallbacks with real imported school data.
 - [ ] Add configurable dashboard widgets per role.
 - [x] Add saved filters and date ranges.
 - [x] Add export/share actions for dashboard snapshots.
@@ -141,11 +142,11 @@ Status legend:
 - [x] Guardian PIN management exists.
 - [x] Schema covers guardians, children, authorized pickups, emergency contacts, medical notes, allergies, documents, billing accounts, enrollments, and sibling relationships.
 - [x] Sensitive medical/custody/document fields are modeled separately.
-- [ ] Complete full edit forms for every family/child/guardian field.
-- [ ] Add custody visibility controls and staff-facing warnings throughout UI.
-- [ ] Add document upload/review/expiration workflow per family/child.
-- [ ] Add guardian self-service change request approval workflow.
-- [ ] Add family merge/deduplication.
+- [x] Complete full edit forms for family, guardian, child, pickup, emergency contact, allergy, medical note, and family/child document fields.
+- [x] Add custody visibility controls and staff-facing warnings across family, child, teacher, kiosk, and document review surfaces.
+- [x] Add document request/upload/review/expiration workflow per family/child with parent portal submission and director review actions.
+- [x] Add guardian self-service change request approval workflow with restricted request notes, director review, parent notification, and audit trail.
+- [x] Add family merge/deduplication with same-school duplicate scoring and guarded merge action.
 
 ## Enrollment, Waitlist, Tours, And Online Registration
 
@@ -156,12 +157,12 @@ Status legend:
 - [x] Online registration page and API exist.
 - [x] Enrollment/application schema exists.
 - [x] Forms and form submission schema exists.
-- [ ] Complete online registration packet using the final Kid City USA registration form fields.
-- [ ] Add parent-facing registration account creation/invite flow.
-- [ ] Add enrollment checklist per child/family.
-- [ ] Add document/signature collection for registration forms.
-- [ ] Add application approval/rejection workflow.
-- [ ] Add registration fee/deposit collection once payments are finalized.
+- [x] Complete online registration packet using the Kid City USA operational registration field map.
+- [x] Add parent-facing registration account creation/invite flow from approved registration applications.
+- [x] Add enrollment checklist per child/family after application approval.
+- [x] Add document/signature collection for registration forms through requested uploads and internal signature requests.
+- [x] Add application approval/rejection workflow with director notes, audit trail, CRM stage updates, and parent notification.
+- [x] Add registration fee/deposit collection once payments are finalized.
 
 ## FTE Reporting
 
@@ -210,7 +211,9 @@ Status legend:
 - [x] Kiosk guardrails exist for PIN security and attendance state.
 - [x] Complete lobby tablet UX with idle/reset mode and large touch targets.
 - [x] Add signature capture.
-- [ ] Add QR/PIN options.
+- [x] Add QR/PIN options.
+- [x] Add parent-facing kiosk PIN reset and QR card display.
+- [x] Add director QR card display for guardian kiosk credentials.
 - [x] Add late pickup flag workflow.
 - [x] Add staff kiosk mode.
 - [x] Add parent authorization warnings during pickup.
@@ -263,10 +266,10 @@ Status legend:
 - [x] Complete parent tuition payment UI in parent portal.
 - [x] Complete school payout onboarding UI for Stripe Connect.
 - [ ] Finalize surcharge/convenience fee disclosures and legal review.
-- [ ] Add real invoice generation/recurring tuition scheduler.
-- [ ] Add payment method management.
-- [ ] Add failed payment/retry workflow.
-- [ ] Add ledger reconciliation reports.
+- [x] Add real invoice generation/recurring tuition scheduler with assignment controls, daily cron route, and dashboard coverage metrics.
+- [x] Add payment method management with Stripe setup sessions, billing portal handoff, autopay status, and admin visibility.
+- [x] Add failed payment/retry workflow with Stripe failure capture, scheduled dunning, retry state, and billing follow-up visibility.
+- [x] Add ledger reconciliation reports comparing billing account balances to latest ledger balances.
 - [x] Add subsidy/agency payment tracking.
 
 ## Messaging, Communication, And AI Assistant
@@ -279,13 +282,13 @@ Status legend:
 - [x] Mr. Bee AI route exists.
 - [x] Message, announcement, campaign, AI summary, and AI suggestion schema exists.
 - [x] SendGrid and Twilio env/integration placeholders exist.
-- [ ] Complete two-way parent/director/teacher messaging UI.
+- [x] Complete two-way parent/director/teacher messaging UI.
 - [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
-- [ ] Add message templates and merge fields.
-- [ ] Add broadcast segmentation by classroom, center, status, and tag.
-- [ ] Add AI reply suggestions directly inside message composer.
-- [ ] Add human-review guardrails for sensitive AI outputs in UI.
+- [x] Add message templates and merge fields.
+- [x] Add broadcast segmentation by classroom, center, status, and tag.
+- [x] Add AI reply suggestions directly inside message composer.
+- [x] Add human-review guardrails for sensitive AI outputs in UI.
 
 ## Forms, Documents, And E-Signature
 
@@ -295,11 +298,11 @@ Status legend:
 - [x] Signature request mock integration API exists.
 - [x] Document/form/form submission schema exists.
 - [x] Build actual form builder UI.
-- [ ] Complete required document checklist per family/staff/child.
-- [ ] Add file upload UI tied to Supabase storage.
+- [x] Complete required document checklist per family/staff/child.
+- [x] Add file upload UI tied to Supabase storage for parent submissions and director/staff document records.
 - [x] Add expiration reminders and document review states.
 - [x] Integrate real e-signature provider or build internal signature capture.
-- [ ] Add export package for licensing/records requests.
+- [x] Add export package for licensing/records requests.
 
 ## Compliance And Incident Reporting
 
@@ -309,12 +312,12 @@ Status legend:
 - [x] Parent incident acknowledgement API exists.
 - [x] Staff certification, background check placeholder, medical/allergy, document, and incident schema exists.
 - [x] Language avoids guaranteed legal/licensing compliance.
-- [ ] Add state-specific licensing configuration.
-- [ ] Add emergency drill logs UI.
-- [ ] Add medication log workflow.
-- [ ] Add compliance report export.
-- [ ] Add incident admin review workflow with parent acknowledgement status.
-- [ ] Add compliance task assignment/reminders.
+- [x] Add state-specific licensing configuration.
+- [x] Add emergency drill logs UI.
+- [x] Add medication log workflow.
+- [x] Add compliance report export.
+- [x] Add incident admin review workflow with parent acknowledgement status.
+- [x] Add compliance task assignment/reminders.
 
 ## Staff, Teachers, Scheduling, And Ratios
 
@@ -325,11 +328,12 @@ Status legend:
 - [x] Dedicated director UI exists for adding/editing teacher profiles and certifications.
 - [x] Complete staff CRUD UI with safe teacher deactivation instead of destructive deletion.
 - [x] New teacher profile saves return generated Bee Suite username and temporary password for handoff.
-- [ ] Add teacher onboarding forms/documents.
+- [x] Add staff onboarding checklist/request workflow for teacher documents, background checks, training, and certifications.
+- [x] Load school-specific teacher onboarding forms/documents and final requirement labels from each school's staff credential rules.
 - [x] Add background check tracking UI.
-- [ ] Add staff time clock.
+- [x] Add staff time clock.
 - [x] Add PTO/unavailability.
-- [ ] Add ratio engine by age group/state rules.
+- [x] Add ratio engine by age group/state rules.
 - [x] Add staff schedule/calendar views.
 
 ## Calendar And Scheduling
@@ -338,10 +342,10 @@ Status legend:
 - [x] Tours, child schedules, billing due dates, compliance reminders, birthdays, and staff schedules are represented in schema/module definitions.
 - [x] Google Calendar mock integration is represented in integrations/readiness.
 - [x] Build full calendar UI with filters by center/classroom/user.
-- [ ] Add Google Calendar real sync.
-- [ ] Add recurring events/closures/holiday management.
+- [x] Add Google Calendar real sync.
+- [x] Add recurring events/closures/holiday management.
 - [x] Add staff schedule publishing.
-- [ ] Add parent event visibility controls.
+- [x] Add parent event visibility controls.
 
 ## Marketing, Campaigns, Reputation, And Reviews
 
@@ -350,12 +354,12 @@ Status legend:
 - [x] Reputation/reviews page exists.
 - [x] Campaign, automation, automation run, review, and survey schema exists.
 - [x] Google Business Profile mock integration exists in structure.
-- [ ] Build campaign editor and template library.
-- [ ] Add automation workflow builder UI beyond foundation.
-- [ ] Add campaign send scheduling and reporting.
-- [ ] Add review request workflows.
-- [ ] Add survey/NPS collection.
-- [ ] Add AI review response generator in UI.
+- [x] Build campaign editor and template library.
+- [x] Add automation workflow builder UI beyond foundation.
+- [x] Add campaign send scheduling and reporting.
+- [x] Add review request workflows.
+- [x] Add survey/NPS collection.
+- [x] Add AI review response generator in UI.
 
 ## Reporting And Analytics
 
@@ -363,12 +367,12 @@ Status legend:
 - [x] Executive dashboard reports CRM, FTE, occupancy/revenue readiness, and operational snapshots.
 - [x] FTE-specific trend and snapshot visuals exist.
 - [x] Readiness API exists.
-- [ ] Add full report builder with filters/date ranges.
-- [ ] Add lead source and funnel conversion dashboards.
-- [ ] Add attendance/absence trend reporting.
-- [ ] Add billing/revenue/AR reporting.
-- [ ] Add parent response time and message analytics.
-- [ ] Add export to CSV/PDF for key reports.
+- [x] Add full report builder with filters/date ranges.
+- [x] Add lead source and funnel conversion dashboards.
+- [x] Add attendance/absence trend reporting.
+- [x] Add billing/revenue/AR reporting.
+- [x] Add parent response time and message analytics.
+- [x] Add export to CSV/PDF for key reports.
 
 ## Notifications
 
@@ -396,7 +400,7 @@ Status legend:
 - [x] Complete real setup UI for each integration.
 - [x] Add integration health checks and last-sync logs.
 - [x] Add retry queues for failed outbound integrations.
-- [ ] Add tenant-specific integration credentials instead of only platform env vars.
+- [x] Add tenant-specific integration credentials instead of only platform env vars.
 
 ## Database, Security, Privacy, And Audit
 
@@ -453,6 +457,7 @@ Status legend:
 - [x] `/login`.
 - [x] `/reset-password`.
 - [x] `/onboarding`.
+- [x] `/school-setup`.
 - [x] `/dashboard`.
 - [x] `/multi-location-dashboard`.
 - [x] `/center-dashboard`.
@@ -495,7 +500,7 @@ Status legend:
 - [x] `/check-in`.
 - [x] `/check-in/[centerId]`.
 - [x] `/registration`.
-- [ ] Replace module-placeholder behavior with full CRUD workflows on every lower-priority operations page.
+- [x] Replace module-placeholder behavior with full CRUD workflows on every lower-priority operations page.
 
 ## API Route Checklist
 
@@ -517,7 +522,7 @@ Status legend:
 - [x] Notifications: summary and read mutation.
 - [x] Onboarding.
 - [x] Operations records.
-- [x] Parent: contact requests, incident acknowledgement, media review, invitations, preferences, and document submission.
+- [x] Parent: contact requests, incident acknowledgement, media review, invitations, preferences, kiosk credentials, and document submission.
 - [x] Public Kid City locations.
 - [x] Registration.
 - [x] Teacher: attendance, daily reports, incidents, media.
@@ -528,11 +533,11 @@ Status legend:
 ## Highest Priority Remaining Work
 
 - [ ] Complete full ProCare import validation with real exports from active Kid City USA locations.
-- [ ] Replace remaining executive-only demo data with real imported classroom/family/teacher data.
+- [ ] Replace remaining demo-login fallbacks with real imported classroom/family/teacher data.
 - [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
 - [ ] Finish teacher classroom tablet workflows for daily logging.
 - [x] Complete kiosk production UX with authorization/signature/late pickup workflows.
-- [ ] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
+- [x] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
 - [x] Complete inquiry embed self-service generator for every tenant/location.
 - [x] Add automated Playwright smoke tests and CI gate.
 - [x] Add formal production runbook for live school support.

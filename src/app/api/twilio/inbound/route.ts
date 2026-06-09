@@ -8,7 +8,7 @@ import {
   phoneMatchKey,
   twilioWebhookUrl,
   twimlResponse,
-  validateTwilioSignature,
+  validateTwilioSignatureAgainstConfiguredTokens,
 } from "@/lib/twilio-messaging";
 
 export const runtime = "nodejs";
@@ -20,13 +20,12 @@ function clean(value: unknown) {
 export async function POST(request: NextRequest) {
   const form = await request.formData();
   const params = formDataToRecord(form);
-  const isValid = validateTwilioSignature({
-    authToken: process.env.TWILIO_AUTH_TOKEN,
+  const signatureMatch = await validateTwilioSignatureAgainstConfiguredTokens({
     signature: request.headers.get("x-twilio-signature"),
     url: twilioWebhookUrl(request),
     params,
   });
-  if (!isValid) {
+  if (!signatureMatch.matched) {
     return NextResponse.json({ ok: false, error: "Invalid Twilio signature." }, { status: 403 });
   }
 

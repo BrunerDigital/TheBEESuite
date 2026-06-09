@@ -3,6 +3,7 @@ import {
   hasGoogleSheetsApiConfig,
   type GoogleSheetValue,
 } from "@/lib/google-sheets";
+import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import { sendEmail } from "@/lib/integrations";
 
 export type InquiryIntegrationResult = {
@@ -71,16 +72,21 @@ function sheetValue(value: unknown): GoogleSheetValue {
 export async function forwardInquiryToGoogleSheets(
   payload: Record<string, unknown>,
 ): Promise<InquiryIntegrationResult> {
-  if (hasGoogleSheetsApiConfig()) {
+  const tenantId = String(payload.tenantId || "").trim() || null;
+  const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "google_sheets");
+
+  if (hasGoogleSheetsApiConfig({ credentials: tenantCredentials })) {
     return appendRowToGoogleSheet({
       headers: GOOGLE_SHEET_COLUMNS.map((column) => column.header),
       row: GOOGLE_SHEET_COLUMNS.map((column) =>
         sheetValue(payload[column.field]),
       ),
+      tenantId,
+      credentials: tenantCredentials,
     });
   }
 
-  const url = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
+  const url = credentialEnvValue(tenantCredentials, "GOOGLE_SHEETS_WEBHOOK_URL");
   if (!url) return { ok: true, skipped: true };
 
   try {

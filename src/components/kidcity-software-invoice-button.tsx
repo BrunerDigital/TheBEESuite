@@ -42,7 +42,7 @@ export function KidCitySoftwareInvoiceButton({ disabled }: Props) {
         return;
       }
       setInvoiceUrl(json.stripe?.url || "");
-      setStatusMessage(`Stripe invoice ${json.stripe?.id || ""} was created and sent.`.trim());
+      setStatusMessage(json.stripe?.id ? `Hosted invoice ${json.stripe.id} was created and sent.` : "Hosted invoice was created and sent.");
     });
   }
 
@@ -58,7 +58,7 @@ export function KidCitySoftwareInvoiceButton({ disabled }: Props) {
               <>
                 {" "}
                 <a className="font-medium underline underline-offset-4" href={invoiceUrl} target="_blank" rel="noreferrer">
-                  Open Stripe invoice
+                  Open hosted invoice
                 </a>
               </>
             ) : null}
@@ -74,7 +74,7 @@ export function KidCitySoftwareInvoiceButton({ disabled }: Props) {
       ) : null}
       <Button disabled={disabled || isPending} onClick={sendInvoice} className="w-full">
         {isPending ? <FileText data-icon="inline-start" /> : <Send data-icon="inline-start" />}
-        {isPending ? "Preparing Stripe invoice..." : "View / Pay Monthly Invoice"}
+        {isPending ? "Preparing hosted invoice..." : "View / Pay Monthly Invoice"}
       </Button>
     </div>
   );

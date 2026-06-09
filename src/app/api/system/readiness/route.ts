@@ -126,7 +126,7 @@ export async function GET() {
       "Inquiry, onboarding, and reviewed lead emails can be sent by server routes.",
     ),
     check(
-      "Stripe Connect",
+      "Payout processing",
       hasStripeBillingConfig(process.env) ? "ready" : "warning",
       "Parent checkout stays blocked until platform keys, webhook secret, and school connected payout accounts are ready.",
     ),

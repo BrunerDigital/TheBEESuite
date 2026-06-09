@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
 
   const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
   const refreshUrl = `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`;
-  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl });
+  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl, tenantId: user.tenantId });
 
   if (!link.ok || !link.url) {
     await prisma.center.update({
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         customFields: {
           ...jsonObject(center.customFields),
           stripePayoutStatus: "refresh_failed",
-          stripeConnectLastError: link.error || "Stripe account link refresh failed.",
+          stripeConnectLastError: link.error || "Payout account link refresh failed.",
           stripeConnectLastSyncedAt: new Date().toISOString(),
         },
       },

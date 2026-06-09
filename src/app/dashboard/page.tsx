@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import { UserRole } from "@prisma/client";
+import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
-import { canAccessAllCenters, canManageCrmLeads, canViewExecutiveDemoData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +42,7 @@ export default async function DashboardPage() {
   });
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
-  const showExecutiveDemoData = canViewExecutiveDemoData(user);
+  const showDemoFallbackData = canViewDemoFallbackData(user);
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
@@ -57,6 +57,7 @@ export default async function DashboardPage() {
   endOfDay.setHours(23, 59, 59, 999);
   const thirtyDays = new Date(today);
   thirtyDays.setDate(today.getDate() + 30);
+  const trendStart = new Date(today.getFullYear(), today.getMonth() - 5, 1);
 
   const [
     activeChildren,
@@ -73,6 +74,9 @@ export default async function DashboardPage() {
     classroomSnapshotRows,
     parentMessageRows,
     recentDashboardLeads,
+    trendLeadRows,
+    trendTourRows,
+    trendInvoiceRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -216,11 +220,96 @@ export default async function DashboardPage() {
         tags: { select: { name: true } },
       },
     }),
+    prisma.lead.findMany({
+      where: {
+        ...leadWhere,
+        createdAt: { gte: trendStart },
+      },
+      select: {
+        createdAt: true,
+        stage: true,
+      },
+    }),
+    prisma.tour.findMany({
+      where: {
+        centerId: scopedCenterFilter,
+        startsAt: {
+          gte: trendStart,
+          lte: endOfDay,
+        },
+      },
+      select: {
+        startsAt: true,
+      },
+    }),
+    prisma.invoice.findMany({
+      where: {
+        createdAt: { gte: trendStart },
+        billingAccount: {
+          family: {
+            centerId: scopedCenterFilter,
+          },
+        },
+      },
+      select: {
+        createdAt: true,
+        totalCents: true,
+      },
+    }),
   ]);
 
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
   const revenueDollars = Math.round((revenue._sum.totalCents ?? 0) / 100);
+  const totalOpenSeats = Math.max(capacity - activeChildren, 0);
+  const monthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
+  const trendBuckets = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - (5 - index), 1);
+    return {
+      key: monthKey(date),
+      month: date.toLocaleDateString("en-US", { month: "short" }),
+      leads: 0,
+      tours: 0,
+      enrolled: 0,
+      revenue: 0,
+    };
+  });
+  const trendBucketByKey = new Map(trendBuckets.map((bucket) => [bucket.key, bucket]));
+  trendLeadRows.forEach((lead) => {
+    const bucket = trendBucketByKey.get(monthKey(lead.createdAt));
+    if (!bucket) return;
+    bucket.leads += 1;
+    if (lead.stage === EnrollmentStage.ENROLLED) bucket.enrolled += 1;
+  });
+  trendTourRows.forEach((tour) => {
+    const bucket = trendBucketByKey.get(monthKey(tour.startsAt));
+    if (bucket) bucket.tours += 1;
+  });
+  trendInvoiceRows.forEach((invoice) => {
+    const bucket = trendBucketByKey.get(monthKey(invoice.createdAt));
+    if (bucket) bucket.revenue += Math.round(invoice.totalCents / 100);
+  });
+  const dashboardAnalytics = trendBuckets.map((bucket) => ({
+    month: bucket.month,
+    leads: bucket.leads,
+    tours: bucket.tours,
+    enrolled: bucket.enrolled,
+    revenue: bucket.revenue,
+  }));
+  const dashboardNotifications = [
+    unreadMessages ? `${unreadMessages.toLocaleString()} parent messages need a response` : null,
+    expiringDocuments ? `${expiringDocuments.toLocaleString()} documents expire within 30 days` : null,
+    totalOpenSeats ? `${totalOpenSeats.toLocaleString()} open seats across visible centers` : null,
+    pendingIncidents ? `${pendingIncidents.toLocaleString()} incident reports need review` : null,
+    highIntentLeadCount ? `${highIntentLeadCount.toLocaleString()} high-fit leads should be prioritized` : null,
+    openTasks ? `${openTasks.toLocaleString()} CRM follow-up tasks are open` : null,
+    toursToday ? `${toursToday.toLocaleString()} tours are scheduled today` : null,
+  ].filter((item): item is string => Boolean(item));
+  const aiHighlights = [
+    `${highIntentLeadCount.toLocaleString()} high-fit leads`,
+    `${expiringDocuments.toLocaleString()} expiring docs`,
+    `${totalOpenSeats.toLocaleString()} open seats`,
+  ];
   const centerEmbedCards = centers.map((center) => {
     const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
@@ -251,7 +340,7 @@ export default async function DashboardPage() {
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
-      { label: "Enrollment capacity", value: capacity.toLocaleString(), trend: `${Math.max(capacity - activeChildren, 0)} open seats`, tone: "sky" },
+      { label: "Enrollment capacity", value: capacity.toLocaleString(), trend: `${totalOpenSeats.toLocaleString()} open seats`, tone: "sky" },
       { label: "Occupancy", value: `${occupancy}%`, trend: "Live from center capacity", tone: "amber" },
       { label: "New leads", value: newLeadCount.toLocaleString(), trend: `${highIntentLeadCount.toLocaleString()} high-fit`, tone: "violet" },
       { label: "Tours today", value: toursToday.toLocaleString(), trend: `${openTasks.toLocaleString()} open CRM tasks`, tone: "sky" },
@@ -304,7 +393,11 @@ export default async function DashboardPage() {
       preview: message.body,
       sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
     })),
-    showExecutiveDemoData,
+    aiHighlights,
+    analytics: dashboardAnalytics,
+    notifications: dashboardNotifications,
+    asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
+    showDemoFallbackData,
     visibleLenses: dashboardLensesForRole(user),
     aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
     inquiryEmbed: inquiryEmbeds[0],

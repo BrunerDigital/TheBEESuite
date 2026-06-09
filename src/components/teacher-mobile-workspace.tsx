@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, LogIn, LogOut, Moon, Palette, Plus, ShieldAlert, Trash2, UserX, Utensils } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, ShieldAlert, Trash2, UserX, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,17 @@ type ChildOption = {
 type Props = {
   roster: ChildOption[];
   teacherName: string;
+  kioskAccess?: TeacherKioskAccess | null;
   classroomRatios?: ClassroomRatioSnapshot[];
+};
+
+type TeacherKioskAccess = {
+  centerId: string;
+  centerName: string;
+  kioskPath: string;
+  hasStaffKioskCode: boolean;
+  clockStatus: "clocked_in" | "clocked_out";
+  lastActionAt: string | null;
 };
 
 type ClassroomRatioSnapshot = {
@@ -139,7 +149,7 @@ function createActivityDraft(): ActivityDraft {
   return { id: draftId("activity"), title: "", notes: "" };
 }
 
-export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = [] }: Props) {
+export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null, classroomRatios = [] }: Props) {
   const firstChild = roster[0]?.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
   const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
@@ -546,6 +556,43 @@ export function TeacherMobileWorkspace({ roster, teacherName, classroomRatios = 
           ) : null}
         </AlertDescription>
       </Alert>
+
+      {kioskAccess ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <QrCode className="text-primary" />
+                  Lobby Kiosk
+                </CardTitle>
+                <CardDescription>{kioskAccess.centerName}</CardDescription>
+              </div>
+              <Badge variant={kioskAccess.hasStaffKioskCode ? "default" : "destructive"}>
+                {kioskAccess.hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Badge variant={kioskAccess.clockStatus === "clocked_in" ? "default" : "outline"}>
+                {kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"}
+              </Badge>
+              {kioskAccess.lastActionAt ? (
+                <Badge variant="secondary">Last action {formatTime(kioskAccess.lastActionAt)}</Badge>
+              ) : null}
+              <Badge variant="outline">
+                <KeyRound data-icon="inline-start" />
+                Staff PIN
+              </Badge>
+            </div>
+            <Button type="button" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
+              <ExternalLink data-icon="inline-start" />
+              Open Kiosk
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="glass-panel">
         <CardHeader>

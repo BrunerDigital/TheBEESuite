@@ -7,6 +7,8 @@ import {
   createStripeCheckoutSession,
   getStripeCheckoutAmounts,
   getStripePaymentMethodConfigurationId,
+  getStripeSecretKey,
+  getStripeWebhookSecret,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
@@ -15,6 +17,7 @@ import {
 import { PAYMENT_PROCESSING_RECOVERY_DISCLOSURE } from "@/lib/payment-disclosures";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
+import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
 export const runtime = "nodejs";
 
@@ -109,6 +112,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });
   }
 
+  const stripeSecretConfigured = Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));
+  const stripeWebhookConfigured = Boolean(await getStripeWebhookSecret({ tenantId: user.tenantId }));
+
+  if (!stripeSecretConfigured) {
+    return NextResponse.json(
+      { ok: false, configured: false, error: "Payment processor keys are missing for this tenant, so parent checkout is disabled." },
+      { status: 503 },
+    );
+  }
+  if (process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT !== "false" && !stripeWebhookConfigured) {
+    return NextResponse.json(
+      { ok: false, configured: false, error: "Payment processor webhook signing secret is missing for this tenant, so payment reconciliation is disabled." },
+      { status: 503 },
+    );
+  }
+
   const center = centerId
     ? await prisma.center.findUnique({
         where: { id: centerId },
@@ -132,36 +151,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: "This school needs a Stripe payout account before parent payments can be accepted.",
+        error: "This school needs a payout account before parent payments can be accepted.",
       },
       { status: 400 },
     );
   }
 
   if (connectedAccountId && process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false") {
-    const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId);
+    const accountStatus = await retrieveStripeConnectedAccount(connectedAccountId, { tenantId: user.tenantId });
     if (!accountStatus.ok || !accountStatus.account) {
       return NextResponse.json(
         {
           ok: false,
           configured: accountStatus.configured,
-          error: accountStatus.error || "Stripe payout status could not be confirmed.",
+          error: accountStatus.error || "Payout status could not be confirmed.",
         },
         { status: accountStatus.configured ? 502 : 503 },
       );
     }
 
-    if (!accountStatus.account.payoutsEnabled) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "This school's payout account is not ready yet. Finish Stripe onboarding before accepting parent payments.",
-          requirements: accountStatus.account.requirementFields,
-        },
-        { status: 400 },
-      );
-    }
-
+    const readiness = stripeConnectReadinessFromSnapshot(accountStatus.account);
     await prisma.center.update({
       where: { id: centerId! },
       data: {
@@ -169,18 +178,24 @@ export async function POST(request: NextRequest) {
           ...(center?.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
             ? center.customFields
             : {}),
-          stripeConnectAccountId: connectedAccountId,
-          stripeChargesEnabled: accountStatus.account.chargesEnabled,
-          stripePayoutsEnabled: accountStatus.account.payoutsEnabled,
-          stripeDetailsSubmitted: accountStatus.account.detailsSubmitted,
+          ...stripeConnectCustomFieldPatch(readiness),
           stripeMerchantCapabilityStatus: accountStatus.account.merchantCapabilityStatus || null,
           stripeRecipientTransferStatus: accountStatus.account.recipientTransferStatus || null,
-          stripePayoutRequirementFields: accountStatus.account.requirementFields,
-          stripePayoutStatus: accountStatus.account.payoutsEnabled ? "ready" : "requirements_due",
-          stripeConnectLastSyncedAt: new Date().toISOString(),
         },
       },
     });
+
+    if (!readiness.canAcceptParentPayments) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: readiness.blockingReason || "This school's payout account is not ready yet. Finish payout onboarding before accepting parent payments.",
+          status: readiness.status,
+          requirements: readiness.requirementFields,
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
@@ -191,7 +206,7 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         error:
-          "This payment method is not configured yet. Add the matching Stripe payment method configuration before enabling method-specific processing fees.",
+          "This payment method is not configured yet. Add the matching payment method configuration before enabling method-specific processing fees.",
       },
       { status: 400 },
     );
@@ -255,9 +270,10 @@ export async function POST(request: NextRequest) {
     invoiceNumber: invoice.number,
     centerName: center?.name,
     customerEmail: invoice.billingAccount.family.billingEmail,
-    successUrl: `${baseUrl}/parent-portal?payment=success&invoice=${invoice.id}`,
+    successUrl: `${baseUrl}/parent-portal?payment=success&invoice=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${baseUrl}/parent-portal?payment=cancelled&invoice=${invoice.id}`,
     metadata: {
+      tenantId: user.tenantId,
       invoiceId: invoice.id,
       paymentId: payment.id,
       familyId: invoice.billingAccount.familyId,
@@ -280,6 +296,8 @@ export async function POST(request: NextRequest) {
     applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     paymentMethodConfigurationId,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
+    idempotencyKey: `checkout:${payment.id}`,
+    tenantId: user.tenantId,
   });
 
   if (!session.ok || !session.url) {

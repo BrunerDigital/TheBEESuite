@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
     const customer = await createStripeCustomer({
       email: snapshot.billingEmail || "accounting@kidcityusa.com",
       name: "Kid City USA Enterprises",
+      tenantId: user.tenantId,
       metadata: {
+        tenantId: user.tenantId,
         customerType: "kidcity_enterprises_monthly_software",
         createdBy: user.email,
       },
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
     if (!customer.ok || !customer.id) {
       return NextResponse.json({
         ok: false,
-        error: customer.error || "Stripe customer could not be created for Kid City USA Enterprises.",
+        error: customer.error || "Payment profile could not be created for Kid City USA Enterprises.",
         invoice: snapshot,
       }, { status: customer.configured ? 502 : 400 });
     }
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
     snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
   }
   if (!snapshot.stripeCustomerId) {
-    return NextResponse.json({ ok: false, error: "Stripe customer setup did not complete.", invoice: snapshot }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "Payment profile setup did not complete.", invoice: snapshot }, { status: 502 });
   }
 
   const stripeInvoice = await createStripeInvoice({
@@ -79,7 +81,9 @@ export async function POST(request: NextRequest) {
     invoiceNumber: snapshot.invoiceNumber,
     daysUntilDue: snapshot.daysUntilDue,
     sendInvoice: true,
+    tenantId: user.tenantId,
     metadata: {
+      tenantId: user.tenantId,
       invoiceType: "kidcity_monthly_software_fee",
       tenant: "kid-city-usa",
       period: snapshot.period,
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
 
   await writeAuditLog(user, {
     action: stripeInvoice.ok ? "billing.kidcity_software_invoice.sent" : "billing.kidcity_software_invoice.failed",
-    resource: "StripeInvoice",
+    resource: "HostedInvoice",
     resourceId: stripeInvoice.id || snapshot.invoiceNumber,
     metadata: {
       invoiceNumber: snapshot.invoiceNumber,
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (!stripeInvoice.ok) {
-    return NextResponse.json({ ok: false, error: stripeInvoice.error || "Stripe invoice could not be created.", invoice: snapshot }, { status: stripeInvoice.configured ? 502 : 400 });
+    return NextResponse.json({ ok: false, error: stripeInvoice.error || "Hosted invoice could not be created.", invoice: snapshot }, { status: stripeInvoice.configured ? 502 : 400 });
   }
 
   return NextResponse.json({

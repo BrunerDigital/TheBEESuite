@@ -34,10 +34,11 @@ A school is not considered fully live until all of these are true:
 - [ ] Rotate any production secrets, Supabase tokens, GitHub tokens, payment keys, email keys, SMS keys, or API credentials that were shared in chat or plain text.
 - [ ] Add a staging environment separate from production for release validation and school pilot testing.
 - [ ] Create dedicated smoke-test credentials for executive, director, teacher, billing, and parent/guardian roles.
+- [x] Director-facing `/school-setup` command center exists to capture full-feature configuration, launch blockers, and required external inputs per school.
 - [ ] Create at least one linked parent/guardian login account per pilot school; the June 5, 2026 smoke report showed `0` active parent/guardian users and `0` guardians linked to login accounts.
 - [ ] Run final ProCare import mapping against real exports from every active live school.
 - [ ] Confirm every ProCare field used by schools is mapped, transformed, or intentionally excluded.
-- [ ] Replace remaining demo classroom, family, parent, and teacher data in executive views with real imported school data.
+- [ ] Replace remaining demo-login classroom, family, parent, and teacher fallbacks with real imported school data.
 - [ ] Complete Stripe connected account onboarding for every school or payout owner before enabling live parent checkout.
 - [ ] Complete legal/accounting review of convenience fee, processing recovery, ACH cap, refunds, disputes, and parent-facing disclosures.
 - [ ] Run a formal Supabase advisor/security review after the latest schema migrations.
@@ -143,7 +144,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Bulk user/location import tools exist for executives.
 - [x] Audit logging exists for sensitive admin actions.
 - [ ] Run credentialed executive smoke test with a dedicated production smoke account.
-- [ ] Validate executive dashboard data is real, not demo, for classroom, parent, teacher, billing, and operations sections.
+- [ ] Validate actual-user executive dashboard data is real, not demo, for classroom, parent, teacher, billing, and operations sections.
 - [ ] Validate executives can manage locations, users, grants, imports, FTE review, billing oversight, reports, integrations, audit logs, and readiness checks.
 - [ ] Finish granular permission editor and support-access/impersonation before broad franchise/customer rollout.
 
@@ -163,6 +164,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Ratio engine and classroom ratio warnings exist.
 - [x] Offline/poor-connectivity classroom tablet strategy exists.
 - [ ] Run credentialed director smoke test for every school rollout.
+- [x] Directors have a full-feature setup checklist covering school profile, classrooms/ratios, programs, staff, ProCare family import, tuition/billing, parent portal, communications, forms/documents, compliance, FTE, integrations, and launch signoff.
 - [ ] Validate director can complete daily workflows: leads, tours, families, children, classrooms, teachers, FTE, attendance, incidents, documents, messages, billing, reports, and notifications.
 - [ ] Confirm director training and first-week support coverage.
 
@@ -184,7 +186,8 @@ Complete this for each school before that school uses operational modules live.
 - [ ] Submit one test inquiry per school or per approved rollout group after installing the embed.
 - [ ] Confirm test inquiry appears in CRM, backup Google Sheet, global notification recipients, and correct school notification recipients.
 - [ ] Remove or archive old CRM forms/webhooks after BEE Suite routing is confirmed.
-- [ ] Provide and load final registration packet fields and policy acknowledgement documents.
+- [x] Load the Kid City USA operational online registration field map, application review workflow, enrollment checklist, and document/signature request setup.
+- [ ] Provide final legal registration PDFs, policy acknowledgement text, school-specific packet documents, and any required state/licensing language for production use.
 - [ ] Validate registration, tour, waitlist, application approval/rejection, and enrollment checklist workflows using real school data.
 - [ ] Confirm registration fee/deposit collection rules after payments are approved.
 
@@ -237,6 +240,9 @@ Complete this for each school before that school uses operational modules live.
 - [x] Parent authorization warnings exist during pickup.
 - [x] End-of-day attendance reconciliation report exists.
 - [x] QR/PIN alternate check-in options exist.
+- [x] Parent portal lets linked guardians set/reset kiosk PINs and display QR cards.
+- [x] Director family profile page shows QR cards for guardian kiosk credentials.
+- [x] Teacher portal links teachers to the lobby staff kiosk and shows staff-code readiness.
 - [x] Staff kiosk mode exists.
 - [ ] Configure kiosk device, route, browser lock mode, and physical placement for each school.
 - [ ] Create or verify guardian PINs for the launch family group.
@@ -273,7 +279,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Parent portal includes pay-balance by bank/card flow tied to open invoices.
 - [ ] Create linked parent/guardian users for real pilot families.
 - [ ] Validate parent account creation, login, data scope, daily reports, media, documents, messages, incidents, contact update requests, invoice view, and payment flow with real families at each pilot school.
-- [ ] Complete full guardian self-service change request approval workflow.
+- [x] Complete full guardian self-service change request approval workflow.
 - [ ] Decide push notification/native app strategy before promising push as part of the full feature set.
 - [ ] Approve parent launch communication templates and parent onboarding guide distribution.
 
@@ -289,9 +295,9 @@ Complete this for each school before that school uses operational modules live.
 - [x] Directors can create single-family invoices, tuition/product/custom charges, batch tuition/fee billing, account credits, and account debits.
 - [x] Batch billing has duplicate protection.
 - [x] Recurring tuition assignment endpoint and daily recurring tuition cron route exist.
-- [x] Recurring billing creates monthly child tuition invoices idempotently.
-- [x] Billing page includes AR aging and ledger reconciliation reporting.
-- [x] Payment method management/autopay and failed payment retry/dunning workflows exist.
+- [x] Recurring billing creates weekly/monthly child tuition invoices idempotently.
+- [x] Billing page includes recurring scheduler coverage, AR aging, and ledger reconciliation reporting.
+- [x] Payments page includes payment method/autopay readiness, failed payment retry status, and dunning workflow visibility.
 - [x] Subsidy/agency payment tracking exists.
 - [x] Surcharge/convenience fee and processing recovery disclosure language exists in parent/admin payment flows.
 - [ ] Have each school director submit or confirm tuition plans, fees, discounts, subsidy rules, ledger balances, invoice rules, and billing cadence.
@@ -312,6 +318,8 @@ Complete this for each school before that school uses operational modules live.
 - [x] Real SendGrid email paths exist for communication workflows.
 - [x] Real Twilio SMS send/receive paths exist.
 - [x] Message templates and merge fields exist.
+- [x] Broadcast segmentation by classroom, center, status, and tag exists.
+- [x] AI reply suggestions are available directly inside the message composer with human-review guardrails.
 - [x] Richer threaded conversation views with per-family reply history and staff assignment exist.
 - [x] Full notification preferences by role/user exist.
 - [x] Email/SMS/push delivery channel foundation exists.
@@ -325,14 +333,15 @@ Complete this for each school before that school uses operational modules live.
 - [x] Forms page and Documents page exist.
 - [x] Registration page and API exist.
 - [x] Signature request mock integration API exists.
-- [x] Parent document upload API stores submitted files in Supabase Storage.
+- [x] Parent and director document upload APIs store submitted files in Supabase Storage.
 - [x] Director document review API supports approve/reject decisions with notes and parent notifications.
 - [x] Required document checklist per family/staff/child exists.
-- [x] File upload UI tied to Supabase storage exists.
+- [x] Parent portal and director Documents page file upload UI is tied to Supabase Storage.
 - [x] Director document review states exist.
 - [x] Expiration reminders for family/staff/child documents exist.
 - [x] Internal signature capture/e-signature foundation exists.
 - [x] Build actual form builder UI.
+- [x] Staff onboarding checklist requests can be created from the teacher/staff management page.
 - [ ] Load final registration forms, policy acknowledgement forms, photo/media releases, medical/allergy forms, custody documents, and required staff documents.
 - [ ] Confirm e-signature consent language and whether internal signature capture is sufficient for each document type.
 - [ ] Test registration packet submission, document request, parent upload, director review, rejection/resubmission, expiration reminders, and export package for licensing/records requests.
@@ -344,9 +353,11 @@ Complete this for each school before that school uses operational modules live.
 - [x] Teacher incident creation API exists.
 - [x] Parent incident acknowledgement API exists.
 - [x] State-specific licensing configuration foundation exists.
+- [x] Emergency drill logs UI exists.
 - [x] Medication log workflow exists.
 - [x] Compliance report export exists.
 - [x] Incident admin review workflow with parent acknowledgement status exists.
+- [x] Compliance task assignment/reminders exist.
 - [ ] Configure state/school-specific licensing checklist, staff certification requirements, medication log expectations, emergency drill logs, inspection records, and document retention rules.
 - [ ] Complete state-specific childcare licensing review before claiming any state-specific workflow support.
 - [ ] Test incident creation, director review, parent acknowledgement, medication log, licensing export, expiring document reminders, and compliance task assignment/reminders.
@@ -360,7 +371,8 @@ Complete this for each school before that school uses operational modules live.
 - [x] Staff CRUD uses safe teacher deactivation instead of destructive deletion.
 - [x] Staff schedule/calendar views exist.
 - [x] Ratio engine by age group/state rules exists.
-- [ ] Load teacher onboarding forms/documents for each school.
+- [x] Staff onboarding checklist summary and request actions exist on the teacher/staff page.
+- [x] Load teacher onboarding forms/documents for each school from saved staff credential rules.
 - [ ] Validate staff schedules, classroom assignments, time clock, PTO/unavailability, certification expiration reminders, and ratio warnings against real rosters.
 - [ ] Confirm director workflow for staffing gaps and classroom ratio corrections.
 
@@ -370,8 +382,8 @@ Complete this for each school before that school uses operational modules live.
 - [x] Tours, child schedules, billing due dates, compliance reminders, birthdays, and staff schedules are represented in schema/module definitions.
 - [x] Full calendar UI with filters by center/classroom/user exists.
 - [x] Staff schedule publishing exists.
-- [ ] Add real Google Calendar sync if schools expect external calendar integration.
-- [ ] Add recurring events, closures, holiday management, and parent event visibility controls.
+- [x] Add real Google Calendar sync if schools expect external calendar integration.
+- [x] Add recurring events, closures, holiday management, and parent event visibility controls.
 - [ ] Validate tours, staff schedules, enrollment starts, billing due dates, document expirations, birthdays, and compliance reminders appear correctly per role.
 
 ## Marketing, Campaigns, Reputation, And Reviews
@@ -380,12 +392,12 @@ Complete this for each school before that school uses operational modules live.
 - [x] Automations page exists.
 - [x] Reputation/reviews page exists.
 - [x] Campaign, automation, automation run, review, and survey schema exists.
-- [ ] Build or validate campaign editor and template library.
-- [ ] Add automation workflow builder UI beyond foundation.
-- [ ] Add campaign send scheduling and reporting.
-- [ ] Add review request workflows.
-- [ ] Add survey/NPS collection.
-- [ ] Add AI review response generator in UI.
+- [x] Build or validate campaign editor and template library.
+- [x] Add automation workflow builder UI beyond foundation.
+- [x] Add campaign send scheduling and reporting.
+- [x] Add review request workflows.
+- [x] Add survey/NPS collection.
+- [x] Add AI review response generator in UI.
 - [ ] Confirm audience segmentation, opt-out rules, consent language, and sender limits before enabling school marketing campaigns.
 - [ ] Connect Google Business Profile or other reputation integrations if required for launch.
 
@@ -396,12 +408,12 @@ Complete this for each school before that school uses operational modules live.
 - [x] FTE trend and snapshot visuals exist.
 - [x] Readiness API exists.
 - [x] Billing AR aging and ledger reconciliation reporting exists.
-- [ ] Add or validate full report builder with filters/date ranges.
-- [ ] Add or validate lead source and funnel conversion dashboards.
-- [ ] Add or validate attendance/absence trend reporting.
-- [ ] Add or validate billing/revenue/AR reporting.
-- [ ] Add or validate parent response time and message analytics.
-- [ ] Add CSV/PDF export for key reports each role needs.
+- [x] Add or validate full report builder with filters/date ranges.
+- [x] Add or validate lead source and funnel conversion dashboards.
+- [x] Add or validate attendance/absence trend reporting.
+- [x] Add or validate billing/revenue/AR reporting.
+- [x] Add or validate parent response time and message analytics.
+- [x] Add CSV/PDF export for key reports each role needs.
 - [ ] Confirm each school director and executive stakeholder knows which reports are source of truth.
 
 ## Integrations And External Systems
@@ -412,7 +424,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Integration health checks, last-sync logs, retry queues, and tenant-specific credentials exist.
 - [ ] Configure production credentials per tenant/school where needed.
 - [ ] Verify Stripe webhooks, SendGrid sender domains, Twilio senders/compliance, Google Sheet backups, Supabase Storage buckets, and any external webhook receivers.
-- [ ] Add real Google Calendar sync if required.
+- [x] Add real Google Calendar sync if required.
 - [ ] Add Google Business Profile, Meta Lead Ads, Zapier/webhooks, or other launch integrations only after owner approval and credential setup.
 - [ ] Test failed integration delivery, retry, alerting, and manual replay.
 

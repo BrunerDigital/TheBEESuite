@@ -7,7 +7,10 @@ import {
   retrieveStripeSetupIntent,
   verifyStripeSignature,
 } from "@/lib/integrations";
+import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
 import { prisma } from "@/lib/prisma";
+import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
+import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
 export const runtime = "nodejs";
 
@@ -22,6 +25,7 @@ type StripeCheckoutSessionCompleted = {
   customer?: string | null;
   metadata?: {
     setupFlow?: string;
+    tenantId?: string;
     billingAccountId?: string;
     invoiceId?: string;
     paymentId?: string;
@@ -30,12 +34,15 @@ type StripeCheckoutSessionCompleted = {
     stripeConnectedAccountId?: string;
     invoiceAmountCents?: string;
     parentSurchargeAmountCents?: string;
+    parentProcessingRecoveryAmountCents?: string;
+    beeSuitePaymentOperationsFeeAmountCents?: string;
     checkoutTotalCents?: string;
     applicationFeeAmountCents?: string;
   };
 };
 
 type StripeMetadata = {
+  tenantId?: string;
   invoiceId?: string;
   paymentId?: string;
   familyId?: string;
@@ -43,6 +50,8 @@ type StripeMetadata = {
   stripeConnectedAccountId?: string;
   invoiceAmountCents?: string;
   parentSurchargeAmountCents?: string;
+  parentProcessingRecoveryAmountCents?: string;
+  beeSuitePaymentOperationsFeeAmountCents?: string;
   checkoutTotalCents?: string;
   applicationFeeAmountCents?: string;
 };
@@ -80,6 +89,7 @@ type StripeDisputeObject = {
 type StripeWebhookEvent = {
   id: string;
   type: string;
+  created?: number;
   livemode?: boolean;
   data: {
     object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | { id?: string; object?: string };
@@ -103,7 +113,26 @@ function metadataOf(value: { metadata?: unknown }) {
 }
 
 function accountEventType(type: string) {
-  return type === "account.updated" || type === "v2.core.account[requirements].updated";
+  return type === "account.updated" || type === "v2.core.account.updated" || type === "v2.core.account[requirements].updated";
+}
+
+async function matchStripeWebhookSecret(payload: string, signature: string | null) {
+  const secrets: Array<{ tenantId: string | null; secret: string }> = [];
+  const platformSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (platformSecret) secrets.push({ tenantId: null, secret: platformSecret });
+
+  const tenantSecrets = await getTenantIntegrationCredentialEntries("stripe", "STRIPE_WEBHOOK_SECRET");
+  for (const credential of tenantSecrets) {
+    secrets.push({ tenantId: credential.tenantId, secret: credential.value });
+  }
+
+  for (const item of secrets) {
+    if (verifyStripeSignature({ payload, signature, secret: item.secret })) {
+      return { configured: true, matched: true, tenantId: item.tenantId };
+    }
+  }
+
+  return { configured: secrets.length > 0, matched: false, tenantId: null };
 }
 
 function stripeObjectId(event: StripeWebhookEvent) {
@@ -197,7 +226,95 @@ async function invoiceIdForPayment(
   return ledgerEntry?.invoiceId || null;
 }
 
-async function handleConnectedAccountEvent(event: StripeWebhookEvent) {
+function centsFromJson(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.round(value));
+  const parsed = Number.parseInt(clean(value), 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+async function applyRegistrationPaymentCompletion(
+  tx: Prisma.TransactionClient,
+  input: {
+    invoiceId: string;
+    paymentId: string;
+    paidAt: Date;
+    invoiceCustomFields: unknown;
+  },
+) {
+  const fields = jsonObject(input.invoiceCustomFields);
+  const isRegistrationPayment =
+    clean(fields.kind) === "registration_fee_deposit" || clean(fields.checkoutPurpose) === "registration_fee_deposit";
+  if (!isRegistrationPayment) return;
+
+  const registrationFeeCents = centsFromJson(fields.registrationFeeCents);
+  const depositCents = centsFromJson(fields.depositCents);
+  const totalCents = centsFromJson(fields.totalCents) || registrationFeeCents + depositCents;
+  const paidAt = input.paidAt.toISOString();
+  await tx.invoice.update({
+    where: { id: input.invoiceId },
+    data: {
+      customFields: {
+        ...fields,
+        status: "paid",
+        paidAt,
+        paymentId: input.paymentId,
+      },
+    },
+  });
+
+  const enrollmentId = clean(fields.enrollmentId);
+  if (enrollmentId) {
+    const enrollment = await tx.enrollment.findUnique({
+      where: { id: enrollmentId },
+      select: { checklist: true },
+    });
+    const checklist = markRegistrationPaymentChecklistPaid(enrollment?.checklist, {
+      amountCents: totalCents,
+      paidAt: input.paidAt,
+    });
+    await tx.enrollment.updateMany({
+      where: { id: enrollmentId },
+      data: {
+        depositDueCents: depositCents,
+        depositPaidCents: depositCents,
+        ...(checklist ? { checklist: checklist as unknown as Prisma.InputJsonObject } : {}),
+      },
+    });
+  }
+
+  const submissionId = clean(fields.registrationSubmissionId);
+  if (submissionId) {
+    const submission = await tx.formSubmission.findUnique({
+      where: { id: submissionId },
+      select: { data: true },
+    });
+    if (submission) {
+      const data = jsonObject(submission.data);
+      const previousPayment = jsonObject(data.registrationPayment);
+      await tx.formSubmission.update({
+        where: { id: submissionId },
+        data: {
+          data: {
+            ...data,
+            registrationPayment: {
+              ...previousPayment,
+              required: true,
+              status: "paid",
+              invoiceId: input.invoiceId,
+              paymentId: input.paymentId,
+              paidAt,
+              registrationFeeCents,
+              depositCents,
+              totalCents,
+            },
+          } as Prisma.InputJsonObject,
+        },
+      });
+    }
+  }
+}
+
+async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTenantId?: string | null) {
   const accountId = event.data.object.id;
   if (!accountId || !accountId.startsWith("acct_")) {
     return NextResponse.json({ ok: true, ignored: true });
@@ -216,24 +333,20 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent) {
     return NextResponse.json({ ok: true, ignored: true, reason: "No center matched the connected account." });
   }
 
-  const retrieved = await retrieveStripeConnectedAccount(accountId);
+  const tenantId = matchedTenantId || matchedCenters[0]?.organization.tenantId || null;
+  const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId });
   try {
     await prisma.$transaction(async (tx) => {
       await recordStripeWebhookEvent(tx, event);
       for (const center of matchedCenters) {
         const existingFields = jsonObject(center.customFields);
-        const nextFields = retrieved.ok && retrieved.account
+        const readiness = retrieved.ok && retrieved.account ? stripeConnectReadinessFromSnapshot(retrieved.account) : null;
+        const nextFields = readiness
           ? {
               ...existingFields,
-              stripeConnectAccountId: accountId,
-              stripeChargesEnabled: retrieved.account.chargesEnabled,
-              stripePayoutsEnabled: retrieved.account.payoutsEnabled,
-              stripeDetailsSubmitted: retrieved.account.detailsSubmitted,
-              stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
-              stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
-              stripePayoutRequirementFields: retrieved.account.requirementFields,
-              stripePayoutStatus: retrieved.account.payoutsEnabled && retrieved.account.chargesEnabled ? "ready" : "requirements_due",
-              stripeConnectLastSyncedAt: new Date().toISOString(),
+              ...stripeConnectCustomFieldPatch(readiness),
+              stripeMerchantCapabilityStatus: retrieved.account?.merchantCapabilityStatus || null,
+              stripeRecipientTransferStatus: retrieved.account?.recipientTransferStatus || null,
             }
           : {
               ...existingFields,
@@ -344,17 +457,18 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
   return NextResponse.json({ ok: true });
 }
 
-async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
   const billingAccountId = session.metadata?.billingAccountId;
   if (!billingAccountId) {
     return NextResponse.json({ ok: false, error: "Missing billing account metadata." }, { status: 400 });
   }
 
   const setupIntentId = clean(session.setup_intent);
-  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId) : null;
+  const tenantId = matchedTenantId || session.metadata?.tenantId || null;
+  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
   if (setupIntent && !setupIntent.ok) {
     return NextResponse.json(
-      { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Stripe setup intent could not be retrieved." },
+      { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Payment setup session could not be retrieved." },
       { status: setupIntent.configured ? 502 : 503 },
     );
   }
@@ -418,8 +532,10 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
             ...jsonObject(currentPayment?.customFields),
             stripePaymentIntentId: paymentIntent.id,
             stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
             stripePaymentIntentStatus: paymentIntent.status || null,
             stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
+            failedAt: new Date().toISOString(),
             status: "payment_intent_failed",
           },
         },
@@ -484,7 +600,7 @@ async function handleChargeRefunded(event: StripeWebhookEvent, charge: StripeCha
             invoiceId,
             paymentId: payment.id,
             type: "refund",
-            description: charge.refunded ? "Stripe payment refunded" : "Stripe payment partially refunded",
+            description: charge.refunded ? "Payment refunded" : "Payment partially refunded",
             amountCents: refundDeltaCents,
             balanceAfterCents: updatedAccount.balanceCents,
             sourceSystem: "stripe",
@@ -609,22 +725,21 @@ async function writeSystemAudit(invoiceId: string, stripeEventId: string, sessio
 }
 
 export async function POST(request: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  if (!secret) {
-    return NextResponse.json({ ok: false, error: "Stripe webhook secret is not configured." }, { status: 503 });
-  }
-
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
+  const signatureMatch = await matchStripeWebhookSecret(payload, signature);
+  if (!signatureMatch.configured) {
+    return NextResponse.json({ ok: false, error: "Payment processor webhook secret is not configured." }, { status: 503 });
+  }
 
-  if (!verifyStripeSignature({ payload, signature, secret })) {
-    return NextResponse.json({ ok: false, error: "Invalid Stripe signature." }, { status: 400 });
+  if (!signatureMatch.matched) {
+    return NextResponse.json({ ok: false, error: "Invalid payment processor signature." }, { status: 400 });
   }
 
   const event = JSON.parse(payload) as StripeWebhookEvent;
 
   if (accountEventType(event.type)) {
-    return handleConnectedAccountEvent(event);
+    return handleConnectedAccountEvent(event, signatureMatch.tenantId);
   }
 
   if (![
@@ -653,7 +768,7 @@ export async function POST(request: NextRequest) {
 
   const session = event.data.object as StripeCheckoutSessionCompleted;
   if (event.type === "checkout.session.completed" && (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method")) {
-    return handlePaymentMethodSetupCompleted(event, session);
+    return handlePaymentMethodSetupCompleted(event, session, signatureMatch.tenantId);
   }
 
   const invoiceId = session.metadata?.invoiceId;
@@ -682,8 +797,10 @@ export async function POST(request: NextRequest) {
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
+              stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
               stripePaymentStatus: session.payment_status || null,
               stripeAmountTotalCents: session.amount_total ?? null,
+              failedAt: new Date().toISOString(),
               status: "checkout_failed",
             },
           },
@@ -699,7 +816,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (event.type === "checkout.session.completed" && session.payment_status && session.payment_status !== "paid") {
+  if (event.type === "checkout.session.completed" && session.payment_status !== "paid") {
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event, "pending");
@@ -714,6 +831,7 @@ export async function POST(request: NextRequest) {
               stripeCheckoutSessionId: session.id,
               stripePaymentIntentId: session.payment_intent || null,
               stripeEventId: event.id,
+              stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
               stripePaymentStatus: session.payment_status || null,
               stripeAmountTotalCents: session.amount_total ?? null,
               status: "checkout_pending",
@@ -741,7 +859,7 @@ export async function POST(request: NextRequest) {
       });
       const invoice = await tx.invoice.findUnique({
         where: { id: invoiceId },
-        select: { status: true, billingAccountId: true, totalCents: true },
+        select: { status: true, billingAccountId: true, totalCents: true, customFields: true },
       });
       if (!currentPayment || !invoice) {
         ignoredReason = currentPayment ? "invoice_not_found" : "payment_not_found";
@@ -806,11 +924,12 @@ export async function POST(request: NextRequest) {
         return;
       }
 
+      const paidAt = new Date();
       const payment = await tx.payment.update({
         where: { id: paymentId },
         data: {
           status: PaymentStatus.PAID,
-          paidAt: new Date(),
+          paidAt,
           externalIdPlaceholder: session.id,
           customFields: {
             ...jsonObject(currentPayment?.customFields),
@@ -821,6 +940,8 @@ export async function POST(request: NextRequest) {
             stripeAmountTotalCents: session.amount_total ?? null,
             invoiceAmountCents: Number(session.metadata?.invoiceAmountCents || 0) || null,
             parentSurchargeAmountCents: Number(session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            parentProcessingRecoveryAmountCents: Number(session.metadata?.parentProcessingRecoveryAmountCents || session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             checkoutTotalCents: Number(session.metadata?.checkoutTotalCents || session.amount_total || 0) || null,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
             status: "paid",
@@ -837,7 +958,7 @@ export async function POST(request: NextRequest) {
           invoiceId,
           paymentId: payment.id,
           type: "payment",
-          description: "Stripe parent payment",
+          description: "Parent payment",
           amountCents: -payment.amountCents,
           balanceAfterCents: updatedAccount.balanceCents,
           sourceSystem: "stripe",
@@ -846,9 +967,17 @@ export async function POST(request: NextRequest) {
             stripeEventId: event.id,
             stripeAmountTotalCents: session.amount_total ?? null,
             parentSurchargeAmountCents: Number(session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            parentProcessingRecoveryAmountCents: Number(session.metadata?.parentProcessingRecoveryAmountCents || session.metadata?.parentSurchargeAmountCents || 0) || 0,
+            beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
           },
         },
+      });
+      await applyRegistrationPaymentCompletion(tx, {
+        invoiceId,
+        paymentId: payment.id,
+        paidAt,
+        invoiceCustomFields: invoice.customFields,
       });
       applied = true;
     });

@@ -11,7 +11,7 @@ import {
   signatureEvidenceHash,
   validateSignatureCapture,
 } from "@/lib/signature-capture";
-import { uploadDocumentBuffer } from "@/lib/supabase-storage";
+import { contentTypeForDocumentFile, uploadDocumentBuffer } from "@/lib/supabase-storage";
 
 export const runtime = "nodejs";
 
@@ -21,19 +21,6 @@ type RouteContext = {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function contentTypeForFile(file: File) {
-  if (file.type) return file.type;
-  const ext = file.name.split(".").pop()?.toLowerCase();
-  if (ext === "pdf") return "application/pdf";
-  if (ext === "doc") return "application/msword";
-  if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (ext === "png") return "image/png";
-  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
-  if (ext === "webp") return "image/webp";
-  if (ext === "txt") return "text/plain";
-  return "application/octet-stream";
 }
 
 export async function POST(request: NextRequest, context: RouteContext) {
@@ -167,7 +154,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     try {
       const upload = await uploadDocumentBuffer({
         bytes,
-        contentType: contentTypeForFile(uploadedFile),
+        contentType: contentTypeForDocumentFile(uploadedFile),
         originalName: uploadedFile.name,
         tenantId: user.tenantId,
         centerId,

@@ -14,3 +14,9 @@ export const demoAccountEmails = {
   school: demoLoginAliases.demoschool,
   executive: demoLoginAliases.demoexec,
 } as const;
+
+const demoAccountEmailSet = new Set<string>(Object.values(demoAccountEmails));
+
+export function isDemoAccountEmail(value: string | null | undefined) {
+  return Boolean(value && demoAccountEmailSet.has(value.trim().toLowerCase()));
+}

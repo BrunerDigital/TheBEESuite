@@ -11,10 +11,12 @@ export function IncidentReviewActions({
   incidentId,
   currentStatus,
   parentNotified,
+  parentAcknowledgedAt,
 }: {
   incidentId: string;
   currentStatus: string;
   parentNotified: boolean;
+  parentAcknowledgedAt?: Date | string | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -56,6 +58,9 @@ export function IncidentReviewActions({
         <input type="checkbox" checked={notified} onChange={(event) => setNotified(event.target.checked)} />
         Parent notified
       </label>
+      <div className="text-xs text-muted-foreground">
+        {parentAcknowledgedAt ? `Parent acknowledged ${new Date(parentAcknowledgedAt).toLocaleDateString()}` : "Parent acknowledgement pending"}
+      </div>
       <Button size="sm" disabled={isPending} onClick={save}>
         {status === "closed" ? <CheckCircle2 data-icon="inline-start" /> : <ClipboardCheck data-icon="inline-start" />}
         Save Review

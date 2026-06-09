@@ -50,6 +50,8 @@ type Payload = {
 
 const editableCenterStatuses = new Set(["active", "trial_setup", "paused", "closed"]);
 const liveCenterStatuses = new Set(["active", "trial_setup", "paused"]);
+const editableOwnerGroupStatuses = new Set(["active", "paused", "closed"]);
+const editableOwnerTypes = new Set(["franchisee", "multi_location_operator", "single_location_owner", "brand_network"]);
 const assignableRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
@@ -373,39 +375,112 @@ async function setCenterStatus(payload: Payload, actor: Awaited<ReturnType<typeo
   return { center: updated };
 }
 
-async function createOwnerGroup(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
+async function saveOwnerGroup(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
+  const ownerGroupId = clean(payload.ownerGroupId);
   const name = clean(payload.name);
   if (!name) throw new Error("Owner group name is required.");
+  const ownerType = clean(payload.ownerType) || "franchisee";
+  if (!editableOwnerTypes.has(ownerType)) throw new Error("Unsupported owner group type.");
+  const billingEmail = clean(payload.billingEmail).toLowerCase();
+  if (billingEmail && !isEmail(billingEmail)) throw new Error("A valid owner group billing email is required.");
+  const status = clean(payload.status) || "active";
+  if (!editableOwnerGroupStatuses.has(status)) throw new Error("Unsupported owner group status.");
+
   const organization = await getDefaultOrganization(actor.tenantId, clean(payload.organizationId) || actor.organizationId);
   const slug = slugify(name);
-  const existing = await prisma.ownerGroup.findUnique({
-    where: { tenantId_slug: { tenantId: actor.tenantId, slug } },
+  const duplicate = await prisma.ownerGroup.findFirst({
+    where: {
+      tenantId: actor.tenantId,
+      slug,
+      ...(ownerGroupId ? { NOT: { id: ownerGroupId } } : {}),
+    },
     select: { id: true },
   });
-  if (existing) throw new Error("An owner group with this name already exists.");
+  if (duplicate) throw new Error("An owner group with this name already exists.");
 
-  const ownerGroup = await prisma.ownerGroup.create({
+  if (ownerGroupId) {
+    const existing = await prisma.ownerGroup.findFirst({
+      where: { id: ownerGroupId, tenantId: actor.tenantId },
+      select: { id: true },
+    });
+    if (!existing) throw new Error("Owner group not found.");
+  }
+
+  const data = {
+    brandId: organization.brandId,
+    organizationId: organization.id,
+    name,
+    slug,
+    ownerType,
+    billingEmail: billingEmail || null,
+    contactName: clean(payload.contactName) || null,
+    status,
+  };
+
+  const ownerGroup = ownerGroupId
+    ? await prisma.ownerGroup.update({
+        where: { id: ownerGroupId },
+        data,
+      })
+    : await prisma.ownerGroup.create({
+        data: {
+          tenantId: actor.tenantId,
+          ...data,
+          customFields: { createdFromExecutiveConsole: true, createdById: actor.id },
+        },
+      });
+
+  await audit({
+    tenantId: actor.tenantId,
+    userId: actor.id,
+    action: ownerGroupId ? "executive.owner_group.updated" : "executive.owner_group.created",
+    resource: "OwnerGroup",
+    resourceId: ownerGroup.id,
+    metadata: { name: ownerGroup.name, ownerType: ownerGroup.ownerType, status: ownerGroup.status },
+  });
+
+  return { ownerGroup };
+}
+
+async function setOwnerGroupStatus(payload: Payload, actor: Awaited<ReturnType<typeof requireExecutiveAccess>>) {
+  const ownerGroupId = clean(payload.ownerGroupId);
+  const status = clean(payload.status);
+  if (!ownerGroupId || !editableOwnerGroupStatuses.has(status)) throw new Error("Owner group and supported status are required.");
+
+  const existing = await prisma.ownerGroup.findFirst({
+    where: { id: ownerGroupId, tenantId: actor.tenantId },
+    select: { id: true, customFields: true },
+  });
+  if (!existing) throw new Error("Owner group not found.");
+  const existingFields = existing.customFields && typeof existing.customFields === "object" && !Array.isArray(existing.customFields)
+    ? existing.customFields as Record<string, unknown>
+    : {};
+
+  const ownerGroup = await prisma.ownerGroup.update({
+    where: { id: ownerGroupId },
     data: {
-      tenantId: actor.tenantId,
-      brandId: organization.brandId,
-      organizationId: organization.id,
-      name,
-      slug,
-      ownerType: clean(payload.ownerType) || "franchisee",
-      billingEmail: clean(payload.billingEmail).toLowerCase() || null,
-      contactName: clean(payload.contactName) || null,
-      status: "active",
-      customFields: { createdFromExecutiveConsole: true, createdById: actor.id },
+      status,
+      customFields: {
+        ...existingFields,
+        executiveStatusChangedAt: new Date().toISOString(),
+        executiveStatusChangedBy: actor.email,
+      },
+    },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      ownerType: true,
     },
   });
 
   await audit({
     tenantId: actor.tenantId,
     userId: actor.id,
-    action: "executive.owner_group.created",
+    action: status === "closed" ? "executive.owner_group.archived" : "executive.owner_group.status_updated",
     resource: "OwnerGroup",
     resourceId: ownerGroup.id,
-    metadata: { name: ownerGroup.name, ownerType: ownerGroup.ownerType },
+    metadata: { name: ownerGroup.name, ownerType: ownerGroup.ownerType, status },
   });
 
   return { ownerGroup };
@@ -546,8 +621,8 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
         email,
         name,
         role: roleValue,
-      isActive: true,
-      mustResetPassword: forcePasswordReset,
+        isActive: true,
+        mustResetPassword: forcePasswordReset,
       },
     });
 
@@ -863,8 +938,11 @@ export async function POST(request: NextRequest) {
     if (action === "setCenterStatus") {
       return NextResponse.json({ ok: true, ...(await setCenterStatus(payload, actor)) });
     }
-    if (action === "createOwnerGroup") {
-      return NextResponse.json({ ok: true, ...(await createOwnerGroup(payload, actor)) });
+    if (action === "createOwnerGroup" || action === "saveOwnerGroup") {
+      return NextResponse.json({ ok: true, ...(await saveOwnerGroup(payload, actor)) });
+    }
+    if (action === "setOwnerGroupStatus") {
+      return NextResponse.json({ ok: true, ...(await setOwnerGroupStatus(payload, actor)) });
     }
     if (action === "saveUser") {
       return NextResponse.json({ ok: true, ...(await saveUser(payload, actor, request.url)) });

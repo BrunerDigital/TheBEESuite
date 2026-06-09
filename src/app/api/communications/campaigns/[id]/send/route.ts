@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { canAccessAllCenters, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
+import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -40,12 +42,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
   const body = await request.json().catch(() => ({}));
-  const message = clean(body.message) || clean(body.body);
+  const requestedSchedule = clean(body.scheduledAt) || clean(body.sendAt);
   const limit = Math.max(1, Math.min(Number(body.limit) || 1000, 1000));
-
-  if (!message) {
-    return NextResponse.json({ ok: false, error: "Campaign email body is required before sending." }, { status: 400 });
-  }
 
   const campaign = await prisma.campaign.findUnique({
     where: { id },
@@ -54,11 +52,56 @@ export async function POST(request: NextRequest, context: RouteContext) {
     },
   });
   if (!campaign) return NextResponse.json({ ok: false, error: "Campaign not found." }, { status: 404 });
-  if (campaign.brand?.tenantId && campaign.brand.tenantId !== user.tenantId) {
+  if (campaign.tenantId !== user.tenantId && campaign.brand?.tenantId !== user.tenantId) {
     return NextResponse.json({ ok: false, error: "You do not have access to this campaign." }, { status: 403 });
   }
-  if (campaign.type && !["email", "newsletter", "nurture"].includes(campaign.type.toLowerCase())) {
+  if (campaign.type && !["email", "newsletter", "nurture", "review_request", "survey"].includes(campaign.type.toLowerCase())) {
     return NextResponse.json({ ok: false, error: "Only email-style campaigns can be sent through SendGrid." }, { status: 400 });
+  }
+
+  const draft = normalizeCampaignDraft({
+    name: campaign.name,
+    type: campaign.type,
+    subject: body.subject || campaign.subject,
+    body: body.message || body.body || campaign.body,
+    audience: clean(body.audience) || asRecord(campaign.audience).label,
+    status: campaign.status,
+    scheduledAt: requestedSchedule,
+  });
+
+  if (!draft.body) {
+    return NextResponse.json({ ok: false, error: "Campaign email body is required before sending." }, { status: 400 });
+  }
+  if (requestedSchedule && draft.scheduledAt && draft.scheduledAt > new Date()) {
+    const metrics = {
+      ...asRecord(campaign.metrics),
+      scheduledBy: user.email,
+      scheduledAt: draft.scheduledAt.toISOString(),
+      scheduledLimit: limit,
+    };
+    const scheduled = await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        tenantId: user.tenantId,
+        subject: draft.subject,
+        body: draft.body,
+        ...(draft.audience ? { audience: draft.audience as Prisma.InputJsonObject } : {}),
+        status: "scheduled",
+        scheduledAt: draft.scheduledAt,
+        metrics,
+      },
+    });
+    await writeAuditLog(user, {
+      centerId: user.primaryCenterId,
+      action: "campaign.email.scheduled",
+      resource: "Campaign",
+      resourceId: campaign.id,
+      metadata: {
+        scheduledAt: draft.scheduledAt.toISOString(),
+        limit,
+      },
+    });
+    return NextResponse.json({ ok: true, scheduled: true, campaign: scheduled, scheduledAt: draft.scheduledAt.toISOString() });
   }
 
   const centerIds = await visibleCenterIds(user);
@@ -79,11 +122,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "No lead email recipients were found for this campaign." }, { status: 400 });
   }
 
-  const subject = clean(body.subject) || campaign.name;
+  const subject = draft.subject || campaign.name;
   const email = await sendEmail({
     to: recipients,
     subject,
-    text: message,
+    text: draft.body,
     replyTo: user.email,
     fromName: campaign.brand?.name ?? "The BEE Suite",
     categories: ["campaign_email"],
@@ -96,7 +139,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     purpose: "campaign_email",
     to: recipients,
     subject,
-    text: message,
+    text: draft.body,
     replyTo: user.email,
     fromName: campaign.brand?.name ?? "The BEE Suite",
     result: email,
@@ -113,10 +156,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
       lastSendAt: new Date().toISOString(),
       lastRecipientCount: recipients.length,
       lastProviderMessageId: email.id ?? null,
+      lastDeliveryStatus: email.ok ? "delivered" : email.configured ? "failed" : "not_configured",
+      lastError: email.error ?? null,
     };
     await prisma.campaign.update({
       where: { id: campaign.id },
-      data: { status: "active", metrics },
+      data: { tenantId: user.tenantId, status: "active", sentAt: new Date(), scheduledAt: null, subject, body: draft.body, metrics },
+    });
+  } else {
+    await prisma.campaign.update({
+      where: { id: campaign.id },
+      data: {
+        metrics: {
+          ...asRecord(campaign.metrics),
+          lastAttemptAt: new Date().toISOString(),
+          lastDeliveryStatus: email.configured ? "failed" : "not_configured",
+          lastError: email.error ?? null,
+        },
+      },
     });
   }
 

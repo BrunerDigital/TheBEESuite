@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
+import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
 
 export type TwilioDeliveryStatus = "delivered" | "failed" | "pending";
 
@@ -68,6 +69,33 @@ export function validateTwilioSignature({
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(signature);
   return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+export async function validateTwilioSignatureAgainstConfiguredTokens({
+  signature,
+  url,
+  params,
+}: {
+  signature: string | undefined | null;
+  url: string;
+  params: Record<string, string>;
+}) {
+  const tokens: Array<{ tenantId: string | null; token: string }> = [];
+  const platformToken = clean(process.env.TWILIO_AUTH_TOKEN);
+  if (platformToken) tokens.push({ tenantId: null, token: platformToken });
+
+  const tenantTokens = await getTenantIntegrationCredentialEntries("twilio", "TWILIO_AUTH_TOKEN");
+  for (const credential of tenantTokens) {
+    tokens.push({ tenantId: credential.tenantId, token: credential.value });
+  }
+
+  for (const item of tokens) {
+    if (validateTwilioSignature({ authToken: item.token, signature, url, params })) {
+      return { configured: true, matched: true, tenantId: item.tenantId };
+    }
+  }
+
+  return { configured: tokens.length > 0, matched: false, tenantId: null };
 }
 
 export function twilioDeliveryStatus(value: unknown): TwilioDeliveryStatus {

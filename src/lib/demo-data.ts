@@ -28,6 +28,7 @@ export type ModuleSlug =
   | "login"
   | "forgot-password"
   | "onboarding"
+  | "school-setup"
   | "dashboard"
   | "multi-location-dashboard"
   | "center-dashboard"
@@ -264,6 +265,7 @@ export const navGroups = [
     title: "Command",
     items: [
       ["Dashboard", "dashboard", LayoutDashboard],
+      ["School setup", "school-setup", ClipboardCheck],
       ["Multi-location", "multi-location-dashboard", Building2],
       ["Notifications", "notifications", Bell],
       ["AI Command", "ai-command", Bot],
@@ -345,6 +347,18 @@ export type ModuleDefinition = {
 };
 
 export const modules: ModuleDefinition[] = [
+  {
+    slug: "school-setup",
+    title: "School Setup Command Center",
+    eyebrow: "Launch readiness",
+    description:
+      "Director-facing configuration workflow for turning on all BEE Suite modules, from classrooms and staff to billing, parent portal, compliance, integrations, and launch sign-off.",
+    owner: "Center director, assistant director, brand admin",
+    metrics: ["15 setup areas", "Director input tracker", "Record readiness", "Launch blockers"],
+    features: ["Setup progress by feature area", "Director input capture", "Action links to live modules", "External-data needs panel"],
+    records: ["Center profile", "Classrooms", "Staff", "Families", "Tuition", "Forms", "Integrations"],
+    sensitive: true,
+  },
   {
     slug: "dashboard",
     title: "Executive Dashboard",

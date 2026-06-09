@@ -4,6 +4,7 @@ import {
   PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION,
   PAYMENT_PROCESSING_RECOVERY_LABEL,
 } from "@/lib/payment-disclosures";
+import { readStripeConnectAccountId } from "@/lib/stripe-connect-readiness";
 
 export type IntegrationSendResult = {
   ok: boolean;
@@ -45,6 +46,11 @@ export type StripeConnectedAccountSnapshot = {
   raw?: unknown;
 };
 
+type TenantCredentialRuntimeInput = {
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+};
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -57,8 +63,22 @@ function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function stripeSecretKey() {
-  return process.env.STRIPE_SECRET_KEY;
+async function resolveTenantCredentials(
+  provider: "stripe" | "sendgrid" | "twilio",
+  input: TenantCredentialRuntimeInput = {},
+) {
+  if (input.credentials) return input.credentials;
+  return getTenantIntegrationCredentialMap(input.tenantId, provider);
+}
+
+export async function getStripeSecretKey(input: TenantCredentialRuntimeInput = {}) {
+  const credentials = await resolveTenantCredentials("stripe", input);
+  return credentialEnvValue(credentials, "STRIPE_SECRET_KEY");
+}
+
+export async function getStripeWebhookSecret(input: TenantCredentialRuntimeInput = {}) {
+  const credentials = await resolveTenantCredentials("stripe", input);
+  return credentialEnvValue(credentials, "STRIPE_WEBHOOK_SECRET");
 }
 
 function nonNegativeIntEnv(name: string, fallback = 0) {
@@ -103,8 +123,7 @@ function grossedUpFee(amountCents: number, bps: number, fixedCents: number, maxC
   return maxCents > 0 ? Math.min(Math.max(0, fee), maxCents) : Math.max(0, fee);
 }
 
-function stripeHeaders(contentType: "json" | "form", apiVersion = STRIPE_API_VERSION) {
-  const apiKey = stripeSecretKey();
+function stripeHeaders(apiKey: string, contentType: "json" | "form", apiVersion = STRIPE_API_VERSION) {
   return {
     Authorization: `Bearer ${apiKey}`,
     "Stripe-Version": apiVersion,
@@ -245,9 +264,7 @@ export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: Str
 }
 
 export function readStripeConnectedAccountId(customFields: unknown) {
-  const fields = asRecord(customFields);
-  const accountId = fields.stripeConnectedAccountId || fields.stripeConnectAccountId;
-  return typeof accountId === "string" && accountId.startsWith("acct_") ? accountId : null;
+  return readStripeConnectAccountId(customFields);
 }
 
 function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
@@ -261,14 +278,29 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const stripeBalance = asRecord(recipientCapabilities.stripe_balance);
   const stripeTransfers = asRecord(stripeBalance.stripe_transfers);
   const requirements = asRecord(account.requirements);
+  const futureRequirements = asRecord(account.future_requirements || account.futureRequirements);
   const currentDue = asStringArray(requirements.currently_due);
   const eventuallyDue = asStringArray(requirements.eventually_due);
+  const futureCurrentDue = asStringArray(futureRequirements.currently_due);
+  const futureEventuallyDue = asStringArray(futureRequirements.eventually_due);
   const entries = Array.isArray(requirements.entries)
     ? requirements.entries
         .map((entry) => asRecord(entry).field)
         .filter((field): field is string => typeof field === "string")
     : [];
-  const requirementFields = Array.from(new Set([...currentDue, ...eventuallyDue, ...entries]));
+  const futureEntries = Array.isArray(futureRequirements.entries)
+    ? futureRequirements.entries
+        .map((entry) => asRecord(entry).field)
+        .filter((field): field is string => typeof field === "string")
+    : [];
+  const requirementFields = Array.from(new Set([
+    ...currentDue,
+    ...eventuallyDue,
+    ...futureCurrentDue,
+    ...futureEventuallyDue,
+    ...entries,
+    ...futureEntries,
+  ]));
   const recipientTransferStatus = clean(stripeTransfers.status) || null;
   const merchantCapabilityStatus = clean(cardPayments.status) || null;
 
@@ -278,7 +310,7 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
     dashboard: clean(account.dashboard) || null,
     chargesEnabled: account.charges_enabled === true || merchantCapabilityStatus === "active",
     payoutsEnabled: account.payouts_enabled === true || recipientTransferStatus === "active",
-    detailsSubmitted: requirementFields.length === 0,
+    detailsSubmitted: account.details_submitted === true || account.detailsSubmitted === true || requirementFields.length === 0,
     merchantCapabilityStatus,
     recipientTransferStatus,
     requirementFields,
@@ -448,6 +480,9 @@ export async function createStripeCheckoutSession({
   applicationFeeAmountCents = 0,
   paymentMethodConfigurationId,
   onBehalfOfConnectedAccount = false,
+  idempotencyKey,
+  tenantId,
+  credentials,
 }: {
   amountCents: number;
   invoiceAmountCents?: number;
@@ -462,8 +497,11 @@ export async function createStripeCheckoutSession({
   applicationFeeAmountCents?: number;
   paymentMethodConfigurationId?: string | null;
   onBehalfOfConnectedAccount?: boolean;
+  idempotencyKey?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -516,6 +554,7 @@ export async function createStripeCheckoutSession({
       Authorization: `Bearer ${apiKey}`,
       "Stripe-Version": STRIPE_API_VERSION,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body,
     signal: AbortSignal.timeout(10_000),
@@ -539,12 +578,16 @@ export async function createStripeCustomer({
   email,
   name,
   metadata,
+  tenantId,
+  credentials,
 }: {
   email?: string | null;
   name?: string | null;
   metadata?: Record<string, string>;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -558,7 +601,7 @@ export async function createStripeCustomer({
 
   const response = await fetch("https://api.stripe.com/v1/customers", {
     method: "POST",
-    headers: stripeHeaders("form"),
+    headers: stripeHeaders(apiKey, "form"),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -584,6 +627,8 @@ export async function createStripeInvoice({
   daysUntilDue = 15,
   metadata,
   sendInvoice = false,
+  tenantId,
+  credentials,
 }: {
   customerId: string;
   amountCents: number;
@@ -592,8 +637,10 @@ export async function createStripeInvoice({
   daysUntilDue?: number;
   metadata: Record<string, string>;
   sendInvoice?: boolean;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { hostedInvoiceUrl?: string | null; invoicePdf?: string | null }> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -617,7 +664,7 @@ export async function createStripeInvoice({
   const itemResponse = await fetch("https://api.stripe.com/v1/invoiceitems", {
     method: "POST",
     headers: {
-      ...stripeHeaders("form"),
+      ...stripeHeaders(apiKey, "form"),
       "Idempotency-Key": `${invoiceNumber}:item`,
     },
     body: itemBody,
@@ -648,7 +695,7 @@ export async function createStripeInvoice({
   const invoiceResponse = await fetch("https://api.stripe.com/v1/invoices", {
     method: "POST",
     headers: {
-      ...stripeHeaders("form"),
+      ...stripeHeaders(apiKey, "form"),
       "Idempotency-Key": `${invoiceNumber}:invoice`,
     },
     body: invoiceBody,
@@ -672,7 +719,7 @@ export async function createStripeInvoice({
   const finalizeResponse = await fetch(`https://api.stripe.com/v1/invoices/${invoiceJson.id}/finalize`, {
     method: "POST",
     headers: {
-      ...stripeHeaders("form"),
+      ...stripeHeaders(apiKey, "form"),
       "Idempotency-Key": `${invoiceNumber}:finalize`,
     },
     body: new URLSearchParams({}),
@@ -697,7 +744,7 @@ export async function createStripeInvoice({
     const sendResponse = await fetch(`https://api.stripe.com/v1/invoices/${finalizedJson.id}/send`, {
       method: "POST",
       headers: {
-        ...stripeHeaders("form"),
+        ...stripeHeaders(apiKey, "form"),
         "Idempotency-Key": `${invoiceNumber}:send`,
       },
       body: new URLSearchParams({}),
@@ -745,14 +792,18 @@ export async function createStripeSetupCheckoutSession({
   successUrl,
   cancelUrl,
   metadata,
+  tenantId,
+  credentials,
 }: {
   customerId?: string | null;
   customerEmail?: string | null;
   successUrl: string;
   cancelUrl: string;
   metadata: Record<string, string>;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -775,7 +826,7 @@ export async function createStripeSetupCheckoutSession({
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
-    headers: stripeHeaders("form"),
+    headers: stripeHeaders(apiKey, "form"),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -796,11 +847,15 @@ export async function createStripeSetupCheckoutSession({
 export async function createStripeBillingPortalSession({
   customerId,
   returnUrl,
+  tenantId,
+  credentials,
 }: {
   customerId: string;
   returnUrl: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -811,7 +866,7 @@ export async function createStripeBillingPortalSession({
   });
   const response = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",
-    headers: stripeHeaders("form"),
+    headers: stripeHeaders(apiKey, "form"),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -829,14 +884,14 @@ export async function createStripeBillingPortalSession({
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
 }
 
-export async function retrieveStripeSetupIntent(setupIntentId: string): Promise<{
+export async function retrieveStripeSetupIntent(setupIntentId: string, input: TenantCredentialRuntimeInput = {}): Promise<{
   ok: boolean;
   configured: boolean;
   provider: "stripe";
   setupIntent?: StripeSetupIntentSnapshot;
   error?: string;
 }> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey(input);
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -888,6 +943,8 @@ export async function createStripeConnectedAccount({
   state,
   postalCode,
   address,
+  tenantId,
+  credentials,
 }: {
   businessName: string;
   email?: string | null;
@@ -896,8 +953,10 @@ export async function createStripeConnectedAccount({
   state?: string | null;
   postalCode?: string | null;
   address?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
@@ -957,7 +1016,7 @@ export async function createStripeConnectedAccount({
 
   const response = await fetch("https://api.stripe.com/v2/core/accounts", {
     method: "POST",
-    headers: stripeHeaders("json", STRIPE_ACCOUNTS_V2_API_VERSION),
+    headers: stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(10_000),
   });
@@ -979,19 +1038,23 @@ export async function createStripeAccountLink({
   accountId,
   refreshUrl,
   returnUrl,
+  tenantId,
+  credentials,
 }: {
   accountId: string;
   refreshUrl: string;
   returnUrl: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
 
   const response = await fetch("https://api.stripe.com/v2/core/account_links", {
     method: "POST",
-    headers: stripeHeaders("json", STRIPE_ACCOUNTS_V2_API_VERSION),
+    headers: stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
     body: JSON.stringify({
       account: accountId,
       use_case: {
@@ -1025,8 +1088,9 @@ export async function createStripeAccountLink({
 
 export async function retrieveStripeConnectedAccount(
   accountId: string,
+  input: TenantCredentialRuntimeInput = {},
 ): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
-  const apiKey = stripeSecretKey();
+  const apiKey = await getStripeSecretKey(input);
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }

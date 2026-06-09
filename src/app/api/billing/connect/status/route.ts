@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
+import { getStripeSecretKey, readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
 export const runtime = "nodejs";
 
@@ -48,43 +49,35 @@ export async function GET(request: NextRequest) {
   const existingFields = jsonObject(center.customFields);
   const accountId = readStripeConnectedAccountId(existingFields);
   if (!accountId) {
+    const readiness = stripeConnectReadinessFromFields(existingFields);
     return NextResponse.json({
       ok: true,
-      configured: Boolean(process.env.STRIPE_SECRET_KEY),
+      configured: Boolean(await getStripeSecretKey({ tenantId: user.tenantId })),
       centerId: center.id,
       account: null,
       status: "not_started",
+      readiness,
     });
   }
 
-  const retrieved = await retrieveStripeConnectedAccount(accountId);
+  const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
   if (!retrieved.ok || !retrieved.account) {
     return NextResponse.json(
-      { ok: false, configured: retrieved.configured, error: retrieved.error || "Stripe payout status could not be checked." },
+      { ok: false, configured: retrieved.configured, error: retrieved.error || "Payout status could not be checked." },
       { status: retrieved.configured ? 502 : 503 },
     );
   }
 
-  const status = retrieved.account.payoutsEnabled && retrieved.account.chargesEnabled
-    ? "ready"
-    : retrieved.account.payoutsEnabled
-      ? "payouts_ready"
-      : "requirements_due";
+  const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
 
   await prisma.center.update({
     where: { id: center.id },
     data: {
       customFields: {
         ...existingFields,
-        stripeConnectAccountId: accountId,
-        stripeChargesEnabled: retrieved.account.chargesEnabled,
-        stripePayoutsEnabled: retrieved.account.payoutsEnabled,
-        stripeDetailsSubmitted: retrieved.account.detailsSubmitted,
+        ...stripeConnectCustomFieldPatch(readiness),
         stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
         stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
-        stripePayoutRequirementFields: retrieved.account.requirementFields,
-        stripePayoutStatus: status,
-        stripeConnectLastSyncedAt: new Date().toISOString(),
       },
     },
   });
@@ -96,7 +89,7 @@ export async function GET(request: NextRequest) {
     resourceId: center.id,
     metadata: {
       stripeConnectedAccountId: accountId,
-      status,
+      status: readiness.status,
       requirementCount: retrieved.account.requirementFields.length,
     },
   });
@@ -105,7 +98,8 @@ export async function GET(request: NextRequest) {
     ok: true,
     configured: true,
     centerId: center.id,
-    status,
+    status: readiness.status,
+    readiness,
     account: retrieved.account,
   });
 }

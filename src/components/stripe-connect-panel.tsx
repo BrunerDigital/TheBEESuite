@@ -11,6 +11,7 @@ import {
   PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
   PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE,
 } from "@/lib/payment-disclosures";
+import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 
 export type StripeConnectCenter = {
   id: string;
@@ -39,24 +40,18 @@ function text(value: unknown) {
 }
 
 function statusLabel(center: StripeConnectCenter) {
-  const custom = fields(center.customFields);
-  const accountId = text(custom.stripeConnectAccountId || custom.stripeConnectedAccountId);
-  if (!accountId) return "Needs setup";
-  if (custom.stripePayoutsEnabled === true && custom.stripeChargesEnabled === true) return "Ready";
-  if (custom.stripePayoutsEnabled === true) return "Payouts ready";
-  if (text(custom.stripePayoutStatus)) return text(custom.stripePayoutStatus).replaceAll("_", " ");
-  return "Onboarding started";
+  return stripeConnectReadinessFromFields(center.customFields).label;
 }
 
-function statusVariant(status: string): "default" | "outline" | "secondary" {
+function statusVariant(status: string): "default" | "outline" | "secondary" | "destructive" {
   if (status === "Ready") return "default";
   if (status === "Needs setup") return "outline";
+  if (status === "Requirements due") return "destructive";
   return "secondary";
 }
 
 function maskedAccount(center: StripeConnectCenter) {
-  const custom = fields(center.customFields);
-  const accountId = text(custom.stripeConnectAccountId || custom.stripeConnectedAccountId);
+  const accountId = stripeConnectReadinessFromFields(center.customFields).accountId;
   if (!accountId) return "Not connected";
   return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
 }
@@ -105,11 +100,11 @@ export function StripeConnectPanel({
       });
       const json = await response.json();
       if (!response.ok || !json.ok || !json.url) {
-        throw new Error(json.error || "Stripe onboarding could not be started.");
+        throw new Error(json.error || "Payout onboarding could not be started.");
       }
       window.location.href = json.url as string;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Stripe onboarding could not be started.");
+      setMessage(error instanceof Error ? error.message : "Payout onboarding could not be started.");
       setBusyCenterId(null);
     }
   }
@@ -121,12 +116,13 @@ export function StripeConnectPanel({
       const response = await fetch(`/api/billing/connect/status?centerId=${encodeURIComponent(centerId)}`);
       const json = await response.json();
       if (!response.ok || !json.ok) {
-        throw new Error(json.error || "Stripe payout status could not be checked.");
+        throw new Error(json.error || "Payout status could not be checked.");
       }
       if (json.account) {
         setLocalCenters((current) => current.map((center) => {
           if (center.id !== centerId) return center;
           const custom = fields(center.customFields);
+          const readiness = fields(json.readiness);
           return {
             ...center,
             customFields: {
@@ -138,7 +134,7 @@ export function StripeConnectPanel({
               stripeMerchantCapabilityStatus: json.account.merchantCapabilityStatus,
               stripeRecipientTransferStatus: json.account.recipientTransferStatus,
               stripePayoutRequirementFields: json.account.requirementFields,
-              stripePayoutStatus: json.status,
+              stripePayoutStatus: text(readiness.status) || json.status,
               stripeConnectLastSyncedAt: new Date().toISOString(),
             },
           };
@@ -146,7 +142,7 @@ export function StripeConnectPanel({
       }
       setMessage("Payout status updated.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Stripe payout status could not be checked.");
+      setMessage(error instanceof Error ? error.message : "Payout status could not be checked.");
     } finally {
       setBusyCenterId(null);
     }
@@ -164,8 +160,8 @@ export function StripeConnectPanel({
       forbidden: "You do not have access to refresh that payout onboarding link.",
       not_found: "That school payout profile could not be found.",
       not_started: "Start payout setup before refreshing an onboarding link.",
-      refresh_failed: "Stripe could not refresh the onboarding link. Try again from the payout account table.",
-      stripe_missing: "Stripe platform keys are missing, so payout onboarding links cannot be generated yet.",
+      refresh_failed: "The processor could not refresh the onboarding link. Try again from the payout account table.",
+      stripe_missing: "Payment processor keys are missing, so payout onboarding links cannot be generated yet.",
     };
     if (stripeConnectStatus && messages[stripeConnectStatus]) {
       const timer = window.setTimeout(() => setMessage(messages[stripeConnectStatus]), 0);
@@ -181,11 +177,11 @@ export function StripeConnectPanel({
           <div>
             <Badge className="mb-3">
               <BadgeDollarSign data-icon="inline-start" />
-              Stripe Connect
+              Payout setup
             </Badge>
             <CardTitle>School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              The BEE Suite platform account can collect parent payments, retain the configured school-paid tuition payments feature fee, and route the remaining funds to each school&apos;s connected Stripe payout account.
+              The BEE Suite platform account can collect parent payments, retain the configured school-paid tuition payments feature fee, and route the remaining funds to each school&apos;s connected payout account.
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
@@ -203,7 +199,7 @@ export function StripeConnectPanel({
       <CardContent className="space-y-5">
         <div className="grid gap-3 md:grid-cols-5">
           <div className="rounded-xl border bg-background/40 p-4">
-            <div className="text-sm text-muted-foreground">Stripe keys</div>
+            <div className="text-sm text-muted-foreground">Processor keys</div>
             <div className="mt-1 font-semibold">{stripeConfigured ? "Configured" : "Missing"}</div>
           </div>
           <div className="rounded-xl border bg-background/40 p-4">
@@ -227,7 +223,13 @@ export function StripeConnectPanel({
         {!stripeConfigured ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
             <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
-            Add the platform Stripe secret key and webhook secret in Vercel before creating school payout onboarding links.
+            Add the platform payment processor secret key and webhook secret in Vercel before creating school payout onboarding links.
+          </div>
+        ) : null}
+        {stripeConfigured && !webhookConfigured ? (
+          <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
+            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            Add the payment processor webhook signing secret before enabling live parent checkout. Checkout is blocked without webhook reconciliation unless the explicit override is enabled.
           </div>
         ) : null}
 
@@ -241,11 +243,13 @@ export function StripeConnectPanel({
               <TableHead>Payout contact</TableHead>
               <TableHead>Connected account</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Requirements</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {localCenters.map((center) => {
+              const readiness = stripeConnectReadinessFromFields(center.customFields);
               const status = statusLabel(center);
               const hasAccount = maskedAccount(center) !== "Not connected";
               return (
@@ -255,6 +259,14 @@ export function StripeConnectPanel({
                   <TableCell>{center.email ?? "Add school email"}</TableCell>
                   <TableCell>{maskedAccount(center)}</TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
+                  <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
+                    {readiness.requirementFields.length
+                      ? readiness.requirementFields.slice(0, 4).join(", ")
+                      : readiness.canAcceptParentPayments
+                        ? "Checkout enabled"
+                        : readiness.blockingReason || "Awaiting payout status"}
+                    {readiness.requirementFields.length > 4 ? ` +${readiness.requirementFields.length - 4} more` : ""}
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       {hasAccount ? (
@@ -285,7 +297,7 @@ export function StripeConnectPanel({
             })}
             {!localCenters.length ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
+                <TableCell colSpan={7} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
@@ -293,10 +305,10 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent checkout is blocked for a school until its connected payout account exists and Stripe reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
+          Parent checkout is blocked for a school until its connected payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the Stripe application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout because there is no separate monthly software fee for the tuition billing and payment module. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout because there is no separate monthly software fee for the tuition billing and payment module. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
       </CardContent>
     </Card>

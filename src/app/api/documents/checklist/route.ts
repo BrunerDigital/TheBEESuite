@@ -40,12 +40,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Scope, subject, and requirement are required." }, { status: 400 });
   }
 
-  const requirement = findChecklistDefinition(scope, requirementId);
-  if (!requirement) {
-    return NextResponse.json({ ok: false, error: "Required checklist item was not found." }, { status: 404 });
-  }
-
   if (scope === "family") {
+    const requirement = findChecklistDefinition(scope, requirementId);
+    if (!requirement) {
+      return NextResponse.json({ ok: false, error: "Required checklist item was not found." }, { status: 404 });
+    }
     const family = await prisma.family.findUnique({
       where: { id: subjectId },
       select: {
@@ -85,6 +84,10 @@ export async function POST(request: NextRequest) {
   }
 
   if (scope === "child") {
+    const requirement = findChecklistDefinition(scope, requirementId);
+    if (!requirement) {
+      return NextResponse.json({ ok: false, error: "Required checklist item was not found." }, { status: 404 });
+    }
     const child = await prisma.child.findUnique({
       where: { id: subjectId },
       select: {
@@ -131,12 +134,17 @@ export async function POST(request: NextRequest) {
       id: true,
       centerId: true,
       user: { select: { name: true } },
+      center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
       certifications: { select: { id: true, name: true, status: true, expiresAt: true } },
     },
   });
   if (!staff) return NextResponse.json({ ok: false, error: "Staff profile not found." }, { status: 404 });
   if (!canAccessRequiredCenter(user, staff.centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this staff profile." }, { status: 403 });
+  }
+  const requirement = findChecklistDefinition(scope, requirementId, { center: staff.center });
+  if (!requirement) {
+    return NextResponse.json({ ok: false, error: "Required checklist item was not found for this school." }, { status: 404 });
   }
   const existing = staff.certifications.find((certification) => matchesRequiredChecklistDefinition(requirement, certification));
   if (existing && existing.status.toLowerCase() !== "rejected") {

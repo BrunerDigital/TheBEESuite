@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
+import {
+  broadcastSegmentIsEmpty,
+  broadcastSegmentSummary,
+  familyMatchesBroadcastSegment,
+  normalizeMessageBroadcastSegment,
+} from "@/lib/message-segmentation";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -16,6 +22,75 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+type MessageFamilyForDelivery = {
+  id: string;
+  name: string;
+  centerId: string | null;
+  billingEmail: string | null;
+  customFields?: unknown;
+  guardians: Array<{
+    userId: string | null;
+    email: string | null;
+    fullName: string;
+    phone: string | null;
+    preferredCommunication: string | null;
+  }>;
+  children: Array<{
+    fullName: string;
+    classroomId: string | null;
+    enrollmentStatus?: string | null;
+    classroom?: { name: string } | null;
+  }>;
+};
+
+type MessageCenterContext = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+};
+
+function firstName(value: string | null | undefined) {
+  return (value ?? "").split(" ").filter(Boolean)[0] ?? "";
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort();
+}
+
+function roleLabel(role: string) {
+  return role.replaceAll("_", " ").toLowerCase();
+}
+
+function buildTemplateContext({
+  family,
+  center,
+  senderName,
+  senderRole,
+}: {
+  family: MessageFamilyForDelivery | null;
+  center: MessageCenterContext | null;
+  senderName: string;
+  senderRole: string;
+}) {
+  const primaryGuardian = family?.guardians[0] ?? null;
+  const childNames = family?.children.map((child) => child.fullName) ?? [];
+  return {
+    familyName: family?.name,
+    guardianFirstName: firstName(primaryGuardian?.fullName),
+    guardianFullName: primaryGuardian?.fullName,
+    guardianEmail: primaryGuardian?.email,
+    childNames,
+    childFirstNames: childNames.map(firstName).filter(Boolean),
+    classroomNames: uniqueStrings(family?.children.map((child) => child.classroom?.name) ?? []),
+    centerName: center?.name,
+    centerEmail: center?.email,
+    centerPhone: center?.phone,
+    senderName,
+    senderRole: roleLabel(senderRole),
+    today: new Date(),
+  };
+}
+
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -24,6 +99,8 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const familyId = clean(body.familyId) || null;
+  const targetMode = clean(body.targetMode) === "broadcast" ? "broadcast" : "family";
+  const broadcastSegment = normalizeMessageBroadcastSegment(body.broadcastSegment);
   const templateId = clean(body.templateId) || null;
   const assignedToId = clean(body.assignedToId) || null;
   const replyToMessageId = clean(body.replyToMessageId) || null;
@@ -46,27 +123,326 @@ export async function POST(request: NextRequest) {
     isParentGuardian: senderIsParent,
     canManageOperations: senderCanManageOperations,
     canManageClassroomTasks: senderCanManageClassroom,
-    familyId,
+    familyId: targetMode === "broadcast" ? null : familyId,
   });
   if (!messageGuard.ok) {
     return NextResponse.json({ ok: false, error: messageGuard.error }, { status: messageGuard.status });
   }
 
-  let family: {
-    id: string;
-    name: string;
-    centerId: string | null;
-    billingEmail: string | null;
-    guardians: Array<{ userId: string | null; email: string | null; fullName: string; phone: string | null; preferredCommunication: string | null }>;
-    children: Array<{ fullName: string; classroomId: string | null }>;
-  } | null = null;
-  let familyCenter: { name: string; email: string | null; phone: string | null } | null = null;
+  if (targetMode === "broadcast") {
+    if (!senderCanManageOperations || senderIsParent) {
+      return NextResponse.json({ ok: false, error: "Broadcast messaging requires school operations access." }, { status: 403 });
+    }
+    if (replyToMessageId) {
+      return NextResponse.json({ ok: false, error: "Broadcast messages cannot be sent as thread replies." }, { status: 400 });
+    }
+
+    const requestedCenterIds = broadcastSegment.centerIds;
+    const scopedCenterIds = canAccessAllCenters(user)
+      ? requestedCenterIds
+      : requestedCenterIds.length
+        ? requestedCenterIds.filter((centerId) => user.centerIds.includes(centerId))
+        : user.centerIds;
+    if (!canAccessAllCenters(user) && requestedCenterIds.some((centerId) => !user.centerIds.includes(centerId))) {
+      return NextResponse.json({ ok: false, error: "One or more selected centers are outside your access scope." }, { status: 403 });
+    }
+
+    if (broadcastSegment.classroomIds.length) {
+      const selectedClassrooms = await prisma.classroom.findMany({
+        where: { id: { in: broadcastSegment.classroomIds } },
+        select: { id: true, centerId: true },
+      });
+      if (selectedClassrooms.length !== broadcastSegment.classroomIds.length) {
+        return NextResponse.json({ ok: false, error: "One or more selected classrooms are unavailable." }, { status: 400 });
+      }
+      const inaccessibleClassroom = selectedClassrooms.find((classroom) =>
+        !canAccessAllCenters(user) && !user.centerIds.includes(classroom.centerId),
+      );
+      if (inaccessibleClassroom) {
+        return NextResponse.json({ ok: false, error: "One or more selected classrooms are outside your access scope." }, { status: 403 });
+      }
+    }
+
+    const familyWhere: Prisma.FamilyWhereInput = {
+      ...(scopedCenterIds.length ? { centerId: { in: scopedCenterIds } } : {}),
+      ...(broadcastSegment.classroomIds.length
+        ? { children: { some: { classroomId: { in: broadcastSegment.classroomIds } } } }
+        : {}),
+    };
+    const candidateFamilies = await prisma.family.findMany({
+      where: familyWhere,
+      orderBy: { name: "asc" },
+      take: 1000,
+      include: {
+        guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
+        children: {
+          select: {
+            fullName: true,
+            classroomId: true,
+            enrollmentStatus: true,
+            classroom: { select: { name: true } },
+          },
+        },
+      },
+    });
+    const targetFamilies = candidateFamilies.filter((family) => familyMatchesBroadcastSegment(family, broadcastSegment));
+    if (!targetFamilies.length) {
+      const emptyDetail = broadcastSegmentIsEmpty(broadcastSegment) ? "No visible families are available." : "No families match the selected segment.";
+      return NextResponse.json({ ok: false, error: emptyDetail }, { status: 400 });
+    }
+
+    const familyCenterIds = uniqueStrings(targetFamilies.map((family) => family.centerId));
+    const centerRows = await prisma.center.findMany({
+      where: { id: { in: familyCenterIds } },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+    const centerById = new Map(centerRows.map((center) => [center.id, center]));
+
+    let selectedTemplate: { subject: string; body: string } | null = null;
+    if (templateId && !templateId.startsWith("default-")) {
+      selectedTemplate = await prisma.messageTemplate.findFirst({
+        where: {
+          id: templateId,
+          tenantId: user.tenantId,
+          isActive: true,
+          OR: [{ centerId: null }, { centerId: { in: familyCenterIds } }],
+        },
+        select: { subject: true, body: true },
+      });
+    } else if (templateId) {
+      selectedTemplate = defaultMessageTemplates.find((item) => item.id === templateId) ?? null;
+    }
+    if (selectedTemplate) {
+      subject = clean(body.subject) || selectedTemplate.subject;
+      message = clean(body.message) || selectedTemplate.body;
+    }
+
+    if (assignedToId) {
+      const assignee = await prisma.user.findFirst({
+        where: {
+          id: assignedToId,
+          tenantId: user.tenantId,
+          isActive: true,
+          ...(canAccessAllCenters(user)
+            ? {}
+            : {
+                OR: [
+                  { staffProfile: { centerId: { in: familyCenterIds } } },
+                  { accessGrants: { some: { isActive: true, centerId: { in: familyCenterIds } } } },
+                ],
+              }),
+        },
+        select: { id: true },
+      });
+      if (!assignee) {
+        return NextResponse.json({ ok: false, error: "Assigned staff user is not available for this broadcast." }, { status: 400 });
+      }
+    }
+
+    const statusCallbackUrl = sendSmsCopy ? twilioStatusCallbackUrl(request) : null;
+    const broadcastParentUserIds = uniqueStrings(targetFamilies.flatMap((familyRow) => familyRow.guardians.map((guardian) => guardian.userId)));
+    const broadcastNotificationPreferences = sendPushCopy && broadcastParentUserIds.length
+      ? await prisma.notificationPreference.findMany({
+          where: {
+            tenantId: user.tenantId,
+            type: "messages",
+            OR: [
+              { userId: { in: broadcastParentUserIds } },
+              { role: UserRole.PARENT_GUARDIAN },
+            ],
+          },
+          select: { userId: true, pushEnabled: true },
+        })
+      : [];
+    const pushDisabledUserIds = new Set(
+      broadcastNotificationPreferences
+        .filter((preference) => preference.userId && !preference.pushEnabled)
+        .map((preference) => preference.userId as string),
+    );
+    const createdMessages = [];
+    const emailResults = [];
+    const smsResults = [];
+    const pushNotifications = [];
+
+    for (const targetFamily of targetFamilies) {
+      const center = targetFamily.centerId ? centerById.get(targetFamily.centerId) ?? null : null;
+      const context = buildTemplateContext({
+        family: targetFamily,
+        center,
+        senderName: user.name,
+        senderRole: user.role,
+      });
+      const renderedSubject = renderMessageTemplate(subject, context);
+      const renderedMessage = renderMessageTemplate(message, context);
+      const created = await prisma.message.create({
+        data: {
+          familyId: targetFamily.id,
+          senderId: user.id,
+          assignedToId,
+          templateId: templateId && !templateId.startsWith("default-") ? templateId : null,
+          threadKey: `family:${targetFamily.id}`,
+          subject: renderedSubject,
+          body: renderedMessage,
+          channel: "broadcast",
+          priority,
+          sentiment: priority === "high" ? "needs_review" : "neutral",
+          metadata: {
+            deliveryChannels: {
+              portal: true,
+              email: sendEmailCopy,
+              sms: sendSmsCopy,
+              push: sendPushCopy,
+            },
+            templateId,
+            broadcast: {
+              segment: broadcastSegment,
+              summary: broadcastSegmentSummary(broadcastSegment),
+              recipientCount: targetFamilies.length,
+            },
+          },
+        },
+      });
+      createdMessages.push(created);
+
+      const parentEmails = uniqueStrings([targetFamily.billingEmail, ...targetFamily.guardians.map((guardian) => guardian.email)]);
+      if (sendEmailCopy) {
+        const email = await sendEmail({
+          to: parentEmails,
+          subject: `Message from ${user.name}: ${renderedSubject}`,
+          text: renderedMessage,
+          replyTo: user.email,
+          fromName: "The BEE Suite",
+          categories: ["communication_email", "broadcast"],
+          customArgs: { messageId: created.id, familyId: targetFamily.id, centerId: targetFamily.centerId },
+          tenantId: user.tenantId,
+        });
+        await recordEmailDeliveryAttempt({
+          tenantId: user.tenantId,
+          centerId: targetFamily.centerId,
+          messageId: created.id,
+          purpose: "communication_email",
+          to: parentEmails,
+          subject: `Message from ${user.name}: ${renderedSubject}`,
+          text: renderedMessage,
+          replyTo: user.email,
+          result: email,
+          metadata: { familyId: targetFamily.id, broadcast: true },
+        });
+        emailResults.push(email);
+      }
+
+      if (sendSmsCopy) {
+        const smsRecipients = uniqueSmsRecipients(
+          targetFamily.guardians
+            .filter((guardian) => guardian.preferredCommunication === "sms")
+            .map((guardian) => guardian.phone),
+        );
+        for (const to of smsRecipients) {
+          const result = await sendSms({ to, body: renderedMessage, statusCallbackUrl, tenantId: user.tenantId });
+          await recordCommunicationSmsDeliveryAttempt({
+            tenantId: user.tenantId,
+            centerId: targetFamily.centerId,
+            messageId: created.id,
+            to,
+            body: renderedMessage,
+            statusCallbackUrl,
+            result,
+          });
+          smsResults.push({
+            ok: result.ok,
+            configured: result.configured,
+            provider: result.provider,
+            id: result.id ?? null,
+            error: result.error ?? null,
+          });
+        }
+      }
+
+      if (sendPushCopy) {
+        const parentUserIds = uniqueStrings(targetFamily.guardians.map((guardian) => guardian.userId));
+        for (const userId of parentUserIds) {
+          if (!pushDisabledUserIds.has(userId)) {
+            pushNotifications.push(await prisma.notification.create({
+              data: {
+                userId,
+                title: `New school message: ${renderedSubject}`,
+                body: `${user.name}: ${renderedMessage}`,
+                type: "message",
+                priority,
+              },
+            }));
+          }
+        }
+      }
+    }
+
+    await writeAuditLog(user, {
+      centerId: user.primaryCenterId,
+      action: "message.broadcast.created",
+      resource: "Message",
+      resourceId: createdMessages[0]?.id ?? null,
+      metadata: {
+        channel: "broadcast",
+        priority,
+        recipientCount: targetFamilies.length,
+        messageIds: createdMessages.map((messageRow) => messageRow.id),
+        segment: broadcastSegment,
+        segmentSummary: broadcastSegmentSummary(broadcastSegment),
+        emailCopyRequested: sendEmailCopy,
+        emailCopySent: emailResults.filter((result) => result.ok).length,
+        smsCopyRequested: sendSmsCopy,
+        smsCopyAttempted: smsResults.length,
+        smsCopySent: smsResults.filter((result) => result.ok).length,
+        pushCopyRequested: sendPushCopy,
+        pushCopyQueued: pushNotifications.length,
+        assignedToId,
+        templateId,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      recipientCount: targetFamilies.length,
+      messageCount: createdMessages.length,
+      messages: createdMessages,
+      email: {
+        attempted: sendEmailCopy ? targetFamilies.length : 0,
+        sent: emailResults.filter((result) => result.ok).length,
+        configured: emailResults.some((result) => result.configured),
+        provider: "sendgrid",
+      },
+      sms: {
+        attempted: smsResults.length,
+        sent: smsResults.filter((result) => result.ok).length,
+        configured: smsResults.some((result) => result.configured),
+        provider: "twilio",
+        error: sendSmsCopy && smsResults.length === 0 ? "No SMS-preferred guardian phone numbers are available." : smsResults.find((result) => result.error)?.error ?? null,
+        results: smsResults,
+      },
+      push: {
+        attempted: pushNotifications.length,
+        queued: pushNotifications.length,
+        provider: "in_app_notification",
+        configured: Boolean(process.env.PUSH_PROVIDER_KEY),
+      },
+    }, { status: 201 });
+  }
+
+  let family: MessageFamilyForDelivery | null = null;
+  let familyCenter: MessageCenterContext | null = null;
   if (familyId) {
     family = await prisma.family.findUnique({
       where: { id: familyId },
       include: {
         guardians: { select: { userId: true, email: true, fullName: true, phone: true, preferredCommunication: true } },
-        children: { select: { fullName: true, classroomId: true } },
+        children: {
+          select: {
+            fullName: true,
+            classroomId: true,
+            enrollmentStatus: true,
+            classroom: { select: { name: true } },
+          },
+        },
       },
     });
     if (!family) return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
@@ -126,18 +502,12 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const primaryGuardian = family?.guardians[0] ?? null;
-  const [guardianFirstName = ""] = (primaryGuardian?.fullName ?? "").split(" ");
-  const templateContext = {
-    familyName: family?.name,
-    guardianFirstName,
-    guardianFullName: primaryGuardian?.fullName,
-    childNames: family?.children.map((child) => child.fullName),
-    centerName: familyCenter?.name,
-    centerEmail: familyCenter?.email,
-    centerPhone: familyCenter?.phone,
+  const templateContext = buildTemplateContext({
+    family,
+    center: familyCenter,
     senderName: user.name,
-  };
+    senderRole: user.role,
+  });
   subject = renderMessageTemplate(subject, templateContext);
   message = renderMessageTemplate(message, templateContext);
 

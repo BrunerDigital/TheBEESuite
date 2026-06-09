@@ -39,7 +39,7 @@ const steps = [
   {
     title: "School setup",
     icon: ClipboardList,
-    fields: ["classroomSetup", "tuitionRateSetup", "subsidyRules", "balanceRules", "invoiceRules", "licensingSetup"],
+    fields: schoolOnboardingSetupSections.map((section) => section.field),
   },
   {
     title: "Payouts",
@@ -71,14 +71,8 @@ type FormState = {
   softwarePlan: string;
   addOnBundle: string;
   merchantFeeStrategy: string;
-  classroomSetup: string;
-  tuitionRateSetup: string;
-  subsidyRules: string;
-  balanceRules: string;
-  invoiceRules: string;
-  licensingSetup: string;
   notes: string;
-};
+} & Record<SchoolOnboardingSetupField, string>;
 
 type WorkspaceSetup = {
   existingWorkspace?: boolean;
@@ -114,6 +108,10 @@ type WorkspaceSetup = {
   };
 };
 
+const initialSetupFields = Object.fromEntries(
+  schoolOnboardingSetupSections.map((section) => [section.field, ""]),
+) as Record<SchoolOnboardingSetupField, string>;
+
 const initialForm: FormState = {
   brandName: "",
   workEmail: "",
@@ -127,13 +125,8 @@ const initialForm: FormState = {
   softwarePlan: "",
   addOnBundle: "",
   merchantFeeStrategy: "",
-  classroomSetup: "",
-  tuitionRateSetup: "",
-  subsidyRules: "",
-  balanceRules: "",
-  invoiceRules: "",
-  licensingSetup: "",
   notes: "",
+  ...initialSetupFields,
 };
 
 function hasValue(value: string) {
@@ -423,8 +416,8 @@ export function OnboardingFlow() {
                           <SelectValue placeholder="Choose fee handling" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Stripe processing plus BEE Suite surcharge passed to payer">Stripe processing plus BEE Suite surcharge passed to payer</SelectItem>
-                          <SelectItem value="School absorbs Stripe processing; BEE Suite surcharge invoiced monthly">School absorbs Stripe processing; BEE Suite surcharge invoiced monthly</SelectItem>
+                          <SelectItem value="Processor costs plus BEE Suite surcharge passed to payer">Processor costs plus BEE Suite surcharge passed to payer</SelectItem>
+                          <SelectItem value="School absorbs processor costs; BEE Suite surcharge invoiced monthly">School absorbs processor costs; BEE Suite surcharge invoiced monthly</SelectItem>
                           <SelectItem value="Enterprise negotiated merchant services">Enterprise negotiated merchant services</SelectItem>
                         </SelectContent>
                       </Select>
@@ -438,7 +431,7 @@ export function OnboardingFlow() {
                       <Input id="payoutAdminEmail" value={form.payoutAdminEmail} onChange={(event) => update("payoutAdminEmail", event.target.value)} placeholder="finance@example.com" type="email" required />
                     </div>
                     <div className="space-y-2 sm:col-span-2">
-                      <Label>Stripe Connect readiness</Label>
+                      <Label>Payout account readiness</Label>
                       <Select value={form.payoutReadiness} onValueChange={(value) => update("payoutReadiness", value ?? "")}>
                         <SelectTrigger>
                           <SelectValue placeholder="Choose payout setup status" />
@@ -523,7 +516,7 @@ export function OnboardingFlow() {
                       ))}
                     </div>
                     <div className="rounded-lg border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-700">
-                      Finishing onboarding creates a gated trial workspace, owner account, primary center profile, and inquiry form embed. Live checkout remains disabled until Stripe Connect payout onboarding is complete and reviewed.
+                      Finishing onboarding creates a gated trial workspace, owner account, primary center profile, and inquiry form embed. Live checkout remains disabled until payout onboarding is complete and reviewed.
                     </div>
                   </div>
                 ) : null}
@@ -556,7 +549,7 @@ export function OnboardingFlow() {
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[
               [Mail, "Account setup", "Owners receive a password setup email and can complete their profile from the workspace."],
-              [BadgeDollarSign, "Payout onboarding", "Schools complete connected Stripe payout setup before live checkout."],
+              [BadgeDollarSign, "Payout onboarding", "Schools complete connected payout setup before live checkout."],
               [ShieldCheck, "Trial safeguards", "Live payments, parent engagement, and sensitive workflows stay gated until reviewed."],
             ].map(([Icon, title, body]) => (
               <div key={title as string} className="rounded-lg border border-white/10 bg-white/[0.04] p-4">

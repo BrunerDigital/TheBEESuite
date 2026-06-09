@@ -30,7 +30,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   ["Product", "#product"],
   ["How it works", "#workflows"],
-  ["Product maps", "#product-maps"],
+  ["Visual guides", "#product-maps"],
   ["Schools", "#school-use"],
   ["Registration", "/registration"],
   ["Testimonials", "#testimonials"],
@@ -38,9 +38,9 @@ const navItems = [
 ];
 
 const heroProof = [
-  ["Tenant-isolated", "Separate brands, owner groups, schools, and users"],
-  ["1 embed", "Inquiry form to CRM, email, and Sheets"],
-  ["Human-reviewed AI", "Suggestions with safety guardrails"],
+  ["Role-safe SaaS", "Tenant, brand, owner group, school, and classroom scope"],
+  ["Enrollment to ops", "Inquiry, registration, family setup, billing, and reports"],
+  ["Human-reviewed AI", "Drafts and summaries with staff decision guardrails"],
 ];
 
 const heroLogo = {
@@ -69,14 +69,14 @@ const crmSteps = [
 ];
 
 const setupCards = [
-  ["Brand profile", "Name, theme, logo placeholder, custom domain, and parent-facing identity.", Building2],
+  ["Brand profile", "Name, theme, logo assets, custom domain, and parent-facing identity.", Building2],
   ["Owner groups", "Single-center owners, franchisees, and multi-location operators stay properly separated.", ShieldCheck],
   ["Centers", "Location profiles, CRM IDs, routing emails, capacity, and open or closed status.", MapPin],
   ["Users", "Role-scoped access for owners, regional teams, directors, staff, and auditors.", UsersRound],
   ["Branding layers", "Tenant, brand, owner group, and center customizations can override the right surfaces.", Sparkles],
   ["Inquiry form", "Copyable embed codes tied to the correct center or multi-location account.", ClipboardCheck],
   ["Online registration", "Public registration packets create application-stage leads and director review tasks.", FileCheck2],
-  ["Payouts", "Stripe Connect readiness is captured, but live checkout stays gated until reviewed.", CreditCard],
+  ["Payouts", "School payout readiness is captured before live parent checkout is enabled.", CreditCard],
   ["Reports", "FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.", BarChart3],
 ];
 
@@ -147,37 +147,88 @@ const explainerGraphics = [
 
 const schoolScenes = [
   {
-    title: "Lobby check-in on a tablet",
-    body: "Parents use a 4 digit PIN set by the director, select their children, and create check-in or check-out records without staff retyping the day.",
+    title: "Lobby check-in without the morning scramble",
+    body: "Parents use director-managed PIN or QR options while the school keeps attendance, pickup authorization, and daily arrival records in one place.",
     icon: TabletSmartphone,
+    src: "/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
+    alt: "Parent using a tablet kiosk with a school director in a childcare lobby",
+    metric: "PIN + QR ready",
+    detail: "Drop-off, pickup, and authorization support",
   },
   {
-    title: "Teacher updates during the day",
-    body: "Classroom staff can share photos, notes, activities, meals, naps, and daily reports so families get a warmer window into the day.",
+    title: "Teacher updates while the classroom keeps moving",
+    body: "Staff can document meals, naps, activities, photos, incidents, and daily reports without turning classroom communication into end-of-day paperwork.",
     icon: Camera,
+    src: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
+    alt: "Teacher using a tablet in a preschool classroom",
+    metric: "Daily reports",
+    detail: "Care logs, photos, notes, and parent updates",
   },
   {
-    title: "Director follow-up desk",
-    body: "Enrollment teams can add leads manually, move families through the pipeline, assign tasks, and use Mr. Bee to draft thoughtful replies.",
+    title: "Director follow-up with the full school picture",
+    body: "Directors can review leads, tours, applications, tuition setup, staffing, documents, and parent communication from the same operating record.",
     icon: School,
+    src: "/brand/the-bee-suite/usage/bee-suite-director-operations.png",
+    alt: "Childcare directors collaborating at a laptop in a preschool office",
+    metric: "One operating record",
+    detail: "CRM, enrollment, documents, billing, and staffing",
   },
 ];
 
 const testimonials = [
   {
-    quote: "This is the first childcare CRM view that feels like it was designed around the actual work happening in a center, not a generic sales board.",
-    person: "Pilot center director",
-    role: "Multi-classroom preschool",
+    quote: "The part that matters to franchisees is separation. I can see owner-group performance without giving every location access to every other school’s families, billing, or staffing details.",
+    person: "Composite franchisee perspective",
+    role: "Multi-location childcare owner",
+    challenge: "Owner group visibility",
   },
   {
-    quote: "The multi-location snapshot makes the morning standup faster. We can see where inquiries, tours, occupancy, and follow-ups need attention.",
-    person: "Regional operator",
-    role: "Childcare franchise group",
+    quote: "Our directors used to chase leads in email, text threads, and sticky notes. The BEE Suite gives them one place to see inquiry source, tour status, registration packet, and next follow-up.",
+    person: "Composite franchise operator",
+    role: "Regional childcare franchisee",
+    challenge: "Lead follow-up discipline",
   },
   {
-    quote: "The inquiry routing is the part I care about most. Every lead needs to reach the right school quickly, with a backup record we can trust.",
-    person: "Enrollment coordinator",
-    role: "Early education brand",
+    quote: "Online registration is useful because it does not just collect a form. Approval creates the family record, document requests, checklist, parent portal invite, and billing next steps.",
+    person: "Composite school director",
+    role: "Center director",
+    challenge: "Enrollment handoff",
+  },
+  {
+    quote: "I need to know what is missing before a child starts: custody paperwork, immunizations, signatures, tuition setup, classroom assignment, and start date. The checklist makes that visible.",
+    person: "Composite assistant director",
+    role: "Enrollment and front desk lead",
+    challenge: "Start-date readiness",
+  },
+  {
+    quote: "At the corporate level, the value is a cleaner operating rhythm. We can review FTE, pipeline, open documents, payments readiness, ratios, and location setup without asking schools for another spreadsheet.",
+    person: "Composite corporate operations team",
+    role: "Childcare brand operations",
+    challenge: "Executive rollup",
+  },
+  {
+    quote: "The teacher view is practical. I can add meals, naps, activities, photos, and notes during the day instead of reconstructing everything after pickup.",
+    person: "Composite lead teacher",
+    role: "Preschool classroom lead",
+    challenge: "Daily report accuracy",
+  },
+  {
+    quote: "For agencies supporting multiple providers, the document and compliance queues are the difference. It is easier to see which families, staff, or children need records before a visit or file review.",
+    person: "Composite childcare agency coordinator",
+    role: "Family services and records support",
+    challenge: "Records readiness",
+  },
+  {
+    quote: "Medication logs, incident review, emergency drills, and staff credential reminders all reduce the number of places directors have to look before they know what needs attention.",
+    person: "Composite quality improvement coach",
+    role: "Childcare agency field support",
+    challenge: "Licensing support workflows",
+  },
+  {
+    quote: "The AI assistant helps with the blank-page problem. It can draft a warm parent reply or summarize a lead, but the school still makes the final call on sensitive issues.",
+    person: "Composite enrollment specialist",
+    role: "Early learning agency staff",
+    challenge: "Human-reviewed communication",
   },
 ];
 
@@ -308,56 +359,38 @@ function SchoolSceneCard({
   title,
   body,
   icon: Icon,
-  index,
+  src,
+  alt,
+  metric,
+  detail,
 }: {
   title: string;
   body: string;
   icon: LucideIcon;
-  index: number;
+  src: string;
+  alt: string;
+  metric: string;
+  detail: string;
 }) {
   return (
-    <GlassPanel className="relative overflow-hidden">
-      <div className="relative aspect-[16/10] overflow-hidden border-b border-white/10 bg-[radial-gradient(circle_at_30%_20%,rgba(245,181,27,0.24),transparent_12rem),linear-gradient(135deg,#121821,#05070a)]">
-        <div className="absolute inset-x-6 top-6 h-8 rounded-t-2xl border border-white/10 bg-black/35" />
-        <div className="absolute inset-x-8 bottom-5 top-11 rounded-2xl border border-white/10 bg-black/45 p-4 shadow-2xl shadow-black/40">
-          {index === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Lobby kiosk</div>
-              <div className="mt-5 flex gap-2">
-                {[1, 2, 3, 4].map((dot) => (
-                  <span key={dot} className="size-4 rounded-full bg-amber-300" />
-                ))}
-              </div>
-              <div className="mt-6 grid w-full max-w-52 grid-cols-3 gap-2">
-                {Array.from({ length: 9 }, (_, keypad) => (
-                  <span key={keypad} className="rounded-lg bg-white/[0.07] py-2 text-xs text-zinc-300">
-                    {keypad + 1}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : index === 1 ? (
-            <div className="grid h-full grid-cols-[0.72fr_1fr] gap-4">
-              <div className="rounded-xl bg-amber-300/20" />
-              <div className="space-y-3 self-center">
-                <div className="h-3 rounded bg-white/18" />
-                <div className="h-3 w-2/3 rounded bg-white/12" />
-                <div className="h-10 rounded-lg border border-amber-300/25 bg-amber-300/10" />
-              </div>
-            </div>
-          ) : (
-            <div className="h-full space-y-2">
-              {["New Inquiry", "Tour Scheduled", "Application", "Enrolled"].map((stage, stageIndex) => (
-                <div key={stage} className="grid grid-cols-[1fr_auto] rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300">
-                  <span>{stage}</span>
-                  <span className="font-semibold text-amber-300">{[18, 12, 9, 6][stageIndex]}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="absolute left-5 top-5 grid size-11 place-items-center rounded-xl border border-amber-300/25 bg-black/45 text-amber-300 backdrop-blur-md">
+    <GlassPanel className="group relative overflow-hidden">
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-white/10 bg-[#070b10]">
+        <Image
+          src={src}
+          alt={alt}
+          width={1600}
+          height={1000}
+          sizes="(max-width: 1024px) 100vw, 31vw"
+          className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.035]"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,7,10,0)_0%,rgba(5,7,10,0.1)_38%,rgba(5,7,10,0.78)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(245,181,27,0.16),transparent_18rem),linear-gradient(135deg,rgba(5,7,10,0.16),rgba(87,57,6,0.14))] opacity-80" />
+        <div className="absolute left-5 top-5 grid size-11 place-items-center rounded-xl border border-amber-300/25 bg-black/45 text-amber-300 shadow-2xl shadow-black/25 backdrop-blur-md">
           <Icon className="size-5" />
+        </div>
+        <div className="absolute bottom-5 left-5 right-5 rounded-xl border border-white/12 bg-black/45 p-4 shadow-2xl shadow-black/30 backdrop-blur-md">
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-300">{metric}</div>
+          <div className="mt-2 text-sm leading-5 text-zinc-200">{detail}</div>
         </div>
       </div>
       <div className="p-5">
@@ -368,14 +401,29 @@ function SchoolSceneCard({
   );
 }
 
-function TestimonialCard({ quote, person, role }: { quote: string; person: string; role: string }) {
+function TestimonialCard({
+  quote,
+  person,
+  role,
+  challenge,
+}: {
+  quote: string;
+  person: string;
+  role: string;
+  challenge: string;
+}) {
   return (
-    <GlassPanel className="relative p-6">
-      <Quote className="size-7 text-amber-300" />
-      <p className="mt-5 text-base leading-7 text-zinc-200">{quote}</p>
+    <GlassPanel className="relative flex h-full flex-col p-6 transition duration-300 hover:border-amber-300/30 hover:bg-white/[0.055]">
+      <div className="flex items-center justify-between gap-4">
+        <Quote className="size-7 shrink-0 text-amber-300" />
+        <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
+          {challenge}
+        </span>
+      </div>
+      <p className="mt-5 flex-1 text-base leading-7 text-zinc-200">{quote}</p>
       <div className="mt-6 border-t border-white/10 pt-4">
         <div className="text-sm font-semibold text-white">{person}</div>
-        <div className="mt-1 text-xs text-zinc-500">{role}</div>
+        <div className="mt-1 text-xs leading-5 text-zinc-500">{role}</div>
       </div>
     </GlassPanel>
   );
@@ -405,7 +453,7 @@ export default function LandingPage() {
               Log in
             </Link>
             <Button className="hidden h-10 px-4 shadow-[0_0_28px_rgba(245,181,27,0.22)] sm:inline-flex" nativeButton={false} render={<Link href="/onboarding" />}>
-              Start onboarding
+              Request workspace
               <ArrowRight data-icon="inline-end" />
             </Button>
           </div>
@@ -429,11 +477,11 @@ export default function LandingPage() {
               priority
             />
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
-              A premium childcare CRM and operations command center for enrollment, tours, family communication, staffing, billing readiness, reporting, and multi-location visibility.
+              The public SaaS command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="h-12 px-5 text-sm shadow-[0_0_34px_rgba(245,181,27,0.25)]" nativeButton={false} render={<Link href="/onboarding" />}>
-                Create trial workspace
+                Request SaaS workspace
                 <ArrowRight data-icon="inline-end" />
               </Button>
               <Button
@@ -452,7 +500,7 @@ export default function LandingPage() {
                 nativeButton={false}
                 render={<Link href="/login" />}
               >
-                Log in to CRM
+                Log in
               </Button>
             </div>
             <div className="mt-9 grid gap-3 sm:grid-cols-3">
@@ -473,7 +521,7 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1400px] gap-10 lg:grid-cols-[0.72fr_1fr] lg:items-start">
           <SectionHeading
             title="A CRM built around childcare enrollment, not generic sales."
-            body="Every inquiry is tied to a center, program, family, child, tour, status, source, and follow-up history. Schools can create and edit leads directly, while executives keep the system-level view."
+            body="Every inquiry is tied to a center, program, family, child, tour, status, source, and follow-up history. Schools can create and edit leads directly while executives keep the system-level view across brands, owner groups, and centers."
           />
           <div className="grid gap-4">
             {crmSteps.map((step) => (
@@ -489,7 +537,7 @@ export default function LandingPage() {
           <SectionHeading
             align="center"
             title="The workflows connect instead of living in separate tabs."
-            body="Inquiry capture, classroom engagement, billing readiness, reporting, and AI assistance share the same center-aware foundation, so schools do less duplicate admin work."
+            body="Inquiry capture, online registration, classroom engagement, billing readiness, compliance work, reporting, and AI assistance share the same center-aware foundation, so schools do less duplicate admin work."
           />
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {workflowCards.map((workflow) => (
@@ -505,8 +553,8 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1fr] lg:items-end">
             <SectionHeading
-              title="Product maps that make the system easier to explain."
-              body="These visual guides help new users, school leaders, and franchise teams understand what The BEE Suite does before they touch the dashboard."
+              title="Visual guides that make the platform easier to explain."
+              body="These product maps help new users, school leaders, franchise teams, and agency partners understand The BEE Suite before they touch the dashboard."
             />
             <div className="grid gap-3 sm:grid-cols-3">
               {[
@@ -537,11 +585,11 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             title="Designed for how schools actually use the system."
-            body="The BEE Suite is not just a back-office dashboard. It supports the lobby, the classroom, the enrollment desk, and the executive view with role-aware screens."
+            body="The BEE Suite is not just a back-office dashboard. It supports the lobby, classroom, enrollment desk, director office, and executive view with role-aware screens and workflows."
           />
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
-            {schoolScenes.map((scene, index) => (
-              <SchoolSceneCard key={scene.title} {...scene} index={index} />
+            {schoolScenes.map((scene) => (
+              <SchoolSceneCard key={scene.title} {...scene} />
             ))}
           </div>
         </div>
@@ -552,7 +600,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="Trial workspaces start with the pieces a provider actually needs."
+            title="Production onboarding starts with the pieces a provider actually needs."
             body="A new operator can create a gated workspace, define the ownership container, complete brand and center setup, copy their inquiry form, invite users, and prepare payout onboarding before live parent workflows are enabled."
           />
           <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -568,10 +616,10 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="Built with operators, directors, and enrollment teams in mind."
-            body="The first production rollout is focused on real center operations: lead capture, school-level ownership, executive visibility, and parent engagement foundations."
+            title="Representative launch feedback from the people who run childcare."
+            body="These generated composite quotes reflect the franchisee, director, corporate, teacher, and childcare-agency workflows The BEE Suite is built to support. They are not presented as verified customer endorsements."
           />
-          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {testimonials.map((testimonial) => (
               <TestimonialCard key={testimonial.person} {...testimonial} />
             ))}
@@ -584,7 +632,7 @@ export default function LandingPage() {
           <div>
             <SectionHeading
               title="Executive reporting without losing the school-level truth."
-              body="The BEE Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
+              body="The BEE Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, compliance work, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
             />
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {reportingRows.map(([title, body]) => (
@@ -648,7 +696,7 @@ export default function LandingPage() {
                 </div>
                 <h2 className="mt-3 text-3xl font-semibold tracking-normal text-white">Helpful drafts. Human decisions.</h2>
                 <p className="mt-3 text-sm leading-6 text-zinc-400">
-                  Mr. Bee can summarize a lead, draft a tour follow-up, suggest a parent reply, and highlight next steps. Sensitive safety, medical, custody, billing, and compliance decisions stay with authorized staff.
+                  Mr. Bee can summarize a lead, draft a tour follow-up, suggest a parent reply, and highlight next steps. Sensitive safety, medical, custody, billing, licensing, and compliance decisions stay with authorized staff.
                 </p>
               </div>
             </div>
@@ -657,7 +705,7 @@ export default function LandingPage() {
             {[
               [ShieldCheck, "Role-scoped", "Users only see the centers and workflows their role allows."],
               [LockKeyhole, "Sensitive by design", "Custody, medical, child, and billing data are treated as protected workflows."],
-              [FileCheck2, "Audit-ready", "Important changes create traceable records for review."],
+              [FileCheck2, "Review-ready", "Important changes create traceable records for operational review."],
             ].map(([Icon, title, body]) => (
               <FeatureCard key={title as string} title={title as string} body={body as string} icon={Icon as LucideIcon} />
             ))}
@@ -671,12 +719,12 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-semibold tracking-normal">Ready to run enrollment from one command center?</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#29313a]">
-              Create a trial workspace for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
+              Start the SaaS onboarding path for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button className="h-11 bg-[#101318] px-5 text-white hover:bg-black" nativeButton={false} render={<Link href="/onboarding" />}>
-              Start onboarding
+              Request workspace
               <ArrowRight data-icon="inline-end" />
             </Button>
             <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/login" />}>

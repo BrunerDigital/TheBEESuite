@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
 
   const currentFields = jsonObject(billingAccount.customFields);
   const baseUrl = requestBaseUrl(request);
+  const tenantId = billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
 
   if (action === "disable_autopay") {
     await prisma.billingAccount.update({
@@ -124,10 +125,11 @@ export async function POST(request: NextRequest) {
     const portal = await createStripeBillingPortalSession({
       customerId: existingCustomerId,
       returnUrl: `${baseUrl}/parent-portal?paymentMethod=portal_return`,
+      tenantId,
     });
     if (!portal.ok || !portal.url) {
       return NextResponse.json(
-        { ok: false, configured: portal.configured, error: portal.error || "Stripe customer portal could not be created." },
+        { ok: false, configured: portal.configured, error: portal.error || "Payment method management could not be opened." },
         { status: portal.configured ? 502 : 503 },
       );
     }
@@ -152,7 +154,9 @@ export async function POST(request: NextRequest) {
     const customer = await createStripeCustomer({
       email: fallbackEmail,
       name: billingAccount.family.name,
+      tenantId,
       metadata: {
+        tenantId,
         billingAccountId: billingAccount.id,
         familyId: billingAccount.familyId,
         centerId: centerId || "",
@@ -161,7 +165,7 @@ export async function POST(request: NextRequest) {
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
-        { ok: false, configured: customer.configured, error: customer.error || "Stripe customer could not be created." },
+        { ok: false, configured: customer.configured, error: customer.error || "Payment profile could not be created." },
         { status: customer.configured ? 502 : 503 },
       );
     }
@@ -174,6 +178,7 @@ export async function POST(request: NextRequest) {
     successUrl: `${baseUrl}/parent-portal?paymentMethod=success`,
     cancelUrl: `${baseUrl}/parent-portal?paymentMethod=cancelled`,
     metadata: {
+      tenantId,
       setupFlow: "billing_account_payment_method",
       billingAccountId: billingAccount.id,
       familyId: billingAccount.familyId,
@@ -182,6 +187,7 @@ export async function POST(request: NextRequest) {
       enableAutopay: "true",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
+    tenantId,
   });
   if (!setup.ok || !setup.url) {
     return NextResponse.json(

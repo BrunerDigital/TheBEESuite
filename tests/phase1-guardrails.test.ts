@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PaymentStatus } from "@prisma/client";
+import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
 import { checkoutApplicationGuard, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
+import { demoAccountEmails } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
 import {
@@ -32,7 +33,7 @@ import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
-import { readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { canViewDemoFallbackData, readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
@@ -205,6 +206,26 @@ test("session version guard invalidates stale signed cookies", () => {
   assert.equal(sessionMatchesCurrentVersion({ sessionVersion: 2 }, 3), false);
   assert.equal(sessionMatchesCurrentVersion({}, 1), false);
   assert.equal(sessionMatchesCurrentVersion({}, 0), true);
+});
+
+test("demo fallback data is limited to seeded demo accounts", () => {
+  assert.equal(canViewDemoFallbackData({
+    email: demoAccountEmails.executive,
+    role: UserRole.BRAND_ADMIN,
+  }), true);
+  assert.equal(canViewDemoFallbackData({
+    email: ` ${demoAccountEmails.school.toUpperCase()} `,
+    role: UserRole.CENTER_DIRECTOR,
+  }), true);
+  assert.equal(canViewDemoFallbackData({
+    email: "brenden@kidcityusa.com",
+    role: UserRole.PLATFORM_OWNER,
+  }), false);
+  assert.equal(canViewDemoFallbackData({
+    email: "marie@kidcityusa.com",
+    role: UserRole.BRAND_ADMIN,
+  }), false);
+  assert.equal(canViewDemoFallbackData({ role: UserRole.REGIONAL_MANAGER }), false);
 });
 
 test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {
@@ -410,7 +431,9 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
 
   assert.equal(canAccessModule(teacher, "teacher-portal"), true);
   assert.equal(canAccessModule(teacher, "daily-reports"), true);
+  assert.equal(canAccessModule(teacher, "school-setup"), false);
   assert.equal(canAccessModule(teacher, "staff"), false);
+  assert.equal(canAccessModule(director, "school-setup"), true);
   assert.equal(canAccessModule(director, "staff"), true);
   assert.equal(canAccessModule(director, "calendar"), true);
   assert.equal(canAccessModule(teacher, "calendar"), false);

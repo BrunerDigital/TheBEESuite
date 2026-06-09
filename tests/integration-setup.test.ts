@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildIntegrationSetupViews,
+  getIntegrationRuntimeStatus,
   INTEGRATION_SETUP_DEFINITIONS,
   normalizeIntegrationSetupStatus,
   sanitizeIntegrationConfig,
@@ -10,8 +11,18 @@ import {
 test("integration setup definitions cover the active setup surface", () => {
   assert.deepEqual(
     INTEGRATION_SETUP_DEFINITIONS.map((definition) => definition.provider),
-    ["supabase", "sendgrid", "google_sheets", "openai", "stripe", "twilio"],
+    ["supabase", "sendgrid", "google_sheets", "google_calendar", "openai", "stripe", "twilio"],
   );
+});
+
+test("Google Calendar setup accepts access token credentials", () => {
+  const status = getIntegrationRuntimeStatus("google_calendar", {}, [
+    "GOOGLE_CALENDAR_ID",
+    "GOOGLE_CALENDAR_ACCESS_TOKEN",
+  ]);
+
+  assert.equal(status.configured, true);
+  assert.equal(status.status, "Connected");
 });
 
 test("integration setup sanitization keeps only approved non-secret fields", () => {

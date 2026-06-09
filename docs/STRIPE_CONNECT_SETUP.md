@@ -78,7 +78,7 @@ Copy the signing secret into `STRIPE_WEBHOOK_SECRET`, then redeploy.
 5. Return to The BEE Suite. The payout table auto-syncs after return.
 6. Use `Check` to refresh payout status later.
 
-Parent checkout is blocked until the selected school has a connected account and Stripe reports payouts enabled.
+Parent checkout is blocked until Stripe platform keys, webhook reconciliation, and the selected school connected account are ready. A school account is ready only when Stripe reports both charges and payouts enabled.
 
 ## Test Mode Checklist
 

@@ -70,6 +70,19 @@ function assertDocumentContentType(contentType: string) {
   }
 }
 
+export function contentTypeForDocumentFile(input: { type?: string | null; name?: string | null }) {
+  if (input.type) return input.type;
+  const ext = input.name?.split(".").pop()?.toLowerCase();
+  if (ext === "pdf") return "application/pdf";
+  if (ext === "doc") return "application/msword";
+  if (ext === "docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "webp") return "image/webp";
+  if (ext === "txt") return "text/plain";
+  return "application/octet-stream";
+}
+
 export function buildChildMediaPath({
   tenantId,
   centerId,

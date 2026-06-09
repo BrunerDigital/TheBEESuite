@@ -4,39 +4,17 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
+import {
+  cleanText,
+  kidCityRegistrationPacketSchema,
+  normalizeEmailText,
+  normalizeScheduleDays,
+  type RegistrationPacketPayload,
+} from "@/lib/registration-packet";
 
 export const runtime = "nodejs";
 
-type RegistrationPayload = {
-  centerId: string;
-  primaryGuardianName: string;
-  primaryGuardianEmail: string;
-  primaryGuardianPhone: string;
-  primaryGuardianAddress: string;
-  secondaryGuardianName: string;
-  secondaryGuardianEmail: string;
-  secondaryGuardianPhone: string;
-  childFullName: string;
-  childPreferredName: string;
-  childDateOfBirth: string;
-  program: string;
-  schedule: string;
-  desiredStartDate: string;
-  allergies: string;
-  medications: string;
-  dietaryRestrictions: string;
-  medicalNotes: string;
-  emergencyContacts: string;
-  authorizedPickups: string;
-  custodyNotes: string;
-  physicianInfo: string;
-  insuranceInfo: string;
-  photoVideoPermission: boolean;
-  fieldTripPermission: boolean;
-  policyAcknowledgment: boolean;
-  signatureName: string;
-  pageUrl: string;
-};
+type RegistrationPayload = RegistrationPacketPayload;
 
 const rateLimit = new Map<string, { count: number; resetAt: number }>();
 
@@ -56,7 +34,7 @@ const stageRank: Record<EnrollmentStage, number> = {
 };
 
 function clean(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+  return cleanText(value);
 }
 
 function cleanBool(value: unknown) {
@@ -67,31 +45,63 @@ function readPayload(body: Record<string, unknown>): RegistrationPayload {
   return {
     centerId: clean(body.centerId),
     primaryGuardianName: clean(body.primaryGuardianName),
-    primaryGuardianEmail: clean(body.primaryGuardianEmail).toLowerCase(),
+    primaryGuardianEmail: normalizeEmailText(body.primaryGuardianEmail),
     primaryGuardianPhone: clean(body.primaryGuardianPhone),
     primaryGuardianAddress: clean(body.primaryGuardianAddress),
+    primaryGuardianRelation: clean(body.primaryGuardianRelation),
+    primaryGuardianEmployer: clean(body.primaryGuardianEmployer),
+    primaryGuardianWorkPhone: clean(body.primaryGuardianWorkPhone),
     secondaryGuardianName: clean(body.secondaryGuardianName),
-    secondaryGuardianEmail: clean(body.secondaryGuardianEmail).toLowerCase(),
+    secondaryGuardianEmail: normalizeEmailText(body.secondaryGuardianEmail),
     secondaryGuardianPhone: clean(body.secondaryGuardianPhone),
+    secondaryGuardianRelation: clean(body.secondaryGuardianRelation),
+    secondaryGuardianEmployer: clean(body.secondaryGuardianEmployer),
+    secondaryGuardianAddress: clean(body.secondaryGuardianAddress),
+    billingContactName: clean(body.billingContactName),
+    billingContactEmail: normalizeEmailText(body.billingContactEmail),
+    billingContactPhone: clean(body.billingContactPhone),
     childFullName: clean(body.childFullName),
     childPreferredName: clean(body.childPreferredName),
     childDateOfBirth: clean(body.childDateOfBirth),
+    childSex: clean(body.childSex),
+    childPrimaryLanguage: clean(body.childPrimaryLanguage),
+    childLivesWith: clean(body.childLivesWith),
+    previousCareProgram: clean(body.previousCareProgram),
     program: clean(body.program),
     schedule: clean(body.schedule),
+    scheduleDays: normalizeScheduleDays(body.scheduleDays),
     desiredStartDate: clean(body.desiredStartDate),
     allergies: clean(body.allergies),
+    allergyActionPlan: clean(body.allergyActionPlan),
     medications: clean(body.medications),
+    medicationAuthorizationNeeded: cleanBool(body.medicationAuthorizationNeeded),
     dietaryRestrictions: clean(body.dietaryRestrictions),
     medicalNotes: clean(body.medicalNotes),
     emergencyContacts: clean(body.emergencyContacts),
     authorizedPickups: clean(body.authorizedPickups),
+    restrictedPickups: clean(body.restrictedPickups),
     custodyNotes: clean(body.custodyNotes),
     physicianInfo: clean(body.physicianInfo),
+    physicianPhone: clean(body.physicianPhone),
+    dentistInfo: clean(body.dentistInfo),
     insuranceInfo: clean(body.insuranceInfo),
+    hospitalPreference: clean(body.hospitalPreference),
+    immunizationStatus: clean(body.immunizationStatus),
     photoVideoPermission: cleanBool(body.photoVideoPermission),
     fieldTripPermission: cleanBool(body.fieldTripPermission),
+    transportationPermission: cleanBool(body.transportationPermission),
+    sunscreenPermission: cleanBool(body.sunscreenPermission),
+    waterActivityPermission: cleanBool(body.waterActivityPermission),
+    emergencyMedicalPermission: cleanBool(body.emergencyMedicalPermission),
+    foodProgramPermission: cleanBool(body.foodProgramPermission),
+    handbookAcknowledgment: cleanBool(body.handbookAcknowledgment),
+    tuitionPolicyAcknowledgment: cleanBool(body.tuitionPolicyAcknowledgment),
+    disciplinePolicyAcknowledgment: cleanBool(body.disciplinePolicyAcknowledgment),
+    healthPolicyAcknowledgment: cleanBool(body.healthPolicyAcknowledgment),
     policyAcknowledgment: cleanBool(body.policyAcknowledgment),
+    eSignatureConsent: cleanBool(body.eSignatureConsent),
     signatureName: clean(body.signatureName),
+    signatureDate: clean(body.signatureDate),
     pageUrl: clean(body.pageUrl),
   };
 }
@@ -153,22 +163,6 @@ function validationErrors(payload: RegistrationPayload) {
 
 function existingCustomFields(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function registrationSchema() {
-  return {
-    version: 1,
-    source: "public_online_registration",
-    sections: [
-      "school_program",
-      "parent_guardian",
-      "child_information",
-      "medical_safety",
-      "emergency_contacts",
-      "permissions",
-      "typed_signature",
-    ],
-  };
 }
 
 function addDays(days: number) {
@@ -246,22 +240,52 @@ export async function POST(request: NextRequest) {
         crmLocationId: center.crmLocationId,
         childPreferredName: payload.childPreferredName,
         childDateOfBirth: payload.childDateOfBirth,
+        childSex: payload.childSex,
+        childPrimaryLanguage: payload.childPrimaryLanguage,
+        childLivesWith: payload.childLivesWith,
+        previousCareProgram: payload.previousCareProgram,
         schedule: payload.schedule,
+        scheduleDays: payload.scheduleDays,
         primaryGuardianAddress: payload.primaryGuardianAddress,
+        primaryGuardianRelation: payload.primaryGuardianRelation,
+        primaryGuardianEmployer: payload.primaryGuardianEmployer,
+        primaryGuardianWorkPhone: payload.primaryGuardianWorkPhone,
         secondaryGuardianName: payload.secondaryGuardianName,
         secondaryGuardianEmail: payload.secondaryGuardianEmail,
         secondaryGuardianPhone: payload.secondaryGuardianPhone,
+        secondaryGuardianRelation: payload.secondaryGuardianRelation,
+        secondaryGuardianEmployer: payload.secondaryGuardianEmployer,
+        secondaryGuardianAddress: payload.secondaryGuardianAddress,
+        billingContactName: payload.billingContactName,
+        billingContactEmail: payload.billingContactEmail,
+        billingContactPhone: payload.billingContactPhone,
         allergies: payload.allergies,
+        allergyActionPlan: payload.allergyActionPlan,
         medications: payload.medications,
+        medicationAuthorizationNeeded: payload.medicationAuthorizationNeeded,
         dietaryRestrictions: payload.dietaryRestrictions,
         medicalNotes: payload.medicalNotes,
         emergencyContacts: payload.emergencyContacts,
         authorizedPickups: payload.authorizedPickups,
+        restrictedPickups: payload.restrictedPickups,
         custodyNotes: payload.custodyNotes,
         physicianInfo: payload.physicianInfo,
+        physicianPhone: payload.physicianPhone,
+        dentistInfo: payload.dentistInfo,
         insuranceInfo: payload.insuranceInfo,
+        hospitalPreference: payload.hospitalPreference,
+        immunizationStatus: payload.immunizationStatus,
         photoVideoPermission: payload.photoVideoPermission,
         fieldTripPermission: payload.fieldTripPermission,
+        transportationPermission: payload.transportationPermission,
+        sunscreenPermission: payload.sunscreenPermission,
+        waterActivityPermission: payload.waterActivityPermission,
+        emergencyMedicalPermission: payload.emergencyMedicalPermission,
+        foodProgramPermission: payload.foodProgramPermission,
+        handbookAcknowledgment: payload.handbookAcknowledgment,
+        tuitionPolicyAcknowledgment: payload.tuitionPolicyAcknowledgment,
+        disciplinePolicyAcknowledgment: payload.disciplinePolicyAcknowledgment,
+        healthPolicyAcknowledgment: payload.healthPolicyAcknowledgment,
         pageUrl: payload.pageUrl,
         submittedAt: new Date().toISOString(),
       },
@@ -284,8 +308,8 @@ export async function POST(request: NextRequest) {
 
     const form = await prisma.form.upsert({
       where: { id: "online-registration-packet" },
-      update: { name: "Online Registration Packet", type: "online_registration", schema: registrationSchema(), status: "active" },
-      create: { id: "online-registration-packet", name: "Online Registration Packet", type: "online_registration", schema: registrationSchema(), status: "active" },
+      update: { name: "Kid City USA Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
+      create: { id: "online-registration-packet", name: "Kid City USA Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
     });
 
     const submission = await prisma.formSubmission.create({
@@ -301,6 +325,10 @@ export async function POST(request: NextRequest) {
           city: center.city,
           state: center.state,
           leadId: lead.id,
+          registrationReview: {
+            status: "submitted",
+            submittedAt: new Date().toISOString(),
+          },
         },
       },
       select: { id: true },

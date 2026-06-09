@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections } from "@/lib/onboarding-setup";
+import {
+  normalizeSchoolOnboardingSetup,
+  schoolOnboardingSetupSections,
+  type SchoolOnboardingSetupField,
+  type SchoolOnboardingSetupInput,
+} from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getCenterInquiryEmbedCode } from "@/lib/inquiry-embed";
@@ -28,15 +33,9 @@ type OnboardingPayload = {
   softwarePlan?: unknown;
   addOnBundle?: unknown;
   merchantFeeStrategy?: unknown;
-  classroomSetup?: unknown;
-  tuitionRateSetup?: unknown;
-  subsidyRules?: unknown;
-  balanceRules?: unknown;
-  invoiceRules?: unknown;
-  licensingSetup?: unknown;
   notes?: unknown;
   pageUrl?: unknown;
-};
+} & Partial<Record<SchoolOnboardingSetupField, unknown>>;
 
 type NormalizedPayload = ReturnType<typeof normalizePayload>;
 
@@ -91,6 +90,10 @@ function ownerNameFromPayload(payload: NormalizedPayload) {
 }
 
 function normalizePayload(input: OnboardingPayload) {
+  const schoolSetupInput = Object.fromEntries(
+    schoolOnboardingSetupSections.map((section) => [section.field, input[section.field]]),
+  ) as SchoolOnboardingSetupInput;
+
   return {
     brandName: clean(input.brandName),
     workEmail: clean(input.workEmail).toLowerCase(),
@@ -104,14 +107,7 @@ function normalizePayload(input: OnboardingPayload) {
     softwarePlan: clean(input.softwarePlan),
     addOnBundle: clean(input.addOnBundle),
     merchantFeeStrategy: clean(input.merchantFeeStrategy),
-    schoolSetup: normalizeSchoolOnboardingSetup({
-      classroomSetup: input.classroomSetup,
-      tuitionRateSetup: input.tuitionRateSetup,
-      subsidyRules: input.subsidyRules,
-      balanceRules: input.balanceRules,
-      invoiceRules: input.invoiceRules,
-      licensingSetup: input.licensingSetup,
-    }),
+    schoolSetup: normalizeSchoolOnboardingSetup(schoolSetupInput),
     notes: clean(input.notes),
     pageUrl: clean(input.pageUrl),
   };
@@ -128,7 +124,7 @@ function validate(payload: NormalizedPayload) {
   if (!payload.priority) errors.priority = "First priority is required.";
   if (!payload.payoutAdminName) errors.payoutAdminName = "Payout setup owner is required.";
   if (!isEmail(payload.payoutAdminEmail)) errors.payoutAdminEmail = "A valid payout setup email is required.";
-  if (!payload.payoutReadiness) errors.payoutReadiness = "Stripe Connect readiness is required.";
+  if (!payload.payoutReadiness) errors.payoutReadiness = "Payout account readiness is required.";
   if (!payload.softwarePlan) errors.softwarePlan = "Software plan model is required.";
   if (!payload.addOnBundle) errors.addOnBundle = "Add-on bundle is required.";
   if (!payload.merchantFeeStrategy) errors.merchantFeeStrategy = "Merchant fee strategy is required.";
@@ -172,7 +168,7 @@ async function sendOnboardingEmail(
     `First priority: ${payload.priority}`,
     `Payout setup owner: ${payload.payoutAdminName}`,
     `Payout setup email: ${payload.payoutAdminEmail}`,
-    `Stripe Connect readiness: ${payload.payoutReadiness}`,
+    `Payout account readiness: ${payload.payoutReadiness}`,
     `Software plan: ${payload.softwarePlan}`,
     `Add-on bundle: ${payload.addOnBundle}`,
     `Merchant fee strategy: ${payload.merchantFeeStrategy}`,

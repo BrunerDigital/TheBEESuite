@@ -67,6 +67,11 @@ model Tenant {
   integrations          Integration[]
   integrationCredentials IntegrationCredential[]
   integrationDeliveries IntegrationDelivery[]
+  calendarEvents        CalendarEvent[]
+  campaigns             Campaign[]
+  automations           Automation[]
+  reviews               Review[]
+  surveys               Survey[]
   messageTemplates      MessageTemplate[]
   notificationPreferences NotificationPreference[]
   ownerGroups           OwnerGroup[]
@@ -152,6 +157,12 @@ model Center {
   customizations        BrandCustomization[]
   integrationDeliveries IntegrationDelivery[]
   messageTemplates      MessageTemplate[]
+  calendarEvents        CalendarEvent[]
+  reviews               Review[]
+  surveys               Survey[]
+  surveyResponses       SurveyResponse[]
+  emergencyDrillLogs    EmergencyDrillLog[]
+  complianceTasks       ComplianceTask[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -239,6 +250,10 @@ model User {
   notifications  Notification[]
   notificationPreferences NotificationPreference[]
   medicationLogs MedicationLog[]
+  createdEmergencyDrillLogs EmergencyDrillLog[] @relation("EmergencyDrillCreatedBy")
+  assignedComplianceTasks ComplianceTask[] @relation("ComplianceTaskAssignee")
+  createdComplianceTasks ComplianceTask[] @relation("ComplianceTaskCreator")
+  createdCalendarEvents CalendarEvent[] @relation("CalendarEventCreatedBy")
   uploadedMedia  ChildMedia[]
   procareImports ProcareImportBatch[]
   fteReports     FteReport[]          @relation("FteSubmittedBy")
@@ -382,6 +397,7 @@ model Family {
   messages          Message[]
   documents         Document[]
   notesList         Note[]
+  surveyResponses   SurveyResponse[]
 
   @@index([centerId, sourceSystem, externalId])
 }
@@ -693,19 +709,32 @@ model Announcement {
 }
 
 model Campaign {
-  id       String  @id @default(cuid())
-  brandId  String?
-  name     String
-  type     String
-  audience Json?
-  status   String
-  metrics  Json?
+  id          String    @id @default(cuid())
+  tenantId    String?
+  brandId     String?
+  name        String
+  type        String
+  subject     String?
+  body        String?
+  templateKey String?
+  audience    Json?
+  status      String
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  metrics     Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
   brand Brand? @relation(fields: [brandId], references: [id])
+
+  @@index([tenantId, status, scheduledAt])
+  @@index([brandId, status, scheduledAt])
 }
 
 model Automation {
   id        String  @id @default(cuid())
+  tenantId  String?
   brandId   String?
   name      String
   trigger   String
@@ -714,8 +743,11 @@ model Automation {
   delay     String?
   status    String
 
+  tenant Tenant?         @relation(fields: [tenantId], references: [id])
   brand Brand?          @relation(fields: [brandId], references: [id])
   runs  AutomationRun[]
+
+  @@index([tenantId, status])
 }
 
 model AutomationRun {
@@ -912,6 +944,27 @@ model IncidentReport {
   classroom Classroom? @relation(fields: [classroomId], references: [id])
 }
 
+model EmergencyDrillLog {
+  id              String   @id @default(cuid())
+  centerId        String
+  drillType       String
+  conductedAt     DateTime
+  durationMinutes Int?
+  participants    String?
+  outcome         String   @default("completed")
+  notes           String?
+  nextDueAt       DateTime?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  center    Center @relation(fields: [centerId], references: [id])
+  createdBy User?  @relation("EmergencyDrillCreatedBy", fields: [createdById], references: [id])
+
+  @@index([centerId, conductedAt])
+  @@index([nextDueAt])
+}
+
 model MedicationLog {
   id               String   @id @default(cuid())
   childId          String
@@ -931,6 +984,33 @@ model MedicationLog {
 
   @@index([childId, administeredAt])
   @@index([administeredById, administeredAt])
+}
+
+model ComplianceTask {
+  id                  String    @id @default(cuid())
+  centerId            String
+  title               String
+  category            String    @default("general")
+  priority            String    @default("normal")
+  status              String    @default("open")
+  dueAt               DateTime?
+  reminderAt          DateTime?
+  assignedToId        String?
+  createdById         String?
+  relatedResourceType String?
+  relatedResourceId   String?
+  notes               String?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  center     Center @relation(fields: [centerId], references: [id])
+  assignedTo User?  @relation("ComplianceTaskAssignee", fields: [assignedToId], references: [id])
+  createdBy  User?  @relation("ComplianceTaskCreator", fields: [createdById], references: [id])
+
+  @@index([centerId, status, dueAt])
+  @@index([assignedToId, status, dueAt])
+  @@index([reminderAt, status])
 }
 
 model StaffProfile {
@@ -966,6 +1046,43 @@ model StaffSchedule {
 
   staff  StaffProfile @relation(fields: [staffId], references: [id])
   center Center       @relation(fields: [centerId], references: [id])
+}
+
+model CalendarEvent {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  centerId           String?
+  title              String
+  eventType          String    @default("event")
+  startsAt           DateTime
+  endsAt             DateTime?
+  allDay             Boolean   @default(false)
+  timeZone           String    @default("America/New_York")
+  status             String    @default("scheduled")
+  visibility         String    @default("staff")
+  recurrenceRule     String?
+  recurrenceEndAt    DateTime?
+  closureReason      String?
+  source             String    @default("manual")
+  googleCalendarId   String?
+  googleEventId      String?
+  googleSyncStatus   String    @default("not_synced")
+  googleSyncedAt     DateTime?
+  lastGooglePayload  Json?
+  notes              String?
+  createdById        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  center    Center? @relation(fields: [centerId], references: [id])
+  createdBy User?   @relation("CalendarEventCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, startsAt])
+  @@index([centerId, startsAt])
+  @@index([eventType, startsAt])
+  @@index([googleCalendarId, googleEventId])
+  @@index([googleSyncStatus, startsAt])
 }
 
 model Certification {
@@ -1090,20 +1207,65 @@ model SubscriptionPlaceholder {
 }
 
 model Review {
-  id                           String  @id @default(cuid())
+  id                           String   @id @default(cuid())
+  tenantId                     String?
+  centerId                     String?
   source                       String
   rating                       Int
   body                         String?
   responseDraft                String?
-  approvedForPublicTestimonial Boolean @default(false)
+  approvedForPublicTestimonial Boolean  @default(false)
+  status                       String   @default("new")
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([centerId, status])
 }
 
 model Survey {
-  id      String @id @default(cuid())
-  name    String
-  type    String
-  status  String
-  results Json?
+  id          String   @id @default(cuid())
+  tenantId    String?
+  centerId    String?
+  name        String
+  type        String
+  description String?
+  status      String
+  results     Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant    Tenant?          @relation(fields: [tenantId], references: [id])
+  center    Center?          @relation(fields: [centerId], references: [id])
+  responses SurveyResponse[]
+
+  @@index([tenantId, status])
+  @@index([centerId, status])
+}
+
+model SurveyResponse {
+  id              String   @id @default(cuid())
+  surveyId        String
+  centerId        String?
+  familyId        String?
+  respondentName  String?
+  respondentEmail String?
+  score           Int
+  comment         String?
+  responseType    String   @default("nps")
+  metadata        Json?
+  submittedAt     DateTime @default(now())
+
+  survey Survey  @relation(fields: [surveyId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id])
+  family Family? @relation(fields: [familyId], references: [id])
+
+  @@index([surveyId, submittedAt])
+  @@index([centerId, submittedAt])
+  @@index([familyId, submittedAt])
 }
 
 model Notification {

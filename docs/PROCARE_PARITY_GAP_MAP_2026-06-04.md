@@ -28,7 +28,7 @@ Status legend:
 | Family and child profiles | [~] | Family/guardian/child editing, PINs, classroom assignment, documents, medical/custody fields exist. Remaining gaps: complete all field editors, custody warnings across every staff surface, merge/dedupe. |
 | Enrollment and registration | [~] | Inquiry CRM, online registration, waitlist/tours, routing, lead workflow exist. Remaining gaps: actual form builder UI, registration fee/payment depth, final ProCare field mapping. |
 | Attendance tracking | [~] | Kiosk/PIN/signature/check logs and teacher quick attendance exist. Remaining gaps: QR check-in, staff kiosk mode, offline tablet strategy. |
-| Parent communication | [~] | Parent-to-center portal messaging exists; this pass adds school/teacher replies. Remaining gaps: SendGrid/Twilio production delivery paths, templates/merge fields, push/native app strategy. |
+| Parent communication | [~] | Parent/director/teacher portal messaging, templates, merge fields, broadcast segmentation, AI composer suggestions, and SendGrid/Twilio delivery paths exist. Remaining gaps: production sender validation, opt-out/consent verification, and push/native app strategy. |
 | Parent app / portal | [~] | Web parent portal covers balances, payments, daily reports, docs, messages, preferences, incidents, and photos. Remaining gaps: native app/push, full self-service change approval, payment method management/autopay. |
 | Staff app / teacher tools | [~] | Teacher portal covers classroom task entry, attendance, incidents, media, and daily reports. Remaining gaps: classroom chat polish, staff time clock, schedule actions, ratio warnings. |
 | Billing and payments | [~] | Stripe Checkout, invoices, ledger, recurring monthly tuition, batch billing, AR aging, and parent payments exist. Remaining gaps: autopay/payment methods, failed payment dunning, subsidies/agencies, weekly cadence, legal fee disclosures. |
@@ -42,9 +42,9 @@ Status legend:
 | Staff management | [~] | Teacher profiles, classroom assignment, credentials, background/certification reminders, and login provisioning exist. Remaining gaps: time clock, payroll/timecards, schedule comparison, staff messaging depth. |
 | Staff scheduling | [~] | Staff schedules exist in schema/UI foundation. Remaining gaps: schedule editing depth, coverage alerts, ratio-aware staffing recommendations. |
 | Time clock / payroll | [ ] | Staff time clock, breaks, timecards, payroll exports, deductions, accruals, and Gusto/QuickBooks workflows are not complete. |
-| Compliance and licensing | [~] | Incidents, documents, compliance dashboard, attendance signatures, allergies/medical/custody foundations exist. Remaining gaps: state-specific rules, medication logs, exports, document review/expiration workflow. |
+| Compliance and licensing | [~] | Incidents, documents, compliance dashboard, attendance signatures, allergies/medical/custody foundations, state licensing configuration, emergency drill logs, medication logs, compliance task reminders, exports, and incident review with parent acknowledgement status exist. Remaining gaps: formal state/licensing review, school-specific rule configuration, and validated licensing export package expectations. |
 | Reporting and analytics | [~] | Dashboards, CRM/FTE/billing/AR metrics, exports, and audit logs exist. Remaining gaps: custom reports, saved report library, room/program insight depth, subsidy and licensing reports. |
-| Messaging and notifications | [~] | Notifications, summary API, dedupe/retention policy, portal messaging, announcements, campaigns, and automations exist. Remaining gaps: SendGrid/Twilio live delivery, inbound SMS, push, templates, role preferences. |
+| Messaging and notifications | [~] | Notifications, summary API, dedupe/retention policy, portal messaging, announcements, campaigns, automations, templates, merge fields, broadcast segmentation, role preferences, and email/SMS delivery paths exist. Remaining gaps: production sender validation, opt-out/consent verification, inbound SMS polish, and push/native app strategy. |
 | Photo and video sharing | [~] | Teacher media upload foundation and parent media review exist. Remaining gaps: gallery editing depth, download controls, video-specific verification, permission enforcement polish. |
 | Digital forms and documents | [~] | Documents, forms, registration, signature request mock, parent submissions, status tracking exist. Remaining gaps: form builder UI, Supabase upload UI, e-signature provider/internal signature completion, expiration reminders. |
 | Waitlist / lead / CRM | [x] | Strong CRM foundation with routing, leads, tasks, notes, messages, tours, stages, waitlists, active schools, and verified 94-location routing. |
@@ -58,7 +58,7 @@ Status legend:
 
 ## Highest-Impact Build Queue
 
-1. Finish portal two-way messaging for directors, teachers, and parents, then add message templates/merge fields and SendGrid/Twilio live delivery.
+1. Validate production messaging sender setup, SMS consent/opt-out language, notification recipients, and school-specific message/announcement template configuration.
 2. Complete document upload, review, expiration reminders, and internal/e-signature workflows.
 3. Add QR check-in and staff kiosk/time clock so attendance and payroll foundations become operational.
 4. Build classroom ratio rules, warnings, and staff assignment actions.

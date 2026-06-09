@@ -14,6 +14,10 @@ const entityOptions = [
   ["family", "Family"],
   ["guardian", "Guardian"],
   ["child", "Child"],
+  ["authorizedPickup", "Authorized pickup"],
+  ["emergencyContact", "Emergency contact"],
+  ["allergy", "Child allergy"],
+  ["medicalNote", "Child medical note"],
   ["classroom", "Classroom"],
   ["staff", "Teacher profile"],
   ["staffSchedule", "Teacher schedule"],
@@ -70,13 +74,18 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
           body,
           familyId: entity === "document" || entity === "formSubmission" ? relatedId : undefined,
           relatedId,
+          childId: ["allergy", "medicalNote"].includes(entity) ? relatedId : undefined,
           centerId: scopedCenterId,
           ageGroup: ["child", "classroom", "tuitionPlan"].includes(entity) ? type : undefined,
           billingEmail: entity === "family" ? type : undefined,
           email: ["guardian", "staff"].includes(entity) ? type : undefined,
           role: entity === "staff" ? status : undefined,
           title: entity === "staff" ? body : name,
-          relation: entity === "guardian" ? status : undefined,
+          relation: ["guardian", "authorizedPickup", "emergencyContact"].includes(entity) ? status : undefined,
+          verificationNotes: entity === "authorizedPickup" ? body : undefined,
+          actionPlan: entity === "allergy" ? body : undefined,
+          category: entity === "medicalNote" ? type : undefined,
+          note: entity === "medicalNote" ? body : undefined,
           enrollmentStatus: entity === "child" ? status : undefined,
           capacity: entity === "classroom" ? amountDollars : undefined,
           ratioRule: entity === "classroom" ? status : undefined,
@@ -118,7 +127,7 @@ export function OperationsActionHub({ title = "Create / Edit Record", defaultEnt
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardDescription>
-          Use an existing record ID to edit, or leave it blank to create. This is the first-pass operating console for modules while dedicated editors are built out.
+          Use an existing record ID to update a record, or leave it blank to create a new one through the live operations API.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

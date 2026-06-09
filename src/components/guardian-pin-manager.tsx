@@ -1,22 +1,39 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Copy, KeyRound, QrCode } from "lucide-react";
+import { AlertCircle, CheckCircle2, KeyRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { GuardianKioskCredentialCard } from "@/components/guardian-kiosk-credential-card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 
 type Props = {
   guardianId: string;
   guardianName: string;
+  familyName: string;
+  centerId?: string | null;
+  centerName?: string | null;
   pinSetAt?: string | Date | null;
+  qrToken?: string | null;
+  kioskPath?: string | null;
 };
 
-export function GuardianPinManager({ guardianId, guardianName, pinSetAt }: Props) {
+export function GuardianPinManager({
+  guardianId,
+  guardianName,
+  familyName,
+  centerId = null,
+  centerName = null,
+  pinSetAt,
+  qrToken: initialQrToken = null,
+  kioskPath = null,
+}: Props) {
   const [pin, setPin] = useState("");
   const [status, setStatus] = useState(pinSetAt ? "PIN set" : "No PIN");
-  const [qrToken, setQrToken] = useState("");
+  const [pinSetAtState, setPinSetAtState] = useState<string | null>(
+    pinSetAt ? new Date(pinSetAt).toISOString() : null,
+  );
+  const [qrToken, setQrToken] = useState(initialQrToken ?? "");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
@@ -28,16 +45,33 @@ export function GuardianPinManager({ guardianId, guardianName, pinSetAt }: Props
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId, pin }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; guardian?: { qrToken?: string | null } } | null;
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        guardian?: { qrToken?: string | null; pinSetAt?: string | null };
+      } | null;
       if (!response.ok) {
         setError(json?.error || "PIN could not be saved.");
         return;
       }
       setPin("");
       setQrToken(json?.guardian?.qrToken || "");
+      setPinSetAtState(json?.guardian?.pinSetAt || new Date().toISOString());
       setStatus("PIN saved");
     });
   }
+
+  const credential = {
+    guardianId,
+    guardianName,
+    familyId: "",
+    familyName,
+    centerId,
+    centerName,
+    hasPin: Boolean(pinSetAtState),
+    pinSetAt: pinSetAtState,
+    qrToken: qrToken || null,
+    kioskPath: kioskPath || (centerId ? `/check-in/${centerId}` : "/check-in"),
+  };
 
   return (
     <div className="space-y-2 rounded-lg border bg-background/40 p-3">
@@ -67,31 +101,7 @@ export function GuardianPinManager({ guardianId, guardianName, pinSetAt }: Props
           <AlertDescription>This guardian can use the lobby kiosk by PIN or QR scan.</AlertDescription>
         </Alert>
       ) : null}
-      {qrToken ? (
-        <div className="space-y-2 rounded-md border bg-background/50 p-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <QrCode className="size-4" />
-              QR scan payload
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void navigator.clipboard?.writeText(qrToken)}
-            >
-              <Copy data-icon="inline-start" />
-              Copy
-            </Button>
-          </div>
-          <Textarea
-            readOnly
-            value={qrToken}
-            aria-label={`QR scan payload for ${guardianName}`}
-            className="max-h-28 min-h-20 resize-none font-mono text-xs"
-          />
-        </div>
-      ) : null}
+      <GuardianKioskCredentialCard credential={credential} />
       {error ? (
         <Alert variant="destructive">
           <AlertCircle className="size-4" />

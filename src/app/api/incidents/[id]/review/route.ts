@@ -67,6 +67,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       followUpTasks: followUpTask ? [...existingTasks, followUpTask] : existingTasks,
     },
   });
+  const complianceTask = followUpTask && centerId
+    ? await prisma.complianceTask.create({
+        data: {
+          centerId,
+          title: followUpTask,
+          category: "incident",
+          priority: status === "needs_follow_up" ? "high" : "normal",
+          status: "open",
+          createdById: user.id,
+          relatedResourceType: "IncidentReport",
+          relatedResourceId: id,
+          notes: `Incident follow-up for ${incident.type} on ${incident.occurredAt.toISOString().slice(0, 10)}.`,
+        },
+      })
+    : null;
 
   await writeAuditLog(user, {
     centerId,
@@ -79,8 +94,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       adminReviewStatus: status,
       parentNotified,
       followUpTaskAdded: Boolean(followUpTask),
+      complianceTaskId: complianceTask?.id ?? null,
     },
   });
 
-  return NextResponse.json({ ok: true, incident: updated });
+  return NextResponse.json({ ok: true, incident: updated, complianceTask });
 }

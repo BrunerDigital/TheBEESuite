@@ -8,6 +8,7 @@ import {
   readStripeConnectedAccountId,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
 export const runtime = "nodejs";
 
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
   }
 
   const existingFields = jsonObject(center.customFields);
+  let currentFields = existingFields;
   let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;
 
@@ -79,28 +81,32 @@ export async function POST(request: NextRequest) {
       city: center.city,
       state: center.state,
       postalCode: center.postalCode,
+      tenantId: user.tenantId,
     });
 
     if (!created.ok || !created.id) {
       return NextResponse.json(
-        { ok: false, configured: created.configured, error: created.error || "Stripe connected account could not be created." },
+        { ok: false, configured: created.configured, error: created.error || "Connected payout account could not be created." },
         { status: created.configured ? 502 : 503 },
       );
     }
 
     accountId = created.id;
     createdAccount = true;
+    const readiness = created.account ? stripeConnectReadinessFromSnapshot(created.account) : null;
+    currentFields = {
+      ...existingFields,
+      stripeConnectAccountId: accountId,
+      ...(readiness ? stripeConnectCustomFieldPatch(readiness) : {}),
+      stripePayoutStatus: "onboarding_started",
+      stripeConnectDashboard: "express",
+      stripeConnectApi: "accounts_v2",
+      stripeConnectCreatedAt: new Date().toISOString(),
+    };
     await prisma.center.update({
       where: { id: center.id },
       data: {
-        customFields: {
-          ...existingFields,
-          stripeConnectAccountId: accountId,
-          stripePayoutStatus: "onboarding_started",
-          stripeConnectDashboard: "express",
-          stripeConnectApi: "accounts_v2",
-          stripeConnectCreatedAt: new Date().toISOString(),
-        },
+        customFields: currentFields,
       },
     });
   }
@@ -108,11 +114,11 @@ export async function POST(request: NextRequest) {
   const baseUrl = requestBaseUrl(request);
   const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
   const refreshUrl = `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`;
-  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl });
+  const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl, tenantId: user.tenantId });
 
   if (!link.ok || !link.url) {
     return NextResponse.json(
-      { ok: false, configured: link.configured, error: link.error || "Stripe payout onboarding link could not be created." },
+      { ok: false, configured: link.configured, error: link.error || "Payout onboarding link could not be created." },
       { status: link.configured ? 502 : 503 },
     );
   }
@@ -121,7 +127,7 @@ export async function POST(request: NextRequest) {
     where: { id: center.id },
     data: {
       customFields: {
-        ...jsonObject(center.customFields),
+        ...currentFields,
         stripeConnectAccountId: accountId,
         stripePayoutStatus: "onboarding_link_created",
         stripeConnectDashboard: "express",

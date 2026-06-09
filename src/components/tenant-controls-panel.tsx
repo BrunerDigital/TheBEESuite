@@ -84,7 +84,7 @@ const featureDefinitions = [
   ["attendance_kiosk", "Attendance + Kiosk", "Guardian PIN/QR check-in, signatures, warnings, reconciliation."],
   ["teacher_portal", "Teacher Portal", "Classroom roster, daily logs, incidents, media, and offline queue."],
   ["parent_portal", "Parent Portal", "Family dashboard, reports, documents, messages, and preferences."],
-  ["billing_payments", "Billing + Payments", "Tuition plans, invoices, ledger, Stripe checkout, and dunning."],
+  ["billing_payments", "Billing + Payments", "Tuition plans, invoices, ledger, secure checkout, and dunning."],
   ["documents_signatures", "Documents + Signatures", "Required checklist, uploads, review, reminders, and e-signature."],
   ["messaging_sms_email", "Messaging", "Email, SMS, announcements, campaigns, and templates."],
   ["compliance_medication", "Compliance + Medication", "Licensing configuration, incident review, medication logs, exports."],

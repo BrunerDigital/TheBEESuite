@@ -21,11 +21,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
 import { Textarea } from "@/components/ui/textarea";
+import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
 import {
   PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
   paymentProcessingRecoverySummary,
 } from "@/lib/payment-disclosures";
+import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 
 type Child = {
   id: string;
@@ -46,6 +49,23 @@ type Invoice = {
   status: string;
   dueDate: string | Date;
   totalCents: number;
+  purposeLabel?: string | null;
+  checkoutOptions?: {
+    ach: {
+      checkoutTotalCents: number;
+      parentProcessingRecoveryAmountCents: number;
+      applicationFeeAmountCents: number;
+      paymentMethodConfigurationReady: boolean;
+    };
+    card: {
+      checkoutTotalCents: number;
+      parentProcessingRecoveryAmountCents: number;
+      applicationFeeAmountCents: number;
+      paymentMethodConfigurationReady: boolean;
+    };
+    beeSuitePaymentOperationsFeeAmountCents: number;
+    beeSuitePaymentOperationsFeeWaived: boolean;
+  };
 };
 
 type Payment = {
@@ -131,6 +151,7 @@ type Props = {
       lastUpdatedAt: string | null;
     };
   } | null;
+  checkoutReadiness?: StripeCheckoutReadiness;
   invoices: Invoice[];
   payments?: Payment[];
   ledgerEntries?: LedgerEntry[];
@@ -141,6 +162,7 @@ type Props = {
   media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
   currentGuardianId?: string | null;
+  kioskCredentials?: GuardianKioskCredential[];
   notificationPreferences?: Partial<NotificationPreferences> | null;
   demoMode?: boolean;
 };
@@ -157,6 +179,22 @@ const defaultNotificationPreferences: NotificationPreferences = {
 };
 
 const signaturePendingStorageKeys = new Set(["internal_signature_pending", "signature_provider_pending"]);
+
+const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
+  accountId: null,
+  chargesEnabled: true,
+  payoutsEnabled: true,
+  detailsSubmitted: true,
+  requirementFields: [],
+  status: "ready",
+  label: "Ready",
+  canAcceptParentPayments: true,
+  lastSyncedAt: null,
+  blockingReason: null,
+  stripeConfigured: true,
+  webhookConfigured: true,
+  allowPlatformOnlyPayments: false,
+};
 
 function requiresDocumentSignature(document: { storageKey?: string | null }) {
   return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
@@ -202,6 +240,7 @@ function estimatedCardRecovery(cents: number) {
 export function ParentPortalWorkspace({
   family,
   billingAccount,
+  checkoutReadiness = fallbackCheckoutReadiness,
   invoices,
   payments = [],
   ledgerEntries = [],
@@ -212,6 +251,7 @@ export function ParentPortalWorkspace({
   media = [],
   announcements = [],
   currentGuardianId = null,
+  kioskCredentials = [],
   notificationPreferences,
   demoMode,
 }: Props) {
@@ -240,6 +280,7 @@ export function ParentPortalWorkspace({
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
 
   function showStatus(next: string) {
     setError("");
@@ -301,6 +342,9 @@ export function ParentPortalWorkspace({
   }
 
   function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card") {
+    if (checkoutBlocked) {
+      return showError(checkoutReadiness.blockingReason || "Parent checkout is not ready for this school yet.");
+    }
     startTransition(async () => {
       const response = await fetch("/api/billing/checkout-session", {
         method: "POST",
@@ -408,9 +452,9 @@ export function ParentPortalWorkspace({
       {demoMode ? (
         <Alert className="border-primary/30 bg-primary/10">
           <ShieldCheck className="size-4" />
-          <AlertTitle>Executive demo data</AlertTitle>
+          <AlertTitle>Demo account data</AlertTitle>
           <AlertDescription>
-            This parent portal sample is visible only to executive roles and is not saved as live family data.
+            This parent portal sample is visible only to demo accounts and is not saved as live family data.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -436,6 +480,8 @@ export function ParentPortalWorkspace({
         <Card className="glass-panel"><CardHeader><CardDescription>Reports</CardDescription><CardTitle>{dailyReports.length}</CardTitle></CardHeader></Card>
         <Card className="glass-panel"><CardHeader><CardDescription>Need acknowledgment</CardDescription><CardTitle>{unacknowledged.length}</CardTitle></CardHeader></Card>
       </div>
+
+      <ParentKioskCredentialPanel initialCredentials={kioskCredentials} />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card className="glass-panel">
@@ -495,10 +541,22 @@ export function ParentPortalWorkspace({
           <CardHeader>
             <CardTitle>Billing</CardTitle>
             <CardDescription>
-              Stripe Checkout is used when platform keys and the school payout account are ready. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE}
+              Secure checkout is available when the school payout account is ready. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {checkoutBlocked ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Checkout is not active yet</AlertTitle>
+                <AlertDescription>
+                  {checkoutReadiness.blockingReason || "The school is still finishing payout setup."}
+                  {checkoutReadiness.requirementFields.length
+                    ? ` Outstanding payout requirement fields: ${checkoutReadiness.requirementFields.slice(0, 4).join(", ")}${checkoutReadiness.requirementFields.length > 4 ? "..." : ""}.`
+                    : ""}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
@@ -519,10 +577,10 @@ export function ParentPortalWorkspace({
                   <div className="font-medium">Payment Method And Autopay</div>
                   <div className="text-xs text-muted-foreground">
                     {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `Saved with Stripe${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
+                      ? `Saved securely${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "A Stripe setup session is pending."
-                        : "Save a payment method with Stripe to enable autopay."}
+                        ? "A secure setup session is pending."
+                        : "Save a payment method to enable autopay."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -535,7 +593,7 @@ export function ParentPortalWorkspace({
                     onClick={() => managePaymentMethod("portal")}
                     variant="outline"
                   >
-                    Manage In Stripe
+                    Manage Payment Method
                   </Button>
                   <Button
                     disabled={isPending || autopayStatus === "disabled" || !billingAccount}
@@ -553,17 +611,17 @@ export function ParentPortalWorkspace({
                   <div>
                     <div className="text-xs text-muted-foreground">Next balance payment</div>
                     <div className="font-medium">
-                      {nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
+                      {nextOpenInvoice.purposeLabel ? `${nextOpenInvoice.purposeLabel} · ` : ""}{nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button disabled={isPending} onClick={() => payBalance("ach")}>
+                    <Button disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
                       <Building2 data-icon="inline-start" />
-                      Pay Balance by Bank
+                      Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                     </Button>
-                    <Button disabled={isPending} onClick={() => payBalance("card")} variant="outline">
+                    <Button disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
-                      Pay Balance by Card
+                      Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -578,30 +636,37 @@ export function ParentPortalWorkspace({
               <div key={invoice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/40 p-4">
                 <div>
                   <div className="font-medium">{invoice.number}</div>
-                  <div className="text-xs text-muted-foreground">Due {formatDate(invoice.dueDate)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {invoice.purposeLabel ? `${invoice.purposeLabel} · ` : ""}Due {formatDate(invoice.dueDate)}
+                  </div>
                 </div>
                 <Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge>
                 <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
                 <div className="flex flex-wrap gap-2">
-                  <Button disabled={isPending || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
+                  <Button disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
                     <Building2 data-icon="inline-start" />
-                    Bank / ACH
+                    Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                   </Button>
                   <Button
-                    disabled={isPending || invoice.status !== "OPEN"}
+                    disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"}
                     onClick={() => payInvoice(invoice.id, "card")}
                     variant="outline"
                   >
                     <CreditCard data-icon="inline-start" />
-                    Card
+                    Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">
                   {paymentProcessingRecoverySummary({
-                    achRecovery: estimatedAchRecovery(invoice.totalCents),
-                    cardRecovery: estimatedCardRecovery(invoice.totalCents),
+                    achRecovery: invoice.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice.totalCents),
+                    cardRecovery: invoice.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice.totalCents),
                     formatMoney: money,
                   })}
+                  {invoice.checkoutOptions?.beeSuitePaymentOperationsFeeAmountCents ? (
+                    <span className="block">
+                      School-paid BEE Suite payment operations fee retained from payout: {money(invoice.checkoutOptions.beeSuitePaymentOperationsFeeAmountCents)}.
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ))}

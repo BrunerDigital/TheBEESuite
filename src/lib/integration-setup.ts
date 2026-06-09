@@ -1,6 +1,6 @@
 import { credentialPresenceFromKeys, integrationCredentialFields, type IntegrationCredentialField, type IntegrationCredentialPresence } from "@/lib/integration-credentials";
 
-export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "openai" | "stripe" | "twilio";
+export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "google_calendar" | "openai" | "stripe" | "twilio";
 
 export type IntegrationDisplayStatus = "Connected" | "Configured" | "Missing" | "Placeholder";
 export type IntegrationSetupStatus = "not_started" | "in_progress" | "needs_credentials" | "ready_for_test" | "verified";
@@ -133,6 +133,29 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
       { key: "fteSpreadsheetId", label: "FTE spreadsheet ID", type: "text", placeholder: "Kid City FTE sheet ID" },
       { key: "appsScriptDeploymentId", label: "Apps Script deployment ID", type: "text", placeholder: "Deployment ID only" },
       { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Backup routing and ownership notes" },
+    ],
+  },
+  {
+    provider: "google_calendar",
+    name: "Google Calendar",
+    purpose: "Calendar Sync",
+    detail: "Pushes closures, holidays, recurring events, and school calendar items to Google Calendar and can import external Google Calendar events into the school calendar.",
+    envRequirements: [
+      { label: "Calendar ID", names: ["GOOGLE_CALENDAR_ID"] },
+      { label: "OAuth access token or refresh credentials", names: ["GOOGLE_CALENDAR_ACCESS_TOKEN", "GOOGLE_CALENDAR_REFRESH_TOKEN"], mode: "any" },
+    ],
+    fields: [
+      {
+        key: "syncMode",
+        label: "Sync mode",
+        type: "select",
+        options: [
+          { value: "bee_to_google", label: "The BEE Suite to Google" },
+          { value: "two_way", label: "Two-way sync" },
+        ],
+      },
+      { key: "syncOwner", label: "Calendar owner", type: "email", placeholder: "director@example.com" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Calendar sharing, OAuth app, and sync ownership notes" },
     ],
   },
   {
@@ -300,6 +323,28 @@ export function getIntegrationRuntimeStatus(provider: IntegrationProvider, env: 
       configured,
       configuredRequirements,
       missingRequirements: configured ? [] : ["Apps Script webhook or service account API"],
+    };
+  }
+  if (provider === "google_calendar") {
+    const calendarId = isConfiguredValue(env, credentialKeys, "GOOGLE_CALENDAR_ID");
+    const directAccessToken = isConfiguredValue(env, credentialKeys, "GOOGLE_CALENDAR_ACCESS_TOKEN");
+    const refreshToken = isConfiguredValue(env, credentialKeys, "GOOGLE_CALENDAR_REFRESH_TOKEN");
+    const oauthClient = isConfiguredValue(env, credentialKeys, "GOOGLE_CLIENT_ID") && isConfiguredValue(env, credentialKeys, "GOOGLE_CLIENT_SECRET");
+    const configured = calendarId && (directAccessToken || (refreshToken && oauthClient));
+    const configuredRequirements = [
+      calendarId ? "Calendar ID" : "",
+      directAccessToken ? "Access token" : "",
+      refreshToken && oauthClient ? "Refresh token OAuth" : "",
+    ].filter(Boolean);
+    const missingRequirements = [
+      calendarId ? "" : "Calendar ID",
+      directAccessToken || (refreshToken && oauthClient) ? "" : "OAuth access token or refresh credentials",
+    ].filter(Boolean);
+    return {
+      status: configured ? "Connected" : configuredRequirements.length ? "Configured" : "Missing",
+      configured,
+      configuredRequirements,
+      missingRequirements,
     };
   }
   return runtimeFromRequirements(definition, env, credentialKeys);

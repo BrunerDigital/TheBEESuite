@@ -162,7 +162,7 @@ Status legend:
 - [x] Add subsidy/agency payment tracking.
 - [x] Add surcharge/convenience fee and payment processing recovery disclosure language to parent/admin payment flows.
 - [ ] Complete final legal/accounting review of surcharge/convenience fee and processing recovery policy before enforcing live pass-through fees.
-- [ ] Complete Stripe connected account onboarding for every school/payout owner before accepting live parent payments at that school.
+- [x] Complete Stripe connected account onboarding gate for every school/payout owner before accepting live parent payments at that school.
 
 ## Attendance, Check-In, And Kiosk
 
@@ -229,6 +229,8 @@ Status legend:
 - [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
 - [x] Add message templates and merge fields.
+- [x] Add broadcast segmentation by classroom, center, status, and tag.
+- [x] Add AI reply suggestions directly inside message composer with human-review guardrails.
 - [x] Add richer threaded conversation views with per-family reply history and staff assignment.
 - [x] Add full notification preferences by role/user beyond parent portal.
 - [x] Add email/SMS/push delivery channels.
@@ -252,9 +254,11 @@ Status legend:
 - [x] Add expiration reminders for family/staff/child documents.
 - [x] Integrate real e-signature provider or complete internal signature capture flow.
 - [x] Add state-specific licensing configuration.
+- [x] Add emergency drill logs UI.
 - [x] Add medication log workflow.
 - [x] Add compliance report export.
 - [x] Add incident admin review workflow with parent acknowledgement status.
+- [x] Add compliance task assignment/reminders.
 
 ## Integrations, Security, And Operations
 

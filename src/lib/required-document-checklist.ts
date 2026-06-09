@@ -1,3 +1,5 @@
+import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
+
 export type RequirementScope = "family" | "child" | "staff";
 export type ChecklistStatus = "complete" | "submitted" | "requested" | "rejected" | "expired" | "missing";
 
@@ -35,6 +37,22 @@ export type RequiredChecklistSummary = {
   actionNeeded: number;
 };
 
+export type RequiredChecklistSubjectGroup = {
+  key: string;
+  scope: RequirementScope;
+  subjectId: string;
+  subjectName: string;
+  centerLabel: string | null;
+  items: RequiredChecklistItem[];
+  summary: RequiredChecklistSummary;
+  actionNeeded: number;
+  completePercent: number;
+};
+
+export function requiresChecklistAction(status: ChecklistStatus) {
+  return status === "missing" || status === "expired" || status === "rejected";
+}
+
 type ChecklistDocument = {
   id: string;
   name: string;
@@ -66,7 +84,7 @@ type StaffInput = {
   id: string;
   title?: string | null;
   user: { name: string };
-  center?: { name: string; crmLocationId?: string | null } | null;
+  center?: { name: string; crmLocationId?: string | null; customFields?: unknown; state?: string | null; licensedCapacity?: number | null } | null;
   certifications: ChecklistCertification[];
 };
 
@@ -97,6 +115,42 @@ export const requiredChecklistDefinitions = [
   ...staffRequirements,
 ] as const satisfies readonly RequiredChecklistDefinition[];
 
+function requirementSlug(value: string) {
+  return normalize(value)
+    .replace(/^staff/, "")
+    .slice(0, 64) || "requirement";
+}
+
+function requirementType(value: string) {
+  const normalized = value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized || "staff_requirement";
+}
+
+export function staffRequirementsForCenter(center?: StaffInput["center"]): RequiredChecklistDefinition[] {
+  const config = readCenterLicensingConfiguration(center?.customFields, {
+    centerState: center?.state,
+    licensedCapacity: center?.licensedCapacity,
+  });
+  const configuredLabels = config.staffCredentialRules.items;
+  if (!configuredLabels.length) return staffRequirements;
+
+  const usedIds = new Set<string>();
+  return configuredLabels.map((label, index) => {
+    const baseId = `staff-${requirementSlug(label)}`;
+    const id = usedIds.has(baseId) ? `${baseId}-${index + 1}` : baseId;
+    usedIds.add(id);
+    const defaultMatch = staffRequirements.find((requirement) => matchesRequiredChecklistDefinition(requirement, { name: label, type: requirementType(label) }));
+    return {
+      id,
+      scope: "staff",
+      label,
+      type: defaultMatch?.type ?? requirementType(label),
+      aliases: defaultMatch?.aliases,
+      restricted: defaultMatch?.restricted ?? /background|fingerprint|screen/i.test(label),
+    } satisfies RequiredChecklistDefinition;
+  });
+}
+
 function normalize(value: string | null | undefined) {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -117,8 +171,15 @@ function centerLabel(center?: { name: string; crmLocationId?: string | null } | 
   return center?.crmLocationId || center?.name || null;
 }
 
-export function findChecklistDefinition(scope: RequirementScope, requirementId: string) {
-  return requiredChecklistDefinitions.find((requirement) => requirement.scope === scope && requirement.id === requirementId) ?? null;
+export function findChecklistDefinition(
+  scope: RequirementScope,
+  requirementId: string,
+  options: { center?: StaffInput["center"] } = {},
+) {
+  const definitions = scope === "staff"
+    ? staffRequirementsForCenter(options.center)
+    : requiredChecklistDefinitions.filter((requirement) => requirement.scope === scope);
+  return definitions.find((requirement) => requirement.scope === scope && requirement.id === requirementId) ?? null;
 }
 
 export function matchesRequiredChecklistDefinition(
@@ -231,7 +292,7 @@ export function buildRequiredDocumentChecklist(input: {
   }
 
   for (const staffMember of input.staff) {
-    for (const requirement of staffRequirements) {
+    for (const requirement of staffRequirementsForCenter(staffMember.center)) {
       const match = bestCertificationMatch(requirement, staffMember.certifications, now);
       rows.push({
         key: `staff:${staffMember.id}:${requirement.id}`,
@@ -272,9 +333,57 @@ export function summarizeRequiredDocumentChecklist(items: RequiredChecklistItem[
   };
   for (const item of items) {
     summary[item.status] += 1;
-    if (item.status === "missing" || item.status === "expired" || item.status === "rejected") {
+    if (requiresChecklistAction(item.status)) {
       summary.actionNeeded += 1;
     }
   }
   return summary;
+}
+
+const subjectGroupScopeOrder: Record<RequirementScope, number> = {
+  family: 0,
+  child: 1,
+  staff: 2,
+};
+
+export function groupRequiredChecklistBySubject(items: RequiredChecklistItem[]): RequiredChecklistSubjectGroup[] {
+  const groupedItems = new Map<string, RequiredChecklistItem[]>();
+
+  for (const item of items) {
+    const key = `${item.scope}:${item.subjectId}`;
+    const currentItems = groupedItems.get(key);
+    if (currentItems) {
+      currentItems.push(item);
+    } else {
+      groupedItems.set(key, [item]);
+    }
+  }
+
+  return Array.from(groupedItems.entries())
+    .map(([key, subjectItems]) => {
+      const firstItem = subjectItems[0];
+      const summary = summarizeRequiredDocumentChecklist(subjectItems);
+      return {
+        key,
+        scope: firstItem.scope,
+        subjectId: firstItem.subjectId,
+        subjectName: firstItem.subjectName,
+        centerLabel: firstItem.centerLabel,
+        items: subjectItems,
+        summary,
+        actionNeeded: summary.actionNeeded,
+        completePercent: summary.total > 0 ? Math.round((summary.complete / summary.total) * 100) : 0,
+      };
+    })
+    .sort((left, right) => {
+      if (left.actionNeeded !== right.actionNeeded) {
+        return right.actionNeeded - left.actionNeeded;
+      }
+
+      if (subjectGroupScopeOrder[left.scope] !== subjectGroupScopeOrder[right.scope]) {
+        return subjectGroupScopeOrder[left.scope] - subjectGroupScopeOrder[right.scope];
+      }
+
+      return left.subjectName.localeCompare(right.subjectName);
+    });
 }

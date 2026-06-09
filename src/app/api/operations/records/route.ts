@@ -4,6 +4,7 @@ import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperat
 import { writeAuditLog } from "@/lib/audit";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
+import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
@@ -449,6 +450,87 @@ export async function POST(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+  } else if (entity === "authorizedPickup") {
+    const familyId = clean(body.familyId) || clean(body.relatedId);
+    if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
+    const access = await assertFamilyAccess(user, familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    centerId = access.centerId;
+    const data = {
+      familyId,
+      fullName: clean(body.name),
+      phone: clean(body.phone) || clean(body.type) || null,
+      relation: clean(body.relation) || clean(body.type) || null,
+      verificationNotes: clean(body.verificationNotes) || clean(body.body) || null,
+    };
+    if (!data.fullName) return NextResponse.json({ ok: false, error: "Authorized pickup name is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.authorizedPickup.findUnique({ where: { id }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "AuthorizedPickup", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    result = id ? await prisma.authorizedPickup.update({ where: { id }, data }) : await prisma.authorizedPickup.create({ data });
+  } else if (entity === "emergencyContact") {
+    const familyId = clean(body.familyId) || clean(body.relatedId);
+    if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
+    const access = await assertFamilyAccess(user, familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    centerId = access.centerId;
+    const data = {
+      familyId,
+      fullName: clean(body.name),
+      phone: clean(body.phone) || clean(body.type),
+      relation: clean(body.relation) || clean(body.status) || "Emergency contact",
+    };
+    if (!data.fullName || !data.phone) return NextResponse.json({ ok: false, error: "Emergency contact name and phone are required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.emergencyContact.findUnique({ where: { id }, select: { familyId: true } });
+      const guard = scopedUpdateGuard({ entity: "EmergencyContact", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    result = id ? await prisma.emergencyContact.update({ where: { id }, data }) : await prisma.emergencyContact.create({ data });
+  } else if (entity === "allergy") {
+    const childId = clean(body.childId) || clean(body.relatedId);
+    if (!childId) return NextResponse.json({ ok: false, error: "Child ID is required." }, { status: 400 });
+    const child = await prisma.child.findUnique({ where: { id: childId }, select: { familyId: true, family: { select: { centerId: true } } } });
+    if (!child) return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, child.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    centerId = child.family.centerId;
+    const data = {
+      childId,
+      allergen: clean(body.allergen) || clean(body.name),
+      severity: clean(body.severity) || clean(body.status) || "Needs review",
+      actionPlan: clean(body.actionPlan) || clean(body.body) || null,
+    };
+    if (!data.allergen) return NextResponse.json({ ok: false, error: "Allergen is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.allergy.findUnique({ where: { id }, select: { childId: true } });
+      const guard = scopedUpdateGuard({ entity: "Allergy", expectedScopeId: childId, actualScopeId: existing?.childId, scopeLabel: "child" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    result = id ? await prisma.allergy.update({ where: { id }, data }) : await prisma.allergy.create({ data });
+  } else if (entity === "medicalNote") {
+    const childId = clean(body.childId) || clean(body.relatedId);
+    if (!childId) return NextResponse.json({ ok: false, error: "Child ID is required." }, { status: 400 });
+    const child = await prisma.child.findUnique({ where: { id: childId }, select: { familyId: true, family: { select: { centerId: true } } } });
+    if (!child) return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, child.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    centerId = child.family.centerId;
+    const data = {
+      childId,
+      category: clean(body.category) || clean(body.type) || "Medical note",
+      note: clean(body.note) || clean(body.body),
+      restricted: body.restricted === undefined ? true : Boolean(body.restricted),
+    };
+    if (!data.note) return NextResponse.json({ ok: false, error: "Medical note is required." }, { status: 400 });
+    if (id) {
+      const existing = await prisma.childMedicalNote.findUnique({ where: { id }, select: { childId: true } });
+      const guard = scopedUpdateGuard({ entity: "ChildMedicalNote", expectedScopeId: childId, actualScopeId: existing?.childId, scopeLabel: "child" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    result = id ? await prisma.childMedicalNote.update({ where: { id }, data }) : await prisma.childMedicalNote.create({ data });
   } else if (entity === "staff") {
     const requestedCenterId = clean(body.centerId) || clean(body.relatedId) || user.primaryCenterId;
     if (!requestedCenterId) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
@@ -845,33 +927,69 @@ export async function POST(request: NextRequest) {
   } else if (entity === "campaign") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
     if (id) {
-      const existing = await prisma.campaign.findUnique({ where: { id }, select: { brandId: true } });
-      const guard = scopedUpdateGuard({ entity: "Campaign", expectedScopeId: brand?.id ?? null, actualScopeId: existing?.brandId, scopeLabel: "brand" });
-      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+      const existing = await prisma.campaign.findUnique({
+        where: { id },
+        select: { tenantId: true, brand: { select: { tenantId: true } } },
+      });
+      if (!existing || (existing.tenantId !== user.tenantId && existing.brand?.tenantId !== user.tenantId)) {
+        return NextResponse.json({ ok: false, error: "Campaign not found for this tenant." }, { status: 404 });
+      }
     }
+    const draft = normalizeCampaignDraft({
+      name: body.name,
+      type: body.type,
+      templateKey: body.templateKey,
+      subject: body.subject,
+      body: body.body,
+      audience: body.audience,
+      status: body.status,
+      scheduledAt: body.scheduledAt || body.sendAt || body.expiresAt,
+    });
     const data = {
+      tenantId: user.tenantId,
       brandId: brand?.id ?? null,
-      name: clean(body.name),
-      type: clean(body.type) || "email",
-      audience: clean(body.audience) ? { label: clean(body.audience) } : undefined,
-      status: clean(body.status) || "draft",
-      metrics: id ? undefined : { createdFrom: "operations_record_api" },
+      name: draft.name,
+      type: draft.type,
+      subject: draft.subject,
+      body: draft.body,
+      templateKey: draft.templateKey,
+      audience: draft.audience ? draft.audience as Prisma.InputJsonObject : undefined,
+      status: draft.status,
+      scheduledAt: draft.scheduledAt,
+      metrics: id ? undefined : { createdFrom: "operations_record_api", templateKey: draft.templateKey },
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Campaign name is required." }, { status: 400 });
     result = id ? await prisma.campaign.update({ where: { id }, data }) : await prisma.campaign.create({ data });
   } else if (entity === "automation") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
     if (id) {
-      const existing = await prisma.automation.findUnique({ where: { id }, select: { brandId: true } });
-      const guard = scopedUpdateGuard({ entity: "Automation", expectedScopeId: brand?.id ?? null, actualScopeId: existing?.brandId, scopeLabel: "brand" });
-      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+      const existing = await prisma.automation.findUnique({
+        where: { id },
+        select: { tenantId: true, brand: { select: { tenantId: true } } },
+      });
+      if (!existing || (existing.tenantId !== user.tenantId && existing.brand?.tenantId !== user.tenantId)) {
+        return NextResponse.json({ ok: false, error: "Automation not found for this tenant." }, { status: 404 });
+      }
     }
     const data = {
+      tenantId: user.tenantId,
       brandId: brand?.id ?? null,
       name: clean(body.name),
       trigger: clean(body.trigger) || "manual",
-      condition: clean(body.condition) ? { rule: clean(body.condition) } : undefined,
-      action: { type: clean(body.action) || "create_task" },
+      condition: clean(body.condition) || clean(body.audience)
+        ? {
+            rule: clean(body.condition),
+            audience: clean(body.audience),
+            requiresReview: body.requiresReview === true || body.requiresReview === "true",
+          }
+        : undefined,
+      action: {
+        type: clean(body.actionType) || clean(body.action) || "create_task",
+        channel: clean(body.channel) || "task",
+        templateKey: clean(body.templateKey) || null,
+        subject: clean(body.subject) || null,
+        body: clean(body.body) || null,
+      },
       delay: clean(body.delay) || null,
       status: clean(body.status) || "active",
     };
@@ -1011,12 +1129,27 @@ export async function POST(request: NextRequest) {
     if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Plan name and amount are required." }, { status: 400 });
     result = id ? await prisma.tuitionPlan.update({ where: { id }, data }) : await prisma.tuitionPlan.create({ data });
   } else if (entity === "review") {
+    const requestedCenterId = clean(body.centerId) || null;
+    if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
+    }
+    if (id) {
+      const existing = await prisma.review.findFirst({ where: { id, tenantId: user.tenantId }, select: { id: true, centerId: true } });
+      if (!existing) return NextResponse.json({ ok: false, error: "Review not found for this tenant." }, { status: 404 });
+      if (existing.centerId && !canAccessCenter(user, existing.centerId)) {
+        return NextResponse.json({ ok: false, error: "You do not have access to this review." }, { status: 403 });
+      }
+    }
+    centerId = requestedCenterId;
     const data = {
+      tenantId: user.tenantId,
+      centerId: requestedCenterId,
       source: clean(body.source) || "manual",
       rating: Math.min(Math.max(intValue(body.rating, 5), 1), 5),
       body: clean(body.body) || null,
       responseDraft: clean(body.responseDraft) || null,
       approvedForPublicTestimonial: Boolean(body.approvedForPublicTestimonial),
+      status: clean(body.status) || "new",
     };
     result = id ? await prisma.review.update({ where: { id }, data }) : await prisma.review.create({ data });
   } else {

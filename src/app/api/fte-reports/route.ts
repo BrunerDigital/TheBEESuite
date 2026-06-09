@@ -12,6 +12,7 @@ import {
   validateFtePeriod,
 } from "@/lib/fte-report-guardrails";
 import { appendRowToGoogleSheet, spreadsheetIdFromUrl, type GoogleSheetValue } from "@/lib/google-sheets";
+import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -101,16 +102,19 @@ function googleSpreadsheetId() {
   );
 }
 
-async function forwardToFteSheet(row: GoogleSheetValue[]) {
-  const webhookUrl = process.env.FTE_GOOGLE_SHEETS_WEBHOOK_URL?.trim();
+async function forwardToFteSheet(row: GoogleSheetValue[], tenantId: string | null) {
+  const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "google_sheets");
+  const webhookUrl = process.env.FTE_GOOGLE_SHEETS_WEBHOOK_URL?.trim() || credentialEnvValue(tenantCredentials, "GOOGLE_SHEETS_WEBHOOK_URL");
   const spreadsheetId = googleSpreadsheetId();
 
-  if (spreadsheetId) {
+  if (spreadsheetId || tenantCredentials.GOOGLE_SHEETS_SPREADSHEET_ID || tenantCredentials.GOOGLE_SHEETS_SPREADSHEET_URL) {
     const result = await appendRowToGoogleSheet({
-      spreadsheetId,
+      spreadsheetId: spreadsheetId || undefined,
       sheetName: process.env.FTE_GOOGLE_SHEETS_SHEET_NAME || "FTE Reports",
       headers: FTE_SHEET_HEADERS,
       row,
+      tenantId,
+      credentials: tenantCredentials,
     });
     if (!result.skipped) return result;
   }
@@ -365,7 +369,7 @@ export async function POST(request: NextRequest) {
     report.status,
     report.submittedBy?.email ?? user.email,
     report.notes ?? "",
-  ]);
+  ], center.organization.tenantId);
 
   const executiveUsers = await prisma.user.findMany({
     where: {

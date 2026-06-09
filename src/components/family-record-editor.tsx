@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CUSTODY_WARNING_DETAIL, CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import { findFamilyDuplicateCandidates } from "@/lib/family-dedupe";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
@@ -27,6 +28,9 @@ type GuardianRecord = {
   isBillingContact?: boolean;
   userId?: string | null;
   checkInPinSetAt?: Date | string | null;
+  qrToken?: string | null;
+  kioskPath?: string | null;
+  centerName?: string | null;
 };
 
 type ChildRecord = {
@@ -45,6 +49,49 @@ type ChildRecord = {
   feedingNotes?: string | null;
   pottyNotes?: string | null;
   developmentalNotes?: string | null;
+  allergies: AllergyRecord[];
+  medicalNotes: MedicalNoteRecord[];
+  documents: DocumentRecord[];
+};
+
+type AuthorizedPickupRecord = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  relation: string | null;
+  verificationNotes: string | null;
+};
+
+type EmergencyContactRecord = {
+  id: string;
+  fullName: string;
+  phone: string;
+  relation: string;
+};
+
+type AllergyRecord = {
+  id: string;
+  allergen: string;
+  severity: string;
+  actionPlan: string | null;
+};
+
+type MedicalNoteRecord = {
+  id: string;
+  category: string;
+  note: string;
+  restricted: boolean;
+};
+
+type DocumentRecord = {
+  id: string;
+  familyId: string | null;
+  childId: string | null;
+  name: string;
+  type: string;
+  status: string;
+  expiresAt: Date | string | null;
+  restricted: boolean;
 };
 
 export type EditableFamilyRecord = {
@@ -57,6 +104,9 @@ export type EditableFamilyRecord = {
   custodyNotes: string | null;
   guardians: GuardianRecord[];
   children: ChildRecord[];
+  pickups: AuthorizedPickupRecord[];
+  emergencyContacts: EmergencyContactRecord[];
+  documents: DocumentRecord[];
 };
 
 type Props = {
@@ -67,6 +117,7 @@ type Props = {
 const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
+const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
 
 function toDateInput(value: Date | string | null | undefined) {
   if (!value) return "";
@@ -107,6 +158,22 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [preferredCommunication, setPreferredCommunication] = useState(selectedGuardian?.preferredCommunication ?? "email");
   const [isBillingContact, setIsBillingContact] = useState(Boolean(selectedGuardian?.isBillingContact));
 
+  const [selectedPickupId, setSelectedPickupId] = useState(selectedFamily?.pickups[0]?.id ?? "");
+  const selectedPickup = selectedFamily?.pickups.find((pickup) => pickup.id === selectedPickupId) ?? selectedFamily?.pickups[0] ?? null;
+  const [pickupName, setPickupName] = useState(selectedPickup?.fullName ?? "");
+  const [pickupPhone, setPickupPhone] = useState(selectedPickup?.phone ?? "");
+  const [pickupRelation, setPickupRelation] = useState(selectedPickup?.relation ?? "");
+  const [pickupVerificationNotes, setPickupVerificationNotes] = useState(selectedPickup?.verificationNotes ?? "");
+
+  const [selectedEmergencyContactId, setSelectedEmergencyContactId] = useState(selectedFamily?.emergencyContacts[0]?.id ?? "");
+  const selectedEmergencyContact =
+    selectedFamily?.emergencyContacts.find((contact) => contact.id === selectedEmergencyContactId) ??
+    selectedFamily?.emergencyContacts[0] ??
+    null;
+  const [emergencyContactName, setEmergencyContactName] = useState(selectedEmergencyContact?.fullName ?? "");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(selectedEmergencyContact?.phone ?? "");
+  const [emergencyContactRelation, setEmergencyContactRelation] = useState(selectedEmergencyContact?.relation ?? "");
+
   const [selectedChildId, setSelectedChildId] = useState(selectedFamily?.children[0]?.id ?? "");
   const selectedChild = selectedFamily?.children.find((child) => child.id === selectedChildId) ?? selectedFamily?.children[0] ?? null;
   const [childName, setChildName] = useState(selectedChild?.fullName ?? "");
@@ -123,6 +190,33 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [developmentalNotes, setDevelopmentalNotes] = useState(selectedChild?.developmentalNotes ?? "");
   const [photoVideoPermission, setPhotoVideoPermission] = useState(Boolean(selectedChild?.photoVideoPermission));
   const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(selectedChild?.fieldTripPermission));
+
+  const [selectedAllergyId, setSelectedAllergyId] = useState(selectedChild?.allergies[0]?.id ?? "");
+  const selectedAllergy = selectedChild?.allergies.find((allergy) => allergy.id === selectedAllergyId) ?? selectedChild?.allergies[0] ?? null;
+  const [allergen, setAllergen] = useState(selectedAllergy?.allergen ?? "");
+  const [allergySeverity, setAllergySeverity] = useState(selectedAllergy?.severity ?? "");
+  const [allergyActionPlan, setAllergyActionPlan] = useState(selectedAllergy?.actionPlan ?? "");
+
+  const [selectedMedicalNoteId, setSelectedMedicalNoteId] = useState(selectedChild?.medicalNotes[0]?.id ?? "");
+  const selectedMedicalNote =
+    selectedChild?.medicalNotes.find((note) => note.id === selectedMedicalNoteId) ?? selectedChild?.medicalNotes[0] ?? null;
+  const [medicalCategory, setMedicalCategory] = useState(selectedMedicalNote?.category ?? "");
+  const [medicalNote, setMedicalNote] = useState(selectedMedicalNote?.note ?? "");
+  const [medicalRestricted, setMedicalRestricted] = useState(selectedMedicalNote?.restricted ?? true);
+
+  const firstDocument = selectedChild?.documents[0] ?? selectedFamily?.documents[0] ?? null;
+  const [selectedDocumentId, setSelectedDocumentId] = useState(firstDocument?.id ?? "");
+  const selectedDocument =
+    selectedChild?.documents.find((document) => document.id === selectedDocumentId) ??
+    selectedFamily?.documents.find((document) => document.id === selectedDocumentId) ??
+    firstDocument;
+  const [documentName, setDocumentName] = useState(selectedDocument?.name ?? "");
+  const [documentType, setDocumentType] = useState(selectedDocument?.type ?? "");
+  const [documentStatus, setDocumentStatus] = useState(selectedDocument?.status ?? "REQUESTED");
+  const [documentExpiresAt, setDocumentExpiresAt] = useState(toDateInput(selectedDocument?.expiresAt));
+  const [documentRestricted, setDocumentRestricted] = useState(Boolean(selectedDocument?.restricted));
+  const [documentChildId, setDocumentChildId] = useState(selectedDocument?.childId ?? "family");
+
   const [duplicateFamilyId, setDuplicateFamilyId] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("");
@@ -148,6 +242,45 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setIsBillingContact(Boolean(guardian?.isBillingContact));
   }
 
+  function loadPickup(pickup: AuthorizedPickupRecord | null) {
+    setSelectedPickupId(pickup?.id ?? "");
+    setPickupName(pickup?.fullName ?? "");
+    setPickupPhone(pickup?.phone ?? "");
+    setPickupRelation(pickup?.relation ?? "");
+    setPickupVerificationNotes(pickup?.verificationNotes ?? "");
+  }
+
+  function loadEmergencyContact(contact: EmergencyContactRecord | null) {
+    setSelectedEmergencyContactId(contact?.id ?? "");
+    setEmergencyContactName(contact?.fullName ?? "");
+    setEmergencyContactPhone(contact?.phone ?? "");
+    setEmergencyContactRelation(contact?.relation ?? "");
+  }
+
+  function loadAllergy(allergy: AllergyRecord | null) {
+    setSelectedAllergyId(allergy?.id ?? "");
+    setAllergen(allergy?.allergen ?? "");
+    setAllergySeverity(allergy?.severity ?? "");
+    setAllergyActionPlan(allergy?.actionPlan ?? "");
+  }
+
+  function loadMedicalNote(note: MedicalNoteRecord | null) {
+    setSelectedMedicalNoteId(note?.id ?? "");
+    setMedicalCategory(note?.category ?? "");
+    setMedicalNote(note?.note ?? "");
+    setMedicalRestricted(note?.restricted ?? true);
+  }
+
+  function loadDocument(document: DocumentRecord | null, child: ChildRecord | null = selectedChild) {
+    setSelectedDocumentId(document?.id ?? "");
+    setDocumentName(document?.name ?? "");
+    setDocumentType(document?.type ?? "");
+    setDocumentStatus(document?.status ?? "REQUESTED");
+    setDocumentExpiresAt(toDateInput(document?.expiresAt));
+    setDocumentRestricted(Boolean(document?.restricted));
+    setDocumentChildId(document?.childId ?? child?.id ?? "family");
+  }
+
   function loadChild(child: ChildRecord | null) {
     setSelectedChildId(child?.id ?? "");
     setChildName(child?.fullName ?? "");
@@ -164,6 +297,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setDevelopmentalNotes(child?.developmentalNotes ?? "");
     setPhotoVideoPermission(Boolean(child?.photoVideoPermission));
     setFieldTripPermission(Boolean(child?.fieldTripPermission));
+    loadAllergy(child?.allergies[0] ?? null);
+    loadMedicalNote(child?.medicalNotes[0] ?? null);
+    loadDocument(child?.documents[0] ?? null, child);
   }
 
   function loadFamily(familyId: string) {
@@ -176,7 +312,10 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setFamilyNotes(family?.notes ?? "");
     setCustodyNotes(family?.custodyNotes ?? "");
     loadGuardian(family?.guardians[0] ?? null);
+    loadPickup(family?.pickups[0] ?? null);
+    loadEmergencyContact(family?.emergencyContacts[0] ?? null);
     loadChild(family?.children[0] ?? null);
+    loadDocument(family?.children[0]?.documents[0] ?? family?.documents[0] ?? null, family?.children[0] ?? null);
     setDuplicateFamilyId("");
   }
 
@@ -186,6 +325,27 @@ export function FamilyRecordEditor({ families, centers }: Props) {
 
   function loadChildById(childId: string) {
     loadChild(selectedFamily?.children.find((child) => child.id === childId) ?? null);
+  }
+
+  function loadPickupById(pickupId: string) {
+    loadPickup(selectedFamily?.pickups.find((pickup) => pickup.id === pickupId) ?? null);
+  }
+
+  function loadEmergencyContactById(contactId: string) {
+    loadEmergencyContact(selectedFamily?.emergencyContacts.find((contact) => contact.id === contactId) ?? null);
+  }
+
+  function loadAllergyById(allergyId: string) {
+    loadAllergy(selectedChild?.allergies.find((allergy) => allergy.id === allergyId) ?? null);
+  }
+
+  function loadMedicalNoteById(noteId: string) {
+    loadMedicalNote(selectedChild?.medicalNotes.find((note) => note.id === noteId) ?? null);
+  }
+
+  function loadDocumentById(documentId: string) {
+    const childDocument = selectedFamily?.children.flatMap((child) => child.documents).find((document) => document.id === documentId);
+    loadDocument(selectedFamily?.documents.find((document) => document.id === documentId) ?? childDocument ?? null);
   }
 
   function postRecord(payload: Record<string, unknown>, successLabel: string) {
@@ -290,6 +450,15 @@ export function FamilyRecordEditor({ families, centers }: Props) {
 
         <section className="space-y-3">
           <div className="text-sm font-medium">Family account</div>
+          {hasCustodyWarning({ custodyNotes }) ? (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>{CUSTODY_WARNING_LABEL}</AlertTitle>
+              <AlertDescription>
+                {CUSTODY_WARNING_DETAIL} Note preview: {custodyWarningPreview({ custodyNotes }, 140)}
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>School / center</Label>
@@ -315,7 +484,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               <Input value={address} onChange={(event) => setAddress(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Restricted custody note</Label>
+              <Label>Restricted custody note (staff only)</Label>
               <Input value={custodyNotes} onChange={(event) => setCustodyNotes(event.target.value)} />
             </div>
             <div className="space-y-1 md:col-span-3">
@@ -388,6 +557,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>Guardian</Label>
+              <div className="flex gap-2">
               <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
                 <SelectTrigger><SelectValue placeholder="Choose guardian" /></SelectTrigger>
                 <SelectContent>
@@ -396,6 +566,8 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>New</Button>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Name</Label>
@@ -434,7 +606,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             </label>
           </div>
           <Button
-            disabled={isPending || !selectedFamily || !selectedGuardian || !guardianName.trim()}
+            disabled={isPending || !selectedFamily || !guardianName.trim()}
             onClick={() => postRecord({
               entity: "guardian",
               id: selectedGuardian?.id,
@@ -454,18 +626,127 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         </section>
 
         <section className="space-y-3">
+          <div className="text-sm font-medium">Authorized pickups and emergency contacts</div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Authorized pickup</div>
+                <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>New</Button>
+              </div>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Pickup record</Label>
+                  <Select value={selectedPickup?.id ?? ""} onValueChange={(value) => value && loadPickupById(value)}>
+                    <SelectTrigger><SelectValue placeholder="Choose pickup" /></SelectTrigger>
+                    <SelectContent>
+                      {selectedFamily?.pickups.map((pickup) => (
+                        <SelectItem key={pickup.id} value={pickup.id}>{pickup.fullName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={pickupName} onChange={(event) => setPickupName(event.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Phone</Label>
+                    <Input value={pickupPhone} onChange={(event) => setPickupPhone(event.target.value)} type="tel" />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Relation</Label>
+                    <Input value={pickupRelation} onChange={(event) => setPickupRelation(event.target.value)} />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Verification notes</Label>
+                    <Textarea value={pickupVerificationNotes} onChange={(event) => setPickupVerificationNotes(event.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  disabled={isPending || !selectedFamily || !pickupName.trim()}
+                  onClick={() => postRecord({
+                    entity: "authorizedPickup",
+                    id: selectedPickup?.id,
+                    familyId: selectedFamily?.id,
+                    name: pickupName,
+                    phone: pickupPhone,
+                    relation: pickupRelation,
+                    verificationNotes: pickupVerificationNotes,
+                  }, "Authorized pickup")}
+                >
+                  <Save data-icon="inline-start" />
+                  Save pickup
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Emergency contact</div>
+                <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>New</Button>
+              </div>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Contact record</Label>
+                  <Select value={selectedEmergencyContact?.id ?? ""} onValueChange={(value) => value && loadEmergencyContactById(value)}>
+                    <SelectTrigger><SelectValue placeholder="Choose contact" /></SelectTrigger>
+                    <SelectContent>
+                      {selectedFamily?.emergencyContacts.map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>{contact.fullName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Phone</Label>
+                    <Input value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} type="tel" />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Relation</Label>
+                    <Input value={emergencyContactRelation} onChange={(event) => setEmergencyContactRelation(event.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  disabled={isPending || !selectedFamily || !emergencyContactName.trim() || !emergencyContactPhone.trim()}
+                  onClick={() => postRecord({
+                    entity: "emergencyContact",
+                    id: selectedEmergencyContact?.id,
+                    familyId: selectedFamily?.id,
+                    name: emergencyContactName,
+                    phone: emergencyContactPhone,
+                    relation: emergencyContactRelation,
+                  }, "Emergency contact")}
+                >
+                  <Save data-icon="inline-start" />
+                  Save contact
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-3">
           <div className="text-sm font-medium">Child profile</div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>Child</Label>
-              <Select value={selectedChild?.id ?? ""} onValueChange={(value) => value && loadChildById(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
-                <SelectContent>
-                  {selectedFamily?.children.map((child) => (
-                    <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={selectedChild?.id ?? ""} onValueChange={(value) => value && loadChildById(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose child" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedFamily?.children.map((child) => (
+                      <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={() => loadChild(null)}>New</Button>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Full name</Label>
@@ -549,7 +830,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             </div>
           </div>
           <Button
-            disabled={isPending || !selectedFamily || !selectedChild || !childName.trim() || !dateOfBirth}
+            disabled={isPending || !selectedFamily || !childName.trim() || !dateOfBirth}
             onClick={() => postRecord({
               entity: "child",
               id: selectedChild?.id,
@@ -573,6 +854,189 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             <Save data-icon="inline-start" />
             Save child
           </Button>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Allergy action plan</div>
+                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>New</Button>
+              </div>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Allergy record</Label>
+                  <Select value={selectedAllergy?.id ?? ""} onValueChange={(value) => value && loadAllergyById(value)}>
+                    <SelectTrigger><SelectValue placeholder="Choose allergy" /></SelectTrigger>
+                    <SelectContent>
+                      {selectedChild?.allergies.map((allergy) => (
+                        <SelectItem key={allergy.id} value={allergy.id}>{allergy.allergen}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Allergen</Label>
+                    <Input value={allergen} onChange={(event) => setAllergen(event.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Severity</Label>
+                    <Input value={allergySeverity} onChange={(event) => setAllergySeverity(event.target.value)} />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Action plan</Label>
+                    <Textarea value={allergyActionPlan} onChange={(event) => setAllergyActionPlan(event.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  disabled={isPending || !selectedChild || !allergen.trim()}
+                  onClick={() => postRecord({
+                    entity: "allergy",
+                    id: selectedAllergy?.id,
+                    childId: selectedChild?.id,
+                    name: allergen,
+                    severity: allergySeverity,
+                    actionPlan: allergyActionPlan,
+                  }, "Allergy record")}
+                >
+                  <Save data-icon="inline-start" />
+                  Save allergy
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Restricted medical note</div>
+                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>New</Button>
+              </div>
+              <div className="grid gap-3">
+                <div className="space-y-1">
+                  <Label>Medical note record</Label>
+                  <Select value={selectedMedicalNote?.id ?? ""} onValueChange={(value) => value && loadMedicalNoteById(value)}>
+                    <SelectTrigger><SelectValue placeholder="Choose note" /></SelectTrigger>
+                    <SelectContent>
+                      {selectedChild?.medicalNotes.map((note) => (
+                        <SelectItem key={note.id} value={note.id}>{note.category}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Category</Label>
+                  <Input value={medicalCategory} onChange={(event) => setMedicalCategory(event.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Note</Label>
+                  <Textarea value={medicalNote} onChange={(event) => setMedicalNote(event.target.value)} />
+                </div>
+                <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                  <input type="checkbox" checked={medicalRestricted} onChange={(event) => setMedicalRestricted(event.target.checked)} />
+                  Restricted to staff with child safety access
+                </label>
+                <Button
+                  disabled={isPending || !selectedChild || !medicalNote.trim()}
+                  onClick={() => postRecord({
+                    entity: "medicalNote",
+                    id: selectedMedicalNote?.id,
+                    childId: selectedChild?.id,
+                    category: medicalCategory,
+                    note: medicalNote,
+                    restricted: medicalRestricted,
+                  }, "Medical note")}
+                >
+                  <Save data-icon="inline-start" />
+                  Save medical note
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">Family and child document request</div>
+                <p className="text-xs text-muted-foreground">
+                  Create or edit family/child document rows. Parents upload requested files from the portal; directors review them from Documents.
+                </p>
+              </div>
+              <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>New</Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>Document record</Label>
+                <Select value={selectedDocument?.id ?? ""} onValueChange={(value) => value && loadDocumentById(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose document" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedFamily?.documents.map((document) => (
+                      <SelectItem key={document.id} value={document.id}>{document.name} · family</SelectItem>
+                    ))}
+                    {selectedFamily?.children.flatMap((child) =>
+                      child.documents.map((document) => (
+                        <SelectItem key={document.id} value={document.id}>{document.name} · {child.fullName}</SelectItem>
+                      )),
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Owner</Label>
+                <Select value={documentChildId} onValueChange={(value) => value && setDocumentChildId(value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="family">Family account</SelectItem>
+                    {selectedFamily?.children.map((child) => (
+                      <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Document name</Label>
+                <Input value={documentName} onChange={(event) => setDocumentName(event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>Type</Label>
+                <Input value={documentType} onChange={(event) => setDocumentType(event.target.value)} placeholder="immunization, policy, custody" />
+              </div>
+              <div className="space-y-1">
+                <Label>Status</Label>
+                <Select value={documentStatus} onValueChange={(value) => value && setDocumentStatus(value)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {documentStatuses.map((status) => (
+                      <SelectItem key={status} value={status}>{status.toLowerCase()}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Expiration</Label>
+                <Input type="date" value={documentExpiresAt} onChange={(event) => setDocumentExpiresAt(event.target.value)} />
+              </div>
+              <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm md:col-span-3">
+                <input type="checkbox" checked={documentRestricted} onChange={(event) => setDocumentRestricted(event.target.checked)} />
+                Restricted document visibility
+              </label>
+            </div>
+            <Button
+              className="mt-3"
+              disabled={isPending || !selectedFamily || !documentName.trim()}
+              onClick={() => postRecord({
+                entity: "document",
+                id: selectedDocument?.id,
+                familyId: selectedFamily?.id,
+                childId: documentChildId === "family" ? undefined : documentChildId,
+                name: documentName,
+                type: documentType,
+                status: documentStatus,
+                expiresAt: documentExpiresAt,
+                restricted: documentRestricted,
+              }, "Document request")}
+            >
+              <Save data-icon="inline-start" />
+              Save document
+            </Button>
+          </div>
         </section>
       </CardContent>
     </Card>

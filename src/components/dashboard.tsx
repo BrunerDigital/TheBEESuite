@@ -35,9 +35,13 @@ export type LiveDashboardData = {
   centers: typeof centers;
   leadRows?: typeof leads;
   aiSummary: string;
+  aiHighlights?: string[];
+  analytics?: typeof analytics;
   classroomSnapshots?: typeof classrooms;
+  notifications?: typeof notifications;
   parentMessages?: typeof messages;
-  showExecutiveDemoData?: boolean;
+  asOfLabel?: string;
+  showDemoFallbackData?: boolean;
   visibleLenses?: readonly DashboardLens[];
   inquiryEmbed?: {
     title: string;
@@ -61,26 +65,57 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : (["platform", "brand", "regional", "director", "teacher", "parent"] as const);
   const defaultLens = visibleLenses.includes("director") ? "director" : visibleLenses[0] ?? "director";
   const secondaryLenses = visibleLenses.filter((lens) => lens !== "director");
-  const showExecutiveDemoData = Boolean(live?.showExecutiveDemoData);
+  const showDemoFallbackData = Boolean(live?.showDemoFallbackData);
+  const dashboardAnalytics = live?.analytics?.length
+    ? live.analytics
+    : showDemoFallbackData
+      ? analytics
+      : [];
+  const actionQueue = live?.notifications?.length
+    ? live.notifications
+    : showDemoFallbackData
+      ? notifications
+      : [];
   const classroomSnapshots = live?.classroomSnapshots?.length
     ? live.classroomSnapshots
-    : showExecutiveDemoData
+    : showDemoFallbackData
       ? classrooms
       : [];
   const parentMessages = live?.parentMessages?.length
     ? live.parentMessages
-    : showExecutiveDemoData
+    : showDemoFallbackData
       ? messages
       : [];
-  const isClassroomDemo = showExecutiveDemoData && !live?.classroomSnapshots?.length;
-  const isParentMessageDemo = showExecutiveDemoData && !live?.parentMessages?.length;
+  const isClassroomDemo = showDemoFallbackData && !live?.classroomSnapshots?.length;
+  const isParentMessageDemo = showDemoFallbackData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
     "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm any sensitive action before sending messages or changing records. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
+  const aiHighlights = live?.aiHighlights?.length
+    ? live.aiHighlights
+    : showDemoFallbackData
+      ? ["4 high-fit leads", "8 expiring docs", "2 open seats"]
+      : [];
+  const asOfLabel = live?.asOfLabel ?? "Demo workspace";
+  const maxRevenue = Math.max(...dashboardAnalytics.map((point) => point.revenue), 1);
+  const maxFunnelCount = Math.max(...dashboardAnalytics.flatMap((point) => [point.leads, point.tours, point.enrolled]), 1);
+  const openSeatsByAgeGroup = Array.from(
+    classroomSnapshots.reduce((groups, room) => {
+      const label = String(room.ageGroup || "Unassigned");
+      const capacity = Number(room.capacity);
+      const present = Number(room.present);
+      groups.set(label, (groups.get(label) ?? 0) + Math.max(capacity - present, 0));
+      return groups;
+    }, new Map<string, number>()),
+    ([label, value]) => ({ label, value }),
+  ).filter((item) => item.value > 0);
+  const totalOpenSeats = openSeatsByAgeGroup.reduce((sum, item) => sum + item.value, 0);
+  const ageGroupColors = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
   const inquiryEmbeds = live?.inquiryEmbeds?.length
     ? live.inquiryEmbeds
     : live?.inquiryEmbed
       ? [live.inquiryEmbed]
       : [];
+  const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,7 +125,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-primary">Monday, May 11, 2026</p>
+                <p className="text-sm font-medium text-primary">{asOfLabel}</p>
                 <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
                   The BEE Suite command center
                 </h1>
@@ -139,13 +174,15 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               <p className="text-sm leading-6 text-muted-foreground">
                 {aiSummary}
               </p>
+              {aiHighlights.length ? (
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                {["4 high-fit leads", "8 expiring docs", "2 open seats"].map((item) => (
+                {aiHighlights.map((item) => (
                   <div key={item} className="rounded-lg border bg-background/50 p-3 text-sm font-medium">
                     {item}
                   </div>
                 ))}
               </div>
+              ) : null}
             </CardContent>
           </Card>
         </div>
@@ -210,30 +247,36 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <CardDescription>Leads, tours, enrollments, and revenue index</CardDescription>
                   </CardHeader>
                   <CardContent>
+                    {dashboardAnalytics.length ? (
                     <div className="flex h-64 items-end gap-4 rounded-xl border bg-background/40 p-4">
-                      {analytics.map((point) => (
+                      {dashboardAnalytics.map((point) => (
                         <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                           <div className="flex h-52 w-full items-end justify-center gap-1">
                             <span
                               className="w-4 rounded-t-md bg-primary"
-                              style={{ height: `${(point.revenue / 190) * 100}%` }}
+                              style={{ height: barHeight(point.revenue, maxRevenue) }}
                             />
                             <span
                               className="w-4 rounded-t-md bg-[var(--chart-2)]"
-                              style={{ height: `${point.enrolled * 10}%` }}
+                              style={{ height: barHeight(point.enrolled, maxFunnelCount) }}
                             />
                           </div>
                           <span className="text-xs text-muted-foreground">{point.month}</span>
                         </div>
                       ))}
                     </div>
+                    ) : (
+                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                        No enrollment or revenue trend data is available for this login yet.
+                      </p>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="glass-panel">
                   <CardHeader>
                     <CardTitle>Capacity by classroom</CardTitle>
                     <CardDescription>
-                      {isClassroomDemo ? "Executive demo preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
+                      {isClassroomDemo ? "Demo account preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-4">
@@ -244,9 +287,9 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                             <div className="text-sm font-medium">{room.name}</div>
                             <div className="text-xs text-muted-foreground">{room.ageGroup} · ratio {room.ratio}</div>
                           </div>
-                          <Badge variant="secondary">{room.capacity - room.present} open</Badge>
+                          <Badge variant="secondary">{Math.max(Number(room.capacity) - Number(room.present), 0)} open</Badge>
                         </div>
-                        <Progress value={(room.present / room.capacity) * 100} />
+                        <Progress value={(Number(room.present) / Math.max(Number(room.capacity), 1)) * 100} />
                       </div>
                     ))}
                     {!classroomSnapshots.length ? (
@@ -314,7 +357,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <CardDescription>Notifications, reminders, and review items</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  {notifications.slice(0, 8).map((item, index) => (
+                  {actionQueue.slice(0, 8).map((item, index) => (
                     <div key={item} className="flex items-start gap-3 rounded-xl border bg-background/50 p-3">
                       <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
                         {index + 1}
@@ -322,13 +365,18 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       <p className="text-sm leading-5">{item}</p>
                     </div>
                   ))}
+                  {!actionQueue.length ? (
+                    <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                      No dashboard action items are visible for this login yet.
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
               <Card className="glass-panel">
                 <CardHeader>
                   <CardTitle>Parent messages</CardTitle>
                   <CardDescription>
-                    {isParentMessageDemo ? "Executive demo preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
+                    {isParentMessageDemo ? "Demo account preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
@@ -391,18 +439,24 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <CardDescription>Inquiry to enrolled conversion snapshot</CardDescription>
           </CardHeader>
           <CardContent>
+            {dashboardAnalytics.length ? (
             <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-              {analytics.map((point) => (
+              {dashboardAnalytics.map((point) => (
                 <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                   <div className="flex h-56 w-full items-end justify-center gap-1">
-                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: `${point.leads * 3}%` }} />
-                    <span className="w-3 rounded-t-md bg-primary" style={{ height: `${point.tours * 4}%` }} />
-                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: `${point.enrolled * 7}%` }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: barHeight(point.leads, maxFunnelCount) }} />
+                    <span className="w-3 rounded-t-md bg-primary" style={{ height: barHeight(point.tours, maxFunnelCount) }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
                   </div>
                   <span className="text-xs text-muted-foreground">{point.month}</span>
                 </div>
               ))}
             </div>
+            ) : (
+              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                No enrollment funnel trend data is available for this login yet.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="glass-panel">
@@ -411,30 +465,31 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <CardDescription>Capacity planning for enrollment</CardDescription>
           </CardHeader>
           <CardContent>
+            {openSeatsByAgeGroup.length ? (
             <div className="grid gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[14rem_1fr]">
-              <div className="grid aspect-square place-items-center rounded-full bg-[conic-gradient(var(--chart-1)_0_19%,var(--chart-2)_19%_38%,var(--chart-3)_38%_70%,var(--chart-4)_70%_100%)]">
+              <div className="grid aspect-square place-items-center rounded-full border bg-primary/10">
                 <div className="grid size-28 place-items-center rounded-full bg-card text-center">
-                  <span className="text-3xl font-semibold">19</span>
+                  <span className="text-3xl font-semibold">{totalOpenSeats}</span>
                   <span className="-mt-7 text-xs text-muted-foreground">open seats</span>
                 </div>
               </div>
               <div className="flex flex-col justify-center gap-3">
-                {[
-                  ["Infants", 3, "var(--chart-1)"],
-                  ["Toddlers", 3, "var(--chart-2)"],
-                  ["Preschool", 6, "var(--chart-3)"],
-                  ["Pre-K", 7, "var(--chart-4)"],
-                ].map(([label, value, color]) => (
-                  <div key={label} className="flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
+                {openSeatsByAgeGroup.map((item, index) => (
+                  <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
                     <span className="flex items-center gap-2 text-sm font-medium">
-                      <span className="size-3 rounded-full" style={{ background: String(color) }} />
-                      {label}
+                      <span className="size-3 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
+                      {item.label}
                     </span>
-                    <Badge variant="secondary">{value} open</Badge>
+                    <Badge variant="secondary">{item.value} open</Badge>
                   </div>
                 ))}
               </div>
             </div>
+            ) : (
+              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                No open-seat data is available for this login yet.
+              </p>
+            )}
           </CardContent>
         </Card>
       </section>

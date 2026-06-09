@@ -7,7 +7,7 @@ The BEE Suite uses Stripe Checkout with Connect destination charges for parent t
 1. The school director or executive opens `/billing-settings`.
 2. They start Stripe Connect onboarding for a school.
 3. Stripe collects payout, identity, and bank information directly from the school.
-4. Parent portal invoice payments create a Checkout Session only after that school has an active connected account.
+4. Parent portal invoice payments create a Checkout Session only after Stripe platform keys, webhook reconciliation, and the school connected account are ready.
 5. The Checkout Session charges the parent, routes funds to the school connected account, and retains the configured BEE Suite application fee.
 6. The webhook at `/api/billing/stripe-webhook` marks payments paid, closes invoices, writes ledger credits, and stores processed Stripe event IDs for idempotency.
 

@@ -1,4 +1,5 @@
-import { createSign } from "crypto";
+import { createHash, createSign } from "crypto";
+import { getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 
 export type GoogleSheetValue = string | number | boolean | null;
 
@@ -56,13 +57,53 @@ type CachedToken = {
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
-let cachedToken: CachedToken | null = null;
+type EnvMap = Record<string, string | undefined>;
 
-export function hasGoogleSheetsApiConfig() {
+type GoogleSheetsCredentialInput = {
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  env?: EnvMap;
+};
+
+type GoogleSheetsRuntimeConfig = {
+  spreadsheetId: string;
+  serviceAccountEmail: string;
+  serviceAccountPrivateKey: string;
+};
+
+const cachedTokens = new Map<string, CachedToken>();
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function configuredValue(credentials: Record<string, string>, env: EnvMap, name: string) {
+  return clean(credentials[name]) || clean(env[name]);
+}
+
+async function resolveGoogleSheetsCredentials(input: GoogleSheetsCredentialInput = {}) {
+  if (input.credentials) return input.credentials;
+  return getTenantIntegrationCredentialMap(input.tenantId, "google_sheets");
+}
+
+export function googleSheetsRuntimeConfig({
+  credentials = {},
+  env = process.env,
+  spreadsheetId,
+}: GoogleSheetsCredentialInput & { spreadsheetId?: string } = {}): GoogleSheetsRuntimeConfig {
+  return {
+    spreadsheetId: spreadsheetId || getSpreadsheetId(credentials, env),
+    serviceAccountEmail: getServiceAccountEmail(credentials, env),
+    serviceAccountPrivateKey: getServiceAccountPrivateKey(credentials, env),
+  };
+}
+
+export function hasGoogleSheetsApiConfig(input: GoogleSheetsCredentialInput & { spreadsheetId?: string } = {}) {
+  const config = googleSheetsRuntimeConfig(input);
   return Boolean(
-    getSpreadsheetId() &&
-      getServiceAccountEmail() &&
-      getServiceAccountPrivateKey(),
+    config.spreadsheetId &&
+      config.serviceAccountEmail &&
+      config.serviceAccountPrivateKey,
   );
 }
 
@@ -75,28 +116,38 @@ export function spreadsheetIdFromUrl(value?: string | null) {
 export async function appendRowToGoogleSheet({
   headers,
   row,
-  spreadsheetId = getSpreadsheetId(),
-  sheetName = process.env.GOOGLE_SHEETS_SHEET_NAME || "Inquiries",
+  spreadsheetId,
+  sheetName,
+  tenantId,
+  credentials,
+  env = process.env,
 }: {
   headers: string[];
   row: GoogleSheetValue[];
   spreadsheetId?: string;
   sheetName?: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  env?: EnvMap;
 }): Promise<GoogleSheetsAppendResult> {
-  if (!spreadsheetId || !getServiceAccountEmail() || !getServiceAccountPrivateKey()) {
+  const resolvedCredentials = await resolveGoogleSheetsCredentials({ tenantId, credentials });
+  const config = googleSheetsRuntimeConfig({ credentials: resolvedCredentials, env, spreadsheetId });
+  const targetSheetName = sheetName || configuredValue(resolvedCredentials, env, "GOOGLE_SHEETS_SHEET_NAME") || "Inquiries";
+
+  if (!config.spreadsheetId || !config.serviceAccountEmail || !config.serviceAccountPrivateKey) {
     return { ok: true, skipped: true };
   }
 
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(config);
 
-    await ensureSheet(spreadsheetId, sheetName, token);
-    await ensureHeaders(spreadsheetId, sheetName, headers, token);
+    await ensureSheet(config.spreadsheetId, targetSheetName, token);
+    await ensureHeaders(config.spreadsheetId, targetSheetName, headers, token);
 
-    const appendRange = `${quoteSheetName(sheetName)}!A:${columnName(headers.length)}`;
+    const appendRange = `${quoteSheetName(targetSheetName)}!A:${columnName(headers.length)}`;
     const response = await googleFetch<AppendValuesResponse>(
       `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
-        spreadsheetId,
+        config.spreadsheetId,
       )}/values/${encodeURIComponent(
         appendRange,
       )}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
@@ -110,16 +161,16 @@ export async function appendRowToGoogleSheet({
     return {
       ok: true,
       mode: "google_sheets_api",
-      spreadsheetId,
-      sheetName,
+      spreadsheetId: config.spreadsheetId,
+      sheetName: targetSheetName,
       updatedRange: response.updates?.updatedRange,
     };
   } catch (error) {
     return {
       ok: false,
       mode: "google_sheets_api",
-      spreadsheetId,
-      sheetName,
+      spreadsheetId: config.spreadsheetId,
+      sheetName: targetSheetName,
       error: error instanceof Error ? error.message : "Google Sheets API failed.",
     };
   }
@@ -128,19 +179,28 @@ export async function appendRowToGoogleSheet({
 export async function readGoogleSheetValues({
   spreadsheetId,
   range,
+  tenantId,
+  credentials,
+  env = process.env,
 }: {
   spreadsheetId: string;
   range: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  env?: EnvMap;
 }): Promise<GoogleSheetsReadResult> {
-  if (!spreadsheetId || !getServiceAccountEmail() || !getServiceAccountPrivateKey()) {
+  const resolvedCredentials = await resolveGoogleSheetsCredentials({ tenantId, credentials });
+  const config = googleSheetsRuntimeConfig({ credentials: resolvedCredentials, env, spreadsheetId });
+
+  if (!config.spreadsheetId || !config.serviceAccountEmail || !config.serviceAccountPrivateKey) {
     return { ok: true, skipped: true, spreadsheetId, range };
   }
 
   try {
-    const token = await getAccessToken();
+    const token = await getAccessToken(config);
     const response = await googleFetch<ValuesResponse>(
       `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
-        spreadsheetId,
+        config.spreadsheetId,
       )}/values/${encodeURIComponent(range)}`,
       token,
     );
@@ -148,7 +208,7 @@ export async function readGoogleSheetValues({
     return {
       ok: true,
       mode: "google_sheets_api",
-      spreadsheetId,
+      spreadsheetId: config.spreadsheetId,
       range,
       values: response.values ?? [],
     };
@@ -156,44 +216,48 @@ export async function readGoogleSheetValues({
     return {
       ok: false,
       mode: "google_sheets_api",
-      spreadsheetId,
+      spreadsheetId: config.spreadsheetId,
       range,
       error: error instanceof Error ? error.message : "Google Sheets API read failed.",
     };
   }
 }
 
-function getSpreadsheetId() {
-  const configuredId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID?.trim();
+function getSpreadsheetId(credentials: Record<string, string>, env: EnvMap) {
+  const configuredId = configuredValue(credentials, env, "GOOGLE_SHEETS_SPREADSHEET_ID");
   if (configuredId) return configuredId;
 
-  const url = process.env.GOOGLE_SHEETS_SPREADSHEET_URL?.trim();
+  const url = configuredValue(credentials, env, "GOOGLE_SHEETS_SPREADSHEET_URL");
   return spreadsheetIdFromUrl(url);
 }
 
-function getServiceAccountEmail() {
+function getServiceAccountEmail(credentials: Record<string, string>, env: EnvMap) {
   return (
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    process.env.GOOGLE_CLIENT_EMAIL ||
+    configuredValue(credentials, env, "GOOGLE_SERVICE_ACCOUNT_EMAIL") ||
+    configuredValue(credentials, env, "GOOGLE_CLIENT_EMAIL") ||
     ""
   ).trim();
 }
 
-function getServiceAccountPrivateKey() {
+function getServiceAccountPrivateKey(credentials: Record<string, string>, env: EnvMap) {
   const key =
-    process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ||
-    process.env.GOOGLE_PRIVATE_KEY ||
+    configuredValue(credentials, env, "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY") ||
+    configuredValue(credentials, env, "GOOGLE_PRIVATE_KEY") ||
     "";
 
   return key.trim().replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
-async function getAccessToken() {
+async function getAccessToken(config: GoogleSheetsRuntimeConfig) {
+  const cacheKey = createHash("sha256")
+    .update(`${config.serviceAccountEmail}:${config.serviceAccountPrivateKey}`)
+    .digest("hex");
+  const cachedToken = cachedTokens.get(cacheKey);
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
     return cachedToken.token;
   }
 
-  const assertion = createJwtAssertion();
+  const assertion = createJwtAssertion(config);
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -214,19 +278,19 @@ async function getAccessToken() {
     );
   }
 
-  cachedToken = {
+  cachedTokens.set(cacheKey, {
     token: data.access_token,
     expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
-  };
+  });
 
-  return cachedToken.token;
+  return data.access_token;
 }
 
-function createJwtAssertion() {
+function createJwtAssertion(config: GoogleSheetsRuntimeConfig) {
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const claims = {
-    iss: getServiceAccountEmail(),
+    iss: config.serviceAccountEmail,
     scope: GOOGLE_SHEETS_SCOPE,
     aud: GOOGLE_TOKEN_URL,
     exp: now + 3600,
@@ -237,7 +301,7 @@ function createJwtAssertion() {
   )}`;
   const signature = createSign("RSA-SHA256")
     .update(unsigned)
-    .sign(getServiceAccountPrivateKey());
+    .sign(config.serviceAccountPrivateKey);
 
   return `${unsigned}.${base64Url(signature)}`;
 }

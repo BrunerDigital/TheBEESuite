@@ -31,8 +31,9 @@ export async function GET() {
       };
   const childScopedWhere = allCenters ? {} : { child: { family: { is: { centerId: scopedCenterIds } } } };
   const staffScopedWhere = allCenters ? {} : { staff: { centerId: scopedCenterIds } };
+  const centerScopedWhere = allCenters ? {} : { centerId: scopedCenterIds };
 
-  const [incidents, medications, allergies, certifications] = await Promise.all([
+  const [incidents, medications, allergies, certifications, drillLogs, complianceTasks] = await Promise.all([
     prisma.incidentReport.findMany({
       where: incidentWhere,
       orderBy: { occurredAt: "desc" },
@@ -62,6 +63,24 @@ export async function GET() {
       orderBy: { expiresAt: "asc" },
       take: 1000,
       include: { staff: { select: { user: { select: { name: true, email: true } }, center: { select: { name: true, crmLocationId: true } } } } },
+    }),
+    prisma.emergencyDrillLog.findMany({
+      where: centerScopedWhere,
+      orderBy: { conductedAt: "desc" },
+      take: 1000,
+      include: {
+        center: { select: { name: true, crmLocationId: true } },
+        createdBy: { select: { name: true, email: true } },
+      },
+    }),
+    prisma.complianceTask.findMany({
+      where: centerScopedWhere,
+      orderBy: [{ status: "asc" }, { dueAt: "asc" }],
+      take: 1000,
+      include: {
+        center: { select: { name: true, crmLocationId: true } },
+        assignedTo: { select: { name: true, email: true } },
+      },
     }),
   ]);
 
@@ -110,6 +129,28 @@ export async function GET() {
       certification.name,
       "",
       "",
+    ])),
+    ...drillLogs.map((log) => csvRow([
+      "emergency_drill",
+      log.center.crmLocationId ?? log.center.name,
+      log.createdBy?.name ?? "",
+      "",
+      log.conductedAt.toISOString(),
+      log.outcome,
+      `${log.drillType}${log.durationMinutes ? ` · ${log.durationMinutes} minutes` : ""}${log.participants ? ` · Participants: ${log.participants}` : ""}${log.notes ? ` · Notes: ${log.notes}` : ""}${log.nextDueAt ? ` · Next due: ${log.nextDueAt.toISOString().slice(0, 10)}` : ""}`,
+      "",
+      "",
+    ])),
+    ...complianceTasks.map((task) => csvRow([
+      "compliance_task",
+      task.center.crmLocationId ?? task.center.name,
+      task.assignedTo?.name ?? "",
+      task.category,
+      task.dueAt?.toISOString() ?? task.reminderAt?.toISOString() ?? "",
+      task.status,
+      `${task.priority}: ${task.title}${task.notes ? ` · ${task.notes}` : ""}${task.reminderAt ? ` · Reminder: ${task.reminderAt.toISOString().slice(0, 10)}` : ""}`,
+      "",
+      task.completedAt?.toISOString() ?? "",
     ])),
   ];
 

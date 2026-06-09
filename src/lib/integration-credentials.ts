@@ -14,6 +14,12 @@ export type IntegrationCredentialPresence = {
   lastFour: string | null;
 };
 
+export type TenantIntegrationCredentialEntry = {
+  tenantId: string;
+  key: string;
+  value: string;
+};
+
 const credentialFieldsByProvider: Partial<Record<IntegrationProvider, IntegrationCredentialField[]>> = {
   sendgrid: [
     { key: "SENDGRID_API_KEY", label: "SendGrid API key", placeholder: "SG..." },
@@ -34,6 +40,14 @@ const credentialFieldsByProvider: Partial<Record<IntegrationProvider, Integratio
     { key: "GOOGLE_SERVICE_ACCOUNT_EMAIL", label: "Service account email" },
     { key: "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY", label: "Private key" },
     { key: "GOOGLE_SHEETS_SPREADSHEET_ID", label: "Inquiry spreadsheet ID" },
+    { key: "GOOGLE_SHEETS_SPREADSHEET_URL", label: "Inquiry spreadsheet URL" },
+  ],
+  google_calendar: [
+    { key: "GOOGLE_CALENDAR_ID", label: "Calendar ID", placeholder: "primary or calendar email" },
+    { key: "GOOGLE_CALENDAR_ACCESS_TOKEN", label: "OAuth access token" },
+    { key: "GOOGLE_CALENDAR_REFRESH_TOKEN", label: "OAuth refresh token" },
+    { key: "GOOGLE_CLIENT_ID", label: "OAuth client ID" },
+    { key: "GOOGLE_CLIENT_SECRET", label: "OAuth client secret" },
   ],
   openai: [
     { key: "OPENAI_API_KEY", label: "OpenAI API key", placeholder: "sk-..." },
@@ -150,6 +164,23 @@ export async function getTenantIntegrationCredentialMap(tenantId: string | null 
       result[credential.key] = decryptIntegrationCredential(credential.encryptedValue);
     } catch {
       result[credential.key] = "";
+    }
+  }
+  return result;
+}
+
+export async function getTenantIntegrationCredentialEntries(provider: IntegrationProvider, key?: string) {
+  const credentials = await prisma.integrationCredential.findMany({
+    where: { provider, ...(key ? { key } : {}) },
+    select: { tenantId: true, key: true, encryptedValue: true },
+  });
+  const result: TenantIntegrationCredentialEntry[] = [];
+  for (const credential of credentials) {
+    try {
+      const value = decryptIntegrationCredential(credential.encryptedValue);
+      if (value) result.push({ tenantId: credential.tenantId, key: credential.key, value });
+    } catch {
+      // Ignore credentials that can no longer be decrypted with the active key.
     }
   }
   return result;

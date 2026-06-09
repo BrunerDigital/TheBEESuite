@@ -537,7 +537,7 @@ export default function LandingPage() {
           <SectionHeading
             align="center"
             title="The workflows connect instead of living in separate tabs."
-            body="Inquiry capture, online registration, classroom engagement, billing readiness, compliance work, reporting, and AI assistance share the same center-aware foundation, so schools do less duplicate admin work."
+            body="Inquiry capture, online registration, classroom engagement, billing readiness, compliance work, reporting, and AI assistance share the same center record, so schools do less duplicate admin work."
           />
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
             {workflowCards.map((workflow) => (

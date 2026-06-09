@@ -25,6 +25,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -75,8 +83,11 @@ function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
   return <BrandLogo href="/" branding={branding} size="md" />;
 }
 
-function NotificationDropdown() {
+function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
+  const canViewEnrollment = canAccessModule(currentUser, "crm-leads");
+  const canViewTasks = canViewEnrollment;
+  const canViewFteReports = canAccessModule(currentUser, "fte-reports");
 
   function loadSummary() {
     let mounted = true;
@@ -108,6 +119,19 @@ function NotificationDropdown() {
   }
 
   const unread = summary?.stats.unread ?? 0;
+  const notificationScopeText = canViewEnrollment && canViewFteReports
+    ? "New inquiries, tasks, FTE, tours, and review alerts"
+    : canViewEnrollment
+      ? "New inquiries, tours, CRM tasks, and review alerts"
+      : canViewFteReports
+        ? "FTE reminders, assigned tasks, and review alerts"
+        : currentUser?.role === "TEACHER"
+          ? "Classroom messages, incidents, and assigned notifications"
+          : currentUser?.role === "BILLING_ADMIN"
+            ? "Billing messages, payment follow-ups, and assigned notifications"
+            : currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP"
+              ? "Family portal updates, messages, documents, and account alerts"
+              : "Assigned notifications and review items";
   const items = [
     ...(summary?.derived ?? []),
     ...(summary?.notifications.map((notification) => ({
@@ -134,7 +158,7 @@ function NotificationDropdown() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold">Notifications</div>
-              <div className="text-xs text-muted-foreground">New inquiries, tasks, FTE, tours, and review alerts</div>
+              <div className="text-xs text-muted-foreground">{notificationScopeText}</div>
             </div>
             <Badge variant={unread ? "default" : "outline"}>{unread} unread</Badge>
           </div>
@@ -146,18 +170,30 @@ function NotificationDropdown() {
           ) : null}
           {summary ? (
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="rounded-lg border bg-background/60 p-2">
-                <div className="font-semibold">{summary.stats.newInquiries}</div>
-                <div className="text-muted-foreground">Inquiries</div>
-              </div>
-              <div className="rounded-lg border bg-background/60 p-2">
-                <div className="font-semibold">{summary.stats.openTasks}</div>
-                <div className="text-muted-foreground">Tasks</div>
-              </div>
-              <div className="rounded-lg border bg-background/60 p-2">
-                <div className="font-semibold">{summary.stats.missingFteReports}</div>
-                <div className="text-muted-foreground">FTE due</div>
-              </div>
+              {canViewEnrollment ? (
+                <div className="rounded-lg border bg-background/60 p-2">
+                  <div className="font-semibold">{summary.stats.newInquiries}</div>
+                  <div className="text-muted-foreground">Inquiries</div>
+                </div>
+              ) : null}
+              {canViewTasks ? (
+                <div className="rounded-lg border bg-background/60 p-2">
+                  <div className="font-semibold">{summary.stats.openTasks}</div>
+                  <div className="text-muted-foreground">Tasks</div>
+                </div>
+              ) : null}
+              {canViewFteReports ? (
+                <div className="rounded-lg border bg-background/60 p-2">
+                  <div className="font-semibold">{summary.stats.missingFteReports}</div>
+                  <div className="text-muted-foreground">FTE due</div>
+                </div>
+              ) : null}
+              {!canViewEnrollment && !canViewTasks && !canViewFteReports ? (
+                <div className="col-span-3 rounded-lg border bg-background/60 p-2">
+                  <div className="font-semibold">{summary.stats.pendingIncidents}</div>
+                  <div className="text-muted-foreground">Review items</div>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -198,12 +234,12 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
     .filter((group) => group.items.length);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="p-5">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 p-5">
         <BrandMark branding={currentUser?.branding} />
       </div>
-      <ScrollArea className="flex-1 px-3">
-        <nav className="flex flex-col gap-5 pb-6">
+      <ScrollArea className="min-h-0 flex-1 px-3">
+        <nav className="flex flex-col gap-5 pb-4">
           {visibleNavGroups.map((group) => (
             <div key={group.title} className="flex flex-col gap-2">
               <div className="px-3 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
@@ -232,24 +268,53 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
             </div>
           ))}
         </nav>
-      </ScrollArea>
-      <div className="border-t p-4">
-        <div className="rounded-xl border bg-background/60 p-3">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <ShieldCheck data-icon="inline-start" />
-            Live pilot safeguards
+        <div className="border-t py-4">
+          <div className="rounded-xl border bg-background/60 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <ShieldCheck data-icon="inline-start" />
+              Live pilot safeguards
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              Sensitive child, custody, medical, billing, and compliance workflows stay role-gated and human-reviewed.
+            </p>
           </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Sensitive child, custody, medical, billing, and compliance workflows stay role-gated and human-reviewed.
-          </p>
         </div>
-      </div>
+      </ScrollArea>
     </div>
   );
 }
 
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const visibleCommandItems = navGroups
+    .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
+    .filter((item) => canAccessModule(currentUser, item.slug))
+    .slice(0, 12);
+  const searchDestination = canAccessModule(currentUser, "crm-leads")
+    ? "crm-leads"
+    : canAccessModule(currentUser, "parent-portal")
+      ? "parent-portal"
+      : canAccessModule(currentUser, "billing-invoices")
+        ? "billing-invoices"
+        : canAccessModule(currentUser, "messages")
+          ? "messages"
+          : "dashboard";
+  const searchPlaceholder = searchDestination === "crm-leads"
+    ? "Search families, children, invoices, tours, tasks..."
+    : searchDestination === "parent-portal"
+      ? "Search your family portal..."
+      : searchDestination === "billing-invoices"
+        ? "Search billing accounts and invoices..."
+        : searchDestination === "messages"
+          ? "Search messages..."
+          : "Search your dashboard...";
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("bee-suite-theme");
+    if (storedTheme === "dark") document.documentElement.classList.add("dark");
+    if (storedTheme === "light") document.documentElement.classList.remove("dark");
+  }, []);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -257,9 +322,22 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     router.refresh();
   }
 
+  function submitGlobalSearch() {
+    const query = searchQuery.trim();
+    if (!query) return;
+    router.push(`/${searchDestination}?q=${encodeURIComponent(query)}`);
+  }
+
+  function toggleTheme() {
+    const root = document.documentElement;
+    const nextDark = !root.classList.contains("dark");
+    root.classList.toggle("dark", nextDark);
+    window.localStorage.setItem("bee-suite-theme", nextDark ? "dark" : "light");
+  }
+
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r bg-sidebar/90 backdrop-blur-xl lg:block">
+      <aside className="fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block">
         <SidebarNav currentUser={currentUser} />
       </aside>
       <div className="lg:pl-72">
@@ -283,7 +361,12 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="h-11 rounded-xl border-border/70 bg-card/70 pl-10"
-                  placeholder="Search families, children, invoices, tours, tasks..."
+                  placeholder={searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") submitGlobalSearch();
+                  }}
                 />
               </div>
             </div>
@@ -292,14 +375,36 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <Sparkles data-icon="inline-start" />
                 AI suggestions require review
               </Badge>
-              <Tooltip>
-                <TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Command menu" />}>
-                  <Command />
-                </TooltipTrigger>
-                <TooltipContent>Command menu placeholder</TooltipContent>
-              </Tooltip>
-              <NotificationDropdown />
-              <Button variant="outline" size="icon" aria-label="Theme preview">
+              <Dialog>
+                <Tooltip>
+                  <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
+                    <Command />
+                  </DialogTrigger>
+                  <TooltipContent>Open command menu</TooltipContent>
+                </Tooltip>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Command menu</DialogTitle>
+                    <DialogDescription>Open the next workspace area for your role.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-2">
+                    {visibleCommandItems.map(({ label, slug, Icon, group }) => {
+                      const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                      return (
+                        <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
+                          <Icon className="text-primary" />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">{label}</span>
+                            <span className="block text-xs text-muted-foreground">{group}</span>
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </DialogContent>
+              </Dialog>
+              <NotificationDropdown currentUser={currentUser} />
+              <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />
               </Button>
@@ -314,7 +419,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </Button>
                 </div>
               ) : (
-                <Button variant="secondary" className="hidden gap-2 sm:inline-flex">
+                <Button variant="secondary" className="hidden gap-2 sm:inline-flex" nativeButton={false} render={<Link href="/login" />}>
                   Live workspace
                   <ChevronDown data-icon="inline-end" />
                 </Button>

@@ -25,8 +25,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
+import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
+import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
@@ -39,7 +41,7 @@ const kpiWidgetIds: readonly DashboardWidgetId[] = [
   "staffingRatios",
   "complianceQueue",
 ];
-type DashboardLens = "platform" | "brand" | "regional" | "director" | "teacher" | "parent";
+type DashboardLens = "platform" | "brand" | "regional" | "director" | "billing" | "teacher" | "parent" | "pickup";
 type DashboardNotification = string | { text: string; widgetId?: DashboardWidgetId };
 
 function notificationText(item: DashboardNotification) {
@@ -72,7 +74,257 @@ export type LiveDashboardData = {
     description: string;
     embedCode: string;
   }>;
+  setupChecklists?: Array<{
+    key: SetupChecklistKey;
+    title: string;
+    description: string;
+    completedIds: string[];
+    graphicHref: string;
+  }>;
+  executiveMetrics?: {
+    currentWeekStart: string;
+    fteDeadlineLabel: string;
+    fteSubmittedSchools: number;
+    fteMissingSchools: number;
+    schoolComparisons: Array<{
+      id: string;
+      name: string;
+      region: string;
+      children: number;
+      capacity: number;
+      occupancy: number;
+      staff: number;
+      leads: number;
+      toursToday: number;
+      revenueDollars: number;
+      compliance: number;
+      fteCount: number | null;
+      fteStatus: string;
+      fteSubmitted: boolean;
+    }>;
+    weeklyFteTrend: Array<{
+      week: string;
+      submitted: number;
+      missing: number;
+      fteTotal: number;
+      enrolledTotal: number;
+    }>;
+  };
 };
+
+function percentBar(value: number, max = 100) {
+  return `${Math.max(0, Math.min(100, max ? (value / max) * 100 : 0))}%`;
+}
+
+function compactSchoolName(value: string) {
+  return value.replace(/^Kid City USA\s*[-–]\s*/i, "").trim() || value;
+}
+
+function ExecutiveLensDashboard({
+  lens,
+  metrics,
+  trendData,
+  actionQueue,
+}: {
+  lens: Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">;
+  metrics: NonNullable<LiveDashboardData["executiveMetrics"]>;
+  trendData: typeof analytics;
+  actionQueue: DashboardNotification[];
+}) {
+  const sortedByOccupancy = [...metrics.schoolComparisons].sort((left, right) => right.occupancy - left.occupancy).slice(0, 10);
+  const sortedByRevenue = [...metrics.schoolComparisons].sort((left, right) => right.revenueDollars - left.revenueDollars).slice(0, 8);
+  const sortedByLeads = [...metrics.schoolComparisons].sort((left, right) => right.leads - left.leads).slice(0, 8);
+  const maxRevenueDollars = Math.max(...sortedByRevenue.map((school) => school.revenueDollars), 1);
+  const maxLeadCount = Math.max(...sortedByLeads.map((school) => school.leads), 1);
+  const maxFteTotal = Math.max(...metrics.weeklyFteTrend.map((week) => week.fteTotal), 1);
+  const submittedPercent = metrics.schoolComparisons.length
+    ? Math.round((metrics.fteSubmittedSchools / metrics.schoolComparisons.length) * 100)
+    : 0;
+  const averageOccupancy = metrics.schoolComparisons.length
+    ? Math.round(metrics.schoolComparisons.reduce((sum, school) => sum + school.occupancy, 0) / metrics.schoolComparisons.length)
+    : 0;
+  const totalOpenSeats = metrics.schoolComparisons.reduce((sum, school) => sum + Math.max(school.capacity - school.children, 0), 0);
+  const title = lens === "platform" ? "Platform executive view" : lens === "brand" ? "Brand executive view" : "Regional executive view";
+
+  return (
+    <div className="grid gap-6">
+      <Card className="glass-panel">
+        <CardHeader>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle>{title}</CardTitle>
+              <CardDescription>Company-level KPI visualizations across visible schools.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/multi-location-dashboard" />}>
+              <ArrowUpRight data-icon="inline-start" />
+              Open multi-location
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">FTE submitted</div>
+            <div className="mt-2 text-3xl font-semibold">{submittedPercent}%</div>
+            <p className="mt-1 text-xs text-muted-foreground">{metrics.fteSubmittedSchools}/{metrics.schoolComparisons.length} schools · due {metrics.fteDeadlineLabel}</p>
+            <Progress className="mt-3" value={submittedPercent} />
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Missing FTE reports</div>
+            <div className="mt-2 text-3xl font-semibold">{metrics.fteMissingSchools}</div>
+            <p className="mt-1 text-xs text-muted-foreground">Current week {metrics.currentWeekStart}</p>
+            <Progress className="mt-3" value={Math.max(0, 100 - submittedPercent)} />
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Average occupancy</div>
+            <div className="mt-2 text-3xl font-semibold">{averageOccupancy}%</div>
+            <p className="mt-1 text-xs text-muted-foreground">{totalOpenSeats.toLocaleString()} open seats across visible schools</p>
+            <Progress className="mt-3" value={averageOccupancy} />
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Executive actions</div>
+            <div className="mt-2 text-3xl font-semibold">{actionQueue.length}</div>
+            <p className="mt-1 text-xs text-muted-foreground">FTE, compliance, enrollment, billing, and parent-response queue</p>
+            <Progress className="mt-3" value={Math.min(actionQueue.length * 12, 100)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Weekly FTE progress</CardTitle>
+            <CardDescription>Submitted schools, missing schools, and total FTE by week.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {metrics.weeklyFteTrend.length ? (
+              <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
+                {metrics.weeklyFteTrend.map((week) => (
+                  <div key={week.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                    <div className="flex h-56 w-full items-end justify-center gap-1">
+                      <span className="w-4 rounded-t-md bg-primary" title={`${week.submitted} submitted`} style={{ height: percentBar(week.submitted, metrics.schoolComparisons.length || 1) }} />
+                      <span className="w-4 rounded-t-md bg-destructive/70" title={`${week.missing} missing`} style={{ height: percentBar(week.missing, metrics.schoolComparisons.length || 1) }} />
+                      <span className="w-4 rounded-t-md bg-[var(--chart-2)]" title={`${week.fteTotal} FTE`} style={{ height: percentBar(week.fteTotal, maxFteTotal) }} />
+                    </div>
+                    <span className="truncate text-xs text-muted-foreground">{week.week}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No FTE submissions are visible yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Current-week FTE by school</CardTitle>
+            <CardDescription>Schools missing this week are highlighted for follow-up.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {metrics.schoolComparisons.slice(0, 12).map((school) => (
+              <div key={school.id} className="rounded-xl border bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
+                    <div className="text-xs text-muted-foreground">{school.region}</div>
+                  </div>
+                  <Badge variant={school.fteSubmitted ? "default" : "destructive"}>{school.fteSubmitted ? school.fteStatus : "Missing"}</Badge>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <Progress value={school.fteSubmitted ? 100 : 8} />
+                  <span className="w-14 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</span>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Occupancy comparison</CardTitle>
+            <CardDescription>Top schools by current child count against licensed capacity.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {sortedByOccupancy.map((school) => (
+              <div key={school.id} className="grid gap-2">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
+                  <span className="text-muted-foreground">{school.occupancy}%</span>
+                </div>
+                <Progress value={school.occupancy} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Revenue comparison</CardTitle>
+            <CardDescription>Invoice total snapshot by school.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {sortedByRevenue.map((school) => (
+              <div key={school.id} className="grid gap-2">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
+                  <span className="text-muted-foreground">${school.revenueDollars.toLocaleString()}</span>
+                </div>
+                <Progress value={(school.revenueDollars / maxRevenueDollars) * 100} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Lead and tour pressure</CardTitle>
+            <CardDescription>Schools with the highest active inquiry load.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3">
+            {sortedByLeads.map((school) => (
+              <div key={school.id} className="rounded-xl border bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
+                    <div className="text-xs text-muted-foreground">{school.toursToday} tours today</div>
+                  </div>
+                  <Badge variant="secondary">{school.leads} leads</Badge>
+                </div>
+                <Progress className="mt-3" value={(school.leads / maxLeadCount) * 100} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      {trendData.length ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>Company trend snapshot</CardTitle>
+            <CardDescription>Enrollment funnel and revenue trend for visible schools.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
+              {trendData.map((point) => (
+                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                  <div className="flex h-56 w-full items-end justify-center gap-1">
+                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: percentBar(point.leads, Math.max(...trendData.map((item) => item.leads), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-primary" style={{ height: percentBar(point.tours, Math.max(...trendData.map((item) => item.tours), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(point.enrolled, Math.max(...trendData.map((item) => item.enrolled), 1)) }} />
+                    <span className="w-3 rounded-t-md bg-[var(--chart-5)]" style={{ height: percentBar(point.revenue, Math.max(...trendData.map((item) => item.revenue), 1)) }} />
+                  </div>
+                  <span className="text-xs text-muted-foreground">{point.month}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
 
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const dashboardKpis = live?.kpis ?? kpis;
@@ -157,6 +409,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : live?.inquiryEmbed
       ? [live.inquiryEmbed]
       : [];
+  const setupChecklists = live?.setupChecklists ?? [];
   const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
   const kpiValue = (label: string, fallback = "0") => dashboardKpis.find((kpi) => kpi.label === label)?.value ?? fallback;
   const kpiTrend = (label: string, fallback = "") => dashboardKpis.find((kpi) => kpi.label === label)?.trend ?? fallback;
@@ -165,22 +418,50 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const showClassroomCapacity = isWidgetVisible("classroomCapacity");
   const showFamilyCommunication = isWidgetVisible("familyCommunication");
   const showExecutiveRollup = isWidgetVisible("executiveRollup");
+  const isTeacherDashboard = visibleLenses.length === 1 && visibleLenses.includes("teacher");
+  const isBillingDashboard = visibleLenses.length === 1 && visibleLenses.includes("billing");
+  const isParentDashboard = visibleLenses.length === 1 && visibleLenses.includes("parent");
+  const isPickupDashboard = visibleLenses.length === 1 && visibleLenses.includes("pickup");
+  const commandCenterDescription = isTeacherDashboard
+    ? "Classroom attendance, daily reports, incident notes, family messages, and ratio awareness for your assigned room."
+    : isBillingDashboard
+      ? "Invoices, payments, family billing messages, and account follow-up for your permitted billing scope."
+      : isParentDashboard
+        ? "Your family portal, child updates, messages, documents, invoices, and payment actions."
+        : isPickupDashboard
+          ? "Authorized pickup access, child status, approved pickup details, and family account updates."
+          : "Enrollment, classroom operations, billing, compliance-ready documentation, and parent trust signals in one white-label operating system.";
+  const aiBriefHref = isTeacherDashboard ? "/teacher-portal" : isBillingDashboard ? "/messages" : isParentDashboard || isPickupDashboard ? "/parent-portal" : "/ai-command";
   const visibleSnapshotPipeline = showEnrollment ? dashboardPipeline : [];
   const visibleSnapshotLeads = isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? dashboardLeads : [];
-  const visibleSnapshotCenters = isAnyWidgetVisible(["executiveRollup", "attendanceSnapshot", "classroomCapacity", "staffingRatios"])
+  const visibleSnapshotCenters = !isTeacherDashboard && !isBillingDashboard && !isParentDashboard && !isPickupDashboard && isAnyWidgetVisible(["executiveRollup", "attendanceSnapshot", "classroomCapacity", "staffingRatios"])
     ? dashboardCenters
     : [];
+  const attendanceHref = isParentDashboard || isPickupDashboard ? "/parent-portal" : isTeacherDashboard ? "/classroom-dashboard" : "/attendance";
+  const attendanceDetail = isParentDashboard || isPickupDashboard
+    ? "Family attendance and pickup status"
+    : isTeacherDashboard
+      ? "Classroom attendance"
+      : kpiTrend("Occupancy", "Attendance and occupancy");
   const visibleConfiguredWidgets = hasWidgetConfiguration ? configuredWidgets.filter((widget) => widget.visible) : [];
   const widgetSummaries: Partial<Record<DashboardWidgetId, { value: string; detail: string; href: string }>> = {
-    aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Human review required", href: "/ai-command" },
+    aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Human review required", href: aiBriefHref },
     executiveRollup: { value: `${dashboardCenters.length}`, detail: "Visible centers", href: "/multi-location-dashboard" },
     enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Live enrollment pipeline"), href: "/crm-leads" },
     toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tour and CRM tasks"), href: "/tours" },
-    attendanceSnapshot: { value: kpiValue("Active children"), detail: kpiTrend("Occupancy", "Attendance and occupancy"), href: "/attendance" },
+    attendanceSnapshot: { value: kpiValue("Active children"), detail: attendanceDetail, href: attendanceHref },
     classroomCapacity: { value: `${totalOpenSeats}`, detail: "Open seats by age group", href: "/center-dashboard" },
     billingRevenue: { value: kpiValue("Outstanding balances"), detail: kpiTrend("Outstanding balances", "Billing snapshot"), href: "/billing-invoices" },
-    staffingRatios: { value: kpiValue("Teachers"), detail: kpiTrend("Teachers", "Teacher coverage"), href: "/staff" },
-    complianceQueue: { value: kpiValue("Incidents to review"), detail: kpiTrend("Incidents to review", "Review queue"), href: "/compliance" },
+    staffingRatios: {
+      value: kpiValue("Teachers"),
+      detail: kpiTrend("Teachers", isTeacherDashboard ? "Classroom coverage" : "Teacher coverage"),
+      href: isTeacherDashboard ? "/classroom-dashboard" : "/staff",
+    },
+    complianceQueue: {
+      value: kpiValue("Incidents to review"),
+      detail: kpiTrend("Incidents to review", isTeacherDashboard ? "Classroom reports" : "Review queue"),
+      href: isTeacherDashboard ? "/incident-reports" : "/compliance",
+    },
     familyCommunication: { value: `${parentMessages.length}`, detail: "Recent family messages", href: "/messages" },
     parentAccount: { value: "Portal", detail: "Family account view", href: "/parent-portal" },
   };
@@ -198,13 +479,13 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   The BEE Suite command center
                 </h1>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                  Enrollment, classroom operations, billing, compliance-ready documentation, and parent trust signals in one white-label operating system.
+                  {commandCenterDescription}
                 </p>
               </div>
               <div className="flex gap-2">
-                {showAiBrief ? <Button>
+                {showAiBrief ? <Button nativeButton={false} render={<Link href={aiBriefHref} />}>
                   <Sparkles data-icon="inline-start" />
-                  Review AI brief
+                  {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}
                 </Button> : null}
                 {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
                   <ArrowUpRight data-icon="inline-start" />
@@ -267,6 +548,23 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         />
       ) : null}
 
+      {setupChecklists.length ? (
+        <section className="grid gap-4">
+          {setupChecklists.map((checklist) => (
+            <SetupChecklistPanel
+              key={checklist.key}
+              checklistKey={checklist.key}
+              title={checklist.title}
+              description={checklist.description}
+              tasks={checklist.key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks}
+              initialCompletedIds={checklist.completedIds}
+              graphicHref={checklist.graphicHref}
+              compact
+            />
+          ))}
+        </section>
+      ) : null}
+
       <DashboardSnapshotControls
         kpis={visibleDashboardKpis}
         pipelineStages={visibleSnapshotPipeline}
@@ -296,8 +594,10 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           {visibleLenses.includes("brand") ? <TabsTrigger value="brand">Brand admin</TabsTrigger> : null}
           {visibleLenses.includes("regional") ? <TabsTrigger value="regional">Regional</TabsTrigger> : null}
           {visibleLenses.includes("director") ? <TabsTrigger value="director">Center director</TabsTrigger> : null}
+          {visibleLenses.includes("billing") ? <TabsTrigger value="billing">Billing</TabsTrigger> : null}
           {visibleLenses.includes("teacher") ? <TabsTrigger value="teacher">Teacher</TabsTrigger> : null}
           {visibleLenses.includes("parent") ? <TabsTrigger value="parent">Parent</TabsTrigger> : null}
+          {visibleLenses.includes("pickup") ? <TabsTrigger value="pickup">Pickup</TabsTrigger> : null}
         </TabsList>
         {visibleLenses.includes("director") ? <TabsContent value="director" className="mt-0">
           <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
@@ -391,7 +691,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 {showEnrollment ? (
                 <Card className="glass-panel">
                   <CardHeader>
-                    <CardTitle>Pipeline foundation</CardTitle>
+                    <CardTitle>Enrollment pipeline</CardTitle>
                     <CardDescription>Drag-and-drop board-ready stages</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -508,7 +808,17 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 <CardDescription>{live?.dashboardWidgetRoleLabel ?? "Role"} widgets from the current permission scope</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-3">
-                {visibleConfiguredWidgets.map((widget) => {
+                {live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab) ? (
+                  <div className="md:col-span-3">
+                    <ExecutiveLensDashboard
+                      lens={tab as Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">}
+                      metrics={live.executiveMetrics}
+                      trendData={dashboardAnalytics}
+                      actionQueue={actionQueue}
+                    />
+                  </div>
+                ) : null}
+                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) ? visibleConfiguredWidgets.map((widget) => {
                   const summary = widgetSummaries[widget.id];
                   return (
                     <div key={widget.id} className="flex flex-col gap-3 rounded-xl border bg-background/50 p-4">
@@ -532,8 +842,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       ) : null}
                     </div>
                   );
-                })}
-                {showExecutiveRollup ? dashboardCenters.map((center) => (
+                }) : null}
+                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && showExecutiveRollup ? dashboardCenters.map((center) => (
                   <div key={center.name} className="rounded-xl border bg-background/50 p-4">
                     <div className="font-medium">{center.name}</div>
                     <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>
@@ -545,7 +855,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     </div>
                   </div>
                 )) : null}
-                {!visibleConfiguredWidgets.length && (!showExecutiveRollup || !dashboardCenters.length) ? (
+                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && !visibleConfiguredWidgets.length && (!showExecutiveRollup || !dashboardCenters.length) ? (
                   <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
                     No dashboard widgets are visible for this login yet.
                   </p>

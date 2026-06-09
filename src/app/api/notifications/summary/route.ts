@@ -4,6 +4,7 @@ import { canAccessAllCenters, getCurrentUser, getLeadScopeWhere } from "@/lib/au
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
+import { canAccessModule } from "@/lib/rbac";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -27,13 +28,17 @@ async function GETHandler() {
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const now = new Date();
   const tenantWide = canAccessAllCenters(user);
+  const canViewEnrollment = canAccessModule(user, "crm-leads");
+  const canViewTours = canAccessModule(user, "tours");
+  const canViewFteReports = canAccessModule(user, "fte-reports");
+  const canViewIncidents = canAccessModule(user, "incident-reports");
   const notificationUserWhere: Prisma.NotificationWhereInput = {
     AND: [
       activeNotificationWhere(now),
       tenantWide ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: user.id },
     ],
   };
-  const fteDueState = getFteDueState(now);
+  const fteDueState = canViewFteReports ? getFteDueState(now) : null;
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);
 
@@ -56,11 +61,11 @@ async function GETHandler() {
     prisma.notification.count({
       where: { readAt: null, ...notificationUserWhere },
     }),
-    prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.NEW_INQUIRY } }),
-    prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
-    prisma.task.count({ where: { status: "open", lead: leadWhere } }),
-    prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: now, lte: sevenDays } } }),
-    prisma.incidentReport.count({
+    canViewEnrollment ? prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.NEW_INQUIRY } }) : Promise.resolve(0),
+    canViewEnrollment ? prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }) : Promise.resolve(0),
+    canViewEnrollment ? prisma.task.count({ where: { status: "open", lead: leadWhere } }) : Promise.resolve(0),
+    canViewTours ? prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: now, lte: sevenDays } } }) : Promise.resolve(0),
+    canViewIncidents ? prisma.incidentReport.count({
       where: {
         adminReviewStatus: "pending",
         OR: [
@@ -68,13 +73,13 @@ async function GETHandler() {
           { child: { family: { is: { centerId: scopedCenterIds } } } },
         ],
       },
-    }),
-    prisma.center.count({
+    }) : Promise.resolve(0),
+    fteDueState ? prisma.center.count({
       where: {
         id: scopedCenterIds,
         fteReports: { none: { weekStart: fteDueState.weekStart } },
       },
-    }),
+    }) : Promise.resolve(0),
   ]);
 
   const derived = [
@@ -123,7 +128,7 @@ async function GETHandler() {
           href: "/incident-reports",
         }
       : null,
-    missingFteReports
+    missingFteReports && fteDueState
       ? {
           title: `${missingFteReports.toLocaleString()} FTE reports ${fteDueState.phase === "overdue" ? "overdue" : "due"}`,
           body: `${fteDueState.reminder} Deadline: ${fteDueState.dueAt.toISOString().slice(0, 10)} · ${fteDueState.deadlineLabel}.`,

@@ -15,6 +15,7 @@ import { ageGroupTotal, calculateFteCount, dateInputString, defaultFteWeekEnd, s
 export type FteReportCenterOption = {
   id: string;
   name: string;
+  licensedCapacity?: number;
 };
 
 export type FteReportRow = {
@@ -35,14 +36,33 @@ export type FteReportRow = {
   schoolAge: number;
   status: string;
   source: string;
+  payrollPercent?: number | null;
   notes: string | null;
   submittedBy: string | null;
   updatedAt: string;
 };
 
+export type FteReportPrefill = {
+  centerId: string;
+  licensedCapacity: number | null;
+  enrolledCount: number;
+  fullTimeCount: number | null;
+  partTimeCount: number | null;
+  unknownScheduleCount: number;
+  infants: number;
+  toddlers: number;
+  twos: number;
+  preschool: number;
+  preK: number;
+  schoolAge: number;
+  generatedAt: string;
+  sourceLabel: string;
+};
+
 type Props = {
   centers: FteReportCenterOption[];
   reports: FteReportRow[];
+  prefills?: FteReportPrefill[];
   title?: string;
   description?: string;
   allowCenterSelect?: boolean;
@@ -58,6 +78,7 @@ type FormState = {
   fullTimeCount: string;
   partTimeCount: string;
   fteCount: string;
+  payrollPercent: string;
   infants: string;
   toddlers: string;
   twos: string;
@@ -85,25 +106,32 @@ function defaultWeekEnd(weekStart: string) {
   return dateInputString(defaultFteWeekEnd(date));
 }
 
-function emptyForm(centerId = ""): FormState {
+function defaultValuesForCenter(centerId: string, prefills: FteReportPrefill[] = []) {
+  return Array.isArray(prefills) ? prefills.find((item) => item.centerId === centerId) : undefined;
+}
+
+function emptyForm(centerId = "", prefill?: FteReportPrefill): FormState {
   const weekStart = defaultWeekStart();
   return {
     id: "",
     centerId,
     weekStart,
     weekEnd: defaultWeekEnd(weekStart),
-    enrolledCount: "",
-    fullTimeCount: "",
-    partTimeCount: "",
+    enrolledCount: prefill ? asInput(prefill.enrolledCount) : "",
+    fullTimeCount: prefill?.fullTimeCount === null || prefill?.fullTimeCount === undefined ? "" : asInput(prefill.fullTimeCount),
+    partTimeCount: prefill?.partTimeCount === null || prefill?.partTimeCount === undefined ? "" : asInput(prefill.partTimeCount),
     fteCount: "",
-    infants: "",
-    toddlers: "",
-    twos: "",
-    preschool: "",
-    preK: "",
-    schoolAge: "",
+    payrollPercent: "",
+    infants: prefill ? asInput(prefill.infants) : "",
+    toddlers: prefill ? asInput(prefill.toddlers) : "",
+    twos: prefill ? asInput(prefill.twos) : "",
+    preschool: prefill ? asInput(prefill.preschool) : "",
+    preK: prefill ? asInput(prefill.preK) : "",
+    schoolAge: prefill ? asInput(prefill.schoolAge) : "",
     status: "submitted",
-    notes: "",
+    notes: prefill?.unknownScheduleCount
+      ? `${prefill.unknownScheduleCount} enrolled child schedule(s) need full-time/part-time verification.`
+      : "",
   };
 }
 
@@ -114,13 +142,14 @@ function asInput(value: number) {
 export function FteReportForm({
   centers,
   reports,
+  prefills = [],
   title = "Weekly FTE Report",
   description = "Submit or edit the weekly full-time-equivalent report for the selected school.",
   allowCenterSelect = false,
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
   const defaultCenterId = centers[0]?.id ?? "";
-  const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId));
+  const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills)));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -139,6 +168,7 @@ export function FteReportForm({
     schoolAge: Number(form.schoolAge || 0),
   }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
   const selectedCenter = centers.find((center) => center.id === form.centerId);
+  const selectedPrefill = defaultValuesForCenter(form.centerId, prefills);
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
@@ -155,6 +185,27 @@ export function FteReportForm({
     }));
   }
 
+  function setCenter(value: string | null) {
+    if (!value) return;
+    setStatusMessage("");
+    setErrorMessage("");
+    setForm(emptyForm(value, defaultValuesForCenter(value, prefills)));
+  }
+
+  function applyPrefill() {
+    const prefill = defaultValuesForCenter(form.centerId, prefills);
+    if (!prefill) return;
+    const next = emptyForm(form.centerId, prefill);
+    setForm((current) => ({
+      ...next,
+      id: current.id,
+      weekStart: current.weekStart,
+      weekEnd: current.weekEnd,
+      status: current.status,
+      payrollPercent: current.payrollPercent,
+    }));
+  }
+
   function editReport(report: FteReportRow) {
     setStatusMessage("");
     setErrorMessage("");
@@ -167,6 +218,7 @@ export function FteReportForm({
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
       fteCount: report.fteCount ? String(report.fteCount) : "",
+      payrollPercent: report.payrollPercent === null || report.payrollPercent === undefined ? "" : String(report.payrollPercent),
       infants: asInput(report.infants),
       toddlers: asInput(report.toddlers),
       twos: asInput(report.twos),
@@ -190,6 +242,7 @@ export function FteReportForm({
           ...form,
           status: mode === "executive" ? form.status : undefined,
           fteCount: form.fteCount || calculatedFte,
+          source: form.id ? "manual_correction" : "prefilled_director_review",
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; report?: { centerName?: string; weekStart?: string } } | null;
@@ -200,7 +253,7 @@ export function FteReportForm({
       }
 
       setStatusMessage(`FTE report saved${json?.report?.centerName ? ` for ${json.report.centerName}` : ""}.`);
-      setForm(emptyForm(form.centerId || defaultCenterId));
+      setForm(emptyForm(form.centerId || defaultCenterId, defaultValuesForCenter(form.centerId || defaultCenterId, prefills)));
       window.setTimeout(() => window.location.reload(), 750);
     });
   }
@@ -246,12 +299,26 @@ export function FteReportForm({
           </div>
         </div>
 
+        {selectedPrefill ? (
+          <Alert>
+            <CheckCircle2 className="size-4" />
+            <AlertTitle>Prefilled from current school records</AlertTitle>
+            <AlertDescription>
+              Enrollment and age groups were prefilled from active child records for {selectedCenter?.name ?? "this school"}.
+              Licensed capacity is {selectedPrefill.licensedCapacity ?? selectedCenter?.licensedCapacity ?? "not set"}.
+              {selectedPrefill.unknownScheduleCount
+                ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) could not be classified as full-time or part-time, so verify those fields before submitting.`
+                : " Verify the fields, enter payroll percentage if required, and submit."}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         <div className="grid gap-3 lg:grid-cols-4">
           <div className="space-y-1 lg:col-span-2">
             <Label>School</Label>
             <Select
               value={form.centerId}
-              onValueChange={(value) => value && setField("centerId", value)}
+              onValueChange={setCenter}
               disabled={!allowCenterSelect || centers.length <= 1}
             >
               <SelectTrigger className="w-full">
@@ -294,6 +361,15 @@ export function FteReportForm({
               onChange={(event) => setField("fteCount", event.target.value)}
               inputMode="decimal"
               placeholder={calculatedFte ? `Calculated ${calculatedFte}` : "Optional"}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Payroll %</Label>
+            <Input
+              value={form.payrollPercent}
+              onChange={(event) => setField("payrollPercent", event.target.value)}
+              inputMode="decimal"
+              placeholder="Enter if not available"
             />
           </div>
         </div>
@@ -345,10 +421,13 @@ export function FteReportForm({
             {form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>
           {form.id ? (
-            <Button variant="outline" onClick={() => setForm(emptyForm(form.centerId || defaultCenterId))}>Cancel edit</Button>
+            <Button variant="outline" onClick={() => setForm(emptyForm(form.centerId || defaultCenterId, defaultValuesForCenter(form.centerId || defaultCenterId, prefills)))}>Cancel edit</Button>
+          ) : null}
+          {selectedPrefill ? (
+            <Button variant="outline" onClick={applyPrefill}>Reset to school data</Button>
           ) : null}
           <span className="text-xs text-muted-foreground">
-            Calculated FTE uses full-time + half of part-time unless manually overridden. Directors can only submit for their assigned school.
+            Prefilled values are editable. Calculated FTE uses full-time + half of part-time unless manually overridden. Directors can only submit for their assigned school.
           </span>
         </div>
 
@@ -362,6 +441,7 @@ export function FteReportForm({
                 <TableHead>FT/PT</TableHead>
                 <TableHead>Enrollment</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Payroll %</TableHead>
                 <TableHead>Submitted by</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Action</TableHead>
@@ -376,6 +456,7 @@ export function FteReportForm({
                   <TableCell>{report.fullTimeCount.toLocaleString()} / {report.partTimeCount.toLocaleString()}</TableCell>
                   <TableCell>{report.enrolledCount.toLocaleString()}</TableCell>
                   <TableCell>{report.status.replaceAll("_", " ")}</TableCell>
+                  <TableCell>{report.payrollPercent === null || report.payrollPercent === undefined ? "Not set" : `${report.payrollPercent}%`}</TableCell>
                   <TableCell>{report.submittedBy ?? "Not set"}</TableCell>
                   <TableCell>{dateInput(report.updatedAt)}</TableCell>
                   <TableCell>
@@ -385,7 +466,7 @@ export function FteReportForm({
               ))}
               {!reports.length ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">
+                    <TableCell colSpan={10} className="text-muted-foreground">
                     No FTE reports have been submitted for this scope yet.
                   </TableCell>
                 </TableRow>

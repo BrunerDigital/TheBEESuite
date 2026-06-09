@@ -18,6 +18,7 @@ export const metadata: Metadata = {
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
   icons: {
+    shortcut: [{ url: "/favicon.ico" }],
     icon: [{ url: "/brand/the-bee-suite/favicon.png", sizes: "512x512", type: "image/png" }],
     apple: [{ url: "/brand/the-bee-suite/app-icon-yellow.png", sizes: "1024x1024", type: "image/png" }],
   },

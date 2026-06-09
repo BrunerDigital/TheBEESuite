@@ -1,0 +1,197 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1900" viewBox="0 0 1600 1900" role="img" aria-labelledby="title desc">
+  <title id="title">Kid City USA Teacher Profile Setup Roadmap for The BEE Suite</title>
+  <desc id="desc">A teacher-facing profile and classroom setup checklist for The BEE Suite.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.58" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#fff4d6"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.7" stop-color="#0b111d"/>
+      <stop offset="1" stop-color="#2b2107"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffd86b"/>
+      <stop offset="1" stop-color="#f5b51b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#101827" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .bg { fill: url(#page); }
+      .dark { fill: #101827; }
+      .ink { fill: #172033; }
+      .muted { fill: #5f6b7a; }
+      .soft { fill: #fffdf8; }
+      .gold { fill: url(#gold); }
+      .teal { fill: #52b69a; }
+      .blue { fill: #4ea1d3; }
+      .rose { fill: #d86b73; }
+      .purple { fill: #8c75d9; }
+      .border { stroke: #e1d6bc; stroke-width: 2; }
+      .line { stroke: #f5b51b; stroke-width: 6; stroke-linecap: round; }
+      .tiny { font: 500 25px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .label { font: 700 30px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .body { font: 500 24px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .title { font: 800 64px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .subtitle { font: 500 30px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .phase { font: 800 34px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .num { font: 800 34px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="1900"/>
+  <path d="M0 0h1600v400H0z" fill="url(#header)"/>
+  <g opacity="0.16">
+    <path d="M86 70h52l26 45-26 45H86l-26-45z" fill="#f5b51b"/>
+    <path d="M204 70h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+    <path d="M1450 220h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+    <path d="M1334 220h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+  </g>
+
+  <g transform="translate(86 72)">
+    <rect x="0" y="0" width="66" height="66" rx="16" fill="#f5b51b"/>
+    <text x="96" y="30" fill="#ffd86b" class="label">The BEE Suite</text>
+    <text x="96" y="60" fill="#d1d7e0" class="tiny">Kid City USA teacher setup roadmap</text>
+  </g>
+
+  <text x="86" y="218" fill="#fffaf0" class="title">Teacher profile check</text>
+  <text x="86" y="276" fill="#d1d7e0" class="subtitle">Make sure your account, classroom, roster, kiosk code, and tablet workflows are ready before go-live.</text>
+  <g transform="translate(86 316)">
+    <rect x="0" y="0" width="340" height="54" rx="12" fill="#f5b51b"/>
+    <text x="24" y="36" fill="#101827" class="label">Login with your teacher account</text>
+    <rect x="360" y="0" width="300" height="54" rx="12" fill="#fffaf0" opacity="0.12" stroke="#f5b51b"/>
+    <text x="384" y="36" fill="#fffaf0" class="label">Default temp: BusyBees</text>
+    <rect x="680" y="0" width="560" height="54" rx="12" fill="#fffaf0" opacity="0.12" stroke="#f5b51b"/>
+    <text x="704" y="36" fill="#fffaf0" class="label">Wrong classroom? Ask your director to update Teachers</text>
+  </g>
+
+  <g transform="translate(100 460)">
+    <path class="line" d="M90 70 H1400"/>
+    <path class="line" d="M1400 70 V1290"/>
+    <path class="line" d="M1400 1290 H90"/>
+    <path class="line" d="M90 1290 V70"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(100 440)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">1</text>
+      <text x="92" y="50" class="phase ink">Sign in</text>
+      <text x="92" y="86" class="body muted">Use your teacher username or</text>
+      <text x="92" y="116" class="body muted">work email and temp password.</text>
+      <text x="28" y="174" class="label ink">Check: own account</text>
+    </g>
+
+    <g transform="translate(585 440)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="teal" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">2</text>
+      <text x="92" y="50" class="phase ink">Confirm profile</text>
+      <text x="92" y="86" class="body muted">Verify your name, role, school,</text>
+      <text x="92" y="116" class="body muted">email, title, and active status.</text>
+      <text x="28" y="174" class="label ink">Check: Teacher role</text>
+    </g>
+
+    <g transform="translate(1070 440)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="blue" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">3</text>
+      <text x="92" y="50" class="phase ink">Confirm classroom</text>
+      <text x="92" y="86" class="body muted">Your classroom controls roster,</text>
+      <text x="92" y="116" class="body muted">messages, reports, and ratios.</text>
+      <text x="28" y="174" class="label ink">Check: correct room</text>
+    </g>
+
+    <g transform="translate(1070 730)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="purple" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">4</text>
+      <text x="92" y="50" class="phase ink">Review roster</text>
+      <text x="92" y="86" class="body muted">Make sure every visible child</text>
+      <text x="92" y="116" class="body muted">belongs in your classroom.</text>
+      <text x="28" y="174" class="label ink">Check: no missing children</text>
+    </g>
+
+    <g transform="translate(585 730)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="rose" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">5</text>
+      <text x="92" y="50" class="phase ink">Check safety notes</text>
+      <text x="92" y="86" class="body muted">Review custody, allergy, medication,</text>
+      <text x="92" y="116" class="body muted">and media restrictions.</text>
+      <text x="28" y="174" class="label ink">Check: ask before unsure</text>
+    </g>
+
+    <g transform="translate(100 730)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">6</text>
+      <text x="92" y="50" class="phase ink">Kiosk code</text>
+      <text x="92" y="86" class="body muted">Use work email and 4 digit code</text>
+      <text x="92" y="116" class="body muted">to verify clock-in/out.</text>
+      <text x="28" y="174" class="label ink">Check: clock status</text>
+    </g>
+
+    <g transform="translate(100 1020)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="teal" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">7</text>
+      <text x="92" y="50" class="phase ink">Attendance</text>
+      <text x="92" y="86" class="body muted">Test present, absent, check-in,</text>
+      <text x="92" y="116" class="body muted">and check-out with approval.</text>
+      <text x="28" y="174" class="label ink">Check: child card updates</text>
+    </g>
+
+    <g transform="translate(585 1020)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="blue" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">8</text>
+      <text x="92" y="50" class="phase ink">Daily reports</text>
+      <text x="92" y="86" class="body muted">Test meals, naps, diapers,</text>
+      <text x="92" y="116" class="body muted">activities, supplies, and notes.</text>
+      <text x="28" y="174" class="label ink">Check: correct targets</text>
+    </g>
+
+    <g transform="translate(1070 1020)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="purple" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">9</text>
+      <text x="92" y="50" class="phase ink">Photos and incidents</text>
+      <text x="92" y="86" class="body muted">Confirm photos route for review</text>
+      <text x="92" y="116" class="body muted">and incidents go to directors.</text>
+      <text x="28" y="174" class="label ink">Check: review required</text>
+    </g>
+
+    <g transform="translate(342 1310)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="rose" cx="52" cy="52" r="28"/>
+      <text x="32" y="64" class="num dark">10</text>
+      <text x="92" y="50" class="phase ink">Offline queue</text>
+      <text x="92" y="86" class="body muted">Know what to do if tablet actions</text>
+      <text x="92" y="116" class="body muted">queue during poor connection.</text>
+      <text x="28" y="174" class="label ink">Check: sync when online</text>
+    </g>
+
+    <g transform="translate(827 1310)">
+      <rect class="soft border" width="430" height="230" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="32" y="64" class="num dark">11</text>
+      <text x="92" y="50" class="phase ink">Final sign-off</text>
+      <text x="92" y="86" class="body muted">Confirm login, classroom, roster,</text>
+      <text x="92" y="116" class="body muted">kiosk, reports, and safety notes.</text>
+      <text x="28" y="174" class="label ink">Check: ready for go-live</text>
+    </g>
+  </g>
+
+  <g transform="translate(100 1620)" filter="url(#shadow)">
+    <rect width="1500" height="205" rx="20" fill="#101827"/>
+    <text x="34" y="56" fill="#ffd86b" class="phase">Ask your director to fix these items in Teachers</text>
+    <text x="34" y="104" fill="#fffaf0" class="body">Wrong school • wrong classroom • missing children • extra children • inactive account • wrong role • missing kiosk code</text>
+    <text x="34" y="144" fill="#fffaf0" class="body">missing schedule • expired credentials • incorrect custody, allergy, medication, or media permission details</text>
+    <text x="34" y="184" fill="#d1d7e0" class="tiny">Do not use another teacher's account or work from a wrong classroom. Access, reports, messages, and ratios depend on the teacher profile.</text>
+  </g>
+</svg>

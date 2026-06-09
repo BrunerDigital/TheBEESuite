@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
@@ -19,6 +20,7 @@ import {
   type ClassroomOfflineAction,
 } from "@/lib/classroom-offline-queue";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
+import { teacherProfileChecklistTasks } from "@/lib/setup-checklists";
 
 type ChildOption = {
   id: string;
@@ -36,6 +38,7 @@ type Props = {
   teacherName: string;
   kioskAccess?: TeacherKioskAccess | null;
   classroomRatios?: ClassroomRatioSnapshot[];
+  teacherChecklistCompletedIds?: string[];
 };
 
 type TeacherKioskAccess = {
@@ -190,7 +193,7 @@ function createActivityDraft(): ActivityDraft {
   return { id: draftId("activity"), title: "", notes: "" };
 }
 
-export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null, classroomRatios = [] }: Props) {
+export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null, classroomRatios = [], teacherChecklistCompletedIds = [] }: Props) {
   const firstChild = roster[0]?.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
   const [selectedDailyReportChildIds, setSelectedDailyReportChildIds] = useState<string[]>(() => firstChild ? [firstChild] : []);
@@ -683,6 +686,16 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+      <SetupChecklistPanel
+        checklistKey="teacher_profile"
+        title="Teacher profile setup checklist"
+        description="Check off each item after you confirm your account, classroom, roster, kiosk code, and classroom tablet workflows are ready."
+        tasks={teacherProfileChecklistTasks}
+        initialCompletedIds={teacherChecklistCompletedIds}
+        graphicHref="/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg"
+        compact
+      />
+
       <section className="rounded-2xl border bg-card/80 p-5 shadow-2xl shadow-black/15">
         <Badge className="mb-3">
           <ClipboardCheck data-icon="inline-start" />

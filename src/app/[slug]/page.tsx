@@ -36,11 +36,12 @@ import {
   ReputationPage,
   StaffPage,
   TeamPermissionsPage,
+  TeacherDocumentsPage,
   ToursPage,
   WaitlistPage,
   WhiteLabelPage,
 } from "@/components/live-ops-pages";
-import type { FteReportRow } from "@/components/fte-report-form";
+import type { FteReportPrefill, FteReportRow } from "@/components/fte-report-form";
 import { AuthLikePage } from "@/components/module-page";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import {
@@ -97,6 +98,7 @@ import { paymentMethodManagementSummary } from "@/lib/payment-method-management"
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
+import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
@@ -201,6 +203,10 @@ function numberField(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function stringArrayField(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
 function tuitionAssignmentFromCustomFields(customFields: unknown) {
   const fields = recordFromJson(customFields);
   const planId = stringField(fields.tuitionPlanId);
@@ -235,7 +241,7 @@ function readSchoolSetupFromCustomFields(customFields: unknown) {
 
 function setupGroupForField(field: string) {
   if (field === "schoolProfileSetup" || field === "classroomSetup" || field === "programSetup") {
-    return "School foundation";
+    return "School profile";
   }
   if (field === "staffSetup" || field === "familyImportSetup" || field === "parentPortalSetup") {
     return "People and access";
@@ -269,6 +275,51 @@ function setupActionLabel(field: string) {
     launchSmokeTestSetup: "Open dashboard",
   };
   return labels[field] ?? "Open feature";
+}
+
+const teacherDocumentKeywords = [
+  "allergy",
+  "medical",
+  "medication",
+  "action plan",
+  "care plan",
+  "emergency",
+  "immunization",
+  "health",
+  "physical",
+  "authorization",
+  "permission",
+  "pickup",
+  "contact",
+  "feeding",
+  "nap",
+  "toilet",
+  "potty",
+];
+
+const teacherBlockedDocumentKeywords = [
+  "billing",
+  "invoice",
+  "payment",
+  "tuition",
+  "ledger",
+  "tax",
+  "staff",
+  "employee",
+  "background",
+  "payroll",
+  "bank",
+  "stripe",
+  "custody order",
+  "court order",
+  "legal",
+];
+
+function teacherCanViewDocument(document: { name: string; type: string; restricted: boolean }) {
+  const haystack = `${document.name} ${document.type}`.toLowerCase();
+  if (teacherBlockedDocumentKeywords.some((keyword) => haystack.includes(keyword))) return false;
+  const isTeacherRelevant = teacherDocumentKeywords.some((keyword) => haystack.includes(keyword));
+  return isTeacherRelevant || !document.restricted;
 }
 
 function setupStatus(recordReady: boolean, value: string): SchoolSetupStatus {
@@ -307,6 +358,7 @@ function serializeFteReport(report: {
   schoolAge: number;
   status: string;
   source: string;
+  sourceMetadata?: unknown;
   notes: string | null;
   updatedAt: Date;
   center: { name: string; crmLocationId: string | null };
@@ -330,6 +382,7 @@ function serializeFteReport(report: {
     schoolAge: report.schoolAge,
     status: report.status,
     source: report.source,
+    payrollPercent: numberField(recordFromJson(report.sourceMetadata).payrollPercent),
     notes: report.notes,
     submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
     updatedAt: report.updatedAt.toISOString(),
@@ -346,6 +399,100 @@ async function getFteReports(centerIds: string[], take = 150) {
       submittedBy: { select: { name: true, email: true } },
     },
   });
+}
+
+function activeEnrollmentStatus(value: string) {
+  const status = value.toLowerCase();
+  return !["inactive", "withdrawn", "graduated", "lost", "not enrolled", "unenrolled"].some((blocked) => status.includes(blocked));
+}
+
+function ageBucket(ageGroup: string) {
+  const value = ageGroup.toLowerCase();
+  if (value.includes("infant")) return "infants" as const;
+  if (value.includes("toddler")) return "toddlers" as const;
+  if (value.includes("two") || value.includes("2")) return "twos" as const;
+  if (value.includes("pre-k") || value.includes("prek") || value.includes("vpk")) return "preK" as const;
+  if (value.includes("school") || value.includes("after")) return "schoolAge" as const;
+  return "preschool" as const;
+}
+
+function childScheduleClassification(input: { schedule: unknown; customFields: unknown }) {
+  const schedule = recordFromJson(input.schedule);
+  const customFields = recordFromJson(input.customFields);
+  const days = [
+    ...stringArrayField(schedule.days),
+    ...stringArrayField(schedule.scheduleDays),
+    ...stringArrayField(customFields.days),
+    ...stringArrayField(customFields.scheduleDays),
+  ];
+  if (days.length >= 5) return "full_time" as const;
+  if (days.length > 0 && days.length <= 3) return "part_time" as const;
+
+  const text = JSON.stringify({ schedule, customFields }).toLowerCase();
+  if (/\b(part|part-time|half|half-day|2 day|two day|3 day|three day|mwf)\b/.test(text)) return "part_time" as const;
+  if (/\b(full|full-time|5 day|five day|mon-fri|monday-friday|monday through friday)\b/.test(text)) return "full_time" as const;
+  return "unknown" as const;
+}
+
+async function buildFtePrefills(
+  centers: Array<{ id: string; licensedCapacity: number }>,
+): Promise<FteReportPrefill[]> {
+  const centerIds = centers.map((center) => center.id);
+  if (!centerIds.length) return [];
+
+  const children = await prisma.child.findMany({
+    where: {
+      OR: [
+        { family: { is: { centerId: centerIdFilter(centerIds) } } },
+        { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
+      ],
+    },
+    select: {
+      ageGroup: true,
+      enrollmentStatus: true,
+      schedule: true,
+      customFields: true,
+      family: { select: { centerId: true } },
+      classroom: { select: { centerId: true } },
+    },
+  });
+
+  const byCenter = new Map(centers.map((center) => [center.id, {
+    centerId: center.id,
+    licensedCapacity: center.licensedCapacity,
+    enrolledCount: 0,
+    fullTimeCount: 0,
+    partTimeCount: 0,
+    unknownScheduleCount: 0,
+    infants: 0,
+    toddlers: 0,
+    twos: 0,
+    preschool: 0,
+    preK: 0,
+    schoolAge: 0,
+    generatedAt: new Date().toISOString(),
+    sourceLabel: "Current active child records",
+  } satisfies FteReportPrefill]));
+
+  for (const child of children) {
+    if (!activeEnrollmentStatus(child.enrollmentStatus)) continue;
+    const centerId = child.classroom?.centerId ?? child.family.centerId;
+    if (!centerId) continue;
+    const row = byCenter.get(centerId);
+    if (!row) continue;
+    row.enrolledCount += 1;
+    row[ageBucket(child.ageGroup)] += 1;
+    const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
+    if (classification === "full_time") row.fullTimeCount = (row.fullTimeCount ?? 0) + 1;
+    else if (classification === "part_time") row.partTimeCount = (row.partTimeCount ?? 0) + 1;
+    else row.unknownScheduleCount += 1;
+  }
+
+  return Array.from(byCenter.values()).map((row) => ({
+    ...row,
+    fullTimeCount: row.fullTimeCount || row.unknownScheduleCount ? row.fullTimeCount : null,
+    partTimeCount: row.partTimeCount || row.unknownScheduleCount ? row.partTimeCount : null,
+  }));
 }
 
 function buildFteTrendData(
@@ -450,6 +597,10 @@ async function renderLivePage(
           ],
         }),
   };
+  const setupChecklistUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { customFields: true },
+  });
 
   if (slug === "school-setup") {
     const selectedCenter = centers.find((center) => center.id === user.primaryCenterId) ?? centers[0] ?? null;
@@ -690,19 +841,21 @@ async function renderLivePage(
       ],
       sections,
       externalNeeds,
+      directorChecklistCompletedIds: readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "director_launch"),
     };
 
     return <SchoolSetupCommandCenter data={data} />;
   }
 
   if (slug === "multi-location-dashboard") {
-    const [leads, highIntentLeads, upcomingTours, teacherCount, fte, fteReports] = await Promise.all([
+    const [leads, highIntentLeads, upcomingTours, teacherCount, fte, fteReports, ftePrefills] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
       prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } } }),
       getKidCityFteSnapshot(centers),
       getFteReports(visibleCenterIds, 250),
+      buildFtePrefills(centers),
     ]);
     const currentFteWeekStart = fteDueState.weekStart;
     const trend = buildFteTrendData(centers, fteReports, currentFteWeekStart);
@@ -730,7 +883,8 @@ async function renderLivePage(
             .filter((center) => !currentWeekReportedCenterIds.has(center.id))
             .map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fte,
-          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity })),
+          ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
         }}
       />
@@ -738,9 +892,10 @@ async function renderLivePage(
   }
 
   if (slug === "fte-reports") {
-    const [fteReports, fte] = await Promise.all([
+    const [fteReports, fte, ftePrefills] = await Promise.all([
       getFteReports(visibleCenterIds, tenantWide ? 500 : 100),
       tenantWide ? getKidCityFteSnapshot(centers) : Promise.resolve(undefined),
+      buildFtePrefills(centers),
     ]);
     const currentFteWeekStart = fteDueState.weekStart;
     const trend = buildFteTrendData(centers, fteReports, currentFteWeekStart);
@@ -775,7 +930,8 @@ async function renderLivePage(
           trendWeeks: trend.trendWeeks,
           centerSnapshots: trend.centerSnapshots,
           fte,
-          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity })),
+          ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
           exportHref: "/api/fte-reports?format=csv",
         }}
@@ -1755,6 +1911,7 @@ async function renderLivePage(
           }),
           assignedStaff: classroom._count.staff,
         }))}
+        teacherChecklistCompletedIds={readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "teacher_profile")}
       />
     );
   }
@@ -3324,7 +3481,7 @@ async function renderLivePage(
   if (slug === "center-dashboard") {
     const center = centers.find((item) => item.id === user.primaryCenterId) ?? centers[0];
     const centerWhere = center ? { centerId: center.id } : { centerId: "__none__" };
-    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports] = await Promise.all([
+    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
       center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER } } }) : 0,
@@ -3351,6 +3508,7 @@ async function renderLivePage(
         },
       }),
       center ? getFteReports([center.id], 24) : [],
+      center ? buildFtePrefills([center]) : [],
     ]);
     const currentFteWeekStart = startOfFteWeek(today);
     const currentWeekFteReport = fteReports.find((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
@@ -3362,7 +3520,8 @@ async function renderLivePage(
           centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
-          fteCenters: center ? [{ id: center.id, name: formatCenterName(center) }] : [],
+          fteCenters: center ? [{ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity }] : [],
+          ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
           stats: {
             leads,
@@ -3792,6 +3951,80 @@ async function renderLivePage(
   }
 
   if (slug === "documents") {
+    if (user.role === UserRole.TEACHER && !allCenters) {
+      const staffProfile = await prisma.staffProfile.findUnique({
+        where: { userId: user.id },
+        select: { centerId: true, classroomId: true },
+      });
+      const teacherChildWhere: Prisma.ChildWhereInput = staffProfile?.classroomId
+        ? { classroomId: staffProfile.classroomId }
+        : staffProfile?.centerId
+          ? { classroom: { is: { centerId: staffProfile.centerId } } }
+          : { id: "__no_teacher_child_scope__" };
+      const teacherChildren = await prisma.child.findMany({
+        where: teacherChildWhere,
+        orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
+        take: 120,
+        select: {
+          id: true,
+          fullName: true,
+          preferredName: true,
+          ageGroup: true,
+          enrollmentStatus: true,
+          photoVideoPermission: true,
+          fieldTripPermission: true,
+          napNotes: true,
+          feedingNotes: true,
+          pottyNotes: true,
+          classroom: { select: { name: true } },
+          family: { select: { name: true, custodyNotes: true } },
+          allergies: { select: { id: true, allergen: true, severity: true, actionPlan: true }, orderBy: { severity: "desc" } },
+          medicalNotes: {
+            select: { id: true, category: true, note: true, restricted: true },
+            orderBy: { createdAt: "desc" },
+          },
+        },
+      });
+      const teacherChildIds = teacherChildren.map((child) => child.id);
+      const teacherDocuments = teacherChildIds.length
+        ? await prisma.document.findMany({
+            where: { childId: { in: teacherChildIds } },
+            orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }],
+            take: 200,
+            include: {
+              family: { select: { name: true, custodyNotes: true } },
+              child: { select: { fullName: true, family: { select: { centerId: true, custodyNotes: true } } } },
+            },
+          })
+        : [];
+      const visibleTeacherDocuments = teacherDocuments.filter(teacherCanViewDocument);
+      const signedTeacherDocuments = await signDocumentRecords(visibleTeacherDocuments);
+      const documentsByChildId = new Map<string, typeof signedTeacherDocuments>();
+      for (const document of signedTeacherDocuments) {
+        if (!document.childId) continue;
+        const current = documentsByChildId.get(document.childId) ?? [];
+        current.push(document);
+        documentsByChildId.set(document.childId, current);
+      }
+
+      return (
+        <TeacherDocumentsPage
+          data={{
+            children: teacherChildren.map((child) => ({
+              ...child,
+              documents: documentsByChildId.get(child.id) ?? [],
+            })),
+            stats: {
+              children: teacherChildren.length,
+              allergies: teacherChildren.reduce((sum, child) => sum + child.allergies.length, 0),
+              medicalNotes: teacherChildren.reduce((sum, child) => sum + child.medicalNotes.length, 0),
+              documents: signedTeacherDocuments.length,
+            },
+          }}
+        />
+      );
+    }
+
     const documentWhere: Prisma.DocumentWhereInput = allCenters
       ? {}
       : {

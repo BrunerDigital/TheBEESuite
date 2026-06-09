@@ -162,7 +162,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     provider: "openai",
     name: "OpenAI",
     purpose: "Guardrailed AI Drafting",
-    detail: "Supports future Mr. Bee drafting and assistant workflows with human approval before family-facing messages are sent.",
+    detail: "Supports Mr. Bee drafting and assistant workflows with human approval before family-facing messages are sent.",
     envRequirements: [
       { label: "API key", names: ["OPENAI_API_KEY"] },
     ],

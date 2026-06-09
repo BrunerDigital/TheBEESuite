@@ -16,6 +16,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
+import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import { directorLaunchChecklistTasks } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
 
 export type SchoolSetupStatus = "complete" | "in_progress" | "missing";
@@ -53,6 +55,7 @@ export type SchoolSetupCommandCenterData = {
   }>;
   sections: SchoolSetupCommandSection[];
   externalNeeds: string[];
+  directorChecklistCompletedIds: string[];
 };
 
 const emptySections: SchoolSetupCommandSection[] = [];
@@ -158,6 +161,15 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           </div>
         </div>
       </section>
+
+      <SetupChecklistPanel
+        checklistKey="director_launch"
+        title="Director launch setup checklist"
+        description="Check off each setup task as your school finishes it. This is your per-user progress tracker for the director implementation guide."
+        tasks={directorLaunchChecklistTasks}
+        initialCompletedIds={data.directorChecklistCompletedIds}
+        graphicHref="/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg"
+      />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="flex flex-col gap-5">

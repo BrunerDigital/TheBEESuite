@@ -6,9 +6,11 @@ import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCur
 import { stageLabels } from "@/lib/crm";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
+import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { dashboardLensesForRole } from "@/lib/rbac";
+import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,8 @@ export default async function DashboardPage() {
     role: user.role,
     value: getDashboardWidgetPreferenceValue(dashboardPreferenceUser?.customFields),
   });
+  const directorChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "director_launch");
+  const teacherChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "teacher_profile");
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
   const showDemoFallbackData = canViewDemoFallbackData(user);
@@ -308,6 +312,189 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
+  const visibleDashboardLenses = dashboardLensesForRole(user);
+  const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
+  const fteDueState = getFteDueState(today);
+  const fteTrendStart = new Date(fteDueState.weekStart);
+  fteTrendStart.setUTCDate(fteTrendStart.getUTCDate() - 7 * 7);
+  const [
+    executiveClassroomRows,
+    executiveStaffRows,
+    executiveLeadRows,
+    executiveTourRows,
+    executiveInvoiceRows,
+    executiveFteRows,
+    executiveExpiringDocumentRows,
+    executivePendingIncidentRows,
+  ] = await Promise.all([
+    prisma.classroom.findMany({
+      where: { centerId: scopedCenterFilter },
+      select: {
+        centerId: true,
+        capacity: true,
+        _count: { select: { children: true } },
+      },
+    }),
+    prisma.staffProfile.groupBy({
+      by: ["centerId"],
+      where: { centerId: scopedCenterFilter, user: { role: UserRole.TEACHER } },
+      _count: { _all: true },
+    }),
+    canSeeExecutiveMetrics ? prisma.lead.groupBy({
+      by: ["centerId"],
+      where: leadWhere,
+      _count: { _all: true },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.tour.groupBy({
+      by: ["centerId"],
+      where: { centerId: scopedCenterFilter, startsAt: { gte: startOfDay, lte: endOfDay } },
+      _count: { _all: true },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.invoice.findMany({
+      where: {
+        billingAccount: {
+          family: {
+            centerId: scopedCenterFilter,
+          },
+        },
+      },
+      select: {
+        totalCents: true,
+        billingAccount: { select: { family: { select: { centerId: true } } } },
+      },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.fteReport.findMany({
+      where: {
+        centerId: scopedCenterFilter,
+        weekStart: { gte: fteTrendStart },
+      },
+      orderBy: [{ weekStart: "asc" }, { updatedAt: "desc" }],
+      select: {
+        centerId: true,
+        weekStart: true,
+        enrolledCount: true,
+        fteCount: true,
+        status: true,
+      },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.document.findMany({
+      where: {
+        expiresAt: {
+          gte: today,
+          lte: thirtyDays,
+        },
+        OR: [
+          {
+            family: {
+              centerId: scopedCenterFilter,
+            },
+          },
+          {
+            child: {
+              classroom: {
+                centerId: scopedCenterFilter,
+              },
+            },
+          },
+        ],
+      },
+      select: {
+        family: { select: { centerId: true } },
+        child: { select: { classroom: { select: { centerId: true } } } },
+      },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.incidentReport.findMany({
+      where: {
+        adminReviewStatus: "pending",
+        classroom: {
+          centerId: scopedCenterFilter,
+        },
+      },
+      select: {
+        classroom: { select: { centerId: true } },
+      },
+    }) : Promise.resolve([]),
+  ]);
+  const classroomStatsByCenter = new Map<string, { children: number; capacity: number }>();
+  for (const classroom of executiveClassroomRows) {
+    const current = classroomStatsByCenter.get(classroom.centerId) ?? { children: 0, capacity: 0 };
+    current.children += classroom._count.children;
+    current.capacity += classroom.capacity;
+    classroomStatsByCenter.set(classroom.centerId, current);
+  }
+  const staffByCenter = new Map(executiveStaffRows.map((row) => [row.centerId, row._count._all]));
+  const leadsByCenter = new Map(executiveLeadRows.map((row) => [row.centerId, row._count._all]));
+  const toursByCenter = new Map(executiveTourRows.map((row) => [row.centerId, row._count._all]));
+  const revenueByCenter = new Map<string, number>();
+  for (const invoice of executiveInvoiceRows) {
+    const centerId = invoice.billingAccount.family.centerId;
+    if (!centerId) continue;
+    revenueByCenter.set(centerId, (revenueByCenter.get(centerId) ?? 0) + Math.round(invoice.totalCents / 100));
+  }
+  const expiringDocumentsByCenter = new Map<string, number>();
+  for (const document of executiveExpiringDocumentRows) {
+    const centerId = document.family?.centerId ?? document.child?.classroom?.centerId;
+    if (!centerId) continue;
+    expiringDocumentsByCenter.set(centerId, (expiringDocumentsByCenter.get(centerId) ?? 0) + 1);
+  }
+  const pendingIncidentsByCenter = new Map<string, number>();
+  for (const incident of executivePendingIncidentRows) {
+    const centerId = incident.classroom?.centerId;
+    if (!centerId) continue;
+    pendingIncidentsByCenter.set(centerId, (pendingIncidentsByCenter.get(centerId) ?? 0) + 1);
+  }
+  const currentWeekFteByCenter = new Map<string, (typeof executiveFteRows)[number]>();
+  for (const report of executiveFteRows) {
+    if (report.weekStart.getTime() === fteDueState.weekStart.getTime() && !currentWeekFteByCenter.has(report.centerId)) {
+      currentWeekFteByCenter.set(report.centerId, report);
+    }
+  }
+  const fteRowsByWeek = new Map<string, typeof executiveFteRows>();
+  for (const report of executiveFteRows) {
+    const key = report.weekStart.toISOString().slice(0, 10);
+    const rows = fteRowsByWeek.get(key) ?? [];
+    rows.push(report);
+    fteRowsByWeek.set(key, rows);
+  }
+  const weeklyFteTrend = Array.from({ length: 8 }, (_, index) => {
+    const weekDate = new Date(fteDueState.weekStart);
+    weekDate.setUTCDate(weekDate.getUTCDate() - 7 * (7 - index));
+    const week = weekDate.toISOString().slice(0, 10);
+    const rows = fteRowsByWeek.get(week) ?? [];
+    const submitted = new Set(rows.map((row) => row.centerId)).size;
+    return {
+      week,
+      submitted,
+      missing: Math.max(centers.length - submitted, 0),
+      fteTotal: Math.round(rows.reduce((sum, row) => sum + row.fteCount, 0) * 100) / 100,
+      enrolledTotal: rows.reduce((sum, row) => sum + row.enrolledCount, 0),
+    };
+  });
+  const executiveSchoolComparisons = centers.map((center) => {
+    const classroomStats = classroomStatsByCenter.get(center.id);
+    const children = classroomStats?.children ?? 0;
+    const capacityForCenter = classroomStats?.capacity || center.licensedCapacity || 0;
+    const fteReport = currentWeekFteByCenter.get(center.id);
+    const expiringDocumentCount = expiringDocumentsByCenter.get(center.id) ?? 0;
+    const pendingIncidentCount = pendingIncidentsByCenter.get(center.id) ?? 0;
+    return {
+      id: center.id,
+      name: center.crmLocationId ?? center.name,
+      region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
+      children,
+      capacity: capacityForCenter,
+      occupancy: capacityForCenter ? Math.round((children / capacityForCenter) * 100) : 0,
+      staff: staffByCenter.get(center.id) ?? 0,
+      leads: leadsByCenter.get(center.id) ?? 0,
+      toursToday: toursByCenter.get(center.id) ?? 0,
+      revenueDollars: revenueByCenter.get(center.id) ?? 0,
+      compliance: Math.max(0, Math.min(100, 100 - expiringDocumentCount * 3 - pendingIncidentCount * 5)),
+      fteCount: fteReport ? Math.round(fteReport.fteCount * 100) / 100 : null,
+      fteStatus: fteReport?.status.replaceAll("_", " ") ?? "missing",
+      fteSubmitted: Boolean(fteReport),
+    };
+  });
+  const fteSubmittedSchools = executiveSchoolComparisons.filter((school) => school.fteSubmitted).length;
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
@@ -319,11 +506,20 @@ export default async function DashboardPage() {
     toursToday ? { widgetId: "toursAndTasks" as const, text: `${toursToday.toLocaleString()} tours are scheduled today` } : null,
   ];
   const dashboardNotifications = dashboardNotificationRows.filter((item): item is DashboardNotificationRow => Boolean(item));
-  const aiHighlights = [
-    `${highIntentLeadCount.toLocaleString()} high-fit leads`,
-    `${expiringDocuments.toLocaleString()} expiring docs`,
-    `${totalOpenSeats.toLocaleString()} open seats`,
-  ];
+  const aiHighlights = user.role === UserRole.TEACHER
+    ? [
+        `${activeChildren.toLocaleString()} children in visible classrooms`,
+        `${pendingIncidents.toLocaleString()} classroom incident drafts/reviews`,
+        `${unreadMessages.toLocaleString()} family messages`,
+      ]
+    : [
+        `${highIntentLeadCount.toLocaleString()} high-fit leads`,
+        `${expiringDocuments.toLocaleString()} expiring docs`,
+        `${totalOpenSeats.toLocaleString()} open seats`,
+      ];
+  const aiSummary = user.role === UserRole.TEACHER
+    ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, or licensing decisions.`
+    : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`;
   const centerEmbedCards = centers.map((center) => {
     const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
@@ -380,15 +576,15 @@ export default async function DashboardPage() {
         ? lead.tags.map((tag) => tag.name)
         : [lead.programInterest, lead.ageGroupInterest].filter((tag): tag is string => Boolean(tag)),
     })),
-    centers: centers.slice(0, 6).map((center) => ({
+    centers: executiveSchoolComparisons.slice(0, 6).map((center) => ({
       name: center.name,
-      region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
+      region: center.region,
       director: user.name,
-      children: activeChildren,
-      capacity: center.licensedCapacity,
-      staff: staffCount,
-      revenue: `$${revenueDollars.toLocaleString()}`,
-      compliance: expiringDocuments ? 88 : 96,
+      children: center.children,
+      capacity: center.capacity,
+      staff: center.staff,
+      revenue: `$${center.revenueDollars.toLocaleString()}`,
+      compliance: center.compliance,
     })),
     classroomSnapshots: classroomSnapshotRows.map((classroom) => {
       const staffAssigned = classroom._count.staff || 1;
@@ -412,12 +608,38 @@ export default async function DashboardPage() {
     notifications: dashboardNotifications,
     asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
     showDemoFallbackData,
-    visibleLenses: dashboardLensesForRole(user),
+    visibleLenses: visibleDashboardLenses,
     dashboardWidgets: dashboardWidgetConfig.widgets,
     dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
-    aiSummary: `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`,
+    setupChecklists: [
+      ...(user.role === UserRole.TEACHER ? [{
+        key: "teacher_profile" as const,
+        title: "Teacher profile setup checklist",
+        description: "Confirm your teacher account, classroom, roster, kiosk code, and classroom tablet workflows are ready.",
+        completedIds: teacherChecklistCompletedIds,
+        graphicHref: "/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
+      }] : []),
+      ...(user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? [{
+        key: "director_launch" as const,
+        title: "Director launch setup checklist",
+        description: "Track the school-level setup work required before all BEE Suite features go live.",
+        completedIds: directorChecklistCompletedIds,
+        graphicHref: "/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg",
+      }] : []),
+    ],
+    aiSummary,
     inquiryEmbed: inquiryEmbeds[0],
     inquiryEmbeds,
+    executiveMetrics: canSeeExecutiveMetrics
+      ? {
+          currentWeekStart: fteDueState.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          fteDeadlineLabel: fteDueState.deadlineLabel,
+          fteSubmittedSchools,
+          fteMissingSchools: Math.max(executiveSchoolComparisons.length - fteSubmittedSchools, 0),
+          schoolComparisons: executiveSchoolComparisons,
+          weeklyFteTrend,
+        }
+      : undefined,
   };
 
   return (

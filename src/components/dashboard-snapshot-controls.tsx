@@ -76,7 +76,9 @@ const lensLabels: Record<string, string> = {
   regional: "Regional",
   director: "Center director",
   teacher: "Teacher",
+  billing: "Billing",
   parent: "Parent",
+  pickup: "Authorized pickup",
 };
 
 function parseDashboardViews(value: string | null): DashboardSnapshotView[] {

@@ -28,6 +28,7 @@ const FTE_SHEET_HEADERS = [
   "Full Time",
   "Part Time",
   "FTE",
+  "Payroll %",
   "Infants",
   "Toddlers",
   "Twos",
@@ -51,6 +52,20 @@ function intValue(value: unknown) {
 function floatValue(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.round(number * 100) / 100) : 0;
+}
+
+function nullableFloatValue(value: unknown) {
+  if (value === "" || value === undefined || value === null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number * 100) / 100) : null;
+}
+
+function recordFromJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function metadataNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function parseDate(value: unknown) {
@@ -81,6 +96,7 @@ function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof repor
     report.fullTimeCount,
     report.partTimeCount,
     report.fteCount,
+    metadataNumber(recordFromJson(report.sourceMetadata).payrollPercent) ?? "",
     report.infants,
     report.toddlers,
     report.twos,
@@ -204,6 +220,7 @@ async function GETHandler(request: NextRequest) {
       fullTimeCount: report.fullTimeCount,
       partTimeCount: report.partTimeCount,
       fteCount: report.fteCount,
+      payrollPercent: metadataNumber(recordFromJson(report.sourceMetadata).payrollPercent),
       infants: report.infants,
       toddlers: report.toddlers,
       twos: report.twos,
@@ -271,6 +288,7 @@ async function POSTHandler(request: NextRequest) {
 
   const fullTimeCount = intValue(body.fullTimeCount);
   const partTimeCount = intValue(body.partTimeCount);
+  const payrollPercent = nullableFloatValue(body.payrollPercent);
   const calculatedFte = calculateFteCount(fullTimeCount, partTimeCount);
   const fteCount = body.fteCount === "" || body.fteCount === undefined || body.fteCount === null
     ? calculatedFte
@@ -333,6 +351,8 @@ async function POSTHandler(request: NextRequest) {
       app: "the_bee_suite",
       calculatedFte,
       ageGroupCount,
+      payrollPercent,
+      prefillSource: clean(body.source),
       enrollmentVariance: enrolledCount - ageGroupCount,
       requestedCenterId,
       resolvedCenterId: centerId,
@@ -361,6 +381,7 @@ async function POSTHandler(request: NextRequest) {
     report.fullTimeCount,
     report.partTimeCount,
     report.fteCount,
+    payrollPercent ?? "",
     report.infants,
     report.toddlers,
     report.twos,
@@ -403,6 +424,7 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       weekStart: report.weekStart.toISOString(),
       fteCount: report.fteCount,
+      payrollPercent,
       status: report.status,
       ageGroupCount,
       enrollmentVariance: report.enrolledCount - ageGroupCount,

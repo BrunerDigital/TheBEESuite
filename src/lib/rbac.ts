@@ -13,11 +13,11 @@ type AccessSubject =
       centerIds?: string[] | null;
     };
 
-const enrollmentRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BILLING_ADMIN", "READ_ONLY_AUDITOR"]);
+const enrollmentRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]);
 const schoolAdminRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "READ_ONLY_AUDITOR"]);
 const classroomRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "TEACHER", "READ_ONLY_AUDITOR"]);
 const billingRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BILLING_ADMIN", "READ_ONLY_AUDITOR"]);
-const parentRoles = new Set(["PARENT_GUARDIAN"]);
+const parentRoles = new Set(["PARENT_GUARDIAN", "AUTHORIZED_PICKUP"]);
 
 const executiveOnlyModules = new Set<ModuleSlug>([
   "multi-location-dashboard",
@@ -63,10 +63,12 @@ const classroomModules = new Set<ModuleSlug>([
   "daily-reports",
   "incident-reports",
   "messages",
+  "documents",
   "teacher-portal",
 ]);
 
 const billingModules = new Set<ModuleSlug>([
+  "messages",
   "billing-invoices",
   "payments",
   "billing-settings",
@@ -74,7 +76,7 @@ const billingModules = new Set<ModuleSlug>([
 
 const corporateBillingEmails = new Set(["accounting@kidcityusa.com"]);
 
-const parentModules = new Set<ModuleSlug>([
+const parentGuardianModules = new Set<ModuleSlug>([
   "parent-portal",
   "messages",
   "documents",
@@ -82,6 +84,25 @@ const parentModules = new Set<ModuleSlug>([
   "payments",
   "notifications",
   "help",
+]);
+
+const authorizedPickupModules = new Set<ModuleSlug>([
+  "parent-portal",
+  "notifications",
+  "help",
+]);
+
+const readOnlyAuditorModules = new Set<ModuleSlug>([
+  "multi-location-dashboard",
+  "center-dashboard",
+  "fte-reports",
+  "family-detail",
+  "child-profile",
+  "billing-invoices",
+  "documents",
+  "compliance",
+  "analytics",
+  "audit-logs",
 ]);
 
 export function isExecutiveRole(role?: string | null) {
@@ -109,27 +130,34 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (!role) return false;
   if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
-  if (slug === "parent-portal" && isExecutiveRole(role)) return true;
+  if (slug === "parent-portal") return role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
+  if (slug === "teacher-portal") return role === "TEACHER";
+  if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
   if (slug === "corporate-billing") return hasTenantWideUiAccess(subject) || corporateBillingEmails.has(getEmail(subject) ?? "");
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;
-  if (parentRoles.has(role)) return parentModules.has(slug as ModuleSlug);
-  if (enrollmentModules.has(slug as ModuleSlug)) return enrollmentRoles.has(role);
-  if (schoolAdminModules.has(slug as ModuleSlug)) return schoolAdminRoles.has(role);
-  if (classroomModules.has(slug as ModuleSlug)) return classroomRoles.has(role);
-  if (billingModules.has(slug as ModuleSlug)) return billingRoles.has(role);
+  if (role === "AUTHORIZED_PICKUP") return authorizedPickupModules.has(slug as ModuleSlug);
+  if (role === "PARENT_GUARDIAN") return parentGuardianModules.has(slug as ModuleSlug);
+  if (parentRoles.has(role)) return false;
+  if (enrollmentModules.has(slug as ModuleSlug) && enrollmentRoles.has(role)) return true;
+  if (schoolAdminModules.has(slug as ModuleSlug) && schoolAdminRoles.has(role)) return true;
+  if (classroomModules.has(slug as ModuleSlug) && classroomRoles.has(role)) return true;
+  if (billingModules.has(slug as ModuleSlug) && billingRoles.has(role)) return true;
   return false;
 }
 
 export function dashboardLensesForRole(subject: AccessSubject) {
   const role = getRole(subject);
+  if (role === "READ_ONLY_AUDITOR") return ["regional"] as const;
   if (!hasTenantWideUiAccess(subject)) {
     if (role === "TEACHER") return ["teacher"] as const;
     if (role === "PARENT_GUARDIAN") return ["parent"] as const;
+    if (role === "AUTHORIZED_PICKUP") return ["pickup"] as const;
+    if (role === "BILLING_ADMIN") return ["billing"] as const;
     return ["director"] as const;
   }
   if (role === "PLATFORM_OWNER") return ["platform", "brand", "regional", "director"] as const;
   if (role === "BRAND_ADMIN") return ["brand", "regional", "director"] as const;
-  if (role === "REGIONAL_MANAGER" || role === "READ_ONLY_AUDITOR") return ["regional", "director"] as const;
+  if (role === "REGIONAL_MANAGER") return ["regional", "director"] as const;
   return ["director"] as const;
 }

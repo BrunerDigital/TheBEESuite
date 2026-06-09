@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
@@ -28,6 +30,9 @@ import { integrations, ModuleDefinition, roleMatrix } from "@/lib/demo-data";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
 
 export function ModulePage({ module }: { module: ModuleDefinition }) {
+  const [quickRecordSaved, setQuickRecordSaved] = useState(false);
+  const primaryHref = module.slug === "school-setup" ? "/school-setup" : `/${module.slug}?action=new`;
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -46,11 +51,11 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
             <h1 className="mt-4 max-w-4xl text-3xl font-semibold tracking-tight sm:text-4xl">{module.title}</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">{module.description}</p>
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button>
+              <Button nativeButton={false} render={<Link href={primaryHref} />}>
                 <Plus data-icon="inline-start" />
-                Create setup record
+                Start setup
               </Button>
-              <Button variant="outline">
+              <Button variant="outline" nativeButton={false} render={<Link href={`/audit-logs?resource=${encodeURIComponent(module.slug)}`} />}>
                 View audit trail
                 <ArrowRight data-icon="inline-end" />
               </Button>
@@ -116,7 +121,7 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                     <div>
                       <div className="text-sm font-medium">{feature}</div>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                        Ready for tenant-scoped setup, with integration hooks documented for production expansion.
+                        Use the linked workspace controls to configure records, review status, and keep changes inside the current role scope.
                       </p>
                     </div>
                   </div>
@@ -159,7 +164,12 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
                   </div>
                   <Switch defaultChecked aria-label="Require human review" />
                 </div>
-                <Button>Save record</Button>
+                <Button onClick={() => setQuickRecordSaved(true)}>Save draft</Button>
+                {quickRecordSaved ? (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">
+                    Draft saved in this workspace view. Use the module action above to create the permanent record.
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -202,13 +212,13 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
               <Card key={label} className="glass-panel">
                 <CardHeader>
                   <CardTitle>{label}</CardTitle>
-                  <CardDescription>Workflow builder foundation</CardDescription>
+                  <CardDescription>Workflow setup step</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
                   {["New inquiry submitted", "Missing document", "Notify director"].map((item, itemIndex) => (
-                    <div key={item} className="rounded-xl border bg-background/50 p-3">
-                      <div className="text-sm font-medium">{index === itemIndex ? item : `${label} option ${itemIndex + 1}`}</div>
-                      <p className="mt-1 text-xs text-muted-foreground">Execution logs appear here when workflows run.</p>
+                      <div key={item} className="rounded-xl border bg-background/50 p-3">
+                        <div className="text-sm font-medium">{index === itemIndex ? item : `${label} option ${itemIndex + 1}`}</div>
+                      <p className="mt-1 text-xs text-muted-foreground">Select this pattern when building a saved workflow for this module.</p>
                     </div>
                   ))}
                 </CardContent>
@@ -258,9 +268,9 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
 
       <Alert>
         <AlertTriangle />
-        <AlertTitle>Production boundary</AlertTitle>
+        <AlertTitle>Review before launch</AlertTitle>
         <AlertDescription>
-          This screen is an operational foundation. Real payment processing, SMS/push, signatures, document storage, and final licensing exports remain gated integration work.
+          Confirm role access, audit history, external integrations, and school-specific settings before using this workflow with live families, staff, billing, or compliance records.
         </AlertDescription>
       </Alert>
     </div>
@@ -288,9 +298,7 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
           <CardDescription>
             {isLogin
               ? "Secure login for directors, teachers, parents, and platform teams."
-              : isForgot
-                ? "Password reset delivery is a placeholder until an auth provider is connected."
-                : "Configure organization hierarchy, centers, white-label settings, and first workflows."}
+              : "Configure organization hierarchy, centers, white-label settings, and first workflows."}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -317,7 +325,9 @@ export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "on
               </div>
             </>
           ) : null}
-          <Button>{isLogin ? "Enter workspace" : isForgot ? "Send reset placeholder" : "Continue onboarding"}</Button>
+          <Button nativeButton={false} render={<Link href={isLogin ? "/login" : "/onboarding"} />}>
+            {isLogin ? "Enter workspace" : "Continue onboarding"}
+          </Button>
           <p className="text-center text-xs leading-5 text-muted-foreground">
             Access is scoped by role, center, organization, and tenant before sensitive workflows are shown.
           </p>

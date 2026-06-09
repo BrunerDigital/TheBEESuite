@@ -84,7 +84,7 @@ import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/fami
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
-import { FteReportForm, type FteReportCenterOption, type FteReportRow } from "@/components/fte-report-form";
+import { FteReportForm, type FteReportCenterOption, type FteReportPrefill, type FteReportRow } from "@/components/fte-report-form";
 import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
@@ -382,7 +382,7 @@ export function AuditLogsPage({ data }: { data: AuditLogsData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Audit Logs</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live audit trail for lead creation, pipeline updates, notes, tasks, reviewed emails, and future restricted-data events.
+          Live audit trail for lead creation, pipeline updates, notes, tasks, reviewed emails, and restricted-data events.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
@@ -1299,6 +1299,7 @@ export type CenterDashboardData = {
   centerName: string;
   place: string;
   fteCenters: FteReportCenterOption[];
+  ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
   stats: {
     leads: number;
@@ -1360,6 +1361,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
       {data.fteCenters.length ? (
         <FteReportForm
           centers={data.fteCenters}
+          prefills={data.ftePrefills}
           reports={data.fteReports}
           mode="director"
           title="Submit Weekly FTE"
@@ -2046,7 +2048,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Announcements</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Warm, professional broadcast drafts and scheduled notices by school. Emergency alert delivery remains a future integration workflow.
+          Warm, professional broadcast drafts and scheduled notices by school, with emergency alert routing controlled through notification settings.
         </p>
       </section>
       {data.demoMode ? <DemoDataNotice section="announcement" /> : null}
@@ -2143,7 +2145,7 @@ export function AutomationsPage({ data }: { data: AutomationsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Automations</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Workflow foundations for lead routing, tour reminders, document follow-ups, billing reminders, and Mr. Bee summaries. Sensitive decisions still require staff review.
+          Workflow builder for lead routing, tour reminders, document follow-ups, billing reminders, and Mr. Bee summaries. Sensitive decisions still require staff review.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -2304,7 +2306,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <ClipboardCheck data-icon="inline-start" />
-          Check-in foundation
+          Check-in workflow
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Attendance</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -2957,18 +2959,18 @@ export function FormsPage({ data }: { data: FormsPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Forms</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Enrollment, emergency contact, medical, permission, policy acknowledgment, incident, and staff onboarding form foundations.
+          Enrollment, emergency contact, medical, permission, policy acknowledgment, incident, and staff onboarding forms.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Forms" value={data.forms.length} />
         <StatCard label="Submissions" value={data.submissions.length} />
-        <StatCard label="Signature placeholders" value={data.submissions.filter((submission) => submission.signaturePlaceholder).length} />
+        <StatCard label="Signature captures" value={data.submissions.filter((submission) => submission.signaturePlaceholder).length} />
       </div>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Form Library</CardTitle>
-          <CardDescription>Schema-ready form builder foundation</CardDescription>
+          <CardDescription>Form builder fields and review settings</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -3032,7 +3034,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                       <span className="text-xs text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
-                  <TableCell>{submission.signaturePlaceholder ? "Captured placeholder" : "Not required"}</TableCell>
+                  <TableCell>{submission.signaturePlaceholder ? "Captured" : "Not required"}</TableCell>
                   <TableCell className="max-w-xl whitespace-normal text-xs text-muted-foreground">
                     {submission.form.type === "online_registration" ? submission.summary : jsonSummary(submission.data)}
                   </TableCell>
@@ -3087,6 +3089,207 @@ export type DocumentsPageData = {
   };
   signatureFamilies: SignatureRequestFamilyOption[];
 };
+
+export type TeacherDocumentsPageData = {
+  children: Array<{
+    id: string;
+    fullName: string;
+    preferredName: string | null;
+    ageGroup: string;
+    enrollmentStatus: string;
+    photoVideoPermission: boolean;
+    fieldTripPermission: boolean;
+    napNotes: string | null;
+    feedingNotes: string | null;
+    pottyNotes: string | null;
+    classroom: { name: string } | null;
+    family: { name: string; custodyNotes: string | null };
+    allergies: Array<{ id: string; allergen: string; severity: string; actionPlan: string | null }>;
+    medicalNotes: Array<{ id: string; category: string; note: string; restricted: boolean }>;
+    documents: Array<{
+      id: string;
+      name: string;
+      type: string;
+      status: string;
+      expiresAt: Date | string | null;
+      restricted: boolean;
+      storageKey?: string | null;
+      downloadUrl?: string | null;
+    }>;
+  }>;
+  stats: {
+    children: number;
+    allergies: number;
+    medicalNotes: number;
+    documents: number;
+  };
+};
+
+export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData }) {
+  const documentRows = data.children.flatMap((child) => child.documents.map((document) => ({ ...document, child })));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <ShieldCheck data-icon="inline-start" />
+          Classroom safety records
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Teacher Documents</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Read-only child information, allergy plans, medical care notes, emergency details, and permission records for children in your assigned classroom or school scope.
+        </p>
+      </section>
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Children visible" value={data.stats.children} />
+        <StatCard label="Allergies" value={data.stats.allergies} />
+        <StatCard label="Medical notes" value={data.stats.medicalNotes} />
+        <StatCard label="Teacher documents" value={data.stats.documents} />
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Visibility Rules</CardTitle>
+          <CardDescription>
+            Teachers see classroom safety records only. Billing, payroll, staff files, raw legal/court records, and admin compliance packages stay hidden.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        {data.children.map((child) => (
+          <Card key={child.id} className="glass-panel">
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{child.preferredName || child.fullName}</CardTitle>
+                  <CardDescription>
+                    {child.fullName} · {child.classroom?.name ?? "Unassigned classroom"} · {child.ageGroup}
+                  </CardDescription>
+                </div>
+                <Badge variant="outline">{child.enrollmentStatus}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {hasCustodyWarning(child.family) ? (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                  <div className="font-medium text-destructive">
+                    <ShieldAlert data-icon="inline-start" />
+                    {CUSTODY_WARNING_LABEL}
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {custodyWarningPreview(child.family, 180)}
+                  </p>
+                </div>
+              ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-lg border bg-background/50 p-3">
+                  <div className="text-sm font-medium">Care Notes</div>
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p>Feeding: {child.feedingNotes || "Not listed"}</p>
+                    <p>Nap: {child.napNotes || "Not listed"}</p>
+                    <p>Potty/toileting: {child.pottyNotes || "Not listed"}</p>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-background/50 p-3">
+                  <div className="text-sm font-medium">Permissions</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Badge variant={child.photoVideoPermission ? "default" : "outline"}>Photo/video {child.photoVideoPermission ? "yes" : "no"}</Badge>
+                    <Badge variant={child.fieldTripPermission ? "default" : "outline"}>Field trip {child.fieldTripPermission ? "yes" : "no"}</Badge>
+                  </div>
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-sm font-medium">Allergies</div>
+                  <div className="grid gap-2">
+                    {child.allergies.map((allergy) => (
+                      <div key={allergy.id} className="rounded-lg border bg-background/50 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{allergy.allergen}</span>
+                          <Badge variant="destructive">{allergy.severity}</Badge>
+                        </div>
+                        {allergy.actionPlan ? <p className="mt-1 text-xs leading-5 text-muted-foreground">{allergy.actionPlan}</p> : null}
+                      </div>
+                    ))}
+                    {!child.allergies.length ? <p className="text-xs text-muted-foreground">No allergies listed.</p> : null}
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-2 text-sm font-medium">Medical Notes</div>
+                  <div className="grid gap-2">
+                    {child.medicalNotes.map((note) => (
+                      <div key={note.id} className="rounded-lg border bg-background/50 p-3 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{note.category}</span>
+                          {note.restricted ? <Badge variant="outline">Restricted</Badge> : null}
+                        </div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{note.note}</p>
+                      </div>
+                    ))}
+                    {!child.medicalNotes.length ? <p className="text-xs text-muted-foreground">No medical notes listed.</p> : null}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {!data.children.length ? (
+          <Card className="glass-panel xl:col-span-2">
+            <CardContent className="p-6 text-sm text-muted-foreground">
+              No children are assigned to your classroom or school scope yet.
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle>Teacher-Visible Files</CardTitle>
+          <CardDescription>Read-only files relevant to classroom care, safety, permissions, and emergency response.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document</TableHead>
+                <TableHead>Child</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>File</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {documentRows.map((document) => (
+                <TableRow key={document.id}>
+                  <TableCell className="font-medium">{document.name}</TableCell>
+                  <TableCell>{document.child.fullName}</TableCell>
+                  <TableCell>{document.type}</TableCell>
+                  <TableCell><Badge variant={document.status === "pending" ? "outline" : "default"}>{document.status}</Badge></TableCell>
+                  <TableCell>{formatDate(document.expiresAt)}</TableCell>
+                  <TableCell>
+                    {document.downloadUrl ? (
+                      <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href={document.downloadUrl} target="_blank" rel="noreferrer">
+                        Open file
+                      </a>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">File not available</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!documentRows.length ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-muted-foreground">
+                    No teacher-visible files are attached to your classroom children yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function DocumentsPage({ data }: { data: DocumentsPageData }) {
   return (
@@ -3253,7 +3456,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Compliance-Readiness Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Compliance-ready workflows and documentation support for licensing checklists, certifications, incident review, immunization placeholders, allergies, and audit readiness. This is not legal or licensing advice.
+          Compliance-ready workflows and documentation support for licensing checklists, certifications, incident review, immunizations, allergies, and audit readiness. This is not legal or licensing advice.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-6">
@@ -3415,6 +3618,7 @@ export type MultiLocationDashboardData = {
   dueCenters: Array<{ id: string; name: string }>;
   fte?: FteSnapshot;
   fteCenters: FteReportCenterOption[];
+  ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
 };
 
@@ -3462,6 +3666,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
       </div>
       <FteReportForm
         centers={data.fteCenters}
+        prefills={data.ftePrefills}
         reports={data.fteReports}
         allowCenterSelect
         mode="executive"
@@ -3638,6 +3843,7 @@ export type FteReportsPageData = {
   }>;
   fte?: FteSnapshot;
   fteCenters: FteReportCenterOption[];
+  ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
   exportHref: string;
 };
@@ -3775,6 +3981,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
       <FteReportForm
         centers={data.fteCenters}
         reports={data.fteReports}
+        prefills={data.ftePrefills}
         allowCenterSelect={isExecutive}
         mode={data.mode}
         title={isExecutive ? "Review or Enter FTE" : "Submit Weekly FTE"}
@@ -4081,7 +4288,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Child Profiles</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Child enrollment, classroom, allergy, medical note, document, incident, permission, and daily activity profile foundation.
+          Child enrollment, classroom, allergy, medical note, document, incident, permission, and daily activity profile.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -4225,7 +4432,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
         <Badge className="mb-4">
           <BadgeDollarSign data-icon="inline-start" />
-          Billing foundation
+          Billing workbench
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Billing and Invoices</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
@@ -4464,7 +4671,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Dunning ready" value={data.stats.dunningReady} detail="send on next cron run" />
-        <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="future follow-up scheduled" />
+        <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="follow-up scheduled" />
         <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
       </div>
       <Card className="glass-panel">
@@ -4604,7 +4811,7 @@ export function ReputationPage({ data }: { data: ReputationPageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Reputation and Reviews</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Review requests, parent satisfaction surveys, testimonial approval, and AI response drafts. Google Business integration remains mock-ready.
+          Review requests, parent satisfaction surveys, testimonial approval, and AI response drafts with Google Business setup status.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -5009,7 +5216,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Products and fees" value={data.products.length} />
         <StatCard label="Tuition plans" value={data.tuitionPlans.length} />
-        <StatCard label="Subscription placeholders" value={data.subscriptions.length} />
+        <StatCard label="Subscriptions" value={data.subscriptions.length} />
         <StatCard label="Payout accounts" value={data.centers.filter((center) => {
           const fields = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
             ? center.customFields as Record<string, unknown>

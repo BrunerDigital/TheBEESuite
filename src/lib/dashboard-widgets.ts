@@ -43,6 +43,12 @@ const executiveRoles = [
   UserRole.READ_ONLY_AUDITOR,
 ] as const;
 
+const executiveAdminRoles = [
+  UserRole.PLATFORM_OWNER,
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
+] as const;
+
 const directorRoles = [
   UserRole.CENTER_DIRECTOR,
   UserRole.ASSISTANT_DIRECTOR,
@@ -52,8 +58,8 @@ const billingRoles = [UserRole.BILLING_ADMIN] as const;
 const teacherRoles = [UserRole.TEACHER] as const;
 const parentRoles = [UserRole.PARENT_GUARDIAN, UserRole.AUTHORIZED_PICKUP] as const;
 
-const staffAdminRoles = [...executiveRoles, ...directorRoles] as const;
-const enrollmentRoles = [...staffAdminRoles, ...billingRoles] as const;
+const staffAdminRoles = [...executiveAdminRoles, ...directorRoles] as const;
+const enrollmentRoles = [...staffAdminRoles] as const;
 const operationsRoles = [...staffAdminRoles, ...teacherRoles] as const;
 const billingVisibleRoles = [...staffAdminRoles, ...billingRoles, UserRole.PARENT_GUARDIAN] as const;
 const communicationRoles = [...staffAdminRoles, ...billingRoles, ...teacherRoles, UserRole.PARENT_GUARDIAN] as const;
@@ -112,7 +118,7 @@ export const dashboardWidgetCatalog: readonly DashboardWidgetDefinition[] = [
     title: "Classroom capacity",
     description: "Open seats, classroom capacity, and age-group availability.",
     category: "Operations",
-    roles: operationsRoles,
+    roles: staffAdminRoles,
   },
   {
     id: "billingRevenue",
@@ -192,7 +198,6 @@ const defaultWidgetIdsByRole: Record<UserRole, readonly DashboardWidgetId[]> = {
   ],
   [UserRole.READ_ONLY_AUDITOR]: [
     "executiveRollup",
-    "enrollmentPipeline",
     "attendanceSnapshot",
     "classroomCapacity",
     "billingRevenue",
@@ -223,15 +228,12 @@ const defaultWidgetIdsByRole: Record<UserRole, readonly DashboardWidgetId[]> = {
   ],
   [UserRole.BILLING_ADMIN]: [
     "aiBrief",
-    "enrollmentPipeline",
-    "toursAndTasks",
     "billingRevenue",
     "familyCommunication",
   ],
   [UserRole.TEACHER]: [
     "aiBrief",
     "attendanceSnapshot",
-    "classroomCapacity",
     "staffingRatios",
     "complianceQueue",
     "familyCommunication",

@@ -160,8 +160,9 @@ Status legend:
 - [x] Add payment method management/autopay through Stripe Setup Intents or customer portal.
 - [x] Add failed payment retry/dunning workflow.
 - [x] Add subsidy/agency payment tracking.
-- [x] Add surcharge/convenience fee and payment processing recovery disclosure language to parent/admin payment flows.
-- [ ] Complete final legal/accounting review of surcharge/convenience fee and processing recovery policy before enforcing live pass-through fees.
+- [x] Add payment processing recovery disclosure language to parent/admin payment flows.
+- [x] Add final payment processing recovery review packet and code-level live approval gate.
+- [ ] Complete final legal/accounting signoff for each school's processing recovery policy before enforcing live pass-through fees.
 - [x] Complete Stripe connected account onboarding gate for every school/payout owner before accepting live parent payments at that school.
 
 ## Attendance, Check-In, And Kiosk
@@ -285,7 +286,7 @@ Status legend:
 - [x] Create onboarding sections for directors to provide current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.
 - [ ] Have each school director submit or confirm current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.
 - [ ] Confirm which schools are ready for Stripe connected account onboarding.
-- [ ] Confirm convenience fee/processing recovery language with legal/accounting.
+- [ ] Provide written legal/accounting approval for each school's payment processing recovery policy using `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`.
 - [ ] Provide teacher/staff rosters per active location.
 - [x] Create onboarding sections for directors to provide classroom names, capacities, age ranges, and ratio expectations.
 - [ ] Have each school director submit or confirm classroom names, capacities, age ranges, and ratio expectations per active location.

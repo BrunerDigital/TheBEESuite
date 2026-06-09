@@ -26,6 +26,7 @@ type StripeConnectPanelProps = {
   stripeConfigured: boolean;
   webhookConfigured: boolean;
   tuitionFeatureFeeBps: number;
+  parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
   tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
@@ -70,6 +71,7 @@ export function StripeConnectPanel({
   stripeConfigured,
   webhookConfigured,
   tuitionFeatureFeeBps,
+  parentProcessingRecoveryApproved,
   parentSurchargeBps,
   tuitionFeatureFeeFixedCents,
   parentSurchargeFixedCents,
@@ -191,8 +193,14 @@ export function StripeConnectPanel({
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
             <div className="font-medium">Parent card recovery</div>
-            <div className="text-2xl font-semibold">{percentFromBps(parentSurchargeBps)}{centsLabel(parentSurchargeFixedCents)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Only added above tuition for card or other higher-cost methods</div>
+            <div className="text-2xl font-semibold">
+              {parentProcessingRecoveryApproved ? `${percentFromBps(parentSurchargeBps)}${centsLabel(parentSurchargeFixedCents)}` : "Review required"}
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {parentProcessingRecoveryApproved
+                ? "Only added above tuition for approved higher-cost methods"
+                : "Parent-paid recovery stays at $0 until legal/accounting approval is enabled"}
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -310,6 +318,12 @@ export function StripeConnectPanel({
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout because there is no separate monthly software fee for the tuition billing and payment module. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
+        {!parentProcessingRecoveryApproved ? (
+          <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
+            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            Parent-paid processing recovery is currently blocked by the legal/accounting approval gate. Set `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true` only after the approved policy, disclosures, refund/dispute treatment, and state/card-network review are complete.
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

@@ -18,6 +18,7 @@ function isoWithOffset(days: number, hour = 9, minute = 0) {
 export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = [
   {
     id: "exec-demo-classroom-infant-hive",
+    centerId: "exec-demo-center",
     name: "Infant Hive",
     ageGroup: "Infant",
     capacity: 10,
@@ -27,6 +28,7 @@ export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = 
   },
   {
     id: "exec-demo-classroom-toddler-hive",
+    centerId: "exec-demo-center",
     name: "Toddler Hive",
     ageGroup: "Toddler",
     capacity: 15,
@@ -36,6 +38,7 @@ export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = 
   },
   {
     id: "exec-demo-classroom-threes-hive",
+    centerId: "exec-demo-center",
     name: "3's Hive",
     ageGroup: "3's",
     capacity: 14,
@@ -45,6 +48,7 @@ export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = 
   },
   {
     id: "exec-demo-classroom-prek-hive",
+    centerId: "exec-demo-center",
     name: "Pre-K Hive",
     ageGroup: "Pre-K",
     capacity: 18,
@@ -54,6 +58,7 @@ export const executiveClassroomDemoRows: ClassroomDashboardData["classrooms"] = 
   },
   {
     id: "exec-demo-classroom-afterschool-hive",
+    centerId: "exec-demo-center",
     name: "Afterschool Hive",
     ageGroup: "Afterschool",
     capacity: 22,

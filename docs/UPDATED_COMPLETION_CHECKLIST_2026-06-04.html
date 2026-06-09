@@ -155,10 +155,10 @@
       <h1>The BEE Suite Updated Completion Checklist</h1>
       <p>Generated from <code>docs/UPDATED_COMPLETION_CHECKLIST_2026-06-04.md</code>. Last updated: June 5, 2026.</p>
       <div class="stats">
-        <div class="stat"><strong>236</strong><span>Total Items</span></div>
-        <div class="stat"><strong>206</strong><span>Checked</span></div>
-        <div class="stat"><strong>30</strong><span>Open</span></div>
-        <div class="stat"><strong>87%</strong><span>Complete</span></div>
+        <div class="stat"><strong>241</strong><span>Total Items</span></div>
+        <div class="stat"><strong>212</strong><span>Checked</span></div>
+        <div class="stat"><strong>29</strong><span>Open</span></div>
+        <div class="stat"><strong>88%</strong><span>Complete</span></div>
       </div>
     </section>
     <section class="toolbar" aria-label="Checklist tools">
@@ -356,9 +356,10 @@
 <li class="done"><span class="box">✓</span><span>Add payment method management/autopay through Stripe Setup Intents or customer portal.</span></li>
 <li class="done"><span class="box">✓</span><span>Add failed payment retry/dunning workflow.</span></li>
 <li class="done"><span class="box">✓</span><span>Add subsidy/agency payment tracking.</span></li>
-<li class="done"><span class="box">✓</span><span>Add surcharge/convenience fee and payment processing recovery disclosure language to parent/admin payment flows.</span></li>
-<li class="open"><span class="box"></span><span>Complete final legal/accounting review of surcharge/convenience fee and processing recovery policy before enforcing live pass-through fees.</span></li>
-<li class="open"><span class="box"></span><span>Complete Stripe connected account onboarding for every school/payout owner before accepting live parent payments at that school.</span></li>
+<li class="done"><span class="box">✓</span><span>Add payment processing recovery disclosure language to parent/admin payment flows.</span></li>
+<li class="done"><span class="box">✓</span><span>Add final payment processing recovery review packet and code-level live approval gate.</span></li>
+<li class="open"><span class="box"></span><span>Complete final legal/accounting signoff for each school's processing recovery policy before enforcing live pass-through fees.</span></li>
+<li class="done"><span class="box">✓</span><span>Complete Stripe connected account onboarding gate for every school/payout owner before accepting live parent payments at that school.</span></li>
 </ul>
 
 <h2>Attendance, Check-In, And Kiosk</h2>
@@ -433,6 +434,8 @@
 <li class="done"><span class="box">✓</span><span>Add real SendGrid email send paths for all communication workflows.</span></li>
 <li class="done"><span class="box">✓</span><span>Add real Twilio SMS send/receive paths.</span></li>
 <li class="done"><span class="box">✓</span><span>Add message templates and merge fields.</span></li>
+<li class="done"><span class="box">✓</span><span>Add broadcast segmentation by classroom, center, status, and tag.</span></li>
+<li class="done"><span class="box">✓</span><span>Add AI reply suggestions directly inside message composer with human-review guardrails.</span></li>
 <li class="done"><span class="box">✓</span><span>Add richer threaded conversation views with per-family reply history and staff assignment.</span></li>
 <li class="done"><span class="box">✓</span><span>Add full notification preferences by role/user beyond parent portal.</span></li>
 <li class="done"><span class="box">✓</span><span>Add email/SMS/push delivery channels.</span></li>
@@ -458,9 +461,11 @@
 <li class="done"><span class="box">✓</span><span>Add expiration reminders for family/staff/child documents.</span></li>
 <li class="done"><span class="box">✓</span><span>Integrate real e-signature provider or complete internal signature capture flow.</span></li>
 <li class="done"><span class="box">✓</span><span>Add state-specific licensing configuration.</span></li>
+<li class="done"><span class="box">✓</span><span>Add emergency drill logs UI.</span></li>
 <li class="done"><span class="box">✓</span><span>Add medication log workflow.</span></li>
 <li class="done"><span class="box">✓</span><span>Add compliance report export.</span></li>
 <li class="done"><span class="box">✓</span><span>Add incident admin review workflow with parent acknowledgement status.</span></li>
+<li class="done"><span class="box">✓</span><span>Add compliance task assignment/reminders.</span></li>
 </ul>
 
 <h2>Integrations, Security, And Operations</h2>
@@ -491,7 +496,7 @@
 <li class="done"><span class="box">✓</span><span>Create onboarding sections for directors to provide current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.</span></li>
 <li class="open"><span class="box"></span><span>Have each school director submit or confirm current tuition plans, fees, discounts, subsidy rules, ledger balances, and invoice rules.</span></li>
 <li class="open"><span class="box"></span><span>Confirm which schools are ready for Stripe connected account onboarding.</span></li>
-<li class="open"><span class="box"></span><span>Confirm convenience fee/processing recovery language with legal/accounting.</span></li>
+<li class="open"><span class="box"></span><span>Provide written legal/accounting approval for each school's payment processing recovery policy using <code>docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md</code>.</span></li>
 <li class="open"><span class="box"></span><span>Provide teacher/staff rosters per active location.</span></li>
 <li class="done"><span class="box">✓</span><span>Create onboarding sections for directors to provide classroom names, capacities, age ranges, and ratio expectations.</span></li>
 <li class="open"><span class="box"></span><span>Have each school director submit or confirm classroom names, capacities, age ranges, and ratio expectations per active location.</span></li>

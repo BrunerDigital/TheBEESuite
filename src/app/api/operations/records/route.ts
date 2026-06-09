@@ -21,6 +21,39 @@ function jsonObject(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function fillBlank(primary: string | null | undefined, duplicate: string | null | undefined) {
+  return primary && primary.trim() ? primary : duplicate || null;
+}
+
+function mergeText(primary: string | null | undefined, duplicate: string | null | undefined) {
+  const primaryText = primary?.trim() || "";
+  const duplicateText = duplicate?.trim() || "";
+  if (!primaryText) return duplicateText || null;
+  if (!duplicateText || primaryText.toLowerCase() === duplicateText.toLowerCase()) return primaryText;
+  return `${primaryText}\n${duplicateText}`;
+}
+
+function mergeCustomFields(
+  existing: unknown,
+  input: {
+    mergedIdsKey: string;
+    mergedId: string;
+    lastMergeKey: string;
+    lastMerge: Prisma.InputJsonObject;
+  },
+) {
+  const fields = jsonObject(existing);
+  return {
+    ...fields,
+    [input.mergedIdsKey]: Array.from(new Set([...stringList(fields[input.mergedIdsKey]), input.mergedId])),
+    [input.lastMergeKey]: input.lastMerge,
+  } as Prisma.InputJsonObject;
+}
+
 function intValue(value: unknown, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.round(number) : fallback;
@@ -411,6 +444,117 @@ export async function POST(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     result = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
+  } else if (entity === "guardianMerge") {
+    const primaryGuardianId = clean(body.primaryGuardianId) || clean(body.guardianId);
+    const duplicateGuardianId = clean(body.duplicateGuardianId) || clean(body.relatedId);
+    if (!primaryGuardianId || !duplicateGuardianId) {
+      return NextResponse.json({ ok: false, error: "Primary and duplicate guardian IDs are required." }, { status: 400 });
+    }
+    if (primaryGuardianId === duplicateGuardianId) {
+      return NextResponse.json({ ok: false, error: "Choose two different guardian records to merge." }, { status: 400 });
+    }
+
+    const [primary, duplicate] = await Promise.all([
+      prisma.guardian.findUnique({
+        where: { id: primaryGuardianId },
+        select: {
+          id: true,
+          familyId: true,
+          userId: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          employer: true,
+          relation: true,
+          preferredCommunication: true,
+          isBillingContact: true,
+          checkInPinHash: true,
+          checkInPinSetAt: true,
+          checkInPinSetById: true,
+          customFields: true,
+          family: { select: { centerId: true } },
+        },
+      }),
+      prisma.guardian.findUnique({
+        where: { id: duplicateGuardianId },
+        select: {
+          id: true,
+          familyId: true,
+          userId: true,
+          fullName: true,
+          email: true,
+          phone: true,
+          employer: true,
+          relation: true,
+          preferredCommunication: true,
+          isBillingContact: true,
+          checkInPinHash: true,
+          checkInPinSetAt: true,
+          checkInPinSetById: true,
+          customFields: true,
+          family: { select: { centerId: true } },
+        },
+      }),
+    ]);
+    if (!primary || !duplicate) {
+      return NextResponse.json({ ok: false, error: "Guardian record not found." }, { status: 404 });
+    }
+    if (primary.userId && duplicate.userId && primary.userId !== duplicate.userId) {
+      return NextResponse.json(
+        { ok: false, error: "Both guardian records are linked to different parent portal users. Resolve one parent account before merging." },
+        { status: 400 },
+      );
+    }
+
+    const [primaryAccess, duplicateAccess] = await Promise.all([
+      assertFamilyAccess(user, primary.familyId),
+      assertFamilyAccess(user, duplicate.familyId),
+    ]);
+    if (!primaryAccess.ok) return NextResponse.json({ ok: false, error: primaryAccess.error }, { status: primaryAccess.status });
+    if (!duplicateAccess.ok) return NextResponse.json({ ok: false, error: duplicateAccess.error }, { status: duplicateAccess.status });
+    if (primaryAccess.centerId !== duplicateAccess.centerId) {
+      return NextResponse.json({ ok: false, error: "Guardian records must belong to the same school before merging." }, { status: 400 });
+    }
+
+    centerId = primaryAccess.centerId;
+    const mergedAt = new Date();
+    result = await prisma.$transaction(async (tx) => {
+      await tx.checkInOutLog.updateMany({
+        where: { guardianId: duplicateGuardianId },
+        data: { guardianId: primaryGuardianId },
+      });
+      const mergedGuardian = await tx.guardian.update({
+        where: { id: primaryGuardianId },
+        data: {
+          userId: primary.userId ?? duplicate.userId ?? null,
+          email: fillBlank(primary.email, duplicate.email),
+          phone: fillBlank(primary.phone, duplicate.phone),
+          employer: fillBlank(primary.employer, duplicate.employer),
+          preferredCommunication: fillBlank(primary.preferredCommunication, duplicate.preferredCommunication),
+          isBillingContact: primary.isBillingContact || duplicate.isBillingContact,
+          checkInPinHash: primary.checkInPinHash ?? duplicate.checkInPinHash ?? null,
+          checkInPinSetAt: primary.checkInPinSetAt ?? duplicate.checkInPinSetAt ?? null,
+          checkInPinSetById: primary.checkInPinSetById ?? duplicate.checkInPinSetById ?? null,
+          customFields: mergeCustomFields(primary.customFields, {
+            mergedIdsKey: "mergedGuardianIds",
+            mergedId: duplicateGuardianId,
+            lastMergeKey: "lastGuardianMerge",
+            lastMerge: {
+              duplicateGuardianId,
+              duplicateName: duplicate.fullName,
+              duplicateFamilyId: duplicate.familyId,
+              mergedAt: mergedAt.toISOString(),
+              mergedBy: user.email,
+            },
+          }),
+        },
+      });
+      await tx.guardian.delete({ where: { id: duplicateGuardianId } });
+      return { primaryGuardianId, duplicateGuardianId, guardian: mergedGuardian };
+    });
+    auditMetadata.primaryGuardianId = primaryGuardianId;
+    auditMetadata.duplicateGuardianId = duplicateGuardianId;
+    auditMetadata.mode = "merged";
   } else if (entity === "child") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
@@ -450,6 +594,128 @@ export async function POST(request: NextRequest) {
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+  } else if (entity === "childMerge") {
+    const primaryChildId = clean(body.primaryChildId) || clean(body.childId);
+    const duplicateChildId = clean(body.duplicateChildId) || clean(body.relatedId);
+    if (!primaryChildId || !duplicateChildId) {
+      return NextResponse.json({ ok: false, error: "Primary and duplicate child IDs are required." }, { status: 400 });
+    }
+    if (primaryChildId === duplicateChildId) {
+      return NextResponse.json({ ok: false, error: "Choose two different child records to merge." }, { status: 400 });
+    }
+
+    const [primary, duplicate] = await Promise.all([
+      prisma.child.findUnique({
+        where: { id: primaryChildId },
+        select: {
+          id: true,
+          familyId: true,
+          classroomId: true,
+          fullName: true,
+          preferredName: true,
+          dateOfBirth: true,
+          ageGroup: true,
+          enrollmentStatus: true,
+          startDate: true,
+          schedule: true,
+          photoVideoPermission: true,
+          fieldTripPermission: true,
+          napNotes: true,
+          feedingNotes: true,
+          pottyNotes: true,
+          developmentalNotes: true,
+          customFields: true,
+          family: { select: { centerId: true } },
+        },
+      }),
+      prisma.child.findUnique({
+        where: { id: duplicateChildId },
+        select: {
+          id: true,
+          familyId: true,
+          classroomId: true,
+          fullName: true,
+          preferredName: true,
+          dateOfBirth: true,
+          ageGroup: true,
+          enrollmentStatus: true,
+          startDate: true,
+          schedule: true,
+          photoVideoPermission: true,
+          fieldTripPermission: true,
+          napNotes: true,
+          feedingNotes: true,
+          pottyNotes: true,
+          developmentalNotes: true,
+          customFields: true,
+          family: { select: { centerId: true } },
+        },
+      }),
+    ]);
+    if (!primary || !duplicate) {
+      return NextResponse.json({ ok: false, error: "Child record not found." }, { status: 404 });
+    }
+
+    const [primaryAccess, duplicateAccess] = await Promise.all([
+      assertFamilyAccess(user, primary.familyId),
+      assertFamilyAccess(user, duplicate.familyId),
+    ]);
+    if (!primaryAccess.ok) return NextResponse.json({ ok: false, error: primaryAccess.error }, { status: primaryAccess.status });
+    if (!duplicateAccess.ok) return NextResponse.json({ ok: false, error: duplicateAccess.error }, { status: duplicateAccess.status });
+    if (primaryAccess.centerId !== duplicateAccess.centerId) {
+      return NextResponse.json({ ok: false, error: "Child records must belong to the same school before merging." }, { status: 400 });
+    }
+
+    centerId = primaryAccess.centerId;
+    const mergedAt = new Date();
+    result = await prisma.$transaction(async (tx) => {
+      await Promise.all([
+        tx.childMedicalNote.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.allergy.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.enrollment.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.document.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId, familyId: primary.familyId } }),
+        tx.attendanceRecord.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.checkInOutLog.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.dailyReport.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.childMedia.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.incidentReport.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+        tx.medicationLog.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
+      ]);
+      const mergedChild = await tx.child.update({
+        where: { id: primaryChildId },
+        data: {
+          preferredName: fillBlank(primary.preferredName, duplicate.preferredName),
+          classroomId: primary.classroomId ?? duplicate.classroomId ?? null,
+          ageGroup: primary.ageGroup || duplicate.ageGroup,
+          enrollmentStatus: primary.enrollmentStatus === "inactive" ? duplicate.enrollmentStatus : primary.enrollmentStatus,
+          startDate: primary.startDate ?? duplicate.startDate ?? null,
+          ...(primary.schedule ? {} : duplicate.schedule ? { schedule: duplicate.schedule as Prisma.InputJsonValue } : {}),
+          photoVideoPermission: primary.photoVideoPermission || duplicate.photoVideoPermission,
+          fieldTripPermission: primary.fieldTripPermission || duplicate.fieldTripPermission,
+          napNotes: mergeText(primary.napNotes, duplicate.napNotes),
+          feedingNotes: mergeText(primary.feedingNotes, duplicate.feedingNotes),
+          pottyNotes: mergeText(primary.pottyNotes, duplicate.pottyNotes),
+          developmentalNotes: mergeText(primary.developmentalNotes, duplicate.developmentalNotes),
+          customFields: mergeCustomFields(primary.customFields, {
+            mergedIdsKey: "mergedChildIds",
+            mergedId: duplicateChildId,
+            lastMergeKey: "lastChildMerge",
+            lastMerge: {
+              duplicateChildId,
+              duplicateName: duplicate.fullName,
+              duplicateFamilyId: duplicate.familyId,
+              mergedAt: mergedAt.toISOString(),
+              mergedBy: user.email,
+            },
+          }),
+        },
+      });
+      await tx.child.delete({ where: { id: duplicateChildId } });
+      return { primaryChildId, duplicateChildId, child: mergedChild };
+    });
+    auditMetadata.primaryChildId = primaryChildId;
+    auditMetadata.duplicateChildId = duplicateChildId;
+    auditMetadata.mode = "merged";
   } else if (entity === "authorizedPickup") {
     const familyId = clean(body.familyId) || clean(body.relatedId);
     if (!familyId) return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });

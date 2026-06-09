@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
-import { canManageOperations, getCurrentUser } from "@/lib/auth";
+import { Prisma, UserRole } from "@prisma/client";
+import { canAccessAllCenters, canManageOperations, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { notificationPreferenceTypes } from "@/lib/message-templates";
+import { roleLabel } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -25,27 +26,72 @@ function validRole(value: unknown) {
   return Object.values(UserRole).includes(next as UserRole) ? next as UserRole : null;
 }
 
+function roleOptions() {
+  return Object.values(UserRole).map((role) => ({ role, label: roleLabel(role) }));
+}
+
+function manageableUserWhere(user: CurrentUser): Prisma.UserWhereInput {
+  if (canAccessAllCenters(user)) {
+    return { tenantId: user.tenantId, isActive: true };
+  }
+
+  const centerId = user.centerIds.length ? { in: user.centerIds } : { in: ["__no_authorized_center__"] };
+  return {
+    tenantId: user.tenantId,
+    isActive: true,
+    OR: [
+      { id: user.id },
+      { staffProfile: { centerId } },
+      { accessGrants: { some: { isActive: true, centerId } } },
+      { guardians: { some: { family: { centerId } } } },
+    ],
+  };
+}
+
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
 
+  const canManageRoleDefaults = canManageOperations(user);
+  const userOptions = canManageRoleDefaults
+    ? await prisma.user.findMany({
+        where: manageableUserWhere(user),
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+        take: 500,
+        select: { id: true, name: true, email: true, role: true },
+      })
+    : [{ id: user.id, name: user.name, email: user.email, role: user.role }];
+  const userIds = userOptions.map((item) => item.id);
   const preferences = await prisma.notificationPreference.findMany({
-    where: {
-      tenantId: user.tenantId,
-      OR: [
-        { userId: user.id },
-        { role: user.role },
-      ],
-    },
-    orderBy: [{ userId: "desc" }, { type: "asc" }],
+    where: canManageRoleDefaults
+      ? {
+          tenantId: user.tenantId,
+          OR: [
+            { userId: { in: userIds.length ? userIds : [user.id] } },
+            { role: { in: Object.values(UserRole) } },
+          ],
+        }
+      : {
+          tenantId: user.tenantId,
+          OR: [
+            { userId: user.id },
+            { role: user.role },
+          ],
+        },
+    orderBy: [{ userId: "desc" }, { role: "asc" }, { type: "asc" }],
   });
 
   return NextResponse.json({
     ok: true,
     types: notificationPreferenceTypes,
     preferences,
+    userOptions,
+    roleOptions: roleOptions(),
+    currentUserId: user.id,
+    currentRole: user.role,
+    canManageRoleDefaults,
   });
 }
 
@@ -64,6 +110,9 @@ export async function POST(request: NextRequest) {
   if (!type) {
     return NextResponse.json({ ok: false, error: "A valid preference type is required." }, { status: 400 });
   }
+  if (target !== "user" && target !== "role") {
+    return NextResponse.json({ ok: false, error: "Preference target must be user or role." }, { status: 400 });
+  }
   if (target === "role" && !canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Only school leadership can update role defaults." }, { status: 403 });
   }
@@ -72,6 +121,18 @@ export async function POST(request: NextRequest) {
   }
   if (targetUserId !== user.id && !canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Only school leadership can update another user's preferences." }, { status: 403 });
+  }
+  if (targetUserId && targetUserId !== user.id) {
+    const manageableUser = await prisma.user.findFirst({
+      where: {
+        ...manageableUserWhere(user),
+        id: targetUserId,
+      },
+      select: { id: true },
+    });
+    if (!manageableUser) {
+      return NextResponse.json({ ok: false, error: "That user is not available in your notification preference scope." }, { status: 403 });
+    }
   }
 
   const data = {

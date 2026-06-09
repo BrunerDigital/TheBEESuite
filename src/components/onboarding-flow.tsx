@@ -416,8 +416,8 @@ export function OnboardingFlow() {
                           <SelectValue placeholder="Choose fee handling" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Processor costs plus BEE Suite surcharge passed to payer">Processor costs plus BEE Suite surcharge passed to payer</SelectItem>
-                          <SelectItem value="School absorbs processor costs; BEE Suite surcharge invoiced monthly">School absorbs processor costs; BEE Suite surcharge invoiced monthly</SelectItem>
+                          <SelectItem value="Approved processing recovery shown to payer">Approved processing recovery shown to payer</SelectItem>
+                          <SelectItem value="School absorbs processor costs; BEE Suite payment operations fee invoiced monthly">School absorbs processor costs; BEE Suite payment operations fee invoiced monthly</SelectItem>
                           <SelectItem value="Enterprise negotiated merchant services">Enterprise negotiated merchant services</SelectItem>
                         </SelectContent>
                       </Select>

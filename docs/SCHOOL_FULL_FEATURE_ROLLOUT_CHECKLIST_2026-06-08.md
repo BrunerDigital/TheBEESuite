@@ -40,7 +40,7 @@ A school is not considered fully live until all of these are true:
 - [ ] Confirm every ProCare field used by schools is mapped, transformed, or intentionally excluded.
 - [ ] Replace remaining demo-login classroom, family, parent, and teacher fallbacks with real imported school data.
 - [ ] Complete Stripe connected account onboarding for every school or payout owner before enabling live parent checkout.
-- [ ] Complete legal/accounting review of convenience fee, processing recovery, ACH cap, refunds, disputes, and parent-facing disclosures.
+- [ ] Complete legal/accounting review of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, including processing recovery, ACH cap, refunds, disputes, debit/prepaid handling, and parent-facing disclosures.
 - [ ] Run a formal Supabase advisor/security review after the latest schema migrations.
 - [ ] Add production error monitoring and uptime monitoring.
 - [ ] Run full role-by-role credentialed production smoke tests after the account/data setup pass.
@@ -222,7 +222,7 @@ Complete this for each school before that school uses operational modules live.
 - [ ] Export/confirm ProCare datasets: family accounts, children, guardians/payers, relationships, authorized pickups, emergency contacts, classroom roster, staff, attendance, balances/ledger, tuition contracts, schedules, immunization/medical/allergy fields, and FTE.
 - [ ] Run final import mapping against real exports from each live school.
 - [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
-- [ ] Complete final migration runbook for switching each location off ProCare.
+- [x] Complete final migration runbook for switching each location off ProCare.
 - [ ] Schedule cutover windows and fallback procedures per school.
 - [ ] Have each school validate imported records before live operational use.
 
@@ -299,10 +299,11 @@ Complete this for each school before that school uses operational modules live.
 - [x] Billing page includes recurring scheduler coverage, AR aging, and ledger reconciliation reporting.
 - [x] Payments page includes payment method/autopay readiness, failed payment retry status, and dunning workflow visibility.
 - [x] Subsidy/agency payment tracking exists.
-- [x] Surcharge/convenience fee and processing recovery disclosure language exists in parent/admin payment flows.
+- [x] Payment processing recovery disclosure language exists in parent/admin payment flows.
+- [x] Payment processing recovery review packet and `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED` live approval gate exist.
 - [ ] Have each school director submit or confirm tuition plans, fees, discounts, subsidy rules, ledger balances, invoice rules, and billing cadence.
 - [ ] Complete Stripe connected account onboarding for every school/payout owner before accepting live parent payments.
-- [ ] Complete final legal/accounting review of surcharge/convenience fee and processing recovery policy before enforcing live pass-through fees.
+- [ ] Complete final legal/accounting signoff on `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` before setting `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
 - [ ] Confirm whether schools or corporate absorb failed-payment, ACH, card, dispute, and refund fees.
 - [ ] Provide official billing terms, refund language, privacy policy, and payment authorization text.
 - [ ] Run school-specific billing test: create invoice, post credit/debit, run batch billing, reconcile ledger, start Checkout, complete test payment, receive webhook, mark invoice paid, verify payout/application fee behavior, and test failed-payment path.

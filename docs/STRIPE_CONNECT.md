@@ -24,6 +24,7 @@ STRIPE_APPLICATION_FEE_FIXED_CENTS=0
 STRIPE_PARENT_SURCHARGE_BPS=0
 STRIPE_PARENT_SURCHARGE_FIXED_CENTS=0
 STRIPE_PARENT_SURCHARGE_MAX_CENTS=0
+STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false
 STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true
@@ -80,15 +81,18 @@ account.updated
 
 ## Fee Configuration
 
+The final product copy, legal/accounting review checklist, and source links live in `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`.
+
 `STRIPE_PARENT_SURCHARGE_BPS` and `STRIPE_PARENT_SURCHARGE_FIXED_CENTS` are legacy/global surcharge controls. Keep them at `0` for live tuition unless a single global surcharge has been reviewed and approved.
 
 The preferred tuition model is method-specific processing recovery:
 
-- ACH: parent pays tuition plus `STRIPE_ACH_PROCESSING_RECOVERY_BPS`, capped by `STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS`. Current policy is 0.8%, capped at $5.
-- Card: parent pays tuition plus grossed-up card processing recovery. Current policy uses 2.9% + $0.30 gross-up so the school can still receive the invoice amount.
+- ACH: parent pays tuition plus `STRIPE_ACH_PROCESSING_RECOVERY_BPS`, capped by `STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS`, only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
+- Card: parent pays tuition plus grossed-up card processing recovery, only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
 - Payment method configurations should be created in Stripe Dashboard and wired into `STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID` and `STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID`. Keep `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` so an ACH-fee checkout cannot accidentally allow card payment methods.
+- Keep card recovery disabled if the processor/acquirer setup cannot distinguish legally allowed card types from debit/prepaid card payments.
 
-BEE Suite payment operations fees are school/brand-side economics, not an extra parent card surcharge:
+BEE Suite payment operations fees are school/brand-side economics, not an extra parent-paid processing recovery line:
 
 - `STRIPE_PAYMENT_OPS_FEE_BPS`
 - `STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS`
@@ -119,7 +123,7 @@ Application fee: card processing recovery + BEE Suite payment operations fee, if
 Family ledger credit: $1,000.00
 ```
 
-Review fee disclosures, state surcharge restrictions, card-network rules, debit-card handling, refunds, and dispute handling before enabling parent-facing card recovery in live mode.
+Review fee disclosures, state-specific rules, card-network/acquirer notice, debit/prepaid handling, refunds, disputes, and accounting treatment before setting `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
 
 ## Go-Live Checks
 

@@ -167,6 +167,18 @@ export function getStripeParentSurchargeAmount(amountCents: number) {
   return Math.max(0, maxFee > 0 ? Math.min(fee, maxFee) : fee);
 }
 
+export function isStripeParentProcessingRecoveryApproved() {
+  return boolEnv("STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED");
+}
+
+export function getStripeCardProcessingRecoveryBps() {
+  return isStripeParentProcessingRecoveryApproved() ? basisPointsEnv("STRIPE_CARD_PROCESSING_RECOVERY_BPS", 290) : 0;
+}
+
+export function getStripeCardProcessingRecoveryFixedCents() {
+  return isStripeParentProcessingRecoveryApproved() ? nonNegativeIntEnv("STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS", 30) : 0;
+}
+
 export function getStripePaymentMethodConfigurationId(paymentMethodCategory: StripePaymentMethodCategory) {
   if (paymentMethodCategory === "ach") return clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
   if (paymentMethodCategory === "card") return clean(process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID);
@@ -175,6 +187,8 @@ export function getStripePaymentMethodConfigurationId(paymentMethodCategory: Str
 }
 
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
+  if (!isStripeParentProcessingRecoveryApproved()) return 0;
+
   if (paymentMethodCategory === "ach") {
     return feeFromParts(
       amountCents,

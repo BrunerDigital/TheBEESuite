@@ -25,8 +25,8 @@ These are the items that require the business owner, account admin, ProCare user
 - [ ] Create/verify the Stripe platform account as the legal/business owner.
 - [ ] Enable Stripe Connect for school payout accounts.
 - [ ] Decide the software pricing model for Kid City USA and future public customers.
-- [ ] Decide the platform surcharge / application fee structure for parent tuition payments.
-- [ ] Have legal/accounting review card surcharge rules, state restrictions, and parent-facing fee disclosures.
+- [ ] Decide the BEE Suite payment operations fee and any approved parent-paid processing recovery structure for tuition payments.
+- [ ] Provide written legal/accounting approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` before enabling parent-paid processing recovery.
 - [ ] Confirm whether schools or corporate will absorb failed-payment, ACH, card, dispute, and refund fees.
 - [ ] Provide official billing terms, refund language, privacy policy, and payment authorization text.
 - [ ] Have each school complete payout onboarding before parent payments are enabled.

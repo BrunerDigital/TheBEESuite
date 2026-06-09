@@ -44,6 +44,11 @@ import {
 } from "@/components/billing-workbench";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { CampaignWorkspace, type CampaignWorkspaceData } from "@/components/campaign-workspace";
+import {
+  ClassroomRatioAssignmentPanel,
+  type ClassroomAssignmentClassroom,
+  type ClassroomAssignmentStaff,
+} from "@/components/classroom-ratio-assignment-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
@@ -70,7 +75,9 @@ import {
 import {
   NotificationPreferencesPanel,
   type NotificationPreferenceRow,
+  type NotificationPreferenceRoleOption,
   type NotificationPreferenceType,
+  type NotificationPreferenceUserOption,
 } from "@/components/notification-preferences-panel";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
 import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
@@ -249,6 +256,13 @@ export type NotificationCenterData = {
     highIntentLeads: number;
     pendingIncidents: number;
   };
+  notificationPreferences: NotificationPreferenceRow[];
+  notificationPreferenceTypes: NotificationPreferenceType[];
+  notificationPreferenceUsers: NotificationPreferenceUserOption[];
+  notificationPreferenceRoles: NotificationPreferenceRoleOption[];
+  currentUserId: string;
+  currentRole: string;
+  canManageRoleDefaults: boolean;
 };
 
 export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
@@ -275,6 +289,15 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
         <StatCard label="High-intent leads" value={data.stats.highIntentLeads} detail="Lead score 75+" />
         <StatCard label="Incidents pending" value={data.stats.pendingIncidents} detail="Director review queue" />
       </div>
+      <NotificationPreferencesPanel
+        types={data.notificationPreferenceTypes}
+        preferences={data.notificationPreferences}
+        userOptions={data.notificationPreferenceUsers}
+        roleOptions={data.notificationPreferenceRoles}
+        currentUserId={data.currentUserId}
+        currentRole={data.currentRole}
+        canManageRoleDefaults={data.canManageRoleDefaults}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1858,6 +1881,9 @@ export type MessagesPageData = {
   staffOptions: MessageStaffOption[];
   notificationPreferences: NotificationPreferenceRow[];
   notificationPreferenceTypes: NotificationPreferenceType[];
+  notificationPreferenceUsers: NotificationPreferenceUserOption[];
+  notificationPreferenceRoles: NotificationPreferenceRoleOption[];
+  currentUserId: string;
   currentRole: string;
   canManageRoleDefaults: boolean;
   demoMode?: boolean;
@@ -1893,6 +1919,9 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
       <NotificationPreferencesPanel
         types={data.notificationPreferenceTypes}
         preferences={data.notificationPreferences}
+        userOptions={data.notificationPreferenceUsers}
+        roleOptions={data.notificationPreferenceRoles}
+        currentUserId={data.currentUserId}
         currentRole={data.currentRole}
         canManageRoleDefaults={data.canManageRoleDefaults}
       />
@@ -2130,15 +2159,8 @@ export function AutomationsPage({ data }: { data: AutomationsPageData }) {
 
 export type ClassroomDashboardData = {
   centers: Array<{ id: string; name: string }>;
-  classrooms: Array<{
-    id: string;
-    name: string;
-    ageGroup: string;
-    capacity: number;
-    ratioRule: string | null;
-    center: { name: string; crmLocationId: string | null };
-    _count: { children: number; staff: number; dailyReports: number; incidents: number };
-  }>;
+  classrooms: ClassroomAssignmentClassroom[];
+  staff: ClassroomAssignmentStaff[];
   demoMode?: boolean;
 };
 
@@ -2204,7 +2226,14 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
                   <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
                   <TableCell>{classroom.ageGroup}</TableCell>
                   <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
-                  <TableCell>{classroom._count.staff}</TableCell>
+                  <TableCell>
+                    <div className="flex max-w-52 flex-col gap-1">
+                      <span>{classroom._count.staff} assigned</span>
+                      <span className="text-xs text-muted-foreground">
+                        {data.staff.filter((teacher) => teacher.classroomId === classroom.id).map((teacher) => teacher.user.name).join(", ") || "No active teacher names"}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell>{classroom.ratioRule ?? "Not set"}</TableCell>
                   <TableCell>
                     <div className="flex max-w-64 flex-col gap-1">
@@ -2219,6 +2248,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
           </Table>
         </CardContent>
       </Card>
+      <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
       <OperationsActionHub title="Create or Edit Classroom" defaultEntity="classroom" compact centers={data.centers} />
     </div>
   );
@@ -4878,6 +4908,7 @@ export type BillingSettingsPageData = {
   stripeConfigured: boolean;
   webhookConfigured: boolean;
   tuitionFeatureFeeBps: number;
+  parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
   tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
@@ -4991,6 +5022,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         stripeConfigured={data.stripeConfigured}
         webhookConfigured={data.webhookConfigured}
         tuitionFeatureFeeBps={data.tuitionFeatureFeeBps}
+        parentProcessingRecoveryApproved={data.parentProcessingRecoveryApproved}
         parentSurchargeBps={data.parentSurchargeBps}
         tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}

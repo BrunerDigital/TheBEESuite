@@ -12,7 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CUSTODY_WARNING_DETAIL, CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
-import { findFamilyDuplicateCandidates } from "@/lib/family-dedupe";
+import {
+  findChildDuplicateCandidates,
+  findFamilyDuplicateCandidates,
+  findGuardianDuplicateCandidates,
+} from "@/lib/family-dedupe";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -218,6 +222,8 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [documentChildId, setDocumentChildId] = useState(selectedDocument?.childId ?? "family");
 
   const [duplicateFamilyId, setDuplicateFamilyId] = useState("");
+  const [duplicateGuardianId, setDuplicateGuardianId] = useState("");
+  const [duplicateChildId, setDuplicateChildId] = useState("");
 
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -225,11 +231,49 @@ export function FamilyRecordEditor({ families, centers }: Props) {
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
+  const childDuplicateRecords = useMemo(
+    () => families.flatMap((family) =>
+      family.children.map((child) => ({
+        ...child,
+        familyId: family.id,
+        familyName: family.name,
+        centerId: family.centerId,
+      })),
+    ),
+    [families],
+  );
+  const guardianDuplicateRecords = useMemo(
+    () => families.flatMap((family) =>
+      family.guardians.map((guardian) => ({
+        ...guardian,
+        familyId: family.id,
+        familyName: family.name,
+        centerId: family.centerId,
+      })),
+    ),
+    [families],
+  );
   const duplicateCandidates = useMemo(
     () => selectedFamily ? findFamilyDuplicateCandidates(families, selectedFamily.id) : [],
     [families, selectedFamily],
   );
-  const selectedDuplicateId = duplicateFamilyId || duplicateCandidates[0]?.candidateId || "";
+  const selectedDuplicateId = duplicateFamilyId && duplicateCandidates.some((candidate) => candidate.candidateId === duplicateFamilyId)
+    ? duplicateFamilyId
+    : duplicateCandidates[0]?.candidateId || "";
+  const guardianDuplicateCandidates = useMemo(
+    () => selectedGuardian ? findGuardianDuplicateCandidates(guardianDuplicateRecords, selectedGuardian.id) : [],
+    [guardianDuplicateRecords, selectedGuardian],
+  );
+  const selectedDuplicateGuardianId = duplicateGuardianId && guardianDuplicateCandidates.some((candidate) => candidate.candidateId === duplicateGuardianId)
+    ? duplicateGuardianId
+    : guardianDuplicateCandidates[0]?.candidateId || "";
+  const childDuplicateCandidates = useMemo(
+    () => selectedChild ? findChildDuplicateCandidates(childDuplicateRecords, selectedChild.id) : [],
+    [childDuplicateRecords, selectedChild],
+  );
+  const selectedDuplicateChildId = duplicateChildId && childDuplicateCandidates.some((candidate) => candidate.candidateId === duplicateChildId)
+    ? duplicateChildId
+    : childDuplicateCandidates[0]?.candidateId || "";
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -240,6 +284,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setGuardianRelation(guardian?.relation ?? "Parent/Guardian");
     setPreferredCommunication(guardian?.preferredCommunication ?? "email");
     setIsBillingContact(Boolean(guardian?.isBillingContact));
+    setDuplicateGuardianId("");
   }
 
   function loadPickup(pickup: AuthorizedPickupRecord | null) {
@@ -300,6 +345,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     loadAllergy(child?.allergies[0] ?? null);
     loadMedicalNote(child?.medicalNotes[0] ?? null);
     loadDocument(child?.documents[0] ?? null, child);
+    setDuplicateChildId("");
   }
 
   function loadFamily(familyId: string) {
@@ -363,6 +409,62 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      router.refresh();
+    });
+  }
+
+  function mergeDuplicateGuardian() {
+    if (!selectedGuardian || !selectedDuplicateGuardianId) return;
+    const duplicate = guardianDuplicateRecords.find((guardian) => guardian.id === selectedDuplicateGuardianId);
+    const confirmed = window.confirm(`Merge ${duplicate?.fullName ?? "this duplicate guardian"} into ${selectedGuardian.fullName}? Check-in history and the linked parent account will move to the kept guardian when safe.`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "guardianMerge",
+          primaryGuardianId: selectedGuardian.id,
+          duplicateGuardianId: selectedDuplicateGuardianId,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Guardian merge could not be completed.");
+        return;
+      }
+      setStatusMessage("Duplicate guardian merged into the selected guardian.");
+      setDuplicateGuardianId("");
+      router.refresh();
+    });
+  }
+
+  function mergeDuplicateChild() {
+    if (!selectedChild || !selectedDuplicateChildId) return;
+    const duplicate = childDuplicateRecords.find((child) => child.id === selectedDuplicateChildId);
+    const confirmed = window.confirm(`Merge ${duplicate?.fullName ?? "this duplicate child"} into ${selectedChild.fullName}? Attendance, documents, daily reports, incidents, medication logs, media, and enrollment history will move to the kept child profile.`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "childMerge",
+          primaryChildId: selectedChild.id,
+          duplicateChildId: selectedDuplicateChildId,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Child merge could not be completed.");
+        return;
+      }
+      setStatusMessage("Duplicate child profile merged into the selected child.");
+      setDuplicateChildId("");
       router.refresh();
     });
   }
@@ -623,6 +725,47 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             <Save data-icon="inline-start" />
             Save guardian
           </Button>
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Guardian duplicate matching</div>
+                <p className="text-xs text-muted-foreground">
+                  Review same-school guardian matches before merging contact details, check-in history, and safe parent portal links.
+                </p>
+              </div>
+              <Badge variant={guardianDuplicateCandidates.length ? "secondary" : "outline"}>
+                {guardianDuplicateCandidates.length} candidate{guardianDuplicateCandidates.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
+            {selectedGuardian && guardianDuplicateCandidates.length ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="space-y-1">
+                  <Label>Duplicate guardian to merge into selected guardian</Label>
+                  <Select value={selectedDuplicateGuardianId} onValueChange={(value) => value && setDuplicateGuardianId(value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {guardianDuplicateCandidates.map((candidate) => {
+                        const guardian = guardianDuplicateRecords.find((item) => item.id === candidate.candidateId);
+                        return (
+                          <SelectItem key={candidate.candidateId} value={candidate.candidateId}>
+                            {guardian?.fullName ?? "Duplicate guardian"} · {guardian?.familyName ?? "Family"} · {candidate.confidence} · {candidate.reasons.join(", ")}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" className="self-end" disabled={isPending || !selectedDuplicateGuardianId} onClick={mergeDuplicateGuardian}>
+                  <GitMerge data-icon="inline-start" />
+                  Merge guardian
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-3 rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                No likely guardian duplicates found for the selected guardian.
+              </p>
+            )}
+          </div>
         </section>
 
         <section className="space-y-3">
@@ -854,6 +997,47 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             <Save data-icon="inline-start" />
             Save child
           </Button>
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Child duplicate matching</div>
+                <p className="text-xs text-muted-foreground">
+                  Review same-school child matches before merging enrollment, attendance, health, document, media, and incident history.
+                </p>
+              </div>
+              <Badge variant={childDuplicateCandidates.length ? "secondary" : "outline"}>
+                {childDuplicateCandidates.length} candidate{childDuplicateCandidates.length === 1 ? "" : "s"}
+              </Badge>
+            </div>
+            {selectedChild && childDuplicateCandidates.length ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="space-y-1">
+                  <Label>Duplicate child to merge into selected child</Label>
+                  <Select value={selectedDuplicateChildId} onValueChange={(value) => value && setDuplicateChildId(value)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {childDuplicateCandidates.map((candidate) => {
+                        const child = childDuplicateRecords.find((item) => item.id === candidate.candidateId);
+                        return (
+                          <SelectItem key={candidate.candidateId} value={candidate.candidateId}>
+                            {child?.fullName ?? "Duplicate child"} · {child?.familyName ?? "Family"} · {candidate.confidence} · {candidate.reasons.join(", ")}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button type="button" className="self-end" disabled={isPending || !selectedDuplicateChildId} onClick={mergeDuplicateChild}>
+                  <GitMerge data-icon="inline-start" />
+                  Merge child
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-3 rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                No likely child duplicates found for the selected child.
+              </p>
+            )}
+          </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">

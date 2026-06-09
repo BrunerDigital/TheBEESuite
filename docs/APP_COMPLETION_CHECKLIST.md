@@ -196,8 +196,8 @@ Status legend:
 - [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
 - [x] Add import preview/diff UI before committing records.
 - [x] Add rollback/export backup for imports.
-- [ ] Add duplicate matching controls for families/children/guardians.
-- [ ] Add final migration runbook for switching each location off ProCare.
+- [x] Add duplicate matching controls for families/children/guardians.
+- [x] Add final migration runbook for switching each location off ProCare.
 
 ## Attendance, Check-In, And Kiosk
 
@@ -232,7 +232,7 @@ Status legend:
 - [x] Complete teacher mobile task-entry workflow for all daily report fields.
 - [x] Add classroom roster attendance board with fast check-in/check-out states.
 - [x] Add batch logging for meals/naps/diapers/activities.
-- [ ] Add classroom ratio warnings and staff assignment actions.
+- [x] Add classroom ratio warnings and staff assignment actions.
 - [ ] Add offline/poor-connectivity strategy for classroom tablets.
 - [x] Add teacher permissions separated from director/location users.
 
@@ -265,7 +265,7 @@ Status legend:
 - [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, BEE Suite monthly/payment operations fees, and Kid City USA pilot waiver.
 - [x] Complete parent tuition payment UI in parent portal.
 - [x] Complete school payout onboarding UI for Stripe Connect.
-- [ ] Finalize surcharge/convenience fee disclosures and legal review.
+- [x] Finalize payment processing recovery disclosure packet and code-level legal/accounting approval gate.
 - [x] Add real invoice generation/recurring tuition scheduler with assignment controls, daily cron route, and dashboard coverage metrics.
 - [x] Add payment method management with Stripe setup sessions, billing portal handoff, autopay status, and admin visibility.
 - [x] Add failed payment/retry workflow with Stripe failure capture, scheduled dunning, retry state, and billing follow-up visibility.
@@ -383,7 +383,7 @@ Status legend:
 - [x] Persistent FTE reminder cron route exists.
 - [x] Add read/unread mutation UI.
 - [x] Add parent notification preferences.
-- [ ] Add full notification preferences by role/user beyond parent portal.
+- [x] Add full notification preferences by role/user beyond parent portal.
 - [ ] Add email/SMS/push delivery channels.
 - [x] Add notification dedupe/retention policy.
 

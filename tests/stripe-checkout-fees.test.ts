@@ -12,6 +12,7 @@ const managedEnvKeys = [
   "STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS",
   "STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS",
   "STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES",
+  "STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED",
   "STRIPE_CARD_PROCESSING_RECOVERY_BPS",
   "STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS",
   "STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP",
@@ -47,6 +48,7 @@ test("tuition checkout defaults retain the school-paid 1.5 percent BEE Suite fea
 
 test("card checkout adds parent-paid card recovery in addition to the school-paid tuition feature fee", () => {
   for (const key of managedEnvKeys) delete process.env[key];
+  process.env.STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED = "true";
   process.env.STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP = "false";
 
   const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
@@ -56,6 +58,18 @@ test("card checkout adds parent-paid card recovery in addition to the school-pai
   assert.equal(amounts.parentProcessingRecoveryAmountCents, 2_930);
   assert.equal(amounts.checkoutTotalCents, 102_930);
   assert.equal(amounts.applicationFeeAmountCents, 4_430);
+});
+
+test("parent-paid processing recovery remains blocked until legal approval gate is enabled", () => {
+  for (const key of managedEnvKeys) delete process.env[key];
+  process.env.STRIPE_CARD_PROCESSING_RECOVERY_BPS = "290";
+  process.env.STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS = "30";
+
+  const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
+
+  assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.checkoutTotalCents, 100_000);
+  assert.equal(amounts.applicationFeeAmountCents, 1_500);
 });
 
 test("Kid City is not waived unless a waiver env var explicitly includes it", () => {

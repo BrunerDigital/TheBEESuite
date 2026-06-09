@@ -67,10 +67,12 @@ import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
 import {
   getStripeCheckoutAmounts,
+  getStripeCardProcessingRecoveryBps,
+  getStripeCardProcessingRecoveryFixedCents,
   getStripeSecretKey,
-  getStripeParentSurchargeBps,
   getStripePaymentMethodConfigurationId,
   getStripeWebhookSecret,
+  isStripeParentProcessingRecoveryApproved,
   shouldWaiveStripePaymentOperationsFee,
 } from "@/lib/integrations";
 import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
@@ -86,6 +88,7 @@ import {
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
+import { roleLabel } from "@/lib/notification-preferences";
 import { resolveClassroomRatioRule } from "@/lib/classroom-ratios";
 import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
@@ -432,6 +435,21 @@ async function renderLivePage(
   const endOfDay = new Date(today);
   endOfDay.setHours(23, 59, 59, 999);
   const fteDueState = getFteDueState(today);
+  const notificationPreferenceRoleOptions = Object.values(UserRole).map((role) => ({ role, label: roleLabel(role) }));
+  const notificationPreferenceUserWhere: Prisma.UserWhereInput = {
+    tenantId: user.tenantId,
+    isActive: true,
+    ...(allCenters
+      ? {}
+      : {
+          OR: [
+            { id: user.id },
+            { staffProfile: { centerId: scopedCenterIds } },
+            { accessGrants: { some: { isActive: true, centerId: scopedCenterIds } } },
+            { guardians: { some: { family: { centerId: scopedCenterIds } } } },
+          ],
+        }),
+  };
 
   if (slug === "school-setup") {
     const selectedCenter = centers.find((center) => center.id === user.primaryCenterId) ?? centers[0] ?? null;
@@ -1734,7 +1752,7 @@ async function renderLivePage(
         ? {}
         : { OR: [{ family: { is: familyScopeWhere } }, { familyId: null }] };
     const classroomWhere: Prisma.ClassroomWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
-    const [messages, families, templates, staffUsers, classrooms, notificationPreferences, total, unread, priority, aiReview] = await Promise.all([
+    const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
         orderBy: { createdAt: "desc" },
@@ -1824,12 +1842,11 @@ async function renderLivePage(
           center: { select: { name: true, crmLocationId: true } },
         },
       }),
-      prisma.notificationPreference.findMany({
-        where: {
-          tenantId: user.tenantId,
-          OR: [{ userId: user.id }, { role: user.role }],
-        },
-        orderBy: [{ userId: "desc" }, { type: "asc" }],
+      prisma.user.findMany({
+        where: notificationPreferenceUserWhere,
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+        take: 500,
+        select: { id: true, name: true, email: true, role: true },
       }),
       prisma.message.count({ where: messageWhere }),
       prisma.message.count({ where: { ...messageWhere, readAt: null } }),
@@ -1848,6 +1865,23 @@ async function renderLivePage(
         },
       }),
     ]);
+    const canManageNotificationDefaults = canManageOperations(user);
+    const notificationPreferenceUserIds = notificationPreferenceUsers.map((item) => item.id);
+    const notificationPreferences = await prisma.notificationPreference.findMany({
+      where: canManageNotificationDefaults
+        ? {
+            tenantId: user.tenantId,
+            OR: [
+              { userId: { in: notificationPreferenceUserIds.length ? notificationPreferenceUserIds : [user.id] } },
+              { role: { in: Object.values(UserRole) } },
+            ],
+          }
+        : {
+            tenantId: user.tenantId,
+            OR: [{ userId: user.id }, { role: user.role }],
+          },
+      orderBy: [{ userId: "desc" }, { role: "asc" }, { type: "asc" }],
+    });
 
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : messages;
@@ -1973,8 +2007,11 @@ async function renderLivePage(
           },
           notificationPreferences,
           notificationPreferenceTypes,
+          notificationPreferenceUsers,
+          notificationPreferenceRoles: notificationPreferenceRoleOptions,
+          currentUserId: user.id,
           currentRole: user.role,
-          canManageRoleDefaults: canManageOperations(user),
+          canManageRoleDefaults: canManageNotificationDefaults,
           demoMode,
         }}
       />
@@ -2708,9 +2745,10 @@ async function renderLivePage(
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
           tuitionFeatureFeeBps: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_BPS || "150", 10) || 150,
-          parentSurchargeBps: getStripeParentSurchargeBps(),
+          parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
+          parentSurchargeBps: getStripeCardProcessingRecoveryBps(),
           tuitionFeatureFeeFixedCents: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS || "0", 10) || 0,
-          parentSurchargeFixedCents: Number.parseInt(process.env.STRIPE_PARENT_SURCHARGE_FIXED_CENTS || "0", 10) || 0,
+          parentSurchargeFixedCents: getStripeCardProcessingRecoveryFixedCents(),
           kidCitySoftwareInvoice,
         }}
       />
@@ -2724,7 +2762,7 @@ async function renderLivePage(
 
   if (slug === "notifications") {
     const now = new Date();
-    const [notifications, openTasks, highIntentLeads, pendingIncidents] = await Promise.all([
+    const [notifications, openTasks, highIntentLeads, pendingIncidents, notificationPreferenceUsers] = await Promise.all([
       prisma.notification.findMany({
         where: {
           AND: [
@@ -2755,14 +2793,44 @@ async function renderLivePage(
           adminReviewStatus: "pending",
         },
       }),
+      prisma.user.findMany({
+        where: notificationPreferenceUserWhere,
+        orderBy: [{ role: "asc" }, { name: "asc" }],
+        take: 500,
+        select: { id: true, name: true, email: true, role: true },
+      }),
     ]);
     const unread = notifications.filter((notification) => !notification.readAt).length;
+    const canManageNotificationDefaults = canManageOperations(user);
+    const notificationPreferenceUserIds = notificationPreferenceUsers.map((item) => item.id);
+    const notificationPreferences = await prisma.notificationPreference.findMany({
+      where: canManageNotificationDefaults
+        ? {
+            tenantId: user.tenantId,
+            OR: [
+              { userId: { in: notificationPreferenceUserIds.length ? notificationPreferenceUserIds : [user.id] } },
+              { role: { in: Object.values(UserRole) } },
+            ],
+          }
+        : {
+            tenantId: user.tenantId,
+            OR: [{ userId: user.id }, { role: user.role }],
+          },
+      orderBy: [{ userId: "desc" }, { role: "asc" }, { type: "asc" }],
+    });
 
     return (
       <NotificationCenterPage
         data={{
           notifications,
           stats: { unread, openTasks, highIntentLeads, pendingIncidents },
+          notificationPreferences,
+          notificationPreferenceTypes,
+          notificationPreferenceUsers,
+          notificationPreferenceRoles: notificationPreferenceRoleOptions,
+          currentUserId: user.id,
+          currentRole: user.role,
+          canManageRoleDefaults: canManageNotificationDefaults,
           derived: [
             {
               title: `${openTasks.toLocaleString()} lead follow-up tasks are open`,
@@ -3287,15 +3355,30 @@ async function renderLivePage(
 
   if (slug === "classroom-dashboard") {
     const classroomWhere: Prisma.ClassroomWhereInput = { centerId: scopedCenterIds };
-    const classrooms = await prisma.classroom.findMany({
-      where: classroomWhere,
-      orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
-      take: 150,
-      include: {
-        center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
-        _count: { select: { children: true, staff: { where: { user: { role: UserRole.TEACHER } } }, dailyReports: true, incidents: true } },
-      },
-    });
+    const [classrooms, classroomStaff] = await Promise.all([
+      prisma.classroom.findMany({
+        where: classroomWhere,
+        orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
+        take: 150,
+        include: {
+          center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
+          _count: { select: { children: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, dailyReports: true, incidents: true } },
+        },
+      }),
+      prisma.staffProfile.findMany({
+        where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } },
+        orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
+        take: 250,
+        select: {
+          id: true,
+          centerId: true,
+          classroomId: true,
+          title: true,
+          user: { select: { name: true, email: true, isActive: true } },
+          classroom: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
 
     const demoMode = showDemoFallbackData && classrooms.length === 0;
 
@@ -3307,6 +3390,7 @@ async function renderLivePage(
             ? executiveClassroomDemoRows
             : classrooms.map((classroom) => ({
                 id: classroom.id,
+                centerId: classroom.centerId,
                 name: classroom.name,
                 ageGroup: classroom.ageGroup,
                 capacity: classroom.capacity,
@@ -3322,6 +3406,7 @@ async function renderLivePage(
                   }).ratioRules.value,
                 }),
               })),
+          staff: demoMode ? [] : classroomStaff,
           demoMode,
         }}
       />

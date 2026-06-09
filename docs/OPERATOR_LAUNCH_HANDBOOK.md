@@ -14,6 +14,7 @@ This is the central operator-facing index for launching and supporting The BEE S
 - `docs/SECURITY_PRIVACY_OPERATIONS.md` - RLS/table access documentation, retention, encryption plan, and backup/restore.
 - `docs/KIDCITY_CRM_CUTOVER.md` - Kid City CRM cutover workflow.
 - `docs/KIDCITY_CUTOVER_OWNER_CHECKLIST.md` - owner-side Kid City cutover actions.
+- `docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md` - per-location final migration sequence for switching off ProCare.
 - `docs/in-school-testing-runbook.md` - in-school pilot testing.
 
 ## Module Guides
@@ -24,6 +25,7 @@ This is the central operator-facing index for launching and supporting The BEE S
 - `docs/KIOSK_PARENT_ENGAGEMENT.md` - kiosk and parent engagement foundation.
 - `docs/STRIPE_CONNECT.md` - payment architecture.
 - `docs/STRIPE_CONNECT_SETUP.md` - Stripe setup and payout onboarding.
+- `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` - finalized payment processing recovery copy, legal/accounting review checklist, and live approval gate.
 - `docs/EXECUTIVE_ADMIN.md` - executive admin capabilities.
 - `docs/user-feature-access-map.md` - role/module access map.
 
@@ -41,7 +43,7 @@ This is the central operator-facing index for launching and supporting The BEE S
 5. Configure inquiry embed and submit a test inquiry.
 6. Configure FTE reporting access and submit a test weekly report.
 7. Configure kiosk/PIN workflow and test one family check-in/check-out.
-8. Keep payment checkout disabled until Stripe connected account onboarding and fee disclosures are approved.
+8. Keep payment checkout disabled until Stripe connected account onboarding is complete, and keep parent-paid processing recovery disabled until `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` is approved for the school.
 9. Run the full-feature rollout checklist for the school.
 10. Run the role smoke test checklist.
 11. Document any exceptions or known limitations before school staff use the module live.
@@ -51,5 +53,5 @@ This is the central operator-facing index for launching and supporting The BEE S
 - Kid City USA is the first live pilot account.
 - CRM inquiry intake and FTE workflows are live operational priorities.
 - Parent portal, teacher workflows, kiosk, documents, billing, and messaging foundations exist, but full school use is gated by real school data, role-by-role validation, training, and school signoff.
-- Parent payments stay disabled per school until Stripe connected account onboarding, fee disclosures, refund/dispute handling, and legal/accounting approval are complete.
+- Parent payments stay disabled per school until Stripe connected account onboarding, fee disclosures, refund/dispute handling, and legal/accounting approval are complete. Parent-paid processing recovery stays at `$0` until `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true` is approved.
 - Do not claim legal/licensing compliance. Use `compliance-ready workflows` and `documentation support`.

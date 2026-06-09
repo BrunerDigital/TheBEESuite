@@ -13,6 +13,7 @@ NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 STRIPE_ACCOUNTS_V2_API_VERSION=2026-04-22.dahlia
 STRIPE_APPLICATION_FEE_BPS=0
 STRIPE_APPLICATION_FEE_FIXED_CENTS=0
+STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false
 STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true
@@ -40,14 +41,16 @@ STRIPE_CHECKOUT_ON_BEHALF_OF=false
 250  = 2.5%
 ```
 
-For live tuition, keep the global application fee at `0` and use method-specific processing recovery:
+For live tuition, keep the global application fee at `0` and use method-specific processing recovery only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`:
 
 - ACH: 0.8%, capped at $5.
 - Card: 2.9% + $0.30 gross-up.
 - Kid City USA: payment operations fee waived through the waiver env vars above.
 - Future non-waived brands: use `STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS` or `STRIPE_PAYMENT_OPS_FEE_BPS` for the school/brand-side payment operations fee.
 
-Create separate Stripe payment method configurations for ACH and card before enabling method-specific fees. This prevents a parent from opening a low-fee ACH checkout and then paying with a card.
+Create separate Stripe payment method configurations for ACH and card before enabling method-specific fees. This prevents a parent from opening a low-fee ACH checkout and then paying with a card. Keep card recovery disabled if legal/accounting review or the processor/acquirer setup cannot support debit/prepaid handling.
+
+See `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for the final product copy, approval checklist, and source links.
 
 ## Webhook
 
@@ -95,6 +98,7 @@ Parent checkout is blocked until Stripe platform keys, webhook reconciliation, a
 ## Go-Live Notes
 
 - Confirm who owns negative balances, disputes, refunds, and school payout support.
+- Keep `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false` until payment processing recovery policy, disclosures, state-specific review, card-network/acquirer review, debit/prepaid handling, refunds, disputes, and accounting treatment are approved.
 - Do not set `STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=true` for real parent payments.
 - Keep Stripe keys server-side only. Never paste secret keys into WordPress.
 - Keep school payout onboarding behind authenticated BEE Suite sessions.

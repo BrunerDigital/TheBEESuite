@@ -35,7 +35,7 @@ These are the items BrunerDigital cannot safely complete without business approv
 
 ## Legal, Privacy, And Compliance
 
-- Legal review of convenience fee, processing recovery, ACH fee cap, refund, chargeback, and disclosure language.
+- Written legal/accounting approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for payment processing recovery, ACH fee cap, card recovery, refund, chargeback, dispute, debit/prepaid, and disclosure language.
 - Privacy review for child, guardian, custody, medical, billing, and photo/media data handling.
 - State-specific childcare licensing review before claiming any state-specific workflow support.
 - Approval of data retention, deletion, backup, and incident response policies.

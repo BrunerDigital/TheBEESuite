@@ -12,6 +12,7 @@ import {
 import { notificationExpiresAt } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const tenantDunningRoles = [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, UserRole.BILLING_ADMIN];
@@ -58,7 +59,7 @@ function activeGuardianUserIds(guardians: Array<{ userId: string | null; user: {
     .filter((userId): userId is string => typeof userId === "string");
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -376,3 +377,5 @@ export async function GET(request: NextRequest) {
     notificationsSkipped: existingNotifications.length,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

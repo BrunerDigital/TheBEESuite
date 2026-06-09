@@ -1,8 +1,23 @@
 # Security, Privacy, And Data Operations
 
-Last updated: June 1, 2026
+Last updated: June 9, 2026
 
 This document defines the production security operating plan for The BEE Suite. It does not replace legal review, state licensing review, or Supabase's own security advisor output.
+
+Latest internal review: `docs/LEGAL_PRIVACY_SECURITY_REVIEW_2026-06-09.md`. The internal product/security/privacy review is complete. Public SaaS expansion still requires owner/counsel approvals, payment-processing approval, Twilio/SMS compliance approval, MFA decision, production monitoring, and live Supabase advisor verification.
+
+## Application Security Headers
+
+`next.config.ts` applies baseline browser security headers to all routes:
+
+- `X-DNS-Prefetch-Control: on`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: SAMEORIGIN`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(self), browsing-topics=()`
+- `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload` in production only
+
+Do not add a broad CSP until Stripe Checkout, Cloudflare Turnstile, Supabase media URLs, white-label domains, and public embed scripts have a tested allowlist.
 
 ## Access Model
 

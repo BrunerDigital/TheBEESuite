@@ -5,13 +5,14 @@ import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function centerIdFilter(centerIds: string[]) {
   return centerIds.length ? { in: centerIds } : { in: ["__no_visible_centers__"] };
 }
 
-export async function GET() {
+async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -153,7 +154,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function PATCH(request: NextRequest) {
+async function PATCHHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -200,3 +201,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true, notification: updated });
 }
+
+export const GET = withApiLogging("GET", GETHandler);
+export const PATCH = withApiLogging("PATCH", PATCHHandler);

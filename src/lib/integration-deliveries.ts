@@ -20,8 +20,10 @@ export type IntegrationDeliveryPurpose =
   | "signature_request_email"
   | "onboarding_email"
   | "fte_reminder_email"
+  | "notification_email"
   | "communication_sms"
-  | "fte_reminder_sms";
+  | "fte_reminder_sms"
+  | "notification_sms";
 
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
@@ -52,7 +54,7 @@ type RecordCommunicationSmsDeliveryInput = {
   body: string;
   statusCallbackUrl?: string | null;
   result: IntegrationSendResult;
-  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms">;
+  purpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "fte_reminder_sms" | "notification_sms">;
   maxAttempts?: number;
 };
 
@@ -73,6 +75,7 @@ type RecordEmailDeliveryInput = {
     | "signature_request_email"
     | "onboarding_email"
     | "fte_reminder_email"
+    | "notification_email"
   >;
   to: string[];
   subject: string;
@@ -290,6 +293,7 @@ const SENDGRID_EMAIL_PURPOSES = new Set([
   "signature_request_email",
   "onboarding_email",
   "fte_reminder_email",
+  "notification_email",
 ]);
 
 async function sendDelivery(provider: string, purpose: string, payload: Record<string, unknown>) {
@@ -319,7 +323,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
     });
   }
 
-  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms")) {
+  if (provider === "twilio" && (purpose === "communication_sms" || purpose === "fte_reminder_sms" || purpose === "notification_sms")) {
     return sendSms({
       to: stringValue(payload.to),
       body: stringValue(payload.body),

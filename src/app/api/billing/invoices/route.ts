@@ -15,6 +15,7 @@ import {
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type CurrentBillingUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
@@ -518,7 +519,7 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageBilling(user)) {
@@ -538,3 +539,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: false, error: "Unsupported billing action." }, { status: 400 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

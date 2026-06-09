@@ -9,6 +9,7 @@ import {
 } from "@/lib/required-document-checklist";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -23,7 +24,7 @@ function canAccessRequiredCenter(user: CurrentUser, centerId: string | null) {
   return canAccessAllCenters(user) || Boolean(centerId && canAccessCenter(user, centerId));
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -167,3 +168,5 @@ export async function POST(request: NextRequest) {
   });
   return NextResponse.json({ ok: true, mode: "created", record: certification }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

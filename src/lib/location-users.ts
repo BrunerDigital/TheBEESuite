@@ -27,7 +27,7 @@ export async function getCenterLeadershipUsers({
           ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
         },
       },
-      select: { user: { select: { id: true, email: true } } },
+      select: { role: true, user: { select: { id: true, email: true, role: true, staffProfile: { select: { phone: true } } } } },
     }),
     prisma.staffProfile.findMany({
       where: {
@@ -38,13 +38,27 @@ export async function getCenterLeadershipUsers({
           ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
         },
       },
-      select: { user: { select: { id: true, email: true } } },
+      select: { user: { select: { id: true, email: true, role: true, staffProfile: { select: { phone: true } } } } },
     }),
   ]);
 
-  const usersById = new Map<string, { id: string; email: string }>();
-  for (const item of [...grantUsers, ...legacyProfileUsers]) {
-    usersById.set(item.user.id, item.user);
+  const usersById = new Map<string, { id: string; email: string; role: UserRole; phone: string | null }>();
+  for (const item of grantUsers) {
+    usersById.set(item.user.id, {
+      id: item.user.id,
+      email: item.user.email,
+      role: item.role,
+      phone: item.user.staffProfile?.phone ?? null,
+    });
+  }
+  for (const item of legacyProfileUsers) {
+    if (usersById.has(item.user.id)) continue;
+    usersById.set(item.user.id, {
+      id: item.user.id,
+      email: item.user.email,
+      role: item.user.role,
+      phone: item.user.staffProfile?.phone ?? null,
+    });
   }
   return Array.from(usersById.values());
 }

@@ -1,6 +1,7 @@
 import { parseOperationalDate } from "@/lib/date-guardrails";
 
 const MAX_CARE_ENTRIES = 12;
+const MAX_CHILDREN_PER_REPORT_BATCH = 40;
 
 export type DailyReportMealInput = {
   mealType: string;
@@ -26,6 +27,7 @@ export type DailyReportActivityInput = {
 
 export type ParsedTeacherDailyReportPayload = {
   childId: string;
+  childIds: string[];
   date: Date;
   mood: string | null;
   teacherNote: string | null;
@@ -53,6 +55,35 @@ function parseBoolean(value: unknown) {
   if (value === true) return true;
   if (typeof value !== "string") return false;
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
+}
+
+function collectChildIds(input: Record<string, unknown>): { ok: true; childIds: string[] } | { ok: false; status: number; error: string } {
+  const ids = new Set<string>();
+  const childId = clean(input.childId);
+  if (childId) ids.add(childId);
+
+  if (input.childIds !== undefined && input.childIds !== null) {
+    if (!Array.isArray(input.childIds)) {
+      return { ok: false, status: 400, error: "Child IDs must be an array." };
+    }
+    if (input.childIds.length > MAX_CHILDREN_PER_REPORT_BATCH) {
+      return { ok: false, status: 400, error: `Daily reports can be created for at most ${MAX_CHILDREN_PER_REPORT_BATCH} children at once.` };
+    }
+    for (const item of input.childIds) {
+      const id = clean(item);
+      if (id) ids.add(id);
+    }
+  }
+
+  const childIds = Array.from(ids);
+  if (!childIds.length) {
+    return { ok: false, status: 400, error: "At least one child ID is required." };
+  }
+  if (childIds.length > MAX_CHILDREN_PER_REPORT_BATCH) {
+    return { ok: false, status: 400, error: `Daily reports can be created for at most ${MAX_CHILDREN_PER_REPORT_BATCH} children at once.` };
+  }
+
+  return { ok: true, childIds };
 }
 
 function normalizeDateInput(value: unknown) {
@@ -185,10 +216,8 @@ function collectDiapers(input: Record<string, unknown>, fallbackDate: Date): { o
 
 export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
   const input = asRecord(body);
-  const childId = clean(input.childId);
-  if (!childId) {
-    return { ok: false, status: 400, error: "Child ID is required." };
-  }
+  const childIds = collectChildIds(input);
+  if (!childIds.ok) return childIds;
 
   const parsedDate = parseDateField(input.date, "Daily report date");
   if (!parsedDate.ok) return parsedDate;
@@ -205,7 +234,8 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
   return {
     ok: true,
     report: {
-      childId,
+      childId: childIds.childIds[0],
+      childIds: childIds.childIds,
       date: parsedDate.date,
       mood: clean(input.mood) || null,
       teacherNote: clean(input.teacherNote) || null,

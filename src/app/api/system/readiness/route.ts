@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { envPresent, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { CHILD_MEDIA_BUCKET, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ function check(name: string, status: ReadinessStatus, detail: string) {
   return { name, status, detail };
 }
 
-export async function GET() {
+async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -151,3 +152,5 @@ export async function GET() {
     checks,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

@@ -9,6 +9,7 @@ import {
 } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function jsonObject(value: unknown): Record<string, unknown> {
@@ -21,7 +22,7 @@ function canManageCorporateBilling(user: { role: UserRole; email: string }) {
     user.email.toLowerCase() === "accounting@kidcityusa.com";
 }
 
-export async function GET() {
+async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageCorporateBilling(user)) {
@@ -32,7 +33,7 @@ export async function GET() {
   return NextResponse.json({ ok: true, invoice: snapshot });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageCorporateBilling(user)) {
@@ -124,3 +125,6 @@ export async function POST(request: NextRequest) {
     },
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);
+export const POST = withApiLogging("POST", POSTHandler);

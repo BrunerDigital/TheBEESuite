@@ -13,6 +13,7 @@ import {
 import { sanitizeCredentialInput, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ function actionValue(value: unknown) {
   return value === "check" ? "check" : "save";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -123,3 +124,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, integration });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

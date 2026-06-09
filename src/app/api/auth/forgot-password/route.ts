@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset } from "@/lib/supabase-auth";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -12,7 +13,7 @@ function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { email?: unknown } | null;
   const email = clean(body?.email).toLowerCase();
 
@@ -38,14 +39,10 @@ export async function POST(request: NextRequest) {
     const response = await requestSupabasePasswordReset(email, redirectTo);
 
     if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("Supabase password reset request failed", {
-        status: response.status,
-        detail: detail.slice(0, 500),
-      });
+      logOperationalError("auth.forgot_password.supabase_request_failed", null, { status: response.status });
     }
   } catch (error) {
-    console.error("Supabase password reset request errored", error);
+    logOperationalError("auth.forgot_password.supabase_request_error", error);
     return NextResponse.json(
       { ok: false, error: "Password reset email service is not configured yet." },
       { status: 503 },
@@ -57,3 +54,5 @@ export async function POST(request: NextRequest) {
     message: "If that email is active, a password reset link will be sent shortly.",
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

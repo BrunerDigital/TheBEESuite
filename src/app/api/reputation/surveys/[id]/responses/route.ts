@@ -4,6 +4,7 @@ import { writeSystemAuditLog } from "@/lib/audit";
 import { updateSurveyResults } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -21,7 +22,7 @@ function parseScore(value: unknown) {
   return rounded >= 0 && rounded <= 10 ? rounded : null;
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
   const body = await request.json().catch(() => ({}));
   const score = parseScore(body.score);
@@ -89,3 +90,5 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, response, results }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

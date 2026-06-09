@@ -5,13 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { updateSupabaseAuthUserPasswordByEmail, verifySupabasePassword } from "@/lib/supabase-auth";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -85,7 +86,9 @@ export async function POST(request: NextRequest) {
     response.cookies.set(SESSION_COOKIE, createSessionToken(updated), sessionCookieOptions());
     return response;
   } catch (error) {
-    console.error("Forced password reset failed", error);
+    logOperationalError("auth.force_password_reset.failed", error, { userId: user.id });
     return NextResponse.json({ ok: false, error: "Password reset service is unavailable right now." }, { status: 503 });
   }
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

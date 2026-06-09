@@ -22,11 +22,28 @@ test("teacher daily report parser accepts batched care entries", () => {
   if (!parsed.ok) assert.fail(parsed.error);
 
   assert.equal(parsed.report.date.getHours(), 12);
+  assert.deepEqual(parsed.report.childIds, ["child_1"]);
   assert.equal(parsed.report.sendToParent, true);
   assert.deepEqual(parsed.report.meals, [{ mealType: "Breakfast", food: "Oatmeal", amount: "All" }]);
   assert.equal(parsed.report.naps.length, 1);
   assert.equal(parsed.report.diapers.length, 1);
   assert.equal(parsed.report.activities[0]?.title, "Outdoor play");
+});
+
+test("teacher daily report parser accepts multi-child tablet batches", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    childIds: ["child_1", "child_2", " child_3 ", "child_2"],
+    date: "2026-06-04",
+    meals: [{ mealType: "Lunch", food: "Pasta", amount: "Most" }],
+    activities: [{ title: "Story time" }],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.equal(parsed.report.childId, "child_1");
+  assert.deepEqual(parsed.report.childIds, ["child_1", "child_2", "child_3"]);
+  assert.equal(parsed.report.meals.length, 1);
 });
 
 test("teacher daily report parser keeps legacy single-field payload support", () => {
@@ -74,4 +91,15 @@ test("teacher daily report parser limits batched entries", () => {
   if (parsed.ok) throw new Error("Expected batch limit validation to fail.");
   assert.equal(parsed.status, 400);
   assert.match(parsed.error, /at most 12 entries/);
+});
+
+test("teacher daily report parser limits selected children", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childIds: Array.from({ length: 41 }, (_, index) => `child_${index}`),
+  });
+
+  assert.equal(parsed.ok, false);
+  if (parsed.ok) throw new Error("Expected child batch validation to fail.");
+  assert.equal(parsed.status, 400);
+  assert.match(parsed.error, /at most 40 children/);
 });

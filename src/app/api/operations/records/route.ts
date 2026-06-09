@@ -11,6 +11,7 @@ import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staff
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -239,7 +240,7 @@ async function assertFamilyAccess(user: Awaited<ReturnType<typeof getCurrentUser
   return { ok: true as const, centerId: family.centerId };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -1433,7 +1434,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true, entity, mode, record: result, ...auditMetadata, ...(login ? { login } : {}) }, { status: id ? 200 : 201 });
 }
 
-export async function DELETE(request: NextRequest) {
+async function DELETEHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -1518,3 +1519,6 @@ export async function DELETE(request: NextRequest) {
 
   return NextResponse.json({ ok: false, error: `Delete is not supported for entity: ${entity}` }, { status: 400 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);
+export const DELETE = withApiLogging("DELETE", DELETEHandler);

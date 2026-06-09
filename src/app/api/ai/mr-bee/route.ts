@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canAccessCenter, getCurrentUser } from "@/lib/auth";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -33,7 +34,7 @@ function buildDraft({
   return `Hi ${familyName}, this is Kid City USA following up on your ${programText} inquiry for ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -97,3 +98,5 @@ export async function POST(request: NextRequest) {
     guardrailNote: aiSuggestion.guardrailNote,
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

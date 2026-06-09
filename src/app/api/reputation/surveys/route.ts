@@ -4,6 +4,7 @@ import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -15,7 +16,7 @@ function safeStatus(value: unknown) {
   return ["draft", "active", "paused", "closed", "archived"].includes(status) ? status : "active";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) {
@@ -67,3 +68,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, survey }, { status: id ? 200 : 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

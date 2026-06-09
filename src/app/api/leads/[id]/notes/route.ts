@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -13,7 +14,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -73,3 +74,5 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, note }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

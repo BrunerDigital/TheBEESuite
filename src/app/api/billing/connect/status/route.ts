@@ -6,6 +6,7 @@ import { getStripeSecretKey, readStripeConnectedAccountId, retrieveStripeConnect
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function jsonObject(value: unknown): Prisma.JsonObject {
@@ -14,7 +15,7 @@ function jsonObject(value: unknown): Prisma.JsonObject {
     : {};
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -103,3 +104,5 @@ export async function GET(request: NextRequest) {
     account: retrieved.account,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

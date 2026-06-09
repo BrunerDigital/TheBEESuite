@@ -7,6 +7,7 @@ import { parseOperationalDate } from "@/lib/date-guardrails";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -15,7 +16,7 @@ function clean(value: unknown) {
 
 const ATTENDANCE_STATUSES = new Set(["present", "absent", "checked_out"]);
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -129,3 +130,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, record, checkLog, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

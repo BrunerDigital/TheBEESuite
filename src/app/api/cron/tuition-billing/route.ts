@@ -12,6 +12,7 @@ import {
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function authorized(request: NextRequest) {
@@ -31,7 +32,7 @@ function numeric(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -193,3 +194,5 @@ export async function GET(request: NextRequest) {
     invoices,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

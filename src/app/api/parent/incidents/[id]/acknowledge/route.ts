@@ -4,13 +4,14 @@ import { canAcknowledgeIncident } from "@/lib/portal-guardrails";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+async function POSTHandler(_request: Request, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -62,3 +63,5 @@ export async function POST(_request: Request, context: RouteContext) {
 
   return NextResponse.json({ ok: true, incident: updated });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

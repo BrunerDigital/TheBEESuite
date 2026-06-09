@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function csvCell(value: unknown) {
@@ -13,7 +14,7 @@ function csvRow(values: unknown[]) {
   return values.map(csvCell).join(",");
 }
 
-export async function GET() {
+async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -161,3 +162,5 @@ export async function GET() {
     },
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

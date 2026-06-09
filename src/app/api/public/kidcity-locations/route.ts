@@ -9,6 +9,7 @@ import {
 } from "@/lib/active-school-locations";
 import { prisma } from "@/lib/prisma";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -71,23 +72,26 @@ async function getLiveLocations() {
     .sort(comparePublicKidCityLocations);
 }
 
-export async function GET() {
+async function GETHandler() {
   try {
     const locations = await getLiveLocations();
     if (locations.length) {
       return NextResponse.json({ locations }, { headers: responseHeaders });
     }
   } catch (error) {
-    console.error("Kid City public locations database lookup failed", error);
+    logOperationalError("public.kidcity_locations.lookup_failed", error);
   }
 
   const fallback = await loadStaticLocations();
   return NextResponse.json(fallback, { headers: responseHeaders });
 }
 
-export function OPTIONS() {
+function OPTIONSHandler() {
   return new NextResponse(null, {
     status: 204,
     headers: responseHeaders,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);
+export const OPTIONS = withApiLogging("OPTIONS", OPTIONSHandler);

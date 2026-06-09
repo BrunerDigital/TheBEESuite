@@ -7,6 +7,7 @@ import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { buildReviewRequestCopy, normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -56,7 +57,7 @@ async function familyRecipients(centerIds: string[], limit: number) {
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) {
@@ -217,3 +218,5 @@ export async function POST(request: NextRequest) {
     error: email.ok ? undefined : email.error || "Review request could not be queued.",
   }, { status: email.ok ? 201 : email.configured ? 502 : 503 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

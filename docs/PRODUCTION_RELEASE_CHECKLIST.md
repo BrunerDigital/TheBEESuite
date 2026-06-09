@@ -1,6 +1,6 @@
 # Production Release Checklist
 
-Last updated: June 1, 2026
+Last updated: June 9, 2026
 
 Use this before every production release that affects live schools.
 
@@ -17,12 +17,14 @@ Use this before every production release that affects live schools.
 - Run `npm run lint`.
 - Run `npm run typecheck`.
 - Run `npm test`.
+- Run `npm audit --omit=dev`.
 - Run `npm run test:smoke` against `https://thebeesuite.io` after the deployment is live.
 - Run `npm run build` or `npm run vercel-build`.
 - Review Prisma migrations for tenant/location scoping and destructive operations.
 - Confirm public mutation routes have validation, scope checks, and rate-limit strategy.
 - Confirm no secrets or live keys are committed.
 - Confirm any new user-facing text avoids legal/compliance guarantees.
+- Confirm security headers are present after deployment.
 
 ## 3. Data Safety
 

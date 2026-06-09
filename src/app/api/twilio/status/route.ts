@@ -7,13 +7,14 @@ import {
   validateTwilioSignatureAgainstConfiguredTokens,
 } from "@/lib/twilio-messaging";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const form = await request.formData();
   const params = formDataToRecord(form);
   const signatureMatch = await validateTwilioSignatureAgainstConfiguredTokens({
@@ -55,3 +56,5 @@ export async function POST(request: NextRequest) {
 
   return new Response(null, { status: 204 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -5,13 +5,14 @@ import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const loginIdentifier = clean(body.email).toLowerCase();
   const email = resolveLoginIdentifier(loginIdentifier);
@@ -74,3 +75,5 @@ export async function POST(request: NextRequest) {
   response.cookies.set(SESSION_COOKIE, createSessionToken(user), sessionCookieOptions());
   return response;
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

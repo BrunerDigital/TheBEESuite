@@ -52,7 +52,7 @@ Migration file:
 supabase/migrations/202605130001_initial_bee_suite.sql
 ```
 
-Before real production use, add RLS policies, tenant-scoped query enforcement, and storage bucket policies.
+Before real production use, apply all Prisma migrations, including the Supabase public API hardening migration, Stripe webhook hardening migration, and tenant integration credential migration. Then run a formal Supabase advisor/security review against the live project and confirm Supabase Data API settings do not expose childcare records through `anon` or `authenticated` roles.
 
 ## 3. Vercel
 

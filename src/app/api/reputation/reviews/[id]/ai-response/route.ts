@@ -4,13 +4,14 @@ import { writeAuditLog } from "@/lib/audit";
 import { draftReviewResponse } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function POST(_request: NextRequest, context: RouteContext) {
+async function POSTHandler(_request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) {
@@ -52,3 +53,5 @@ export async function POST(_request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, review: updated, draft, guardrailNote });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

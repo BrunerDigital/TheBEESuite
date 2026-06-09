@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { createStripeAccountLink, readStripeConnectedAccountId } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function requestBaseUrl(request: NextRequest) {
@@ -23,7 +24,7 @@ function settingsUrl(baseUrl: string, centerId?: string, status = "refresh_faile
   return url;
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const baseUrl = requestBaseUrl(request);
   const user = await getCurrentUser();
   if (!user) {
@@ -97,3 +98,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.redirect(link.url);
 }
+
+export const GET = withApiLogging("GET", GETHandler);

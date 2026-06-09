@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -14,7 +15,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+async function PATCHHandler(request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -117,3 +118,5 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, media: updated });
 }
+
+export const PATCH = withApiLogging("PATCH", PATCHHandler);

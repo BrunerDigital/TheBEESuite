@@ -12,6 +12,7 @@ import {
   type RegistrationPacketPayload,
 } from "@/lib/registration-packet";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RegistrationPayload = RegistrationPacketPayload;
@@ -171,7 +172,7 @@ function addDays(days: number) {
   return date;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   if (!checkRateLimit(requestKey(request))) {
     return NextResponse.json({ ok: false, error: "Too many registration attempts. Please try again shortly." }, { status: 429 });
   }
@@ -453,7 +454,9 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Online registration failed", error);
+    logOperationalError("registration.submit_failed", error);
     return NextResponse.json({ ok: false, error: "Registration could not be submitted. Please try again or contact the school." }, { status: 500 });
   }
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -19,7 +20,7 @@ function reviewStatus(value: unknown) {
   return ["pending", "reviewed", "needs_follow_up", "closed"].includes(next) ? next : "reviewed";
 }
 
-export async function POST(request: NextRequest, context: RouteContext) {
+async function POSTHandler(request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -100,3 +101,5 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, incident: updated, complianceTask });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

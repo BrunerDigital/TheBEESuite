@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
-import { sendEmail, sendSms } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
@@ -13,9 +11,17 @@ import {
   normalizeMessageBroadcastSegment,
 } from "@/lib/message-segmentation";
 import { canAccessFamilyRecord, canCreateFamilyMessage, canMessageClassroomFamily } from "@/lib/portal-guardrails";
+import {
+  deliverNotificationExternalChannels,
+  resolveNotificationDeliveryRecipientChannels,
+  type NotificationDeliveryRecipient,
+  type NotificationDeliverySummary,
+} from "@/lib/notification-delivery";
+import type { NotificationPreferenceRecord } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
-import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
+import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -57,6 +63,98 @@ function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort();
 }
 
+function familyNotificationDeliveryRecipients(family: MessageFamilyForDelivery): NotificationDeliveryRecipient[] {
+  return [
+    {
+      role: UserRole.PARENT_GUARDIAN,
+      email: family.billingEmail,
+      smsOptIn: false,
+    },
+    ...family.guardians.map((guardian) => ({
+      userId: guardian.userId,
+      role: UserRole.PARENT_GUARDIAN,
+      email: guardian.email,
+      phone: guardian.phone,
+      smsOptIn: guardian.preferredCommunication === "sms",
+    })),
+  ];
+}
+
+function leadershipNotificationDeliveryRecipients(
+  leaders: Array<{ id: string; email: string; role: string; phone: string | null }>,
+): NotificationDeliveryRecipient[] {
+  return leaders.map((leader) => ({
+    userId: leader.id,
+    role: leader.role,
+    email: leader.email,
+    phone: leader.phone,
+  }));
+}
+
+function pushEnabledForMessageRecipient(
+  recipient: NotificationDeliveryRecipient,
+  preferences: NotificationPreferenceRecord[],
+) {
+  return resolveNotificationDeliveryRecipientChannels({
+    type: "messages",
+    recipient,
+    preferences,
+  }).pushEnabled;
+}
+
+function emptyDeliverySummary({
+  emailRequested,
+  smsRequested,
+}: {
+  emailRequested: boolean;
+  smsRequested: boolean;
+}): NotificationDeliverySummary {
+  return {
+    email: {
+      requested: emailRequested,
+      attempted: 0,
+      sent: 0,
+      configured: false,
+      provider: "sendgrid",
+      error: emailRequested ? "No email-enabled recipients are available." : null,
+      recipients: [],
+    },
+    sms: {
+      requested: smsRequested,
+      attempted: 0,
+      sent: 0,
+      configured: false,
+      provider: "twilio",
+      error: smsRequested ? "No SMS-enabled recipients are available." : null,
+      recipients: [],
+      results: [],
+    },
+  };
+}
+
+function combineDeliverySummaries(summaries: NotificationDeliverySummary[]) {
+  const smsResults = summaries.flatMap((summary) => summary.sms.results);
+  return {
+    email: {
+      attempted: summaries.reduce((total, summary) => total + summary.email.attempted, 0),
+      sent: summaries.reduce((total, summary) => total + summary.email.sent, 0),
+      configured: summaries.some((summary) => summary.email.configured),
+      provider: "sendgrid",
+      error: summaries.find((summary) => summary.email.error)?.email.error ?? null,
+      recipients: uniqueStrings(summaries.flatMap((summary) => summary.email.recipients)),
+    },
+    sms: {
+      attempted: summaries.reduce((total, summary) => total + summary.sms.attempted, 0),
+      sent: summaries.reduce((total, summary) => total + summary.sms.sent, 0),
+      configured: summaries.some((summary) => summary.sms.configured),
+      provider: "twilio",
+      error: summaries.find((summary) => summary.sms.error)?.sms.error ?? null,
+      recipients: uniqueStrings(summaries.flatMap((summary) => summary.sms.recipients)),
+      results: smsResults,
+    },
+  };
+}
+
 function roleLabel(role: string) {
   return role.replaceAll("_", " ").toLowerCase();
 }
@@ -91,7 +189,7 @@ function buildTemplateContext({
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -241,27 +339,21 @@ export async function POST(request: NextRequest) {
 
     const statusCallbackUrl = sendSmsCopy ? twilioStatusCallbackUrl(request) : null;
     const broadcastParentUserIds = uniqueStrings(targetFamilies.flatMap((familyRow) => familyRow.guardians.map((guardian) => guardian.userId)));
-    const broadcastNotificationPreferences = sendPushCopy && broadcastParentUserIds.length
+    const broadcastNotificationPreferences: NotificationPreferenceRecord[] = (sendEmailCopy || sendSmsCopy || sendPushCopy)
       ? await prisma.notificationPreference.findMany({
           where: {
             tenantId: user.tenantId,
             type: "messages",
             OR: [
-              { userId: { in: broadcastParentUserIds } },
+              ...(broadcastParentUserIds.length ? [{ userId: { in: broadcastParentUserIds } }] : []),
               { role: UserRole.PARENT_GUARDIAN },
             ],
           },
-          select: { userId: true, pushEnabled: true },
+          select: { userId: true, role: true, type: true, emailEnabled: true, smsEnabled: true, pushEnabled: true },
         })
       : [];
-    const pushDisabledUserIds = new Set(
-      broadcastNotificationPreferences
-        .filter((preference) => preference.userId && !preference.pushEnabled)
-        .map((preference) => preference.userId as string),
-    );
     const createdMessages = [];
-    const emailResults = [];
-    const smsResults = [];
+    const deliverySummaries: NotificationDeliverySummary[] = [];
     const pushNotifications = [];
 
     for (const targetFamily of targetFamilies) {
@@ -304,67 +396,35 @@ export async function POST(request: NextRequest) {
       });
       createdMessages.push(created);
 
-      const parentEmails = uniqueStrings([targetFamily.billingEmail, ...targetFamily.guardians.map((guardian) => guardian.email)]);
-      if (sendEmailCopy) {
-        const email = await sendEmail({
-          to: parentEmails,
-          subject: `Message from ${user.name}: ${renderedSubject}`,
-          text: renderedMessage,
-          replyTo: user.email,
-          fromName: "The BEE Suite",
-          categories: ["communication_email", "broadcast"],
-          customArgs: { messageId: created.id, familyId: targetFamily.id, centerId: targetFamily.centerId },
-          tenantId: user.tenantId,
-        });
-        await recordEmailDeliveryAttempt({
-          tenantId: user.tenantId,
-          centerId: targetFamily.centerId,
-          messageId: created.id,
-          purpose: "communication_email",
-          to: parentEmails,
-          subject: `Message from ${user.name}: ${renderedSubject}`,
-          text: renderedMessage,
-          replyTo: user.email,
-          result: email,
-          metadata: { familyId: targetFamily.id, broadcast: true },
-        });
-        emailResults.push(email);
-      }
-
-      if (sendSmsCopy) {
-        const smsRecipients = uniqueSmsRecipients(
-          targetFamily.guardians
-            .filter((guardian) => guardian.preferredCommunication === "sms")
-            .map((guardian) => guardian.phone),
-        );
-        for (const to of smsRecipients) {
-          const result = await sendSms({ to, body: renderedMessage, statusCallbackUrl, tenantId: user.tenantId });
-          await recordCommunicationSmsDeliveryAttempt({
-            tenantId: user.tenantId,
-            centerId: targetFamily.centerId,
-            messageId: created.id,
-            to,
-            body: renderedMessage,
-            statusCallbackUrl,
-            result,
-          });
-          smsResults.push({
-            ok: result.ok,
-            configured: result.configured,
-            provider: result.provider,
-            id: result.id ?? null,
-            error: result.error ?? null,
-          });
-        }
-      }
+      const delivery = await deliverNotificationExternalChannels({
+        tenantId: user.tenantId,
+        centerId: targetFamily.centerId,
+        messageId: created.id,
+        type: "messages",
+        title: `Message from ${user.name}: ${renderedSubject}`,
+        body: renderedMessage,
+        recipients: familyNotificationDeliveryRecipients(targetFamily),
+        preferences: broadcastNotificationPreferences,
+        emailRequested: sendEmailCopy,
+        smsRequested: sendSmsCopy,
+        replyTo: user.email,
+        fromName: "The BEE Suite",
+        statusCallbackUrl,
+        emailPurpose: "communication_email",
+        smsPurpose: "communication_sms",
+        metadata: { familyId: targetFamily.id, broadcast: true },
+      });
+      deliverySummaries.push(delivery);
 
       if (sendPushCopy) {
-        const parentUserIds = uniqueStrings(targetFamily.guardians.map((guardian) => guardian.userId));
-        for (const userId of parentUserIds) {
-          if (!pushDisabledUserIds.has(userId)) {
+        for (const guardian of targetFamily.guardians) {
+          if (guardian.userId && pushEnabledForMessageRecipient({
+            userId: guardian.userId,
+            role: UserRole.PARENT_GUARDIAN,
+          }, broadcastNotificationPreferences)) {
             pushNotifications.push(await prisma.notification.create({
               data: {
-                userId,
+                userId: guardian.userId,
                 title: `New school message: ${renderedSubject}`,
                 body: `${user.name}: ${renderedMessage}`,
                 type: "message",
@@ -375,6 +435,7 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+    const deliveryTotals = combineDeliverySummaries(deliverySummaries);
 
     await writeAuditLog(user, {
       centerId: user.primaryCenterId,
@@ -389,10 +450,10 @@ export async function POST(request: NextRequest) {
         segment: broadcastSegment,
         segmentSummary: broadcastSegmentSummary(broadcastSegment),
         emailCopyRequested: sendEmailCopy,
-        emailCopySent: emailResults.filter((result) => result.ok).length,
+        emailCopySent: deliveryTotals.email.sent,
         smsCopyRequested: sendSmsCopy,
-        smsCopyAttempted: smsResults.length,
-        smsCopySent: smsResults.filter((result) => result.ok).length,
+        smsCopyAttempted: deliveryTotals.sms.attempted,
+        smsCopySent: deliveryTotals.sms.sent,
         pushCopyRequested: sendPushCopy,
         pushCopyQueued: pushNotifications.length,
         assignedToId,
@@ -406,18 +467,10 @@ export async function POST(request: NextRequest) {
       messageCount: createdMessages.length,
       messages: createdMessages,
       email: {
-        attempted: sendEmailCopy ? targetFamilies.length : 0,
-        sent: emailResults.filter((result) => result.ok).length,
-        configured: emailResults.some((result) => result.configured),
-        provider: "sendgrid",
+        ...deliveryTotals.email,
       },
       sms: {
-        attempted: smsResults.length,
-        sent: smsResults.filter((result) => result.ok).length,
-        configured: smsResults.some((result) => result.configured),
-        provider: "twilio",
-        error: sendSmsCopy && smsResults.length === 0 ? "No SMS-preferred guardian phone numbers are available." : smsResults.find((result) => result.error)?.error ?? null,
-        results: smsResults,
+        ...deliveryTotals.sms,
       },
       push: {
         attempted: pushNotifications.length,
@@ -577,30 +630,30 @@ export async function POST(request: NextRequest) {
   const parentUserIds = !senderIsParent && family
     ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value))))
     : [];
-  const parentEmails = family
-    ? [family.billingEmail, ...family.guardians.map((guardian) => guardian.email)].filter((value): value is string => Boolean(value))
-    : [];
 
-  const notificationUserIds = sendPushCopy
-    ? [...directors.map((director) => director.id), ...parentUserIds]
-    : [];
-  const notificationPreferenceRows = notificationUserIds.length
+  const notificationUserIds = [...directors.map((director) => director.id), ...parentUserIds];
+  const notificationPreferenceRoles = senderIsParent
+    ? [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR]
+    : [UserRole.PARENT_GUARDIAN];
+  const notificationPreferenceRows: NotificationPreferenceRecord[] = sendEmailCopy || sendSmsCopy || sendPushCopy
     ? await prisma.notificationPreference.findMany({
         where: {
           tenantId: user.tenantId,
           type: "messages",
           OR: [
-            { userId: { in: notificationUserIds } },
-            { role: { in: senderIsParent ? [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] : [UserRole.PARENT_GUARDIAN] } },
+            ...(notificationUserIds.length ? [{ userId: { in: notificationUserIds } }] : []),
+            { role: { in: notificationPreferenceRoles } },
           ],
         },
-        select: { userId: true, role: true, pushEnabled: true },
+        select: { userId: true, role: true, type: true, emailEnabled: true, smsEnabled: true, pushEnabled: true },
       })
     : [];
-  const pushDisabledUserIds = new Set(notificationPreferenceRows.filter((preference) => preference.userId && !preference.pushEnabled).map((preference) => preference.userId as string));
   const pushNotifications = await Promise.all([
     ...directors.map((director) =>
-      sendPushCopy && !pushDisabledUserIds.has(director.id) ? prisma.notification.create({
+      sendPushCopy && pushEnabledForMessageRecipient({
+        userId: director.id,
+        role: director.role,
+      }, notificationPreferenceRows) ? prisma.notification.create({
         data: {
           userId: director.id,
           title: `New parent message: ${subject}`,
@@ -610,10 +663,13 @@ export async function POST(request: NextRequest) {
         },
       }) : null,
     ),
-    ...parentUserIds.map((userId) =>
-      sendPushCopy && !pushDisabledUserIds.has(userId) ? prisma.notification.create({
+    ...(family?.guardians ?? []).map((guardian) =>
+      sendPushCopy && guardian.userId && pushEnabledForMessageRecipient({
+        userId: guardian.userId,
+        role: UserRole.PARENT_GUARDIAN,
+      }, notificationPreferenceRows) ? prisma.notification.create({
         data: {
-          userId,
+          userId: guardian.userId,
           title: `New school message: ${subject}`,
           body: `${user.name}: ${message}`,
           type: "message",
@@ -634,74 +690,34 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  const emailRecipients = senderIsParent ? directors.map((director) => director.email) : parentEmails;
   const emailSubject = senderIsParent && family ? `Portal message from ${family.name}: ${subject}` : `Message from ${user.name}: ${subject}`;
   const emailReplyTo = senderIsParent ? family?.billingEmail : user.email;
-  const email = sendEmailCopy && family
-    ? await sendEmail({
-        to: emailRecipients,
-        subject: emailSubject,
-        text: message,
+  const deliveryRecipients = family
+    ? senderIsParent
+      ? leadershipNotificationDeliveryRecipients(directors)
+      : familyNotificationDeliveryRecipients(family)
+    : [];
+  const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
+  const delivery = family
+    ? await deliverNotificationExternalChannels({
+        tenantId: user.tenantId,
+        centerId: family.centerId,
+        messageId: created.id,
+        type: "messages",
+        title: emailSubject,
+        body: message,
+        recipients: deliveryRecipients,
+        preferences: notificationPreferenceRows,
+        emailRequested: sendEmailCopy,
+        smsRequested: sendSmsCopy,
         replyTo: emailReplyTo,
         fromName: "The BEE Suite",
-      categories: ["communication_email"],
-      customArgs: { messageId: created.id, familyId: family.id, centerId: family.centerId },
-      tenantId: user.tenantId,
-    })
-    : { ok: false, configured: false, provider: "sendgrid" as const };
-  if (sendEmailCopy && family) {
-    await recordEmailDeliveryAttempt({
-      tenantId: user.tenantId,
-      centerId: family.centerId,
-      messageId: created.id,
-      purpose: "communication_email",
-      to: emailRecipients,
-      subject: emailSubject,
-      text: message,
-      replyTo: emailReplyTo,
-      result: email,
-      metadata: { familyId: family.id },
-    });
-  }
-  const smsRecipients = sendSmsCopy && family && !senderIsParent
-    ? uniqueSmsRecipients(
-        family.guardians
-          .filter((guardian) => guardian.preferredCommunication === "sms")
-          .map((guardian) => guardian.phone),
-      )
-    : [];
-  const statusCallbackUrl = smsRecipients.length ? twilioStatusCallbackUrl(request) : null;
-  const smsResults = await Promise.all(
-    smsRecipients.map(async (to) => {
-      const result = await sendSms({ to, body: message, statusCallbackUrl, tenantId: user.tenantId });
-      await recordCommunicationSmsDeliveryAttempt({
-        tenantId: user.tenantId,
-        centerId: family?.centerId ?? null,
-        messageId: created.id,
-        to,
-        body: message,
         statusCallbackUrl,
-        result,
-      });
-      return {
-        ok: result.ok,
-        configured: result.configured,
-        provider: result.provider,
-        id: result.id ?? null,
-        error: result.error ?? null,
-      };
-    }),
-  );
-  const sms = {
-    attempted: smsRecipients.length,
-    sent: smsResults.filter((result) => result.ok).length,
-    configured: smsResults.some((result) => result.configured),
-    provider: "twilio",
-    error: sendSmsCopy && !senderIsParent && family && smsRecipients.length === 0
-      ? "No SMS-preferred guardian phone numbers are available."
-      : smsResults.find((result) => result.error)?.error ?? null,
-    results: smsResults,
-  };
+        emailPurpose: "communication_email",
+        smsPurpose: "communication_sms",
+        metadata: { familyId: family.id },
+      })
+    : emptyDeliverySummary({ emailRequested: sendEmailCopy, smsRequested: sendSmsCopy });
 
   await writeAuditLog(user, {
     centerId: family?.centerId ?? user.primaryCenterId,
@@ -713,10 +729,12 @@ export async function POST(request: NextRequest) {
       channel,
       priority,
       direction: senderIsParent ? "parent_to_school" : family ? "school_to_parent" : "internal",
-      emailCopySent: email.ok,
+      emailCopyRequested: sendEmailCopy,
+      emailCopyAttempted: delivery.email.attempted,
+      emailCopySent: delivery.email.sent,
       smsCopyRequested: sendSmsCopy,
-      smsCopyAttempted: sms.attempted,
-      smsCopySent: sms.sent,
+      smsCopyAttempted: delivery.sms.attempted,
+      smsCopySent: delivery.sms.sent,
       pushCopyRequested: sendPushCopy,
       pushCopyQueued: pushNotifications.filter(Boolean).length,
       assignedToId,
@@ -727,8 +745,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     message: created,
-    email,
-    sms,
+    email: delivery.email,
+    sms: delivery.sms,
     push: {
       attempted: notificationUserIds.length,
       queued: pushNotifications.filter(Boolean).length,
@@ -737,3 +755,5 @@ export async function POST(request: NextRequest) {
     },
   }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

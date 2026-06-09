@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, ShieldAlert, Trash2, UserX, Utensils } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ type ChildOption = {
   classroom: { id: string; name: string } | null;
   family?: { custodyNotes: string | null } | null;
   attendance?: AttendanceSnapshot;
+  dailyReport?: DailyReportSnapshot | null;
 };
 
 type Props = {
@@ -61,11 +62,30 @@ type AttendanceSnapshot = {
   lastMarkedAt: string | Date | null;
 };
 
+type DailyReportSnapshot = {
+  status: "not_started" | "draft" | "sent" | "queued";
+  latestReportAt: string | Date | null;
+  sentAt: string | Date | null;
+  entries: {
+    meals: number;
+    naps: number;
+    diapers: number;
+    activities: number;
+  };
+};
+
 const emptyAttendance: AttendanceSnapshot = {
   status: "not_marked",
   latestLogType: null,
   latestLogAt: null,
   lastMarkedAt: null,
+};
+
+const emptyDailyReport: DailyReportSnapshot = {
+  status: "not_started",
+  latestReportAt: null,
+  sentAt: null,
+  entries: { meals: 0, naps: 0, diapers: 0, activities: 0 },
 };
 
 type MealDraft = {
@@ -133,6 +153,27 @@ function attendanceDetail(snapshot: AttendanceSnapshot) {
   return `Marked at ${time}`;
 }
 
+function dailyReportLabel(snapshot: DailyReportSnapshot) {
+  if (snapshot.status === "queued") return "Report queued";
+  if (snapshot.status === "sent") return "Report sent";
+  if (snapshot.status === "draft") return "Report draft";
+  return "No report";
+}
+
+function dailyReportDetail(snapshot: DailyReportSnapshot) {
+  const entryCount = snapshot.entries.meals + snapshot.entries.naps + snapshot.entries.diapers + snapshot.entries.activities;
+  const time = formatTime(snapshot.sentAt ?? snapshot.latestReportAt);
+  const entryLabel = `${entryCount} care entr${entryCount === 1 ? "y" : "ies"}`;
+  return time ? `${entryLabel} · ${time}` : entryLabel;
+}
+
+function dailyReportBadgeVariant(snapshot: DailyReportSnapshot): "default" | "secondary" | "outline" | "destructive" {
+  if (snapshot.status === "sent") return "default";
+  if (snapshot.status === "queued") return "secondary";
+  if (snapshot.status === "draft") return "outline";
+  return "outline";
+}
+
 function createMealDraft(): MealDraft {
   return { id: draftId("meal"), mealType: "Lunch", food: "", amount: "" };
 }
@@ -152,7 +193,9 @@ function createActivityDraft(): ActivityDraft {
 export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null, classroomRatios = [] }: Props) {
   const firstChild = roster[0]?.id ?? "";
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
+  const [selectedDailyReportChildIds, setSelectedDailyReportChildIds] = useState<string[]>(() => firstChild ? [firstChild] : []);
   const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
+  const [dailyReportOverrides, setDailyReportOverrides] = useState<Record<string, DailyReportSnapshot>>({});
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [attendanceStatus, setAttendanceStatus] = useState("present");
@@ -180,6 +223,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   const ratioByClassroomId = useMemo(() => {
     return new Map(classroomRatios.map((classroom) => [classroom.classroomId, classroom]));
   }, [classroomRatios]);
+  const selectedDailyReportChildren = useMemo(() => {
+    const selectedIds = new Set(selectedDailyReportChildIds);
+    return roster.filter((child) => selectedIds.has(child.id));
+  }, [roster, selectedDailyReportChildIds]);
+  const activeDailyReportChildIds = selectedDailyReportChildren.map((child) => child.id);
   const byClassroom = useMemo(() => {
     const grouped = roster.reduce<Record<string, { id: string | null; name: string; children: ChildOption[] }>>((acc, child) => {
       const key = child.classroom?.id ?? "unassigned";
@@ -334,6 +382,48 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
     return attendanceOverrides[child.id] ?? child.attendance ?? emptyAttendance;
   }
 
+  function dailyReportFor(child: ChildOption) {
+    return dailyReportOverrides[child.id] ?? child.dailyReport ?? emptyDailyReport;
+  }
+
+  function chooseChild(childId: string) {
+    setSelectedChildId(childId);
+    setSelectedDailyReportChildIds((current) => current.length > 1 ? current : [childId]);
+  }
+
+  function setDailyReportTargets(childIds: string[]) {
+    const rosterIds = new Set(roster.map((child) => child.id));
+    const nextIds = Array.from(new Set(childIds.filter((childId) => rosterIds.has(childId)))).slice(0, 40);
+    setSelectedDailyReportChildIds(nextIds);
+    if (nextIds[0]) setSelectedChildId(nextIds[0]);
+  }
+
+  function toggleDailyReportTarget(childId: string) {
+    setSelectedDailyReportChildIds((current) => {
+      if (current.includes(childId)) return current.filter((id) => id !== childId);
+      return [...current, childId].slice(0, 40);
+    });
+    setSelectedChildId(childId);
+  }
+
+  function selectPresentDailyReports() {
+    const presentChildIds = roster
+      .filter((child) => {
+        const attendance = attendanceFor(child);
+        return attendance.latestLogType === "check_in" || attendance.status === "present";
+      })
+      .map((child) => child.id);
+    if (!presentChildIds.length) {
+      showError("No children are currently marked present.");
+      return;
+    }
+    setDailyReportTargets(presentChildIds);
+  }
+
+  function selectClassroomDailyReports(children: ChildOption[]) {
+    setDailyReportTargets(children.map((child) => child.id));
+  }
+
   function showStatus(next: string) {
     setError("");
     setStatus(next);
@@ -385,6 +475,87 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
     setActivityRows([createActivityDraft()]);
   }
 
+  function buildDailyReportEntries() {
+    const meals = mealRows
+      .filter((row) => row.food.trim())
+      .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
+    const naps = napRows
+      .filter((row) => row.startsAt)
+      .map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt }));
+    const diapers = diaperRows
+      .filter((row) => row.type.trim())
+      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
+    const activities = activityRows
+      .filter((row) => row.title.trim())
+      .map((row) => ({ title: row.title, notes: row.notes }));
+
+    return { meals, naps, diapers, activities };
+  }
+
+  function markDailyReportsLocally(childIds: string[], status: DailyReportSnapshot["status"]) {
+    const entries = buildDailyReportEntries();
+    const entryCounts = {
+      meals: entries.meals.length,
+      naps: entries.naps.length,
+      diapers: entries.diapers.length,
+      activities: entries.activities.length,
+    };
+    const now = new Date();
+    setDailyReportOverrides((current) => {
+      const next = { ...current };
+      for (const childId of childIds) {
+        next[childId] = {
+          status,
+          latestReportAt: `${reportDate}T12:00:00`,
+          sentAt: status === "sent" ? now : null,
+          entries: entryCounts,
+        };
+      }
+      return next;
+    });
+  }
+
+  function addMealPreset(mealType: string) {
+    const nextRow = { ...createMealDraft(), mealType };
+    setMealRows((current) => current.length === 1 && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
+  }
+
+  function addDiaperPreset(type: string) {
+    const nextRow = { ...createDiaperDraft(), type };
+    setDiaperRows((current) => current.length === 1 && !current[0].type.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
+  }
+
+  function addActivityPreset(title: string) {
+    const nextRow = { ...createActivityDraft(), title };
+    setActivityRows((current) => current.length === 1 && !current[0].title.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
+  }
+
+  function startNapNow() {
+    const nextRow = { ...createNapDraft(), startsAt: dateTimeInputValue() };
+    setNapRows((current) => current.length === 1 && !current[0].startsAt && !current[0].endsAt ? [nextRow] : [...current, nextRow]);
+  }
+
+  function endLatestNapNow() {
+    let openNapIndex = -1;
+    for (let index = napRows.length - 1; index >= 0; index -= 1) {
+      if (napRows[index].startsAt && !napRows[index].endsAt) {
+        openNapIndex = index;
+        break;
+      }
+    }
+    if (openNapIndex < 0) {
+      showError("Start a nap before setting the end time.");
+      return;
+    }
+    setNapRows((current) => {
+      const next = [...current];
+      if (next[openNapIndex]) {
+        next[openNapIndex] = { ...next[openNapIndex], endsAt: dateTimeInputValue() };
+      }
+      return next;
+    });
+  }
+
   function submitAttendance(options: { childId?: string; status?: string; logType?: string; label?: string } = {}) {
     const targetChildId = options.childId ?? selectedChild?.id;
     const targetChildName = roster.find((child) => child.id === targetChildId)?.fullName ?? selectedChild?.fullName ?? "Child";
@@ -420,38 +591,41 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function submitDailyReport() {
+    const targetChildIds = activeDailyReportChildIds;
+    if (!targetChildIds.length) {
+      showError("Choose at least one child for the daily report.");
+      return;
+    }
     startTransition(async () => {
-      const meals = mealRows
-        .filter((row) => row.food.trim())
-        .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
-      const naps = napRows
-        .filter((row) => row.startsAt)
-        .map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt }));
-      const diapers = diaperRows
-        .filter((row) => row.type.trim())
-        .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
-      const activities = activityRows
-        .filter((row) => row.title.trim())
-        .map((row) => ({ title: row.title, notes: row.notes }));
+      const entries = buildDailyReportEntries();
+      const targetLabel = targetChildIds.length === 1
+        ? `${roster.find((child) => child.id === targetChildIds[0])?.fullName ?? "Child"} daily report`
+        : `${targetChildIds.length} daily reports`;
       await postJsonOrQueue({
         endpoint: "/api/teacher/daily-reports",
         body: {
-          childId: selectedChild?.id,
+          childId: targetChildIds[0],
+          childIds: targetChildIds,
           date: `${reportDate}T12:00:00`,
           mood,
           teacherNote,
-          meals,
-          naps,
-          diapers,
-          activities,
+          meals: entries.meals,
+          naps: entries.naps,
+          diapers: entries.diapers,
+          activities: entries.activities,
           suppliesNeeded,
           sendToParent,
         },
-        label: `${selectedChild?.fullName ?? "Child"} daily report`,
-        onQueued: resetDailyReportDrafts,
-        onSuccess: () => {
+        label: targetLabel,
+        onQueued: () => {
+          markDailyReportsLocally(targetChildIds, "queued");
           resetDailyReportDrafts();
-          showStatus(sendToParent ? "Daily report saved for parent view." : "Daily report saved as an internal draft.");
+        },
+        onSuccess: () => {
+          markDailyReportsLocally(targetChildIds, sendToParent ? "sent" : "draft");
+          resetDailyReportDrafts();
+          const reportLabel = targetChildIds.length === 1 ? "Daily report" : `${targetChildIds.length} daily reports`;
+          showStatus(sendToParent ? `${reportLabel} saved for parent view.` : `${reportLabel} saved as internal draft${targetChildIds.length === 1 ? "" : "s"}.`);
         },
       });
     });
@@ -502,6 +676,10 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       showStatus(json?.warning || "Photo shared to the parent portal.");
     });
   }
+
+  const activeDailyReportChildren = activeDailyReportChildIds
+    .map((childId) => roster.find((child) => child.id === childId))
+    .filter((child): child is ChildOption => Boolean(child));
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
@@ -626,9 +804,36 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                     </div>
                   ) : null}
                 </div>
-                {ratioWarning ? (
-                  <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
-                ) : null}
+                <div className="flex flex-wrap justify-end gap-1">
+                  <Button type="button" size="xs" variant="outline" onClick={() => selectClassroomDailyReports(classroom.children)}>
+                    <Users data-icon="inline-start" />
+                    Room
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={() => {
+                      const presentChildIds = classroom.children
+                        .filter((child) => {
+                          const attendance = attendanceFor(child);
+                          return attendance.latestLogType === "check_in" || attendance.status === "present";
+                        })
+                        .map((child) => child.id);
+                      if (!presentChildIds.length) {
+                        showError(`No present children in ${classroom.name}.`);
+                        return;
+                      }
+                      setDailyReportTargets(presentChildIds);
+                    }}
+                  >
+                    <ClipboardCheck data-icon="inline-start" />
+                    Present
+                  </Button>
+                  {ratioWarning ? (
+                    <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
+                  ) : null}
+                </div>
               </div>
               {ratioWarning && ratioWarning.status !== "healthy" ? (
                 <Alert variant={ratioWarning.tone === "destructive" ? "destructive" : "default"} className="mb-3">
@@ -640,13 +845,15 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
               <div className="grid gap-2">
                 {classroom.children.slice(0, 12).map((child) => {
                   const attendance = attendanceFor(child);
+                  const dailyReport = dailyReportFor(child);
                   const isCheckedIn = attendance.latestLogType === "check_in";
+                  const isReportTarget = selectedDailyReportChildIds.includes(child.id);
                   return (
                     <div
                       key={child.id}
                       className={`rounded-lg border p-2 text-sm transition ${selectedChild?.id === child.id ? "border-primary bg-primary/10" : "bg-card/40"}`}
                     >
-                      <button type="button" className="flex w-full items-start justify-between gap-2 text-left" onClick={() => setSelectedChildId(child.id)}>
+                      <button type="button" className="flex w-full items-start justify-between gap-2 text-left" onClick={() => chooseChild(child.id)}>
                         <span className="min-w-0">
                           <span className="font-medium">{child.fullName}</span>
                           <span className="ml-2 text-xs text-muted-foreground">{child.ageGroup}</span>
@@ -656,54 +863,74 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                             </span>
                           ) : null}
                         </span>
-                        <Badge variant="outline" className="shrink-0">{attendanceLabel(attendance)}</Badge>
+                        <span className="flex shrink-0 flex-col items-end gap-1">
+                          <Badge variant="outline">{attendanceLabel(attendance)}</Badge>
+                          <Badge variant={dailyReportBadgeVariant(dailyReport)}>{dailyReportLabel(dailyReport)}</Badge>
+                        </span>
                       </button>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="size-3" />
-                          {attendanceDetail(attendance)}
+                      <div className="mt-2 grid gap-2">
+                        <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="flex min-w-0 items-center gap-1">
+                            <Clock className="size-3" />
+                            {attendanceDetail(attendance)}
+                          </span>
+                          <span className="flex min-w-0 items-center gap-1">
+                            <BookOpen className="size-3" />
+                            {dailyReportDetail(dailyReport)}
+                          </span>
                         </span>
-                        <span className="flex flex-wrap gap-1">
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            disabled={isPending || isCheckedIn}
-                            onClick={() => {
-                              setSelectedChildId(child.id);
-                              submitAttendance({ childId: child.id, status: "present", logType: "check_in", label: `${child.fullName} checked in.` });
-                            }}
-                          >
-                            <LogIn data-icon="inline-start" />
-                            In
-                          </Button>
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            disabled={isPending || !isCheckedIn}
-                            onClick={() => {
-                              setSelectedChildId(child.id);
-                              submitAttendance({ childId: child.id, status: "checked_out", logType: "check_out", label: `${child.fullName} checked out.` });
-                            }}
-                          >
-                            <LogOut data-icon="inline-start" />
-                            Out
-                          </Button>
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="outline"
-                            disabled={isPending || isCheckedIn || attendance.status === "absent"}
-                            onClick={() => {
-                              setSelectedChildId(child.id);
-                              submitAttendance({ childId: child.id, status: "absent", logType: "", label: `${child.fullName} marked absent.` });
-                            }}
-                          >
-                            <UserX data-icon="inline-start" />
-                            Absent
-                          </Button>
-                        </span>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label className="flex h-6 items-center gap-1 rounded-md border bg-background px-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={isReportTarget}
+                              onChange={() => toggleDailyReportTarget(child.id)}
+                              aria-label={`Include ${child.fullName} in daily report batch`}
+                            />
+                            Daily
+                          </label>
+                          <span className="flex flex-wrap gap-1">
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={isPending || isCheckedIn}
+                              onClick={() => {
+                                chooseChild(child.id);
+                                submitAttendance({ childId: child.id, status: "present", logType: "check_in", label: `${child.fullName} checked in.` });
+                              }}
+                            >
+                              <LogIn data-icon="inline-start" />
+                              In
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={isPending || !isCheckedIn}
+                              onClick={() => {
+                                chooseChild(child.id);
+                                submitAttendance({ childId: child.id, status: "checked_out", logType: "check_out", label: `${child.fullName} checked out.` });
+                              }}
+                            >
+                              <LogOut data-icon="inline-start" />
+                              Out
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={isPending || isCheckedIn || attendance.status === "absent"}
+                              onClick={() => {
+                                chooseChild(child.id);
+                                submitAttendance({ childId: child.id, status: "absent", logType: "", label: `${child.fullName} marked absent.` });
+                              }}
+                            >
+                              <UserX data-icon="inline-start" />
+                              Absent
+                            </Button>
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -770,9 +997,75 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         <Card className="glass-panel lg:col-span-2">
           <CardHeader>
             <CardTitle>Daily Report</CardTitle>
-            <CardDescription>Sendable parent summary</CardDescription>
+            <CardDescription>
+              {activeDailyReportChildren.length === 1
+                ? activeDailyReportChildren[0].fullName
+                : `${activeDailyReportChildren.length} children selected`}
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            <section className="rounded-xl border bg-background/40 p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                  <Users className="size-4" />
+                  Report targets
+                </div>
+                <Badge variant={activeDailyReportChildren.length ? "default" : "destructive"}>
+                  {activeDailyReportChildren.length || 0} selected
+                </Badge>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {activeDailyReportChildren.slice(0, 8).map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className="rounded-md border bg-card px-2 py-1 text-xs font-medium transition hover:bg-muted"
+                    onClick={() => chooseChild(child.id)}
+                  >
+                    {child.fullName}
+                  </button>
+                ))}
+                {activeDailyReportChildren.length > 8 ? (
+                  <Badge variant="secondary">+{activeDailyReportChildren.length - 8}</Badge>
+                ) : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button type="button" size="xs" variant="outline" onClick={selectPresentDailyReports}>
+                  <ClipboardCheck data-icon="inline-start" />
+                  Present children
+                </Button>
+                <Button type="button" size="xs" variant="outline" onClick={() => setDailyReportTargets(roster.map((child) => child.id))}>
+                  <Users data-icon="inline-start" />
+                  All visible
+                </Button>
+                <Button type="button" size="xs" variant="ghost" onClick={() => setSelectedDailyReportChildIds(selectedChild?.id ? [selectedChild.id] : [])}>
+                  Selected child
+                </Button>
+              </div>
+            </section>
+
+            <section className="rounded-xl border bg-background/40 p-3">
+              <div className="mb-3 text-sm font-medium">Quick logging</div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="flex flex-wrap gap-1">
+                  <Button type="button" size="xs" variant="outline" onClick={() => addMealPreset("Breakfast")}>Breakfast</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addMealPreset("Lunch")}>Lunch</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addMealPreset("Afternoon snack")}>Snack</Button>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  <Button type="button" size="xs" variant="outline" onClick={startNapNow}>Start nap</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={endLatestNapNow}>End nap</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Wet")}>Wet</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Potty")}>Potty</Button>
+                </div>
+                <div className="flex flex-wrap gap-1 sm:col-span-2">
+                  <Button type="button" size="xs" variant="outline" onClick={() => addActivityPreset("Circle time")}>Circle time</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addActivityPreset("Outdoor play")}>Outdoor play</Button>
+                  <Button type="button" size="xs" variant="outline" onClick={() => addActivityPreset("Centers")}>Centers</Button>
+                </div>
+              </div>
+            </section>
+
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label htmlFor="daily-report-date">Report date</Label>
@@ -940,9 +1233,9 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
               <Input value={suppliesNeeded} onChange={(event) => setSuppliesNeeded(event.target.value)} placeholder="Supplies needed" />
               <Textarea value={teacherNote} onChange={(event) => setTeacherNote(event.target.value)} placeholder="Teacher note" />
             </div>
-            <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitDailyReport}>
+            <Button disabled={isPending || !activeDailyReportChildIds.length} className="w-full" onClick={submitDailyReport}>
               <BookOpen data-icon="inline-start" />
-              Save Report
+              {activeDailyReportChildIds.length > 1 ? `Save ${activeDailyReportChildIds.length} Reports` : "Save Report"}
             </Button>
           </CardContent>
         </Card>

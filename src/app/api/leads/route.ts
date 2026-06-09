@@ -5,6 +5,7 @@ import { leadScore, parseLeadStage } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -57,7 +58,7 @@ async function resolveCenterId(user: CurrentUser, locationId?: string) {
   return fallback.id;
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -117,7 +118,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ ok: true, leads });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -211,3 +212,6 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, lead }, { status: 201 });
 }
+
+export const GET = withApiLogging("GET", GETHandler);
+export const POST = withApiLogging("POST", POSTHandler);

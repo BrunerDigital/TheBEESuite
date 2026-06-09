@@ -4,6 +4,7 @@ import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -82,7 +83,7 @@ async function findGuardianByQrToken(centerId: string, qrToken: string) {
   }) ? guardian : null;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const centerId = clean(body.centerId);
   const pin = normalizePin(body.pin);
@@ -156,3 +157,5 @@ export async function POST(request: NextRequest) {
     }),
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

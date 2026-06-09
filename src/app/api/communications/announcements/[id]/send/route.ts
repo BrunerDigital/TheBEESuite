@@ -5,6 +5,7 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -23,7 +24,7 @@ async function visibleCenterIds(user: NonNullable<Awaited<ReturnType<typeof getC
   return centers.map((center) => center.id);
 }
 
-export async function POST(_request: NextRequest, context: RouteContext) {
+async function POSTHandler(_request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) {
@@ -131,3 +132,5 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     error: email.ok ? undefined : email.error || "Announcement email could not be queued.",
   }, { status: email.ok ? 200 : email.configured ? 502 : 503 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

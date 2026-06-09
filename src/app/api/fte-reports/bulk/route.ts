@@ -14,6 +14,7 @@ import {
 import { normalizeFteCenterKey, parseFteImportCsv } from "@/lib/fte-report-import";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -34,7 +35,7 @@ function addLookup(lookup: Map<string, string>, key: string | null | undefined, 
   lookup.set(normalizeFteCenterKey(key), centerId);
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -179,3 +180,5 @@ export async function POST(request: NextRequest) {
     errors: errors.slice(0, 25),
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

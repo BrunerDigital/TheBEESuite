@@ -1665,7 +1665,7 @@ async function renderLivePage(
       },
     });
     const childIds = children.map((child) => child.id);
-    const [attendanceRecords, checkLogs] = childIds.length
+    const [attendanceRecords, checkLogs, dailyReports] = childIds.length
       ? await Promise.all([
           prisma.attendanceRecord.findMany({
             where: { childId: { in: childIds }, date: { gte: serviceDayStart } },
@@ -1677,8 +1677,18 @@ async function renderLivePage(
             orderBy: { occurredAt: "desc" },
             select: { childId: true, type: true, occurredAt: true },
           }),
+          prisma.dailyReport.findMany({
+            where: { childId: { in: childIds }, date: { gte: serviceDayStart } },
+            orderBy: { date: "desc" },
+            select: {
+              childId: true,
+              date: true,
+              sentAt: true,
+              _count: { select: { meals: true, naps: true, diapers: true, activities: true } },
+            },
+          }),
         ])
-      : [[], []];
+      : [[], [], []];
     const attendanceByChild = new Map<string, { status: string; date: Date }>();
     for (const record of attendanceRecords) {
       if (record.childId && !attendanceByChild.has(record.childId)) {
@@ -1686,9 +1696,16 @@ async function renderLivePage(
       }
     }
     const latestCheckLogByChild = latestLogMap(checkLogs);
+    const latestDailyReportByChild = new Map<string, (typeof dailyReports)[number]>();
+    for (const report of dailyReports) {
+      if (report.childId && !latestDailyReportByChild.has(report.childId)) {
+        latestDailyReportByChild.set(report.childId, report);
+      }
+    }
     const roster = children.map((child) => {
       const attendance = attendanceByChild.get(child.id);
       const latestLog = latestCheckLogByChild.get(child.id);
+      const dailyReport = latestDailyReportByChild.get(child.id);
       return {
         ...child,
         attendance: {
@@ -1697,6 +1714,17 @@ async function renderLivePage(
           latestLogAt: latestLog?.occurredAt.toISOString() ?? null,
           lastMarkedAt: attendance?.date.toISOString() ?? null,
         },
+        dailyReport: dailyReport ? {
+          status: dailyReport.sentAt ? "sent" as const : "draft" as const,
+          latestReportAt: dailyReport.date.toISOString(),
+          sentAt: dailyReport.sentAt?.toISOString() ?? null,
+          entries: {
+            meals: dailyReport._count.meals,
+            naps: dailyReport._count.naps,
+            diapers: dailyReport._count.diapers,
+            activities: dailyReport._count.activities,
+          },
+        } : null,
       };
     });
 

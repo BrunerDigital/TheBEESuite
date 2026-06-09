@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
-export async function POST() {
+async function POSTHandler() {
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
@@ -14,3 +15,5 @@ export async function POST() {
   });
   return response;
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

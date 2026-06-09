@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateSupabasePassword } from "@/lib/supabase-auth";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
     accessToken?: unknown;
     password?: unknown;
@@ -27,11 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const response = await updateSupabasePassword(accessToken, password);
     if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("Supabase password update failed", {
-        status: response.status,
-        detail: detail.slice(0, 500),
-      });
+      logOperationalError("auth.reset_password.supabase_update_failed", null, { status: response.status });
       return NextResponse.json(
         { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
         { status: 400 },
@@ -49,7 +46,7 @@ export async function POST(request: NextRequest) {
       });
     }
   } catch (error) {
-    console.error("Supabase password update errored", error);
+    logOperationalError("auth.reset_password.supabase_update_error", error);
     return NextResponse.json(
       { ok: false, error: "Password reset service is unavailable right now." },
       { status: 503 },
@@ -61,3 +58,5 @@ export async function POST(request: NextRequest) {
     message: "Password updated. You can now sign in with your new password.",
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -4,6 +4,7 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function authorized(request: NextRequest) {
@@ -88,7 +89,7 @@ async function campaignRecipients(input: {
   };
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -217,3 +218,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ ok: true, scanned: dueCampaigns.length, results });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

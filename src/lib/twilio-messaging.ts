@@ -84,7 +84,7 @@ export async function validateTwilioSignatureAgainstConfiguredTokens({
   const platformToken = clean(process.env.TWILIO_AUTH_TOKEN);
   if (platformToken) tokens.push({ tenantId: null, token: platformToken });
 
-  const tenantTokens = await getTenantIntegrationCredentialEntries("twilio", "TWILIO_AUTH_TOKEN");
+  const tenantTokens = await getTenantIntegrationCredentialEntries("twilio", "TWILIO_AUTH_TOKEN").catch(() => []);
   for (const credential of tenantTokens) {
     tokens.push({ tenantId: credential.tenantId, token: credential.value });
   }

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { isEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ function loadPublicLocations() {
   return file.locations.filter((location) => location.crmLocationId && location.locationId);
 }
 
-export async function GET() {
+async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -143,3 +144,5 @@ export async function GET() {
     })),
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

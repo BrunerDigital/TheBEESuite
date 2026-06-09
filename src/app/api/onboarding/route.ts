@@ -18,6 +18,7 @@ import {
   requestSupabasePasswordReset,
 } from "@/lib/supabase-auth";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type OnboardingPayload = {
@@ -605,7 +606,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const rate = checkRateLimit({
     key: `onboarding:${requestIp(request.headers)}`,
     limit: 10,
@@ -646,3 +647,5 @@ export async function POST(request: NextRequest) {
     integrations: { email },
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function GETHandler() {
   try {
     await prisma.$queryRaw`SELECT 1`;
     return NextResponse.json({
@@ -25,3 +26,5 @@ export async function GET() {
     );
   }
 }
+
+export const GET = withApiLogging("GET", GETHandler);

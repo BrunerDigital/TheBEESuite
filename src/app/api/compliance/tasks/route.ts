@@ -6,6 +6,7 @@ import { parseOperationalDate } from "@/lib/date-guardrails";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -38,7 +39,7 @@ async function validateAssignee(input: { assignedToId: string | null; centerId: 
   return { ok: true as const };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -136,3 +137,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, task }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

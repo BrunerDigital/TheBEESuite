@@ -5,6 +5,7 @@ import { OnlineRegistrationForm } from "@/components/online-registration-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { logOperationalError } from "@/lib/request-response-logging";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ async function getRegistrationCenters() {
       },
     });
   } catch (error) {
-    console.warn("Registration centers could not be loaded", error);
+    logOperationalError("registration.centers_lookup_failed", error);
     return [];
   }
 }

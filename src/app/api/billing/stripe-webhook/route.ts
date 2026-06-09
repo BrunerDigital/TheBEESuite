@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type StripeCheckoutSessionCompleted = {
@@ -121,7 +122,7 @@ async function matchStripeWebhookSecret(payload: string, signature: string | nul
   const platformSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (platformSecret) secrets.push({ tenantId: null, secret: platformSecret });
 
-  const tenantSecrets = await getTenantIntegrationCredentialEntries("stripe", "STRIPE_WEBHOOK_SECRET");
+  const tenantSecrets = await getTenantIntegrationCredentialEntries("stripe", "STRIPE_WEBHOOK_SECRET").catch(() => []);
   for (const credential of tenantSecrets) {
     secrets.push({ tenantId: credential.tenantId, secret: credential.value });
   }
@@ -724,7 +725,7 @@ async function writeSystemAudit(invoiceId: string, stripeEventId: string, sessio
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
   const signatureMatch = await matchStripeWebhookSecret(payload, signature);
@@ -999,3 +1000,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -1,6 +1,6 @@
 # Owner Action Items
 
-Last updated: June 1, 2026
+Last updated: June 9, 2026
 
 These are the items BrunerDigital cannot safely complete without business approval, third-party account access, legal review, or real production data from Kid City USA and future customers.
 
@@ -35,6 +35,7 @@ These are the items BrunerDigital cannot safely complete without business approv
 
 ## Legal, Privacy, And Compliance
 
+- Internal product/security/privacy review is complete in `docs/LEGAL_PRIVACY_SECURITY_REVIEW_2026-06-09.md`; the remaining items below require owner, counsel, accounting, vendor, or production-project approval.
 - Written legal/accounting approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for payment processing recovery, ACH fee cap, card recovery, refund, chargeback, dispute, debit/prepaid, and disclosure language.
 - Privacy review for child, guardian, custody, medical, billing, and photo/media data handling.
 - State-specific childcare licensing review before claiming any state-specific workflow support.

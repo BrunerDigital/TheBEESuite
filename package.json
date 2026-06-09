@@ -12,6 +12,7 @@
     "vercel-build": "prisma generate && npm run lint && npm run typecheck && npm test && next build",
     "start": "next start",
     "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

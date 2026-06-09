@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { retryPendingIntegrationDeliveries } from "@/lib/integration-deliveries";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function authorized(request: NextRequest) {
@@ -8,7 +9,7 @@ function authorized(request: NextRequest) {
   return Boolean(secret && request.headers.get("authorization") === `Bearer ${secret}`);
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -26,3 +27,5 @@ export async function GET(request: NextRequest) {
     ...result,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

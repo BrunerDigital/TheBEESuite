@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -28,7 +29,7 @@ function jsonObject(value: unknown): Prisma.JsonObject {
     : {};
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -156,3 +157,5 @@ export async function POST(request: NextRequest) {
     createdAccount,
   });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

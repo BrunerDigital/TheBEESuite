@@ -11,6 +11,7 @@ import {
 } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const reportKinds = new Set<ReportKind>(["lead_funnel", "attendance", "billing", "messages"]);
@@ -20,7 +21,7 @@ function safeFilename(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "report";
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canAccessModule(user, "analytics")) {
@@ -59,3 +60,5 @@ export async function GET(request: NextRequest) {
     },
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

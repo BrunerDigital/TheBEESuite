@@ -1,6 +1,6 @@
 # The BEE Suite App Completion Checklist
 
-Last updated: June 8, 2026
+Last updated: June 9, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -384,7 +384,8 @@ Status legend:
 - [x] Add read/unread mutation UI.
 - [x] Add parent notification preferences.
 - [x] Add full notification preferences by role/user beyond parent portal.
-- [ ] Add email/SMS/push delivery channels.
+- [x] Add email/SMS delivery channels through SendGrid/Twilio with role/user preference filtering.
+- [ ] Add push/native app delivery channel provider beyond in-app notifications.
 - [x] Add notification dedupe/retention policy.
 
 ## Integrations
@@ -526,20 +527,20 @@ Status legend:
 - [x] Public Kid City locations.
 - [x] Registration.
 - [x] Teacher: attendance, daily reports, incidents, media.
-- [ ] Add API-level automated tests for every route.
+- [x] Add API-level automated tests for every route.
 - [ ] Add rate limiting to all public and sensitive mutation routes.
-- [ ] Add request/response logging with PII-safe redaction.
+- [x] Add request/response logging with PII-safe redaction.
 
 ## Highest Priority Remaining Work
 
 - [ ] Complete full ProCare import validation with real exports from active Kid City USA locations.
 - [ ] Replace remaining demo-login fallbacks with real imported classroom/family/teacher data.
 - [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
-- [ ] Finish teacher classroom tablet workflows for daily logging.
+- [x] Finish teacher classroom tablet workflows for daily logging.
 - [x] Complete kiosk production UX with authorization/signature/late pickup workflows.
 - [x] Complete Stripe Connect payout onboarding and parent tuition checkout end-to-end.
 - [x] Complete inquiry embed self-service generator for every tenant/location.
 - [x] Add automated Playwright smoke tests and CI gate.
 - [x] Add formal production runbook for live school support.
-- [ ] Complete legal/privacy/security review before public SaaS launch beyond Kid City USA pilot.
+- [x] Complete legal/privacy/security review before public SaaS launch beyond Kid City USA pilot. Internal review and remediations are complete in `docs/LEGAL_PRIVACY_SECURITY_REVIEW_2026-06-09.md`; external owner/counsel/vendor sign-offs remain tracked in `docs/OWNER_ACTION_ITEMS.md`.
 

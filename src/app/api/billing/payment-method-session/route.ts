@@ -9,6 +9,7 @@ import {
 import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -31,7 +32,7 @@ function actionFrom(value: unknown) {
   return "setup";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -223,3 +224,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, url: setup.url, status: "setup_session_created" });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

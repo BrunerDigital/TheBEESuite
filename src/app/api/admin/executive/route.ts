@@ -17,6 +17,7 @@ import {
 } from "@/lib/supabase-auth";
 import { generateTeacherLoginCredentials } from "@/lib/teacher-login";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type Payload = {
@@ -926,7 +927,7 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   try {
     const actor = await requireExecutiveAccess();
     const payload = (await request.json().catch(() => ({}))) as Payload;
@@ -971,3 +972,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

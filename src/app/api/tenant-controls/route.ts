@@ -4,6 +4,7 @@ import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const editableRoles = new Set<UserRole>([UserRole.PLATFORM_OWNER, UserRole.BRAND_ADMIN]);
@@ -187,7 +188,7 @@ async function supportTargetLabel(tenantId: string, targetScope: string, targetI
   return "Tenant";
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   try {
     const user = await requireTenantControlAccess();
     const body = await request.json().catch(() => ({}));
@@ -396,3 +397,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

@@ -5,6 +5,7 @@ import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -77,7 +78,7 @@ async function findGuardianByQrToken(centerId: string, qrToken: string, childIds
   }) ? guardian : null;
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const centerId = clean(body.centerId);
   const pin = normalizePin(body.pin);
@@ -238,3 +239,5 @@ export async function POST(request: NextRequest) {
     logs,
   }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

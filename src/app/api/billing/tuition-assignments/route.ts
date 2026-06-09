@@ -5,6 +5,7 @@ import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import { normalizeBillingCadence, normalizeRecurringBillingDay, normalizeRecurringBillingPeriod } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type CurrentBillingUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
@@ -38,7 +39,7 @@ async function assertChildAccess(user: CurrentBillingUser, familyId: string, chi
   return { ok: true as const, child, centerId: child.family.centerId };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageBilling(user)) {
@@ -129,3 +130,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, assignment: updated.customFields });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

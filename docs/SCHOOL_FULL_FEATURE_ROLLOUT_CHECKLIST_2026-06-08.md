@@ -1,6 +1,6 @@
 # School Full-Feature Rollout Checklist
 
-Last updated: June 8, 2026
+Last updated: June 9, 2026
 
 Purpose: track everything that must be complete before a school can use the full BEE Suite feature set live: executive/admin, director operations, CRM, enrollment, FTE, ProCare cutover, attendance/kiosk, teacher workflows, parent portal, billing/payments, documents, compliance, messaging, reporting, integrations, and support.
 
@@ -60,9 +60,10 @@ A school is not considered fully live until all of these are true:
 - [ ] Confirm `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, and `npm run test:smoke` pass before each full-feature rollout.
 - [ ] Confirm `/api/health` and `/api/system/readiness` are healthy after deployment.
 - [ ] Review every new migration for tenant/location scoping and destructive operations before production deploy.
-- [ ] Add API-level automated tests for every production route.
+- [x] Add API-level automated tests for every production route.
 - [ ] Add rate limiting to all public and sensitive mutation routes.
-- [ ] Add PII-safe request/response logging and redaction.
+- [x] Add PII-safe request/response logging and redaction.
+- [x] Complete internal legal/privacy/security review and remediation pass.
 - [ ] Add seed/test fixtures for every major role and feature workflow.
 
 ## Security, Privacy, And Legal
@@ -71,6 +72,9 @@ A school is not considered fully live until all of these are true:
 - [x] Sensitive workflows use server-side role and scope checks.
 - [x] Guardrail helpers exist for access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.
 - [x] Data retention, deletion, backup/restore, and encryption-at-rest/field-level encryption plans exist in docs.
+- [x] Internal legal/privacy/security review is complete in `docs/LEGAL_PRIVACY_SECURITY_REVIEW_2026-06-09.md`.
+- [x] App-level security headers are configured in `next.config.ts`.
+- [x] Raw operational error logging was replaced with redacted structured logs.
 - [ ] Rotate any shared secrets before further live-school expansion.
 - [ ] Decide and implement MFA policy for executive/admin users.
 - [ ] Run formal Supabase advisor/security review after each schema migration.
@@ -323,7 +327,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] AI reply suggestions are available directly inside the message composer with human-review guardrails.
 - [x] Richer threaded conversation views with per-family reply history and staff assignment exist.
 - [x] Full notification preferences by role/user exist.
-- [x] Email/SMS/push delivery channel foundation exists.
+- [x] Email/SMS delivery channels exist; push/native provider is still separate future scope.
 - [ ] Verify sender domains, DNS records, SendGrid authentication, Twilio compliance, SMS consent language, opt-out language, and school notification recipients.
 - [ ] Configure message templates, merge fields, announcement templates, billing notices, FTE reminders, document reminders, and emergency/non-emergency categories per tenant/school.
 - [ ] Test parent-director, parent-teacher, director-parent, lead follow-up, announcement, campaign, email, SMS, notification preference, opt-out, and inbound SMS flows.

@@ -12,6 +12,7 @@ import {
   validateNextStaffClockAction,
 } from "@/lib/staff-kiosk";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
@@ -35,7 +36,7 @@ function serializeStaff(staff: {
   };
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
   const centerId = clean(body.centerId);
   const email = clean(body.email).toLowerCase();
@@ -148,3 +149,5 @@ export async function POST(request: NextRequest) {
     staff: serializeStaff(updated),
   }, { status: 201 });
 }
+
+export const POST = withApiLogging("POST", POSTHandler);

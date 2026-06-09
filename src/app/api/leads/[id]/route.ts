@@ -5,6 +5,7 @@ import { parseLeadStage, stageNurtureTask } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type RouteContext = {
@@ -28,7 +29,7 @@ function jsonObject(value: Prisma.JsonValue | null) {
   return { ...value } as Prisma.JsonObject;
 }
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+async function GETHandler(_request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -86,7 +87,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   return NextResponse.json({ ok: true, lead });
 }
 
-export async function PATCH(request: NextRequest, context: RouteContext) {
+async function PATCHHandler(request: NextRequest, context: RouteContext) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -318,3 +319,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   return NextResponse.json({ ok: true, lead });
 }
+
+export const GET = withApiLogging("GET", GETHandler);
+export const PATCH = withApiLogging("PATCH", PATCHHandler);

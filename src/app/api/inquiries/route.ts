@@ -10,6 +10,7 @@ import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type InquiryPayload = {
@@ -475,14 +476,14 @@ async function verifyTurnstileToken({
   }
 }
 
-export async function OPTIONS(request: NextRequest) {
+async function OPTIONSHandler(request: NextRequest) {
   return new NextResponse(null, {
     status: 204,
     headers: corsHeaders(request.headers.get("origin")),
   });
 }
 
-export async function POST(request: NextRequest) {
+async function POSTHandler(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
@@ -632,7 +633,10 @@ export async function POST(request: NextRequest) {
         result: email,
       }),
     ]).catch((error) => {
-      console.error("Inquiry integration delivery logging failed", error);
+      logOperationalError("inquiries.integration_delivery_logging_failed", error, {
+        centerId: center.id,
+        leadId: lead.id,
+      });
     });
 
     return json(
@@ -660,7 +664,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error("Inquiry intake failed", error);
+    logOperationalError("inquiries.intake_failed", error);
     return json(
       {
         ok: false,
@@ -671,3 +675,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const OPTIONS = withApiLogging("OPTIONS", OPTIONSHandler);
+export const POST = withApiLogging("POST", POSTHandler);

@@ -14,6 +14,7 @@ import { notificationDedupeKey, notificationExpiresAt } from "@/lib/notification
 import { prisma } from "@/lib/prisma";
 import { twilioStatusCallbackUrl, uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
+import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const directorRoles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR];
@@ -37,7 +38,7 @@ function centerName(center: { name: string; crmLocationId: string | null; city: 
   ].filter(Boolean).join(" · ");
 }
 
-export async function GET(request: NextRequest) {
+async function GETHandler(request: NextRequest) {
   if (!authorized(request)) {
     return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
   }
@@ -397,3 +398,5 @@ export async function GET(request: NextRequest) {
     smsSkipped,
   });
 }
+
+export const GET = withApiLogging("GET", GETHandler);

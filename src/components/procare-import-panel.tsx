@@ -1,12 +1,15 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Download, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Eye, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
 type CenterOption = {
@@ -40,6 +43,9 @@ type ImportPreview = {
   centersTouched: number;
   duplicateMatches?: number;
   duplicateReviewRows?: number;
+  duplicateScanSkipped?: boolean;
+  duplicateScanRowLimit?: number;
+  existingMatchPreviewSkipped?: boolean;
   duplicateMatchesByEntity?: {
     families: number;
     children: number;
@@ -74,11 +80,22 @@ type ImportPreview = {
   }>;
 };
 
+function previewRecordLabel(row: NonNullable<ImportPreview["rowResults"]>[number]) {
+  return row.staffName ?? row.childName ?? row.familyName ?? row.message ?? row.entity;
+}
+
+function previewStatusVariant(status: "ready" | "warning") {
+  return status === "ready" ? "default" : "destructive";
+}
+
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState("");
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
+  const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
+  const [progressMessage, setProgressMessage] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -88,6 +105,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function clearPreview() {
     setPreview(null);
+    setPreviewDialogOpen(false);
     setDuplicateReviewConfirmed(false);
   }
 
@@ -102,47 +120,82 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     startTransition(async () => {
       setStatus("");
       setError("");
-      const formData = new FormData();
-      formData.set("centerId", centerId);
-      formData.set("dryRun", String(dryRun));
-      formData.set("duplicateMatchMode", duplicateMatchMode);
-      formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
-      if (csv.trim()) formData.set("csv", csv);
-      const file = fileRef.current?.files?.[0];
-      if (file) formData.set("file", file);
-      const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
-      const json = await response.json().catch(() => null) as {
-        dryRun?: boolean;
-        error?: string;
-        batchId?: string;
-        summary?: ImportPreview & Record<string, number | string | unknown>;
-      } | null;
-      if (!response.ok) {
-        setError(json?.error || "ProCare import could not be processed.");
-        return;
-      }
-      if (json?.dryRun) {
-        setPreview(json.summary ?? null);
+      setProgressMessage(dryRun ? "Preparing import review..." : "Committing ProCare import...");
+      try {
+        const formData = new FormData();
+        formData.set("centerId", centerId);
+        formData.set("dryRun", String(dryRun));
+        formData.set("duplicateMatchMode", duplicateMatchMode);
+        formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
+        if (csv.trim()) formData.set("csv", csv);
+        const file = fileRef.current?.files?.[0];
+        if (file) formData.set("file", file);
+        const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
+        const json = await response.json().catch(() => null) as {
+          dryRun?: boolean;
+          error?: string;
+          batchId?: string;
+          summary?: ImportPreview & Record<string, number | string | unknown>;
+        } | null;
+        if (!response.ok) {
+          setError(json?.error || "ProCare import could not be processed.");
+          if (json?.summary) {
+            setPreview(json.summary);
+            setPreviewDialogOpen(true);
+          }
+          return;
+        }
+        if (json?.dryRun) {
+          setPreview(json.summary ?? null);
+          setPreviewDialogOpen(true);
+          setDuplicateReviewConfirmed(false);
+          setLastBatchId("");
+          return;
+        }
+        setCsv("");
+        setPreview(null);
+        setPreviewDialogOpen(false);
         setDuplicateReviewConfirmed(false);
-        setLastBatchId("");
-        setStatus("");
-        return;
+        setLastBatchId(json?.batchId ?? "");
+        if (fileRef.current) fileRef.current.value = "";
+        setSelectedFileName("");
+        const summary = json?.summary;
+        setStatus(
+          `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
+        );
+      } catch {
+        setError(dryRun ? "Import review could not be prepared. Check the file and try again." : "ProCare import could not be committed. Check the file and try again.");
+      } finally {
+        setProgressMessage("");
       }
-      setCsv("");
-      setPreview(null);
-      setDuplicateReviewConfirmed(false);
-      setLastBatchId(json?.batchId ?? "");
-      if (fileRef.current) fileRef.current.value = "";
-      const summary = json?.summary;
-      setStatus(
-        `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
-      );
     });
   }
 
   const duplicateReviewRows = preview?.duplicateReviewRows ?? 0;
   const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
   const commitNeedsDuplicateConfirmation = duplicateReviewRows > 0 && !duplicateReviewConfirmed;
+  const busy = isPending || Boolean(progressMessage);
+  const duplicateScanSummary = preview?.duplicateScanSkipped
+    ? `Large-file duplicate scan skipped for this ${preview.rows}-row import. Existing records will still be matched during commit by ProCare IDs, family names, emails, and child names.`
+    : `Duplicate scan found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
+  const hasImportSource = Boolean(csv.trim() || selectedFileName);
+  const noCentersAvailable = !centers.length;
+  const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
+  const commitBlockedReason = noCentersAvailable
+    ? "This account needs an active school assignment before importing."
+    : !centerId
+    ? "Choose a center before importing."
+    : !hasImportSource
+      ? "Choose a CSV export or paste CSV text before submitting."
+      : preview && blockingWarningRows > 0
+          ? "Resolve or remove non-duplicate warning rows before committing."
+          : preview && commitNeedsDuplicateConfirmation
+            ? "Review and confirm the duplicate match candidates before committing."
+            : "";
+  const reviewRows = preview?.rowResults ?? [];
+  const reviewRowsShown = reviewRows.length;
+  const readyReviewRows = reviewRows.filter((row) => row.status === "ready").length;
+  const warningReviewRows = reviewRows.filter((row) => row.status === "warning").length;
 
   return (
     <Card className="glass-panel">
@@ -153,6 +206,102 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
+          <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-[min(96vw,76rem)]">
+            <DialogHeader className="px-5 pt-5">
+              <DialogTitle>ProCare Import Review</DialogTitle>
+              <DialogDescription>
+                Review the mapped rows before committing. Directors can close this review and commit from the import panel when there are no blocking cleanup warnings.
+              </DialogDescription>
+            </DialogHeader>
+            {preview ? (
+              <div className="grid min-h-0 gap-4">
+                <div className="grid gap-2 px-5 sm:grid-cols-2 lg:grid-cols-5">
+                  {[
+                    ["Rows", preview.rows],
+                    ["Ready", preview.readyRows],
+                    ["Warnings", preview.warningRows],
+                    ["Families", preview.familyRows],
+                    ["Staff", preview.staffRows],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-lg border bg-background/60 p-3">
+                      <div className="text-xs text-muted-foreground">{label}</div>
+                      <div className="mt-1 text-lg font-semibold">{Number(value).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="px-5 text-xs leading-5 text-muted-foreground">
+                  {duplicateScanSummary} Showing {reviewRowsShown.toLocaleString()} mapped row(s) in this table{preview.rows > reviewRowsShown ? `, capped from ${preview.rows.toLocaleString()} total rows for browser performance` : ""}.
+                </div>
+                <div className="min-h-0 max-h-[48vh] overflow-auto border-y">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-popover">
+                      <TableRow>
+                        <TableHead className="w-20">Row</TableHead>
+                        <TableHead className="w-28">Status</TableHead>
+                        <TableHead>Center</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Record</TableHead>
+                        <TableHead>Message</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reviewRows.map((row) => (
+                        <TableRow key={row.rowNumber}>
+                          <TableCell>{row.rowNumber}</TableCell>
+                          <TableCell>
+                            <Badge variant={previewStatusVariant(row.status)}>
+                              {row.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-48 whitespace-normal">{row.center}</TableCell>
+                          <TableCell className="max-w-52 whitespace-normal">{row.action}</TableCell>
+                          <TableCell className="max-w-64 whitespace-normal font-medium">{previewRecordLabel(row)}</TableCell>
+                          <TableCell className="max-w-72 whitespace-normal text-muted-foreground">{row.message ?? ""}</TableCell>
+                        </TableRow>
+                      ))}
+                      {!reviewRows.length ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-muted-foreground">No mapped rows were returned for this preview.</TableCell>
+                        </TableRow>
+                      ) : null}
+                    </TableBody>
+                  </Table>
+                </div>
+                <div className="grid gap-3 px-5 pb-2 sm:grid-cols-3">
+                  <div className="rounded-lg border bg-background/60 p-3 text-sm">
+                    <div className="text-xs text-muted-foreground">Displayed rows</div>
+                    <div className="mt-1 font-semibold">{readyReviewRows.toLocaleString()} ready / {warningReviewRows.toLocaleString()} warnings</div>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3 text-sm">
+                    <div className="text-xs text-muted-foreground">Expected creates</div>
+                    <div className="mt-1 font-semibold">{preview.newFamilies.toLocaleString()} families / {preview.newChildren.toLocaleString()} children</div>
+                  </div>
+                  <div className="rounded-lg border bg-background/60 p-3 text-sm">
+                    <div className="text-xs text-muted-foreground">Classrooms and balances</div>
+                    <div className="mt-1 font-semibold">{preview.classroomsReferenced.toLocaleString()} classrooms / {preview.balanceRows.toLocaleString()} balances</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
+                Close Review
+              </Button>
+              <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
+                <Upload data-icon="inline-start" />
+                {progressMessage ? "Working..." : "Commit Import"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {progressMessage ? (
+          <Alert>
+            <Upload className="size-4" />
+            <AlertTitle>Working</AlertTitle>
+            <AlertDescription>{progressMessage}</AlertDescription>
+          </Alert>
+        ) : null}
         {status ? (
           <Alert>
             <CheckCircle2 className="size-4" />
@@ -173,6 +322,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <AlertCircle className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {noCentersAvailable ? (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" />
+            <AlertTitle>No assigned school found</AlertTitle>
+            <AlertDescription>
+              This account needs an active school assignment before ProCare rows can be imported.
+            </AlertDescription>
           </Alert>
         ) : null}
         <div className="grid gap-3 md:grid-cols-[18rem_1fr]">
@@ -205,9 +363,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               id="procare-file"
               type="file"
               accept=".csv,.txt,text/csv,text/plain"
-              onChange={clearPreview}
+              onChange={(event) => {
+                setSelectedFileName(event.target.files?.[0]?.name ?? "");
+                clearPreview();
+              }}
               className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
+            {selectedFileName ? (
+              <p className="text-xs text-muted-foreground">Selected: {selectedFileName}</p>
+            ) : null}
           </div>
         </div>
         <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[18rem_1fr]">
@@ -261,7 +425,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <CheckCircle2 className="size-4" />
             <AlertTitle>Preview ready</AlertTitle>
             <AlertDescription>
-              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. Duplicate scan found {preview.duplicateMatches ?? 0} possible match groups across {duplicateReviewRows} review row(s).
+              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. {duplicateScanSummary}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -327,18 +491,28 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           </div>
         ) : null}
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button disabled={isPending || !centerId} onClick={() => submit(true)} variant="outline">
-            Preview Import
+          <Button disabled={!canPreview} onClick={() => submit(true)} variant="outline">
+            <Eye data-icon="inline-start" />
+            {progressMessage === "Preparing import review..." ? "Preparing Review..." : "Submit for Review"}
           </Button>
-          <Button disabled={isPending || !centerId || !preview || blockingWarningRows > 0 || commitNeedsDuplicateConfirmation} onClick={() => submit(false)}>
+          {preview ? (
+            <Button disabled={busy} onClick={() => setPreviewDialogOpen(true)} variant="outline">
+              <Eye data-icon="inline-start" />
+              View Review Table
+            </Button>
+          ) : null}
+          <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            Commit ProCare Import
+            {progressMessage === "Committing ProCare import..." ? "Committing..." : preview ? "Commit Reviewed Import" : "Commit Import"}
           </Button>
-          <Button disabled={isPending || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
+          <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />
             Download Latest Backup
           </Button>
         </div>
+        {commitBlockedReason ? (
+          <p className="text-xs text-muted-foreground">{commitBlockedReason}</p>
+        ) : null}
         {preview?.warningRows ? (
           <p className="text-xs text-muted-foreground">
             {blockingWarningRows

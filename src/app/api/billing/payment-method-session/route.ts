@@ -5,6 +5,7 @@ import {
   createStripeBillingPortalSession,
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +33,24 @@ function actionFrom(value: unknown) {
   return "setup";
 }
 
+function paymentMethodCategoryFrom(value: unknown): StripePaymentMethodCategory {
+  const category = clean(value).toLowerCase();
+  if (category === "ach" || category === "card" || category === "link_bank") return category;
+  return "default";
+}
+
+function safeReturnPath(value: unknown, fallback: string) {
+  const path = clean(value);
+  if (!path || !path.startsWith("/") || path.startsWith("//")) return fallback;
+  return path;
+}
+
+function appendQuery(path: string, key: string, value: string) {
+  const [base, hash = ""] = path.split("#", 2);
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -45,6 +64,8 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const billingAccountId = clean(body.billingAccountId);
   const action = actionFrom(body.action);
+  const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
+  const returnPath = safeReturnPath(body.returnPath, isParentGuardian(user) ? "/parent-portal" : "/family-detail");
   if (!billingAccountId) {
     return NextResponse.json({ ok: false, error: "Billing account ID is required." }, { status: 400 });
   }
@@ -125,7 +146,7 @@ async function POSTHandler(request: NextRequest) {
     }
     const portal = await createStripeBillingPortalSession({
       customerId: existingCustomerId,
-      returnUrl: `${baseUrl}/parent-portal?paymentMethod=portal_return`,
+      returnUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "portal_return")}`,
       tenantId,
     });
     if (!portal.ok || !portal.url) {
@@ -176,8 +197,9 @@ async function POSTHandler(request: NextRequest) {
   const setup = await createStripeSetupCheckoutSession({
     customerId,
     customerEmail: billingAccount.family.billingEmail,
-    successUrl: `${baseUrl}/parent-portal?paymentMethod=success`,
-    cancelUrl: `${baseUrl}/parent-portal?paymentMethod=cancelled`,
+    paymentMethodCategory,
+    successUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "success")}`,
+    cancelUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "cancelled")}`,
     metadata: {
       tenantId,
       setupFlow: "billing_account_payment_method",
@@ -186,6 +208,7 @@ async function POSTHandler(request: NextRequest) {
       centerId: centerId || "",
       requestedByUserId: user.id,
       enableAutopay: "true",
+      preferredPaymentMethodCategory: paymentMethodCategory,
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     tenantId,

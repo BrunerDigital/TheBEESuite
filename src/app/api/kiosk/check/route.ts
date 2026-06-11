@@ -142,11 +142,13 @@ async function POSTHandler(request: NextRequest) {
   const latePickupCutoff = readLatePickupCutoff(center.customFields);
   const latePickup = type === "check_out" && isLatePickup(occurredAt, timeZone, latePickupCutoff);
   const pickupAuthorizationWarning = Boolean(guardian.family.custodyNotes);
+  const serviceDayStart = startOfServiceDay(occurredAt, timeZone);
+  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
   const latestLogs = await prisma.checkInOutLog.findMany({
     where: {
       childId: { in: allowedChildren.map((child) => child.id) },
       centerId,
-      occurredAt: { gte: startOfServiceDay(occurredAt, timeZone) },
+      occurredAt: { gte: serviceDayStart, lt: serviceDayEnd },
     },
     orderBy: { occurredAt: "desc" },
     select: { childId: true, type: true, occurredAt: true },
@@ -165,15 +167,40 @@ async function POSTHandler(request: NextRequest) {
   const logs = await prisma.$transaction(async (tx) => {
     const created = [];
     for (const child of allowedChildren) {
-      await tx.attendanceRecord.create({
-        data: {
-          childId: child.id,
-          classroomId: child.classroom?.id ?? null,
-          date: occurredAt,
-          status,
-          absenceReason: null,
+      const attendanceData = {
+        childId: child.id,
+        classroomId: child.classroom?.id ?? null,
+        date: occurredAt,
+        status,
+        absenceReason: null,
+        sourceSystem: "kiosk",
+        externalId: `kiosk-attendance:${child.id}:${serviceDayStart.toISOString()}`,
+        metadata: {
+          centerId,
+          serviceDay: serviceDayStart.toISOString(),
+          lastKioskAction: type,
+          lastKioskActionAt: occurredAt.toISOString(),
+          verificationMethod,
+          latePickup,
+          pickupAuthorizationWarning,
+          timeZone,
         },
+      };
+      const existingAttendance = await tx.attendanceRecord.findFirst({
+        where: {
+          childId: child.id,
+          date: { gte: serviceDayStart, lt: serviceDayEnd },
+        },
+        select: { id: true },
       });
+      if (existingAttendance) {
+        await tx.attendanceRecord.update({
+          where: { id: existingAttendance.id },
+          data: attendanceData,
+        });
+      } else {
+        await tx.attendanceRecord.create({ data: attendanceData });
+      }
       created.push(await tx.checkInOutLog.create({
         data: {
           childId: child.id,
@@ -187,6 +214,8 @@ async function POSTHandler(request: NextRequest) {
           verificationStatus: verificationMethod === "qr" ? "qr_verified" : "pin_verified",
           pinVerified: verificationMethod === "pin",
           notes: clean(body.notes) || null,
+          sourceSystem: "kiosk",
+          externalId: `kiosk:${type}:${child.id}:${occurredAt.toISOString()}`,
           metadata: {
             verificationMethod,
             qrVerified: verificationMethod === "qr",
@@ -222,7 +251,7 @@ async function POSTHandler(request: NextRequest) {
       latePickup,
       latePickupCutoff,
       pickupAuthorizationWarning,
-      kioskDate: startOfServiceDay(occurredAt, timeZone).toISOString(),
+      kioskDate: serviceDayStart.toISOString(),
       timeZone,
     },
   });

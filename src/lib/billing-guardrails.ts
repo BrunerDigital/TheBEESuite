@@ -14,6 +14,18 @@ export function isActiveStripeCheckoutPayment(payment: {
   return fields.status === "checkout_pending" || fields.status === "checkout_created";
 }
 
+export function isActiveStripeAutopayPayment(payment: {
+  status: PaymentStatus;
+  provider: string;
+  customFields?: unknown;
+}) {
+  if (payment.provider !== "stripe" || payment.status !== PaymentStatus.DRAFT) return false;
+  const fields = jsonRecord(payment.customFields);
+  return fields.status === "autopay_pending" ||
+    fields.status === "autopay_processing" ||
+    fields.status === "autopay_succeeded_pending_webhook";
+}
+
 export function checkoutApplicationGuard(input: {
   invoiceStatus: PaymentStatus;
   invoiceBillingAccountId: string;

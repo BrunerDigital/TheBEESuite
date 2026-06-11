@@ -123,9 +123,11 @@ async function POSTHandler(request: NextRequest) {
   const visibleChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId || !child.classroom);
   const childIds = visibleChildren.map((child) => child.id);
   const timeZone = readCenterTimeZone(center.customFields);
+  const serviceDayStart = startOfServiceDay(new Date(), timeZone);
+  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
   const latestLogs = childIds.length
     ? await prisma.checkInOutLog.findMany({
-        where: { childId: { in: childIds }, occurredAt: { gte: startOfServiceDay(new Date(), timeZone) } },
+        where: { childId: { in: childIds }, occurredAt: { gte: serviceDayStart, lt: serviceDayEnd } },
         orderBy: { occurredAt: "desc" },
         select: { childId: true, type: true, occurredAt: true },
       })

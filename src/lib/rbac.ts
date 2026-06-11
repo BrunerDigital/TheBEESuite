@@ -74,8 +74,6 @@ const billingModules = new Set<ModuleSlug>([
   "billing-settings",
 ]);
 
-const corporateBillingEmails = new Set(["accounting@kidcityusa.com"]);
-
 const parentGuardianModules = new Set<ModuleSlug>([
   "parent-portal",
   "messages",
@@ -113,10 +111,6 @@ function getRole(subject: AccessSubject) {
   return typeof subject === "string" || subject == null ? subject : subject.role;
 }
 
-function getEmail(subject: AccessSubject) {
-  return typeof subject === "string" || subject == null ? null : subject.email?.toLowerCase() ?? null;
-}
-
 function hasTenantWideUiAccess(subject: AccessSubject) {
   const role = getRole(subject);
   if (role === "PLATFORM_OWNER") return true;
@@ -134,7 +128,7 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (slug === "parent-portal") return role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
   if (slug === "teacher-portal") return role === "TEACHER";
   if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
-  if (slug === "corporate-billing") return hasTenantWideUiAccess(subject) || corporateBillingEmails.has(getEmail(subject) ?? "");
+  if (slug === "corporate-billing") return hasTenantWideUiAccess(subject);
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;
   if (role === "AUTHORIZED_PICKUP") return authorizedPickupModules.has(slug as ModuleSlug);

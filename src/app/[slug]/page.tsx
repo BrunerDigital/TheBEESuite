@@ -1369,6 +1369,14 @@ async function renderLivePage(
           },
           pickups: { orderBy: { fullName: "asc" } },
           emergencyContacts: { orderBy: { fullName: "asc" } },
+          billingAccount: {
+            select: {
+              id: true,
+              balanceCents: true,
+              autopayPlaceholder: true,
+              customFields: true,
+            },
+          },
           documents: { where: { childId: null }, orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
           _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
         },
@@ -1409,6 +1417,17 @@ async function renderLivePage(
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     const familiesForClient = families.map((family) => ({
       ...family,
+      billingAccount: family.billingAccount
+        ? {
+            id: family.billingAccount.id,
+            balanceCents: family.billingAccount.balanceCents,
+            autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+            paymentMethodManagement: paymentMethodManagementSummary({
+              autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+              customFields: family.billingAccount.customFields,
+            }),
+          }
+        : null,
       guardians: family.guardians.map((guardian) => {
         const credential = buildGuardianKioskCredential({
           id: guardian.id,
@@ -2506,7 +2525,10 @@ async function renderLivePage(
     const paymentWhere: Prisma.PaymentWhereInput = allCenters
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts] = await Promise.all([
+    const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
+      ? {}
+      : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
+    const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
         orderBy: [{ paidAt: "desc" }, { id: "desc" }],
@@ -2534,6 +2556,24 @@ async function renderLivePage(
           autopayPlaceholder: true,
           customFields: true,
         },
+      }),
+      prisma.invoice.findMany({
+        where: {
+          ...invoiceWhere,
+          status: PaymentStatus.OPEN,
+          totalCents: { gt: 0 },
+          dueDate: { lte: today },
+        },
+        select: {
+          totalCents: true,
+          billingAccount: {
+            select: {
+              autopayPlaceholder: true,
+              customFields: true,
+            },
+          },
+        },
+        take: 500,
       }),
     ]);
     const paymentInvoiceIds = Array.from(new Set(paymentRows
@@ -2585,6 +2625,14 @@ async function renderLivePage(
     const stripeCustomers = paymentMethodSummaries.filter((summary) => summary.hasStripeCustomer).length;
     const autopayEnabled = paymentMethodSummaries.filter((summary) => summary.autopayStatus === "enabled").length;
     const autopayPending = paymentMethodSummaries.filter((summary) => summary.autopayStatus === "pending").length;
+    const dueAutopayInvoices = dueOpenInvoices.filter((invoice) => {
+      const summary = paymentMethodManagementSummary({
+        autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
+        customFields: invoice.billingAccount.customFields,
+      });
+      return summary.autopayStatus === "enabled" && summary.hasStripeCustomer && summary.hasSavedPaymentMethod;
+    });
+    const autopayDueCents = dueAutopayInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
     const payoutStartedCenters = payoutCenters.filter((center) => {
       const fields = center.customFields && typeof center.customFields === "object" && !Array.isArray(center.customFields)
         ? center.customFields as Record<string, unknown>
@@ -2621,6 +2669,8 @@ async function renderLivePage(
             savedPaymentMethods,
             autopayEnabled,
             autopayPending,
+            autopayDueInvoices: dueAutopayInvoices.length,
+            autopayDueCents,
           },
         }}
       />
@@ -2751,13 +2801,84 @@ async function renderLivePage(
   }
 
   if (slug === "ai-command") {
-    const [summaries, suggestions, pendingReview] = await Promise.all([
+    const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
+    const [summaries, suggestions, pendingReview, aiLeads, aiFamilies] = await Promise.all([
       prisma.aiSummary.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
       prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
       prisma.aiSuggestion.count({ where: { status: "pending_review" } }),
+      prisma.lead.findMany({
+        where: leadWhere,
+        orderBy: [{ score: "desc" }, { createdAt: "desc" }],
+        take: 100,
+        select: {
+          id: true,
+          centerId: true,
+          familyName: true,
+          childName: true,
+          programInterest: true,
+          stage: true,
+          score: true,
+          createdAt: true,
+          center: { select: { name: true, crmLocationId: true, city: true, state: true } },
+        },
+      }),
+      prisma.family.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: { name: "asc" },
+        take: 200,
+        select: {
+          id: true,
+          centerId: true,
+          name: true,
+          guardians: {
+            orderBy: { fullName: "asc" },
+            take: 2,
+            select: { fullName: true, email: true },
+          },
+          _count: { select: { children: true } },
+        },
+      }),
     ]);
 
-    return <AiCommandPage data={{ summaries, suggestions, stats: { summaries: summaries.length, suggestions: suggestions.length, pendingReview } }} />;
+    return (
+      <AiCommandPage
+        data={{
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          leads: aiLeads.map((lead) => ({
+            id: lead.id,
+            centerId: lead.centerId,
+            centerName: formatCenterName(lead.center),
+            familyName: lead.familyName,
+            childName: lead.childName,
+            programInterest: lead.programInterest,
+            stage: lead.stage,
+            score: lead.score,
+            createdAt: lead.createdAt.toISOString(),
+          })),
+          families: aiFamilies.map((family) => ({
+            id: family.id,
+            centerId: family.centerId,
+            centerName: family.centerId ? centerNameById.get(family.centerId) ?? "Visible school" : "No school",
+            name: family.name,
+            guardianLabel: family.guardians.map((guardian) => guardian.fullName || guardian.email).filter(Boolean).join(", ") || "No guardian listed",
+            childCount: family._count.children,
+          })),
+          summaries: summaries.map((summary) => ({
+            ...summary,
+            createdAt: summary.createdAt.toISOString(),
+          })),
+          suggestions: suggestions.map((suggestion) => ({
+            id: suggestion.id,
+            type: suggestion.type,
+            suggestion: suggestion.suggestion,
+            status: suggestion.status,
+            guardrailNote: suggestion.guardrailNote,
+            createdAt: suggestion.createdAt.toISOString(),
+          })),
+          stats: { summaries: summaries.length, suggestions: suggestions.length, pendingReview },
+        }}
+      />
+    );
   }
 
   if (slug === "white-label") {
@@ -2899,7 +3020,7 @@ async function renderLivePage(
   }
 
   if (slug === "billing-settings") {
-    const [products, tuitionPlans, subscriptions, billingCenters, kidCitySoftwareInvoice] = await Promise.all([
+    const [products, tuitionPlans, subscriptions, billingCenters] = await Promise.all([
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
       prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { amountCents: "asc" }] }),
       prisma.subscriptionPlaceholder.findMany({ orderBy: [{ status: "asc" }, { name: "asc" }] }),
@@ -2914,7 +3035,6 @@ async function renderLivePage(
           customFields: true,
         },
       }),
-      getKidCitySoftwareInvoiceSnapshot(prisma),
     ]);
 
     const stripeConfigured = Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));
@@ -2934,7 +3054,6 @@ async function renderLivePage(
           parentSurchargeBps: getStripeCardProcessingRecoveryBps(),
           tuitionFeatureFeeFixedCents: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS || "0", 10) || 0,
           parentSurchargeFixedCents: getStripeCardProcessingRecoveryFixedCents(),
-          kidCitySoftwareInvoice,
         }}
       />
     );

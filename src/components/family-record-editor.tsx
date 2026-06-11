@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, GitMerge, Save, UserPen } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Save, UserPen } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,18 @@ type DocumentRecord = {
   restricted: boolean;
 };
 
+type PaymentMethodManagementRecord = {
+  autopayEnabled: boolean;
+  autopayStatus: "enabled" | "disabled" | "pending";
+  hasStripeCustomer: boolean;
+  hasSavedPaymentMethod: boolean;
+  stripeCustomerId: string | null;
+  stripeDefaultPaymentMethodId: string | null;
+  paymentMethodType: string | null;
+  paymentMethodLabel: string | null;
+  lastUpdatedAt: string | null;
+};
+
 export type EditableFamilyRecord = {
   id: string;
   centerId: string | null;
@@ -111,6 +123,12 @@ export type EditableFamilyRecord = {
   pickups: AuthorizedPickupRecord[];
   emergencyContacts: EmergencyContactRecord[];
   documents: DocumentRecord[];
+  billingAccount?: {
+    id: string;
+    balanceCents: number;
+    autopayPlaceholder: boolean;
+    paymentMethodManagement: PaymentMethodManagementRecord;
+  } | null;
 };
 
 type Props = {
@@ -119,7 +137,7 @@ type Props = {
 };
 
 const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
-const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "inactive"];
+const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break", "withdrawn", "graduated", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
 
@@ -135,6 +153,17 @@ function scheduleNotes(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const notes = (value as { notes?: unknown }).notes;
   return typeof notes === "string" ? notes : "";
+}
+
+function formatDate(value: string | Date | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return date.toLocaleDateString();
+}
+
+function money(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
 export function FamilyRecordEditor({ families, centers }: Props) {
@@ -274,6 +303,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const selectedDuplicateChildId = duplicateChildId && childDuplicateCandidates.some((candidate) => candidate.candidateId === duplicateChildId)
     ? duplicateChildId
     : childDuplicateCandidates[0]?.candidateId || "";
+  const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
+  const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
+  const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -409,6 +441,39 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      router.refresh();
+    });
+  }
+
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
+    if (!selectedBillingAccount) {
+      setStatusMessage("");
+      setErrorMessage("Create a billing account before saving a family payment method.");
+      return;
+    }
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/payment-method-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billingAccountId: selectedBillingAccount.id,
+          action,
+          paymentMethodCategory,
+          returnPath: "/family-detail",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Payment method management is not configured yet.");
+        return;
+      }
+      if (json?.url) {
+        window.location.href = json.url;
+        return;
+      }
+      setStatusMessage(action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated.");
       router.refresh();
     });
   }
@@ -592,6 +657,52 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             <div className="space-y-1 md:col-span-3">
               <Label>Internal family notes</Label>
               <Textarea value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
+            </div>
+          </div>
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Family payment method</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {selectedBillingAccount
+                    ? selectedPaymentMethod?.hasSavedPaymentMethod
+                      ? `${selectedPaymentMethod.paymentMethodLabel ?? "Payment method saved securely"}${selectedPaymentMethod.lastUpdatedAt ? ` on ${formatDate(selectedPaymentMethod.lastUpdatedAt)}` : ""}.`
+                      : selectedPaymentMethod?.autopayStatus === "pending"
+                        ? "A secure setup session is pending."
+                        : "No bank account or card is saved for autopay."
+                    : "No billing account is linked to this family yet."}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant={selectedAutopayStatus === "enabled" ? "default" : selectedAutopayStatus === "pending" ? "secondary" : "outline"}>
+                  Autopay {selectedAutopayStatus}
+                </Badge>
+                {selectedBillingAccount ? <Badge variant="outline">Balance {money(selectedBillingAccount.balanceCents)}</Badge> : null}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "ach")}>
+                <Building2 data-icon="inline-start" />
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
+              </Button>
+              <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
+                <CreditCard data-icon="inline-start" />
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
+              </Button>
+              <Button
+                disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer}
+                onClick={() => manageFamilyPaymentMethod("portal")}
+                variant="outline"
+              >
+                Manage Saved Method
+              </Button>
+              <Button
+                disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount}
+                onClick={() => manageFamilyPaymentMethod("disable_autopay")}
+                variant="outline"
+              >
+                Disable Autopay
+              </Button>
             </div>
           </div>
           <Button

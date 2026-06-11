@@ -20,6 +20,12 @@ export function getSupabaseAuthConfig(preference: SupabaseAuthKeyPreference = "a
   return { url, key };
 }
 
+export function hasSupabaseAdminAuthConfig() {
+  const url = cleanSupabaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  return Boolean(url && serviceKey);
+}
+
 function getSupabaseAdminClient() {
   const { url, key } = getSupabaseAuthConfig("service");
   return createClient(url, key, {

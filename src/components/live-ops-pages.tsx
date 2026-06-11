@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
+import { AiCommandCenter, type AiCommandCenterData } from "@/components/ai-command-center";
 import {
   AnalyticsReportBuilder,
   type AnalyticsReportBuilderFilters,
@@ -63,6 +64,7 @@ import {
 } from "@/components/emergency-drill-log-panel";
 import { OperationsActionHub } from "@/components/operations-action-hub";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
+import { PaymentAutopayActions } from "@/components/payment-autopay-actions";
 import { NotificationReadAction } from "@/components/notification-read-actions";
 import {
   MessageReplyPanel,
@@ -164,6 +166,15 @@ function jsonSummary(value: unknown) {
       .join(" · ");
   }
   return String(value);
+}
+
+function formatRecordLabel(value: string | null | undefined) {
+  if (!value) return "Not set";
+  return value
+    .replaceAll("_", " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\w/, (letter) => letter.toUpperCase());
 }
 
 function localImageSrc(value: string | null | undefined) {
@@ -3165,7 +3176,7 @@ export function TeacherDocumentsPage({ data }: { data: TeacherDocumentsPageData 
                     {child.fullName} · {child.classroom?.name ?? "Unassigned classroom"} · {child.ageGroup}
                   </CardDescription>
                 </div>
-                <Badge variant="outline">{child.enrollmentStatus}</Badge>
+                <Badge variant="outline">{formatRecordLabel(child.enrollmentStatus)}</Badge>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -4332,7 +4343,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
                     ) : null}
                   </TableCell>
                   <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{child.enrollmentStatus}</TableCell>
+                  <TableCell>{formatRecordLabel(child.enrollmentStatus)}</TableCell>
                   <TableCell>
                     {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
                     {hasCustodyWarning(child.family) ? (
@@ -4638,6 +4649,8 @@ export type PaymentsPageData = {
     savedPaymentMethods: number;
     autopayEnabled: number;
     autopayPending: number;
+    autopayDueInvoices: number;
+    autopayDueCents: number;
   };
 };
 
@@ -4668,12 +4681,14 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
         <StatCard label="Saved methods" value={data.stats.savedPaymentMethods} detail="ready for parent payments" />
         <StatCard label="Autopay enabled" value={data.stats.autopayEnabled} />
         <StatCard label="Setup pending" value={data.stats.autopayPending} detail="checkout setup in progress" />
+        <StatCard label="Due autopay" value={data.stats.autopayDueInvoices} detail={money(data.stats.autopayDueCents)} />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard label="Dunning ready" value={data.stats.dunningReady} detail="send on next cron run" />
         <StatCard label="Retry waiting" value={data.stats.dunningWaiting} detail="follow-up scheduled" />
         <StatCard label="Maxed retries" value={data.stats.dunningMaxed} detail="manual billing review" />
       </div>
+      <PaymentAutopayActions />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Payment Attempts</CardTitle>
@@ -4825,11 +4840,7 @@ export function ReputationPage({ data }: { data: ReputationPageData }) {
   );
 }
 
-export type AiCommandPageData = {
-  summaries: Array<{ id: string; scope: string; title: string; body: string; requiresReview: boolean; createdAt: Date | string }>;
-  suggestions: Array<{ id: string; type: string; suggestion: string; status: string; guardrailNote: string; createdAt: Date | string }>;
-  stats: { summaries: number; suggestions: number; pendingReview: number };
-};
+export type AiCommandPageData = AiCommandCenterData;
 
 export function AiCommandPage({ data }: { data: AiCommandPageData }) {
   return (
@@ -4844,49 +4855,7 @@ export function AiCommandPage({ data }: { data: AiCommandPageData }) {
           Mr. Bee helps summarize, draft, prioritize, and recommend next steps. Suggestions are labeled, logged, and require human review for sensitive workflows.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard label="Summaries" value={data.stats.summaries} />
-        <StatCard label="Suggestions" value={data.stats.suggestions} />
-        <StatCard label="Pending review" value={data.stats.pendingReview} />
-      </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Recent Summaries</CardTitle>
-            <CardDescription>Daily center, family, lead, and compliance summaries</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.summaries.map((summary) => (
-              <div key={summary.id} className="rounded-xl border bg-background/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="font-medium">{summary.title}</div>
-                  <Badge variant={summary.requiresReview ? "outline" : "default"}>{summary.scope}</Badge>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">{summary.body}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Suggestion Queue</CardTitle>
-            <CardDescription>Human approval gate for generated content</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.suggestions.map((suggestion) => (
-              <div key={suggestion.id} className="rounded-xl border bg-background/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="font-medium">{suggestion.type}</div>
-                  <Badge variant={suggestion.status === "approved" ? "default" : "outline"}>{suggestion.status}</Badge>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">{suggestion.suggestion}</p>
-                <p className="mt-2 text-xs text-amber-500">{suggestion.guardrailNote}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-      <OperationsActionHub title="Create or Edit Product / Tuition Plan" defaultEntity="tuitionPlan" compact />
+      <AiCommandCenter data={data} />
     </div>
   );
 }
@@ -5119,7 +5088,9 @@ export type BillingSettingsPageData = {
   parentSurchargeBps: number;
   tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
-  kidCitySoftwareInvoice: {
+};
+
+type KidCitySoftwareInvoiceData = {
     period: string;
     invoiceNumber: string;
     unitAmountCents: number;
@@ -5129,11 +5100,10 @@ export type BillingSettingsPageData = {
     daysUntilDue: number;
     stripeCustomerConfigured: boolean;
     billingEmail?: string | null;
-  };
 };
 
 export type CorporateBillingPageData = {
-  kidCitySoftwareInvoice: BillingSettingsPageData["kidCitySoftwareInvoice"];
+  kidCitySoftwareInvoice: KidCitySoftwareInvoiceData;
 };
 
 export function CorporateBillingPage({ data }: { data: CorporateBillingPageData }) {
@@ -5234,39 +5204,6 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
-      <Card className="glass-panel">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <CardTitle>Kid City USA Enterprises Monthly Software Invoice</CardTitle>
-              <CardDescription className="mt-2 max-w-3xl">
-                Corporate software access is billed monthly at $49 per active school user. This invoice is separate from parent tuition payments and school payout fees.
-              </CardDescription>
-            </div>
-            <Badge variant={data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "default" : "destructive"}>
-              {data.kidCitySoftwareInvoice.stripeCustomerConfigured ? "Payment profile ready" : "Payment profile will be created"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="grid gap-3 sm:grid-cols-4">
-            <StatCard label="Invoice period" value={data.kidCitySoftwareInvoice.period} />
-            <StatCard label="School users" value={data.kidCitySoftwareInvoice.activeSchoolUserCount} />
-            <StatCard label="Per user" value={money(data.kidCitySoftwareInvoice.unitAmountCents)} />
-            <StatCard label="Invoice total" value={money(data.kidCitySoftwareInvoice.totalAmountCents)} />
-          </div>
-          <div className="rounded-xl border bg-background/40 p-4">
-            <div className="text-sm font-medium">{data.kidCitySoftwareInvoice.invoiceNumber}</div>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">{data.kidCitySoftwareInvoice.description}</p>
-            <p className="mt-2 text-xs text-muted-foreground">Due {data.kidCitySoftwareInvoice.daysUntilDue} day(s) after sending.</p>
-            <div className="mt-4">
-              <KidCitySoftwareInvoiceButton
-                disabled={data.kidCitySoftwareInvoice.totalAmountCents <= 0}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>

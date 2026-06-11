@@ -33,6 +33,23 @@ export type StripeSetupIntentSnapshot = {
   raw?: unknown;
 };
 
+export type StripePaymentMethodSnapshot = {
+  id: string;
+  type: string | null;
+  customerId: string | null;
+  last4: string | null;
+  brand: string | null;
+  bankName: string | null;
+  raw?: unknown;
+};
+
+export type StripePaymentIntentSnapshot = {
+  id: string;
+  amountCents?: number | null;
+  status?: string | null;
+  raw?: unknown;
+};
+
 export type StripeConnectedAccountSnapshot = {
   id: string;
   displayName?: string | null;
@@ -588,6 +605,130 @@ export async function createStripeCheckoutSession({
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
 }
 
+export async function createStripeOffSessionPaymentIntent({
+  amountCents,
+  invoiceAmountCents = amountCents,
+  parentSurchargeAmountCents = 0,
+  invoiceNumber,
+  centerName,
+  customerId,
+  paymentMethodId,
+  customerEmail,
+  metadata,
+  connectedAccountId,
+  applicationFeeAmountCents = 0,
+  onBehalfOfConnectedAccount = false,
+  idempotencyKey,
+  tenantId,
+  credentials,
+}: {
+  amountCents: number;
+  invoiceAmountCents?: number;
+  parentSurchargeAmountCents?: number;
+  invoiceNumber: string;
+  centerName?: string | null;
+  customerId: string;
+  paymentMethodId: string;
+  customerEmail?: string | null;
+  metadata: Record<string, string>;
+  connectedAccountId?: string | null;
+  applicationFeeAmountCents?: number;
+  onBehalfOfConnectedAccount?: boolean;
+  idempotencyKey?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { paymentIntent?: StripePaymentIntentSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+  if (amountCents <= 0 || invoiceAmountCents <= 0) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment amount must be greater than zero." };
+  }
+  if (!clean(customerId).startsWith("cus_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A Stripe customer is required for autopay." };
+  }
+  if (!clean(paymentMethodId)) {
+    return { ok: false, configured: true, provider: "stripe", error: "A saved Stripe payment method is required for autopay." };
+  }
+
+  const description = `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber} autopay`;
+  const body = new URLSearchParams({
+    amount: String(amountCents),
+    currency: "usd",
+    customer: customerId,
+    payment_method: paymentMethodId,
+    confirm: "true",
+    off_session: "true",
+    description,
+  });
+
+  if (customerEmail && isEmail(customerEmail)) {
+    body.set("receipt_email", customerEmail);
+  }
+
+  if (connectedAccountId) {
+    body.set("transfer_data[destination]", connectedAccountId);
+    if (onBehalfOfConnectedAccount) {
+      body.set("on_behalf_of", connectedAccountId);
+    }
+    if (applicationFeeAmountCents > 0) {
+      body.set("application_fee_amount", String(Math.min(applicationFeeAmountCents, amountCents)));
+    }
+  }
+
+  Object.entries({
+    ...metadata,
+    invoiceAmountCents: String(invoiceAmountCents),
+    parentSurchargeAmountCents: String(parentSurchargeAmountCents),
+  }).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+
+  const response = await fetch("https://api.stripe.com/v1/payment_intents", {
+    method: "POST",
+    headers: {
+      ...stripeHeaders(apiKey, "form"),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+
+  const json = await response.json().catch(() => null) as {
+    id?: string;
+    amount?: number;
+    status?: string | null;
+    error?: {
+      message?: string;
+      payment_intent?: { id?: string; amount?: number; status?: string | null };
+    };
+  } | null;
+  const paymentIntent = json?.id
+    ? { id: json.id, amountCents: json.amount ?? null, status: clean(json.status) || null, raw: json }
+    : json?.error?.payment_intent?.id
+      ? {
+          id: json.error.payment_intent.id,
+          amountCents: json.error.payment_intent.amount ?? null,
+          status: clean(json.error.payment_intent.status) || null,
+          raw: json.error.payment_intent,
+        }
+      : undefined;
+
+  if (!response.ok || !paymentIntent?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      id: paymentIntent?.id,
+      paymentIntent,
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: paymentIntent.id, paymentIntent };
+}
+
 export async function createStripeCustomer({
   email,
   name,
@@ -803,6 +944,7 @@ export async function createStripeInvoice({
 export async function createStripeSetupCheckoutSession({
   customerId,
   customerEmail,
+  paymentMethodCategory = "default",
   successUrl,
   cancelUrl,
   metadata,
@@ -811,6 +953,7 @@ export async function createStripeSetupCheckoutSession({
 }: {
   customerId?: string | null;
   customerEmail?: string | null;
+  paymentMethodCategory?: StripePaymentMethodCategory;
   successUrl: string;
   cancelUrl: string;
   metadata: Record<string, string>;
@@ -824,6 +967,7 @@ export async function createStripeSetupCheckoutSession({
 
   const body = new URLSearchParams({
     mode: "setup",
+    currency: "usd",
     success_url: successUrl,
     cancel_url: cancelUrl,
     client_reference_id: metadata.billingAccountId || metadata.familyId || "payment-method-setup",
@@ -832,6 +976,10 @@ export async function createStripeSetupCheckoutSession({
     body.set("customer", customerId);
   } else if (customerEmail && isEmail(customerEmail)) {
     body.set("customer_email", customerEmail);
+  }
+  const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(paymentMethodCategory);
+  if (paymentMethodConfigurationId) {
+    body.set("payment_method_configuration", paymentMethodConfigurationId);
   }
   Object.entries(metadata).forEach(([key, value]) => {
     body.set(`metadata[${key}]`, value);
@@ -856,6 +1004,63 @@ export async function createStripeSetupCheckoutSession({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+}
+
+export async function retrieveStripePaymentMethod(paymentMethodId: string, input: TenantCredentialRuntimeInput = {}): Promise<{
+  ok: boolean;
+  configured: boolean;
+  provider: "stripe";
+  paymentMethod?: StripePaymentMethodSnapshot;
+  error?: string;
+}> {
+  const apiKey = await getStripeSecretKey(input);
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+  }
+  if (!clean(paymentMethodId).startsWith("pm_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A valid Stripe payment method is required." };
+  }
+
+  const response = await fetch(`https://api.stripe.com/v1/payment_methods/${encodeURIComponent(paymentMethodId)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as {
+    id?: string;
+    type?: string | null;
+    customer?: string | null;
+    card?: { brand?: string | null; last4?: string | null } | null;
+    us_bank_account?: { bank_name?: string | null; last4?: string | null } | null;
+    error?: { message?: string };
+  } | null;
+
+  if (!response.ok || !json?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    paymentMethod: {
+      id: json.id,
+      type: clean(json.type) || null,
+      customerId: clean(json.customer) || null,
+      last4: clean(json.card?.last4) || clean(json.us_bank_account?.last4) || null,
+      brand: clean(json.card?.brand) || null,
+      bankName: clean(json.us_bank_account?.bank_name) || null,
+      raw: json,
+    },
+  };
 }
 
 export async function createStripeBillingPortalSession({

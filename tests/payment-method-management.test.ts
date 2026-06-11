@@ -11,6 +11,9 @@ test("payment method summary identifies saved Stripe customer and autopay status
     customFields: {
       stripeCustomerId: "cus_123",
       stripeDefaultPaymentMethodId: "pm_123",
+      stripePaymentMethodType: "us_bank_account",
+      stripePaymentMethodBankName: "Test Bank",
+      stripePaymentMethodLast4: "6789",
       stripePaymentMethodSavedAt: "2026-06-04T15:00:00.000Z",
       autopayEnabled: true,
     },
@@ -22,7 +25,25 @@ test("payment method summary identifies saved Stripe customer and autopay status
   assert.equal(summary.hasSavedPaymentMethod, true);
   assert.equal(summary.stripeCustomerId, "cus_123");
   assert.equal(summary.stripeDefaultPaymentMethodId, "pm_123");
+  assert.equal(summary.paymentMethodType, "us_bank_account");
+  assert.equal(summary.paymentMethodLabel, "Test Bank ending 6789");
   assert.equal(summary.lastUpdatedAt, "2026-06-04T15:00:00.000Z");
+});
+
+test("payment method summary labels saved cards without storing full numbers", () => {
+  const summary = paymentMethodManagementSummary({
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_123",
+      stripePaymentMethodType: "card",
+      stripePaymentMethodBrand: "visa",
+      stripePaymentMethodLast4: "4242",
+      autopayEnabled: true,
+    },
+  });
+
+  assert.equal(summary.paymentMethodType, "card");
+  assert.equal(summary.paymentMethodLabel, "Visa ending 4242");
 });
 
 test("payment method summary treats setup sessions as pending", () => {

@@ -148,6 +148,8 @@ type Props = {
       hasSavedPaymentMethod: boolean;
       stripeCustomerId: string | null;
       stripeDefaultPaymentMethodId: string | null;
+      paymentMethodType: string | null;
+      paymentMethodLabel: string | null;
       lastUpdatedAt: string | null;
     };
   } | null;
@@ -364,13 +366,18 @@ export function ParentPortalWorkspace({
     payInvoice(nextOpenInvoice.id, paymentMethodCategory);
   }
 
-  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay") {
+  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
     if (!billingAccount) return showError("A billing account is required before saving payment methods.");
     startTransition(async () => {
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ billingAccountId: billingAccount.id, action }),
+        body: JSON.stringify({
+          billingAccountId: billingAccount.id,
+          action,
+          paymentMethodCategory,
+          returnPath: "/parent-portal",
+        }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
       if (!response.ok) return showError(json?.error || "Payment method management is not configured yet.");
@@ -577,16 +584,20 @@ export function ParentPortalWorkspace({
                   <div className="font-medium">Payment Method And Autopay</div>
                   <div className="text-xs text-muted-foreground">
                     {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `Saved securely${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
+                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
                       : paymentMethodManagement?.autopayStatus === "pending"
                         ? "A secure setup session is pending."
-                        : "Save a payment method to enable autopay."}
+                        : "Add a bank account or card to enable autopay."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup")}>
+                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "ach")}>
+                    <Building2 data-icon="inline-start" />
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
+                  </Button>
+                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Method" : "Save Method"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
                   </Button>
                   <Button
                     disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}

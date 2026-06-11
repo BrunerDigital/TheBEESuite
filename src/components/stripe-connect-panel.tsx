@@ -316,7 +316,7 @@ export function StripeConnectPanel({
           Parent checkout is blocked for a school until its connected payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout because there is no separate monthly software fee for the tuition billing and payment module. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
         {!parentProcessingRecoveryApproved ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">

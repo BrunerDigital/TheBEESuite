@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
-import { checkoutApplicationGuard, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
+import { checkoutApplicationGuard, isActiveStripeAutopayPayment, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
 import { demoAccountEmails } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -81,6 +81,26 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     status: PaymentStatus.DRAFT,
     provider: "stripe_mock",
     customFields: { status: "checkout_created" },
+  }), false);
+});
+
+test("active Stripe autopay detection only blocks draft autopay attempts", () => {
+  assert.equal(isActiveStripeAutopayPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_processing" },
+  }), true);
+
+  assert.equal(isActiveStripeAutopayPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "autopay_succeeded_pending_webhook" },
+  }), true);
+
+  assert.equal(isActiveStripeAutopayPayment({
+    status: PaymentStatus.FAILED,
+    provider: "stripe",
+    customFields: { status: "autopay_processing" },
   }), false);
 });
 

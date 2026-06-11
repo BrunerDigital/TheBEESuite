@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
 import { createStripeCustomer, createStripeInvoice } from "@/lib/integrations";
@@ -8,6 +7,7 @@ import {
   saveKidCitySoftwareStripeCustomerId,
 } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
+import { canAccessModule } from "@/lib/rbac";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -16,16 +16,10 @@ function jsonObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function canManageCorporateBilling(user: { role: UserRole; email: string }) {
-  return user.role === UserRole.PLATFORM_OWNER ||
-    user.role === UserRole.BRAND_ADMIN ||
-    user.email.toLowerCase() === "accounting@kidcityusa.com";
-}
-
 async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCorporateBilling(user)) {
+  if (!canAccessModule(user, "corporate-billing")) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
   }
 
@@ -36,7 +30,7 @@ async function GETHandler() {
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageCorporateBilling(user)) {
+  if (!canAccessModule(user, "corporate-billing")) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
   }
 

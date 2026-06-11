@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import {
+  isActiveProcareStaffStatus,
+  normalizeProcareEnrollmentStatus,
+  procareAgeGroup,
+  procareChildFullName,
+  procareChildPreferredName,
+  procareClassroomName,
+  procareFamilyName,
+  procareSourceFields,
+  procareStaffName,
+  procareValue as value,
+} from "@/lib/procare-import-fields";
 import { prisma } from "@/lib/prisma";
 import { buildCenterAliasMap, resolveImportCenter, type CenterAliasMap } from "@/lib/import-center-mapping";
 import {
@@ -9,7 +21,7 @@ import {
   scoreProcareDuplicateCandidate,
   type ProcareDuplicateMatch,
 } from "@/lib/procare-duplicate-matching";
-import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { hasSupabaseAdminAuthConfig, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import { generateTeacherLoginCredentials } from "@/lib/teacher-login";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -59,14 +71,6 @@ function parseImportRows(text: string) {
   });
   parsed.sort((a, b) => b.score - a.score);
   return parsed[0]?.rows ?? [];
-}
-
-function value(record: Record<string, string>, aliases: string[]) {
-  for (const alias of aliases) {
-    const found = record[alias.toLowerCase()];
-    if (found) return found.trim();
-  }
-  return "";
 }
 
 function cents(input: string) {
@@ -128,6 +132,7 @@ function metadataFromRow(rawData: Record<string, string>, extra: Record<string, 
   return {
     source: "procare_import",
     rawData,
+    sourceFields: procareSourceFields(rawData),
     userDefined,
     ...extra,
   };
@@ -291,6 +296,8 @@ async function findExistingImportedStaffProfile(input: {
 
 type DuplicateMatchMode = "review" | "strict" | "auto";
 
+const PREVIEW_DATABASE_LOOKUP_ROW_LIMIT = 500;
+
 function duplicateMatchMode(input: string): DuplicateMatchMode {
   return input === "strict" || input === "auto" ? input : "review";
 }
@@ -299,6 +306,18 @@ function duplicateMatchNeedsReview(match: ProcareDuplicateMatch, mode: Duplicate
   if (!match.candidates.length) return false;
   if (mode === "strict") return true;
   return match.resolution === "needs_review";
+}
+
+function previewImportKey(...parts: Array<string | null | undefined>) {
+  return parts
+    .filter((part): part is string => Boolean(part))
+    .map((part) => part.trim().toLowerCase())
+    .join(":");
+}
+
+function previewImportIdentityKey(scope: string, ...candidates: Array<string | null | undefined>) {
+  const identity = candidates.find((candidate) => Boolean(candidate?.trim()));
+  return identity ? previewImportKey(scope, identity) : "";
 }
 
 async function findProcareDuplicateMatches({
@@ -311,8 +330,8 @@ async function findProcareDuplicateMatches({
   rawData: Record<string, string>;
 }) {
   const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
-  const familyName = value(rawData, ["family name", "account name", "account", "family", "payer family", "household", "parent name", "primary guardian", "primary payer"]);
-  const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
+  const familyName = procareFamilyName(rawData);
+  const childName = procareChildFullName(rawData);
   const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
   const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
   const guardianExternalId = externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]);
@@ -510,6 +529,8 @@ async function previewImportRows({
   filename: string;
   duplicateMode: DuplicateMatchMode;
 }) {
+  const importRowCount = Math.max(rows.length - 1, 0);
+  const runDatabasePreviewLookups = importRowCount <= PREVIEW_DATABASE_LOOKUP_ROW_LIMIT;
   let familyRows = 0;
   let staffRows = 0;
   let matchedFamilies = 0;
@@ -524,6 +545,9 @@ async function previewImportRows({
   let unmappedRows = 0;
   const centersTouched = new Set<string>();
   const classroomsReferenced = new Set<string>();
+  const importFamilyKeys = new Set<string>();
+  const importChildKeys = new Set<string>();
+  const importStaffKeys = new Set<string>();
   const duplicateReviewRows = new Set<number>();
   const duplicateMatches: ProcareDuplicateMatch[] = [];
   const warnings: Array<{ rowNumber: number; message: string }> = [];
@@ -565,32 +589,38 @@ async function previewImportRows({
     }
 
     centersTouched.add(targetCenter.id);
-    const employeeName = value(rawData, ["employee name", "staff name", "teacher name", "employee", "teacher"]);
+    const employeeName = procareStaffName(rawData);
     const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
     const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
-    const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
-    const familyName = value(rawData, ["family name", "account name", "account", "family", "payer family", "household", "parent name", "primary guardian", "primary payer"]);
+    const childName = procareChildFullName(rawData);
+    const familyName = procareFamilyName(rawData);
     const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
     const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
     const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
-    const classroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "class", "assigned classroom", "assigned room"]);
+    const classroomName = procareClassroomName(rawData);
     if (classroomName) classroomsReferenced.add(`${targetCenter.id}:${classroomName}`);
 
     if (employeeName && !childName && !familyName) {
       staffRows += 1;
       const staffContactEmail = normalizedStaffContactEmail(employeeEmail);
-      const existingStaff = await findExistingImportedStaffProfile({
-        centerId: targetCenter.id,
-        externalId: employeeExternalId,
-        contactEmail: staffContactEmail,
-      });
-      if (existingStaff) matchedStaff += 1; else newStaff += 1;
+      const staffKey = previewImportIdentityKey(targetCenter.id, employeeExternalId, staffContactEmail, employeeName);
+      if (staffKey) importStaffKeys.add(staffKey);
+      const existingStaff = runDatabasePreviewLookups
+        ? await findExistingImportedStaffProfile({
+            centerId: targetCenter.id,
+            externalId: employeeExternalId,
+            contactEmail: staffContactEmail,
+          })
+        : null;
+      if (runDatabasePreviewLookups) {
+        if (existingStaff) matchedStaff += 1; else newStaff += 1;
+      }
       rowResults.push({
         rowNumber,
         status: "ready",
         entity: "staff",
         center: targetCenter.crmLocationId ?? targetCenter.name,
-        action: existingStaff ? "Update staff" : "Create staff",
+        action: runDatabasePreviewLookups ? existingStaff ? "Update staff" : "Create staff" : "Ready to import staff",
         staffName: employeeName,
       });
       continue;
@@ -604,6 +634,11 @@ async function previewImportRows({
     }
 
     familyRows += 1;
+    const familyIdentity = accountExternalId || familyName || email || childName;
+    const familyKey = previewImportIdentityKey(targetCenter.id, accountExternalId, familyName, email, childName);
+    if (familyKey) importFamilyKeys.add(familyKey);
+    const childKey = childName ? previewImportKey(targetCenter.id, familyIdentity, childExternalId || childName) : "";
+    if (childKey) importChildKeys.add(childKey);
     if (cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]))) balanceRows += 1;
     if (value(rawData, ["attendance date", "date", "absence date", "attendance status", "attendance"])) attendanceRows += 1;
     if (value(rawData, ["check in", "check-in", "time in", "check out", "check-out", "time out"])) checkLogRows += 1;
@@ -613,13 +648,15 @@ async function previewImportRows({
       familyName ? { name: familyName } : undefined,
       email ? { billingEmail: email } : undefined,
     ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; name?: string; billingEmail?: string }>;
-    const existingFamily = familyMatchers.length
+    const existingFamily = runDatabasePreviewLookups && familyMatchers.length
       ? await prisma.family.findFirst({ where: { centerId: targetCenter.id, OR: familyMatchers }, select: { id: true } })
       : null;
-    if (existingFamily) matchedFamilies += 1; else newFamilies += 1;
+    if (runDatabasePreviewLookups) {
+      if (existingFamily) matchedFamilies += 1; else newFamilies += 1;
+    }
 
     let existingChild: { id: string } | null = null;
-    if (existingFamily && childName) {
+    if (runDatabasePreviewLookups && existingFamily && childName) {
       existingChild = await prisma.child.findFirst({
         where: {
           familyId: existingFamily.id,
@@ -631,10 +668,12 @@ async function previewImportRows({
         select: { id: true },
       });
     }
-    if (childName) {
+    if (runDatabasePreviewLookups && childName) {
       if (existingChild) matchedChildren += 1; else newChildren += 1;
     }
-    const rowDuplicateMatches = await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData });
+    const rowDuplicateMatches = runDatabasePreviewLookups
+      ? await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData })
+      : [];
     const rowDuplicateWarnings = rowDuplicateMatches.filter((match) => duplicateMatchNeedsReview(match, duplicateMode));
     if (rowDuplicateMatches.length) duplicateMatches.push(...rowDuplicateMatches);
     if (rowDuplicateWarnings.length) {
@@ -647,11 +686,21 @@ async function previewImportRows({
       status: rowDuplicateWarnings.length ? "warning" : "ready",
       entity: "family_child",
       center: targetCenter.crmLocationId ?? targetCenter.name,
-      action: rowDuplicateWarnings.length ? "Review duplicate matches" : existingFamily ? "Update family" : "Create family",
+      action: rowDuplicateWarnings.length
+        ? "Review duplicate matches"
+        : runDatabasePreviewLookups
+          ? existingFamily ? "Update family" : "Create family"
+          : "Ready to import family",
       familyName: familyName || email || childName,
       childName: childName || undefined,
       message: rowDuplicateWarnings.length ? rowDuplicateWarnings.map((match) => `${match.entity}: ${match.importLabel}`).join("; ") : undefined,
     });
+  }
+
+  if (!runDatabasePreviewLookups) {
+    newFamilies = importFamilyKeys.size;
+    newChildren = importChildKeys.size;
+    newStaff = importStaffKeys.size;
   }
 
   return {
@@ -677,6 +726,9 @@ async function previewImportRows({
     centersTouched: centersTouched.size,
     duplicateMatches: duplicateMatches.length,
     duplicateReviewRows: duplicateReviewRows.size,
+    duplicateScanSkipped: !runDatabasePreviewLookups,
+    duplicateScanRowLimit: PREVIEW_DATABASE_LOOKUP_ROW_LIMIT,
+    existingMatchPreviewSkipped: !runDatabasePreviewLookups,
     duplicateMatchesByEntity: {
       families: duplicateMatches.filter((match) => match.entity === "family").length,
       children: duplicateMatches.filter((match) => match.entity === "child").length,
@@ -685,7 +737,7 @@ async function previewImportRows({
     duplicateMatchMode: duplicateMode,
     duplicateMatchDetails: duplicateMatches.slice(0, 50),
     warnings: warnings.slice(0, 25),
-    rowResults: rowResults.slice(0, 75),
+    rowResults: rowResults.slice(0, 500),
   };
 }
 
@@ -977,10 +1029,10 @@ async function POSTHandler(request: NextRequest) {
         throw new Error(`Could not map row to a center from "${rowCenterValue || "blank location"}".`);
       }
       centersTouched.add(targetCenter.id);
-      const employeeName = value(rawData, ["employee name", "staff name", "teacher name", "employee", "teacher"]);
+      const employeeName = procareStaffName(rawData);
       const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
       const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
-      if (employeeName && !value(rawData, ["child name", "student name", "student", "child", "name"]) && !value(rawData, ["family name", "account name", "account", "family"])) {
+      if (employeeName && !procareChildFullName(rawData) && !procareFamilyName(rawData)) {
         const staffContactEmail = normalizedStaffContactEmail(employeeEmail);
         const existingStaff = await findExistingImportedStaffProfile({
           centerId: targetCenter.id,
@@ -993,7 +1045,8 @@ async function POSTHandler(request: NextRequest) {
               fullName: employeeName,
               emailExists: (candidate) => prisma.user.findUnique({ where: { email: candidate }, select: { id: true } }).then(Boolean),
             });
-        if (generatedLogin) {
+        const canCreateSupabaseStaffAuth = hasSupabaseAdminAuthConfig();
+        if (generatedLogin && canCreateSupabaseStaffAuth) {
           await upsertSupabaseAuthUserWithPassword({
             email: generatedLogin.email,
             name: employeeName,
@@ -1003,18 +1056,20 @@ async function POSTHandler(request: NextRequest) {
           });
           createdStaffLogins += 1;
         }
-        const staffClassroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "assigned classroom", "assigned room"]);
+        const staffClassroomName = procareClassroomName(rawData);
         let staffClassroomId: string | null = null;
         if (staffClassroomName) {
           const classroom = await findOrCreateClassroom({
             centerId: targetCenter.id,
             name: staffClassroomName,
-            ageGroup: value(rawData, ["age group", "program", "class", "room"]) || "Staff assignment",
+            ageGroup: procareAgeGroup(rawData, "Staff assignment"),
             rawData,
           });
           staffClassroomId = classroom.id;
           if (classroom.created) createdClassrooms += 1;
         }
+        const employeeStatus = value(rawData, ["employee status", "staff status", "teacher status"]);
+        const employeeIsActive = isActiveProcareStaffStatus(employeeStatus);
         const staffWrite = await prisma.$transaction(async (tx) => {
           const staffUser = existingStaff
             ? await tx.user.update({
@@ -1022,7 +1077,7 @@ async function POSTHandler(request: NextRequest) {
                 data: {
                   name: employeeName,
                   role: UserRole.TEACHER,
-                  isActive: true,
+                  isActive: employeeIsActive,
                   organizationId: user.organizationId,
                 },
                 select: { id: true },
@@ -1034,7 +1089,7 @@ async function POSTHandler(request: NextRequest) {
                   email: generatedLogin!.email,
                   name: employeeName,
                   role: UserRole.TEACHER,
-                  isActive: true,
+                  isActive: employeeIsActive,
                   mustResetPassword: true,
                 },
                 select: { id: true },
@@ -1048,7 +1103,10 @@ async function POSTHandler(request: NextRequest) {
           const customFields = metadataFromRow(rawData, {
             mappedCenterId: targetCenter.id,
             ...(staffContactEmail ? { staffContactEmail } : {}),
-            ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email } : {}),
+            employeeStatus,
+            employeeStatusDate: value(rawData, ["status date", "employee status date"]),
+            primaryWorkArea: value(rawData, ["primary work area", "work area"]),
+            ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email, supabaseAuthUserCreated: canCreateSupabaseStaffAuth } : {}),
           });
           const data = {
             centerId: targetCenter.id,
@@ -1101,8 +1159,8 @@ async function POSTHandler(request: NextRequest) {
       }
 
       const accountExternalId = externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
-      const familyName = value(rawData, ["family name", "account name", "account", "family", "payer family", "household", "parent name", "primary guardian", "primary payer"]);
-      const childName = value(rawData, ["child name", "student name", "student", "child", "name"]);
+      const familyName = procareFamilyName(rawData);
+      const childName = procareChildFullName(rawData);
       const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
       const guardianExternalId = externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]);
       const guardianName = value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]);
@@ -1110,8 +1168,9 @@ async function POSTHandler(request: NextRequest) {
       const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]);
       const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
       const balanceCents = cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]));
-      const classroomName = value(rawData, ["classroom", "classroom name", "room", "room name", "class"]);
-      const ageGroup = value(rawData, ["age group", "program", "class", "room"]) || "Preschool";
+      const classroomName = procareClassroomName(rawData);
+      const ageGroup = procareAgeGroup(rawData, "Unassigned");
+      const enrollmentStatus = normalizeProcareEnrollmentStatus(value(rawData, ["child status", "status", "enrollment status", "student status"]));
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
       const familyMatchers = [
@@ -1268,6 +1327,12 @@ async function POSTHandler(request: NextRequest) {
           procareChildId: childExternalId,
           dateOfBirthMissing: !childDob,
           childTracking: value(rawData, ["child tracking", "tracking", "additional tracking"]),
+          childFirstName: value(rawData, ["first name", "child first name", "student first name"]),
+          childMiddleInitial: value(rawData, ["middle initial", "middle name", "child middle name", "student middle name"]),
+          childLastName: value(rawData, ["last name", "child last name", "student last name"]),
+          gender: value(rawData, ["gender", "sex"]),
+          enrollmentStatus,
+          enrollmentEndDate: value(rawData, ["end date", "withdrawal date", "termination date"]),
         });
         const existingChild = await prisma.child.findFirst({
           where: {
@@ -1285,10 +1350,10 @@ async function POSTHandler(request: NextRequest) {
               familyId: family.id,
               classroomId,
               fullName: childName,
-              preferredName: value(rawData, ["preferred name", "nickname"]) || null,
+              preferredName: procareChildPreferredName(rawData) || null,
               dateOfBirth: childDob ?? new Date("1900-01-01T12:00:00.000Z"),
               ageGroup,
-              enrollmentStatus: value(rawData, ["child status", "status", "enrollment status", "student status"]) || "enrolled",
+              enrollmentStatus,
               startDate: parseDate(value(rawData, ["start date", "enrollment date", "begin date", "first day"])),
               schedule: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) ? { notes: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) } : undefined,
               photoVideoPermission: boolValue(value(rawData, ["photo permission", "photo/video permission", "media permission", "photo release"])),
@@ -1311,7 +1376,7 @@ async function POSTHandler(request: NextRequest) {
             data: {
               classroomId: classroomId || undefined,
               ageGroup,
-              enrollmentStatus: value(rawData, ["child status", "status", "enrollment status", "student status"]) || undefined,
+              enrollmentStatus,
               startDate: parseDate(value(rawData, ["start date", "enrollment date", "begin date", "first day"])) || undefined,
               schedule: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) ? { notes: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) } : undefined,
               napNotes: value(rawData, ["nap notes", "sleep notes"]) || undefined,

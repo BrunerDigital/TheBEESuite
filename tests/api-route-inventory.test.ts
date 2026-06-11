@@ -22,6 +22,8 @@ test("API route smoke inventory covers every route file and exported method", ()
   assert.ok(methodChecks.length >= specs.length, "The smoke runner must exercise at least one method for every route.");
   assert.ok(methodChecks.includes("GET /api/health"));
   assert.ok(methodChecks.includes("POST /api/communications/messages"));
+  assert.ok(methodChecks.includes("POST /api/billing/autopay"));
+  assert.ok(methodChecks.includes("GET /api/cron/autopay-invoices"));
   assert.ok(methodChecks.includes("POST /api/billing/stripe-webhook"));
   assert.ok(methodChecks.includes("POST /api/twilio/inbound"));
 

@@ -202,7 +202,7 @@ Status legend:
 
 - [x] ProCare import page/panel exists.
 - [x] ProCare import API exists.
-- [x] Import supports CSV and encrypted `.v10` workflow foundation.
+- [x] Import supports unencrypted ProCare CSV exports.
 - [x] Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.
 - [x] Import preview/diff UI exists.
 - [x] Import rollback/export backup exists.

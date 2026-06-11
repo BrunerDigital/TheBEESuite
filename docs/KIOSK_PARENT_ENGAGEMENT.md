@@ -96,7 +96,7 @@ Production hardening to do before heavy media use:
 
 ## ProCare Family Import
 
-Directors and operations users can import family account data from ProCare CSV exports or encrypted `.v10` exports from the family profile page. `.v10` passwords are used server-side for that upload only and are not saved.
+Directors and operations users can import family account data from unencrypted ProCare CSV exports from the family profile page.
 
 Supported matching fields include common aliases for:
 

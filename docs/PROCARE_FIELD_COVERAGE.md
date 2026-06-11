@@ -7,7 +7,7 @@ This note documents how The BEE Suite maps the ProCare data areas visible in the
 - Active ProCare window title: `Procare - [S32] Kid City USA Longmont`.
 - Visible module areas: `Family Data & Accounting`, `Employee Data & Payroll`, `Expenses & Ledger`, account list, account summary, payer summary, child summary, classroom/status fields.
 - Installed ProCare report catalog under `C:\Program Files\Procare\Client\Reports`, including family data, child enrollment, relationships, immunizations, FTE, rollcall, schedules, sign-in/out, employee records, attendance, account balances, aging, charge/credit activity, statements, deposits, tuition variance, and payment reports.
-- Uploaded Longmont `.v10` export structure. The file is encrypted; the provided app login did not unlock the archive payload, so final field validation still requires the actual export password or a CSV export.
+- Uploaded Longmont ProCare CSV export structure. Final field validation should use unencrypted CSV exports.
 
 ## Current BEE Suite Coverage
 
@@ -48,7 +48,7 @@ This note documents how The BEE Suite maps the ProCare data areas visible in the
 
 ## Remaining Validation Needed
 
-- Obtain the actual `.v10` export password or a CSV export from ProCare.
+- Obtain unencrypted CSV exports from ProCare.
 - Run one Longmont import into production or a staging database and review `ProcareImportRow` errors.
 - Confirm exact ProCare column names for schedules, immunizations, tuition contracts, subsidy/agency payments, and employee certifications.
 - Add any high-volume ledger transaction imports after the accounting export format is confirmed.

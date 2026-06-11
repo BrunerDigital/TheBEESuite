@@ -4,7 +4,7 @@ These are the items that require the business owner, account admin, ProCare user
 
 ## Critical Before Live Operations
 
-- [ ] Provide the actual ProCare `.v10` export password, or export CSV files from ProCare instead.
+- [ ] Provide unencrypted ProCare CSV export files from ProCare.
 - [ ] Export/confirm these ProCare datasets for at least Longmont first: family accounts, children, guardians/payers, relationships, authorized pickups, emergency contacts, classroom roster, staff, attendance/sign-in/out, balances/ledger, tuition contracts, schedules, immunization/medical/allergy fields, and FTE.
 - [ ] Confirm the exact Kid City USA open-location list and mark any closed locations that should remain archived only.
 - [ ] Confirm each location's official school email, director email, phone, address, CRM location ID, and location ID.

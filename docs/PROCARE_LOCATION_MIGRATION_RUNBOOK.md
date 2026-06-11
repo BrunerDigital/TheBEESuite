@@ -32,7 +32,7 @@ Collect these before scheduling a final cutover window:
 
 - Official school name, `Center.crmLocationId`, `Center.locationId`, address, phone, school email, director email, and notification recipients.
 - Confirmation that the location is open, active, and should appear in public inquiry location lists.
-- Unencrypted ProCare CSV exports, or the actual `.v10` export password.
+- Unencrypted ProCare CSV exports.
 - Final ProCare datasets used by the school: family accounts, children, guardians/payers, relationships, authorized pickups, emergency contacts, classroom roster, staff, attendance/sign-in-out, balances/ledger, tuition contracts, schedules, immunization/medical/allergy fields, and FTE.
 - School-specific classroom names, capacities, age groups, ratios, programs, tuition rates, fees, discounts, subsidy/agency rules, and billing cadence.
 - Decision on whether existing parent PINs are imported, reset by directors, or created by guardians in the parent portal.
@@ -66,7 +66,7 @@ Create one evidence packet per location and keep it with the support/cutover rec
 
 ### T-7 To T-3 Export And Dry Run
 
-1. Export ProCare data in unencrypted CSV format, or provide the `.v10` password.
+1. Export ProCare data in unencrypted CSV format.
 2. Run an import preview/diff for the location.
 3. Review `ProcareImportRow` errors and warnings.
 4. Confirm unmapped fields are either mapped, stored in `customFields.rawData`, or intentionally excluded.

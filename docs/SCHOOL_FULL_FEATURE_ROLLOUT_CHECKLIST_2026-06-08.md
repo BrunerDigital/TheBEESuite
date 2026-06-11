@@ -216,13 +216,13 @@ Complete this for each school before that school uses operational modules live.
 
 - [x] ProCare import page/panel exists.
 - [x] ProCare import API exists.
-- [x] Import supports CSV and encrypted `.v10` workflow foundation.
+- [x] Import supports unencrypted ProCare CSV exports.
 - [x] Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.
 - [x] Staff imported through ProCare receive generated Bee Suite teacher login usernames and center-scoped teacher access.
 - [x] Import preview/diff UI exists.
 - [x] Import rollback/export backup exists.
 - [x] Duplicate matching controls for families/children/guardians exist.
-- [ ] Provide actual ProCare `.v10` password, or CSV exports, for each rollout school.
+- [ ] Provide unencrypted ProCare CSV exports for each rollout school.
 - [ ] Export/confirm ProCare datasets: family accounts, children, guardians/payers, relationships, authorized pickups, emergency contacts, classroom roster, staff, attendance, balances/ledger, tuition contracts, schedules, immunization/medical/allergy fields, and FTE.
 - [ ] Run final import mapping against real exports from each live school.
 - [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.

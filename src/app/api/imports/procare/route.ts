@@ -4,6 +4,7 @@ import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { buildCenterAliasMap, resolveImportCenter, type CenterAliasMap } from "@/lib/import-center-mapping";
 import {
   buildProcareDuplicateMatch,
   scoreProcareDuplicateCandidate,
@@ -119,21 +120,6 @@ function parseDateAndTime(dateInput: string, timeInput: string) {
 
 function isEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function centerKey(value: string | null | undefined) {
-  return (value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function centerAliases(center: { id: string; name: string; crmLocationId: string | null; locationId: string | null; city: string | null; state: string | null }) {
-  return [
-    center.id,
-    center.name,
-    center.crmLocationId,
-    center.locationId,
-    [center.city, center.state].filter(Boolean).join(" "),
-    [center.name, center.city, center.state].filter(Boolean).join(" "),
-  ].map(centerKey).filter(Boolean);
 }
 
 function metadataFromRow(rawData: Record<string, string>, extra: Record<string, unknown> = {}) {
@@ -520,7 +506,7 @@ async function previewImportRows({
   headers: string[];
   autoMap: boolean;
   defaultCenter: ImportCenter;
-  centerByAlias: Map<string, ImportCenter>;
+  centerByAlias: CenterAliasMap<ImportCenter>;
   sourceType: string;
   filename: string;
   duplicateMode: DuplicateMatchMode;
@@ -569,7 +555,7 @@ async function previewImportRows({
       "site",
     ]);
     const targetCenter = autoMap
-      ? centerByAlias.get(centerKey(rowCenterValue)) ?? null
+      ? resolveImportCenter(centerByAlias, rowCenterValue)
       : defaultCenter;
     if (!targetCenter) {
       unmappedRows += 1;
@@ -996,12 +982,7 @@ async function POSTHandler(request: NextRequest) {
     ? visibleCenters[0] ?? null
     : visibleCenters.find((item) => item.id === centerId) ?? null;
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
-  const centerByAlias = new Map<string, typeof center>();
-  for (const visibleCenter of visibleCenters) {
-    for (const alias of centerAliases(visibleCenter)) {
-      centerByAlias.set(alias, visibleCenter);
-    }
-  }
+  const centerByAlias = buildCenterAliasMap(visibleCenters);
 
   let importPayload: Awaited<ReturnType<typeof readImportText>>;
   try {
@@ -1101,7 +1082,7 @@ async function POSTHandler(request: NextRequest) {
         "site",
       ]);
       const targetCenter = autoMap
-        ? centerByAlias.get(centerKey(rowCenterValue)) ?? null
+        ? resolveImportCenter(centerByAlias, rowCenterValue)
         : center;
       if (!targetCenter) {
         throw new Error(`Could not map row to a center from "${rowCenterValue || "blank location"}".`);

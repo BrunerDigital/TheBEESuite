@@ -38,16 +38,16 @@ test("submitted widget rows drive both visibility and ordering", () => {
     value: {
       widgets: [
         { id: "billingRevenue", visible: true },
-        { id: "enrollmentPipeline", visible: false },
+        { id: "aiBrief", visible: false },
         { id: "familyCommunication", visible: true },
         { id: "complianceQueue", visible: true },
       ],
     },
   });
 
-  assert.deepEqual(config.order.slice(0, 3), ["billingRevenue", "enrollmentPipeline", "familyCommunication"]);
+  assert.deepEqual(config.order.slice(0, 3), ["billingRevenue", "aiBrief", "familyCommunication"]);
   assert.deepEqual(config.visibleWidgetIds, ["billingRevenue", "familyCommunication"]);
-  assert.ok(config.hiddenWidgetIds.includes("enrollmentPipeline"));
+  assert.ok(config.hiddenWidgetIds.includes("aiBrief"));
   assert.ok(!config.widgets.some((widget) => widget.id === "complianceQueue"));
 });
 

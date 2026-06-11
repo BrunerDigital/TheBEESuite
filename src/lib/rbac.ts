@@ -130,6 +130,7 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (!role) return false;
   if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
+  if (slug === "parent-portal" && isExecutiveRole(role)) return true;
   if (slug === "parent-portal") return role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
   if (slug === "teacher-portal") return role === "TEACHER";
   if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);

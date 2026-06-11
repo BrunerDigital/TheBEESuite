@@ -8,10 +8,6 @@
       "schedule": "0 14 * * 1-5"
     },
     {
-      "path": "/api/cron/fte-reminders",
-      "schedule": "0 12,13,17,18 * * 5"
-    },
-    {
       "path": "/api/cron/integration-retries",
       "schedule": "30 14 * * *"
     },

@@ -1,0 +1,13 @@
+
+> the-bee-suite@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.151:3000
+- Environments: .env.local
+✓ Ready in 3.8s
+
+○ Compiling /[slug] ...
+ GET /live-ops 307 in 14.1s (next.js: 13.7s, generate-params: 870ms, application-code: 389ms)
+ GET /login?next=/live-ops 200 in 488ms (next.js: 390ms, application-code: 98ms)

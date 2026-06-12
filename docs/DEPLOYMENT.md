@@ -3,23 +3,22 @@
 ## Vercel
 
 1. Push the repository to GitHub.
-2. Create a Vercel project from the repository.
-3. Set environment variables from `.env.example`.
-4. Add `DATABASE_URL` for a production Postgres database.
-5. Run `npm run db:generate` during build if your deployment flow needs Prisma Client generation.
-6. Deploy with the default Next.js settings.
+2. Connect the Vercel project `the-bee-suite` to `BrunerDigital/TheBEESuite`.
+3. Set environment variables from `.env.example`, scoped separately for production, preview, and development.
+4. Add `DATABASE_URL` for the production Postgres database.
+5. Keep deployments flowing through GitHub branches and Vercel previews.
 
 Recommended Vercel build command:
 
 ```bash
-npm run build
+npm run vercel-build
 ```
 
 ## Supabase Setup
 
 1. Create a Supabase project.
 2. Copy the pooled Postgres connection string into `DATABASE_URL`.
-3. If using Supabase Auth, set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
+3. If using Supabase Auth, set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SECRET_KEY`. `SUPABASE_SERVICE_ROLE_KEY` remains a legacy fallback only.
 4. Run:
 
 ```bash
@@ -32,16 +31,16 @@ npm run db:seed
 
 ## Prisma Setup
 
-Local Postgres:
+Cloud development:
 
 ```bash
-cp .env.example .env
-npm install
+npm run cloud:link
+npm run cloud:env
 npm run db:generate
-npm run db:push
-npm run db:seed
 npm run dev
 ```
+
+Local Postgres remains a fallback only. See `docs/CLOUD_DEVELOPMENT.md` for the preferred Codespaces workflow.
 
 ## Go-Live Checklist
 

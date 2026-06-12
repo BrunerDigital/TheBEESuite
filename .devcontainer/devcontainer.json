@@ -1,0 +1,33 @@
+{
+  "name": "The BEE Suite",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js dev server",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm ci && npm run db:generate",
+  "postAttachCommand": "printf '\\nCloud workflow: run npm run cloud:link once, then npm run cloud:env or npm run cloud:dev.\\n\\n'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint",
+        "GitHub.vscode-github-actions",
+        "Prisma.prisma"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "typescript.tsdk": "node_modules/typescript/lib"
+      }
+    }
+  }
+}

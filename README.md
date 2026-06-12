@@ -44,15 +44,30 @@ The BEE Suite is a white-label childcare CRM and operations command center for l
 └── README.md
 ```
 
-## Setup
+## Cloud Development
+
+Use GitHub Codespaces for day-to-day development instead of this local folder. The repo includes a devcontainer pinned to Node 24, matching CI and Vercel.
 
 ```bash
-npm install
-cp .env.example .env
+npm run cloud:link
+npm run cloud:env
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open the forwarded port for `http://localhost:3000`.
+
+See `docs/CLOUD_DEVELOPMENT.md` for the full Codespaces, Vercel env, preview, and production release workflow.
+
+## Local Fallback
+
+Local development is still possible when needed, but it is not the preferred workflow:
+
+```bash
+npm ci
+cp .env.example .env.local
+npm run db:generate
+npm run dev
+```
 
 ## Database
 
@@ -85,7 +100,7 @@ Executive users manage live locations, owner groups, scoped users, temporary pas
 Use `.env.example` as the guide. External services stay gated until explicitly connected:
 
 - `DATABASE_URL`
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SECRET_KEY`
 - `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_APPLICATION_FEE_BPS`, `STRIPE_APPLICATION_FEE_FIXED_CENTS`, `STRIPE_PARENT_SURCHARGE_BPS`, `STRIPE_PARENT_SURCHARGE_FIXED_CENTS`
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_BASE_URL`
@@ -100,7 +115,7 @@ Use `.env.example` as the guide. External services stay gated until explicitly c
 
 ## Deployment
 
-See `docs/DEPLOYMENT.md` for Vercel, Supabase, Prisma, and go-live steps.
+See `docs/DEPLOYMENT.md` and `docs/CLOUD_DEVELOPMENT.md` for Vercel, Supabase, Prisma, cloud development, and go-live steps.
 
 ## Screenshots / Visual Previews
 

@@ -1,35 +1,49 @@
-# GitHub Setup Handoff
+# GitHub Setup
 
-The local repository is committed on `main`, but no GitHub remote is configured in this workspace.
+The repository is hosted at `BrunerDigital/TheBEESuite` and deploys through Vercel.
 
-## Current Local Commits
+## Cloud-First Workflow
 
-Run this before pushing if you want to review the local handoff stack:
+- Use GitHub Codespaces for day-to-day development.
+- Use feature branches and pull requests for changes.
+- Use Vercel preview deployments for review.
+- Merge to `main` only after CI and preview validation pass.
+
+## Review Local State
+
+Run this before pushing if you need to review commits that exist only in the current checkout:
 
 ```bash
 git log --oneline -8
+git status --short --branch
 ```
 
-## Create And Push
+## Push A Branch
 
-After creating an empty GitHub repo, run:
+Create a branch for cloud work:
 
 ```bash
-git remote add origin https://github.com/YOUR_ORG/the-bee-suite.git
-git push -u origin main
+git switch -c codex/your-change-name
+git push -u origin codex/your-change-name
 ```
 
-If GitHub CLI is installed and authenticated, this also works:
+Open a draft pull request:
 
 ```bash
-gh repo create YOUR_ORG/the-bee-suite --private --source . --remote origin --push
+gh pr create --draft --base main --head codex/your-change-name
 ```
 
-## After Push
+## Cloud Environment
 
-1. Connect the GitHub repo to the existing Vercel project `the-bee-suite`.
-2. Keep the current production alias: `https://the-bee-suite-beta.vercel.app`.
-3. Confirm Vercel production env vars remain attached after connecting Git.
-4. Enable protected branches and require the build check before merging future changes.
+The Vercel project should hold production, preview, and development environment variables. Codespaces should pull development variables with:
+
+```bash
+npm run cloud:link
+npm run cloud:env
+```
+
+## Repository Protection
+
+Protect `main` and require the CI `validate` workflow before merging. Admins can keep bypass enabled for emergency recovery, but routine work should flow through pull requests.
 
 The local `.env*`, `.vercel`, `.agents`, `node_modules`, `.next`, and other machine-specific files are ignored.

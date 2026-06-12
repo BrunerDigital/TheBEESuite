@@ -14,13 +14,13 @@ type NormalizedExport = {
 };
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceRoleKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 const password = process.env.KIDCITY_DEFAULT_PASSWORD;
 const inputPath = process.env.KIDCITY_IMPORT_FILE ?? "tmp/kidcity-crm-normalized.json";
 
 if (!supabaseUrl || !serviceRoleKey || !password) {
   throw new Error(
-    "Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and KIDCITY_DEFAULT_PASSWORD before creating auth users.",
+    "Set SUPABASE_URL, SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY, and KIDCITY_DEFAULT_PASSWORD before creating auth users.",
   );
 }
 

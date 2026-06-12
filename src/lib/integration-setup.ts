@@ -80,7 +80,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
       { label: "Database URL", names: ["DATABASE_URL"] },
       { label: "Project URL", names: ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"], mode: "any" },
       { label: "Anon key", names: ["SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], mode: "any" },
-      { label: "Service role key", names: ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"], mode: "any" },
+      { label: "Admin API key", names: ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"], mode: "any" },
     ],
     fields: [
       { key: "projectRef", label: "Project ref", type: "text", placeholder: "nqjrlktoewiueiwrubas" },

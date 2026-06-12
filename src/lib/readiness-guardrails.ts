@@ -15,7 +15,7 @@ export function hasSupabaseAuthConfig(env: EnvMap) {
   return Boolean(
     url &&
       anyEnvPresent(env, ["SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"]) &&
-      envPresent(env, "SUPABASE_SERVICE_ROLE_KEY"),
+      anyEnvPresent(env, ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"]),
   );
 }
 

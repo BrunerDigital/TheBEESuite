@@ -486,11 +486,16 @@ test("executive user edits replace stale access grants with the target grant", (
   }), false);
 });
 
-test("readiness guard requires a Supabase URL for Auth readiness", () => {
+test("readiness guard requires a Supabase URL and backend key for Auth readiness", () => {
   assert.equal(hasSupabaseAuthConfig({
     SUPABASE_ANON_KEY: "anon",
     SUPABASE_SERVICE_ROLE_KEY: "service",
   }), false);
+  assert.equal(hasSupabaseAuthConfig({
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_ANON_KEY: "anon",
+    SUPABASE_SECRET_KEY: "secret",
+  }), true);
   assert.equal(hasSupabaseAuthConfig({
     SUPABASE_URL: "https://example.supabase.co",
     SUPABASE_ANON_KEY: "anon",

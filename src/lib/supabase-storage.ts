@@ -12,7 +12,7 @@ export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
 type StorageClient = SupabaseClient;
 
 function getSupabaseStorageKey() {
-  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
+  return process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
 export function isSupabaseStorageConfigured() {

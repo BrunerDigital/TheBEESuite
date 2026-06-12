@@ -11,7 +11,7 @@ const EXECUTIVE_USERS = [
 ];
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
+const serviceRoleKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 const password = process.env.KIDCITY_DEFAULT_PASSWORD;
 
 async function ensureSupabaseUsers() {

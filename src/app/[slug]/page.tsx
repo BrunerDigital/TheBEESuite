@@ -78,6 +78,7 @@ import {
 } from "@/lib/integrations";
 import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
+import { activeEnrollmentStatus, effectiveEnrollmentStatus } from "@/lib/enrollment-status";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import {
   normalizeBillingCadence,
@@ -401,9 +402,17 @@ async function getFteReports(centerIds: string[], take = 150) {
   });
 }
 
-function activeEnrollmentStatus(value: string) {
-  const status = value.toLowerCase();
-  return !["inactive", "withdrawn", "graduated", "lost", "not enrolled", "unenrolled"].some((blocked) => status.includes(blocked));
+function currentStaffProfileStatus(input: { user: { isActive: boolean }; customFields: unknown }) {
+  if (!input.user.isActive) return false;
+  const fields = recordFromJson(input.customFields);
+  const status = String(
+    fields.employeeStatus ??
+    fields.staffStatus ??
+    fields.teacherStatus ??
+    fields.status ??
+    "",
+  ).toLowerCase();
+  return !/(terminated|quit|inactive|separated|dismissed|former|not active)/.test(status);
 }
 
 function ageBucket(ageGroup: string) {
@@ -475,7 +484,7 @@ async function buildFtePrefills(
   } satisfies FteReportPrefill]));
 
   for (const child of children) {
-    if (!activeEnrollmentStatus(child.enrollmentStatus)) continue;
+    if (!activeEnrollmentStatus(child.enrollmentStatus, child.classroom?.centerId)) continue;
     const centerId = child.classroom?.centerId ?? child.family.centerId;
     if (!centerId) continue;
     const row = byCenter.get(centerId);
@@ -1352,11 +1361,11 @@ async function renderLivePage(
 
   if (slug === "family-detail") {
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
-    const [families, total, withCustodyNotes, children, guardians, intakeCenters, requestNotes] = await Promise.all([
+    const [families, intakeCenters, requestNotes] = await Promise.all([
       prisma.family.findMany({
         where: familyWhere,
         orderBy: { createdAt: "desc" },
-        take: 100,
+        take: 1000,
         include: {
           guardians: { orderBy: { fullName: "asc" } },
           children: {
@@ -1381,10 +1390,6 @@ async function renderLivePage(
           _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
         },
       }),
-      prisma.family.count({ where: familyWhere }),
-      prisma.family.count({ where: { ...familyWhere, custodyNotes: { not: null } } }),
-      prisma.child.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
-      prisma.guardian.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
       getFamilyIntakeCenters(user),
       prisma.note.findMany({
         where: {
@@ -1415,8 +1420,12 @@ async function renderLivePage(
       }];
     });
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
-    const familiesForClient = families.map((family) => ({
+    const serializeFamily = (family: (typeof families)[number], childrenForView: typeof family.children) => ({
       ...family,
+      children: childrenForView.map((child) => ({
+        ...child,
+        enrollmentStatus: effectiveEnrollmentStatus(child.enrollmentStatus, child.classroomId),
+      })),
       billingAccount: family.billingAccount
         ? {
             id: family.billingAccount.id,
@@ -1450,17 +1459,38 @@ async function renderLivePage(
           centerName: credential.centerName,
         };
       }),
-    }));
+    });
+    const familiesForClient = families
+      .map((family) => serializeFamily(family, family.children.filter((child) => activeEnrollmentStatus(child.enrollmentStatus, child.classroomId))))
+      .filter((family) => family.children.length > 0);
+    const previousFamiliesForClient = families
+      .map((family) => serializeFamily(family, family.children.filter((child) => !activeEnrollmentStatus(child.enrollmentStatus, child.classroomId))))
+      .filter((family) => family.children.length > 0);
+    const currentFamilyIds = new Set(familiesForClient.map((family) => family.id));
+    const activeGuardianChangeRequests = guardianChangeRequests.filter((request) => currentFamilyIds.has(request.familyId));
+    const currentStats = {
+      total: familiesForClient.length,
+      withCustodyNotes: familiesForClient.filter((family) => Boolean(family.custodyNotes)).length,
+      children: familiesForClient.reduce((sum, family) => sum + family.children.length, 0),
+      guardians: familiesForClient.reduce((sum, family) => sum + family.guardians.length, 0),
+    };
+    const previousStats = {
+      total: previousFamiliesForClient.length,
+      children: previousFamiliesForClient.reduce((sum, family) => sum + family.children.length, 0),
+      guardians: previousFamiliesForClient.reduce((sum, family) => sum + family.guardians.length, 0),
+    };
 
     return (
       <FamilyProfilesPage
         data={{
           families: familiesForClient,
+          previousFamilies: previousFamiliesForClient,
           importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
           bulkImportEnabled: tenantWide || allCenters,
           intakeCenters,
-          guardianChangeRequests,
-          stats: { total, withCustodyNotes, children, guardians },
+          guardianChangeRequests: activeGuardianChangeRequests,
+          stats: currentStats,
+          previousStats,
         }}
       />
     );
@@ -1475,11 +1505,11 @@ async function renderLivePage(
             { family: { is: { centerId: scopedCenterIds } } },
           ],
         };
-    const [children, total, enrolled, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
+    const [children, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: childWhere,
         orderBy: { fullName: "asc" },
-        take: 150,
+        take: 1000,
         include: {
           family: { select: { name: true, centerId: true, custodyNotes: true } },
           classroom: {
@@ -1491,14 +1521,23 @@ async function renderLivePage(
           _count: { select: { allergies: true, medicalNotes: true, documents: true, incidents: true, dailyReports: true } },
         },
       }),
-      prisma.child.count({ where: childWhere }),
-      prisma.child.count({ where: { ...childWhere, enrollmentStatus: "enrolled" } }),
-      prisma.allergy.count({ where: { child: { family: { is: { centerId: scopedCenterIds } } } } }),
-      prisma.childMedicalNote.count({ where: { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } } }),
       getFamilyIntakeCenters(user),
     ]);
+    const currentChildren = children
+      .filter((child) => activeEnrollmentStatus(child.enrollmentStatus, child.classroomId))
+      .map((child) => ({
+        ...child,
+        enrollmentStatus: effectiveEnrollmentStatus(child.enrollmentStatus, child.classroomId),
+      }));
+    const previousChildren = children.filter((child) => !activeEnrollmentStatus(child.enrollmentStatus, child.classroomId));
+    const currentStats = {
+      total: currentChildren.length,
+      enrolled: currentChildren.filter((child) => effectiveEnrollmentStatus(child.enrollmentStatus, child.classroomId) === "enrolled").length,
+      allergies: currentChildren.reduce((sum, child) => sum + child._count.allergies, 0),
+      restrictedMedicalNotes: currentChildren.reduce((sum, child) => sum + child._count.medicalNotes, 0),
+    };
 
-    return <ChildProfilesPage data={{ children, intakeCenters, stats: { total, enrolled, allergies, restrictedMedicalNotes } }} />;
+    return <ChildProfilesPage data={{ children: currentChildren, previousChildren, intakeCenters, stats: currentStats }} />;
   }
 
   if (slug === "parent-portal") {
@@ -3971,10 +4010,7 @@ async function renderLivePage(
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } };
-    const certificationWhere: Prisma.CertificationWhereInput = allCenters
-      ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
-      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };
+    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
     const staff = await prisma.staffProfile.findMany({
       where: staffWhere,
       orderBy: [{ title: "asc" }, { id: "asc" }],
@@ -4006,13 +4042,21 @@ async function renderLivePage(
       const rightCenter = right.center.crmLocationId ?? right.center.name;
       return leftCenter.localeCompare(rightCenter) || left.user.name.localeCompare(right.user.name);
     });
-    const total = sortedStaff.length;
-    const activeUsers = sortedStaff.filter((profile) => profile.user.isActive).length;
-    const expiringCerts = await prisma.certification.count({ where: certificationWhere });
-    const backgroundPending = sortedStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
+    const currentStaff = sortedStaff.filter((profile) => currentStaffProfileStatus(profile));
+    const previousStaff = sortedStaff.filter((profile) => !currentStaffProfileStatus(profile));
+    const currentStaffIds = new Set(currentStaff.map((profile) => profile.id));
+    const currentSchedules = schedules.filter((schedule) => currentStaffIds.has(schedule.staff.id));
+    const total = currentStaff.length;
+    const activeUsers = currentStaff.filter((profile) => profile.user.isActive).length;
+    const expiringCerts = currentStaff.reduce((count, profile) => {
+      return count + profile.certifications.filter((certification) =>
+        certification.expiresAt && new Date(certification.expiresAt) <= thirtyDays,
+      ).length;
+    }, 0);
+    const backgroundPending = currentStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
     const staffChecklistItems = buildRequiredDocumentChecklist({
       families: [],
-      staff: sortedStaff,
+      staff: currentStaff,
       now: today,
     });
     const staffChecklist = {
@@ -4025,8 +4069,9 @@ async function renderLivePage(
         data={{
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           classrooms,
-          schedules,
-          staff: sortedStaff,
+          schedules: currentSchedules,
+          staff: currentStaff,
+          previousStaff,
           stats: { total, activeUsers, expiringCerts, backgroundPending, onboardingActionNeeded: staffChecklist.summary.actionNeeded },
           staffChecklist,
         }}

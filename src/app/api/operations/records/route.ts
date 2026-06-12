@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { effectiveEnrollmentStatus } from "@/lib/enrollment-status";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
@@ -578,7 +579,7 @@ async function POSTHandler(request: NextRequest) {
       preferredName: clean(body.preferredName) || null,
       dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? new Date("2021-01-01T12:00:00.000Z"),
       ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
-      enrollmentStatus: clean(body.enrollmentStatus) || clean(body.status) || "enrolled",
+      enrollmentStatus: effectiveEnrollmentStatus(clean(body.enrollmentStatus) || clean(body.status) || "enrolled", classroomId),
       startDate: parseDate(body.startDate),
       schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
       photoVideoPermission: Boolean(body.photoVideoPermission),
@@ -682,13 +683,14 @@ async function POSTHandler(request: NextRequest) {
         tx.incidentReport.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
         tx.medicationLog.updateMany({ where: { childId: duplicateChildId }, data: { childId: primaryChildId } }),
       ]);
+      const mergedClassroomId = primary.classroomId ?? duplicate.classroomId ?? null;
       const mergedChild = await tx.child.update({
         where: { id: primaryChildId },
         data: {
           preferredName: fillBlank(primary.preferredName, duplicate.preferredName),
-          classroomId: primary.classroomId ?? duplicate.classroomId ?? null,
+          classroomId: mergedClassroomId,
           ageGroup: primary.ageGroup || duplicate.ageGroup,
-          enrollmentStatus: primary.enrollmentStatus === "inactive" ? duplicate.enrollmentStatus : primary.enrollmentStatus,
+          enrollmentStatus: effectiveEnrollmentStatus(primary.enrollmentStatus === "inactive" ? duplicate.enrollmentStatus : primary.enrollmentStatus, mergedClassroomId),
           startDate: primary.startDate ?? duplicate.startDate ?? null,
           ...(primary.schedule ? {} : duplicate.schedule ? { schedule: duplicate.schedule as Prisma.InputJsonValue } : {}),
           photoVideoPermission: primary.photoVideoPermission || duplicate.photoVideoPermission,

@@ -29,6 +29,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
 import { AiCommandCenter, type AiCommandCenterData } from "@/components/ai-command-center";
 import {
@@ -2772,19 +2773,8 @@ export type StaffPageData = {
     staff: { id: string; user: { name: string } };
     center: { name: string; crmLocationId: string | null };
   }>;
-  staff: Array<{
-    id: string;
-    centerId: string;
-    classroomId: string | null;
-    title: string;
-    phone: string | null;
-    backgroundCheckStatus: string | null;
-    customFields: unknown;
-    user: { name: string; email: string; role: string; isActive: boolean };
-    center: { id: string; name: string; crmLocationId: string | null };
-    classroom: { id: string; name: string } | null;
-    certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
-  }>;
+  staff: StaffPageStaffRecord[];
+  previousStaff: StaffPageStaffRecord[];
   stats: {
     total: number;
     activeUsers: number;
@@ -2796,6 +2786,20 @@ export type StaffPageData = {
     items: RequiredChecklistItem[];
     summary: RequiredChecklistSummary;
   };
+};
+
+type StaffPageStaffRecord = {
+    id: string;
+    centerId: string;
+    classroomId: string | null;
+    title: string;
+    phone: string | null;
+    backgroundCheckStatus: string | null;
+    customFields: unknown;
+    user: { name: string; email: string; role: string; isActive: boolean };
+    center: { id: string; name: string; crmLocationId: string | null };
+    classroom: { id: string; name: string } | null;
+    certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
 };
 
 function staffClockBadge(customFields: unknown) {
@@ -2821,14 +2825,20 @@ export function StaffPage({ data }: { data: StaffPageData }) {
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-5">
-        <StatCard label="Teachers" value={data.stats.total} />
+        <StatCard label="Current teachers" value={data.stats.total} />
         <StatCard label="Active users" value={data.stats.activeUsers} />
         <StatCard label="Expiring certs" value={data.stats.expiringCerts} />
         <StatCard label="Background pending" value={data.stats.backgroundPending} />
         <StatCard label="Onboarding actions" value={data.stats.onboardingActionNeeded} />
       </div>
-      <StaffOnboardingChecklistPanel items={data.staffChecklist.items} summary={data.staffChecklist.summary} />
-      <Card className="glass-panel">
+      <Tabs defaultValue="current" className="gap-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="current">Current team</TabsTrigger>
+          <TabsTrigger value="previous">Previous team ({data.previousStaff.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="current" className="space-y-6">
+          <StaffOnboardingChecklistPanel items={data.staffChecklist.items} summary={data.staffChecklist.summary} />
+          <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Teacher Directory</CardTitle>
           <CardDescription>Role, classroom, and certification snapshot</CardDescription>
@@ -2872,9 +2882,9 @@ export function StaffPage({ data }: { data: StaffPageData }) {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
-      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} schedules={data.schedules} />
-      <Card className="glass-panel">
+          </Card>
+          <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} schedules={data.schedules} />
+          <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Upcoming Staff Schedule</CardTitle>
           <CardDescription>Published teacher coverage for the visible school scope</CardDescription>
@@ -2908,7 +2918,51 @@ export function StaffPage({ data }: { data: StaffPageData }) {
             </TableBody>
           </Table>
         </CardContent>
-      </Card>
+          </Card>
+        </TabsContent>
+        <TabsContent value="previous" className="space-y-6">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Previous Team Members</CardTitle>
+              <CardDescription>Inactive, terminated, or separated teachers stay out of current scheduling, kiosk, and ratio workflows.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Teacher</TableHead>
+                    <TableHead>Center</TableHead>
+                    <TableHead>Classroom</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Background</TableHead>
+                    <TableHead>Certifications</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.previousStaff.map((staff) => (
+                    <TableRow key={staff.id}>
+                      <TableCell>
+                        <div className="font-medium">{staff.user.name}</div>
+                        <div className="text-xs text-muted-foreground">{staff.user.email}</div>
+                      </TableCell>
+                      <TableCell>{staff.center.crmLocationId ?? staff.center.name}</TableCell>
+                      <TableCell>{staff.classroom?.name ?? "Unassigned"}</TableCell>
+                      <TableCell><Badge variant="outline">{staff.user.isActive ? "Imported inactive status" : "Inactive user"}</Badge></TableCell>
+                      <TableCell><Badge variant={staff.backgroundCheckStatus?.includes("clear") ? "default" : "outline"}>{staff.backgroundCheckStatus ?? "Not set"}</Badge></TableCell>
+                      <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!data.previousStaff.length ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-muted-foreground">No previous team members are visible for this scope.</TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -4061,8 +4115,7 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
   );
 }
 
-export type FamilyProfilesPageData = {
-  families: Array<EditableFamilyRecord & {
+type FamilyProfileRecord = EditableFamilyRecord & {
     createdAt: Date | string;
     guardians: Array<EditableFamilyRecord["guardians"][number] & {
       userId: string | null;
@@ -4072,7 +4125,11 @@ export type FamilyProfilesPageData = {
       centerName?: string | null;
     }>;
     _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
-  }>;
+  };
+
+export type FamilyProfilesPageData = {
+  families: FamilyProfileRecord[];
+  previousFamilies: FamilyProfileRecord[];
   importCenters: Array<{ id: string; name: string }>;
   bulkImportEnabled: boolean;
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
@@ -4092,6 +4149,11 @@ export type FamilyProfilesPageData = {
     children: number;
     guardians: number;
   };
+  previousStats: {
+    total: number;
+    children: number;
+    guardians: number;
+  };
 };
 
 export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
@@ -4108,14 +4170,20 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Families" value={data.stats.total} />
-        <StatCard label="Children" value={data.stats.children} />
-        <StatCard label="Guardians" value={data.stats.guardians} />
-        <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
+        <StatCard label="Current families" value={data.stats.total} />
+        <StatCard label="Current children" value={data.stats.children} />
+        <StatCard label="Current guardians" value={data.stats.guardians} />
+        <StatCard label="Current restricted notes" value={data.stats.withCustodyNotes} />
       </div>
-      <FamilyStudentIntakeForm centers={data.intakeCenters} />
-      <FamilyRecordEditor families={data.families} centers={data.intakeCenters} />
-      <Card className="glass-panel">
+      <Tabs defaultValue="current" className="gap-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="current">Current enrollment</TabsTrigger>
+          <TabsTrigger value="previous">Previously enrolled ({data.previousStats.children})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="current" className="space-y-6">
+          <FamilyStudentIntakeForm centers={data.intakeCenters} />
+          <FamilyRecordEditor families={data.families} centers={data.intakeCenters} />
+          <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Guardian Self-Service Change Requests</CardTitle>
           <CardDescription>
@@ -4259,27 +4327,90 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           ) : null}
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="previous" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <StatCard label="Previously enrolled families" value={data.previousStats.total} />
+            <StatCard label="Withdrawn/inactive children" value={data.previousStats.children} />
+            <StatCard label="Linked guardians" value={data.previousStats.guardians} />
+          </div>
+          <FamilyRecordEditor families={data.previousFamilies} centers={data.intakeCenters} />
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Previously Enrolled Directory</CardTitle>
+              <CardDescription>Withdrawn, inactive, graduated, or otherwise no-longer-enrolled records stay out of the current enrollment workflow.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Family</TableHead>
+                    <TableHead>Guardians</TableHead>
+                    <TableHead>Children</TableHead>
+                    <TableHead>Records</TableHead>
+                    <TableHead>Restricted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.previousFamilies.map((family) => (
+                    <TableRow key={family.id}>
+                      <TableCell>
+                        <div className="font-medium">{family.name}</div>
+                        <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
+                      </TableCell>
+                      <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
+                      <TableCell>
+                        {family.children.map((child) => `${child.fullName} (${formatRecordLabel(child.enrollmentStatus)})`).join(", ") || "None"}
+                      </TableCell>
+                      <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
+                      <TableCell>
+                        {hasCustodyWarning(family) ? (
+                          <div className="space-y-1">
+                            <Badge variant="destructive">
+                              <ShieldAlert data-icon="inline-start" />
+                              {CUSTODY_WARNING_LABEL}
+                            </Badge>
+                            <div className="max-w-xs text-xs text-muted-foreground">{custodyWarningPreview(family)}</div>
+                          </div>
+                        ) : "Standard"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!data.previousFamilies.length ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-muted-foreground">No previously enrolled family records are visible for this scope.</TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
       <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
       <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact centers={data.importCenters} />
     </div>
   );
 }
 
+type ChildProfileRecord = {
+  id: string;
+  fullName: string;
+  preferredName: string | null;
+  dateOfBirth: Date | string;
+  ageGroup: string;
+  enrollmentStatus: string;
+  startDate: Date | string | null;
+  photoVideoPermission: boolean;
+  fieldTripPermission: boolean;
+  family: { name: string; centerId: string | null; custodyNotes: string | null };
+  classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
+  _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
+};
+
 export type ChildProfilesPageData = {
-  children: Array<{
-    id: string;
-    fullName: string;
-    preferredName: string | null;
-    dateOfBirth: Date | string;
-    ageGroup: string;
-    enrollmentStatus: string;
-    startDate: Date | string | null;
-    photoVideoPermission: boolean;
-    fieldTripPermission: boolean;
-    family: { name: string; centerId: string | null; custodyNotes: string | null };
-    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
-    _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
-  }>;
+  children: ChildProfileRecord[];
+  previousChildren: ChildProfileRecord[];
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
@@ -4290,6 +4421,62 @@ export type ChildProfilesPageData = {
 };
 
 export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
+  const renderChildTable = (children: ChildProfileRecord[], emptyMessage: string) => (
+    <Card className="glass-panel">
+      <CardHeader>
+        <CardTitle>Children</CardTitle>
+        <CardDescription>Sensitive records are marked for restricted access handling</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Child</TableHead>
+              <TableHead>Family</TableHead>
+              <TableHead>Classroom</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Safety</TableHead>
+              <TableHead>Permissions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {children.map((child) => (
+              <TableRow key={child.id}>
+                <TableCell>
+                  <div className="font-medium">{child.fullName}</div>
+                  <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="font-medium">{child.family.name}</div>
+                  {hasCustodyWarning(child.family) ? (
+                    <Badge variant="destructive" className="mt-1">
+                      <ShieldAlert data-icon="inline-start" />
+                      {CUSTODY_WARNING_LABEL}
+                    </Badge>
+                  ) : null}
+                </TableCell>
+                <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
+                <TableCell>{formatRecordLabel(child.enrollmentStatus)}</TableCell>
+                <TableCell>
+                  {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
+                  {hasCustodyWarning(child.family) ? (
+                    <div className="mt-1 text-xs text-destructive">Review custody/pickup restrictions before release or contact changes.</div>
+                  ) : null}
+                </TableCell>
+                <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
+              </TableRow>
+            ))}
+            {!children.length ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-muted-foreground">{emptyMessage}</TableCell>
+              </TableRow>
+            ) : null}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -4303,60 +4490,24 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Children" value={data.stats.total} />
-        <StatCard label="Enrolled" value={data.stats.enrolled} />
-        <StatCard label="Allergy records" value={data.stats.allergies} />
-        <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
+        <StatCard label="Current children" value={data.stats.total} />
+        <StatCard label="Currently enrolled" value={data.stats.enrolled} />
+        <StatCard label="Current allergy records" value={data.stats.allergies} />
+        <StatCard label="Current medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
-      <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Children</CardTitle>
-          <CardDescription>Sensitive records are marked for restricted access handling</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Child</TableHead>
-                <TableHead>Family</TableHead>
-                <TableHead>Classroom</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Safety</TableHead>
-                <TableHead>Permissions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.children.map((child) => (
-                <TableRow key={child.id}>
-                  <TableCell>
-                    <div className="font-medium">{child.fullName}</div>
-                    <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{child.family.name}</div>
-                    {hasCustodyWarning(child.family) ? (
-                      <Badge variant="destructive" className="mt-1">
-                        <ShieldAlert data-icon="inline-start" />
-                        {CUSTODY_WARNING_LABEL}
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{formatRecordLabel(child.enrollmentStatus)}</TableCell>
-                  <TableCell>
-                    {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
-                    {hasCustodyWarning(child.family) ? (
-                      <div className="mt-1 text-xs text-destructive">Review custody/pickup restrictions before release or contact changes.</div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="current" className="gap-4">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="current">Current children</TabsTrigger>
+          <TabsTrigger value="previous">Previously enrolled ({data.previousChildren.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="current" className="space-y-6">
+          <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
+          {renderChildTable(data.children, "No current child records are visible for this scope.")}
+        </TabsContent>
+        <TabsContent value="previous" className="space-y-6">
+          {renderChildTable(data.previousChildren, "No previously enrolled child records are visible for this scope.")}
+        </TabsContent>
+      </Tabs>
       <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
     </div>
   );

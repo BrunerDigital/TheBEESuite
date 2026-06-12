@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { effectiveEnrollmentStatus } from "@/lib/enrollment-status";
 import {
   isActiveProcareStaffStatus,
   normalizeProcareEnrollmentStatus,
@@ -1170,7 +1171,7 @@ async function POSTHandler(request: NextRequest) {
       const balanceCents = cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]));
       const classroomName = procareClassroomName(rawData);
       const ageGroup = procareAgeGroup(rawData, "Unassigned");
-      const enrollmentStatus = normalizeProcareEnrollmentStatus(value(rawData, ["child status", "status", "enrollment status", "student status"]));
+      const importedEnrollmentStatus = normalizeProcareEnrollmentStatus(value(rawData, ["child status", "status", "enrollment status", "student status"]));
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
       const familyMatchers = [
@@ -1320,6 +1321,7 @@ async function POSTHandler(request: NextRequest) {
           classroomId = classroom.id;
           if (classroom.created) createdClassrooms += 1;
         }
+        const enrollmentStatus = effectiveEnrollmentStatus(importedEnrollmentStatus, classroomId);
         const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
         const childMetadata = metadataFromRow(rawData, {
           mappedCenterId: targetCenter.id,
@@ -1332,6 +1334,7 @@ async function POSTHandler(request: NextRequest) {
           childLastName: value(rawData, ["last name", "child last name", "student last name"]),
           gender: value(rawData, ["gender", "sex"]),
           enrollmentStatus,
+          sourceEnrollmentStatus: importedEnrollmentStatus,
           enrollmentEndDate: value(rawData, ["end date", "withdrawal date", "termination date"]),
         });
         const existingChild = await prisma.child.findFirst({

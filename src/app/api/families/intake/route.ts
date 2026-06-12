@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { effectiveEnrollmentStatus } from "@/lib/enrollment-status";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 
@@ -54,9 +55,10 @@ async function POSTHandler(request: NextRequest) {
   const preferredName = clean(body.preferredName);
   const dateOfBirth = parseDate(body.dateOfBirth);
   const ageGroup = clean(body.ageGroup) || "Preschool";
-  const enrollmentStatus = clean(body.enrollmentStatus) || "enrolled";
+  const requestedEnrollmentStatus = clean(body.enrollmentStatus) || "enrolled";
   const startDate = parseDate(body.startDate);
   const classroomId = clean(body.classroomId);
+  const enrollmentStatus = effectiveEnrollmentStatus(requestedEnrollmentStatus, classroomId);
   const scheduleNotes = clean(body.scheduleNotes);
   const napNotes = clean(body.napNotes);
   const feedingNotes = clean(body.feedingNotes);

@@ -48,11 +48,14 @@ The BEE Suite is a white-label childcare CRM and operations command center for l
 
 ```bash
 npm install
-cp .env.example .env
-npm run dev
+npm run cloud:link
+npm run cloud:env
+npm run cloud:dev
 ```
 
 Open `http://localhost:3000`.
+
+For the full machine and cloud setup runbook, see `docs/LOCAL_CLOUD_SETUP.md`.
 
 ## Database
 

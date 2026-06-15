@@ -1,0 +1,16 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "Prisma.prisma",
+    "bradlc.vscode-tailwindcss",
+    "ms-playwright.playwright",
+    "GitHub.vscode-pull-request-github",
+    "GitHub.vscode-github-actions",
+    "dotenv.dotenv-vscode",
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-vscode.powershell",
+    "ms-azuretools.vscode-containers",
+    "ms-vscode-remote.remote-containers"
+  ]
+}

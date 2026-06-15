@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "BEE: Cloud Status",
+      "type": "npm",
+      "script": "cloud:status",
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "BEE: Dev Server",
+      "type": "npm",
+      "script": "cloud:dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "BEE: Validate Before Push",
+      "type": "npm",
+      "script": "cloud:validate",
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "BEE: Lint",
+      "type": "npm",
+      "script": "lint",
+      "problemMatcher": "$eslint-stylish",
+      "group": "test"
+    },
+    {
+      "label": "BEE: Typecheck",
+      "type": "npm",
+      "script": "typecheck",
+      "problemMatcher": "$tsc",
+      "group": "test"
+    },
+    {
+      "label": "BEE: Test",
+      "type": "npm",
+      "script": "test",
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}

@@ -74,6 +74,14 @@ export type LiveDashboardData = {
     description: string;
     embedCode: string;
   }>;
+  setupImportSupport?: {
+    latestImportLabel: string;
+    importRows: number;
+    familyCount: number;
+    childCount: number;
+    classroomCount: number;
+    staffCount: number;
+  };
   setupChecklists?: Array<{
     key: SetupChecklistKey;
     title: string;
@@ -410,6 +418,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ? [live.inquiryEmbed]
       : [];
   const setupChecklists = live?.setupChecklists ?? [];
+  const setupImportSupport = live?.setupImportSupport;
   const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
   const kpiValue = (label: string, fallback = "0") => dashboardKpis.find((kpi) => kpi.label === label)?.value ?? fallback;
   const kpiTrend = (label: string, fallback = "") => dashboardKpis.find((kpi) => kpi.label === label)?.trend ?? fallback;
@@ -546,6 +555,76 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           initialWidgets={configuredWidgets}
           roleLabel={live?.dashboardWidgetRoleLabel ?? "Current role"}
         />
+      ) : null}
+
+
+      {setupImportSupport ? (
+        <Card className="glass-panel border-primary/30">
+          <CardHeader>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">School setup assistant</Badge>
+                  <Badge variant={setupImportSupport.importRows ? "default" : "outline"}>
+                    {setupImportSupport.importRows.toLocaleString()} imported rows
+                  </Badge>
+                </div>
+                <CardTitle className="mt-3">ProCare import readiness and manual data cleanup</CardTitle>
+                <CardDescription className="mt-2 max-w-3xl">
+                  Use this checklist with the setup roadmap to confirm school data imported cleanly, fill gaps ProCare does not include, and jump directly to the screens where directors can edit records manually.
+                </CardDescription>
+              </div>
+              <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/family-detail" />}>
+                <ArrowUpRight data-icon="inline-start" />
+                Review families
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ["Latest import", setupImportSupport.latestImportLabel],
+                ["Families", setupImportSupport.familyCount.toLocaleString()],
+                ["Children", setupImportSupport.childCount.toLocaleString()],
+                ["Classrooms", setupImportSupport.classroomCount.toLocaleString()],
+                ["Teachers/staff", setupImportSupport.staffCount.toLocaleString()],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-xl border bg-background/50 p-3">
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                  <div className="mt-1 text-sm font-semibold">{value}</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid gap-3">
+              {[
+                {
+                  title: "After import, reconcile family links",
+                  detail: "Check duplicate guardians, missing emails or phone numbers, custody restrictions, authorized pickups, payment access, and parent portal invite order.",
+                  href: "/family-detail",
+                },
+                {
+                  title: "Add data ProCare usually does not carry",
+                  detail: "Collect classroom assignments, allergy/medication notes, media permissions, billing preferences, document expirations, staff schedules, kiosk PINs, and notification preferences.",
+                  href: "/documents",
+                },
+                {
+                  title: "Smoke test before go-live",
+                  detail: "Create or edit one family, child, teacher, classroom, invoice, document, message, attendance action, and FTE report before inviting parents.",
+                  href: "/dashboard",
+                },
+              ].map((item) => (
+                <div key={item.title} className="rounded-xl border bg-background/50 p-3">
+                  <div className="text-sm font-medium">{item.title}</div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.detail}</p>
+                  <Link href={item.href} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                    Open step
+                    <ArrowUpRight className="size-3" />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       ) : null}
 
       {setupChecklists.length ? (

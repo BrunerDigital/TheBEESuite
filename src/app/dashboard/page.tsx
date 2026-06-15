@@ -85,6 +85,8 @@ export default async function DashboardPage() {
     pendingIncidents,
     expiringDocuments,
     staffCount,
+    familyCount,
+    latestProcareImport,
     revenue,
     pipelineCounts,
     classroomSnapshotRows,
@@ -162,6 +164,24 @@ export default async function DashboardPage() {
       where: {
         centerId: scopedCenterFilter,
         user: { role: UserRole.TEACHER },
+      },
+    }),
+    prisma.family.count({
+      where: {
+        centerId: scopedCenterFilter,
+      },
+    }),
+    prisma.procareImportBatch.findFirst({
+      where: {
+        centerId: scopedCenterFilter,
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        filename: true,
+        status: true,
+        summary: true,
+        createdAt: true,
+        _count: { select: { rows: true } },
       },
     }),
     prisma.invoice.aggregate({
@@ -611,6 +631,16 @@ export default async function DashboardPage() {
     visibleLenses: visibleDashboardLenses,
     dashboardWidgets: dashboardWidgetConfig.widgets,
     dashboardWidgetRoleLabel: dashboardWidgetConfig.roleLabel,
+    setupImportSupport: user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? {
+      latestImportLabel: latestProcareImport
+        ? `${latestProcareImport.filename} · ${latestProcareImport.status} · ${latestProcareImport.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+        : "No ProCare import found yet",
+      importRows: latestProcareImport?._count.rows ?? 0,
+      familyCount,
+      childCount: activeChildren,
+      classroomCount: classroomSnapshotRows.length,
+      staffCount,
+    } : undefined,
     setupChecklists: [
       ...(user.role === UserRole.TEACHER ? [{
         key: "teacher_profile" as const,

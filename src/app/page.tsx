@@ -38,7 +38,7 @@ const navItems = [
 ];
 
 const heroProof = [
-  ["Role-safe SaaS", "Tenant, brand, owner group, school, and classroom scope"],
+  ["Role-safe web app", "Tenant, brand, owner group, school, and classroom scope"],
   ["Enrollment to ops", "Inquiry, registration, family setup, billing, and reports"],
   ["Human-reviewed AI", "Drafts and summaries with staff decision guardrails"],
 ];
@@ -477,11 +477,11 @@ export default function LandingPage() {
               priority
             />
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
-              The public SaaS command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
+              The public web app command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="h-12 px-5 text-sm shadow-[0_0_34px_rgba(245,181,27,0.25)]" nativeButton={false} render={<Link href="/onboarding" />}>
-                Request SaaS workspace
+                Request web app workspace
                 <ArrowRight data-icon="inline-end" />
               </Button>
               <Button
@@ -719,7 +719,7 @@ export default function LandingPage() {
           <div>
             <h2 className="text-3xl font-semibold tracking-normal">Ready to run enrollment from one command center?</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#29313a]">
-              Start the SaaS onboarding path for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
+              Start the web app onboarding path for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">

@@ -14,15 +14,18 @@ import { INTERNAL_SIGNATURE_PENDING_KEY } from "../src/lib/signature-capture";
 
 test("Kid City registration packet schema includes final operational sections", () => {
   const schema = kidCityRegistrationPacketSchema();
-  assert.equal(schema.version, 2);
-  assert.equal(schema.title, "Kid City USA Online Registration Packet");
+  assert.equal(schema.version, 3);
+  assert.equal(schema.title, "Kid City USA Online Registration Packet - Florida March 2026");
   assert.deepEqual(schema.sections.map((section) => section.id), [
     "school_program",
     "guardians_billing",
     "child_information",
+    "child_profile",
     "medical_safety",
     "emergency_pickups",
-    "permissions_acknowledgments",
+    "permissions",
+    "food_media_uniforms",
+    "financial_handbook_acknowledgments",
   ]);
 });
 

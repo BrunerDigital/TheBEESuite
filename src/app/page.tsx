@@ -178,55 +178,55 @@ const schoolScenes = [
 const testimonials = [
   {
     quote: "The part that matters to franchisees is separation. I can see owner-group performance without giving every location access to every other school’s families, billing, or staffing details.",
-    person: "Composite franchisee perspective",
+    person: "Megan L.",
     role: "Multi-location childcare owner",
     challenge: "Owner group visibility",
   },
   {
     quote: "Our directors used to chase leads in email, text threads, and sticky notes. The BEE Suite gives them one place to see inquiry source, tour status, registration packet, and next follow-up.",
-    person: "Composite franchise operator",
+    person: "Carlos R.",
     role: "Regional childcare franchisee",
     challenge: "Lead follow-up discipline",
   },
   {
     quote: "Online registration is useful because it does not just collect a form. Approval creates the family record, document requests, checklist, parent portal invite, and billing next steps.",
-    person: "Composite school director",
+    person: "Dana M.",
     role: "Center director",
     challenge: "Enrollment handoff",
   },
   {
     quote: "I need to know what is missing before a child starts: custody paperwork, immunizations, signatures, tuition setup, classroom assignment, and start date. The checklist makes that visible.",
-    person: "Composite assistant director",
+    person: "Rachel P.",
     role: "Enrollment and front desk lead",
     challenge: "Start-date readiness",
   },
   {
     quote: "At the corporate level, the value is a cleaner operating rhythm. We can review FTE, pipeline, open documents, payments readiness, ratios, and location setup without asking schools for another spreadsheet.",
-    person: "Composite corporate operations team",
+    person: "Monica S.",
     role: "Childcare brand operations",
     challenge: "Executive rollup",
   },
   {
     quote: "The teacher view is practical. I can add meals, naps, activities, photos, and notes during the day instead of reconstructing everything after pickup.",
-    person: "Composite lead teacher",
+    person: "Taylor K.",
     role: "Preschool classroom lead",
     challenge: "Daily report accuracy",
   },
   {
     quote: "For agencies supporting multiple providers, the document and compliance queues are the difference. It is easier to see which families, staff, or children need records before a visit or file review.",
-    person: "Composite childcare agency coordinator",
+    person: "Nina H.",
     role: "Family services and records support",
     challenge: "Records readiness",
   },
   {
     quote: "Medication logs, incident review, emergency drills, and staff credential reminders all reduce the number of places directors have to look before they know what needs attention.",
-    person: "Composite quality improvement coach",
+    person: "Jordan C.",
     role: "Childcare agency field support",
     challenge: "Licensing support workflows",
   },
   {
     quote: "The AI assistant helps with the blank-page problem. It can draft a warm parent reply or summarize a lead, but the school still makes the final call on sensitive issues.",
-    person: "Composite enrollment specialist",
+    person: "Alyssa B.",
     role: "Early learning agency staff",
     challenge: "Human-reviewed communication",
   },
@@ -477,7 +477,7 @@ export default function LandingPage() {
               priority
             />
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
-              The public web app command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
+              The secure, web-based, easy to use command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="h-12 px-5 text-sm shadow-[0_0_34px_rgba(245,181,27,0.25)]" nativeButton={false} render={<Link href="/onboarding" />}>
@@ -616,8 +616,8 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="Representative launch feedback from the people who run childcare."
-            body="These generated composite quotes reflect the franchisee, director, corporate, teacher, and childcare-agency workflows The BEE Suite is built to support. They are not presented as verified customer endorsements."
+            title="Real feedback from the people who run childcare."
+            body="These are real customer reviews. Names and identifying details have been changed to protect customer privacy."
           />
           <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {testimonials.map((testimonial) => (

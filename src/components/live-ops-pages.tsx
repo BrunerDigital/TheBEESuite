@@ -2,29 +2,41 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
+  ArrowRight,
   BadgeDollarSign,
   Bell,
   BookOpen,
   Bot,
   Building2,
   CheckCircle2,
+  Cloud,
   Code2,
   ClipboardCheck,
+  CreditCard,
+  Database,
   Download,
+  ExternalLink,
   FileText,
+  GitBranch,
+  Globe2,
   HeartHandshake,
   Image as ImageIcon,
   Inbox,
   KeyRound,
   Link2,
+  Mail,
   MapPin,
   Megaphone,
   MessageSquare,
+  PanelsTopLeft,
+  PenTool,
   ShieldCheck,
   Sparkles,
   Star,
   Workflow,
   ShieldAlert,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -912,6 +924,146 @@ export type DeveloperDashboardPageData = {
   }>;
 };
 
+type ProjectAccountLink = {
+  label: string;
+  href: string;
+  detail: string;
+  status: string;
+  Icon: LucideIcon;
+};
+
+const projectAccountGroups: Array<{ title: string; description: string; accounts: ProjectAccountLink[] }> = [
+  {
+    title: "Code, deploy, and domains",
+    description: "Source control, production hosting, live domains, and DNS/security surfaces.",
+    accounts: [
+      {
+        label: "Live production site",
+        href: "https://thebeesuite.io",
+        detail: "Public website and production app domain.",
+        status: "Live",
+        Icon: Globe2,
+      },
+      {
+        label: "GitHub repository",
+        href: "https://github.com/BrunerDigital/TheBEESuite",
+        detail: "Source code, commits, branches, issues, and pull requests.",
+        status: "Source",
+        Icon: GitBranch,
+      },
+      {
+        label: "Vercel project",
+        href: "https://vercel.com/brunerdigitals-projects/the-bee-suite",
+        detail: "Production deployments, aliases, build logs, env vars, and domains.",
+        status: "Deploy",
+        Icon: Cloud,
+      },
+      {
+        label: "Cloudflare dashboard",
+        href: "https://dash.cloudflare.com/",
+        detail: "DNS, domain routing, firewall, and Turnstile account checks.",
+        status: "DNS",
+        Icon: ShieldCheck,
+      },
+    ],
+  },
+  {
+    title: "Data, auth, and money movement",
+    description: "Core production records, user authentication, storage, and billing/payment operations.",
+    accounts: [
+      {
+        label: "Supabase dashboard",
+        href: "https://supabase.com/dashboard/projects",
+        detail: "Postgres, Auth users, storage buckets, service keys, and logs.",
+        status: "Database",
+        Icon: Database,
+      },
+      {
+        label: "Stripe dashboard",
+        href: "https://dashboard.stripe.com/",
+        detail: "Checkout, Connect accounts, webhooks, customers, invoices, and payments.",
+        status: "Payments",
+        Icon: CreditCard,
+      },
+      {
+        label: "Active/inactive users",
+        href: "/agency-admin#existing-user-accounts",
+        detail: "Manual user list inside Executive Admin with activate/deactivate actions.",
+        status: "Internal",
+        Icon: Users,
+      },
+    ],
+  },
+  {
+    title: "Messaging, AI, and documents",
+    description: "Communication providers, Google workspaces, AI assistance, and product planning tools.",
+    accounts: [
+      {
+        label: "Twilio Console",
+        href: "https://console.twilio.com/",
+        detail: "SMS numbers, messaging services, inbound webhooks, and delivery logs.",
+        status: "SMS",
+        Icon: MessageSquare,
+      },
+      {
+        label: "SendGrid",
+        href: "https://app.sendgrid.com/",
+        detail: "Transactional email sender, templates, API keys, suppressions, and activity.",
+        status: "Email",
+        Icon: Mail,
+      },
+      {
+        label: "Google Cloud",
+        href: "https://console.cloud.google.com/",
+        detail: "Sheets, Calendar OAuth, service accounts, and API credentials.",
+        status: "Google",
+        Icon: PanelsTopLeft,
+      },
+      {
+        label: "Google Drive",
+        href: "https://drive.google.com/",
+        detail: "Shared docs, spreadsheets, exports, and school operating files.",
+        status: "Files",
+        Icon: FileText,
+      },
+      {
+        label: "OpenAI Platform",
+        href: "https://platform.openai.com/",
+        detail: "Mr. Bee and AI command center API usage, keys, and model settings.",
+        status: "AI",
+        Icon: Bot,
+      },
+    ],
+  },
+  {
+    title: "Design and workflow",
+    description: "Design files, implementation tracking, and external work management.",
+    accounts: [
+      {
+        label: "Figma",
+        href: "https://www.figma.com/files",
+        detail: "Design files, mockups, slides, prototypes, and brand assets.",
+        status: "Design",
+        Icon: PenTool,
+      },
+      {
+        label: "Linear",
+        href: "https://linear.app/",
+        detail: "Issue tracking, project planning, implementation tasks, and roadmap notes.",
+        status: "Tasks",
+        Icon: Workflow,
+      },
+      {
+        label: "The BEE Suite docs",
+        href: "https://github.com/BrunerDigital/TheBEESuite/tree/main/docs",
+        detail: "Operational checklists, deployment notes, security review, and rollout guides.",
+        status: "Docs",
+        Icon: BookOpen,
+      },
+    ],
+  },
+];
+
 export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageData }) {
   return (
     <div className="flex flex-col gap-6">
@@ -924,6 +1076,59 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Production-facing technical operations for integrations, imports, webhooks, audit events, and record maintenance.
         </p>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Project accounts and platforms</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              Quick links for every outside account and internal admin surface involved in The BEE Suite build, deployment, data, communications, AI, and design workflow.
+            </p>
+          </div>
+          <Badge variant="outline" className="w-fit">
+            <KeyRound data-icon="inline-start" />
+            No secrets shown
+          </Badge>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {projectAccountGroups.map((group) => (
+            <Card key={group.title} className="glass-panel">
+              <CardHeader>
+                <CardTitle className="text-lg">{group.title}</CardTitle>
+                <CardDescription>{group.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2">
+                {group.accounts.map(({ label, href, detail, status, Icon }) => {
+                  const external = href.startsWith("http");
+                  return (
+                    <Link
+                      key={label}
+                      href={href}
+                      target={external ? "_blank" : undefined}
+                      rel={external ? "noreferrer" : undefined}
+                      className="group flex min-h-28 items-start gap-3 rounded-xl border bg-background/55 p-4 transition hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="font-medium leading-5">{label}</span>
+                          <span className="flex shrink-0 items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+                            {status}
+                            {external ? <ExternalLink className="size-3" /> : <ArrowRight className="size-3" />}
+                          </span>
+                        </span>
+                        <span className="mt-2 block text-xs leading-5 text-muted-foreground">{detail}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">

@@ -1107,7 +1107,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
           </Card>
         </div>
 
-        <Card>
+        <Card id="existing-user-accounts" className="scroll-mt-24">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ShieldCheck className="size-5 text-primary" />

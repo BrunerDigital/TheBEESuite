@@ -4,8 +4,11 @@ import {
   ArrowRight,
   BarChart3,
   Building2,
+  CalendarDays,
+  Calculator,
   Camera,
   CheckCircle2,
+  Clock,
   Code2,
   ClipboardCheck,
   CreditCard,
@@ -18,23 +21,25 @@ import {
   ShieldCheck,
   Sparkles,
   TabletSmartphone,
+  TrendingUp,
   UsersRound,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
+import { LandingSavingsCalculator } from "@/components/landing-savings-calculator";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   ["Product", "#product"],
   ["How it works", "#workflows"],
-  ["Visual guides", "#product-maps"],
+  ["Capacity", "#capacity-planning"],
+  ["Savings", "#savings"],
   ["Schools", "#school-use"],
   ["Registration", "/registration"],
-  ["Testimonials", "#testimonials"],
-  ["Reporting", "#reporting"],
+  ["Trust", "#trust"],
 ];
 
 const heroProof = [
@@ -105,6 +110,65 @@ const workflowCards = [
     icon: ShieldCheck,
     steps: ["Tenant", "Brand", "Owner group", "Center"],
   },
+];
+
+const capacityPlanningCards = [
+  {
+    title: "30, 60, and 90 day room view",
+    body: "Directors can see where starts, withdrawals, birthdays, move-ups, capacity, and ratios may collide before a seat sits empty or a room drifts out of range.",
+    icon: CalendarDays,
+  },
+  {
+    title: "Waitlist fit with school context",
+    body: "Open seats are more useful when they are matched to program interest, child age, desired start date, required documents, and billing readiness.",
+    icon: UsersRound,
+  },
+  {
+    title: "Ratio and staffing early warnings",
+    body: "Enrollment planning is tied back to classroom ratios, teacher assignment, schedules, and licensed capacity instead of living in a separate spreadsheet.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "A director answer screen",
+    body: "When a parent asks when a child can start, the school can answer from one planning surface instead of checking files, calendars, rosters, and inboxes.",
+    icon: Sparkles,
+  },
+];
+
+const mobileRoleCards = [
+  {
+    title: "Parents on phones",
+    body: "Family portal flows prioritize balance, invoices, documents, messages, daily reports, and contact requests with thumb-friendly actions.",
+    icon: TabletSmartphone,
+  },
+  {
+    title: "Teachers on classroom tablets",
+    body: "Teacher screens are optimized for iPad/tablet use: attendance, care logs, photos, incident notes, and daily reports stay reachable while the class keeps moving.",
+    icon: ClipboardCheck,
+  },
+  {
+    title: "Directors and executives on desktop",
+    body: "School and executive dashboards stay dense enough for repeated operational work: pipeline, occupancy, billing readiness, reports, setup, and compliance queues.",
+    icon: BarChart3,
+  },
+];
+
+const trustCards = [
+  ["Role and tenant boundaries", "Access is scoped by tenant, brand, owner group, school, classroom, and user role before sensitive records are shown.", ShieldCheck],
+  ["Audit-ready workflow records", "Registration, documents, billing setup, staff actions, messages, incidents, and compliance work create reviewable operational history.", FileCheck2],
+  ["Protected data posture", "Custody, medical, child, family, billing, and staff records are treated as protected workflows with human review on sensitive decisions.", LockKeyhole],
+];
+
+const integrationCards = [
+  ["Migration intake", "Procare CSV import support helps schools move families, children, guardians, classrooms, staff, invoices, balances, and attendance into The BEE Suite.", Workflow],
+  ["Calendar and communication", "Tour events, school closures, staff-visible events, parent notices, Gmail inquiry intake, and message workflows keep teams out of scattered inboxes.", CalendarDays],
+  ["Accounting and payment runway", "Billing readiness, payout setup, invoice flows, parent payment methods, and export-friendly records keep financial operations connected.", CreditCard],
+];
+
+const resourceCards = [
+  ["State readiness", "Licensing, QRIS, funding, professional development, and required document rules can be tracked as school setup and compliance evidence.", MapPin],
+  ["Credential visibility", "Staff profiles, background status, certifications, schedule rows, onboarding documents, and expiration reminders stay visible to authorized leaders.", UsersRound],
+  ["Launch checklist", "Each school can track classrooms, families, staff, registration packets, billing setup, integrations, forms, and smoke testing before going live.", CheckCircle2],
 ];
 
 const explainerGraphics = [
@@ -547,6 +611,83 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="capacity-planning" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(245,181,27,0.1),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(56,189,248,0.08),transparent_24rem)]" />
+        <div className="relative mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
+          <div>
+            <SectionHeading
+              title="Capacity planning before empty seats cost the school."
+              body="The BEE Suite already tracks the pieces that make enrollment planning real: child age, program interest, classroom capacity, staff assignment, start dates, tours, registration status, billing readiness, and open documents. The next layer turns those signals into a forward-looking seat plan."
+            />
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              {capacityPlanningCards.map((card) => (
+                <FeatureCard key={card.title} {...card} />
+              ))}
+            </div>
+          </div>
+          <GlassPanel className="p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Seat forecast</div>
+                <h3 className="mt-2 text-2xl font-semibold tracking-normal text-white">Director planning board</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">A clearer answer for openings, move-ups, waitlist fit, and ratio risk.</p>
+              </div>
+              <TrendingUp className="size-6 text-amber-300" />
+            </div>
+            <div className="mt-6 divide-y divide-white/10">
+              {[
+                ["Infants", "2 projected openings", "1 waitlist match", "Ratio review"],
+                ["Toddlers", "5 move-ups within 60 days", "4 tour families", "Staff ready"],
+                ["Preschool", "3 starts pending packets", "2 payment setups", "Docs needed"],
+                ["VPK", "Full today", "8 upcoming transitions", "Watch capacity"],
+              ].map(([room, signal, match, status]) => (
+                <div key={room} className="grid gap-3 py-4 sm:grid-cols-[0.8fr_1fr_1fr_0.8fr] sm:items-center">
+                  <div className="font-medium text-white">{room}</div>
+                  <div className="text-sm text-zinc-300">{signal}</div>
+                  <div className="text-sm text-zinc-400">{match}</div>
+                  <div className="text-sm font-medium text-amber-200">{status}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-3">
+              {[
+                ["90 days", "planning window"],
+                ["4 signals", "capacity, age, docs, billing"],
+                ["1 answer", "what can we offer this family?"],
+              ].map(([value, label]) => (
+                <div key={label}>
+                  <div className="text-2xl font-semibold text-white">{value}</div>
+                  <div className="mt-1 text-xs leading-5 text-zinc-500">{label}</div>
+                </div>
+              ))}
+            </div>
+          </GlassPanel>
+        </div>
+      </section>
+
+      <section id="savings" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1400px]">
+          <div className="grid gap-8 lg:grid-cols-[0.72fr_1fr] lg:items-end">
+            <SectionHeading
+              title="A better savings calculator for real operating decisions."
+              body="Generic time-savings math is not enough for childcare. This estimate considers school count, children, staff, admin cost, tuition, and the seat visibility that comes from tying enrollment to rooms, billing, documents, and staff coverage."
+            />
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                [Calculator, "Adjustable", "Use your own school, enrollment, staff, and tuition assumptions."],
+                [Clock, "Operational", "Includes enrollment, billing, classroom, and compliance admin drag."],
+                [TrendingUp, "Capacity-aware", "Separates labor savings from seats that need earlier visibility."],
+              ].map(([Icon, title, body]) => (
+                <FeatureCard key={title as string} title={title as string} body={body as string} icon={Icon as LucideIcon} />
+              ))}
+            </div>
+          </div>
+          <div className="mt-10">
+            <LandingSavingsCalculator />
+          </div>
+        </div>
+      </section>
+
       <section id="product-maps" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(245,181,27,0.12),transparent_26rem),radial-gradient(circle_at_86%_28%,rgba(56,189,248,0.1),transparent_28rem)]" />
         <div className="absolute right-0 top-8 hidden h-72 w-96 opacity-20 hive-texture lg:block" />
@@ -595,6 +736,30 @@ export default function LandingPage() {
         </div>
       </section>
 
+      <section id="mobile-app" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.82fr_1fr] lg:items-start">
+          <div>
+            <SectionHeading
+              title="Web-based now, ready for iOS and Android packaging."
+              body="The product stays a secure web app, but each role has a different device reality. Parents need fast phone flows, teachers need classroom tablet flows, and leaders need desktop command surfaces. The native app path should wrap the same role-safe web experience after the installable web version is finalized."
+            />
+            <GlassPanel className="mt-8 p-5">
+              <div className="text-sm font-semibold text-amber-300">Native app path</div>
+              <div className="mt-4 space-y-4 text-sm leading-6 text-zinc-300">
+                <p>1. Finish responsive web and installable PWA behavior for parent and teacher workflows.</p>
+                <p>2. Package iOS with the Apple developer account, bundle ID, icons, screenshots, privacy labels, and push notification decisions.</p>
+                <p>3. Package Android with the Play Console account, package name, signing strategy, store assets, and data safety answers.</p>
+              </div>
+            </GlassPanel>
+          </div>
+          <div className="grid gap-4">
+            {mobileRoleCards.map((card) => (
+              <FeatureCard key={card.title} {...card} />
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section id="onboarding" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
         <div className="absolute -left-20 top-16 hidden h-64 w-80 opacity-20 hive-texture lg:block" />
         <div className="mx-auto max-w-[1400px]">
@@ -606,6 +771,42 @@ export default function LandingPage() {
           <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {setupCards.map(([title, body, Icon]) => (
               <FeatureCard key={title as string} title={title as string} body={body as string} icon={Icon as LucideIcon} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="trust" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(56,189,248,0.08),transparent_36%),radial-gradient(circle_at_80%_24%,rgba(245,181,27,0.1),transparent_26rem)]" />
+        <div className="relative mx-auto max-w-[1400px]">
+          <SectionHeading
+            align="center"
+            title="Trust, integrations, and state readiness built into the sales story."
+            body="Large competitors separate these into resource pages and marketplaces. The BEE Suite can make them part of the product promise: move data in cleanly, keep sensitive records role-gated, track readiness by school, and support the state-specific work directors actually manage."
+          />
+          <div className="mt-10 grid gap-5 lg:grid-cols-3">
+            {[
+              ["Trust posture", "What leaders need to know before sensitive family, child, billing, and staff data moves into a live system.", trustCards],
+              ["Integration runway", "The operational handoffs that keep enrollment, accounting, calendar, payments, messaging, and migration work connected.", integrationCards],
+              ["State-ready operations", "The licensing, funding, credential, and school setup evidence that directors need before audits and renewals.", resourceCards],
+            ].map(([title, body, cards]) => (
+              <GlassPanel key={title as string} className="p-5">
+                <h3 className="text-xl font-semibold text-white">{title as string}</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{body as string}</p>
+                <div className="mt-5 divide-y divide-white/10">
+                  {(cards as typeof trustCards).map(([label, detail, Icon]) => (
+                    <div key={label as string} className="flex gap-3 py-4">
+                      <span className="mt-1 grid size-9 shrink-0 place-items-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-amber-300">
+                        <Icon className="size-4" />
+                      </span>
+                      <div>
+                        <div className="text-sm font-semibold text-white">{label as string}</div>
+                        <p className="mt-1 text-sm leading-6 text-zinc-400">{detail as string}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </GlassPanel>
             ))}
           </div>
         </div>

@@ -445,12 +445,12 @@ export function ParentPortalWorkspace({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+      <section id="family-summary" className="scroll-mt-28 rounded-2xl border bg-card/80 p-4 shadow-2xl shadow-black/15 sm:p-6">
         <Badge className="mb-4">
           <ShieldCheck data-icon="inline-start" />
           Family portal
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">{family.name}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{family.name}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Daily reports, invoices, messages, documents, and director-reviewed update requests for your family.
         </p>
@@ -491,7 +491,7 @@ export function ParentPortalWorkspace({
       <ParentKioskCredentialPanel initialCredentials={kioskCredentials} />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card className="glass-panel">
+        <Card id="billing" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Children</CardTitle>
             <CardDescription>Enrollment, classroom, schedule, and permission snapshot.</CardDescription>
@@ -591,15 +591,16 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "ach")}>
+                  <Button className="w-full sm:w-auto" disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "ach")}>
                     <Building2 data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
                   </Button>
-                  <Button disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
                   </Button>
                   <Button
+                    className="w-full sm:w-auto"
                     disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
                     onClick={() => managePaymentMethod("portal")}
                     variant="outline"
@@ -607,6 +608,7 @@ export function ParentPortalWorkspace({
                     Manage Payment Method
                   </Button>
                   <Button
+                    className="w-full sm:w-auto"
                     disabled={isPending || autopayStatus === "disabled" || !billingAccount}
                     onClick={() => managePaymentMethod("disable_autopay")}
                     variant="outline"
@@ -626,11 +628,11 @@ export function ParentPortalWorkspace({
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
                       <Building2 data-icon="inline-start" />
                       Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                     </Button>
-                    <Button disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
                       Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
@@ -654,11 +656,12 @@ export function ParentPortalWorkspace({
                 <Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge>
                 <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
                 <div className="flex flex-wrap gap-2">
-                  <Button disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
                     <Building2 data-icon="inline-start" />
                     Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                   </Button>
                   <Button
+                    className="w-full sm:w-auto"
                     disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"}
                     onClick={() => payInvoice(invoice.id, "card")}
                     variant="outline"
@@ -722,7 +725,7 @@ export function ParentPortalWorkspace({
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="messages" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Message the Center</CardTitle>
             <CardDescription>Messages are logged and routed to center leadership.</CardDescription>
@@ -736,7 +739,7 @@ export function ParentPortalWorkspace({
               <Label htmlFor="portal-message">Message</Label>
               <Textarea id="portal-message" value={message} onChange={(event) => setMessage(event.target.value)} />
             </div>
-            <Button disabled={isPending || !message.trim()} onClick={sendMessage}>
+            <Button className="w-full sm:w-auto" disabled={isPending || !message.trim()} onClick={sendMessage}>
               <MessageSquare data-icon="inline-start" />
               Send Message
             </Button>
@@ -745,7 +748,7 @@ export function ParentPortalWorkspace({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="glass-panel">
+        <Card id="documents" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Photos and Moments</CardTitle>
             <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
@@ -849,6 +852,7 @@ export function ParentPortalWorkspace({
                         : "I confirm this submission is complete and ready for school review."}
                     </label>
                     <Button
+                      className="w-full sm:w-auto"
                       disabled={
                         isPending ||
                         (requiresDocumentSignature(document) &&
@@ -867,7 +871,7 @@ export function ParentPortalWorkspace({
             <div className="space-y-2">
               <Label htmlFor="contact-request">Request an emergency contact or pickup change</Label>
               <Textarea id="contact-request" value={requestDetails} onChange={(event) => setRequestDetails(event.target.value)} />
-              <Button disabled={isPending || !requestDetails.trim()} onClick={requestContactUpdate}>
+              <Button className="w-full sm:w-auto" disabled={isPending || !requestDetails.trim()} onClick={requestContactUpdate}>
                 <FileText data-icon="inline-start" />
                 Submit Request
               </Button>
@@ -925,7 +929,7 @@ export function ParentPortalWorkspace({
             </label>
           ))}
           <div className="md:col-span-2">
-            <Button disabled={isPending || !currentGuardianId} onClick={saveNotificationPreferences}>
+            <Button className="w-full sm:w-auto" disabled={isPending || !currentGuardianId} onClick={saveNotificationPreferences}>
               <CalendarDays data-icon="inline-start" />
               Save Preferences
             </Button>

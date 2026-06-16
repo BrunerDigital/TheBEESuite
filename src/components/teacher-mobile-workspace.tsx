@@ -748,6 +748,22 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </AlertDescription>
       </Alert>
 
+      <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur lg:top-20">
+        <div className="flex min-w-max gap-2">
+          {[
+            ["Roster", "#teacher-roster"],
+            ["Attendance", "#teacher-attendance"],
+            ["Daily report", "#teacher-daily-report"],
+            ["Photo", "#teacher-photo"],
+            ["Incident", "#teacher-incident"],
+          ].map(([label, href]) => (
+            <Button key={href} size="sm" variant="outline" nativeButton={false} render={<a href={href} />}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      </nav>
+
       {kioskAccess ? (
         <Card className="glass-panel">
           <CardHeader>
@@ -785,7 +801,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </Card>
       ) : null}
 
-      <Card className="glass-panel">
+      <Card id="teacher-roster" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle>Roster</CardTitle>
           <CardDescription>{roster.length} children visible to your role</CardDescription>
@@ -955,8 +971,8 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card className="glass-panel">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <Card id="teacher-attendance" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Attendance</CardTitle>
             <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
@@ -992,7 +1008,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="teacher-photo" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Photo</CardTitle>
             <CardDescription>Share a private classroom moment with parent permission checks.</CardDescription>
@@ -1007,7 +1023,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel lg:col-span-2">
+        <Card id="teacher-daily-report" className="glass-panel scroll-mt-28 lg:col-span-2">
           <CardHeader>
             <CardTitle>Daily Report</CardTitle>
             <CardDescription>
@@ -1253,7 +1269,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="teacher-incident" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Incident</CardTitle>
             <CardDescription>Director review required</CardDescription>

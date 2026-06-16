@@ -482,12 +482,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   {commandCenterDescription}
                 </p>
               </div>
-              <div className="flex gap-2">
-                {showAiBrief ? <Button nativeButton={false} render={<Link href={aiBriefHref} />}>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                {showAiBrief ? <Button className="w-full sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
                   <Sparkles data-icon="inline-start" />
                   {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}
                 </Button> : null}
-                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
+                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? <Button className="w-full sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/crm-leads" />}>
                   <ArrowUpRight data-icon="inline-start" />
                   Open pipeline
                 </Button> : null}

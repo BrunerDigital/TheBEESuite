@@ -4,6 +4,7 @@ import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUs
 import { writeAuditLog } from "@/lib/audit";
 import { AI_COMMAND_GUARDRAIL_NOTE, buildAiOperationsSummary } from "@/lib/ai-command";
 import { latestLogMap, startOfServiceDay } from "@/lib/attendance-state";
+import { currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { readStaffClockState } from "@/lib/staff-kiosk";
@@ -139,7 +140,7 @@ async function generateOperationsSummary(
     prisma.child.count({
       where: {
         family: { centerId: selectedCenterFilter },
-        enrollmentStatus: { notIn: ["withdrawn", "graduated", "inactive"] },
+        enrollmentStatus: { in: currentlyEnrolledStatusValues() },
       },
     }),
     prisma.checkInOutLog.findMany({

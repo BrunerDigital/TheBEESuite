@@ -237,8 +237,8 @@ Kid City USA Enterprises covers the BEE Suite software billing. This payout setu
 5. Confirm the reporting owner.
 6. Submit weekly FTE by Friday at noon.
 7. Watch for missing-report escalations:
-   - Friday 8:00 AM reminder if not submitted
-   - Friday 1:00 PM escalation, one hour after the noon deadline
+   - Friday 8:00 AM friendly reminder if not submitted
+   - Friday 5:00 PM follow-up if the report is still missing
 
 ## Phase 12: Configure Compliance, Incidents, And Medication Logs
 

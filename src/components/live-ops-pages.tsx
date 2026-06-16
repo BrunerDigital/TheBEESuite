@@ -74,8 +74,13 @@ import {
   EmergencyDrillLogPanel,
   type EmergencyDrillLogRow,
 } from "@/components/emergency-drill-log-panel";
+import {
+  ChildProfilesEnrollmentPanel,
+  FamilyProfilesEnrollmentPanel,
+  type ChildProfileVisibilityRecord,
+  type FamilyProfileVisibilityRecord,
+} from "@/components/enrollment-visibility-panels";
 import { OperationsActionHub } from "@/components/operations-action-hub";
-import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { PaymentAutopayActions } from "@/components/payment-autopay-actions";
 import { NotificationReadAction } from "@/components/notification-read-actions";
 import {
@@ -94,14 +99,12 @@ import {
   type NotificationPreferenceUserOption,
 } from "@/components/notification-preferences-panel";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
-import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportPrefill, type FteReportRow } from "@/components/fte-report-form";
 import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
-import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
 import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
@@ -4267,17 +4270,8 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 }
 
 export type FamilyProfilesPageData = {
-  families: Array<EditableFamilyRecord & {
-    createdAt: Date | string;
-    guardians: Array<EditableFamilyRecord["guardians"][number] & {
-      userId: string | null;
-      checkInPinSetAt: Date | string | null;
-      qrToken?: string | null;
-      kioskPath?: string | null;
-      centerName?: string | null;
-    }>;
-    _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
-  }>;
+  families: FamilyProfileVisibilityRecord[];
+  allFamilies: FamilyProfileVisibilityRecord[];
   importCenters: Array<{ id: string; name: string }>;
   bulkImportEnabled: boolean;
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
@@ -4296,6 +4290,8 @@ export type FamilyProfilesPageData = {
     withCustodyNotes: number;
     children: number;
     guardians: number;
+    graduated: number;
+    graduatedFamilies: number;
   };
 };
 
@@ -4312,14 +4308,20 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           Guardian, child, document, pickup, emergency contact, billing email, and restricted custody-note visibility.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <StatCard label="Families" value={data.stats.total} />
         <StatCard label="Children" value={data.stats.children} />
         <StatCard label="Guardians" value={data.stats.guardians} />
+        <StatCard label="Graduated" value={data.stats.graduated} detail={`${data.stats.graduatedFamilies.toLocaleString()} families hidden`} />
         <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} />
-      <FamilyRecordEditor families={data.families} centers={data.intakeCenters} />
+      <FamilyProfilesEnrollmentPanel
+        currentFamilies={data.families}
+        allFamilies={data.allFamilies}
+        centers={data.intakeCenters}
+        graduatedChildren={data.stats.graduated}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Guardian Self-Service Change Requests</CardTitle>
@@ -4371,99 +4373,6 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           </div>
         </CardContent>
       </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Family Directory</CardTitle>
-          <CardDescription>Role-scoped family profile snapshot</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Family</TableHead>
-                <TableHead>Guardians</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Records</TableHead>
-                <TableHead>Restricted</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.families.map((family) => (
-                <TableRow key={family.id}>
-                  <TableCell>
-                    <div className="font-medium">{family.name}</div>
-                    <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
-                  </TableCell>
-                  <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
-                  <TableCell>{family.children.map((child) => `${child.fullName} (${child.ageGroup})`).join(", ") || "None"}</TableCell>
-                  <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
-                  <TableCell>
-                    {hasCustodyWarning(family) ? (
-                      <div className="space-y-1">
-                        <Badge variant="destructive">
-                          <ShieldAlert data-icon="inline-start" />
-                          {CUSTODY_WARNING_LABEL}
-                        </Badge>
-                        <div className="max-w-xs text-xs text-muted-foreground">{custodyWarningPreview(family)}</div>
-                      </div>
-                    ) : "Standard"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Lobby Kiosk Credentials</CardTitle>
-          <CardDescription>Directors set the 4 digit guardian PIN and QR scan payload used on the check-in/check-out tablet.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-2">
-          {data.families.flatMap((family) =>
-            family.guardians.map((guardian) => (
-              <GuardianPinManager
-                key={guardian.id}
-                guardianId={guardian.id}
-                guardianName={guardian.fullName}
-                familyName={family.name}
-                centerId={family.centerId}
-                centerName={guardian.centerName}
-                pinSetAt={guardian.checkInPinSetAt}
-                qrToken={guardian.qrToken}
-                kioskPath={guardian.kioskPath}
-              />
-            )),
-          )}
-          {!data.families.some((family) => family.guardians.length) ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Parent Portal Access</CardTitle>
-          <CardDescription>
-            Create or reset linked parent accounts. Parents only see families connected through their guardian profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-2">
-          {data.families.flatMap((family) =>
-            family.guardians.map((guardian) => (
-              <ParentPortalInviteButton
-                key={guardian.id}
-                guardianId={guardian.id}
-                guardianName={`${guardian.fullName} · ${family.name}`}
-                email={guardian.email}
-                linked={Boolean(guardian.userId)}
-              />
-            )),
-          )}
-          {!data.families.some((family) => family.guardians.length) ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
       <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
       <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact centers={data.importCenters} />
     </div>
@@ -4471,24 +4380,12 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
 }
 
 export type ChildProfilesPageData = {
-  children: Array<{
-    id: string;
-    fullName: string;
-    preferredName: string | null;
-    dateOfBirth: Date | string;
-    ageGroup: string;
-    enrollmentStatus: string;
-    startDate: Date | string | null;
-    photoVideoPermission: boolean;
-    fieldTripPermission: boolean;
-    family: { name: string; centerId: string | null; custodyNotes: string | null };
-    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
-    _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
-  }>;
+  children: ChildProfileVisibilityRecord[];
+  allChildren: ChildProfileVisibilityRecord[];
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
-    enrolled: number;
+    graduated: number;
     allergies: number;
     restrictedMedicalNotes: number;
   };
@@ -4509,59 +4406,16 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
       </section>
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Children" value={data.stats.total} />
-        <StatCard label="Enrolled" value={data.stats.enrolled} />
+        <StatCard label="Graduated" value={data.stats.graduated} detail="hidden by default" />
         <StatCard label="Allergy records" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Children</CardTitle>
-          <CardDescription>Sensitive records are marked for restricted access handling</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Child</TableHead>
-                <TableHead>Family</TableHead>
-                <TableHead>Classroom</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Safety</TableHead>
-                <TableHead>Permissions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.children.map((child) => (
-                <TableRow key={child.id}>
-                  <TableCell>
-                    <div className="font-medium">{child.fullName}</div>
-                    <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{child.family.name}</div>
-                    {hasCustodyWarning(child.family) ? (
-                      <Badge variant="destructive" className="mt-1">
-                        <ShieldAlert data-icon="inline-start" />
-                        {CUSTODY_WARNING_LABEL}
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{formatRecordLabel(child.enrollmentStatus)}</TableCell>
-                  <TableCell>
-                    {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
-                    {hasCustodyWarning(child.family) ? (
-                      <div className="mt-1 text-xs text-destructive">Review custody/pickup restrictions before release or contact changes.</div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <ChildProfilesEnrollmentPanel
+        currentChildren={data.children}
+        allChildren={data.allChildren}
+        graduatedChildren={data.stats.graduated}
+      />
       <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
     </div>
   );

@@ -6,6 +6,7 @@ import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCur
 import { stageLabels } from "@/lib/crm";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
+import { currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,11 @@ export default async function DashboardPage() {
     centerId: scopedCenterFilter,
     status: { notIn: ["closed", "merged"] },
   };
+  const currentEnrollmentWhere = { enrollmentStatus: { in: currentlyEnrolledStatusValues() } };
+  const currentFamilyWhere = {
+    centerId: scopedCenterFilter,
+    children: { some: currentEnrollmentWhere },
+  };
   const today = new Date();
   const startOfDay = new Date(today);
   startOfDay.setHours(0, 0, 0, 0);
@@ -96,9 +102,11 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     prisma.child.count({
       where: {
-        classroom: {
-          centerId: scopedCenterFilter,
-        },
+        ...currentEnrollmentWhere,
+        OR: [
+          { classroom: { centerId: scopedCenterFilter } },
+          { family: { centerId: scopedCenterFilter } },
+        ],
       },
     }),
     prisma.lead.count({ where: leadWhere }),
@@ -123,9 +131,7 @@ export default async function DashboardPage() {
     prisma.message.count({
       where: {
         readAt: null,
-        family: {
-          centerId: scopedCenterFilter,
-        },
+        family: currentFamilyWhere,
       },
     }),
     prisma.incidentReport.count({
@@ -196,7 +202,7 @@ export default async function DashboardPage() {
         ratioRule: true,
         _count: {
           select: {
-            children: true,
+            children: { where: currentEnrollmentWhere },
             staff: { where: { user: { role: UserRole.TEACHER } } },
           },
         },
@@ -204,9 +210,7 @@ export default async function DashboardPage() {
     }),
     prisma.message.findMany({
       where: {
-        family: {
-          centerId: scopedCenterFilter,
-        },
+        family: currentFamilyWhere,
       },
       orderBy: { createdAt: "desc" },
       take: 5,
@@ -332,7 +336,7 @@ export default async function DashboardPage() {
       select: {
         centerId: true,
         capacity: true,
-        _count: { select: { children: true } },
+        _count: { select: { children: { where: currentEnrollmentWhere } } },
       },
     }),
     prisma.staffProfile.groupBy({

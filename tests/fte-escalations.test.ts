@@ -10,7 +10,7 @@ test("FTE external escalations only send during configured Friday checkpoints", 
   assert.equal(shouldSendExternalFteEscalation(null), false);
   assert.equal(shouldSendExternalFteEscalation(undefined), false);
   assert.equal(shouldSendExternalFteEscalation("friday_8am"), true);
-  assert.equal(shouldSendExternalFteEscalation("friday_1pm"), true);
+  assert.equal(shouldSendExternalFteEscalation("friday_5pm"), true);
 });
 
 test("FTE escalation channel preferences prefer user settings over role defaults", () => {
@@ -31,12 +31,26 @@ test("FTE escalation copy includes school, week, and urgency", () => {
     weekLabel: "2026-06-01",
     phase: "overdue",
     reminder: "Current-week FTE reports are past the Friday due window.",
-    escalationLabel: "Friday 1:00 PM ET",
+    escalationLabel: "Friday 5:00 PM ET",
   });
 
-  assert.match(copy.subject, /FTE Overdue/);
+  assert.match(copy.subject, /FTE still needed/);
+  assert.match(copy.body, /Friday evening reminder/);
   assert.match(copy.body, /FL \| Sarasota/);
   assert.match(copy.body, /2026-06-01/);
-  assert.match(copy.body, /Friday 1:00 PM ET/);
-  assert.match(copy.sms, /Submit the weekly FTE report/);
+  assert.match(copy.body, /Friday 5:00 PM ET/);
+  assert.match(copy.sms, /Please submit the weekly FTE report/);
+});
+
+test("FTE pre-deadline copy is a friendly reminder", () => {
+  const copy = fteEscalationCopy({
+    centerName: "FL | Sarasota",
+    weekLabel: "2026-06-01",
+    phase: "due_soon",
+    reminder: "Current-week FTE reports are due Friday by 12:00 PM ET.",
+    escalationLabel: "Friday 8:00 AM ET",
+  });
+
+  assert.match(copy.subject, /Friendly FTE reminder/);
+  assert.match(copy.body, /Friendly reminder/);
 });

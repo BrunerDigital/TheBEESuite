@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
+import { currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ async function findGuardianByPin(centerId: string, pin: string) {
           name: true,
           custodyNotes: true,
           children: {
-            where: { enrollmentStatus: { not: "withdrawn" } },
+            where: { enrollmentStatus: { in: currentlyEnrolledStatusValues() } },
             orderBy: { fullName: "asc" },
             select: {
               id: true,
@@ -58,7 +59,7 @@ async function findGuardianByQrToken(centerId: string, qrToken: string) {
           name: true,
           custodyNotes: true,
           children: {
-            where: { enrollmentStatus: { not: "withdrawn" } },
+            where: { enrollmentStatus: { in: currentlyEnrolledStatusValues() } },
             orderBy: { fullName: "asc" },
             select: {
               id: true,

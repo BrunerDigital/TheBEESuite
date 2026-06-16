@@ -47,6 +47,33 @@ async function GETHandler(request: NextRequest) {
   const now = new Date();
   const dueState = getFteDueState(now);
   const escalationWindow = fteExternalEscalationWindow(now);
+
+  if (!escalationWindow) {
+    return NextResponse.json({
+      ok: true,
+      dryRun,
+      weekStart: dueState.weekStart,
+      dueAt: dueState.dueAt,
+      phase: dueState.phase,
+      missingCenters: 0,
+      notificationsCreated: 0,
+      notificationsWouldCreate: 0,
+      notificationsSkipped: 0,
+      externalEscalationEnabled: false,
+      externalEscalationWindow: null,
+      externalEscalationLabel: null,
+      externalEscalationsWouldSend: 0,
+      externalEscalationsSkipped: 0,
+      emailsAttempted: 0,
+      emailsSent: 0,
+      emailsSkipped: 0,
+      smsAttempted: 0,
+      smsSent: 0,
+      smsSkipped: 0,
+      skipReason: "FTE reminders only run during the Friday reminder windows.",
+    });
+  }
+
   const missingCenters = await prisma.center.findMany({
     where: {
       status: { not: "closed" },
@@ -151,8 +178,12 @@ async function GETHandler(request: NextRequest) {
 
   for (const center of missingCenters) {
     const label = centerName(center);
-    const title = `FTE ${dueState.phase === "overdue" ? "overdue" : "due"}: ${label} (${weekLabel})`;
-    const body = `${dueState.reminder} Missing report for week of ${weekLabel}.`;
+    const title = dueState.phase === "overdue"
+      ? `FTE still needed: ${label} (${weekLabel})`
+      : `Friendly FTE reminder: ${label} (${weekLabel})`;
+    const body = dueState.phase === "overdue"
+      ? `Friday evening reminder: ${dueState.reminder} Missing report for week of ${weekLabel}.`
+      : `Friendly reminder: ${dueState.reminder} Missing report for week of ${weekLabel}.`;
     const recipientIds = Array.from(new Set([
       ...platformOwners.map((user) => user.id),
       ...(executivesByTenant.get(center.organization.tenantId) ?? []),
@@ -175,11 +206,11 @@ async function GETHandler(request: NextRequest) {
       const externalTargetKey = notificationDedupeKey([
         "fte_external_target",
         weekLabel,
-        escalationWindow?.key,
+        escalationWindow.key,
         center.id,
         userId,
       ]);
-      if (escalationWindow && externalTargetKey && !localExternalTargetKeys.has(externalTargetKey)) {
+      if (externalTargetKey && !localExternalTargetKeys.has(externalTargetKey)) {
         localExternalTargetKeys.add(externalTargetKey);
         externalEscalationTargets.push({
           centerId: center.id,
@@ -216,10 +247,10 @@ async function GETHandler(request: NextRequest) {
   let smsAttempted = 0;
   let smsSent = 0;
   let smsSkipped = 0;
-  const shouldSendExternal = shouldSendExternalFteEscalation(escalationWindow?.key);
+  const shouldSendExternal = shouldSendExternalFteEscalation(escalationWindow.key);
   const externalDeliveryKeys = new Set<string>();
 
-  if (shouldSendExternal && escalationWindow) {
+  if (shouldSendExternal) {
     for (const target of externalEscalationTargets) {
       const recipient = allRecipientsById.get(target.userId);
       if (!recipient) continue;
@@ -269,7 +300,7 @@ async function GETHandler(request: NextRequest) {
     notificationsCreated = created.count;
   }
 
-  if (!dryRun && shouldSendExternal && escalationWindow && externalEscalationTargets.length) {
+  if (!dryRun && shouldSendExternal && externalEscalationTargets.length) {
     const statusCallbackUrl = twilioStatusCallbackUrl(request);
     for (const target of externalEscalationTargets) {
       const recipient = allRecipientsById.get(target.userId);
@@ -384,8 +415,8 @@ async function GETHandler(request: NextRequest) {
     notificationsWouldCreate: dryRun ? pendingNotificationData.length : 0,
     notificationsSkipped: existingNotifications.length,
     externalEscalationEnabled: shouldSendExternal,
-    externalEscalationWindow: escalationWindow?.key ?? null,
-    externalEscalationLabel: escalationWindow?.label ?? null,
+    externalEscalationWindow: escalationWindow.key,
+    externalEscalationLabel: escalationWindow.label,
     externalEscalationsWouldSend: dryRun
       ? Math.max(0, externalDeliveryKeys.size - existingExternalDeliveries.length)
       : 0,

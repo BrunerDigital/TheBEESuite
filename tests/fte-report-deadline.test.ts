@@ -34,7 +34,8 @@ test("FTE due state treats Friday morning as due today and Friday afternoon as o
   assert.match(afterNoon.reminder, /Friday noon deadline/);
 });
 
-test("FTE external escalations fire Friday at 8 AM and 1 PM Eastern", () => {
+test("FTE external escalations fire only on Friday morning and Friday evening", () => {
+  assert.equal(fteExternalEscalationWindow(new Date("2026-06-11T14:00:00.000Z")), null);
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T11:59:00.000Z")), null);
 
   const junePreDeadline = fteExternalEscalationWindow(new Date("2026-06-12T12:00:00.000Z"));
@@ -46,17 +47,22 @@ test("FTE external escalations fire Friday at 8 AM and 1 PM Eastern", () => {
     "friday_8am",
   );
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T16:30:00.000Z")), null);
+  assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T20:59:00.000Z")), null);
 
-  const junePostDeadline = fteExternalEscalationWindow(new Date("2026-06-12T17:00:00.000Z"));
-  assert.equal(junePostDeadline?.key, "friday_1pm");
+  const junePostDeadline = fteExternalEscalationWindow(new Date("2026-06-12T21:00:00.000Z"));
+  assert.equal(junePostDeadline?.key, "friday_5pm");
   assert.equal(junePostDeadline?.label, FTE_POST_DEADLINE_ESCALATION_LABEL);
+  assert.equal(
+    fteExternalEscalationWindow(new Date("2026-06-13T04:00:00.000Z")),
+    null,
+  );
 
   assert.equal(
     fteExternalEscalationWindow(new Date("2026-12-11T13:00:00.000Z"))?.key,
     "friday_8am",
   );
   assert.equal(
-    fteExternalEscalationWindow(new Date("2026-12-11T18:00:00.000Z"))?.key,
-    "friday_1pm",
+    fteExternalEscalationWindow(new Date("2026-12-11T22:00:00.000Z"))?.key,
+    "friday_5pm",
   );
 });

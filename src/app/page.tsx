@@ -38,6 +38,7 @@ const navItems = [
   ["Capacity", "#capacity-planning"],
   ["Savings", "#savings"],
   ["Schools", "#school-use"],
+  ["App", "/app"],
   ["Registration", "/registration"],
   ["Trust", "#trust"],
 ];
@@ -746,10 +747,14 @@ export default function LandingPage() {
             <GlassPanel className="mt-8 p-5">
               <div className="text-sm font-semibold text-amber-300">Native app path</div>
               <div className="mt-4 space-y-4 text-sm leading-6 text-zinc-300">
-                <p>1. Finish responsive web and installable PWA behavior for parent and teacher workflows.</p>
+                <p>1. Use the installable app launcher for kiosk, parent, teacher, and admin workflows.</p>
                 <p>2. Package iOS with the Apple developer account, bundle ID, icons, screenshots, privacy labels, and push notification decisions.</p>
                 <p>3. Package Android with the Play Console account, package name, signing strategy, store assets, and data safety answers.</p>
               </div>
+              <Button className="mt-5 h-10 px-4" nativeButton={false} render={<Link href="/app" />}>
+                Open app launcher
+                <ArrowRight data-icon="inline-end" />
+              </Button>
             </GlassPanel>
           </div>
           <div className="grid gap-4">

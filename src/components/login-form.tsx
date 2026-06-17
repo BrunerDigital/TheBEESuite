@@ -11,10 +11,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/dashboard";
+  return value;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/dashboard";
+  const next = safeNextPath(searchParams.get("next"));
   const resetStatus = searchParams.get("reset");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,14 +42,13 @@ export function LoginForm() {
         return;
       }
 
-      const safeNext = next.startsWith("/") ? next : "/dashboard";
       if (data?.requiresPasswordReset) {
-        router.push(`/reset-password?force=1&next=${encodeURIComponent(safeNext)}`);
+        router.push(`/reset-password?force=1&next=${encodeURIComponent(next)}`);
         router.refresh();
         return;
       }
 
-      router.push(safeNext);
+      router.push(next);
       router.refresh();
     });
   }

@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
+import {
+  buildDeviceSessionLabel,
+  cleanDeviceLabel,
+  cleanUserAgent,
+  inferDeviceType,
+  normalizeDeviceAppMode,
+} from "@/lib/device-sessions";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
@@ -17,8 +24,9 @@ async function POSTHandler(request: NextRequest) {
   const loginIdentifier = clean(body.email).toLowerCase();
   const email = resolveLoginIdentifier(loginIdentifier);
   const password = clean(body.password);
+  const ipAddress = requestIp(request.headers);
   const rate = checkRateLimit({
-    key: `login:${requestIp(request.headers)}:${loginIdentifier || "unknown"}`,
+    key: `login:${ipAddress}:${loginIdentifier || "unknown"}`,
     limit: 8,
     windowMs: 15 * 60 * 1000,
   });
@@ -48,6 +56,7 @@ async function POSTHandler(request: NextRequest) {
     where: { email, isActive: true },
     select: {
       id: true,
+      tenantId: true,
       email: true,
       name: true,
       role: true,
@@ -63,6 +72,36 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  const userAgent = cleanUserAgent(request.headers.get("user-agent"));
+  const appMode = normalizeDeviceAppMode(body.appMode, body.next);
+  const deviceType = inferDeviceType(userAgent);
+  const label = cleanDeviceLabel(body.deviceLabel) || buildDeviceSessionLabel({ appMode, deviceType, userAgent });
+  const deviceSession = await prisma.deviceSession.create({
+    data: {
+      userId: user.id,
+      tenantId: user.tenantId,
+      label,
+      deviceType,
+      appMode,
+      userAgent: userAgent || null,
+      ipAddress: ipAddress || null,
+    },
+    select: { id: true, label: true },
+  }).catch(() => null);
+
+  if (deviceSession) {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        userId: user.id,
+        action: "auth.device_session.created",
+        resource: "DeviceSession",
+        resourceId: deviceSession.id,
+        metadata: { appMode, deviceType, label: deviceSession.label },
+      },
+    }).catch(() => undefined);
+  }
+
   const response = NextResponse.json({
     ok: true,
     user: {
@@ -72,7 +111,7 @@ async function POSTHandler(request: NextRequest) {
     },
     requiresPasswordReset: user.mustResetPassword,
   });
-  response.cookies.set(SESSION_COOKIE, createSessionToken(user), sessionCookieOptions());
+  response.cookies.set(SESSION_COOKIE, createSessionToken({ ...user, deviceSessionId: deviceSession?.id }), sessionCookieOptions());
   return response;
 }
 

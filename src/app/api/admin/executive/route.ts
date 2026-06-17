@@ -787,6 +787,18 @@ async function revokeUserSessions(payload: Payload, actor: Awaited<ReturnType<ty
     },
     select: { id: true, email: true, sessionVersion: true },
   });
+  const revokedAt = new Date();
+  await prisma.deviceSession.updateMany({
+    where: {
+      tenantId: actor.tenantId,
+      userId: appUser.id,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt,
+      revokedById: actor.id,
+    },
+  }).catch(() => undefined);
 
   await audit({
     tenantId: actor.tenantId,

@@ -60,7 +60,12 @@ import {
   executiveParentMessageDemoRows,
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
-import { currentlyEnrolledStatusValues, isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import {
+  currentlyEnrolledChildWhere,
+  currentlyEnrolledStatusValues,
+  isCurrentlyEnrolledChildRecord,
+  isCurrentlyEnrolledStatus,
+} from "@/lib/enrollment-status";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
@@ -126,14 +131,6 @@ export function generateStaticParams() {
 
 function centerIdFilter(centerIds: string[]) {
   return centerIds.length ? { in: centerIds } : { in: ["__no_visible_centers__"] };
-}
-
-function currentlyEnrolledStatusFilter() {
-  return { in: currentlyEnrolledStatusValues() };
-}
-
-function currentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
-  return { enrollmentStatus: currentlyEnrolledStatusFilter() };
 }
 
 function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
@@ -1455,7 +1452,7 @@ async function renderLivePage(
       return {
         ...family,
         children: options.currentChildrenOnly
-          ? family.children.filter((child) => isCurrentlyEnrolledStatus(child.enrollmentStatus))
+          ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
           : family.children,
         billingAccount: family.billingAccount
           ? {
@@ -2011,7 +2008,7 @@ async function renderLivePage(
       : null;
     const familyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
       ? teacherStaffProfile?.classroomId
-        ? { children: { some: { classroomId: teacherStaffProfile.classroomId, ...currentlyEnrolledChildWhere() } } }
+        ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
       : allCenters
         ? { children: { some: currentlyEnrolledChildWhere() } }
@@ -3325,12 +3322,73 @@ async function renderLivePage(
         orderBy: { role: "asc" },
       }),
     ]);
+    const visibleUserIds = users.map((visibleUser) => visibleUser.id);
+    const deviceSessionCutoff = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const deviceSessions = visibleUserIds.length
+      ? await prisma.deviceSession.findMany({
+          where: {
+            tenantId: user.tenantId,
+            userId: { in: visibleUserIds },
+            OR: [
+              { revokedAt: null },
+              { lastSeenAt: { gte: deviceSessionCutoff } },
+            ],
+          },
+          orderBy: { lastSeenAt: "desc" },
+          take: 300,
+          select: {
+            id: true,
+            label: true,
+            deviceType: true,
+            appMode: true,
+            userAgent: true,
+            ipAddress: true,
+            lastSeenAt: true,
+            revokedAt: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+            revokedBy: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        }).catch(() => [])
+      : [];
 
     return (
       <TeamPermissionsPage
         data={{
           users,
           roleCounts: roleCounts.map((role) => ({ role: role.role, count: role._count._all })),
+          deviceSessions: deviceSessions.map((session) => ({
+            id: session.id,
+            label: session.label,
+            deviceType: session.deviceType,
+            appMode: session.appMode,
+            userAgent: session.userAgent,
+            ipAddress: session.ipAddress,
+            lastSeenAt: session.lastSeenAt.toISOString(),
+            revokedAt: session.revokedAt?.toISOString() ?? null,
+            createdAt: session.createdAt.toISOString(),
+            user: {
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              role: session.user.role,
+            },
+            revokedBy: session.revokedBy,
+          })),
+          currentDeviceSessionId: user.deviceSessionId,
+          canManageDeviceSessions: canManageOperations(user),
         }}
       />
     );

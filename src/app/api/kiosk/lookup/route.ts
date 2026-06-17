@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
-import { currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
@@ -25,7 +25,7 @@ async function findGuardianByPin(centerId: string, pin: string) {
           name: true,
           custodyNotes: true,
           children: {
-            where: { enrollmentStatus: { in: currentlyEnrolledStatusValues() } },
+            where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
             select: {
               id: true,
@@ -59,7 +59,7 @@ async function findGuardianByQrToken(centerId: string, qrToken: string) {
           name: true,
           custodyNotes: true,
           children: {
-            where: { enrollmentStatus: { in: currentlyEnrolledStatusValues() } },
+            where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
             select: {
               id: true,
@@ -121,7 +121,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const visibleChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId || !child.classroom);
+  const visibleChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId);
   const childIds = visibleChildren.map((child) => child.id);
   const timeZone = readCenterTimeZone(center.customFields);
   const serviceDayStart = startOfServiceDay(new Date(), timeZone);

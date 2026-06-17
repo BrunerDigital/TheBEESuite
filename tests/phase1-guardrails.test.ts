@@ -34,6 +34,7 @@ import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt }
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
 import { canViewDemoFallbackData, readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
@@ -226,6 +227,17 @@ test("session version guard invalidates stale signed cookies", () => {
   assert.equal(sessionMatchesCurrentVersion({ sessionVersion: 2 }, 3), false);
   assert.equal(sessionMatchesCurrentVersion({}, 1), false);
   assert.equal(sessionMatchesCurrentVersion({}, 0), true);
+});
+
+test("device sessions classify app modes and tablet devices", () => {
+  const fireTabletUa = "Mozilla/5.0 (Linux; Android 9; KFMUWI) AppleWebKit/537.36 Silk/115.4.1 like Chrome/115.0 Safari/537.36";
+  const ipadUa = "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 Version/17.2 Mobile/15E148 Safari/604.1";
+  assert.equal(appModeFromPath("/check-in/kokomo"), "kiosk");
+  assert.equal(appModeFromPath("/parent-portal"), "parent");
+  assert.equal(normalizeDeviceAppMode("invalid", "/teacher-portal"), "teacher");
+  assert.equal(inferDeviceType(fireTabletUa), "tablet");
+  assert.equal(inferDeviceType("Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Mobile/15E148"), "phone");
+  assert.equal(buildDeviceSessionLabel({ appMode: "teacher", deviceType: "tablet", userAgent: ipadUa }), "Teacher app on iPad");
 });
 
 test("demo fallback data is limited to seeded demo accounts", () => {

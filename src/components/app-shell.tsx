@@ -23,6 +23,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -464,6 +465,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <Sparkles data-icon="inline-start" />
                 AI suggestions require review
               </Badge>
+              {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
               <Dialog>
                 <Tooltip>
                   <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>

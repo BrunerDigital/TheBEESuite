@@ -15,6 +15,7 @@ export type AppSession = {
   role: UserRole;
   exp: number;
   sessionVersion?: number;
+  deviceSessionId?: string;
 };
 
 export type CurrentUser = {
@@ -27,6 +28,7 @@ export type CurrentUser = {
   mustResetPassword: boolean;
   centerIds: string[];
   primaryCenterId: string | null;
+  deviceSessionId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
   branding: WorkspaceBranding;
@@ -139,6 +141,7 @@ function verifySignature(data: string, signature: string) {
 
 export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role"> & {
   sessionVersion?: number;
+  deviceSessionId?: string | null;
 }) {
   const payload: AppSession = {
     userId: user.id,
@@ -146,6 +149,7 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
     role: user.role,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
     sessionVersion: readSessionVersion(user.sessionVersion),
+    deviceSessionId: user.deviceSessionId ?? undefined,
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
@@ -178,6 +182,35 @@ export function sessionCookieOptions() {
 export async function getSession() {
   const cookieStore = await cookies();
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
+}
+
+async function sessionDeviceIsActive(session: AppSession, tenantId: string) {
+  const deviceSessionId = typeof session.deviceSessionId === "string" ? session.deviceSessionId : "";
+  if (!deviceSessionId) return true;
+
+  const deviceSession = await prisma.deviceSession.findFirst({
+    where: {
+      id: deviceSessionId,
+      userId: session.userId,
+      tenantId,
+    },
+    select: {
+      id: true,
+      revokedAt: true,
+      lastSeenAt: true,
+    },
+  });
+
+  if (!deviceSession || deviceSession.revokedAt) return false;
+
+  if (Date.now() - deviceSession.lastSeenAt.getTime() > 60_000) {
+    await prisma.deviceSession.updateMany({
+      where: { id: deviceSession.id, revokedAt: null },
+      data: { lastSeenAt: new Date() },
+    }).catch(() => undefined);
+  }
+
+  return true;
 }
 
 export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean } = {}): Promise<CurrentUser | null> {
@@ -234,6 +267,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
 
   if (!user) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
+  if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
   if (user.mustResetPassword && !options.allowPasswordResetRequired) return null;
 
   const brandName =
@@ -280,6 +314,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     mustResetPassword: user.mustResetPassword,
     centerIds,
     primaryCenterId: centerIds[0] ?? null,
+    deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
     branding: resolveWorkspaceBranding({

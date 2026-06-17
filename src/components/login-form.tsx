@@ -10,6 +10,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { appModeFromPath } from "@/lib/device-sessions";
 
 function safeNextPath(value: string | null) {
   if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/dashboard";
@@ -30,10 +31,11 @@ export function LoginForm() {
     event.preventDefault();
     setError("");
     startTransition(async () => {
+      const deviceLabel = window.localStorage.getItem("bee-suite-device-label") ?? "";
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, next, appMode: appModeFromPath(next), deviceLabel }),
       });
 
       const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean } | null;

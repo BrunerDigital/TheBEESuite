@@ -6,7 +6,7 @@ import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCur
 import { stageLabels } from "@/lib/crm";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
-import { currentlyEnrolledStatusValues } from "@/lib/enrollment-status";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
@@ -67,7 +67,7 @@ export default async function DashboardPage() {
     centerId: scopedCenterFilter,
     status: { notIn: ["closed", "merged"] },
   };
-  const currentEnrollmentWhere = { enrollmentStatus: { in: currentlyEnrolledStatusValues() } };
+  const currentEnrollmentWhere = currentlyEnrolledChildWhere();
   const currentFamilyWhere = {
     centerId: scopedCenterFilter,
     children: { some: currentEnrollmentWhere },

@@ -63,6 +63,7 @@ import {
   type ClassroomAssignmentStaff,
 } from "@/components/classroom-ratio-assignment-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
+import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
 import {
@@ -444,6 +445,9 @@ export type TeamPermissionsData = {
     } | null;
   }>;
   roleCounts: Array<{ role: string; count: number }>;
+  deviceSessions: DeviceSessionPanelRow[];
+  currentDeviceSessionId: string | null;
+  canManageDeviceSessions: boolean;
 };
 
 export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
@@ -465,6 +469,11 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
           <StatCard key={role.role} label={role.role.replaceAll("_", " ")} value={role.count} />
         ))}
       </div>
+      <DeviceSessionPanel
+        sessions={data.deviceSessions}
+        currentDeviceSessionId={data.currentDeviceSessionId}
+        canManage={data.canManageDeviceSessions}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>User Directory</CardTitle>

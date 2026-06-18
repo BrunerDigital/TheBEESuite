@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { RefreshCw, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type SyncState = "idle" | "offline" | "signed-out" | "syncing";
+
+function subscribeClientReady() {
+  return () => undefined;
+}
+
+function getClientReadySnapshot() {
+  return true;
+}
+
+function getServerReadySnapshot() {
+  return false;
+}
 
 function refreshIntervalMs(pathname: string, role?: string) {
   if (role === "TEACHER" || role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP") return 30_000;
@@ -27,6 +39,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
   const pathname = usePathname();
   const [state, setState] = useState<SyncState>("idle");
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const mounted = useSyncExternalStore(subscribeClientReady, getClientReadySnapshot, getServerReadySnapshot);
   const intervalMs = refreshIntervalMs(pathname, role);
 
   useEffect(() => {
@@ -84,6 +97,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
 
   const offline = state === "offline" || state === "signed-out";
   const Icon = offline ? WifiOff : RefreshCw;
+  const statusText = mounted ? syncText(state, lastSyncedAt) : "Live";
 
   return (
     <Badge
@@ -94,7 +108,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
       )}
     >
       <Icon className={cn("size-3", state === "syncing" && "animate-spin")} />
-      {syncText(state, lastSyncedAt)}
+      <span suppressHydrationWarning>{statusText}</span>
     </Badge>
   );
 }

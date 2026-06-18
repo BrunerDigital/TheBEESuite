@@ -118,7 +118,7 @@ export function LoginForm() {
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="school@kidcityusa.com or demoschool"
+                  placeholder="school@kidcityusa.com, demoschool, or demoteacher"
                   type="text"
                   autoComplete="username"
                   required

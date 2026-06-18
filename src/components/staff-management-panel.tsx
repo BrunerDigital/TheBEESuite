@@ -621,7 +621,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   </div>
                 </div>
               </div>
-              <Button className="mt-4" disabled={isPending || !weeklyClassroomId || !weeklyClassroomTeachers.length || !weeklyDays.length}>
+              <Button type="submit" className="mt-4" disabled={isPending || !weeklyClassroomId || !weeklyClassroomTeachers.length || !weeklyDays.length}>
                 <CalendarClock data-icon="inline-start" />
                 Generate coverage
               </Button>
@@ -742,7 +742,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isPending || !centerId}>
+              <Button type="submit" disabled={isPending || !centerId}>
                 {staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
                 Save teacher
               </Button>
@@ -794,7 +794,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               <Label>Expiration</Label>
               <Input value={certExpiresAt} onChange={(event) => setCertExpiresAt(event.target.value)} type="date" />
             </div>
-            <Button disabled={isPending || !certStaffId}>
+            <Button type="submit" disabled={isPending || !certStaffId}>
               <Save data-icon="inline-start" />
               Save certification
             </Button>
@@ -860,7 +860,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               </Select>
             </div>
             <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-5">
-              <Button disabled={isPending || !scheduleStaffId}>
+              <Button type="submit" disabled={isPending || !scheduleStaffId}>
                 <Save data-icon="inline-start" />
                 Save schedule
               </Button>

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
 import { checkoutApplicationGuard, isActiveStripeAutopayPayment, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
-import { demoAccountEmails } from "../src/lib/demo-accounts";
+import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
 import {
@@ -250,6 +250,10 @@ test("demo fallback data is limited to seeded demo accounts", () => {
     role: UserRole.CENTER_DIRECTOR,
   }), true);
   assert.equal(canViewDemoFallbackData({
+    email: demoAccountEmails.teacher,
+    role: UserRole.TEACHER,
+  }), true);
+  assert.equal(canViewDemoFallbackData({
     email: "brenden@kidcityusa.com",
     role: UserRole.PLATFORM_OWNER,
   }), false);
@@ -258,6 +262,13 @@ test("demo fallback data is limited to seeded demo accounts", () => {
     role: UserRole.BRAND_ADMIN,
   }), false);
   assert.equal(canViewDemoFallbackData({ role: UserRole.REGIONAL_MANAGER }), false);
+});
+
+test("demo login aliases resolve to the Kid City demo users", () => {
+  assert.equal(resolveLoginIdentifier("demoschool"), demoAccountEmails.school);
+  assert.equal(resolveLoginIdentifier("demoschool@demo.thebeesuite.io"), demoAccountEmails.school);
+  assert.equal(resolveLoginIdentifier("demo teacher@kidcityusa.com"), demoAccountEmails.teacher);
+  assert.equal(resolveLoginIdentifier("demoteacher"), demoAccountEmails.teacher);
 });
 
 test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {

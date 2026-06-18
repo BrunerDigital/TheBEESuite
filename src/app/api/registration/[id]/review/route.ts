@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -538,6 +539,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
+  const actor = user;
   if (!canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Registration review is not allowed for this role." }, { status: 403 });
   }
@@ -809,9 +811,15 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
           parentPortalInvite: input.isBillingContact ? { status: inviteParent ? "pending" : "not_requested" } : undefined,
         }),
       };
-      return existing
+      const guardian = existing
         ? tx.guardian.update({ where: { id: existing.id }, data })
         : tx.guardian.create({ data: { familyId: family.id, ...data } });
+      const savedGuardian = await guardian;
+      if (!savedGuardian.checkInPinHash) {
+        const defaultPinData = defaultGuardianPinUpdate({ guardianId: savedGuardian.id, phone: savedGuardian.phone, setById: actor.id });
+        if (defaultPinData) return tx.guardian.update({ where: { id: savedGuardian.id }, data: defaultPinData });
+      }
+      return savedGuardian;
     }
 
     const primaryGuardian = await upsertGuardian({

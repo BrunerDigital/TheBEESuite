@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createGuardianQrToken, hashGuardianPin, normalizePin } from "@/lib/kiosk";
+import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
@@ -69,6 +70,14 @@ async function POSTHandler(request: NextRequest) {
       familyName: guardian.family.name,
     },
   });
+
+  await notifyOperationsRecordChange({
+    actor: user,
+    entity: "guardian",
+    mode: "updated",
+    resourceId: guardian.id,
+    centerId: guardian.family.centerId,
+  }).catch(() => 0);
 
   return NextResponse.json({
     ok: true,

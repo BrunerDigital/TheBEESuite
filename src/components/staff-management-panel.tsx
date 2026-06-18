@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, KeyRound, Save, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, KeyRound, Pencil, Save, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -504,9 +505,13 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               </div>
             ))}
             {!coverageSummaries.length ? (
-              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground xl:col-span-3">
-                Add classrooms before assigning teacher coverage.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground xl:col-span-3">
+                <span>Add classrooms before assigning teacher coverage.</span>
+                <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/classroom-dashboard#classroom-editor" />}>
+                  <Pencil data-icon="inline-start" />
+                  Open classroom setup
+                </Button>
+              </div>
             ) : null}
           </section>
 

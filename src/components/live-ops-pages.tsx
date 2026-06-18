@@ -62,6 +62,7 @@ import {
   type ClassroomAssignmentClassroom,
   type ClassroomAssignmentStaff,
 } from "@/components/classroom-ratio-assignment-panel";
+import { ClassroomSetupPanel } from "@/components/classroom-setup-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
@@ -2430,56 +2431,8 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <StatCard label="Licensed seats shown" value={capacity} />
         <StatCard label="Ratio warnings" value={ratioWarningCount} detail={`${staff} teachers assigned`} />
       </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Classrooms</CardTitle>
-          <CardDescription>Capacity and ratio-ready operating view</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Classroom</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>Age group</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Teachers</TableHead>
-                <TableHead>Ratio rule</TableHead>
-                <TableHead>Ratio status</TableHead>
-                <TableHead>Incidents</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ratioRows.map(({ classroom, ratioWarning }) => (
-                <TableRow key={classroom.id}>
-                  <TableCell className="font-medium">{classroom.name}</TableCell>
-                  <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
-                  <TableCell>{classroom.ageGroup}</TableCell>
-                  <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
-                  <TableCell>
-                    <div className="flex max-w-52 flex-col gap-1">
-                      <span>{classroom._count.staff} assigned</span>
-                      <span className="text-xs text-muted-foreground">
-                        {data.staff.filter((teacher) => teacher.classroomId === classroom.id).map((teacher) => teacher.user.name).join(", ") || "No active teacher names"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{classroom.ratioRule ?? "Not set"}</TableCell>
-                  <TableCell>
-                    <div className="flex max-w-64 flex-col gap-1">
-                      <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
-                      <span className="text-xs text-muted-foreground">{ratioWarning.detail}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{classroom._count.incidents}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <ClassroomSetupPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
       <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
-      <OperationsActionHub title="Create or Edit Classroom" defaultEntity="classroom" compact centers={data.centers} />
     </div>
   );
 }

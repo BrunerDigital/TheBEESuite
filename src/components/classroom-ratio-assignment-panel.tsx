@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowRightLeft, CheckCircle2, UserMinus } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, CheckCircle2, Pencil, UserMinus } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,6 +117,12 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
           <CardTitle>Ratio Warnings And Staff Assignment</CardTitle>
           <CardDescription>Add classrooms before assigning teacher coverage.</CardDescription>
         </CardHeader>
+        <CardContent>
+          <Button nativeButton={false} render={<Link href="/classroom-dashboard#classroom-editor" />}>
+            <Pencil data-icon="inline-start" />
+            Open classroom setup
+          </Button>
+        </CardContent>
       </Card>
     );
   }
@@ -178,7 +185,14 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">{selectedClassroom?.name ?? "Classroom"}</div>
-                <p className="text-xs text-muted-foreground">{selectedClassroom?.ageGroup ?? "Age group"} · {selectedClassroom?.ratioRule ?? "ratio not set"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedClassroom?.ageGroup ?? "Age group"} · {selectedClassroom?.ratioRule ?? "ratio not set"}
+                  {selectedClassroom && !selectedClassroom.ratioRule ? (
+                    <Button nativeButton={false} variant="link" className="ml-1 h-auto p-0 text-xs" render={<Link href="/classroom-dashboard#classroom-editor" />}>
+                      Add ratio
+                    </Button>
+                  ) : null}
+                </p>
               </div>
               {selectedRatio ? <Badge variant={selectedRatio.tone}>{selectedRatio.label}</Badge> : null}
             </div>

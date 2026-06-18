@@ -39,6 +39,7 @@
     "kidcity:cleanup-location-users": "tsx -r tsconfig-paths/register scripts/cleanup-location-user-staff-profiles.ts",
     "kidcity:audit-location-leads": "tsx -r tsconfig-paths/register scripts/audit-location-user-lead-scope.ts",
     "kidcity:audit-director-notifications": "tsx -r tsconfig-paths/register scripts/audit-director-notification-emails.ts",
+    "kidcity:backfill-guardian-pins": "tsx -r tsconfig-paths/register scripts/backfill-guardian-kiosk-pins.ts",
     "kidcity:import-gmail-inquiries": "tsx -r tsconfig-paths/register scripts/import-gmail-inquiries.ts",
     "demo:seed": "tsx -r tsconfig-paths/register scripts/seed-demo-accounts.ts",
     "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",

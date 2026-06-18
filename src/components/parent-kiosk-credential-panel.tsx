@@ -64,7 +64,7 @@ export function ParentKioskCredentialPanel({ initialCredentials }: Props) {
               <QrCode className="text-primary" />
               Check-In PIN And QR
             </CardTitle>
-            <CardDescription>Manage the lobby kiosk credentials connected to your guardian profile.</CardDescription>
+            <CardDescription>Your school can start you with the last four digits of your phone number. You can save a different 4 digit PIN here.</CardDescription>
           </div>
           <Badge variant={credentials.some((credential) => credential.qrToken) ? "default" : "outline"}>
             {credentials.filter((credential) => credential.qrToken).length} ready

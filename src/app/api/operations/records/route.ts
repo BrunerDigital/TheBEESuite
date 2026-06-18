@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
+import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
@@ -75,6 +77,24 @@ function dollarsToCents(value: unknown) {
 function requestedStatus(value: unknown) {
   const status = clean(value).toUpperCase();
   return Object.values(DocumentStatus).includes(status as DocumentStatus) ? status as DocumentStatus : DocumentStatus.REQUESTED;
+}
+
+const notificationEntities = new Set([
+  "classroom",
+  "family",
+  "guardian",
+  "child",
+  "authorizedPickup",
+  "emergencyContact",
+  "document",
+  "staff",
+  "staffAssignment",
+  "staffSchedule",
+  "staffTimeClock",
+]);
+
+function resultRecordId(result: unknown) {
+  return typeof result === "object" && result && "id" in result ? String(result.id) : null;
 }
 
 function normalizeFormSchema(value: unknown): Prisma.InputJsonObject {
@@ -439,12 +459,21 @@ async function POSTHandler(request: NextRequest) {
       isBillingContact: Boolean(body.isBillingContact),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
+    const existing = id
+      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true } })
+      : null;
     if (id) {
-      const existing = await prisma.guardian.findUnique({ where: { id }, select: { familyId: true } });
       const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    result = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
+    const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
+    const defaultPinData = !guardian.checkInPinHash
+      ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
+      : null;
+    result = defaultPinData
+      ? await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData })
+      : guardian;
+    auditMetadata.defaultGuardianPinSet = Boolean(defaultPinData);
   } else if (entity === "guardianMerge") {
     const primaryGuardianId = clean(body.primaryGuardianId) || clean(body.guardianId);
     const duplicateGuardianId = clean(body.duplicateGuardianId) || clean(body.relatedId);
@@ -1423,11 +1452,27 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: `Unsupported entity: ${entity}` }, { status: 400 });
   }
 
+  const resourceId = id || resultRecordId(result);
+  if (notificationEntities.has(entity)) {
+    try {
+      const notificationMode = entity === "staffAssignment" || entity === "staffTimeClock" ? "updated" : mode;
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: notificationMode,
+        resourceId,
+        centerId,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+  }
+
   await writeAuditLog(user, {
     centerId,
     action: `operations.${entity}.${mode}`,
     resource: entity,
-    resourceId: id || (typeof result === "object" && result && "id" in result ? String(result.id) : null),
+    resourceId,
     metadata: auditMetadata as Prisma.InputJsonObject,
   });
 

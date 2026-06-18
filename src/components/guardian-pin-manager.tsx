@@ -87,7 +87,7 @@ export function GuardianPinManager({
           value={pin}
           onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
           inputMode="numeric"
-          placeholder="4 digit PIN"
+          placeholder="Last 4 phone digits or custom PIN"
           aria-label={`Set kiosk PIN for ${guardianName}`}
         />
         <Button disabled={isPending || pin.length !== 4} onClick={savePin}>

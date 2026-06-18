@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
+import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -170,6 +172,7 @@ async function POSTHandler(request: NextRequest) {
           },
         });
 
+    let pinWasSet = false;
     if (checkInPin) {
       await tx.guardian.update({
         where: { id: guardian.id },
@@ -179,6 +182,16 @@ async function POSTHandler(request: NextRequest) {
           checkInPinSetById: user.id,
         },
       });
+      pinWasSet = true;
+    } else if (!guardian.checkInPinHash) {
+      const defaultPinData = defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id });
+      if (defaultPinData) {
+        await tx.guardian.update({
+          where: { id: guardian.id },
+          data: defaultPinData,
+        });
+        pinWasSet = true;
+      }
     }
 
     const existingChild = await tx.child.findFirst({
@@ -261,6 +274,7 @@ async function POSTHandler(request: NextRequest) {
       billingAccountId: billingAccount.id,
       invoiceId,
       mode: existingFamily ? "updated_existing_family" : "created_family",
+      pinWasSet,
     };
   });
 
@@ -277,9 +291,16 @@ async function POSTHandler(request: NextRequest) {
       billingAccountId: result.billingAccountId,
       invoiceId: result.invoiceId,
       mode: result.mode,
-      pinSet: Boolean(checkInPin),
+      pinSet: result.pinWasSet,
     },
   });
+
+  const notificationMode = result.mode === "created_family" ? "created" : "updated";
+  await Promise.all([
+    notifyOperationsRecordChange({ actor: user, entity: "family", mode: notificationMode, resourceId: result.family.id, centerId: center.id }).catch(() => 0),
+    notifyOperationsRecordChange({ actor: user, entity: "guardian", mode: notificationMode, resourceId: result.guardian.id, centerId: center.id }).catch(() => 0),
+    notifyOperationsRecordChange({ actor: user, entity: "child", mode: notificationMode, resourceId: result.child.id, centerId: center.id }).catch(() => 0),
+  ]);
 
   return NextResponse.json({
     ok: true,

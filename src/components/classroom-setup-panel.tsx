@@ -1,0 +1,264 @@
+"use client";
+
+import { FormEvent, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle2, Pencil, Plus, Save } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import type { ClassroomAssignmentClassroom, ClassroomAssignmentStaff } from "@/components/classroom-ratio-assignment-panel";
+
+type CenterOption = { id: string; name: string };
+
+type Props = {
+  centers: CenterOption[];
+  classrooms: ClassroomAssignmentClassroom[];
+  staff: ClassroomAssignmentStaff[];
+  demoMode?: boolean;
+};
+
+const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age", "Mixed Age"];
+
+function classroomTeacherNames(staff: ClassroomAssignmentStaff[], classroomId: string) {
+  return staff.filter((teacher) => teacher.classroomId === classroomId).map((teacher) => teacher.user.name).join(", ");
+}
+
+export function ClassroomSetupPanel({ centers, classrooms, staff, demoMode = false }: Props) {
+  const router = useRouter();
+  const [selectedClassroomId, setSelectedClassroomId] = useState(classrooms[0]?.id ?? "new");
+  const selectedClassroom = classrooms.find((classroom) => classroom.id === selectedClassroomId) ?? null;
+  const [centerId, setCenterId] = useState(selectedClassroom?.centerId ?? centers[0]?.id ?? "");
+  const [name, setName] = useState(selectedClassroom?.name ?? "");
+  const [ageGroup, setAgeGroup] = useState(selectedClassroom?.ageGroup ?? "Preschool");
+  const [capacity, setCapacity] = useState(selectedClassroom?.capacity ? String(selectedClassroom.capacity) : "");
+  const [ratioRule, setRatioRule] = useState(selectedClassroom?.ratioRule ?? "");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  const centerOptions = useMemo(() => centers.length ? centers : [], [centers]);
+  const rows = useMemo(() => classrooms.map((classroom) => ({
+    classroom,
+    warning: evaluateClassroomRatio({
+      children: classroom._count.children,
+      staff: classroom._count.staff,
+      capacity: classroom.capacity,
+      ratioRule: classroom.ratioRule,
+    }),
+  })), [classrooms]);
+
+  function scrollToEditor() {
+    window.requestAnimationFrame(() => {
+      document.getElementById("classroom-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function loadClassroom(classroom: ClassroomAssignmentClassroom | null) {
+    setSelectedClassroomId(classroom?.id ?? "new");
+    setCenterId(classroom?.centerId ?? centers[0]?.id ?? "");
+    setName(classroom?.name ?? "");
+    setAgeGroup(classroom?.ageGroup ?? "Preschool");
+    setCapacity(classroom?.capacity ? String(classroom.capacity) : "");
+    setRatioRule(classroom?.ratioRule ?? "");
+    setStatusMessage("");
+    setErrorMessage("");
+    scrollToEditor();
+  }
+
+  function saveClassroom(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "classroom",
+          id: selectedClassroomId === "new" ? undefined : selectedClassroomId,
+          centerId,
+          name,
+          ageGroup,
+          capacity,
+          ratioRule,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; mode?: string; record?: { id?: string } } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Classroom could not be saved.");
+        return;
+      }
+      setStatusMessage(`Classroom ${json?.mode ?? "saved"}.`);
+      if (json?.record?.id) setSelectedClassroomId(json.record.id);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="glass-panel">
+      <CardHeader>
+        <CardTitle>Classrooms</CardTitle>
+        <CardDescription>Set up each room with the school, age group, licensed seats, and staff-to-child ratio directors use for daily coverage.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Classroom</TableHead>
+                <TableHead>School</TableHead>
+                <TableHead>Age group</TableHead>
+                <TableHead>Children / seats</TableHead>
+                <TableHead>Teachers</TableHead>
+                <TableHead>Staff-to-child ratio</TableHead>
+                <TableHead>Ratio status</TableHead>
+                <TableHead>Incidents</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ classroom, warning }) => (
+                <TableRow key={classroom.id}>
+                  <TableCell className="font-medium">{classroom.name}</TableCell>
+                  <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
+                  <TableCell>{classroom.ageGroup}</TableCell>
+                  <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
+                  <TableCell>
+                    <div className="flex max-w-52 flex-col gap-1">
+                      <span>{classroom._count.staff} assigned</span>
+                      <span className="text-xs text-muted-foreground">
+                        {classroomTeacherNames(staff, classroom.id) || "No active teacher names"}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {classroom.ratioRule ? (
+                      classroom.ratioRule
+                    ) : (
+                      <Button type="button" variant="link" className="h-auto p-0" onClick={() => loadClassroom(classroom)}>
+                        Add ratio
+                      </Button>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex max-w-64 flex-col gap-1">
+                      <Badge variant={warning.tone}>{warning.label}</Badge>
+                      <span className="text-xs text-muted-foreground">{warning.detail}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{classroom._count.incidents}</TableCell>
+                  <TableCell>
+                    <Button type="button" size="sm" variant="outline" onClick={() => loadClassroom(classroom)}>
+                      <Pencil data-icon="inline-start" />
+                      Edit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!rows.length ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-muted-foreground">
+                    No classrooms have been added yet.
+                  </TableCell>
+                </TableRow>
+              ) : null}
+            </TableBody>
+          </Table>
+        </div>
+
+        <form id="classroom-editor" className="scroll-mt-24 rounded-xl border bg-background/40 p-4" onSubmit={saveClassroom}>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">{selectedClassroom ? "Edit classroom" : "Add classroom"}</div>
+              <p className="text-xs text-muted-foreground">Saved changes update the same live classroom record used by kiosk, teacher, parent, and admin views.</p>
+            </div>
+            <Button type="button" variant="outline" onClick={() => loadClassroom(null)}>
+              <Plus data-icon="inline-start" />
+              New classroom
+            </Button>
+          </div>
+
+          {statusMessage ? (
+            <Alert className="mb-4">
+              <CheckCircle2 className="size-4" />
+              <AlertTitle>Saved</AlertTitle>
+              <AlertDescription>{statusMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+          {errorMessage ? (
+            <Alert className="mb-4" variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Needs attention</AlertTitle>
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <div className="space-y-1 xl:col-span-2">
+              <Label>Classroom to edit</Label>
+              <Select value={selectedClassroomId} onValueChange={(value) => {
+                if (value === "new") loadClassroom(null);
+                else loadClassroom(classrooms.find((classroom) => classroom.id === value) ?? null);
+              }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New classroom</SelectItem>
+                  {classrooms.map((classroom) => (
+                    <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 xl:col-span-2">
+              <Label>School</Label>
+              <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
+                <SelectTrigger><SelectValue placeholder="Choose school" /></SelectTrigger>
+                <SelectContent>
+                  {centerOptions.map((center) => (
+                    <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 xl:col-span-2">
+              <Label>Classroom name</Label>
+              <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Infants, Toddlers, Pre-K A" required />
+            </div>
+            <div className="space-y-1">
+              <Label>Age group served</Label>
+              <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ageGroups.map((group) => (
+                    <SelectItem key={group} value={group}>{group}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Licensed seats in room</Label>
+              <Input value={capacity} onChange={(event) => setCapacity(event.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="12" required />
+            </div>
+            <div className="space-y-1">
+              <Label>Staff-to-child ratio</Label>
+              <Input value={ratioRule} onChange={(event) => setRatioRule(event.target.value)} placeholder="1:4, 1:7, 2:12" />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button disabled={demoMode || isPending || !centerId || !name.trim()}>
+              <Save data-icon="inline-start" />
+              Save classroom
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}

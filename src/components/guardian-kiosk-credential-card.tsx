@@ -22,6 +22,7 @@ function formatDateTime(value: string | null) {
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone: "America/New_York",
   }).format(new Date(value));
 }
 

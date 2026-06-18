@@ -6,6 +6,7 @@ import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
+import { familyNameFromGuardian } from "@/lib/registration-packet";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -41,11 +42,12 @@ async function POSTHandler(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const centerId = clean(body.centerId) || user.primaryCenterId || "";
-  const familyName = clean(body.familyName);
+  const requestedFamilyName = clean(body.familyName);
   const address = clean(body.address);
   const familyNotes = clean(body.familyNotes);
   const custodyNotes = clean(body.custodyNotes);
   const guardianName = clean(body.guardianName);
+  const familyName = requestedFamilyName || familyNameFromGuardian(guardianName);
   const guardianEmail = normalizeEmail(body.guardianEmail);
   const guardianPhone = clean(body.guardianPhone);
   const guardianRelation = clean(body.guardianRelation) || "Parent/Guardian";
@@ -68,7 +70,6 @@ async function POSTHandler(request: NextRequest) {
 
   const errors: Record<string, string> = {};
   if (!centerId) errors.centerId = "Center is required.";
-  if (!familyName) errors.familyName = "Family name is required.";
   if (!guardianName) errors.guardianName = "Primary guardian name is required.";
   if (!guardianEmail && !guardianPhone) errors.guardianEmail = "Parent email or phone is required.";
   if (!childName) errors.childName = "Child name is required.";

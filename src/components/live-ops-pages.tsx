@@ -4336,7 +4336,6 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         </CardContent>
       </Card>
       <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
-      <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact centers={data.importCenters} />
     </div>
   );
 }

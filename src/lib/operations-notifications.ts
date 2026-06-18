@@ -14,6 +14,7 @@ type RecordChangeInput = {
   mode: string;
   resourceId: string | null;
   centerId?: string | null;
+  relatedUserIds?: string[];
 };
 
 const leadershipRoles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR] as const;
@@ -149,7 +150,7 @@ export async function notifyOperationsRecordChange(input: RecordChangeInput) {
 
   const [leadershipIds, directlyRelatedIds] = await Promise.all([
     centerLeadershipUserIds(input.actor, input.centerId),
-    relatedUserIds(input),
+    input.relatedUserIds ? Promise.resolve(input.relatedUserIds) : relatedUserIds(input),
   ]);
   const userIds = Array.from(new Set([...leadershipIds, ...directlyRelatedIds]))
     .filter((userId) => userId && userId !== input.actor.id);

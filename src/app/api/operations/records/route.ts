@@ -1495,6 +1495,79 @@ async function DELETEHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Entity and ID are required." }, { status: 400 });
   }
 
+  if (entity === "guardian") {
+    const guardian = await prisma.guardian.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        userId: true,
+        fullName: true,
+        email: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!guardian) return NextResponse.json({ ok: false, error: "Parent/guardian not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, guardian.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set([
+        guardian.userId,
+        ...guardian.family.guardians.map((item) => item.userId),
+      ].filter((userId): userId is string => Boolean(userId))),
+    );
+
+    const result = await prisma.$transaction(async (tx) => {
+      const checkInLogs = await tx.checkInOutLog.updateMany({
+        where: { guardianId: guardian.id },
+        data: { guardianId: null },
+      });
+      const deleted = await tx.guardian.delete({ where: { id: guardian.id } });
+      return {
+        id: deleted.id,
+        familyId: deleted.familyId,
+        userId: deleted.userId,
+        fullName: deleted.fullName,
+        email: deleted.email,
+        detachedCheckInLogs: checkInLogs.count,
+      };
+    });
+
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: guardian.familyId,
+      guardianName: guardian.fullName,
+      detachedCheckInLogs: result.detachedCheckInLogs,
+    };
+    if (guardian.userId) auditMetadata.userId = guardian.userId;
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: guardian.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.guardian.deleted",
+      resource: "guardian",
+      resourceId: guardian.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
   if (entity === "staff") {
     const staff = await prisma.staffProfile.findUnique({
       where: { id },

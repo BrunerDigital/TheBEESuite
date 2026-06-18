@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Save, UserPen } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Save, Trash2, UserPen } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -187,7 +187,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [custodyNotes, setCustodyNotes] = useState(selectedFamily?.custodyNotes ?? "");
 
   const [selectedGuardianId, setSelectedGuardianId] = useState(selectedFamily?.guardians[0]?.id ?? "");
-  const selectedGuardian = selectedFamily?.guardians.find((guardian) => guardian.id === selectedGuardianId) ?? selectedFamily?.guardians[0] ?? null;
+  const selectedGuardian = selectedGuardianId
+    ? selectedFamily?.guardians.find((guardian) => guardian.id === selectedGuardianId) ?? null
+    : null;
   const [guardianName, setGuardianName] = useState(selectedGuardian?.fullName ?? "");
   const [guardianEmail, setGuardianEmail] = useState(selectedGuardian?.email ?? "");
   const [guardianPhone, setGuardianPhone] = useState(selectedGuardian?.phone ?? "");
@@ -446,6 +448,31 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      router.refresh();
+    });
+  }
+
+  function removeGuardian() {
+    if (!selectedGuardian) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedGuardian.fullName} from ${selectedFamily?.name ?? "this family"}? Their kiosk PIN, portal link to this family, and parent contact row will be removed. Historical check-in/out records will stay on file.`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "guardian", id: selectedGuardian.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Parent/guardian could not be removed.");
+        return;
+      }
+      loadGuardian(null);
+      setStatusMessage("Parent/guardian removed from the family.");
       router.refresh();
     });
   }
@@ -771,20 +798,25 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         </section>
 
         <section className="space-y-3">
-          <div className="text-sm font-medium">Guardian contact</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium">Parent / guardian contacts</div>
+            <Badge variant="outline">
+              {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label>Guardian</Label>
+              <Label>Parent / guardian</Label>
               <div className="flex gap-2">
-              <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose guardian" /></SelectTrigger>
-                <SelectContent>
-                  {selectedFamily?.guardians.map((guardian) => (
-                    <SelectItem key={guardian.id} value={guardian.id}>{guardian.fullName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>New</Button>
+                <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose parent" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedFamily?.guardians.map((guardian) => (
+                      <SelectItem key={guardian.id} value={guardian.id}>{guardian.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -823,24 +855,30 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               Billing contact
             </label>
           </div>
-          <Button
-            disabled={isPending || !selectedFamily || !guardianName.trim()}
-            onClick={() => postRecord({
-              entity: "guardian",
-              id: selectedGuardian?.id,
-              familyId: selectedFamily?.id,
-              name: guardianName,
-              email: guardianEmail,
-              phone: guardianPhone,
-              employer: guardianEmployer,
-              relation: guardianRelation,
-              preferredCommunication,
-              isBillingContact,
-            }, "Guardian contact")}
-          >
-            <Save data-icon="inline-start" />
-            Save guardian
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={isPending || !selectedFamily || !guardianName.trim()}
+              onClick={() => postRecord({
+                entity: "guardian",
+                id: selectedGuardian?.id,
+                familyId: selectedFamily?.id,
+                name: guardianName,
+                email: guardianEmail,
+                phone: guardianPhone,
+                employer: guardianEmployer,
+                relation: guardianRelation,
+                preferredCommunication,
+                isBillingContact,
+              }, "Parent/guardian contact")}
+            >
+              <Save data-icon="inline-start" />
+              {selectedGuardian ? "Save parent" : "Add parent"}
+            </Button>
+            <Button type="button" variant="outline" disabled={isPending || !selectedGuardian} onClick={removeGuardian}>
+              <Trash2 data-icon="inline-start" />
+              Remove parent
+            </Button>
+          </div>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

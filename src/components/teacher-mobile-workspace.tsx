@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
@@ -27,6 +27,7 @@ type ChildOption = {
   fullName: string;
   ageGroup: string;
   enrollmentStatus: string;
+  photoVideoPermission: boolean;
   classroom: { id: string; name: string } | null;
   family?: { custodyNotes: string | null } | null;
   attendance?: AttendanceSnapshot;
@@ -96,6 +97,8 @@ type MealDraft = {
   mealType: string;
   food: string;
   amount: string;
+  quickLog?: boolean;
+  touched?: boolean;
 };
 
 type NapDraft = {
@@ -109,12 +112,14 @@ type DiaperDraft = {
   type: string;
   occurredAt: string;
   notes: string;
+  touched?: boolean;
 };
 
 type ActivityDraft = {
   id: string;
   title: string;
   notes: string;
+  touched?: boolean;
 };
 
 function draftId(prefix: string) {
@@ -133,6 +138,19 @@ function dateTimeInputValue(date = new Date()) {
   const hour = String(date.getHours()).padStart(2, "0");
   const minute = String(date.getMinutes()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}T${hour}:${minute}`;
+}
+
+function timeInputValue(date = new Date()) {
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute}`;
+}
+
+function normalizeReportTime(reportDate: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)) return `${reportDate}T${trimmed}`;
+  return trimmed;
 }
 
 function formatTime(value: string | Date | null) {
@@ -438,7 +456,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function updateMeal(id: string, patch: Partial<MealDraft>) {
-    setMealRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setMealRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function updateNap(id: string, patch: Partial<NapDraft>) {
@@ -446,11 +464,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function updateDiaper(id: string, patch: Partial<DiaperDraft>) {
-    setDiaperRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setDiaperRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function updateActivity(id: string, patch: Partial<ActivityDraft>) {
-    setActivityRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setActivityRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function removeMeal(id: string) {
@@ -479,18 +497,28 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function buildDailyReportEntries() {
+    const activeReportDate = reportDate || dateInputValue();
     const meals = mealRows
-      .filter((row) => row.food.trim())
-      .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
+      .filter((row) => row.food.trim() || row.amount.trim() || row.quickLog || row.touched)
+      .map((row) => ({
+        mealType: row.mealType,
+        food: row.food.trim(),
+        amount: row.amount.trim() || null,
+        quickLog: row.quickLog === true,
+        touched: row.touched === true,
+      }));
     const naps = napRows
-      .filter((row) => row.startsAt)
-      .map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt }));
+      .filter((row) => row.startsAt.trim() || row.endsAt.trim())
+      .map((row) => ({
+        startsAt: normalizeReportTime(activeReportDate, row.startsAt),
+        endsAt: normalizeReportTime(activeReportDate, row.endsAt),
+      }));
     const diapers = diaperRows
-      .filter((row) => row.type.trim())
-      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
+      .filter((row) => row.type.trim() || row.notes.trim() || row.touched)
+      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes.trim(), touched: row.touched === true }));
     const activities = activityRows
-      .filter((row) => row.title.trim())
-      .map((row) => ({ title: row.title, notes: row.notes }));
+      .filter((row) => row.title.trim() || row.notes.trim() || row.touched)
+      .map((row) => ({ title: row.title.trim(), notes: row.notes.trim(), touched: row.touched === true }));
 
     return { meals, naps, diapers, activities };
   }
@@ -509,7 +537,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       for (const childId of childIds) {
         next[childId] = {
           status,
-          latestReportAt: `${reportDate}T12:00:00`,
+          latestReportAt: `${reportDate || dateInputValue()}T12:00:00`,
           sentAt: status === "sent" ? now : null,
           entries: entryCounts,
         };
@@ -519,22 +547,22 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function addMealPreset(mealType: string) {
-    const nextRow = { ...createMealDraft(), mealType };
-    setMealRows((current) => current.length === 1 && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
+    const nextRow = { ...createMealDraft(), mealType, quickLog: true, touched: true };
+    setMealRows((current) => current.length === 1 && !current[0].quickLog && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function addDiaperPreset(type: string) {
-    const nextRow = { ...createDiaperDraft(), type };
+    const nextRow = { ...createDiaperDraft(), type, touched: true };
     setDiaperRows((current) => current.length === 1 && !current[0].type.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function addActivityPreset(title: string) {
-    const nextRow = { ...createActivityDraft(), title };
+    const nextRow = { ...createActivityDraft(), title, touched: true };
     setActivityRows((current) => current.length === 1 && !current[0].title.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function startNapNow() {
-    const nextRow = { ...createNapDraft(), startsAt: dateTimeInputValue() };
+    const nextRow = { ...createNapDraft(), startsAt: timeInputValue() };
     setNapRows((current) => current.length === 1 && !current[0].startsAt && !current[0].endsAt ? [nextRow] : [...current, nextRow]);
   }
 
@@ -547,13 +575,13 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       }
     }
     if (openNapIndex < 0) {
-      showError("Start a nap before setting the end time.");
+      setNapRows((current) => [...current, { ...createNapDraft(), endsAt: timeInputValue() }]);
       return;
     }
     setNapRows((current) => {
       const next = [...current];
       if (next[openNapIndex]) {
-        next[openNapIndex] = { ...next[openNapIndex], endsAt: dateTimeInputValue() };
+        next[openNapIndex] = { ...next[openNapIndex], endsAt: timeInputValue() };
       }
       return next;
     });
@@ -609,7 +637,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         body: {
           childId: targetChildIds[0],
           childIds: targetChildIds,
-          date: `${reportDate}T12:00:00`,
+          date: `${reportDate || dateInputValue()}T12:00:00`,
           mood,
           teacherNote,
           meals: entries.meals,
@@ -748,6 +776,22 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </AlertDescription>
       </Alert>
 
+      <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur lg:top-20">
+        <div className="flex min-w-max gap-2">
+          {[
+            ["Roster", "#teacher-roster"],
+            ["Attendance", "#teacher-attendance"],
+            ["Daily report", "#teacher-daily-report"],
+            ["Photo", "#teacher-photo"],
+            ["Incident", "#teacher-incident"],
+          ].map(([label, href]) => (
+            <Button key={href} size="sm" variant="outline" nativeButton={false} render={<a href={href} />}>
+              {label}
+            </Button>
+          ))}
+        </div>
+      </nav>
+
       {kioskAccess ? (
         <Card className="glass-panel">
           <CardHeader>
@@ -785,7 +829,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </Card>
       ) : null}
 
-      <Card className="glass-panel">
+      <Card id="teacher-roster" className="glass-panel scroll-mt-28">
         <CardHeader>
           <CardTitle>Roster</CardTitle>
           <CardDescription>{roster.length} children visible to your role</CardDescription>
@@ -955,8 +999,8 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        <Card className="glass-panel">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <Card id="teacher-attendance" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Attendance</CardTitle>
             <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
@@ -992,12 +1036,39 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="teacher-photo" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Photo</CardTitle>
-            <CardDescription>Share a private classroom moment with parent permission checks.</CardDescription>
+            <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="photo-child">Child</Label>
+              <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) chooseChild(value); }}>
+                <SelectTrigger id="photo-child" className="w-full">
+                  <SelectValue placeholder="Choose a child from this class" />
+                </SelectTrigger>
+                <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                  {byClassroom.map((classroom) => (
+                    <SelectGroup key={classroom.id ?? "unassigned-photo"}>
+                      <SelectLabel>{classroom.name}</SelectLabel>
+                      {classroom.children.map((child) => (
+                        <SelectItem key={child.id} value={child.id}>
+                          <span className="truncate">{child.fullName}</span>
+                          <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={selectedChild?.photoVideoPermission ? "default" : "secondary"}>
+                {selectedChild?.photoVideoPermission ? "Parent sharing ready" : "Director review required"}
+              </Badge>
+              <Badge variant="outline">Private storage</Badge>
+            </div>
             <Input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
             <Textarea value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
             <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>
@@ -1007,7 +1078,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel lg:col-span-2">
+        <Card id="teacher-daily-report" className="glass-panel scroll-mt-28 lg:col-span-2">
           <CardHeader>
             <CardTitle>Daily Report</CardTitle>
             <CardDescription>
@@ -1041,6 +1112,27 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                 {activeDailyReportChildren.length > 8 ? (
                   <Badge variant="secondary">+{activeDailyReportChildren.length - 8}</Badge>
                 ) : null}
+              </div>
+              <div className="mt-3 space-y-1">
+                <Label htmlFor="daily-report-child">Child</Label>
+                <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
+                  <SelectTrigger id="daily-report-child" className="w-full">
+                    <SelectValue placeholder="Choose a child from this class" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                    {byClassroom.map((classroom) => (
+                      <SelectGroup key={classroom.id ?? "unassigned"}>
+                        <SelectLabel>{classroom.name}</SelectLabel>
+                        {classroom.children.map((child) => (
+                          <SelectItem key={child.id} value={child.id}>
+                            <span className="truncate">{child.fullName}</span>
+                            <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="xs" variant="outline" onClick={selectPresentDailyReports}>
@@ -1117,9 +1209,9 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <Select value={row.mealType} onValueChange={(value) => updateMeal(row.id, { mealType: value ?? row.mealType })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Breakfast">Breakfast</SelectItem>
                             <SelectItem value="Morning snack">Morning snack</SelectItem>
@@ -1128,9 +1220,14 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                             <SelectItem value="Bottle">Bottle</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input value={row.food} onChange={(event) => updateMeal(row.id, { food: event.target.value })} placeholder="Food or bottle" />
+                        <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
                       </div>
-                      <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
+                      <Textarea
+                        value={row.food}
+                        onChange={(event) => updateMeal(row.id, { food: event.target.value })}
+                        placeholder="Food, bottle, or meal notes"
+                        className="min-h-24 resize-y text-base leading-6 sm:text-sm"
+                      />
                     </div>
                   ))}
                 </div>
@@ -1157,14 +1254,24 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2">
                         <div className="space-y-1">
-                          <Label>Start</Label>
-                          <Input type="datetime-local" value={row.startsAt} onChange={(event) => updateNap(row.id, { startsAt: event.target.value })} />
+                          <Label htmlFor={`nap-${index + 1}-start`}>Start time</Label>
+                          <Input
+                            id={`nap-${index + 1}-start`}
+                            type="time"
+                            value={row.startsAt}
+                            onChange={(event) => updateNap(row.id, { startsAt: event.target.value })}
+                          />
                         </div>
                         <div className="space-y-1">
-                          <Label>End</Label>
-                          <Input type="datetime-local" value={row.endsAt} onChange={(event) => updateNap(row.id, { endsAt: event.target.value })} />
+                          <Label htmlFor={`nap-${index + 1}-end`}>End time</Label>
+                          <Input
+                            id={`nap-${index + 1}-end`}
+                            type="time"
+                            value={row.endsAt}
+                            onChange={(event) => updateNap(row.id, { endsAt: event.target.value })}
+                          />
                         </div>
                       </div>
                     </div>
@@ -1253,7 +1360,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="teacher-incident" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Incident</CardTitle>
             <CardDescription>Director review required</CardDescription>
@@ -1262,7 +1369,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
             <Input value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
             <Textarea value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Objective description" />
             <Textarea value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
-            <Button disabled={isPending || !selectedChild || !incidentDescription || !actionTaken} className="w-full" onClick={submitIncident}>
+            <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitIncident}>
               <ShieldAlert data-icon="inline-start" />
               Create Incident
             </Button>

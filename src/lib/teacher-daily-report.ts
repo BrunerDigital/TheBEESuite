@@ -57,6 +57,13 @@ function parseBoolean(value: unknown) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
+function parseOptionalDateField(value: unknown, fieldLabel: string, fallback?: Date) {
+  const raw = clean(value);
+  if (!raw) return null;
+  const parsed = parseDateField(raw, fieldLabel, fallback);
+  return parsed.ok ? parsed.date : null;
+}
+
 function collectChildIds(input: Record<string, unknown>): { ok: true; childIds: string[] } | { ok: false; status: number; error: string } {
   const ids = new Set<string>();
   const childId = clean(input.childId);
@@ -92,8 +99,25 @@ function normalizeDateInput(value: unknown) {
   return value;
 }
 
+function dateInputValue(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function normalizeDateTimeInput(value: unknown, fallback?: Date) {
+  const raw = clean(value);
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeMatch && fallback) {
+    const hour = timeMatch[1].padStart(2, "0");
+    const second = timeMatch[3] ? `:${timeMatch[3]}` : "";
+    return `${dateInputValue(fallback)}T${hour}:${timeMatch[2]}${second}`;
+  }
+  return normalizeDateInput(value);
+}
+
 function parseDateField(value: unknown, fieldLabel: string, fallback?: Date) {
-  return parseOperationalDate(normalizeDateInput(value), fieldLabel, fallback);
+  return parseOperationalDate(normalizeDateTimeInput(value, fallback), fieldLabel, fallback);
 }
 
 function getRecordArray(value: unknown, fieldLabel: string): { ok: true; records: Record<string, unknown>[] } | { ok: false; error: string } {
@@ -112,11 +136,19 @@ function collectMeals(input: Record<string, unknown>) {
   if (!meals.ok) return meals;
 
   const records: DailyReportMealInput[] = meals.records
-    .map((meal) => ({
-      mealType: clean(meal.mealType) || "Meal",
-      food: clean(meal.food),
-      amount: clean(meal.amount) || null,
-    }))
+    .map((meal) => {
+      const mealType = clean(meal.mealType) || "Meal";
+      const food = clean(meal.food);
+      const amount = clean(meal.amount) || null;
+      const isQuickLog = parseBoolean(meal.quickLog);
+      const isTouched = parseBoolean(meal.touched);
+      const fallbackFood = isQuickLog ? "Served" : (amount || isTouched) ? "Not recorded" : "";
+      return {
+        mealType,
+        food: food || fallbackFood,
+        amount,
+      };
+    })
     .filter((meal) => Boolean(meal.food));
 
   const legacyMeal = clean(input.meal);
@@ -136,10 +168,15 @@ function collectActivities(input: Record<string, unknown>) {
   if (!activities.ok) return activities;
 
   const records: DailyReportActivityInput[] = activities.records
-    .map((activity) => ({
-      title: clean(activity.title),
-      notes: clean(activity.notes) || null,
-    }))
+    .map((activity) => {
+      const title = clean(activity.title);
+      const notes = clean(activity.notes) || null;
+      const isTouched = parseBoolean(activity.touched);
+      return {
+        title: title || (notes || isTouched ? "Activity" : ""),
+        notes,
+      };
+    })
     .filter((activity) => Boolean(activity.title));
 
   const legacyActivity = clean(input.activity);
@@ -166,17 +203,14 @@ function collectNaps(input: Record<string, unknown>, fallbackDate: Date): { ok: 
     const startRaw = clean(nap.startsAt) || clean(nap.start) || clean(nap.napStart);
     const endRaw = clean(nap.endsAt) || clean(nap.end) || clean(nap.napEnd);
     if (!startRaw && !endRaw) continue;
-    if (!startRaw) return { ok: false, status: 400, error: `Nap ${index + 1} start time is required.` };
 
-    const parsedStart = parseDateField(startRaw, `Nap ${index + 1} start`, fallbackDate);
-    if (!parsedStart.ok) return parsedStart;
-    const parsedEnd = endRaw ? parseDateField(endRaw, `Nap ${index + 1} end`, fallbackDate) : null;
-    if (parsedEnd && !parsedEnd.ok) return parsedEnd;
-    if (parsedEnd?.date && parsedEnd.date.getTime() < parsedStart.date.getTime()) {
-      return { ok: false, status: 400, error: `Nap ${index + 1} end time cannot be before the start time.` };
-    }
+    const parsedStart = parseOptionalDateField(startRaw, `Nap ${index + 1} start`, fallbackDate);
+    const parsedEnd = parseOptionalDateField(endRaw, `Nap ${index + 1} end`, fallbackDate);
+    const startsAt = parsedStart ?? parsedEnd;
+    if (!startsAt) continue;
+    const endsAt = parsedStart && parsedEnd && parsedEnd.getTime() >= startsAt.getTime() ? parsedEnd : null;
 
-    records.push({ startsAt: parsedStart.date, endsAt: parsedEnd?.date ?? null });
+    records.push({ startsAt, endsAt });
   }
 
   return { ok: true, records };
@@ -198,16 +232,17 @@ function collectDiapers(input: Record<string, unknown>, fallbackDate: Date): { o
   }
 
   for (const [index, diaper] of diaperRecords.entries()) {
-    const type = clean(diaper.type);
+    const notes = clean(diaper.notes) || null;
+    const isTouched = parseBoolean(diaper.touched);
+    const type = clean(diaper.type) || (notes || isTouched ? "Care log" : "");
     if (!type) continue;
     const occurredAtRaw = clean(diaper.occurredAt);
-    const parsedOccurredAt = occurredAtRaw ? parseDateField(occurredAtRaw, `Diaper/potty ${index + 1} time`, fallbackDate) : { ok: true as const, date: fallbackDate };
-    if (!parsedOccurredAt.ok) return parsedOccurredAt;
+    const parsedOccurredAt = parseOptionalDateField(occurredAtRaw, `Diaper/potty ${index + 1} time`, fallbackDate);
 
     records.push({
       type,
-      occurredAt: parsedOccurredAt.date,
-      notes: clean(diaper.notes) || null,
+      occurredAt: parsedOccurredAt ?? fallbackDate,
+      notes,
     });
   }
 
@@ -220,13 +255,13 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
   if (!childIds.ok) return childIds;
 
   const parsedDate = parseDateField(input.date, "Daily report date");
-  if (!parsedDate.ok) return parsedDate;
+  const reportDate = parsedDate.ok ? parsedDate.date : new Date();
 
   const meals = collectMeals(input);
   if (!meals.ok) return { ok: false, status: 400, error: meals.error };
-  const naps = collectNaps(input, parsedDate.date);
+  const naps = collectNaps(input, reportDate);
   if (!naps.ok) return naps;
-  const diapers = collectDiapers(input, parsedDate.date);
+  const diapers = collectDiapers(input, reportDate);
   if (!diapers.ok) return diapers;
   const activities = collectActivities(input);
   if (!activities.ok) return { ok: false, status: 400, error: activities.error };
@@ -236,7 +271,7 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
     report: {
       childId: childIds.childIds[0],
       childIds: childIds.childIds,
-      date: parsedDate.date,
+      date: reportDate,
       mood: clean(input.mood) || null,
       teacherNote: clean(input.teacherNote) || null,
       suppliesNeeded: clean(input.suppliesNeeded) || null,

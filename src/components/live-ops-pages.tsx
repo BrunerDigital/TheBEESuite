@@ -2,29 +2,41 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
+  ArrowRight,
   BadgeDollarSign,
   Bell,
   BookOpen,
   Bot,
   Building2,
   CheckCircle2,
+  Cloud,
   Code2,
   ClipboardCheck,
+  CreditCard,
+  Database,
   Download,
+  ExternalLink,
   FileText,
+  GitBranch,
+  Globe2,
   HeartHandshake,
   Image as ImageIcon,
   Inbox,
   KeyRound,
   Link2,
+  Mail,
   MapPin,
   Megaphone,
   MessageSquare,
+  PanelsTopLeft,
+  PenTool,
   ShieldCheck,
   Sparkles,
   Star,
   Workflow,
   ShieldAlert,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,7 +62,10 @@ import {
   type ClassroomAssignmentClassroom,
   type ClassroomAssignmentStaff,
 } from "@/components/classroom-ratio-assignment-panel";
+import { ClassroomSetupPanel } from "@/components/classroom-setup-panel";
+import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
+import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
 import {
@@ -62,8 +77,13 @@ import {
   EmergencyDrillLogPanel,
   type EmergencyDrillLogRow,
 } from "@/components/emergency-drill-log-panel";
+import {
+  ChildProfilesEnrollmentPanel,
+  FamilyProfilesEnrollmentPanel,
+  type ChildProfileVisibilityRecord,
+  type FamilyProfileVisibilityRecord,
+} from "@/components/enrollment-visibility-panels";
 import { OperationsActionHub } from "@/components/operations-action-hub";
-import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { PaymentAutopayActions } from "@/components/payment-autopay-actions";
 import { NotificationReadAction } from "@/components/notification-read-actions";
 import {
@@ -82,14 +102,12 @@ import {
   type NotificationPreferenceUserOption,
 } from "@/components/notification-preferences-panel";
 import { OperationalCalendar, type CalendarEventRow } from "@/components/operational-calendar";
-import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
 import { FamilyStudentIntakeForm } from "@/components/family-student-intake-form";
 import { FteBulkImportPanel } from "@/components/fte-bulk-import-panel";
 import { FteReportExplorer } from "@/components/fte-report-explorer";
 import { FteReportForm, type FteReportCenterOption, type FteReportPrefill, type FteReportRow } from "@/components/fte-report-form";
 import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
-import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
 import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
@@ -104,6 +122,7 @@ import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import { TuitionPaymentReminderSettingsPanel } from "@/components/tuition-payment-reminder-settings-panel";
 import {
   TenantControlsPanel,
   type SupportAccessAuditRow,
@@ -429,6 +448,9 @@ export type TeamPermissionsData = {
     } | null;
   }>;
   roleCounts: Array<{ role: string; count: number }>;
+  deviceSessions: DeviceSessionPanelRow[];
+  currentDeviceSessionId: string | null;
+  canManageDeviceSessions: boolean;
 };
 
 export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
@@ -450,6 +472,11 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
           <StatCard key={role.role} label={role.role.replaceAll("_", " ")} value={role.count} />
         ))}
       </div>
+      <DeviceSessionPanel
+        sessions={data.deviceSessions}
+        currentDeviceSessionId={data.currentDeviceSessionId}
+        canManage={data.canManageDeviceSessions}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
@@ -912,6 +939,146 @@ export type DeveloperDashboardPageData = {
   }>;
 };
 
+type ProjectAccountLink = {
+  label: string;
+  href: string;
+  detail: string;
+  status: string;
+  Icon: LucideIcon;
+};
+
+const projectAccountGroups: Array<{ title: string; description: string; accounts: ProjectAccountLink[] }> = [
+  {
+    title: "Code, deploy, and domains",
+    description: "Source control, production hosting, live domains, and DNS/security surfaces.",
+    accounts: [
+      {
+        label: "Live production site",
+        href: "https://thebeesuite.io",
+        detail: "Public website and production app domain.",
+        status: "Live",
+        Icon: Globe2,
+      },
+      {
+        label: "GitHub repository",
+        href: "https://github.com/BrunerDigital/TheBEESuite",
+        detail: "Source code, commits, branches, issues, and pull requests.",
+        status: "Source",
+        Icon: GitBranch,
+      },
+      {
+        label: "Vercel project",
+        href: "https://vercel.com/brunerdigitals-projects/the-bee-suite",
+        detail: "Production deployments, aliases, build logs, env vars, and domains.",
+        status: "Deploy",
+        Icon: Cloud,
+      },
+      {
+        label: "Cloudflare dashboard",
+        href: "https://dash.cloudflare.com/",
+        detail: "DNS, domain routing, firewall, and Turnstile account checks.",
+        status: "DNS",
+        Icon: ShieldCheck,
+      },
+    ],
+  },
+  {
+    title: "Data, auth, and money movement",
+    description: "Core production records, user authentication, storage, and billing/payment operations.",
+    accounts: [
+      {
+        label: "Supabase dashboard",
+        href: "https://supabase.com/dashboard/projects",
+        detail: "Postgres, Auth users, storage buckets, service keys, and logs.",
+        status: "Database",
+        Icon: Database,
+      },
+      {
+        label: "Stripe dashboard",
+        href: "https://dashboard.stripe.com/",
+        detail: "Checkout, Connect accounts, webhooks, customers, invoices, and payments.",
+        status: "Payments",
+        Icon: CreditCard,
+      },
+      {
+        label: "Active/inactive users",
+        href: "/agency-admin#existing-user-accounts",
+        detail: "Manual user list inside Executive Admin with activate/deactivate actions.",
+        status: "Internal",
+        Icon: Users,
+      },
+    ],
+  },
+  {
+    title: "Messaging, AI, and documents",
+    description: "Communication providers, Google workspaces, AI assistance, and product planning tools.",
+    accounts: [
+      {
+        label: "Twilio Console",
+        href: "https://console.twilio.com/",
+        detail: "SMS numbers, messaging services, inbound webhooks, and delivery logs.",
+        status: "SMS",
+        Icon: MessageSquare,
+      },
+      {
+        label: "SendGrid",
+        href: "https://app.sendgrid.com/",
+        detail: "Transactional email sender, templates, API keys, suppressions, and activity.",
+        status: "Email",
+        Icon: Mail,
+      },
+      {
+        label: "Google Cloud",
+        href: "https://console.cloud.google.com/",
+        detail: "Sheets, Calendar OAuth, service accounts, and API credentials.",
+        status: "Google",
+        Icon: PanelsTopLeft,
+      },
+      {
+        label: "Google Drive",
+        href: "https://drive.google.com/",
+        detail: "Shared docs, spreadsheets, exports, and school operating files.",
+        status: "Files",
+        Icon: FileText,
+      },
+      {
+        label: "OpenAI Platform",
+        href: "https://platform.openai.com/",
+        detail: "Mr. Bee and AI command center API usage, keys, and model settings.",
+        status: "AI",
+        Icon: Bot,
+      },
+    ],
+  },
+  {
+    title: "Design and workflow",
+    description: "Design files, implementation tracking, and external work management.",
+    accounts: [
+      {
+        label: "Figma",
+        href: "https://www.figma.com/files",
+        detail: "Design files, mockups, slides, prototypes, and brand assets.",
+        status: "Design",
+        Icon: PenTool,
+      },
+      {
+        label: "Linear",
+        href: "https://linear.app/",
+        detail: "Issue tracking, project planning, implementation tasks, and roadmap notes.",
+        status: "Tasks",
+        Icon: Workflow,
+      },
+      {
+        label: "The BEE Suite docs",
+        href: "https://github.com/BrunerDigital/TheBEESuite/tree/main/docs",
+        detail: "Operational checklists, deployment notes, security review, and rollout guides.",
+        status: "Docs",
+        Icon: BookOpen,
+      },
+    ],
+  },
+];
+
 export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageData }) {
   return (
     <div className="flex flex-col gap-6">
@@ -924,6 +1091,59 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Production-facing technical operations for integrations, imports, webhooks, audit events, and record maintenance.
         </p>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold tracking-tight">Project accounts and platforms</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
+              Quick links for every outside account and internal admin surface involved in The BEE Suite build, deployment, data, communications, AI, and design workflow.
+            </p>
+          </div>
+          <Badge variant="outline" className="w-fit">
+            <KeyRound data-icon="inline-start" />
+            No secrets shown
+          </Badge>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {projectAccountGroups.map((group) => (
+            <Card key={group.title} className="glass-panel">
+              <CardHeader>
+                <CardTitle className="text-lg">{group.title}</CardTitle>
+                <CardDescription>{group.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 sm:grid-cols-2">
+                {group.accounts.map(({ label, href, detail, status, Icon }) => {
+                  const external = href.startsWith("http");
+                  return (
+                    <Link
+                      key={label}
+                      href={href}
+                      target={external ? "_blank" : undefined}
+                      rel={external ? "noreferrer" : undefined}
+                      className="group flex min-h-28 items-start gap-3 rounded-xl border bg-background/55 p-4 transition hover:border-primary/45 hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="grid size-11 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary transition group-hover:bg-primary group-hover:text-primary-foreground">
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-start justify-between gap-3">
+                          <span className="font-medium leading-5">{label}</span>
+                          <span className="flex shrink-0 items-center gap-1 rounded-full border bg-background px-2 py-0.5 text-[0.68rem] font-medium text-muted-foreground">
+                            {status}
+                            {external ? <ExternalLink className="size-3" /> : <ArrowRight className="size-3" />}
+                          </span>
+                        </span>
+                        <span className="mt-2 block text-xs leading-5 text-muted-foreground">{detail}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -2174,6 +2394,7 @@ export type ClassroomDashboardData = {
   centers: Array<{ id: string; name: string }>;
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
+  ageGroups: string[];
   demoMode?: boolean;
 };
 
@@ -2213,56 +2434,14 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <StatCard label="Licensed seats shown" value={capacity} />
         <StatCard label="Ratio warnings" value={ratioWarningCount} detail={`${staff} teachers assigned`} />
       </div>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Classrooms</CardTitle>
-          <CardDescription>Capacity and ratio-ready operating view</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Classroom</TableHead>
-                <TableHead>Center</TableHead>
-                <TableHead>Age group</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Teachers</TableHead>
-                <TableHead>Ratio rule</TableHead>
-                <TableHead>Ratio status</TableHead>
-                <TableHead>Incidents</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ratioRows.map(({ classroom, ratioWarning }) => (
-                <TableRow key={classroom.id}>
-                  <TableCell className="font-medium">{classroom.name}</TableCell>
-                  <TableCell>{classroom.center.crmLocationId ?? classroom.center.name}</TableCell>
-                  <TableCell>{classroom.ageGroup}</TableCell>
-                  <TableCell>{classroom._count.children}/{classroom.capacity}</TableCell>
-                  <TableCell>
-                    <div className="flex max-w-52 flex-col gap-1">
-                      <span>{classroom._count.staff} assigned</span>
-                      <span className="text-xs text-muted-foreground">
-                        {data.staff.filter((teacher) => teacher.classroomId === classroom.id).map((teacher) => teacher.user.name).join(", ") || "No active teacher names"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{classroom.ratioRule ?? "Not set"}</TableCell>
-                  <TableCell>
-                    <div className="flex max-w-64 flex-col gap-1">
-                      <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
-                      <span className="text-xs text-muted-foreground">{ratioWarning.detail}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{classroom._count.incidents}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <ClassroomSetupPanel
+        centers={data.centers}
+        classrooms={data.classrooms}
+        staff={data.staff}
+        ageGroups={data.ageGroups}
+        demoMode={data.demoMode}
+      />
       <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
-      <OperationsActionHub title="Create or Edit Classroom" defaultEntity="classroom" compact centers={data.centers} />
     </div>
   );
 }
@@ -2785,6 +2964,19 @@ export type StaffPageData = {
     classroom: { id: string; name: string } | null;
     certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
   }>;
+  previousStaff: Array<{
+    id: string;
+    centerId: string;
+    classroomId: string | null;
+    title: string;
+    phone: string | null;
+    backgroundCheckStatus: string | null;
+    customFields: unknown;
+    user: { name: string; email: string; role: string; isActive: boolean };
+    center: { id: string; name: string; crmLocationId: string | null };
+    classroom: { id: string; name: string } | null;
+    certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
+  }>;
   stats: {
     total: number;
     activeUsers: number;
@@ -2873,7 +3065,13 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} schedules={data.schedules} />
+      <StaffManagementPanel
+        centers={data.centers}
+        classrooms={data.classrooms}
+        staff={data.staff}
+        previousStaff={data.previousStaff}
+        schedules={data.schedules}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Upcoming Staff Schedule</CardTitle>
@@ -4062,20 +4260,12 @@ export function FteReportsPage({ data }: { data: FteReportsPageData }) {
 }
 
 export type FamilyProfilesPageData = {
-  families: Array<EditableFamilyRecord & {
-    createdAt: Date | string;
-    guardians: Array<EditableFamilyRecord["guardians"][number] & {
-      userId: string | null;
-      checkInPinSetAt: Date | string | null;
-      qrToken?: string | null;
-      kioskPath?: string | null;
-      centerName?: string | null;
-    }>;
-    _count: { documents: number; messages: number; pickups: number; emergencyContacts: number };
-  }>;
+  families: FamilyProfileVisibilityRecord[];
+  allFamilies: FamilyProfileVisibilityRecord[];
   importCenters: Array<{ id: string; name: string }>;
   bulkImportEnabled: boolean;
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
+  ageGroups: string[];
   guardianChangeRequests: Array<{
     id: string;
     familyId: string;
@@ -4091,6 +4281,8 @@ export type FamilyProfilesPageData = {
     withCustodyNotes: number;
     children: number;
     guardians: number;
+    graduated: number;
+    graduatedFamilies: number;
   };
 };
 
@@ -4107,14 +4299,21 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           Guardian, child, document, pickup, emergency contact, billing email, and restricted custody-note visibility.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <StatCard label="Families" value={data.stats.total} />
         <StatCard label="Children" value={data.stats.children} />
         <StatCard label="Guardians" value={data.stats.guardians} />
+        <StatCard label="Graduated" value={data.stats.graduated} detail={`${data.stats.graduatedFamilies.toLocaleString()} families hidden`} />
         <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} />
-      <FamilyRecordEditor families={data.families} centers={data.intakeCenters} />
+      <FamilyProfilesEnrollmentPanel
+        currentFamilies={data.families}
+        allFamilies={data.allFamilies}
+        centers={data.intakeCenters}
+        graduatedChildren={data.stats.graduated}
+        ageGroups={data.ageGroups}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Guardian Self-Service Change Requests</CardTitle>
@@ -4166,124 +4365,18 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           </div>
         </CardContent>
       </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Family Directory</CardTitle>
-          <CardDescription>Role-scoped family profile snapshot</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Family</TableHead>
-                <TableHead>Guardians</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Records</TableHead>
-                <TableHead>Restricted</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.families.map((family) => (
-                <TableRow key={family.id}>
-                  <TableCell>
-                    <div className="font-medium">{family.name}</div>
-                    <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
-                  </TableCell>
-                  <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
-                  <TableCell>{family.children.map((child) => `${child.fullName} (${child.ageGroup})`).join(", ") || "None"}</TableCell>
-                  <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
-                  <TableCell>
-                    {hasCustodyWarning(family) ? (
-                      <div className="space-y-1">
-                        <Badge variant="destructive">
-                          <ShieldAlert data-icon="inline-start" />
-                          {CUSTODY_WARNING_LABEL}
-                        </Badge>
-                        <div className="max-w-xs text-xs text-muted-foreground">{custodyWarningPreview(family)}</div>
-                      </div>
-                    ) : "Standard"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Lobby Kiosk Credentials</CardTitle>
-          <CardDescription>Directors set the 4 digit guardian PIN and QR scan payload used on the check-in/check-out tablet.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-2">
-          {data.families.flatMap((family) =>
-            family.guardians.map((guardian) => (
-              <GuardianPinManager
-                key={guardian.id}
-                guardianId={guardian.id}
-                guardianName={guardian.fullName}
-                familyName={family.name}
-                centerId={family.centerId}
-                centerName={guardian.centerName}
-                pinSetAt={guardian.checkInPinSetAt}
-                qrToken={guardian.qrToken}
-                kioskPath={guardian.kioskPath}
-              />
-            )),
-          )}
-          {!data.families.some((family) => family.guardians.length) ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Parent Portal Access</CardTitle>
-          <CardDescription>
-            Create or reset linked parent accounts. Parents only see families connected through their guardian profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 lg:grid-cols-2">
-          {data.families.flatMap((family) =>
-            family.guardians.map((guardian) => (
-              <ParentPortalInviteButton
-                key={guardian.id}
-                guardianId={guardian.id}
-                guardianName={`${guardian.fullName} · ${family.name}`}
-                email={guardian.email}
-                linked={Boolean(guardian.userId)}
-              />
-            )),
-          )}
-          {!data.families.some((family) => family.guardians.length) ? (
-            <p className="text-sm text-muted-foreground">No guardians are visible for this scope yet.</p>
-          ) : null}
-        </CardContent>
-      </Card>
       <ProcareImportPanel centers={data.importCenters} allowBulkImport={data.bulkImportEnabled} />
-      <OperationsActionHub title="Create or Edit Family / Guardian" defaultEntity="family" compact centers={data.importCenters} />
     </div>
   );
 }
 
 export type ChildProfilesPageData = {
-  children: Array<{
-    id: string;
-    fullName: string;
-    preferredName: string | null;
-    dateOfBirth: Date | string;
-    ageGroup: string;
-    enrollmentStatus: string;
-    startDate: Date | string | null;
-    photoVideoPermission: boolean;
-    fieldTripPermission: boolean;
-    family: { name: string; centerId: string | null; custodyNotes: string | null };
-    classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
-    _count: { allergies: number; medicalNotes: number; documents: number; incidents: number; dailyReports: number };
-  }>;
+  children: ChildProfileVisibilityRecord[];
+  allChildren: ChildProfileVisibilityRecord[];
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
-    enrolled: number;
+    graduated: number;
     allergies: number;
     restrictedMedicalNotes: number;
   };
@@ -4304,59 +4397,16 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
       </section>
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Children" value={data.stats.total} />
-        <StatCard label="Enrolled" value={data.stats.enrolled} />
+        <StatCard label="Graduated" value={data.stats.graduated} detail="hidden by default" />
         <StatCard label="Allergy records" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} compact />
-      <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Children</CardTitle>
-          <CardDescription>Sensitive records are marked for restricted access handling</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Child</TableHead>
-                <TableHead>Family</TableHead>
-                <TableHead>Classroom</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Safety</TableHead>
-                <TableHead>Permissions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.children.map((child) => (
-                <TableRow key={child.id}>
-                  <TableCell>
-                    <div className="font-medium">{child.fullName}</div>
-                    <div className="text-xs text-muted-foreground">{child.ageGroup} · DOB {formatDate(child.dateOfBirth)}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{child.family.name}</div>
-                    {hasCustodyWarning(child.family) ? (
-                      <Badge variant="destructive" className="mt-1">
-                        <ShieldAlert data-icon="inline-start" />
-                        {CUSTODY_WARNING_LABEL}
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.classroom?.name ?? "Unassigned"}</TableCell>
-                  <TableCell>{formatRecordLabel(child.enrollmentStatus)}</TableCell>
-                  <TableCell>
-                    {child._count.allergies} allergies · {child._count.medicalNotes} medical notes · {child._count.incidents} incidents
-                    {hasCustodyWarning(child.family) ? (
-                      <div className="mt-1 text-xs text-destructive">Review custody/pickup restrictions before release or contact changes.</div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell>{child.photoVideoPermission ? "Photo ok" : "Photo restricted"} · {child.fieldTripPermission ? "Trips ok" : "Trips restricted"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <ChildProfilesEnrollmentPanel
+        currentChildren={data.children}
+        allChildren={data.allChildren}
+        graduatedChildren={data.stats.graduated}
+      />
       <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
     </div>
   );
@@ -5204,6 +5254,8 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
+      <TuitionPaymentReminderSettingsPanel centers={data.centers} />
+      <DashboardOptionsSettingsPanel centers={data.centers} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>

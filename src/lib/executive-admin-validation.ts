@@ -108,8 +108,8 @@ export function validateExecutiveUserForm(input: {
   if (scopeType === "TENANT" && !tenantAccessRoles.has(role)) {
     errors.push("Tenant-wide access is limited to executive, regional, billing, or auditor roles.");
   }
-  if (password && password.length < 8) errors.push("Temporary passwords must be at least 8 characters.");
-  if (password && sendPasswordReset) errors.push("Choose either a temporary password or a reset email, not both.");
+  if (password && password.length < 8) errors.push("Passwords must be at least 8 characters.");
+  if (password && sendPasswordReset) errors.push("Choose either a password or a reset email, not both.");
 
   return errors;
 }
@@ -118,6 +118,6 @@ export function validateExecutivePasswordAction(input: { email?: unknown; passwo
   const errors: string[] = [];
   const password = clean(input.password);
   if (!isExecutiveEmail(input.email)) errors.push("A valid user email is required.");
-  if (password && password.length < 8) errors.push("Temporary passwords must be at least 8 characters.");
+  if (password && password.length < 8) errors.push("Passwords must be at least 8 characters.");
   return errors;
 }

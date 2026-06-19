@@ -41,7 +41,7 @@ npm run kidcity:create-auth-users
 
 The Kid City cutover scripts also load `.env.local` / `.env` automatically when those files are present, so local one-off imports can use the same environment file as the app without committing credentials.
 
-Require password reset after live testing begins if this becomes production access. The BEE Suite now has a Supabase-backed reset flow at `/forgot-password` and `/reset-password`; make sure the Supabase Auth redirect allow-list includes `https://the-bee-suite-beta.vercel.app/reset-password` before inviting school users.
+Require password reset after live testing begins if this becomes production access. The BEE Suite now has a Supabase-backed reset flow at `/forgot-password` and `/reset-password`; make sure the Supabase Auth redirect allow-list includes `https://thebeesuite.io/reset-password` before inviting school users.
 
 ## CRM Access Rules
 
@@ -59,9 +59,9 @@ Paste this into an Avada Code Block or the old form replacement area:
 ```html
 <div id="bee-suite-inquiry-form"></div>
 <script
-  src="https://the-bee-suite-beta.vercel.app/kidcity-inquiry-form.js"
+  src="https://thebeesuite.io/kidcity-inquiry-form.js"
   data-target="bee-suite-inquiry-form"
-  data-endpoint="https://the-bee-suite-beta.vercel.app/api/inquiries"
+  data-endpoint="https://thebeesuite.io/api/inquiries"
   async
 ></script>
 ```

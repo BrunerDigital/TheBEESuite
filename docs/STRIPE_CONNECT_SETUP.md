@@ -57,7 +57,7 @@ See `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for the final product copy, app
 Create a Stripe webhook endpoint:
 
 ```text
-https://the-bee-suite-beta.vercel.app/api/billing/stripe-webhook
+https://thebeesuite.io/api/billing/stripe-webhook
 ```
 
 Subscribe to:

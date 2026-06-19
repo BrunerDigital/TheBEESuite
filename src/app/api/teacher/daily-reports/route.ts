@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 import { parseTeacherDailyReportPayload } from "@/lib/teacher-daily-report";
@@ -26,7 +27,7 @@ async function POSTHandler(request: NextRequest) {
   const dailyReport = parsedPayload.report;
 
   const children = await prisma.child.findMany({
-    where: { id: { in: dailyReport.childIds } },
+    where: { id: { in: dailyReport.childIds }, ...currentlyEnrolledChildWhere() },
     include: {
       classroom: { select: { id: true, centerId: true } },
       family: { select: { centerId: true, custodyNotes: true } },

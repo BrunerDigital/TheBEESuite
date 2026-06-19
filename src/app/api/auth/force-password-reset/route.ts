@@ -37,18 +37,18 @@ async function POSTHandler(request: NextRequest) {
   const currentPassword = clean(body.currentPassword);
   const password = clean(body.password);
   if (!currentPassword) {
-    return NextResponse.json({ ok: false, error: "Temporary password is required." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Password is required." }, { status: 400 });
   }
   if (password.length < 8) {
     return NextResponse.json({ ok: false, error: "Password must be at least 8 characters." }, { status: 400 });
   }
   if (password === currentPassword) {
-    return NextResponse.json({ ok: false, error: "Choose a new password that is different from the temporary password." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Choose a new password that is different from the current password." }, { status: 400 });
   }
 
   const verified = await verifySupabasePassword(user.email, currentPassword);
   if (!verified) {
-    return NextResponse.json({ ok: false, error: "Temporary password is incorrect." }, { status: 401 });
+    return NextResponse.json({ ok: false, error: "Password is incorrect." }, { status: 401 });
   }
 
   try {

@@ -10,11 +10,17 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { appModeFromPath } from "@/lib/device-sessions";
+
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/dashboard";
+  return value;
+}
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/dashboard";
+  const next = safeNextPath(searchParams.get("next"));
   const resetStatus = searchParams.get("reset");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,10 +31,11 @@ export function LoginForm() {
     event.preventDefault();
     setError("");
     startTransition(async () => {
+      const deviceLabel = window.localStorage.getItem("bee-suite-device-label") ?? "";
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, next, appMode: appModeFromPath(next), deviceLabel }),
       });
 
       const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean } | null;
@@ -37,14 +44,13 @@ export function LoginForm() {
         return;
       }
 
-      const safeNext = next.startsWith("/") ? next : "/dashboard";
       if (data?.requiresPasswordReset) {
-        router.push(`/reset-password?force=1&next=${encodeURIComponent(safeNext)}`);
+        router.push(`/reset-password?force=1&next=${encodeURIComponent(next)}`);
         router.refresh();
         return;
       }
 
-      router.push(safeNext);
+      router.push(next);
       router.refresh();
     });
   }
@@ -96,7 +102,7 @@ export function LoginForm() {
                 <Alert className="border-amber-500/30 bg-amber-500/10">
                   <ShieldCheck />
                   <AlertTitle>Password reset required</AlertTitle>
-                  <AlertDescription>Use your temporary password one more time, then choose a new private password.</AlertDescription>
+                  <AlertDescription>Use your password one more time, then choose a new private password.</AlertDescription>
                 </Alert>
               ) : null}
               {error ? (
@@ -112,7 +118,7 @@ export function LoginForm() {
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="school@kidcityusa.com or demoschool"
+                  placeholder="Email or username"
                   type="text"
                   autoComplete="username"
                   required
@@ -129,7 +135,7 @@ export function LoginForm() {
                   id="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Temporary password"
+                  placeholder="Password"
                   type="password"
                   autoComplete="current-password"
                   required

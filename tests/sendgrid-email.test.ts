@@ -8,6 +8,7 @@ test("SendGrid email helper sends private personalizations and captures provider
   const originalFrom = process.env.SENDGRID_FROM_EMAIL;
   type SendGridPayload = {
     personalizations: Array<{ to: Array<{ email: string }>; custom_args: Record<string, string> }>;
+    attachments?: Array<{ content: string; filename: string; type: string; disposition: string }>;
   };
   const capture: { payload?: SendGridPayload } = {};
 
@@ -28,6 +29,11 @@ test("SendGrid email helper sends private personalizations and captures provider
       text: "Today went well.",
       categories: ["communication_email"],
       customArgs: { messageId: "msg_1", count: 2, empty: null },
+      attachments: [{
+        filename: "tour-packet.pdf",
+        content: Buffer.from("PDF placeholder").toString("base64"),
+        type: "application/pdf",
+      }],
     });
 
     assert.equal(result.ok, true);
@@ -40,6 +46,12 @@ test("SendGrid email helper sends private personalizations and captures provider
       [{ email: "director@example.com" }],
     ]);
     assert.deepEqual(personalizations[0].custom_args, { messageId: "msg_1", count: "2" });
+    assert.deepEqual(capture.payload?.attachments, [{
+      content: Buffer.from("PDF placeholder").toString("base64"),
+      filename: "tour-packet.pdf",
+      type: "application/pdf",
+      disposition: "attachment",
+    }]);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY;

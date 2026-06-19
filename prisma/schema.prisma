@@ -79,6 +79,7 @@ model Tenant {
   accessGrants          UserAccessGrant[]
   brandAssets           BrandAsset[]
   brandCustomizations   BrandCustomization[]
+  deviceSessions        DeviceSession[]
 }
 
 model Brand {
@@ -260,6 +261,8 @@ model User {
   procareImports ProcareImportBatch[]
   fteReports     FteReport[]          @relation("FteSubmittedBy")
   accessGrants   UserAccessGrant[]
+  deviceSessions DeviceSession[]      @relation("UserDeviceSessions")
+  revokedDeviceSessions DeviceSession[] @relation("DeviceSessionRevokedBy")
 }
 
 model UserAccessGrant {
@@ -292,6 +295,30 @@ model UserAccessGrant {
   @@index([organizationId])
   @@index([ownerGroupId])
   @@index([centerId])
+}
+
+model DeviceSession {
+  id          String    @id @default(cuid())
+  userId      String
+  tenantId    String
+  label       String
+  deviceType  String    @default("web")
+  appMode     String    @default("web")
+  userAgent   String?
+  ipAddress   String?
+  lastSeenAt  DateTime  @default(now())
+  revokedAt   DateTime?
+  revokedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user      User   @relation("UserDeviceSessions", fields: [userId], references: [id])
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  revokedBy User?  @relation("DeviceSessionRevokedBy", fields: [revokedById], references: [id])
+
+  @@index([tenantId, lastSeenAt])
+  @@index([userId, revokedAt])
+  @@index([revokedById])
 }
 
 model BrandAsset {

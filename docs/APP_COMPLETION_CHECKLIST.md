@@ -180,7 +180,7 @@ Status legend:
 - [x] Confirm the final reporting week cutoff/due time with Kid City USA operations: Friday by 12:00 PM ET.
 - [x] Add full historical FTE trend filters by region/state/owner group.
 - [x] Add executive manual edit table for inline corrections.
-- [x] Add email/SMS escalation for missing FTE reports at Friday 8:00 AM ET and Friday 1:00 PM ET.
+- [x] Add email/SMS reminders for missing FTE reports at Friday 8:00 AM ET and Friday 5:00 PM ET.
 - [ ] Add final Google Sheet two-way reconciliation rules.
 
 ## ProCare Import And Cutover

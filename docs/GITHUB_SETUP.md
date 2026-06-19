@@ -28,7 +28,7 @@ gh repo create YOUR_ORG/the-bee-suite --private --source . --remote origin --pus
 ## After Push
 
 1. Connect the GitHub repo to the existing Vercel project `the-bee-suite`.
-2. Keep the current production alias: `https://the-bee-suite-beta.vercel.app`.
+2. Keep the current production alias: `https://thebeesuite.io`.
 3. Confirm Vercel production env vars remain attached after connecting Git.
 4. Enable protected branches and require the build check before merging future changes.
 

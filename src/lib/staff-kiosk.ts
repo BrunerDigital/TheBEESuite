@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { verifyStaffPin } from "@/lib/kiosk";
 
 export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
 export type StaffClockAction = typeof STAFF_CLOCK_ACTIONS[number];
@@ -68,6 +69,50 @@ export function readStaffClockState(customFields: unknown): StaffClockState {
 
 export function readStaffKioskPinHash(customFields: unknown) {
   return stringValue(asRecord(customFields).staffKioskPinHash) || null;
+}
+
+export function readStaffContactEmail(customFields: unknown) {
+  return stringValue(asRecord(customFields).staffContactEmail).toLowerCase() || null;
+}
+
+export type StaffKioskCredentialCandidate = {
+  id: string;
+  customFields: unknown;
+  user: {
+    email: string;
+    isActive?: boolean;
+  };
+};
+
+export function staffKioskEmailMatches(candidate: StaffKioskCredentialCandidate, email: string) {
+  const normalized = stringValue(email).toLowerCase();
+  if (!normalized) return true;
+  return candidate.user.email.toLowerCase() === normalized || readStaffContactEmail(candidate.customFields) === normalized;
+}
+
+export function resolveStaffKioskCredential<T extends StaffKioskCredentialCandidate>({
+  candidates,
+  pin,
+  email,
+}: {
+  candidates: T[];
+  pin: string;
+  email?: string | null;
+}) {
+  const scopedCandidates = stringValue(email)
+    ? candidates.filter((candidate) => staffKioskEmailMatches(candidate, stringValue(email)))
+    : candidates;
+  if (!scopedCandidates.length) return { ok: false as const, status: "not_found" as const };
+
+  const staffWithCodes = scopedCandidates.filter((candidate) => readStaffKioskPinHash(candidate.customFields));
+  if (!staffWithCodes.length) return { ok: false as const, status: "missing_code" as const };
+
+  const matches = staffWithCodes.filter((candidate) =>
+    verifyStaffPin(candidate.id, pin, readStaffKioskPinHash(candidate.customFields)),
+  );
+  if (matches.length === 1) return { ok: true as const, staff: matches[0] };
+  if (matches.length > 1) return { ok: false as const, status: "ambiguous" as const };
+  return { ok: false as const, status: "invalid_pin" as const };
 }
 
 export function validateNextStaffClockAction(action: StaffClockAction, state: StaffClockState) {

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
 import { checkoutApplicationGuard, isActiveStripeAutopayPayment, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
-import { demoAccountEmails } from "../src/lib/demo-accounts";
+import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
 import {
@@ -22,6 +22,7 @@ import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
 import { hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
+import { buildParentPortalInvitationText, buildParentPortalUrl, PARENT_PORTAL_PATH } from "../src/lib/parent-portal-invitations";
 import {
   calculateFteCount,
   defaultFteWeekEnd,
@@ -31,9 +32,23 @@ import {
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
-import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
+import {
+  buildPasswordResetRedirectUrl,
+  buildPublicAppBaseUrl,
+  canonicalizePublicUrl,
+  CANONICAL_APP_BASE_URL,
+  cleanSupabaseUrl,
+  safePasswordResetNextPath,
+} from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
-import { canViewDemoFallbackData, readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
+
+test("password reset gate does not block teacher profile accounts", () => {
+  assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
+});
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
@@ -211,6 +226,69 @@ test("Supabase auth URL has no hardcoded project fallback", () => {
   assert.equal(cleanSupabaseUrl(undefined), "");
 });
 
+test("password reset redirects can safely return invited parents to the portal", () => {
+  assert.equal(
+    buildPasswordResetRedirectUrl({
+      appBaseUrl: "https://app.example.com",
+      requestUrl: "https://app.example.com/api/parent/invitations",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://app.example.com/reset-password?next=%2Fparent-portal",
+  );
+
+  assert.equal(
+    buildPasswordResetRedirectUrl({
+      configuredRedirectUrl: "https://thebeesuite.io/reset-password",
+      requestUrl: "https://ignored.example.com/api/auth/forgot-password",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://thebeesuite.io/reset-password?next=%2Fparent-portal",
+  );
+
+  assert.equal(safePasswordResetNextPath("//evil.example.com"), "");
+  assert.equal(safePasswordResetNextPath("/login?next=/parent-portal"), "");
+});
+
+test("public parent links never expose Vercel deployment hosts", () => {
+  assert.equal(
+    buildPublicAppBaseUrl({
+      requestUrl: "https://the-bee-suite-preview-brunerdigitals-projects.vercel.app/api/parent/invitations",
+      vercelUrl: "the-bee-suite-preview-brunerdigitals-projects.vercel.app",
+    }),
+    CANONICAL_APP_BASE_URL,
+  );
+
+  assert.equal(
+    canonicalizePublicUrl("https://the-bee-suite-beta.vercel.app/parent-portal"),
+    "https://thebeesuite.io/parent-portal",
+  );
+
+  assert.equal(
+    buildPasswordResetRedirectUrl({
+      configuredRedirectUrl: "https://the-bee-suite-beta.vercel.app/reset-password",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://thebeesuite.io/reset-password?next=%2Fparent-portal",
+  );
+});
+
+test("parent portal invite copy uses guardian email login and parent-owned password setup", () => {
+  const portalUrl = buildParentPortalUrl("https://thebeesuite.io/");
+  const text = buildParentPortalInvitationText({
+    guardianName: "Taylor Parent",
+    centerLabel: "Kid City Kokomo",
+    email: "taylor@example.com",
+    portalUrl,
+  });
+
+  assert.equal(portalUrl, "https://thebeesuite.io/parent-portal");
+  assert.match(text, /Use taylor@example\.com as your login email\./);
+  assert.match(text, /choose your password/);
+  assert.match(text, /child records and classroom connections/);
+  assert.doesNotMatch(text, /temporary password/i);
+  assert.doesNotMatch(text, /provided by your school director/i);
+});
+
 test("login rate limit blocks repeated attempts for the same key", () => {
   const key = `test-login:${Date.now()}:${Math.random()}`;
   assert.equal(checkRateLimit({ key, limit: 2, windowMs: 60_000 }).ok, true);
@@ -228,6 +306,17 @@ test("session version guard invalidates stale signed cookies", () => {
   assert.equal(sessionMatchesCurrentVersion({}, 0), true);
 });
 
+test("device sessions classify app modes and tablet devices", () => {
+  const fireTabletUa = "Mozilla/5.0 (Linux; Android 9; KFMUWI) AppleWebKit/537.36 Silk/115.4.1 like Chrome/115.0 Safari/537.36";
+  const ipadUa = "Mozilla/5.0 (iPad; CPU OS 17_2 like Mac OS X) AppleWebKit/605.1.15 Version/17.2 Mobile/15E148 Safari/604.1";
+  assert.equal(appModeFromPath("/check-in/kokomo"), "kiosk");
+  assert.equal(appModeFromPath("/parent-portal"), "parent");
+  assert.equal(normalizeDeviceAppMode("invalid", "/teacher-portal"), "teacher");
+  assert.equal(inferDeviceType(fireTabletUa), "tablet");
+  assert.equal(inferDeviceType("Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) Mobile/15E148"), "phone");
+  assert.equal(buildDeviceSessionLabel({ appMode: "teacher", deviceType: "tablet", userAgent: ipadUa }), "Teacher app on iPad");
+});
+
 test("demo fallback data is limited to seeded demo accounts", () => {
   assert.equal(canViewDemoFallbackData({
     email: demoAccountEmails.executive,
@@ -238,6 +327,10 @@ test("demo fallback data is limited to seeded demo accounts", () => {
     role: UserRole.CENTER_DIRECTOR,
   }), true);
   assert.equal(canViewDemoFallbackData({
+    email: demoAccountEmails.teacher,
+    role: UserRole.TEACHER,
+  }), true);
+  assert.equal(canViewDemoFallbackData({
     email: "brenden@kidcityusa.com",
     role: UserRole.PLATFORM_OWNER,
   }), false);
@@ -246,6 +339,13 @@ test("demo fallback data is limited to seeded demo accounts", () => {
     role: UserRole.BRAND_ADMIN,
   }), false);
   assert.equal(canViewDemoFallbackData({ role: UserRole.REGIONAL_MANAGER }), false);
+});
+
+test("demo login aliases resolve to the Kid City demo users", () => {
+  assert.equal(resolveLoginIdentifier("demoschool"), demoAccountEmails.school);
+  assert.equal(resolveLoginIdentifier("demoschool@demo.thebeesuite.io"), demoAccountEmails.school);
+  assert.equal(resolveLoginIdentifier("demo teacher@kidcityusa.com"), demoAccountEmails.teacher);
+  assert.equal(resolveLoginIdentifier("demoteacher"), demoAccountEmails.teacher);
 });
 
 test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {

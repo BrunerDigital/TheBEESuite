@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Save, UserPen } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,11 @@ import {
   findFamilyDuplicateCandidates,
   findGuardianDuplicateCandidates,
 } from "@/lib/family-dedupe";
+import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
+import {
+  DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+  resolveDailyReportEmailRecipientGuardianIds,
+} from "@/lib/daily-report-email-settings";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -118,6 +123,7 @@ export type EditableFamilyRecord = {
   address?: string | null;
   notes?: string | null;
   custodyNotes: string | null;
+  customFields?: unknown;
   guardians: GuardianRecord[];
   children: ChildRecord[];
   pickups: AuthorizedPickupRecord[];
@@ -134,9 +140,9 @@ export type EditableFamilyRecord = {
 type Props = {
   families: EditableFamilyRecord[];
   centers: CenterOption[];
+  ageGroups?: string[];
 };
 
-const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break", "withdrawn", "graduated", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
@@ -149,6 +155,14 @@ function toDateInput(value: Date | string | null | undefined) {
   return local.toISOString().slice(0, 10);
 }
 
+function dailyReportEmailRecipientIdsForFamily(family: EditableFamilyRecord | null) {
+  if (!family) return [];
+  return resolveDailyReportEmailRecipientGuardianIds({
+    customFields: family.customFields,
+    guardians: family.guardians,
+  });
+}
+
 function scheduleNotes(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const notes = (value as { notes?: unknown }).notes;
@@ -159,15 +173,28 @@ function formatDate(value: string | Date | null | undefined) {
   if (!value) return "Not set";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not set";
-  return date.toLocaleDateString();
+  return new Intl.DateTimeFormat("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function FamilyRecordEditor({ families, centers }: Props) {
+export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups }: Props) {
   const router = useRouter();
+  const availableAgeGroups = useMemo(
+    () => mergeAgeGroupOptions(
+      configuredAgeGroups,
+      families.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      centers.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
+    ),
+    [centers, configuredAgeGroups, families],
+  );
   const [selectedFamilyId, setSelectedFamilyId] = useState(families[0]?.id ?? "");
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) ?? families[0] ?? null,
@@ -180,9 +207,15 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [address, setAddress] = useState(selectedFamily?.address ?? "");
   const [familyNotes, setFamilyNotes] = useState(selectedFamily?.notes ?? "");
   const [custodyNotes, setCustodyNotes] = useState(selectedFamily?.custodyNotes ?? "");
+  const [dailyReportEmailRecipientGuardianIds, setDailyReportEmailRecipientGuardianIds] = useState<string[]>(
+    () => dailyReportEmailRecipientIdsForFamily(selectedFamily),
+  );
+  const [dailyReportEmailRecipientsTouched, setDailyReportEmailRecipientsTouched] = useState(false);
 
   const [selectedGuardianId, setSelectedGuardianId] = useState(selectedFamily?.guardians[0]?.id ?? "");
-  const selectedGuardian = selectedFamily?.guardians.find((guardian) => guardian.id === selectedGuardianId) ?? selectedFamily?.guardians[0] ?? null;
+  const selectedGuardian = selectedGuardianId
+    ? selectedFamily?.guardians.find((guardian) => guardian.id === selectedGuardianId) ?? null
+    : null;
   const [guardianName, setGuardianName] = useState(selectedGuardian?.fullName ?? "");
   const [guardianEmail, setGuardianEmail] = useState(selectedGuardian?.email ?? "");
   const [guardianPhone, setGuardianPhone] = useState(selectedGuardian?.phone ?? "");
@@ -192,27 +225,30 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [isBillingContact, setIsBillingContact] = useState(Boolean(selectedGuardian?.isBillingContact));
 
   const [selectedPickupId, setSelectedPickupId] = useState(selectedFamily?.pickups[0]?.id ?? "");
-  const selectedPickup = selectedFamily?.pickups.find((pickup) => pickup.id === selectedPickupId) ?? selectedFamily?.pickups[0] ?? null;
+  const selectedPickup = selectedPickupId
+    ? selectedFamily?.pickups.find((pickup) => pickup.id === selectedPickupId) ?? null
+    : null;
   const [pickupName, setPickupName] = useState(selectedPickup?.fullName ?? "");
   const [pickupPhone, setPickupPhone] = useState(selectedPickup?.phone ?? "");
   const [pickupRelation, setPickupRelation] = useState(selectedPickup?.relation ?? "");
   const [pickupVerificationNotes, setPickupVerificationNotes] = useState(selectedPickup?.verificationNotes ?? "");
 
   const [selectedEmergencyContactId, setSelectedEmergencyContactId] = useState(selectedFamily?.emergencyContacts[0]?.id ?? "");
-  const selectedEmergencyContact =
-    selectedFamily?.emergencyContacts.find((contact) => contact.id === selectedEmergencyContactId) ??
-    selectedFamily?.emergencyContacts[0] ??
-    null;
+  const selectedEmergencyContact = selectedEmergencyContactId
+    ? selectedFamily?.emergencyContacts.find((contact) => contact.id === selectedEmergencyContactId) ?? null
+    : null;
   const [emergencyContactName, setEmergencyContactName] = useState(selectedEmergencyContact?.fullName ?? "");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(selectedEmergencyContact?.phone ?? "");
   const [emergencyContactRelation, setEmergencyContactRelation] = useState(selectedEmergencyContact?.relation ?? "");
 
   const [selectedChildId, setSelectedChildId] = useState(selectedFamily?.children[0]?.id ?? "");
-  const selectedChild = selectedFamily?.children.find((child) => child.id === selectedChildId) ?? selectedFamily?.children[0] ?? null;
+  const selectedChild = selectedChildId
+    ? selectedFamily?.children.find((child) => child.id === selectedChildId) ?? null
+    : null;
   const [childName, setChildName] = useState(selectedChild?.fullName ?? "");
   const [preferredName, setPreferredName] = useState(selectedChild?.preferredName ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(toDateInput(selectedChild?.dateOfBirth));
-  const [ageGroup, setAgeGroup] = useState(selectedChild?.ageGroup ?? "Preschool");
+  const [ageGroup, setAgeGroup] = useState(selectedChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [enrollmentStatus, setEnrollmentStatus] = useState(selectedChild?.enrollmentStatus ?? "enrolled");
   const [startDate, setStartDate] = useState(toDateInput(selectedChild?.startDate));
   const [classroomId, setClassroomId] = useState(selectedChild?.classroomId ?? "none");
@@ -225,24 +261,28 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(selectedChild?.fieldTripPermission));
 
   const [selectedAllergyId, setSelectedAllergyId] = useState(selectedChild?.allergies[0]?.id ?? "");
-  const selectedAllergy = selectedChild?.allergies.find((allergy) => allergy.id === selectedAllergyId) ?? selectedChild?.allergies[0] ?? null;
+  const selectedAllergy = selectedAllergyId
+    ? selectedChild?.allergies.find((allergy) => allergy.id === selectedAllergyId) ?? null
+    : null;
   const [allergen, setAllergen] = useState(selectedAllergy?.allergen ?? "");
   const [allergySeverity, setAllergySeverity] = useState(selectedAllergy?.severity ?? "");
   const [allergyActionPlan, setAllergyActionPlan] = useState(selectedAllergy?.actionPlan ?? "");
 
   const [selectedMedicalNoteId, setSelectedMedicalNoteId] = useState(selectedChild?.medicalNotes[0]?.id ?? "");
-  const selectedMedicalNote =
-    selectedChild?.medicalNotes.find((note) => note.id === selectedMedicalNoteId) ?? selectedChild?.medicalNotes[0] ?? null;
+  const selectedMedicalNote = selectedMedicalNoteId
+    ? selectedChild?.medicalNotes.find((note) => note.id === selectedMedicalNoteId) ?? null
+    : null;
   const [medicalCategory, setMedicalCategory] = useState(selectedMedicalNote?.category ?? "");
   const [medicalNote, setMedicalNote] = useState(selectedMedicalNote?.note ?? "");
   const [medicalRestricted, setMedicalRestricted] = useState(selectedMedicalNote?.restricted ?? true);
 
   const firstDocument = selectedChild?.documents[0] ?? selectedFamily?.documents[0] ?? null;
   const [selectedDocumentId, setSelectedDocumentId] = useState(firstDocument?.id ?? "");
-  const selectedDocument =
-    selectedChild?.documents.find((document) => document.id === selectedDocumentId) ??
-    selectedFamily?.documents.find((document) => document.id === selectedDocumentId) ??
-    firstDocument;
+  const selectedDocument = selectedDocumentId
+    ? selectedChild?.documents.find((document) => document.id === selectedDocumentId) ??
+      selectedFamily?.documents.find((document) => document.id === selectedDocumentId) ??
+      null
+    : null;
   const [documentName, setDocumentName] = useState(selectedDocument?.name ?? "");
   const [documentType, setDocumentType] = useState(selectedDocument?.type ?? "");
   const [documentStatus, setDocumentStatus] = useState(selectedDocument?.status ?? "REQUESTED");
@@ -260,6 +300,11 @@ export function FamilyRecordEditor({ families, centers }: Props) {
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
+  const effectiveDailyReportEmailRecipientGuardianIds = dailyReportEmailRecipientsTouched
+    ? dailyReportEmailRecipientGuardianIds
+    : dailyReportEmailRecipientIdsForFamily(selectedFamily);
+  const dailyReportEmailGuardianIds = new Set(effectiveDailyReportEmailRecipientGuardianIds);
+  const dailyReportEmailGuardians = selectedFamily?.guardians.filter((guardian) => guardian.email?.trim()) ?? [];
   const childDuplicateRecords = useMemo(
     () => families.flatMap((family) =>
       family.children.map((child) => ({
@@ -306,6 +351,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
   const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
   const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const documentRecordCount =
+    (selectedFamily?.documents.length ?? 0) +
+    (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -363,7 +411,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setChildName(child?.fullName ?? "");
     setPreferredName(child?.preferredName ?? "");
     setDateOfBirth(toDateInput(child?.dateOfBirth));
-    setAgeGroup(child?.ageGroup ?? "Preschool");
+    setAgeGroup(child?.ageGroup ?? availableAgeGroups[0] ?? defaultAgeGroupOptions[0]);
     setEnrollmentStatus(child?.enrollmentStatus ?? "enrolled");
     setStartDate(toDateInput(child?.startDate));
     setClassroomId(child?.classroomId ?? "none");
@@ -389,12 +437,23 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setAddress(family?.address ?? "");
     setFamilyNotes(family?.notes ?? "");
     setCustodyNotes(family?.custodyNotes ?? "");
+    setDailyReportEmailRecipientGuardianIds(dailyReportEmailRecipientIdsForFamily(family));
+    setDailyReportEmailRecipientsTouched(false);
     loadGuardian(family?.guardians[0] ?? null);
     loadPickup(family?.pickups[0] ?? null);
     loadEmergencyContact(family?.emergencyContacts[0] ?? null);
     loadChild(family?.children[0] ?? null);
     loadDocument(family?.children[0]?.documents[0] ?? family?.documents[0] ?? null, family?.children[0] ?? null);
     setDuplicateFamilyId("");
+  }
+
+  function toggleDailyReportEmailRecipient(guardianId: string, checked: boolean) {
+    setDailyReportEmailRecipientsTouched(true);
+    setDailyReportEmailRecipientGuardianIds((current) => {
+      const base = dailyReportEmailRecipientsTouched ? current : dailyReportEmailRecipientIdsForFamily(selectedFamily);
+      if (checked) return Array.from(new Set([...base, guardianId]));
+      return base.filter((id) => id !== guardianId);
+    });
   }
 
   function loadGuardianById(guardianId: string) {
@@ -441,6 +500,150 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      router.refresh();
+    });
+  }
+
+  function removeGuardian() {
+    if (!selectedGuardian) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedGuardian.fullName} from ${selectedFamily?.name ?? "this family"}? Their kiosk PIN, portal link to this family, and parent contact row will be removed. Historical check-in/out records will stay on file.`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "guardian", id: selectedGuardian.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Parent/guardian could not be removed.");
+        return;
+      }
+      loadGuardian(null);
+      setStatusMessage("Parent/guardian removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removePickup() {
+    if (!selectedPickup) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedPickup.fullName} from ${selectedFamily?.name ?? "this family"} as an authorized pickup?`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "authorizedPickup", id: selectedPickup.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Authorized pickup could not be removed.");
+        return;
+      }
+      loadPickup(null);
+      setStatusMessage("Authorized pickup removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removeEmergencyContact() {
+    if (!selectedEmergencyContact) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedEmergencyContact.fullName} from ${selectedFamily?.name ?? "this family"} as an emergency contact?`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "emergencyContact", id: selectedEmergencyContact.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Emergency contact could not be removed.");
+        return;
+      }
+      loadEmergencyContact(null);
+      setStatusMessage("Emergency contact removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removeAllergy() {
+    if (!selectedAllergy) return;
+    const confirmed = window.confirm(`Remove the ${selectedAllergy.allergen} allergy record from ${selectedChild?.fullName ?? "this child"}?`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "allergy", id: selectedAllergy.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Allergy record could not be removed.");
+        return;
+      }
+      loadAllergy(null);
+      setStatusMessage("Allergy record removed from the child profile.");
+      router.refresh();
+    });
+  }
+
+  function removeMedicalNote() {
+    if (!selectedMedicalNote) return;
+    const confirmed = window.confirm(`Remove this ${selectedMedicalNote.category || "medical"} note from ${selectedChild?.fullName ?? "this child"}?`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "medicalNote", id: selectedMedicalNote.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Medical note could not be removed.");
+        return;
+      }
+      loadMedicalNote(null);
+      setStatusMessage("Medical note removed from the child profile.");
+      router.refresh();
+    });
+  }
+
+  function removeDocument() {
+    if (!selectedDocument) return;
+    const confirmed = window.confirm(`Remove the ${selectedDocument.name} document request? Uploaded files and request history for this row will be removed.`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "document", id: selectedDocument.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Document request could not be removed.");
+        return;
+      }
+      loadDocument(null);
+      setStatusMessage("Document request removed.");
       router.refresh();
     });
   }
@@ -659,6 +862,38 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               <Textarea value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
             </div>
           </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>
+                <Mail data-icon="inline-start" />
+                Daily report email recipients
+              </Label>
+              <Badge variant="outline">
+                {effectiveDailyReportEmailRecipientGuardianIds.length} selected
+              </Badge>
+            </div>
+            {dailyReportEmailGuardians.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {dailyReportEmailGuardians.map((guardian) => (
+                  <label key={guardian.id} className="flex min-h-12 items-center gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={dailyReportEmailGuardianIds.has(guardian.id)}
+                      onChange={(event) => toggleDailyReportEmailRecipient(guardian.id, event.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{guardian.fullName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{guardian.email}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                Add guardian emails before enabling daily report delivery.
+              </p>
+            )}
+          </div>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -716,6 +951,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               address,
               notes: familyNotes,
               custodyNotes,
+              ...(dailyReportEmailRecipientsTouched
+                ? { [DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY]: effectiveDailyReportEmailRecipientGuardianIds }
+                : {}),
             }, "Family account")}
           >
             <Save data-icon="inline-start" />
@@ -766,20 +1004,25 @@ export function FamilyRecordEditor({ families, centers }: Props) {
         </section>
 
         <section className="space-y-3">
-          <div className="text-sm font-medium">Guardian contact</div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium">Parent / guardian contacts</div>
+            <Badge variant="outline">
+              {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
-              <Label>Guardian</Label>
+              <Label>Parent / guardian</Label>
               <div className="flex gap-2">
-              <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
-                <SelectTrigger><SelectValue placeholder="Choose guardian" /></SelectTrigger>
-                <SelectContent>
-                  {selectedFamily?.guardians.map((guardian) => (
-                    <SelectItem key={guardian.id} value={guardian.id}>{guardian.fullName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>New</Button>
+                <Select value={selectedGuardian?.id ?? ""} onValueChange={(value) => value && loadGuardianById(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose parent" /></SelectTrigger>
+                  <SelectContent>
+                    {selectedFamily?.guardians.map((guardian) => (
+                      <SelectItem key={guardian.id} value={guardian.id}>{guardian.fullName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="outline" onClick={() => loadGuardian(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -818,24 +1061,30 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               Billing contact
             </label>
           </div>
-          <Button
-            disabled={isPending || !selectedFamily || !guardianName.trim()}
-            onClick={() => postRecord({
-              entity: "guardian",
-              id: selectedGuardian?.id,
-              familyId: selectedFamily?.id,
-              name: guardianName,
-              email: guardianEmail,
-              phone: guardianPhone,
-              employer: guardianEmployer,
-              relation: guardianRelation,
-              preferredCommunication,
-              isBillingContact,
-            }, "Guardian contact")}
-          >
-            <Save data-icon="inline-start" />
-            Save guardian
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              disabled={isPending || !selectedFamily || !guardianName.trim()}
+              onClick={() => postRecord({
+                entity: "guardian",
+                id: selectedGuardian?.id,
+                familyId: selectedFamily?.id,
+                name: guardianName,
+                email: guardianEmail,
+                phone: guardianPhone,
+                employer: guardianEmployer,
+                relation: guardianRelation,
+                preferredCommunication,
+                isBillingContact,
+              }, "Parent/guardian contact")}
+            >
+              <Save data-icon="inline-start" />
+              {selectedGuardian ? "Save parent" : "Add parent"}
+            </Button>
+            <Button type="button" variant="outline" disabled={isPending || !selectedGuardian} onClick={removeGuardian}>
+              <Trash2 data-icon="inline-start" />
+              Remove parent
+            </Button>
+          </div>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -884,8 +1133,18 @@ export function FamilyRecordEditor({ families, centers }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Authorized pickup</div>
-                <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Authorized pickups</div>
+                  <p className="text-xs text-muted-foreground">
+                    Add every person allowed to pick up children in this family.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedFamily?.pickups.length ?? 0} pickup{selectedFamily?.pickups.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -930,15 +1189,34 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Authorized pickup")}
                 >
                   <Save data-icon="inline-start" />
-                  Save pickup
+                  {selectedPickup ? "Save pickup" : "Add pickup"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedPickup}
+                  onClick={removePickup}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove pickup
                 </Button>
               </div>
             </div>
 
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Emergency contact</div>
-                <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Emergency contacts</div>
+                  <p className="text-xs text-muted-foreground">
+                    Add every backup contact the school may call in an emergency.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedFamily?.emergencyContacts.length ?? 0} contact{selectedFamily?.emergencyContacts.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -978,7 +1256,16 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Emergency contact")}
                 >
                   <Save data-icon="inline-start" />
-                  Save contact
+                  {selectedEmergencyContact ? "Save contact" : "Add contact"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedEmergencyContact}
+                  onClick={removeEmergencyContact}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove contact
                 </Button>
               </div>
             </div>
@@ -999,7 +1286,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="outline" onClick={() => loadChild(null)}>New</Button>
+                <Button type="button" variant="outline" onClick={() => loadChild(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -1019,7 +1306,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ageGroups.map((group) => (
+                  {availableAgeGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1106,7 +1393,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             }, "Child profile")}
           >
             <Save data-icon="inline-start" />
-            Save child
+            {selectedChild ? "Save child" : "Add child"}
           </Button>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1153,8 +1440,16 @@ export function FamilyRecordEditor({ families, centers }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Allergy action plan</div>
-                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Allergy action plans</div>
+                  <p className="text-xs text-muted-foreground">Select an allergy to edit it, or add another plan for this child.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedChild?.allergies.length ?? 0} allerg{selectedChild?.allergies.length === 1 ? "y" : "ies"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -1194,15 +1489,32 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Allergy record")}
                 >
                   <Save data-icon="inline-start" />
-                  Save allergy
+                  {selectedAllergy ? "Save allergy" : "Add allergy"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedAllergy}
+                  onClick={removeAllergy}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove allergy
                 </Button>
               </div>
             </div>
 
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Restricted medical note</div>
-                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Medical notes</div>
+                  <p className="text-xs text-muted-foreground">Select a note to edit it, or add another note for this child.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedChild?.medicalNotes.length ?? 0} note{selectedChild?.medicalNotes.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -1240,7 +1552,16 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Medical note")}
                 >
                   <Save data-icon="inline-start" />
-                  Save medical note
+                  {selectedMedicalNote ? "Save medical note" : "Add medical note"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedMedicalNote}
+                  onClick={removeMedicalNote}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove medical note
                 </Button>
               </div>
             </div>
@@ -1254,7 +1575,12 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   Create or edit family/child document rows. Parents upload requested files from the portal; directors review them from Documents.
                 </p>
               </div>
-              <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>New</Button>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {documentRecordCount} document{documentRecordCount === 1 ? "" : "s"}
+                </Badge>
+                <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>Add</Button>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
@@ -1313,24 +1639,34 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                 Restricted document visibility
               </label>
             </div>
-            <Button
-              className="mt-3"
-              disabled={isPending || !selectedFamily || !documentName.trim()}
-              onClick={() => postRecord({
-                entity: "document",
-                id: selectedDocument?.id,
-                familyId: selectedFamily?.id,
-                childId: documentChildId === "family" ? undefined : documentChildId,
-                name: documentName,
-                type: documentType,
-                status: documentStatus,
-                expiresAt: documentExpiresAt,
-                restricted: documentRestricted,
-              }, "Document request")}
-            >
-              <Save data-icon="inline-start" />
-              Save document
-            </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                disabled={isPending || !selectedFamily || !documentName.trim()}
+                onClick={() => postRecord({
+                  entity: "document",
+                  id: selectedDocument?.id,
+                  familyId: selectedFamily?.id,
+                  childId: documentChildId === "family" ? undefined : documentChildId,
+                  name: documentName,
+                  type: documentType,
+                  status: documentStatus,
+                  expiresAt: documentExpiresAt,
+                  restricted: documentRestricted,
+                }, "Document request")}
+              >
+                <Save data-icon="inline-start" />
+                {selectedDocument ? "Save document" : "Add document"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending || !selectedDocument}
+                onClick={removeDocument}
+              >
+                <Trash2 data-icon="inline-start" />
+                Remove document
+              </Button>
+            </div>
           </div>
         </section>
       </CardContent>

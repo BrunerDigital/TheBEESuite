@@ -51,7 +51,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { canAccessAllCenters, canManageOperations, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -60,6 +60,12 @@ import {
   executiveParentMessageDemoRows,
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
+import {
+  currentlyEnrolledChildWhere,
+  currentlyEnrolledStatusValues,
+  isCurrentlyEnrolledChildRecord,
+  isCurrentlyEnrolledStatus,
+} from "@/lib/enrollment-status";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
@@ -79,6 +85,7 @@ import {
 import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
+import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import {
   normalizeBillingCadence,
   normalizeRecurringBillingDay,
@@ -95,6 +102,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
@@ -109,12 +117,24 @@ import {
   summarizeEnrollmentChecklist,
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
-import { signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
+import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 import { readStaffClockState, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
+
+async function signedProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createProfilePhotoSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
+}
 
 export function generateStaticParams() {
   return [
@@ -125,6 +145,23 @@ export function generateStaticParams() {
 
 function centerIdFilter(centerIds: string[]) {
   return centerIds.length ? { in: centerIds } : { in: ["__no_visible_centers__"] };
+}
+
+function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
+  return { enrollmentStatus: { notIn: currentlyEnrolledStatusValues() } };
+}
+
+function visibleChildCenterWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.ChildWhereInput {
+  return {
+    OR: [
+      { classroom: { is: { centerId: scopedCenterIds } } },
+      { family: { is: { centerId: scopedCenterIds } } },
+    ],
+  };
+}
+
+function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
+  return { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
 }
 
 async function getVisibleCenters(user: CurrentUser) {
@@ -402,8 +439,7 @@ async function getFteReports(centerIds: string[], take = 150) {
 }
 
 function activeEnrollmentStatus(value: string) {
-  const status = value.toLowerCase();
-  return !["inactive", "withdrawn", "graduated", "lost", "not enrolled", "unenrolled"].some((blocked) => status.includes(blocked));
+  return isCurrentlyEnrolledStatus(value);
 }
 
 function ageBucket(ageGroup: string) {
@@ -442,9 +478,14 @@ async function buildFtePrefills(
 
   const children = await prisma.child.findMany({
     where: {
-      OR: [
-        { family: { is: { centerId: centerIdFilter(centerIds) } } },
-        { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
+      AND: [
+        currentlyEnrolledChildWhere(),
+        {
+          OR: [
+            { family: { is: { centerId: centerIdFilter(centerIds) } } },
+            { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
+          ],
+        },
       ],
     },
     select: {
@@ -627,10 +668,10 @@ async function renderLivePage(
       procareImportCount,
       messageTemplateCount,
     ] = selectedCenter ? await Promise.all([
-      prisma.family.count({ where: { centerId: selectedCenter.id } }),
-      prisma.child.count({ where: { family: { centerId: selectedCenter.id } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id } } }),
-      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id }, userId: { not: null } } }),
+      prisma.family.count({ where: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } }),
+      prisma.child.count({ where: { ...currentlyEnrolledChildWhere(), family: { centerId: selectedCenter.id } } }),
+      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } } }),
+      prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
       prisma.staffProfile.count({ where: { centerId: selectedCenter.id } }),
       prisma.staffSchedule.count({ where: { centerId: selectedCenter.id } }),
       prisma.tuitionPlan.count(),
@@ -1120,13 +1161,13 @@ async function renderLivePage(
         },
       }),
       prisma.child.findMany({
-        where: { startDate: { gte: startOfDay, lte: sixtyDays }, family: { is: { centerId: scopedCenterIds } } },
+        where: { ...currentlyEnrolledChildWhere(), startDate: { gte: startOfDay, lte: sixtyDays }, family: { is: { centerId: scopedCenterIds } } },
         orderBy: { startDate: "asc" },
         take: 150,
         include: { family: { select: { name: true, centerId: true } }, classroom: { select: { name: true } } },
       }),
       prisma.child.findMany({
-        where: { family: { is: { centerId: scopedCenterIds } } },
+        where: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } },
         orderBy: { fullName: "asc" },
         take: 400,
         include: { family: { select: { name: true, centerId: true } }, classroom: { select: { name: true } } },
@@ -1352,43 +1393,62 @@ async function renderLivePage(
 
   if (slug === "family-detail") {
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
-    const [families, total, withCustodyNotes, children, guardians, intakeCenters, requestNotes] = await Promise.all([
+    const currentChildWhere = currentlyEnrolledChildWhere();
+    const graduatedChildWhere = notCurrentlyEnrolledChildWhere();
+    const currentFamilyWhere: Prisma.FamilyWhereInput = { ...familyWhere, children: { some: currentChildWhere } };
+    const graduatedFamilyWhere: Prisma.FamilyWhereInput = {
+      AND: [
+        familyWhere,
+        { children: { none: currentChildWhere } },
+        { children: { some: graduatedChildWhere } },
+      ],
+    };
+    const familyInclude = {
+      guardians: { orderBy: { fullName: "asc" } },
+      children: {
+        orderBy: { fullName: "asc" },
+        include: {
+          allergies: { orderBy: { allergen: "asc" } },
+          medicalNotes: { orderBy: { createdAt: "desc" } },
+          documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
+        },
+      },
+      pickups: { orderBy: { fullName: "asc" } },
+      emergencyContacts: { orderBy: { fullName: "asc" } },
+      billingAccount: {
+        select: {
+          id: true,
+          balanceCents: true,
+          autopayPlaceholder: true,
+          customFields: true,
+        },
+      },
+      documents: { where: { childId: null }, orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
+      _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
+    } satisfies Prisma.FamilyInclude;
+    const [families, allFamilies, total, withCustodyNotes, children, guardians, graduated, graduatedFamilies, intakeCenters, requestNotes] = await Promise.all([
+      prisma.family.findMany({
+        where: currentFamilyWhere,
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: familyInclude,
+      }),
       prisma.family.findMany({
         where: familyWhere,
         orderBy: { createdAt: "desc" },
-        take: 100,
-        include: {
-          guardians: { orderBy: { fullName: "asc" } },
-          children: {
-            orderBy: { fullName: "asc" },
-            include: {
-              allergies: { orderBy: { allergen: "asc" } },
-              medicalNotes: { orderBy: { createdAt: "desc" } },
-              documents: { orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
-            },
-          },
-          pickups: { orderBy: { fullName: "asc" } },
-          emergencyContacts: { orderBy: { fullName: "asc" } },
-          billingAccount: {
-            select: {
-              id: true,
-              balanceCents: true,
-              autopayPlaceholder: true,
-              customFields: true,
-            },
-          },
-          documents: { where: { childId: null }, orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
-          _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
-        },
+        take: 250,
+        include: familyInclude,
       }),
-      prisma.family.count({ where: familyWhere }),
-      prisma.family.count({ where: { ...familyWhere, custodyNotes: { not: null } } }),
-      prisma.child.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
-      prisma.guardian.count({ where: { family: { is: { centerId: scopedCenterIds } } } }),
+      prisma.family.count({ where: currentFamilyWhere }),
+      prisma.family.count({ where: { ...currentFamilyWhere, custodyNotes: { not: null } } }),
+      prisma.child.count({ where: { ...currentChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
+      prisma.guardian.count({ where: { family: { is: currentFamilyWhere } } }),
+      prisma.child.count({ where: { ...graduatedChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
+      prisma.family.count({ where: graduatedFamilyWhere }),
       getFamilyIntakeCenters(user),
       prisma.note.findMany({
         where: {
-          family: { is: familyWhere },
+          family: { is: currentFamilyWhere },
           restricted: true,
           body: { contains: " request:" },
         },
@@ -1415,69 +1475,81 @@ async function renderLivePage(
       }];
     });
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
-    const familiesForClient = families.map((family) => ({
-      ...family,
-      billingAccount: family.billingAccount
-        ? {
-            id: family.billingAccount.id,
-            balanceCents: family.billingAccount.balanceCents,
-            autopayPlaceholder: family.billingAccount.autopayPlaceholder,
-            paymentMethodManagement: paymentMethodManagementSummary({
+    function serializeFamilyForClient(family: (typeof allFamilies)[number], options: { currentChildrenOnly: boolean }) {
+      return {
+        ...family,
+        children: options.currentChildrenOnly
+          ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
+          : family.children,
+        billingAccount: family.billingAccount
+          ? {
+              id: family.billingAccount.id,
+              balanceCents: family.billingAccount.balanceCents,
               autopayPlaceholder: family.billingAccount.autopayPlaceholder,
-              customFields: family.billingAccount.customFields,
-            }),
-          }
-        : null,
-      guardians: family.guardians.map((guardian) => {
-        const credential = buildGuardianKioskCredential({
-          id: guardian.id,
-          fullName: guardian.fullName,
-          checkInPinSetAt: guardian.checkInPinSetAt,
-          checkInPinHash: guardian.checkInPinHash,
-          family: {
-            id: family.id,
-            name: family.name,
-            centerId: family.centerId,
-            centerName: family.centerId ? centerNameById.get(family.centerId) ?? null : null,
-          },
-        });
-        const safeGuardian = { ...guardian };
-        delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;
-        return {
-          ...safeGuardian,
-          qrToken: credential.qrToken,
-          kioskPath: credential.kioskPath,
-          centerName: credential.centerName,
-        };
-      }),
-    }));
+              paymentMethodManagement: paymentMethodManagementSummary({
+                autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+                customFields: family.billingAccount.customFields,
+              }),
+            }
+          : null,
+        guardians: family.guardians.map((guardian) => {
+          const credential = buildGuardianKioskCredential({
+            id: guardian.id,
+            fullName: guardian.fullName,
+            checkInPinSetAt: guardian.checkInPinSetAt,
+            checkInPinHash: guardian.checkInPinHash,
+            family: {
+              id: family.id,
+              name: family.name,
+              centerId: family.centerId,
+              centerName: family.centerId ? centerNameById.get(family.centerId) ?? null : null,
+            },
+          });
+          const safeGuardian = { ...guardian };
+          delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;
+          return {
+            ...safeGuardian,
+            qrToken: credential.qrToken,
+            kioskPath: credential.kioskPath,
+            centerName: credential.centerName,
+          };
+        }),
+      };
+    }
+    const familiesForClient = families.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: true }));
+    const allFamiliesForClient = allFamilies.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: false }));
+    const familyAgeGroups = mergeAgeGroupOptions(
+      centers.map((center) => dashboardOptionsFromCustomFields(center.customFields).ageGroups),
+      allFamilies.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
+    );
 
     return (
       <FamilyProfilesPage
         data={{
           families: familiesForClient,
+          allFamilies: allFamiliesForClient,
           importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
           bulkImportEnabled: tenantWide || allCenters,
           intakeCenters,
+          ageGroups: familyAgeGroups,
           guardianChangeRequests,
-          stats: { total, withCustodyNotes, children, guardians },
+          stats: { total, withCustodyNotes, children, guardians, graduated, graduatedFamilies },
         }}
       />
     );
   }
 
   if (slug === "child-profile") {
-    const childWhere: Prisma.ChildWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { family: { is: { centerId: scopedCenterIds } } },
-          ],
-        };
-    const [children, total, enrolled, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
+    const childWhere: Prisma.ChildWhereInput = allCenters ? {} : visibleChildCenterWhere(scopedCenterIds);
+    const currentChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
+    const graduatedChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, notCurrentlyEnrolledChildWhere()] };
+    const currentChildRelationWhere: Prisma.ChildWhereInput = allCenters
+      ? currentlyEnrolledChildWhere()
+      : { AND: [visibleChildCenterWhere(scopedCenterIds), currentlyEnrolledChildWhere()] };
+    const [children, allChildren, total, graduated, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
-        where: childWhere,
+        where: currentChildWhere,
         orderBy: { fullName: "asc" },
         take: 150,
         include: {
@@ -1491,23 +1563,38 @@ async function renderLivePage(
           _count: { select: { allergies: true, medicalNotes: true, documents: true, incidents: true, dailyReports: true } },
         },
       }),
-      prisma.child.count({ where: childWhere }),
-      prisma.child.count({ where: { ...childWhere, enrollmentStatus: "enrolled" } }),
-      prisma.allergy.count({ where: { child: { family: { is: { centerId: scopedCenterIds } } } } }),
-      prisma.childMedicalNote.count({ where: { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } } }),
+      prisma.child.findMany({
+        where: childWhere,
+        orderBy: { fullName: "asc" },
+        take: 300,
+        include: {
+          family: { select: { name: true, centerId: true, custodyNotes: true } },
+          classroom: {
+            select: {
+              name: true,
+              center: { select: { name: true, crmLocationId: true } },
+            },
+          },
+          _count: { select: { allergies: true, medicalNotes: true, documents: true, incidents: true, dailyReports: true } },
+        },
+      }),
+      prisma.child.count({ where: currentChildWhere }),
+      prisma.child.count({ where: graduatedChildWhere }),
+      prisma.allergy.count({ where: { child: currentChildRelationWhere } }),
+      prisma.childMedicalNote.count({ where: { restricted: true, child: currentChildRelationWhere } }),
       getFamilyIntakeCenters(user),
     ]);
 
-    return <ChildProfilesPage data={{ children, intakeCenters, stats: { total, enrolled, allergies, restrictedMedicalNotes } }} />;
+    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, graduated, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
-        ? { guardians: { some: { userId: user.id } } }
+        ? { guardians: { some: { userId: user.id } }, children: { some: currentlyEnrolledChildWhere() } }
         : allCenters
-          ? {}
-          : { centerId: scopedCenterIds },
+          ? { children: { some: currentlyEnrolledChildWhere() } }
+          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
       orderBy: { createdAt: "desc" },
       include: {
         guardians: {
@@ -1525,6 +1612,7 @@ async function renderLivePage(
           },
         },
           children: {
+            where: currentlyEnrolledChildWhere(),
             select: {
               id: true,
               fullName: true,
@@ -1794,13 +1882,14 @@ async function renderLivePage(
         })
       : null;
     const serviceDayStart = startOfServiceDay(today, readCenterTimeZone(teacherCenter?.customFields));
-    const childWhereForTeacher: Prisma.ChildWhereInput = allCenters
+    const teacherChildScopeWhere: Prisma.ChildWhereInput = allCenters
       ? {}
       : staffProfile?.classroomId
         ? { classroomId: staffProfile.classroomId }
         : staffProfile?.centerId
           ? { classroom: { is: { centerId: staffProfile.centerId } } }
           : { classroom: { is: { centerId: scopedCenterIds } } };
+    const childWhereForTeacher: Prisma.ChildWhereInput = { AND: [teacherChildScopeWhere, currentlyEnrolledChildWhere()] };
     const classroomWhereForTeacher: Prisma.ClassroomWhereInput = allCenters
       ? {}
       : staffProfile?.classroomId
@@ -1817,6 +1906,7 @@ async function renderLivePage(
         fullName: true,
         ageGroup: true,
         enrollmentStatus: true,
+        photoVideoPermission: true,
         classroom: { select: { id: true, name: true } },
         family: { select: { custodyNotes: true } },
       },
@@ -1945,11 +2035,11 @@ async function renderLivePage(
       : null;
     const familyScopeWhere: Prisma.FamilyWhereInput = teacherMessageScope
       ? teacherStaffProfile?.classroomId
-        ? { children: { some: { classroomId: teacherStaffProfile.classroomId } } }
+        ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
       : allCenters
-        ? {}
-        : { centerId: scopedCenterIds };
+        ? { children: { some: currentlyEnrolledChildWhere() } }
+        : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } };
     const messageWhere: Prisma.MessageWhereInput = teacherMessageScope
       ? { family: { is: familyScopeWhere } }
       : allCenters
@@ -2000,6 +2090,7 @@ async function renderLivePage(
             },
           },
           children: {
+            where: currentlyEnrolledChildWhere(),
             select: {
               classroomId: true,
               enrollmentStatus: true,
@@ -2339,7 +2430,10 @@ async function renderLivePage(
     const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
       ? {}
       : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const workbenchFamilyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
+    const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
+      centerId: scopedCenterIds,
+      children: { some: currentlyEnrolledChildWhere() },
+    };
     const [invoices, ledgerEntries, total, open, paid, openRows, ledgerRollupRows, billingAccountRows, billingFamilies, billingProducts, tuitionPlans] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
@@ -2407,6 +2501,7 @@ async function renderLivePage(
           billingEmail: true,
           billingAccount: { select: { balanceCents: true } },
           children: {
+            where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
             select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true },
           },
@@ -2503,7 +2598,12 @@ async function renderLivePage(
                 tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               })),
             })),
-            centers: centers.map((center) => ({ id: center.id, name: center.name, crmLocationId: center.crmLocationId })),
+            centers: centers.map((center) => ({
+              id: center.id,
+              name: center.name,
+              crmLocationId: center.crmLocationId,
+              dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
+            })),
             products: billingProducts,
             tuitionPlans,
           },
@@ -2823,7 +2923,7 @@ async function renderLivePage(
         },
       }),
       prisma.family.findMany({
-        where: { centerId: scopedCenterIds },
+        where: { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
         orderBy: { name: "asc" },
         take: 200,
         select: {
@@ -2835,7 +2935,7 @@ async function renderLivePage(
             take: 2,
             select: { fullName: true, email: true },
           },
-          _count: { select: { children: true } },
+          _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
         },
       }),
     ]);
@@ -3254,12 +3354,73 @@ async function renderLivePage(
         orderBy: { role: "asc" },
       }),
     ]);
+    const visibleUserIds = users.map((visibleUser) => visibleUser.id);
+    const deviceSessionCutoff = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const deviceSessions = visibleUserIds.length
+      ? await prisma.deviceSession.findMany({
+          where: {
+            tenantId: user.tenantId,
+            userId: { in: visibleUserIds },
+            OR: [
+              { revokedAt: null },
+              { lastSeenAt: { gte: deviceSessionCutoff } },
+            ],
+          },
+          orderBy: { lastSeenAt: "desc" },
+          take: 300,
+          select: {
+            id: true,
+            label: true,
+            deviceType: true,
+            appMode: true,
+            userAgent: true,
+            ipAddress: true,
+            lastSeenAt: true,
+            revokedAt: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+              },
+            },
+            revokedBy: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        }).catch(() => [])
+      : [];
 
     return (
       <TeamPermissionsPage
         data={{
           users,
           roleCounts: roleCounts.map((role) => ({ role: role.role, count: role._count._all })),
+          deviceSessions: deviceSessions.map((session) => ({
+            id: session.id,
+            label: session.label,
+            deviceType: session.deviceType,
+            appMode: session.appMode,
+            userAgent: session.userAgent,
+            ipAddress: session.ipAddress,
+            lastSeenAt: session.lastSeenAt.toISOString(),
+            revokedAt: session.revokedAt?.toISOString() ?? null,
+            createdAt: session.createdAt.toISOString(),
+            user: {
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              role: session.user.role,
+            },
+            revokedBy: session.revokedBy,
+          })),
+          currentDeviceSessionId: user.deviceSessionId,
+          canManageDeviceSessions: canManageOperations(user),
         }}
       />
     );
@@ -3668,7 +3829,14 @@ async function renderLivePage(
         take: 150,
         include: {
           center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
-          _count: { select: { children: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, dailyReports: true, incidents: true } },
+          _count: {
+            select: {
+              children: { where: currentlyEnrolledChildWhere() },
+              staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
+              dailyReports: true,
+              incidents: true,
+            },
+          },
         },
       }),
       prisma.staffProfile.findMany({
@@ -3687,6 +3855,10 @@ async function renderLivePage(
     ]);
 
     const demoMode = showDemoFallbackData && classrooms.length === 0;
+    const classroomAgeGroups = mergeAgeGroupOptions(
+      centers.map((center) => dashboardOptionsFromCustomFields(center.customFields).ageGroups),
+      classrooms.map((classroom) => classroom.ageGroup),
+    );
 
     return (
       <ClassroomDashboardPage
@@ -3713,6 +3885,7 @@ async function renderLivePage(
                 }),
               })),
           staff: demoMode ? [] : classroomStaff,
+          ageGroups: classroomAgeGroups,
           demoMode,
         }}
       />
@@ -3903,8 +4076,8 @@ async function renderLivePage(
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "rejected", createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.child.count({
         where: allCenters
-          ? { photoVideoPermission: false }
-          : { photoVideoPermission: false, family: { is: { centerId: scopedCenterIds } } },
+          ? { ...currentlyEnrolledChildWhere(), photoVideoPermission: false }
+          : { ...currentlyEnrolledChildWhere(), photoVideoPermission: false, family: { is: { centerId: scopedCenterIds } } },
       }),
     ]);
 
@@ -3971,16 +4144,16 @@ async function renderLivePage(
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } };
+    const staffWhere = visibleTeacherStaffWhere(scopedCenterIds);
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
-      ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
-      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };
+      ? { staff: { user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } }
+      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } };
     const staff = await prisma.staffProfile.findMany({
       where: staffWhere,
       orderBy: [{ title: "asc" }, { id: "asc" }],
       take: 200,
       include: {
-        user: { select: { name: true, email: true, role: true, isActive: true } },
+        user: { select: { name: true, email: true, role: true, isActive: true, customFields: true } },
         center: { select: { id: true, name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
         classroom: { select: { id: true, name: true } },
         certifications: { orderBy: [{ expiresAt: "asc" }, { name: "asc" }] },
@@ -3993,7 +4166,7 @@ async function renderLivePage(
       select: { id: true, centerId: true, name: true, ageGroup: true },
     });
     const schedules = await prisma.staffSchedule.findMany({
-      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay } },
+      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay }, staff: { user: { role: UserRole.TEACHER, isActive: true } } },
       orderBy: { startsAt: "asc" },
       take: 120,
       include: {
@@ -4006,13 +4179,24 @@ async function renderLivePage(
       const rightCenter = right.center.crmLocationId ?? right.center.name;
       return leftCenter.localeCompare(rightCenter) || left.user.name.localeCompare(right.user.name);
     });
-    const total = sortedStaff.length;
-    const activeUsers = sortedStaff.filter((profile) => profile.user.isActive).length;
+    const staffWithProfilePhotos = await Promise.all(
+      sortedStaff.map(async (profile) => ({
+        ...profile,
+        user: {
+          ...profile.user,
+          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields),
+        },
+      })),
+    );
+    const activeStaff = staffWithProfilePhotos.filter((profile) => profile.user.isActive);
+    const previousStaff = staffWithProfilePhotos.filter((profile) => !profile.user.isActive);
+    const total = activeStaff.length;
+    const activeUsers = activeStaff.length;
     const expiringCerts = await prisma.certification.count({ where: certificationWhere });
-    const backgroundPending = sortedStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
+    const backgroundPending = activeStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
     const staffChecklistItems = buildRequiredDocumentChecklist({
       families: [],
-      staff: sortedStaff,
+      staff: activeStaff,
       now: today,
     });
     const staffChecklist = {
@@ -4026,7 +4210,8 @@ async function renderLivePage(
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           classrooms,
           schedules,
-          staff: sortedStaff,
+          staff: activeStaff,
+          previousStaff,
           stats: { total, activeUsers, expiringCerts, backgroundPending, onboardingActionNeeded: staffChecklist.summary.actionNeeded },
           staffChecklist,
         }}
@@ -4075,11 +4260,12 @@ async function renderLivePage(
         where: { userId: user.id },
         select: { centerId: true, classroomId: true },
       });
-      const teacherChildWhere: Prisma.ChildWhereInput = staffProfile?.classroomId
+      const teacherChildScopeWhere: Prisma.ChildWhereInput = staffProfile?.classroomId
         ? { classroomId: staffProfile.classroomId }
         : staffProfile?.centerId
           ? { classroom: { is: { centerId: staffProfile.centerId } } }
           : { id: "__no_teacher_child_scope__" };
+      const teacherChildWhere: Prisma.ChildWhereInput = { AND: [teacherChildScopeWhere, currentlyEnrolledChildWhere()] };
       const teacherChildren = await prisma.child.findMany({
         where: teacherChildWhere,
         orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
@@ -4167,7 +4353,9 @@ async function renderLivePage(
       prisma.document.count({ where: { ...documentWhere, restricted: true } }),
       prisma.document.count({ where: { ...documentWhere, status: DocumentStatus.REQUESTED } }),
       prisma.family.findMany({
-        where: allCenters ? {} : { centerId: scopedCenterIds },
+        where: allCenters
+          ? { children: { some: currentlyEnrolledChildWhere() } }
+          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
         orderBy: { name: "asc" },
         take: 250,
         select: {
@@ -4175,11 +4363,13 @@ async function renderLivePage(
           name: true,
           billingEmail: true,
           guardians: { select: { fullName: true, email: true }, orderBy: { fullName: "asc" } },
-          children: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
+          children: { where: currentlyEnrolledChildWhere(), select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
         },
       }),
       prisma.family.findMany({
-        where: allCenters ? {} : { centerId: scopedCenterIds },
+        where: allCenters
+          ? { children: { some: currentlyEnrolledChildWhere() } }
+          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
         orderBy: { name: "asc" },
         take: 250,
         select: {
@@ -4188,6 +4378,7 @@ async function renderLivePage(
           centerId: true,
           documents: { select: { id: true, name: true, type: true, status: true, expiresAt: true } },
           children: {
+            where: currentlyEnrolledChildWhere(),
             select: {
               id: true,
               fullName: true,
@@ -4251,18 +4442,18 @@ async function renderLivePage(
           ],
         };
     const allergyWhere: Prisma.AllergyWhereInput = allCenters
-      ? {}
-      : { child: { family: { is: { centerId: scopedCenterIds } } } };
+      ? { child: currentlyEnrolledChildWhere() }
+      : { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
     const medicalWhere: Prisma.ChildMedicalNoteWhereInput = allCenters
-      ? { restricted: true }
-      : { restricted: true, child: { family: { is: { centerId: scopedCenterIds } } } };
+      ? { restricted: true, child: currentlyEnrolledChildWhere() }
+      : { restricted: true, child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
 
     const medicationWhere: Prisma.MedicationLogWhereInput = allCenters
-      ? {}
-      : { child: { family: { is: { centerId: scopedCenterIds } } } };
+      ? { child: currentlyEnrolledChildWhere() }
+      : { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
     const childWhere: Prisma.ChildWhereInput = allCenters
-      ? {}
-      : { family: { is: { centerId: scopedCenterIds } } };
+      ? currentlyEnrolledChildWhere()
+      : { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } };
     const emergencyDrillWhere: Prisma.EmergencyDrillLogWhereInput = allCenters
       ? {}
       : { centerId: scopedCenterIds };
@@ -4564,7 +4755,7 @@ export default async function SlugPage({
   if (!user) {
     redirect(`/login?next=/${encodeURIComponent(slug)}`);
   }
-  if (user.mustResetPassword) {
+  if (requiresPasswordResetGate(user)) {
     redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
   }
 

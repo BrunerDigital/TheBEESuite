@@ -751,7 +751,7 @@ export const modules: ModuleDefinition[] = [
     title: "Executive / Franchise Admin",
     eyebrow: "White-label enterprise control",
     description:
-      "Manage organizations, owner groups, locations, scoped users, temporary passwords, subscriptions, analytics, feature flags, audit logs, impersonation warnings, and support access.",
+      "Manage organizations, owner groups, locations, scoped users, passwords, subscriptions, analytics, feature flags, audit logs, impersonation warnings, and support access.",
     owner: "Platform owner, brand/franchise admin",
     metrics: ["1 brand", "Live centers", "10 roles", "Audit logged"],
     features: ["Location lifecycle", "Owner group containers", "User and password controls", "Impersonation audit warning"],

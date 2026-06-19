@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
 import { isDemoAccountEmail } from "@/lib/demo-accounts";
+import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
+import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -15,6 +17,7 @@ export type AppSession = {
   role: UserRole;
   exp: number;
   sessionVersion?: number;
+  deviceSessionId?: string;
 };
 
 export type CurrentUser = {
@@ -27,10 +30,16 @@ export type CurrentUser = {
   mustResetPassword: boolean;
   centerIds: string[];
   primaryCenterId: string | null;
+  deviceSessionId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
+  profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
 };
+
+export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
+  return user.mustResetPassword && user.role !== UserRole.TEACHER;
+}
 
 const tenantWideAccessRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
@@ -139,6 +148,7 @@ function verifySignature(data: string, signature: string) {
 
 export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "role"> & {
   sessionVersion?: number;
+  deviceSessionId?: string | null;
 }) {
   const payload: AppSession = {
     userId: user.id,
@@ -146,9 +156,22 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
     role: user.role,
     exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
     sessionVersion: readSessionVersion(user.sessionVersion),
+    deviceSessionId: user.deviceSessionId ?? undefined,
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
+}
+
+async function resolveCurrentUserProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createProfilePhotoSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
 }
 
 export function verifySessionToken(token?: string) {
@@ -178,6 +201,35 @@ export function sessionCookieOptions() {
 export async function getSession() {
   const cookieStore = await cookies();
   return verifySessionToken(cookieStore.get(SESSION_COOKIE)?.value);
+}
+
+async function sessionDeviceIsActive(session: AppSession, tenantId: string) {
+  const deviceSessionId = typeof session.deviceSessionId === "string" ? session.deviceSessionId : "";
+  if (!deviceSessionId) return true;
+
+  const deviceSession = await prisma.deviceSession.findFirst({
+    where: {
+      id: deviceSessionId,
+      userId: session.userId,
+      tenantId,
+    },
+    select: {
+      id: true,
+      revokedAt: true,
+      lastSeenAt: true,
+    },
+  });
+
+  if (!deviceSession || deviceSession.revokedAt) return false;
+
+  if (Date.now() - deviceSession.lastSeenAt.getTime() > 60_000) {
+    await prisma.deviceSession.updateMany({
+      where: { id: deviceSession.id, revokedAt: null },
+      data: { lastSeenAt: new Date() },
+    }).catch(() => undefined);
+  }
+
+  return true;
 }
 
 export async function getCurrentUser(options: { allowPasswordResetRequired?: boolean } = {}): Promise<CurrentUser | null> {
@@ -234,7 +286,8 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
 
   if (!user) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
-  if (user.mustResetPassword && !options.allowPasswordResetRequired) return null;
+  if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
+  if (requiresPasswordResetGate(user) && !options.allowPasswordResetRequired) return null;
 
   const brandName =
     user.organization?.brand?.settings?.brandName ??
@@ -280,8 +333,10 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     mustResetPassword: user.mustResetPassword,
     centerIds,
     primaryCenterId: centerIds[0] ?? null,
+    deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
+    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields),
     branding: resolveWorkspaceBranding({
       tenantName: user.tenant.name,
       tenantSlug: user.tenant.slug,

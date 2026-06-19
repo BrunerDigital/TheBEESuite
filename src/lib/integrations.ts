@@ -15,6 +15,13 @@ export type IntegrationSendResult = {
   error?: string;
 };
 
+export type EmailAttachment = {
+  filename: string;
+  content: string;
+  type?: string;
+  disposition?: "attachment" | "inline";
+};
+
 const STRIPE_API_VERSION = "2026-04-22.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || "2026-04-22.dahlia";
 
@@ -375,6 +382,7 @@ export async function sendEmail({
   categories,
   customArgs,
   tenantId,
+  attachments,
 }: {
   to: string[];
   subject: string;
@@ -384,6 +392,7 @@ export async function sendEmail({
   categories?: string[];
   customArgs?: Record<string, string | number | boolean | null | undefined>;
   tenantId?: string | null;
+  attachments?: EmailAttachment[];
 }): Promise<IntegrationSendResult> {
   const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "sendgrid");
   const apiKey = credentialEnvValue(tenantCredentials, "SENDGRID_API_KEY");
@@ -418,6 +427,14 @@ export async function sendEmail({
         subject,
         categories: categories?.slice(0, 10),
         content: [{ type: "text/plain", value: text }],
+        attachments: attachments?.length
+          ? attachments.map((attachment) => ({
+              content: attachment.content,
+              filename: attachment.filename,
+              type: attachment.type || "application/octet-stream",
+              disposition: attachment.disposition || "attachment",
+            }))
+          : undefined,
       }),
       signal: AbortSignal.timeout(10_000),
     });

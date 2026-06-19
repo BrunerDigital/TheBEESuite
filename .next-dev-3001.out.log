@@ -1,0 +1,26 @@
+
+> the-bee-suite@0.1.0 dev
+> next dev --port 3001
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.151:3001
+- Environments: .env.local
+✓ Ready in 657ms
+
+ GET /manifest.webmanifest 200 in 537ms (next.js: 503ms, application-code: 34ms)
+ GET /login?next=%2Fteacher-portal 200 in 2.3s (next.js: 1931ms, application-code: 344ms)
+ GET /app 200 in 2.4s (next.js: 1245ms, application-code: 1132ms)
+ GET /app 200 in 85ms (next.js: 4ms, application-code: 82ms)
+ GET /app 200 in 127ms (next.js: 6ms, application-code: 121ms)
+✓ Compiled in 248ms
+ GET /app 200 in 202ms (next.js: 74ms, application-code: 128ms)
+ GET /app 200 in 252ms (next.js: 6ms, application-code: 246ms)
+ GET /app 200 in 748ms (next.js: 9ms, application-code: 739ms)
+ GET /app 200 in 414ms (next.js: 5ms, application-code: 409ms)
+✓ Compiled in 176ms
+ GET /app 200 in 243ms (next.js: 102ms, application-code: 141ms)
+ GET /app 200 in 71ms (next.js: 5ms, application-code: 66ms)
+✓ Compiled in 328ms
+ GET /app 200 in 417ms (next.js: 177ms, application-code: 240ms)
+ GET /app 200 in 80ms (next.js: 27ms, application-code: 54ms)

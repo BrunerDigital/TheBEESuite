@@ -41,10 +41,14 @@ export function fteEscalationCopy(input: {
   reminder: string;
   escalationLabel?: string | null;
 }) {
-  const urgency = input.phase === "overdue" ? "Overdue" : "Due soon";
-  const subject = `FTE ${urgency}: ${input.centerName} (${input.weekLabel})`;
+  const subject = input.phase === "overdue"
+    ? `FTE still needed: ${input.centerName} (${input.weekLabel})`
+    : `Friendly FTE reminder: ${input.centerName} (${input.weekLabel})`;
+  const opening = input.phase === "overdue"
+    ? `Friday evening reminder: ${input.reminder}`
+    : `Friendly reminder: ${input.reminder}`;
   const body = [
-    input.reminder,
+    opening,
     "",
     `Missing FTE report: ${input.centerName}`,
     `Reporting week: ${input.weekLabel}`,
@@ -52,7 +56,7 @@ export function fteEscalationCopy(input: {
     "",
     "Please submit the weekly FTE report in The BEE Suite so operations has the current enrollment count.",
   ].filter((line, index, lines) => line || lines[index - 1]).join("\n");
-  const sms = `${subject}. Submit the weekly FTE report in The BEE Suite.`;
+  const sms = `${subject}. Please submit the weekly FTE report in The BEE Suite.`;
 
   return { subject, body, sms };
 }

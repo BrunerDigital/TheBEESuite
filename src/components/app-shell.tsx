@@ -5,23 +5,33 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell,
+  Camera,
   CheckCheck,
   ChevronDown,
+  ClipboardList,
   Command,
+  CreditCard,
+  FileText,
+  Home,
   Menu,
   Moon,
   LogOut,
+  MessageSquare,
   Search,
   ShieldCheck,
   Sparkles,
   Sun,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { LiveRefreshStatus } from "@/components/live-refresh-status";
+import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -48,6 +58,7 @@ type ShellUser = {
   role: string;
   accessScope?: string;
   centerIds?: string[];
+  profilePhotoUrl?: string | null;
   branding?: WorkspaceBranding;
 };
 
@@ -284,9 +295,93 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
   );
 }
 
+function isTeacherUser(currentUser?: ShellUser) {
+  return currentUser?.role === "TEACHER";
+}
+
+function isParentFacingUser(currentUser?: ShellUser) {
+  return currentUser?.role === "PARENT_GUARDIAN" || currentUser?.role === "AUTHORIZED_PICKUP";
+}
+
+function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
+        <UserAvatar name={currentUser.name} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="p-2">
+          <ProfilePhotoUploader name={currentUser.name} email={currentUser.email} profilePhotoUrl={currentUser.profilePhotoUrl} />
+        </div>
+        <div className="px-3 pb-2">
+          <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onLogout} variant="destructive" className="py-2">
+          <LogOut data-icon="inline-start" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
+  const pathname = usePathname();
+  const teacherItems = [
+    { label: "Home", href: "/dashboard", Icon: Home },
+    { label: "Classroom", href: "/teacher-portal", Icon: ClipboardList },
+    { label: "Messages", href: "/messages", Icon: MessageSquare },
+    { label: "Docs", href: "/documents", Icon: FileText },
+  ];
+  const parentItems = currentUser?.role === "AUTHORIZED_PICKUP"
+    ? [
+        { label: "Family", href: "/parent-portal", Icon: Home },
+        { label: "Alerts", href: "/notifications", Icon: Bell },
+        { label: "Help", href: "/help", Icon: ShieldCheck },
+      ]
+    : [
+        { label: "Family", href: "/parent-portal", Icon: Home },
+        { label: "Billing", href: "/parent-portal#billing", Icon: CreditCard },
+        { label: "Photos", href: "/parent-portal#photos", Icon: Camera },
+        { label: "Docs", href: "/parent-portal#documents", Icon: FileText },
+        { label: "Messages", href: "/parent-portal#messages", Icon: MessageSquare },
+      ];
+  const items = isTeacherUser(currentUser) ? teacherItems : isParentFacingUser(currentUser) ? parentItems : [];
+  if (!items.length) return null;
+
+  return (
+    <nav
+      aria-label="Role quick navigation"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl xl:hidden"
+    >
+      <div className={cn("mx-auto grid max-w-md gap-1", items.length === 3 ? "grid-cols-3" : items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+        {items.map(({ label, href, Icon }) => {
+          const hrefPath = href.split("#")[0];
+          const active = pathname === hrefPath;
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[0.68rem] font-medium text-muted-foreground transition",
+                active && "bg-primary/12 text-primary",
+              )}
+            >
+              <Icon className="size-4" />
+              <span className="truncate">{label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessModule(currentUser, item.slug))
@@ -337,16 +432,16 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
 
   return (
     <div className="min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl lg:block">
+      <aside className={cn("fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl", hasRoleBottomNav ? "xl:block" : "lg:block")}>
         <SidebarNav currentUser={currentUser} />
       </aside>
-      <div className="lg:pl-72">
+      <div className={cn(hasRoleBottomNav ? "xl:pl-72" : "lg:pl-72")}>
         <header className="sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
           <div className="flex min-h-16 items-center gap-3 px-4 sm:px-6">
             <Sheet>
               <SheetTrigger
                 render={
-                  <Button variant="outline" size="icon" className="lg:hidden" aria-label="Open navigation" />
+                  <Button variant="outline" size="icon" className={cn(hasRoleBottomNav ? "xl:hidden" : "lg:hidden")} aria-label="Open navigation" />
                 }
               >
                 <Menu />
@@ -375,6 +470,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <Sparkles data-icon="inline-start" />
                 AI suggestions require review
               </Badge>
+              {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
               <Dialog>
                 <Tooltip>
                   <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
@@ -409,15 +505,21 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <Sun className="hidden dark:block" />
               </Button>
               {currentUser ? (
-                <div className="hidden items-center gap-2 sm:flex">
-                  <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
-                    <div className="text-xs font-medium leading-none">{currentUser.name}</div>
-                    <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
+                <>
+                  <div className="sm:hidden">
+                    <AccountMenu currentUser={currentUser} onLogout={logout} />
                   </div>
-                  <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
-                    <LogOut />
-                  </Button>
-                </div>
+                  <div className="hidden items-center gap-2 sm:flex">
+                    <AccountMenu currentUser={currentUser} onLogout={logout} />
+                    <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
+                      <div className="text-xs font-medium leading-none">{currentUser.name}</div>
+                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
+                    </div>
+                    <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
+                      <LogOut />
+                    </Button>
+                  </div>
+                </>
               ) : (
                 <Button variant="secondary" className="hidden gap-2 sm:inline-flex" nativeButton={false} render={<Link href="/login" />}>
                   Live workspace
@@ -427,8 +529,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main className="min-h-[calc(100vh-4rem)] p-4 sm:p-6 xl:p-8">{children}</main>
+        <main className={cn("min-h-[calc(100vh-4rem)] p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
       </div>
+      <RoleBottomNav currentUser={currentUser} />
     </div>
   );
 }

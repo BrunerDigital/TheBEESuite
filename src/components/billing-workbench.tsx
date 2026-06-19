@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
 
 export type BillingWorkbenchFamily = {
   id: string;
@@ -41,6 +42,7 @@ export type BillingWorkbenchCenter = {
   id: string;
   name: string;
   crmLocationId: string | null;
+  dashboardOptions?: DashboardOptions;
 };
 
 export type BillingWorkbenchProduct = {
@@ -142,7 +144,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [planEditorId, setPlanEditorId] = useState(tuitionPlans[0]?.id ?? "new");
   const [planName, setPlanName] = useState(tuitionPlans[0]?.name ?? "");
-  const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? "Preschool");
+  const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [planCadence, setPlanCadence] = useState(normalizeCadence(tuitionPlans[0]?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
@@ -157,6 +159,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     ? familyId
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
+  const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
   const selectedPlan = tuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
@@ -172,11 +175,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
   const ageGroups = useMemo(
-    () => Array.from(new Set([
-      ...tuitionPlans.map((plan) => plan.ageGroup).filter(Boolean),
-      ...families.flatMap((family) => family.children.map((child) => child.ageGroup)).filter(Boolean),
-    ])).sort(),
-    [families, tuitionPlans],
+    () => mergeAgeGroupOptions(
+      selectedCenter?.dashboardOptions?.ageGroups,
+      tuitionPlans.map((plan) => plan.ageGroup),
+      families.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      planAgeGroup,
+    ),
+    [families, planAgeGroup, selectedCenter, tuitionPlans],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
 
@@ -378,7 +383,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     setPlanEditorId(value);
     if (value === "new") {
       setPlanName("");
-      setPlanAgeGroup("Preschool");
+      setPlanAgeGroup(ageGroups[0] ?? defaultAgeGroupOptions[0]);
       setPlanCadence("weekly");
       setPlanAmountDollars("");
       return;
@@ -386,7 +391,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     const plan = tuitionPlans.find((item) => item.id === value);
     if (!plan) return;
     setPlanName(plan.name);
-    setPlanAgeGroup(plan.ageGroup || "Preschool");
+    setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
     setPlanCadence(normalizeCadence(plan.cadence));
     setPlanAmountDollars(String(plan.amountCents / 100));
   }
@@ -517,7 +522,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
             </div>
             <div className="space-y-1">
               <Label>Age group</Label>
-              <Input value={planAgeGroup} onChange={(event) => setPlanAgeGroup(event.target.value)} placeholder="Infant" />
+              <Select value={planAgeGroup} onValueChange={(value) => value && setPlanAgeGroup(value)}>
+                <SelectTrigger><SelectValue placeholder="Choose age group" /></SelectTrigger>
+                <SelectContent>
+                  {ageGroups.map((group) => (
+                    <SelectItem key={group} value={group}>{group}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label>Amount</Label>

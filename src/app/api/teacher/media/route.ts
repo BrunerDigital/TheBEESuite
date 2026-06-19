@@ -8,6 +8,7 @@ import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { validateDailyReportMediaLink, validateMediaUploadInput } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { createChildMediaSignedUrl, uploadChildMediaBuffer } from "@/lib/supabase-storage";
+import { resolveTeacherMediaShareState } from "@/lib/teacher-media";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -119,7 +120,10 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
-  const canShareWithParents = sharedWithParents && child.photoVideoPermission;
+  const shareState = resolveTeacherMediaShareState({
+    requestedParentShare: sharedWithParents,
+    photoVideoPermission: child.photoVideoPermission,
+  });
   const media = await prisma.childMedia.create({
     data: {
       childId,
@@ -129,8 +133,8 @@ async function POSTHandler(request: NextRequest) {
       url: photoUrl,
       storageKey,
       caption: caption || null,
-      sharedWithParents: canShareWithParents,
-      status: canShareWithParents ? "shared" : sharedWithParents ? "permission_review" : "draft",
+      sharedWithParents: shareState.sharedWithParents,
+      status: shareState.status,
     },
     include: { child: { select: { fullName: true } } },
   });
@@ -165,7 +169,7 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       childId,
       requestedParentShare: sharedWithParents,
-      sharedWithParents: canShareWithParents,
+      sharedWithParents: shareState.sharedWithParents,
       photoVideoPermission: child.photoVideoPermission,
       storageProvider: storageKey ? "supabase" : "external_url",
       custodyWarning: hasCustodyWarning(child.family),
@@ -177,9 +181,7 @@ async function POSTHandler(request: NextRequest) {
     {
       ok: true,
       media: responseMedia,
-      warning: sharedWithParents && !child.photoVideoPermission
-        ? "Photo saved for director review. It is not visible to parents because photo/video permission is not enabled for this child."
-        : undefined,
+      warning: shareState.warning,
       custodyWarning,
     },
     { status: 201 },

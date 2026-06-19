@@ -348,6 +348,26 @@ async function upsertStaffProfile(input: {
   });
 }
 
+async function refreshDemoStaffReadiness(userId: string, centerId: string) {
+  const staff = await prisma.staffProfile.findUnique({ where: { userId } });
+  if (!staff) return;
+
+  await prisma.certification.deleteMany({ where: { staffId: staff.id } });
+  await prisma.certification.createMany({
+    data: [
+      { staffId: staff.id, name: "CPR / First Aid", status: "current", expiresAt: dateAt(150) },
+      { staffId: staff.id, name: "Child Development Training", status: "current", expiresAt: dateAt(310) },
+    ],
+  });
+  await prisma.staffSchedule.deleteMany({ where: { staffId: staff.id, centerId } });
+  await prisma.staffSchedule.createMany({
+    data: [
+      { staffId: staff.id, centerId, startsAt: dateAt(0, 7, 30), endsAt: dateAt(0, 15, 30), status: "scheduled" },
+      { staffId: staff.id, centerId, startsAt: dateAt(1, 8), endsAt: dateAt(1, 16), status: "scheduled" },
+    ],
+  });
+}
+
 async function upsertFamily(centerId: string, input: {
   externalId: string;
   name: string;
@@ -1069,10 +1089,18 @@ async function main() {
     name: "Demo Brand Executive",
     role: UserRole.BRAND_ADMIN,
   });
+  const demoTeacherUser = await upsertUser({
+    tenantId: tenant.id,
+    organizationId: organization.id,
+    email: demoAccountEmails.teacher,
+    name: "Demo Teacher",
+    role: UserRole.TEACHER,
+    mustResetPassword: false,
+  });
 
   await prisma.userAccessGrant.updateMany({
     where: {
-      userId: { in: [schoolUser.id, execUser.id] },
+      userId: { in: [schoolUser.id, execUser.id, demoTeacherUser.id] },
       tenantId: { not: tenant.id },
       permissions: { path: ["demoWorkspace"], equals: true },
     },
@@ -1094,6 +1122,13 @@ async function main() {
       role: execUser.role,
       source: DEMO_SOURCE,
     }),
+    upsertSupabaseAuthUserWithPassword({
+      email: demoAccountEmails.teacher,
+      name: demoTeacherUser.name,
+      password: demoPassword,
+      role: demoTeacherUser.role,
+      source: DEMO_SOURCE,
+    }),
   ]);
 
   await ensureAccessGrant({
@@ -1110,6 +1145,14 @@ async function main() {
     scopeType: "BRAND",
     brandId: brand.id,
   });
+  await ensureAccessGrant({
+    userId: demoTeacherUser.id,
+    tenantId: tenant.id,
+    role: UserRole.TEACHER,
+    scopeType: "CENTER",
+    organizationId: organization.id,
+    centerId: primaryCenter.id,
+  });
   await upsertStaffProfile({
     userId: schoolUser.id,
     centerId: primaryCenter.id,
@@ -1117,6 +1160,15 @@ async function main() {
     phone: "(843) 555-0101",
     externalId: "demo-school-director-profile",
   });
+  await upsertStaffProfile({
+    userId: demoTeacherUser.id,
+    centerId: primaryCenter.id,
+    classroomId: primaryClassrooms[3]?.id ?? primaryClassrooms[0]?.id,
+    title: "Demo Lead Teacher",
+    phone: "(843) 555-0119",
+    externalId: "demo-teacher-login-profile",
+  });
+  await refreshDemoStaffReadiness(demoTeacherUser.id, primaryCenter.id);
 
   const teacherInputs = [
     ["Avery Johnson", "Lead Infant Teacher", primaryClassrooms[0]?.id],
@@ -1126,7 +1178,7 @@ async function main() {
     ["Jordan Carter", "Afterschool Teacher", primaryClassrooms[4]?.id],
   ] as const;
   const teacherInitialPassword = getDefaultTeacherInitialPassword();
-  const teacherUsers = [];
+  const teacherUsers = [demoTeacherUser];
   for (let index = 0; index < teacherInputs.length; index += 1) {
     const [name, title, classroomId] = teacherInputs[index];
     const email = buildTeacherLoginEmail({ fullName: name });
@@ -1162,23 +1214,7 @@ async function main() {
       organizationId: organization.id,
       centerId: primaryCenter.id,
     });
-    const staff = await prisma.staffProfile.findUnique({ where: { userId: user.id } });
-    if (staff) {
-      await prisma.certification.deleteMany({ where: { staffId: staff.id } });
-      await prisma.certification.createMany({
-        data: [
-          { staffId: staff.id, name: "CPR / First Aid", status: "current", expiresAt: dateAt(150) },
-          { staffId: staff.id, name: "Child Development Training", status: "current", expiresAt: dateAt(310) },
-        ],
-      });
-      await prisma.staffSchedule.deleteMany({ where: { staffId: staff.id, centerId: primaryCenter.id } });
-      await prisma.staffSchedule.createMany({
-        data: [
-          { staffId: staff.id, centerId: primaryCenter.id, startsAt: dateAt(0, 7, 30), endsAt: dateAt(0, 15, 30), status: "scheduled" },
-          { staffId: staff.id, centerId: primaryCenter.id, startsAt: dateAt(1, 8), endsAt: dateAt(1, 16), status: "scheduled" },
-        ],
-      });
-    }
+    await refreshDemoStaffReadiness(user.id, primaryCenter.id);
   }
 
   type DemoFamilyInput = {
@@ -1508,7 +1544,7 @@ async function main() {
   });
 
   await prisma.notification.deleteMany({
-    where: { userId: { in: [schoolUser.id, execUser.id] }, title: { startsWith: "Demo" } },
+    where: { userId: { in: [schoolUser.id, execUser.id, demoTeacherUser.id] }, title: { startsWith: "Demo" } },
   });
   await prisma.notification.createMany({
     data: [
@@ -1533,6 +1569,13 @@ async function main() {
         type: "executive",
         priority: "normal",
       },
+      {
+        userId: demoTeacherUser.id,
+        title: "Demo classroom update",
+        body: "Pre-K daily reports, attendance, and parent photos are ready for review.",
+        type: "teacher",
+        priority: "normal",
+      },
     ],
   });
 
@@ -1552,6 +1595,9 @@ async function main() {
         licensedCapacity: primaryCenter.licensedCapacity,
         leads: leadNames.length,
         schoolLogin: "demoschool",
+        schoolEmail: demoAccountEmails.school,
+        teacherLogin: "demoteacher",
+        teacherEmail: demoAccountEmails.teacher,
         executiveLogin: "demoexec",
       },
     },
@@ -1563,6 +1609,9 @@ async function main() {
     brand: brand.name,
     centers: centers.map((center) => center.crmLocationId),
     schoolLogin: "demoschool",
+    schoolEmail: demoAccountEmails.school,
+    teacherLogin: "demoteacher",
+    teacherEmail: demoAccountEmails.teacher,
     executiveLogin: "demoexec",
   }, null, 2));
 }

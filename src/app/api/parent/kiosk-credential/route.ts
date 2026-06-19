@@ -3,6 +3,7 @@ import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { buildGuardianKioskCredential } from "@/lib/kiosk-credentials";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
+import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
@@ -120,6 +121,14 @@ async function POSTHandler(request: NextRequest) {
       source: "parent_portal",
     },
   });
+
+  await notifyOperationsRecordChange({
+    actor: user,
+    entity: "guardian",
+    mode: "updated",
+    resourceId: updated.id,
+    centerId: updated.family.centerId,
+  }).catch(() => 0);
 
   return NextResponse.json({
     ok: true,

@@ -11,6 +11,7 @@ import {
   GripVertical,
   Mail,
   MapPin,
+  Paperclip,
   Phone,
   Plus,
   Search,
@@ -20,6 +21,7 @@ import {
   TriangleAlert,
   Trash2,
   Wand2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { EnrollmentStage } from "@prisma/client";
@@ -103,6 +105,20 @@ type LeadTimelineItem = {
 type ScoreFilter = "all" | "high" | "medium" | "low";
 type CreatedRangeFilter = "all" | "7" | "30" | "90";
 
+type LeadEmailSuggestion = {
+  label: string;
+  subject: string;
+  body: string;
+};
+
+type EmailComposerAttachment = {
+  id: string;
+  filename: string;
+  type: string;
+  size: number;
+  content: string;
+};
+
 type CrmSavedView = {
   id: string;
   name: string;
@@ -132,6 +148,8 @@ const programOptions = [
 
 const crmSavedViewsStorageKey = "bee-suite.crm.savedViews.v1";
 const crmSavedViewsEventName = "bee-suite-crm-saved-views";
+const maxEmailAttachmentCount = 5;
+const maxEmailAttachmentBytes = 8 * 1024 * 1024;
 let crmSavedViewsRawSnapshot = "";
 let crmSavedViewsSnapshot: CrmSavedView[] = [];
 
@@ -192,6 +210,57 @@ function makeMrBeeDraft(lead?: CrmLead) {
   if (!lead) return "Choose a lead and Mr. Bee will draft a warm, human-reviewed follow-up.";
 
   return `Hi ${lead.familyName}, this is Kid City USA following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
+}
+
+function makeLeadEmailOptions(lead?: CrmLead): LeadEmailSuggestion[] {
+  if (!lead) return [];
+  const program = lead.programInterest ?? "childcare";
+  const childLine = lead.childName ? ` for ${lead.childName}` : "";
+  const centerName = lead.center.crmLocationId ?? lead.center.name;
+  const subject = `Kid City USA ${program} follow-up`;
+
+  return [
+    {
+      label: "Warm follow-up",
+      subject,
+      body: `Hi ${lead.familyName},\n\nThank you for your interest in ${program}${childLine} at ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.\n\nThank you,\nKid City USA`,
+    },
+    {
+      label: "Tour next step",
+      subject: `Tour availability for ${centerName}`,
+      body: `Hi ${lead.familyName},\n\nI wanted to follow up on your ${program} inquiry${childLine}. If you would like to tour ${centerName}, reply with a few times that work well and our team can help coordinate the visit.\n\nThank you,\nKid City USA`,
+    },
+    {
+      label: "Application help",
+      subject: `Enrollment next steps for ${centerName}`,
+      body: `Hi ${lead.familyName},\n\nThis is Kid City USA checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\nKid City USA`,
+    },
+  ];
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function fileToEmailAttachment(file: File): Promise<EmailComposerAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const content = result.includes(",") ? result.split(",").pop() ?? "" : result;
+      resolve({
+        id: `${file.name}-${file.size}-${file.lastModified}-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
+        filename: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size,
+        content,
+      });
+    };
+    reader.onerror = () => reject(new Error(`${file.name} could not be attached.`));
+    reader.readAsDataURL(file);
+  });
 }
 
 function getScoreFilterMatch(score: number, filter: ScoreFilter) {
@@ -403,6 +472,9 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [tourNotes, setTourNotes] = useState("");
   const [emailSubject, setEmailSubject] = useState("Kid City USA enrollment follow-up");
   const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0]));
+  const [emailPurposePrompt, setEmailPurposePrompt] = useState("");
+  const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(() => makeLeadEmailOptions(initialLeads[0]));
+  const [emailAttachments, setEmailAttachments] = useState<EmailComposerAttachment[]>([]);
   const [editForm, setEditForm] = useState({
     familyName: initialLeads[0]?.familyName ?? "",
     childName: initialLeads[0]?.childName ?? "",
@@ -495,6 +567,8 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     setSelectedLeadDetails(null);
     setEmailSubject(`Kid City USA ${lead.programInterest ?? "enrollment"} follow-up`);
     setEmailDraft(makeMrBeeDraft(lead));
+    setEmailSuggestions(makeLeadEmailOptions(lead));
+    setEmailAttachments([]);
     setEditForm({
       familyName: lead.familyName,
       childName: lead.childName ?? "",
@@ -625,6 +699,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
       setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
       setEmailDraft(makeMrBeeDraft(json.lead));
+      setEmailSuggestions(makeLeadEmailOptions(json.lead));
       showStatus("Lead details updated and audit logged.");
     });
   }
@@ -784,7 +859,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const response = await fetch("/api/ai/mr-bee", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId: selectedLead.id, purpose: "follow_up" }),
+        body: JSON.stringify({ leadId: selectedLead.id, purpose: "follow_up", contextPrompt: emailPurposePrompt }),
       });
 
       if (!response.ok) {
@@ -796,6 +871,69 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setEmailDraft(json.suggestion);
       showStatus("Mr. Bee draft refreshed. Human review is still required.");
     });
+  }
+
+  function generateEmailSuggestions() {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch("/api/ai/mr-bee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId: selectedLead.id,
+          purpose: "follow_up",
+          contextPrompt: emailPurposePrompt,
+          mode: "options",
+        }),
+      });
+
+      if (!response.ok) {
+        const json = await response.json().catch(() => null) as { error?: string } | null;
+        showError(json?.error || "Mr. Bee could not generate message options.");
+        return;
+      }
+
+      const json = (await response.json()) as { suggestions?: LeadEmailSuggestion[]; guardrailNote?: string };
+      const nextSuggestions = Array.isArray(json.suggestions) && json.suggestions.length
+        ? json.suggestions
+        : makeLeadEmailOptions(selectedLead);
+      setEmailSuggestions(nextSuggestions);
+      showStatus("Message options generated. Review one before sending.");
+    });
+  }
+
+  function applyEmailSuggestion(suggestion: LeadEmailSuggestion) {
+    setEmailSubject(suggestion.subject);
+    setEmailDraft(suggestion.body);
+    showStatus(`Loaded ${suggestion.label} into the reviewed email draft.`);
+  }
+
+  async function addEmailAttachments(files: FileList | null) {
+    if (!files?.length) return;
+    const nextFiles = Array.from(files);
+    if (emailAttachments.length + nextFiles.length > maxEmailAttachmentCount) {
+      showError(`Attach up to ${maxEmailAttachmentCount} files per email.`);
+      return;
+    }
+    const nextTotalBytes = emailAttachments.reduce((sum, attachment) => sum + attachment.size, 0) +
+      nextFiles.reduce((sum, file) => sum + file.size, 0);
+    if (nextTotalBytes > maxEmailAttachmentBytes) {
+      showError("Attachments must be 8 MB or less combined.");
+      return;
+    }
+
+    try {
+      const converted = await Promise.all(nextFiles.map(fileToEmailAttachment));
+      setEmailAttachments((current) => [...current, ...converted]);
+      showStatus(`${converted.length} attachment${converted.length === 1 ? "" : "s"} added.`);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : "Attachments could not be added.");
+    }
+  }
+
+  function removeEmailAttachment(attachmentId: string) {
+    setEmailAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   }
 
   async function copyDraft() {
@@ -811,7 +949,15 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const response = await fetch(`/api/leads/${selectedLead.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: emailSubject, message: emailDraft }),
+        body: JSON.stringify({
+          subject: emailSubject,
+          message: emailDraft,
+          attachments: emailAttachments.map((attachment) => ({
+            filename: attachment.filename,
+            type: attachment.type,
+            content: attachment.content,
+          })),
+        }),
       });
 
       if (!response.ok) {
@@ -824,6 +970,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setSelectedLeadDetails((current) =>
         current ? { ...current, notes: [json.note, ...current.notes] } : current,
       );
+      setEmailAttachments([]);
       showStatus("Reviewed email sent and logged on the lead.");
     });
   }
@@ -890,13 +1037,87 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
               value={emailSubject}
               onChange={(event) => setEmailSubject(event.target.value)}
               aria-label="Reviewed email subject"
+              placeholder="Subject"
             />
+            <Textarea
+              className="mt-3 min-h-20"
+              value={emailPurposePrompt}
+              onChange={(event) => setEmailPurposePrompt(event.target.value)}
+              aria-label="Email purpose for Mr. Bee"
+              placeholder="Tell Mr. Bee the purpose of this email, such as invite them to tour, request missing paperwork, explain availability, or follow up after a call."
+            />
+            <div className="mt-3 grid gap-2">
+              <Button variant="outline" disabled={!selectedLead || isPending} onClick={generateEmailSuggestions}>
+                <Sparkles data-icon="inline-start" />
+                Generate options
+              </Button>
+              {emailSuggestions.length ? (
+                <div className="grid gap-2">
+                  {emailSuggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.label}-${suggestion.subject}`}
+                      type="button"
+                      className="rounded-lg border bg-background/65 p-3 text-left text-xs transition hover:border-primary/50 hover:bg-background"
+                      onClick={() => applyEmailSuggestion(suggestion)}
+                    >
+                      <span className="font-medium text-foreground">{suggestion.label}</span>
+                      <span className="mt-1 block truncate text-muted-foreground">{suggestion.subject}</span>
+                      <span className="mt-2 line-clamp-3 whitespace-pre-line text-muted-foreground">{suggestion.body}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <Textarea
               className="mt-3 min-h-32"
               value={emailDraft}
               onChange={(event) => setEmailDraft(event.target.value)}
               aria-label="Mr. Bee reviewed draft"
             />
+            <div className="mt-3 rounded-lg border bg-background/55 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-medium">Attachments</div>
+                  <div className="text-xs text-muted-foreground">
+                    {emailAttachments.length
+                      ? `${emailAttachments.length} file${emailAttachments.length === 1 ? "" : "s"} attached`
+                      : "Optional files for this email"}
+                  </div>
+                </div>
+                <Label
+                  htmlFor="lead-email-attachments"
+                  className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border bg-background px-2.5 text-sm font-medium transition hover:bg-muted"
+                >
+                  <Paperclip className="size-4" />
+                  Add files
+                </Label>
+                <Input
+                  id="lead-email-attachments"
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  onChange={(event) => {
+                    void addEmailAttachments(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+              {emailAttachments.length ? (
+                <div className="mt-3 grid gap-2">
+                  {emailAttachments.map((attachment) => (
+                    <div key={attachment.id} className="flex items-center justify-between gap-2 rounded-md border bg-card px-2 py-1.5 text-xs">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{attachment.filename}</div>
+                        <div className="text-muted-foreground">{formatBytes(attachment.size)}</div>
+                      </div>
+                      <Button variant="ghost" size="icon-xs" onClick={() => removeEmailAttachment(attachment.id)} title="Remove attachment">
+                        <X />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
               <Button variant="outline" disabled={!selectedLead || isPending} onClick={refreshMrBeeDraft}>
                 <Wand2 data-icon="inline-start" />

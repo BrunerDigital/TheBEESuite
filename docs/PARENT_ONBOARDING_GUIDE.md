@@ -10,8 +10,8 @@ Use this guide when a school is ready to invite families into the parent portal.
 4. Set or confirm the guardian's 4 digit kiosk PIN if lobby check-in is active.
 5. In `Family Profiles`, open `Parent Portal Access`.
 6. Select `Invite Parent` for the guardian.
-7. Leave the temporary password field blank to send a password setup/reset email, or enter a temporary password if the school wants to hand it to the parent directly.
-8. Ask the parent to sign in at `/parent-portal`.
+7. The guardian email becomes the parent's login email. The parent uses the password setup email to choose their own password.
+8. Ask the parent to sign in at `/parent-portal`. Their linked child records and classroom connections are already available through the guardian-to-family link.
 
 ## What Parents Can See
 

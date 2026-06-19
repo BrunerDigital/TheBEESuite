@@ -27,6 +27,13 @@ const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Ag
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
 
+function suggestedFamilyName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const surname = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+  return `${surname} Family`;
+}
+
 type IntakeResponse = {
   error?: string;
   errors?: Record<string, string>;
@@ -72,6 +79,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
 
   const selectedCenter = useMemo(() => centers.find((center) => center.id === centerId), [centers, centerId]);
   const classroomOptions = selectedCenter?.classrooms ?? [];
+  const familyNameHint = familyName.trim() ? "" : suggestedFamilyName(guardianName);
 
   function resetStudentFields() {
     setChildName("");
@@ -134,7 +142,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
         setErrorMessage(json?.error || "Family and student could not be saved.");
         return;
       }
-      setStatusMessage(`${json?.family?.name ?? "Family"} saved with ${json?.guardian?.fullName ?? "guardian"} and ${json?.child?.fullName ?? "student"}.`);
+      setStatusMessage(`${json?.family?.name ?? "Family"} saved with one parent/guardian record for ${json?.guardian?.fullName ?? "the parent"} and ${json?.child?.fullName ?? "the child"}.`);
       setStartingBalanceDollars("");
       setCheckInPin("");
       resetStudentFields();
@@ -151,9 +159,9 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Add Family + Student</CardTitle>
+            <CardTitle>Add Family, Parent + Child</CardTitle>
             <CardDescription>
-              Creates the family profile, primary parent/guardian, child profile, billing account, and optional kiosk PIN in one save.
+              Enter the primary parent once here. This creates the family profile, parent/guardian record, child profile, billing account, and kiosk PIN in one save.
             </CardDescription>
           </div>
           <Badge variant="outline">Director workflow</Badge>
@@ -191,8 +199,11 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
               {errorFor("centerId")}
             </div>
             <div className="space-y-1">
-              <Label>Family name</Label>
-              <Input value={familyName} onChange={(event) => setFamilyName(event.target.value)} placeholder="Johnson Family" />
+              <Label>Household / family label</Label>
+              <Input value={familyName} onChange={(event) => setFamilyName(event.target.value)} placeholder={familyNameHint || "Optional"} />
+              <p className="text-xs text-muted-foreground">
+                Optional. Leave blank and the system will use {familyNameHint || "the parent/guardian last name"}.
+              </p>
               {errorFor("familyName")}
             </div>
             <div className="space-y-1">
@@ -214,7 +225,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
           <div className="text-sm font-medium">Primary parent / guardian</div>
           <div className={`grid gap-3 ${compact ? "md:grid-cols-2" : "md:grid-cols-3"}`}>
             <div className="space-y-1">
-              <Label>Guardian name</Label>
+              <Label>Parent/guardian name</Label>
               <Input value={guardianName} onChange={(event) => setGuardianName(event.target.value)} placeholder="Avery Johnson" />
               {errorFor("guardianName")}
             </div>
@@ -244,7 +255,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
             </div>
             <div className="space-y-1">
               <Label>4 digit kiosk PIN</Label>
-              <Input value={checkInPin} onChange={(event) => setCheckInPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Optional" inputMode="numeric" />
+              <Input value={checkInPin} onChange={(event) => setCheckInPin(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="Defaults to last 4 of phone" inputMode="numeric" />
               {errorFor("checkInPin")}
             </div>
             <div className="space-y-1 md:col-span-2">
@@ -348,7 +359,7 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
 
         <Button disabled={isPending || !centers.length} onClick={submit}>
           <UserPlus data-icon="inline-start" />
-          Save Family + Student
+          Save Family, Parent + Child
         </Button>
       </CardContent>
     </Card>

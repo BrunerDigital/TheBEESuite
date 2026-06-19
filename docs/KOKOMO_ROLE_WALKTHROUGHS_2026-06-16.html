@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kokomo Role Walkthroughs - The BEE Suite</title>
+  <style>
+    :root {
+      --bg: #f7f3ea;
+      --ink: #172033;
+      --muted: #64748b;
+      --panel: #ffffff;
+      --line: #d9dee8;
+      --accent: #f5b51b;
+      --accent-2: #0ea5e9;
+      --good: #16a34a;
+      --warn: #d97706;
+      --danger: #dc2626;
+      --shadow: 0 24px 80px rgba(15, 23, 42, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    .stage {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(245, 181, 27, 0.16), transparent 36%),
+        linear-gradient(315deg, rgba(14, 165, 233, 0.14), transparent 42%),
+        #f7f3ea;
+    }
+
+    .brand-bar {
+      position: absolute;
+      inset: 22px 28px auto;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 4;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-weight: 800;
+    }
+
+    .brand img {
+      max-height: 34px;
+      width: auto;
+      object-fit: contain;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: #111827;
+      color: #f5b51b;
+      font-weight: 900;
+    }
+
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+
+    .app {
+      position: absolute;
+      inset: 96px 28px 28px;
+      display: grid;
+      grid-template-columns: 242px 1fr;
+      border: 1px solid rgba(148, 163, 184, 0.48);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.72);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: rgba(248, 250, 252, 0.86);
+      padding: 20px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .school {
+      padding: 14px;
+      border-radius: 12px;
+      background: #111827;
+      color: #fff;
+    }
+
+    .school small {
+      display: block;
+      color: #cbd5e1;
+      margin-bottom: 4px;
+    }
+
+    .nav-group-title {
+      margin: 0 0 7px 10px;
+      color: #64748b;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 5px;
+      padding: 10px 11px;
+      border-radius: 10px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 650;
+      transition: 240ms ease;
+    }
+
+    .nav-item span:first-child {
+      width: 8px;
+      height: 8px;
+      border-radius: 3px;
+      background: #94a3b8;
+    }
+
+    .nav-item.active {
+      background: color-mix(in srgb, var(--accent) 20%, white);
+      color: #111827;
+      transform: translateX(4px);
+    }
+
+    .nav-item.active span:first-child {
+      background: var(--accent);
+    }
+
+    .main {
+      padding: 22px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .topline {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 17px;
+    }
+
+    .role-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--accent-2);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    h1 {
+      margin: 6px 0 4px;
+      font-size: 33px;
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 680px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .progress {
+      min-width: 180px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .progress-track {
+      margin-top: 8px;
+      width: 180px;
+      height: 8px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+      transition: width 320ms ease;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      background: var(--panel);
+      min-height: 82px;
+    }
+
+    .metric label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 7px;
+      font-size: 24px;
+      line-height: 1;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 14px;
+      min-height: 350px;
+    }
+
+    .panel,
+    .queue {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 17px;
+      overflow: hidden;
+    }
+
+    .panel h2,
+    .queue h3 {
+      margin: 0 0 7px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .panel p,
+    .queue p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .module-list {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .module-card {
+      min-height: 76px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 12px;
+      background: #f8fafc;
+      transition: 260ms ease;
+    }
+
+    .module-card b {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+
+    .module-card span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .module-card.active {
+      border-color: color-mix(in srgb, var(--accent) 75%, #fff);
+      background: color-mix(in srgb, var(--accent) 16%, #fff);
+      transform: translateY(-3px);
+    }
+
+    .queue-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .queue-item {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #f8fafc;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .queue-item i {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: #111827;
+      color: #fff;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .caption {
+      position: absolute;
+      left: 270px;
+      right: 28px;
+      bottom: 28px;
+      min-height: 74px;
+      border-radius: 16px;
+      background: #111827;
+      color: #fff;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.26);
+      padding: 17px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 18px;
+      align-items: center;
+      transform: translateY(120%);
+      transition: transform 300ms ease;
+    }
+
+    .caption.visible {
+      transform: translateY(0);
+    }
+
+    .caption b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 17px;
+    }
+
+    .caption span {
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .caption .badge {
+      border-radius: 999px;
+      background: var(--accent);
+      color: #111827;
+      padding: 10px 13px;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .safety {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      max-width: 320px;
+      border: 1px solid rgba(217, 119, 6, 0.28);
+      border-radius: 14px;
+      background: #fff7ed;
+      color: #9a3412;
+      padding: 11px 12px;
+      font-size: 12px;
+      line-height: 1.4;
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: 260ms ease;
+    }
+
+    .safety.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .fade {
+      animation: fade 360ms ease;
+    }
+
+    @keyframes fade {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 900px) {
+      body {
+        overflow: auto;
+      }
+
+      .stage {
+        width: 100vw;
+        min-height: 100vh;
+        height: auto;
+        overflow: visible;
+      }
+
+      .app {
+        position: static;
+        margin: 92px 16px 16px;
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+
+      .dashboard-grid,
+      .workspace,
+      .module-list {
+        grid-template-columns: 1fr;
+      }
+
+      .caption {
+        position: static;
+        margin: 0 16px 20px;
+        transform: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="brand-bar">
+      <div class="brand">
+        <img src="../public/brand/kid-city-usa/logo-horizontal.png" alt="Kid City USA" />
+        <span class="brand-mark">B</span>
+        <span>The BEE Suite</span>
+      </div>
+      <div class="meta">
+        <span class="pill">Kokomo launch training</span>
+        <span class="pill">June 2026</span>
+      </div>
+    </div>
+
+    <div class="app">
+      <aside class="sidebar">
+        <div class="school">
+          <small>Active center</small>
+          <strong>Kid City USA - Kokomo</strong>
+        </div>
+        <div id="nav"></div>
+      </aside>
+      <main class="main">
+        <div class="safety" id="safety"></div>
+        <div class="topline">
+          <div>
+            <div class="role-eyebrow" id="eyebrow"></div>
+            <h1 id="title"></h1>
+            <div class="subtitle" id="subtitle"></div>
+          </div>
+          <div class="progress">
+            <span id="progress-label"></span>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+          </div>
+        </div>
+        <section class="dashboard-grid" id="metrics"></section>
+        <section class="workspace">
+          <div class="panel">
+            <h2 id="panel-title"></h2>
+            <p id="panel-copy"></p>
+            <div class="module-list" id="modules"></div>
+          </div>
+          <aside class="queue">
+            <h3 id="queue-title"></h3>
+            <p id="queue-copy"></p>
+            <div class="queue-list" id="queue"></div>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+    <div class="caption" id="caption">
+      <div>
+        <b id="caption-title"></b>
+        <span id="caption-copy"></span>
+      </div>
+      <div class="badge" id="caption-badge"></div>
+    </div>
+  </div>
+
+  <script>
+    const roleGroups = [
+      {
+        title: "Command",
+        items: ["Dashboard", "Notifications", "AI Command"],
+      },
+      {
+        title: "Enrollment CRM",
+        items: ["CRM leads", "Pipeline", "Tours", "Waitlist"],
+      },
+      {
+        title: "Operations",
+        items: ["School setup", "Center dashboard", "Classroom", "Attendance", "Daily reports", "Incidents", "Teachers"],
+      },
+      {
+        title: "Families",
+        items: ["Family detail", "Child profile", "Messages", "Parent portal", "Teacher portal"],
+      },
+      {
+        title: "Business",
+        items: ["Billing & invoices", "Payments", "Documents", "Compliance", "Analytics"],
+      },
+      {
+        title: "Platform",
+        items: ["Executive admin", "White-label", "Team permissions", "Integrations", "Audit logs"],
+      },
+    ];
+
+    const roles = {
+      "platform-owner": {
+        title: "Platform Owner",
+        eyebrow: "Tenant and support control",
+        subtitle: "Use this view to confirm the platform is healthy, users are scoped, and Kokomo can launch without exposing another school's data.",
+        accent: "#f5b51b",
+        metrics: [["Centers", "94"], ["Open actions", "12"], ["Readiness", "Live"], ["Audit focus", "High"]],
+        modules: [
+          ["Executive dashboard", "All-school rollups, FTE, and health checks"],
+          ["Executive admin", "Create locations, users, grants, and support evidence"],
+          ["Integrations", "Stripe, email, SMS, storage, and calendar status"],
+          ["Audit logs", "Sensitive action and access evidence"],
+        ],
+        queue: ["Verify Kokomo active center", "Confirm center-scoped login", "Check system readiness", "Keep payments gated"],
+        slides: [
+          ["Dashboard", "Open the platform dashboard", "Confirm the global view is healthy before onboarding Kokomo.", "Start"],
+          ["Executive admin", "Verify Kokomo setup", "Center, location ID, owner group, and user access should be correct before staff enter data.", "Users"],
+          ["Integrations", "Check launch dependencies", "Email, storage, Stripe, and public inquiry routing should be known before Monday.", "Setup"],
+          ["Audit logs", "Use audit evidence", "If anything looks cross-location, stop and review access grants before training continues.", "Safety"],
+        ],
+      },
+      "brand-admin": {
+        title: "Brand Admin",
+        eyebrow: "Kid City USA corporate view",
+        subtitle: "Use the brand view to supervise Kokomo while still seeing multi-location CRM, FTE, enrollment, and setup trends.",
+        accent: "#0ea5e9",
+        metrics: [["Visible schools", "94"], ["Kokomo kids", "5"], ["FTE due", "Fri"], ["Parent pay", "Gated"]],
+        modules: [
+          ["Multi-location", "Compare school readiness and activity"],
+          ["CRM leads", "Confirm Kokomo inquiries route correctly"],
+          ["FTE reports", "Track Friday submissions and missing schools"],
+          ["Executive admin", "Manage location users and access"],
+        ],
+        queue: ["Confirm Kokomo launch owner", "Review inquiry embed routing", "Watch FTE status", "Approve parent payment timing"],
+        slides: [
+          ["Dashboard", "Start with the brand dashboard", "Use the executive lens to see Kokomo's setup status alongside other schools.", "Overview"],
+          ["CRM leads", "Verify inquiry routing", "Kokomo public inquiries should land under `IN | Kokomo` only.", "CRM"],
+          ["FTE reports", "Monitor first Friday", "Make sure the director understands the Friday noon FTE deadline.", "FTE"],
+          ["Executive admin", "Support the director", "Use scoped user tools for Kokomo without broadening access unnecessarily.", "Access"],
+        ],
+      },
+      "regional-manager": {
+        title: "Regional Manager",
+        eyebrow: "Assigned school oversight",
+        subtitle: "Use regional tools to monitor Kokomo's launch status, enrollment activity, compliance reminders, and support needs.",
+        accent: "#14b8a6",
+        metrics: [["Assigned", "Scoped"], ["Open seats", "Tracked"], ["FTE", "Monitor"], ["Reports", "Export"]],
+        modules: [
+          ["Regional dashboard", "Compare assigned schools"],
+          ["CRM leads", "View assigned-school funnel and tours"],
+          ["Compliance", "Follow up on missing setup and documents"],
+          ["Analytics", "Review trend and launch metrics"],
+        ],
+        queue: ["Review Kokomo dashboard", "Escalate missing documents", "Watch parent response time", "Confirm first-week support"],
+        slides: [
+          ["Dashboard", "Use the regional lens", "The dashboard should show only schools assigned to the regional scope.", "Scope"],
+          ["CRM leads", "Watch enrollment follow-up", "Kokomo's first inquiries and tours should be assigned and acted on quickly.", "Follow-up"],
+          ["Compliance", "Track setup gaps", "Use reminders for missing documents, staffing setup, and licensing support records.", "Docs"],
+          ["Analytics", "Review the first-week pulse", "Compare attendance, messages, FTE, and enrollment activity after go-live.", "Reports"],
+        ],
+      },
+      "center-director": {
+        title: "Center Director",
+        eyebrow: "Kokomo daily command center",
+        subtitle: "This is the primary launch workflow for `kokomo@kidcityusa.com`: set up the school, enter 5 children, test attendance, and guide staff.",
+        accent: "#f59e0b",
+        metrics: [["Children", "5"], ["Classrooms", "Set"], ["Teachers", "Invite"], ["Kiosk", "Test"]],
+        modules: [
+          ["School setup", "Profile, launch owner, setup checklist"],
+          ["Family detail", "Families, guardians, children, pickups"],
+          ["Attendance", "Kiosk, PINs, check-in and check-out"],
+          ["Documents", "Required records and review queue"],
+        ],
+        queue: ["Verify Kokomo in header", "Enter five enrolled children", "Test teacher daily report", "Do not enable payments yet"],
+        slides: [
+          ["Dashboard", "Confirm the Kokomo dashboard", "Start by checking that only Kokomo data appears before adding real child records.", "Scope"],
+          ["School setup", "Complete minimum launch setup", "Profile, hours, launch approver, classrooms, staff, and first-week checklist come first.", "Setup"],
+          ["Family detail", "Enter each enrolled child", "Add family, guardians, pickups, emergency contacts, child profile, schedule, and safety notes.", "Data"],
+          ["Attendance", "Test kiosk and classroom attendance", "Run one check-in and check-out with a test PIN before families use the lobby tablet.", "Kiosk"],
+          ["Documents", "Review records before parent invites", "Parent portal should wait until family links, documents, and custody restrictions are verified.", "Review"],
+        ],
+      },
+      "assistant-director": {
+        title: "Assistant Director",
+        eyebrow: "Daily operations support",
+        subtitle: "Assistant directors help keep attendance, family records, classroom updates, messages, and document follow-up moving.",
+        accent: "#6366f1",
+        metrics: [["Tasks", "Daily"], ["Attendance", "Review"], ["Messages", "Triage"], ["Docs", "Follow up"]],
+        modules: [
+          ["Center dashboard", "Today's school operations"],
+          ["Attendance", "Check-in/out, absences, ratio snapshots"],
+          ["Family detail", "Guardian and pickup updates for review"],
+          ["Messages", "Parent communication queue"],
+        ],
+        queue: ["Monitor check-in exceptions", "Review guardian updates", "Route parent messages", "Escalate sensitive changes"],
+        slides: [
+          ["Center dashboard", "Start with today's operating view", "Review children present, staffing, messages, and launch tasks.", "Today"],
+          ["Attendance", "Support the front desk", "Help resolve check-in, check-out, absence, and pickup questions.", "Attendance"],
+          ["Family detail", "Review family updates", "Emergency contacts, pickups, and custody changes need careful director-approved handling.", "Records"],
+          ["Messages", "Keep parents answered", "Use templates and AI drafts only after human review.", "Messages"],
+        ],
+      },
+      "billing-admin": {
+        title: "Billing Admin",
+        eyebrow: "Financial workflows",
+        subtitle: "Billing users manage balances, invoices, payment readiness, and parent billing questions without changing unrelated child records.",
+        accent: "#22c55e",
+        metrics: [["Invoices", "Draft"], ["Balances", "Verify"], ["Checkout", "Off"], ["Payout", "Required"]],
+        modules: [
+          ["Billing & invoices", "Tuition, deposits, invoices, ledger"],
+          ["Payments", "Payment method and payout readiness"],
+          ["Messages", "Billing-related parent communication"],
+          ["Analytics", "Aging and payment reports"],
+        ],
+        queue: ["Verify tuition amounts", "Keep checkout disabled", "Complete payout onboarding", "Review payment disclosures"],
+        slides: [
+          ["Billing & invoices", "Confirm billing records", "Enter only verified tuition, fees, discounts, and opening balances.", "Invoices"],
+          ["Payments", "Check payout readiness", "Parent checkout stays blocked until the school connected account is ready and approved.", "Stripe"],
+          ["Messages", "Handle billing questions", "Keep billing communication in the family timeline and avoid unrelated record changes.", "Messages"],
+          ["Analytics", "Export billing reports", "Use reports for aging, open invoices, and first-week reconciliation.", "Reports"],
+        ],
+      },
+      "teacher": {
+        title: "Teacher",
+        eyebrow: "Classroom tablet workflow",
+        subtitle: "Teachers use a mobile-first workflow for roster, attendance, daily reports, photos, incidents, and classroom messages.",
+        accent: "#10b981",
+        metrics: [["Roster", "Assigned"], ["Reports", "Daily"], ["Photos", "Review"], ["Incidents", "Director"]],
+        modules: [
+          ["Teacher portal", "Roster, quick actions, offline queue"],
+          ["Attendance", "Check children in/out or mark absent"],
+          ["Daily reports", "Meals, naps, potty, activities, notes"],
+          ["Incidents", "Objective notes for director review"],
+        ],
+        queue: ["Confirm assigned classroom", "Submit one daily report", "Do not share photos without permission", "Escalate safety concerns"],
+        slides: [
+          ["Teacher portal", "Open the classroom home base", "The teacher should see only the assigned Kokomo classroom roster.", "Roster"],
+          ["Attendance", "Use quick check-in actions", "Mark present, absent, check-in, or check-out from child cards.", "Attendance"],
+          ["Daily reports", "Build parent-ready daily notes", "Record meals, bottles, naps, diaper/potty, activities, mood, supplies, and notes.", "Reports"],
+          ["Incidents", "Create objective incident reports", "Incident records require director review and parent acknowledgment workflow.", "Safety"],
+          ["Messages", "Use classroom communication carefully", "Teacher messages and AI wording support must still be reviewed before sending.", "Messages"],
+        ],
+      },
+      "parent-guardian": {
+        title: "Parent / Guardian",
+        eyebrow: "Family portal",
+        subtitle: "Parents see their own family only: children, daily reports, documents, messages, invoices, incidents, and preferences.",
+        accent: "#a855f7",
+        metrics: [["Children", "Own"], ["Reports", "View"], ["Invoices", "Pay later"], ["Messages", "Center"]],
+        modules: [
+          ["Parent portal", "Family, children, reports, messages"],
+          ["Documents", "Upload or sign required records"],
+          ["Billing", "Invoices and payment status"],
+          ["Notifications", "Email, SMS, and portal preferences"],
+        ],
+        queue: ["Accept invite", "Review child info", "Submit missing docs", "Use messages for questions"],
+        slides: [
+          ["Parent portal", "Start on the family dashboard", "Parents should see only their linked Kokomo family and children.", "Family"],
+          ["Daily reports", "Review classroom updates", "Meals, naps, activities, photos, supplies, and teacher notes appear after staff sends them.", "Updates"],
+          ["Documents", "Submit required records", "Parents can upload forms or sign pending documents for director review.", "Docs"],
+          ["Billing & invoices", "View invoices and balances", "Payment buttons remain disabled until Kokomo's payout setup is approved.", "Billing"],
+          ["Messages", "Message the center", "Messages are logged in the family timeline and routed to the school.", "Messages"],
+        ],
+      },
+      "authorized-pickup": {
+        title: "Authorized Pickup",
+        eyebrow: "Limited pickup access",
+        subtitle: "Authorized pickups are intentionally limited to pickup/check-in support and do not get full parent portal, billing, or messages.",
+        accent: "#ef4444",
+        metrics: [["Access", "Limited"], ["Kiosk", "PIN/QR"], ["Billing", "None"], ["Messages", "None"]],
+        modules: [
+          ["Parent portal", "Limited family pickup context"],
+          ["Check-in kiosk", "PIN or QR verification"],
+          ["Notifications", "Pickup-related alerts only"],
+          ["Help", "Support and identity guidance"],
+        ],
+        queue: ["Verify identity", "Use assigned PIN/QR", "Do not show billing", "Escalate custody warnings"],
+        slides: [
+          ["Parent portal", "Use the limited pickup view", "Authorized pickups should not see billing, full documents, or unrelated family details.", "Limited"],
+          ["Check-in kiosk", "Complete pickup verification", "Use the lobby kiosk with the approved PIN or QR workflow.", "Kiosk"],
+          ["Notifications", "Review pickup alerts only", "Alerts should be limited to the pickup role and authorized child context.", "Alerts"],
+          ["Help", "Escalate exceptions", "Custody or authorization questions should go to the director before release.", "Safety"],
+        ],
+      },
+      "read-only-auditor": {
+        title: "Read-only Auditor",
+        eyebrow: "Evidence without edits",
+        subtitle: "Auditors review reports, compliance records, dashboards, and audit logs without changing operational data.",
+        accent: "#64748b",
+        metrics: [["Mode", "Read only"], ["Exports", "Allowed"], ["Edits", "None"], ["Audit", "Visible"]],
+        modules: [
+          ["Dashboard", "Scoped read-only status"],
+          ["Compliance", "Documentation support records"],
+          ["Analytics", "Reports and exports"],
+          ["Audit logs", "Sensitive workflow evidence"],
+        ],
+        queue: ["Review only", "Export evidence", "Flag exceptions", "No operational edits"],
+        slides: [
+          ["Dashboard", "Open the scoped dashboard", "Auditor access should show evidence and status without edit controls.", "View"],
+          ["Compliance", "Review documentation support", "Use compliance records for review, not legal or licensing decisions.", "Docs"],
+          ["Analytics", "Export required reports", "Reports should be scoped to assigned schools and filtered before sharing.", "Reports"],
+          ["Audit logs", "Trace sensitive actions", "Use audit logs to confirm who changed what and when.", "Audit"],
+        ],
+      },
+    };
+
+    const roleOrder = Object.keys(roles);
+    const roleParam = new URLSearchParams(window.location.search).get("role");
+    let currentRoleKey = roles[roleParam] ? roleParam : "center-director";
+    let currentSlideIndex = 0;
+
+    const nav = document.getElementById("nav");
+    const eyebrow = document.getElementById("eyebrow");
+    const title = document.getElementById("title");
+    const subtitle = document.getElementById("subtitle");
+    const metrics = document.getElementById("metrics");
+    const modules = document.getElementById("modules");
+    const queue = document.getElementById("queue");
+    const panelTitle = document.getElementById("panel-title");
+    const panelCopy = document.getElementById("panel-copy");
+    const queueTitle = document.getElementById("queue-title");
+    const queueCopy = document.getElementById("queue-copy");
+    const caption = document.getElementById("caption");
+    const captionTitle = document.getElementById("caption-title");
+    const captionCopy = document.getElementById("caption-copy");
+    const captionBadge = document.getElementById("caption-badge");
+    const progressLabel = document.getElementById("progress-label");
+    const progressFill = document.getElementById("progress-fill");
+    const safety = document.getElementById("safety");
+
+    function renderNav(active) {
+      nav.innerHTML = roleGroups.map((group) => {
+        const items = group.items.map((item) => `
+          <div class="nav-item ${item === active ? "active" : ""}">
+            <span></span><span>${item}</span>
+          </div>
+        `).join("");
+        return `<div><div class="nav-group-title">${group.title}</div>${items}</div>`;
+      }).join("");
+    }
+
+    function renderRole(roleKey, slideIndex) {
+      const role = roles[roleKey];
+      const slide = role.slides[slideIndex];
+      const activeModule = slide[0];
+      document.documentElement.style.setProperty("--accent", role.accent);
+      document.documentElement.style.setProperty("--accent-2", role.accent);
+      renderNav(activeModule);
+
+      eyebrow.textContent = role.eyebrow;
+      title.textContent = role.title;
+      subtitle.textContent = role.subtitle;
+      metrics.innerHTML = role.metrics.map(([label, value]) => `
+        <div class="metric fade"><label>${label}</label><strong>${value}</strong></div>
+      `).join("");
+
+      panelTitle.textContent = slide[1];
+      panelCopy.textContent = slide[2];
+      modules.innerHTML = role.modules.map(([name, copy]) => `
+        <div class="module-card ${activeModule.includes(name.split(" ")[0]) || name.includes(activeModule) ? "active" : ""}">
+          <b>${name}</b>
+          <span>${copy}</span>
+        </div>
+      `).join("");
+
+      queueTitle.textContent = "Key actions";
+      queueCopy.textContent = "Use this checklist while walking the user through the role.";
+      queue.innerHTML = role.queue.map((item, index) => `
+        <div class="queue-item fade"><i>${index + 1}</i><span>${item}</span></div>
+      `).join("");
+
+      captionTitle.textContent = slide[1];
+      captionCopy.textContent = slide[2];
+      captionBadge.textContent = slide[3];
+      caption.classList.add("visible");
+
+      const total = role.slides.length;
+      progressLabel.textContent = `Step ${slideIndex + 1} of ${total}`;
+      progressFill.style.width = `${((slideIndex + 1) / total) * 100}%`;
+
+      const showSafety = ["Safety", "Stripe", "Limited", "Review", "Access"].includes(slide[3]);
+      safety.textContent = showSafety
+        ? "Safety gate: stop if role scope, child visibility, custody notes, payments, or parent access do not match Kokomo."
+        : "";
+      safety.classList.toggle("visible", showSafety);
+    }
+
+    function setRole(roleKey) {
+      currentRoleKey = roles[roleKey] ? roleKey : "center-director";
+      currentSlideIndex = 0;
+      renderRole(currentRoleKey, currentSlideIndex);
+    }
+
+    function nextSlide() {
+      const role = roles[currentRoleKey];
+      currentSlideIndex = (currentSlideIndex + 1) % role.slides.length;
+      renderRole(currentRoleKey, currentSlideIndex);
+    }
+
+    async function playWalkthrough(options = {}) {
+      const stepMs = Number(options.stepMs || 2600);
+      const role = roles[currentRoleKey];
+      window.walkthroughDone = false;
+      renderRole(currentRoleKey, 0);
+      for (let index = 1; index < role.slides.length; index += 1) {
+        await new Promise((resolve) => setTimeout(resolve, stepMs));
+        currentSlideIndex = index;
+        renderRole(currentRoleKey, currentSlideIndex);
+      }
+      await new Promise((resolve) => setTimeout(resolve, stepMs));
+      window.walkthroughDone = true;
+    }
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === " ") nextSlide();
+      if (event.key === "ArrowLeft") {
+        const role = roles[currentRoleKey];
+        currentSlideIndex = (currentSlideIndex - 1 + role.slides.length) % role.slides.length;
+        renderRole(currentRoleKey, currentSlideIndex);
+      }
+      const number = Number(event.key);
+      if (number >= 1 && number <= roleOrder.length) setRole(roleOrder[number - 1]);
+    });
+
+    window.walkthroughRoles = roleOrder;
+    window.setWalkthroughRole = setRole;
+    window.playWalkthrough = playWalkthrough;
+    setRole(currentRoleKey);
+    window.walkthroughReady = true;
+  </script>
+</body>
+</html>

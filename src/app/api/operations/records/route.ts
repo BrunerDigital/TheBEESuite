@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
+import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from "@/lib/operations-guardrails";
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +12,11 @@ import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib
 import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import {
+  dailyReportEmailRecipientCustomFields,
+  dailyReportEmailRecipientGuardianIdsFromPayload,
+  DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+} from "@/lib/daily-report-email-settings";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -75,6 +82,26 @@ function dollarsToCents(value: unknown) {
 function requestedStatus(value: unknown) {
   const status = clean(value).toUpperCase();
   return Object.values(DocumentStatus).includes(status as DocumentStatus) ? status as DocumentStatus : DocumentStatus.REQUESTED;
+}
+
+const notificationEntities = new Set([
+  "classroom",
+  "family",
+  "guardian",
+  "child",
+  "allergy",
+  "medicalNote",
+  "authorizedPickup",
+  "emergencyContact",
+  "document",
+  "staff",
+  "staffAssignment",
+  "staffSchedule",
+  "staffTimeClock",
+]);
+
+function resultRecordId(result: unknown) {
+  return typeof result === "object" && result && "id" in result ? String(result.id) : null;
 }
 
 function normalizeFormSchema(value: unknown): Prisma.InputJsonObject {
@@ -293,6 +320,37 @@ async function POSTHandler(request: NextRequest) {
     const access = await assertCenterAccess(user, requestedCenterId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.center.id;
+    const dailyReportRecipientSelectionProvided = Object.prototype.hasOwnProperty.call(
+      body,
+      DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+    );
+    const dailyReportEmailRecipientGuardianIds = dailyReportRecipientSelectionProvided
+      ? dailyReportEmailRecipientGuardianIdsFromPayload(body[DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY])
+      : [];
+    const existing = id
+      ? await prisma.family.findUnique({ where: { id }, select: { centerId: true, customFields: true } })
+      : null;
+    let familyCustomFields: Prisma.InputJsonObject | undefined;
+    if (dailyReportRecipientSelectionProvided) {
+      if (!id && dailyReportEmailRecipientGuardianIds.length) {
+        return NextResponse.json({ ok: false, error: "Save the family before selecting daily report recipients." }, { status: 400 });
+      }
+      if (id) {
+        const guardians = await prisma.guardian.findMany({
+          where: { familyId: id },
+          select: { id: true },
+        });
+        const familyGuardianIds = new Set(guardians.map((guardian) => guardian.id));
+        const invalidGuardianIds = dailyReportEmailRecipientGuardianIds.filter((guardianId) => !familyGuardianIds.has(guardianId));
+        if (invalidGuardianIds.length) {
+          return NextResponse.json({ ok: false, error: "Daily report recipients must belong to this family." }, { status: 400 });
+        }
+      }
+      familyCustomFields = dailyReportEmailRecipientCustomFields(
+        existing?.customFields,
+        dailyReportEmailRecipientGuardianIds,
+      ) as Prisma.InputJsonObject;
+    }
     const data = {
       centerId,
       name: clean(body.name),
@@ -300,10 +358,10 @@ async function POSTHandler(request: NextRequest) {
       billingEmail: clean(body.billingEmail) || clean(body.type) || null,
       notes: clean(body.notes) || clean(body.body) || null,
       custodyNotes: clean(body.custodyNotes) || null,
+      ...(familyCustomFields ? { customFields: familyCustomFields } : {}),
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Family name is required." }, { status: 400 });
     if (id) {
-      const existing = await prisma.family.findUnique({ where: { id }, select: { centerId: true } });
       const guard = scopedUpdateGuard({ entity: "Family", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
@@ -439,12 +497,21 @@ async function POSTHandler(request: NextRequest) {
       isBillingContact: Boolean(body.isBillingContact),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
+    const existing = id
+      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true } })
+      : null;
     if (id) {
-      const existing = await prisma.guardian.findUnique({ where: { id }, select: { familyId: true } });
       const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    result = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
+    const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
+    const defaultPinData = !guardian.checkInPinHash
+      ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
+      : null;
+    result = defaultPinData
+      ? await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData })
+      : guardian;
+    auditMetadata.defaultGuardianPinSet = Boolean(defaultPinData);
   } else if (entity === "guardianMerge") {
     const primaryGuardianId = clean(body.primaryGuardianId) || clean(body.guardianId);
     const duplicateGuardianId = clean(body.duplicateGuardianId) || clean(body.relatedId);
@@ -876,7 +943,7 @@ async function POSTHandler(request: NextRequest) {
               name: staffName,
               role: staffRole,
               isActive: true,
-              mustResetPassword: true,
+              mustResetPassword: false,
             },
           });
 
@@ -1287,7 +1354,11 @@ async function POSTHandler(request: NextRequest) {
       status: requestedStatus(body.status),
       expiresAt: parseDate(body.expiresAt),
       restricted: Boolean(body.restricted),
-      storageKey: clean(body.storageKey) || "upload_pending",
+      ...(id
+        ? clean(body.storageKey)
+          ? { storageKey: clean(body.storageKey) }
+          : {}
+        : { storageKey: clean(body.storageKey) || "upload_pending" }),
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Document name is required." }, { status: 400 });
     result = id ? await prisma.document.update({ where: { id }, data }) : await prisma.document.create({ data });
@@ -1423,11 +1494,27 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: `Unsupported entity: ${entity}` }, { status: 400 });
   }
 
+  const resourceId = id || resultRecordId(result);
+  if (notificationEntities.has(entity)) {
+    try {
+      const notificationMode = entity === "staffAssignment" || entity === "staffTimeClock" ? "updated" : mode;
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: notificationMode,
+        resourceId,
+        centerId,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+  }
+
   await writeAuditLog(user, {
     centerId,
     action: `operations.${entity}.${mode}`,
     resource: entity,
-    resourceId: id || (typeof result === "object" && result && "id" in result ? String(result.id) : null),
+    resourceId,
     metadata: auditMetadata as Prisma.InputJsonObject,
   });
 
@@ -1450,29 +1537,385 @@ async function DELETEHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Entity and ID are required." }, { status: 400 });
   }
 
+  if (entity === "guardian") {
+    const guardian = await prisma.guardian.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        userId: true,
+        fullName: true,
+        email: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!guardian) return NextResponse.json({ ok: false, error: "Parent/guardian not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, guardian.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set([
+        guardian.userId,
+        ...guardian.family.guardians.map((item) => item.userId),
+      ].filter((userId): userId is string => Boolean(userId))),
+    );
+
+    const result = await prisma.$transaction(async (tx) => {
+      const checkInLogs = await tx.checkInOutLog.updateMany({
+        where: { guardianId: guardian.id },
+        data: { guardianId: null },
+      });
+      const deleted = await tx.guardian.delete({ where: { id: guardian.id } });
+      return {
+        id: deleted.id,
+        familyId: deleted.familyId,
+        userId: deleted.userId,
+        fullName: deleted.fullName,
+        email: deleted.email,
+        detachedCheckInLogs: checkInLogs.count,
+      };
+    });
+
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: guardian.familyId,
+      guardianName: guardian.fullName,
+      detachedCheckInLogs: result.detachedCheckInLogs,
+    };
+    if (guardian.userId) auditMetadata.userId = guardian.userId;
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: guardian.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.guardian.deleted",
+      resource: "guardian",
+      resourceId: guardian.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "authorizedPickup") {
+    const pickup = await prisma.authorizedPickup.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        fullName: true,
+        phone: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!pickup) return NextResponse.json({ ok: false, error: "Authorized pickup not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, pickup.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set(pickup.family.guardians.map((item) => item.userId).filter((userId): userId is string => Boolean(userId))),
+    );
+    const result = await prisma.authorizedPickup.delete({ where: { id: pickup.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: pickup.familyId,
+      pickupName: pickup.fullName,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: pickup.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.authorizedPickup.deleted",
+      resource: "authorizedPickup",
+      resourceId: pickup.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "emergencyContact") {
+    const contact = await prisma.emergencyContact.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        fullName: true,
+        phone: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!contact) return NextResponse.json({ ok: false, error: "Emergency contact not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, contact.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set(contact.family.guardians.map((item) => item.userId).filter((userId): userId is string => Boolean(userId))),
+    );
+    const result = await prisma.emergencyContact.delete({ where: { id: contact.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: contact.familyId,
+      contactName: contact.fullName,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: contact.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.emergencyContact.deleted",
+      resource: "emergencyContact",
+      resourceId: contact.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "allergy") {
+    const allergy = await prisma.allergy.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        childId: true,
+        allergen: true,
+        child: {
+          select: {
+            familyId: true,
+            family: { select: { centerId: true, guardians: { select: { userId: true } } } },
+            classroom: { select: { staff: { where: { user: { isActive: true } }, select: { userId: true } } } },
+          },
+        },
+      },
+    });
+    if (!allergy) return NextResponse.json({ ok: false, error: "Allergy record not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, allergy.child.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(new Set([
+      ...allergy.child.family.guardians.map((item) => item.userId),
+      ...(allergy.child.classroom?.staff.map((item) => item.userId) ?? []),
+    ].filter((userId): userId is string => Boolean(userId))));
+    const result = await prisma.allergy.delete({ where: { id: allergy.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      childId: allergy.childId,
+      allergen: allergy.allergen,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: allergy.id,
+        centerId: allergy.child.family.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: allergy.child.family.centerId,
+      action: "operations.allergy.deleted",
+      resource: "allergy",
+      resourceId: allergy.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "medicalNote") {
+    const note = await prisma.childMedicalNote.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        childId: true,
+        category: true,
+        child: {
+          select: {
+            familyId: true,
+            family: { select: { centerId: true, guardians: { select: { userId: true } } } },
+            classroom: { select: { staff: { where: { user: { isActive: true } }, select: { userId: true } } } },
+          },
+        },
+      },
+    });
+    if (!note) return NextResponse.json({ ok: false, error: "Medical note not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, note.child.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(new Set([
+      ...note.child.family.guardians.map((item) => item.userId),
+      ...(note.child.classroom?.staff.map((item) => item.userId) ?? []),
+    ].filter((userId): userId is string => Boolean(userId))));
+    const result = await prisma.childMedicalNote.delete({ where: { id: note.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      childId: note.childId,
+      category: note.category,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: note.id,
+        centerId: note.child.family.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: note.child.family.centerId,
+      action: "operations.medicalNote.deleted",
+      resource: "medicalNote",
+      resourceId: note.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "document") {
+    const document = await prisma.document.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        childId: true,
+        name: true,
+        family: { select: { centerId: true, guardians: { select: { userId: true } } } },
+        child: { select: { familyId: true, family: { select: { centerId: true, guardians: { select: { userId: true } } } } } },
+      },
+    });
+    if (!document) return NextResponse.json({ ok: false, error: "Document not found." }, { status: 404 });
+    const familyId = document.familyId ?? document.child?.familyId ?? null;
+    if (!familyId) return NextResponse.json({ ok: false, error: "Document is not linked to a family." }, { status: 400 });
+    const access = await assertFamilyAccess(user, familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const guardianRows = document.family?.guardians ?? document.child?.family.guardians ?? [];
+    const relatedUserIds = Array.from(
+      new Set(guardianRows.map((item) => item.userId).filter((userId): userId is string => Boolean(userId))),
+    );
+    const result = await prisma.document.delete({ where: { id: document.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId,
+      documentName: document.name,
+    };
+    if (document.childId) auditMetadata.childId = document.childId;
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: document.id,
+        centerId: document.family?.centerId ?? document.child?.family.centerId ?? access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: document.family?.centerId ?? document.child?.family.centerId ?? access.centerId,
+      action: "operations.document.deleted",
+      resource: "document",
+      resourceId: document.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
   if (entity === "staff") {
     const staff = await prisma.staffProfile.findUnique({
       where: { id },
-      select: { id: true, centerId: true, userId: true },
+      select: { id: true, centerId: true, userId: true, classroomId: true },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
 
-    const result = await prisma.user.update({
-      where: { id: staff.userId },
-      data: { isActive: false },
-      select: { id: true, email: true, name: true, isActive: true },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.staffProfile.update({
+        where: { id: staff.id },
+        data: { classroomId: null },
+      });
+      return tx.user.update({
+        where: { id: staff.userId },
+        data: { isActive: false },
+        select: { id: true, email: true, name: true, isActive: true },
+      });
     });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deactivated",
+      userId: staff.userId,
+    };
+    if (staff.classroomId) auditMetadata.previousClassroomId = staff.classroomId;
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deactivated",
+        resourceId: staff.id,
+        centerId: staff.centerId,
+        relatedUserIds: [staff.userId],
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
     await writeAuditLog(user, {
       centerId: staff.centerId,
       action: "operations.staff.deactivated",
       resource: "staff",
       resourceId: staff.id,
-      metadata: { mode: "deactivated", userId: staff.userId },
+      metadata: auditMetadata as Prisma.InputJsonObject,
     });
-    return NextResponse.json({ ok: true, entity, mode: "deactivated", record: result });
+    return NextResponse.json({ ok: true, entity, mode: "deactivated", record: result, ...auditMetadata });
   }
 
   if (entity === "certification") {

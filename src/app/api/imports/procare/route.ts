@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import {
   isActiveProcareStaffStatus,
   normalizeProcareEnrollmentStatus,
@@ -1090,7 +1091,7 @@ async function POSTHandler(request: NextRequest) {
                   name: employeeName,
                   role: UserRole.TEACHER,
                   isActive: employeeIsActive,
-                  mustResetPassword: true,
+                  mustResetPassword: false,
                 },
                 select: { id: true },
               });
@@ -1254,8 +1255,8 @@ async function POSTHandler(request: NextRequest) {
               },
             })
           : null;
-        if (!existingGuardian) {
-          await prisma.guardian.create({
+        const guardian = !existingGuardian
+          ? await prisma.guardian.create({
             data: {
               familyId: family.id,
               fullName: name || familyName || guardianEmail || guardianPhone,
@@ -1269,9 +1270,8 @@ async function POSTHandler(request: NextRequest) {
               externalId,
               customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
             },
-          });
-        } else {
-          await prisma.guardian.update({
+          })
+          : await prisma.guardian.update({
             where: { id: existingGuardian.id },
             data: {
               email: guardianEmail || undefined,
@@ -1284,6 +1284,11 @@ async function POSTHandler(request: NextRequest) {
               customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
             },
           });
+        if (!guardian.checkInPinHash) {
+          const defaultPinData = defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id });
+          if (defaultPinData) {
+            await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData });
+          }
         }
       };
 

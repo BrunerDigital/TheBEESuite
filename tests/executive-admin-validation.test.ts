@@ -68,7 +68,7 @@ test("executive user validation protects scope and credential choices", () => {
     accessScopeType: "TENANT",
     password: "short",
     sendPasswordReset: "yes",
-  }).includes("Temporary passwords must be at least 8 characters."));
+  }).includes("Passwords must be at least 8 characters."));
 
   assert.ok(validateExecutiveUserForm({
     name: "Alex Admin",
@@ -77,10 +77,10 @@ test("executive user validation protects scope and credential choices", () => {
     accessScopeType: "TENANT",
     password: "temporary-123",
     sendPasswordReset: "yes",
-  }).includes("Choose either a temporary password or a reset email, not both."));
+  }).includes("Choose either a password or a reset email, not both."));
 });
 
-test("executive password action validation supports reset and temporary password recovery", () => {
+test("executive password action validation supports reset and password recovery", () => {
   assert.deepEqual(validateExecutivePasswordAction({
     email: "director@example.com",
   }), []);
@@ -88,5 +88,5 @@ test("executive password action validation supports reset and temporary password
   assert.deepEqual(validateExecutivePasswordAction({
     email: "director@example.com",
     password: "short",
-  }), ["Temporary passwords must be at least 8 characters."]);
+  }), ["Passwords must be at least 8 characters."]);
 });

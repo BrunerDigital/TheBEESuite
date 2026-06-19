@@ -26,11 +26,16 @@ function readRecoveryTokenFromHash() {
   return type === "recovery" && accessToken ? accessToken : "";
 }
 
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/dashboard";
+  return value;
+}
+
 export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const forceReset = searchParams.get("force") === "1";
-  const next = searchParams.get("next") || "/dashboard";
+  const next = safeNextPath(searchParams.get("next"));
   const accessTokenRef = useRef("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -78,7 +83,8 @@ export function ResetPasswordForm() {
       }
 
       setMessage(data?.message ?? "Password updated. You can now sign in.");
-      setTimeout(() => router.push(forceReset ? (next.startsWith("/") ? next : "/dashboard") : "/login?reset=complete"), 1200);
+      const loginNext = `/login?reset=complete&next=${encodeURIComponent(next)}`;
+      setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
     });
   }
 
@@ -90,8 +96,8 @@ export function ResetPasswordForm() {
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">Create a new secure password.</h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {forceReset
-              ? "Temporary passwords must be replaced before workspace access is allowed."
-              : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your school email."}
+              ? "Passwords must be updated before workspace access is allowed."
+              : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your email."}
           </p>
         </div>
         <p className="text-sm text-slate-300">Human review remains required for sensitive child, billing, and compliance workflows.</p>
@@ -105,7 +111,7 @@ export function ResetPasswordForm() {
             </div>
             <CardTitle className="mt-4 text-3xl">Set a new password</CardTitle>
             <CardDescription>
-              {forceReset ? "Enter the temporary password, then choose something only you know." : "Use at least 8 characters. Choose something only you know."}
+              {forceReset ? "Enter your password, then choose something only you know." : "Use at least 8 characters. Choose something only you know."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -126,7 +132,7 @@ export function ResetPasswordForm() {
               ) : null}
               {forceReset ? (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="currentPassword">Temporary password</Label>
+                  <Label htmlFor="currentPassword">Password</Label>
                   <Input
                     id="currentPassword"
                     value={currentPassword}

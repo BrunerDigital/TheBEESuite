@@ -10,13 +10,22 @@ export type RegistrationPacketPayload = {
   primaryGuardianAddress: string;
   primaryGuardianRelation: string;
   primaryGuardianEmployer: string;
+  primaryGuardianHomePhone: string;
   primaryGuardianWorkPhone: string;
+  primaryGuardianCellPhoneCarrier: string;
+  primaryGuardianDriverLicense: string;
+  primaryGuardianSocialSecurityNumber: string;
   secondaryGuardianName: string;
   secondaryGuardianEmail: string;
   secondaryGuardianPhone: string;
   secondaryGuardianRelation: string;
   secondaryGuardianEmployer: string;
   secondaryGuardianAddress: string;
+  secondaryGuardianHomePhone: string;
+  secondaryGuardianWorkPhone: string;
+  secondaryGuardianCellPhoneCarrier: string;
+  secondaryGuardianDriverLicense: string;
+  secondaryGuardianSocialSecurityNumber: string;
   billingContactName: string;
   billingContactEmail: string;
   billingContactPhone: string;
@@ -24,40 +33,124 @@ export type RegistrationPacketPayload = {
   childPreferredName: string;
   childDateOfBirth: string;
   childSex: string;
+  childAddress: string;
   childPrimaryLanguage: string;
   childLivesWith: string;
   previousCareProgram: string;
+  siblingNamesAges: string;
+  dayStructure: string;
+  newSituationNotes: string;
+  appetiteNotes: string;
+  feedsSelf: string;
+  foodLikes: string;
+  foodDislikes: string;
+  napSchedule: string;
+  nightSleepSchedule: string;
+  sleepItems: string;
+  napHints: string;
+  favoriteActivities: string;
+  developmentSkills: string[];
+  toiletingStatus: string;
+  bathroomRequest: string;
+  bathroomHelpNeeded: string;
+  toiletingRoutine: string;
+  goalsExpectations: string;
+  friendsAtCenter: string;
+  childPersonality: string;
+  otherHelpfulInfo: string;
+  participationInterests: string[];
+  participationOther: string;
   program: string;
   schedule: string;
   scheduleDays: string[];
   desiredStartDate: string;
+  specialNeedsNotes: string;
+  medicalConditions: string[];
+  medicalConditionOther: string;
   allergies: string;
   allergyActionPlan: string;
+  allergyReactionSymptoms: string;
+  allergyPreventativeMeasures: string;
+  allergyExposureResponse: string;
+  emergencyMedicationInstructions: string;
+  emergencyCarePlanContacts: string;
   medications: string;
   medicationAuthorizationNeeded: boolean;
   dietaryRestrictions: string;
   physicianInfo: string;
   physicianPhone: string;
   dentistInfo: string;
+  dentistPhone: string;
   insuranceInfo: string;
+  insuranceCompany: string;
+  insurancePolicyNumber: string;
   hospitalPreference: string;
   immunizationStatus: string;
+  immunizationExpirationDate: string;
+  physicalExpirationDate: string;
+  elc4cExpirationDate: string;
   medicalNotes: string;
   emergencyContacts: string;
   authorizedPickups: string;
   restrictedPickups: string;
   custodyNotes: string;
+  photoVideoReleaseChoice: string;
   photoVideoPermission: boolean;
   fieldTripPermission: boolean;
   transportationPermission: boolean;
   sunscreenPermission: boolean;
   waterActivityPermission: boolean;
   emergencyMedicalPermission: boolean;
+  firstAidEmergencyConsent: boolean;
+  floridaKnowYourChildcareAcknowledgment: boolean;
+  floridaDistractedAdultAcknowledgment: boolean;
+  dcfInspectionAccessAcknowledgment: boolean;
+  physicalImmunizationThirtyDayAcknowledgment: boolean;
   foodProgramPermission: boolean;
+  foodActivityPermission: string;
+  foodActivityAllergyChoice: string;
+  foodActivityRestrictedItems: string;
+  uniformBlackQuantity: string;
+  uniformBlackSize: string;
+  uniformYellowQuantity: string;
+  uniformYellowSize: string;
+  uniformPaymentChoice: string;
+  uniformPaymentAmount: string;
+  uniformComments: string;
   handbookAcknowledgment: boolean;
+  emergencyProceduresAcknowledgment: boolean;
   tuitionPolicyAcknowledgment: boolean;
   disciplinePolicyAcknowledgment: boolean;
+  expulsionPolicyAcknowledgment: boolean;
+  mandatoryReportingAcknowledgment: boolean;
   healthPolicyAcknowledgment: boolean;
+  nutritionPolicyAcknowledgment: boolean;
+  collectionResponsibilityAcknowledgment: boolean;
+  financialAgreementPaymentFeesInitials: string;
+  financialAgreementAbsenteePolicyInitials: string;
+  financialAgreementRegistrationFeeInitials: string;
+  financialAgreementReturnedPaymentInitials: string;
+  financialAgreementDischargeInitials: string;
+  financialAgreementWithdrawalInitials: string;
+  financialAgreementLatePickupInitials: string;
+  financialAgreementCollectionInitials: string;
+  financialAgreementUniformInitials: string;
+  financialAgreementFinalTermsInitials: string;
+  mealBenefitApplicationNeeded: boolean;
+  mealApplicationCaseNumberSnap: string;
+  mealApplicationCaseNumberTanf: string;
+  mealApplicationChildStatuses: string[];
+  mealApplicationAttendedThisCenter: string;
+  mealApplicationHeadStartPreK: string;
+  mealApplicationChildIncome: string;
+  mealApplicationHouseholdMembers: string;
+  mealApplicationAdultIncome: string;
+  mealApplicationLastFourSsn: string;
+  mealApplicationNoSsn: boolean;
+  mealApplicationEthnicity: string;
+  mealApplicationRace: string;
+  mealApplicationSignatureName: string;
+  mealApplicationSignatureDate: string;
   policyAcknowledgment: boolean;
   eSignatureConsent: boolean;
   signatureName: string;
@@ -130,13 +223,22 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
       { key: "primaryGuardianAddress", label: "Primary guardian address", type: "text" },
       { key: "primaryGuardianRelation", label: "Primary guardian relationship", type: "text" },
       { key: "primaryGuardianEmployer", label: "Primary guardian employer", type: "text" },
+      { key: "primaryGuardianHomePhone", label: "Primary guardian home phone", type: "phone" },
       { key: "primaryGuardianWorkPhone", label: "Primary guardian work phone", type: "phone" },
+      { key: "primaryGuardianCellPhoneCarrier", label: "Primary guardian cell carrier", type: "text" },
+      { key: "primaryGuardianDriverLicense", label: "Primary guardian driver's license", type: "text" },
+      { key: "primaryGuardianSocialSecurityNumber", label: "Primary guardian social security number", type: "text" },
       { key: "secondaryGuardianName", label: "Secondary guardian legal name", type: "text" },
       { key: "secondaryGuardianEmail", label: "Secondary guardian email", type: "email" },
       { key: "secondaryGuardianPhone", label: "Secondary guardian phone", type: "phone" },
       { key: "secondaryGuardianRelation", label: "Secondary guardian relationship", type: "text" },
       { key: "secondaryGuardianEmployer", label: "Secondary guardian employer", type: "text" },
       { key: "secondaryGuardianAddress", label: "Secondary guardian address", type: "text" },
+      { key: "secondaryGuardianHomePhone", label: "Secondary guardian home phone", type: "phone" },
+      { key: "secondaryGuardianWorkPhone", label: "Secondary guardian work phone", type: "phone" },
+      { key: "secondaryGuardianCellPhoneCarrier", label: "Secondary guardian cell carrier", type: "text" },
+      { key: "secondaryGuardianDriverLicense", label: "Secondary guardian driver's license", type: "text" },
+      { key: "secondaryGuardianSocialSecurityNumber", label: "Secondary guardian social security number", type: "text" },
       { key: "billingContactName", label: "Billing contact name", type: "text" },
       { key: "billingContactEmail", label: "Billing contact email", type: "email" },
       { key: "billingContactPhone", label: "Billing contact phone", type: "phone" },
@@ -150,26 +252,70 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
       { key: "childPreferredName", label: "Child preferred name", type: "text" },
       { key: "childDateOfBirth", label: "Child date of birth", type: "date", required: true },
       { key: "childSex", label: "Child sex", type: "text" },
+      { key: "childAddress", label: "Child address", type: "text" },
       { key: "childPrimaryLanguage", label: "Primary language", type: "text" },
       { key: "childLivesWith", label: "Child lives with", type: "text" },
       { key: "previousCareProgram", label: "Previous care or school", type: "text" },
+      { key: "siblingNamesAges", label: "Siblings and ages", type: "textarea" },
+      { key: "dayStructure", label: "Structured or unstructured day", type: "text" },
+      { key: "newSituationNotes", label: "New situation notes", type: "textarea" },
+    ],
+  },
+  {
+    id: "child_profile",
+    label: "Child routines, development, toileting, and program participation",
+    fields: [
+      { key: "appetiteNotes", label: "Appetite notes", type: "textarea" },
+      { key: "feedsSelf", label: "Feeds self", type: "select", options: ["Yes", "No"] },
+      { key: "foodLikes", label: "Foods child likes", type: "textarea" },
+      { key: "foodDislikes", label: "Foods child dislikes", type: "textarea" },
+      { key: "napSchedule", label: "Nap schedule", type: "text" },
+      { key: "nightSleepSchedule", label: "Night sleep schedule", type: "text" },
+      { key: "sleepItems", label: "Special sleep items", type: "text" },
+      { key: "napHints", label: "Nap time hints", type: "textarea" },
+      { key: "favoriteActivities", label: "Favorite activities", type: "textarea" },
+      { key: "developmentSkills", label: "Development skill notes", type: "multi_checkbox" },
+      { key: "toiletingStatus", label: "Potty trained", type: "select", options: ["Yes", "No", "In process"] },
+      { key: "bathroomRequest", label: "Asks to use bathroom", type: "select", options: ["Yes", "No"] },
+      { key: "bathroomHelpNeeded", label: "Needs bathroom help", type: "select", options: ["Yes", "No"] },
+      { key: "toiletingRoutine", label: "Toileting routine", type: "textarea" },
+      { key: "goalsExpectations", label: "Goals and expectations", type: "textarea" },
+      { key: "friendsAtCenter", label: "Friends or acquaintances at center", type: "textarea" },
+      { key: "childPersonality", label: "Child personality description", type: "textarea" },
+      { key: "otherHelpfulInfo", label: "Other helpful information", type: "textarea" },
+      { key: "participationInterests", label: "Family participation interests", type: "multi_checkbox" },
+      { key: "participationOther", label: "Other participation notes", type: "textarea" },
     ],
   },
   {
     id: "medical_safety",
     label: "Medical, allergy, diet, custody, and safety",
     fields: [
+      { key: "specialNeedsNotes", label: "Special needs notes", type: "textarea" },
+      { key: "medicalConditions", label: "Medical conditions", type: "multi_checkbox" },
+      { key: "medicalConditionOther", label: "Other medical condition", type: "textarea" },
       { key: "allergies", label: "Allergies", type: "textarea" },
       { key: "allergyActionPlan", label: "Allergy action plan", type: "textarea" },
+      { key: "allergyReactionSymptoms", label: "Allergic reaction signs and symptoms", type: "textarea" },
+      { key: "allergyPreventativeMeasures", label: "Preventative measures", type: "textarea" },
+      { key: "allergyExposureResponse", label: "Emergency care in event of exposure", type: "textarea" },
+      { key: "emergencyMedicationInstructions", label: "Emergency medication instructions", type: "textarea" },
+      { key: "emergencyCarePlanContacts", label: "Emergency care plan contacts", type: "textarea" },
       { key: "medications", label: "Medications", type: "textarea" },
       { key: "medicationAuthorizationNeeded", label: "Medication authorization needed", type: "checkbox" },
       { key: "dietaryRestrictions", label: "Dietary restrictions", type: "textarea" },
       { key: "physicianInfo", label: "Physician / pediatrician", type: "textarea" },
       { key: "physicianPhone", label: "Physician phone", type: "phone" },
       { key: "dentistInfo", label: "Dentist", type: "textarea" },
+      { key: "dentistPhone", label: "Dentist phone", type: "phone" },
       { key: "insuranceInfo", label: "Insurance / policy notes", type: "textarea" },
+      { key: "insuranceCompany", label: "Insurance company", type: "text" },
+      { key: "insurancePolicyNumber", label: "Insurance policy or group number", type: "text" },
       { key: "hospitalPreference", label: "Hospital preference", type: "text" },
       { key: "immunizationStatus", label: "Immunization status", type: "text" },
+      { key: "immunizationExpirationDate", label: "Immunization expiration date", type: "date" },
+      { key: "physicalExpirationDate", label: "Physical expiration date", type: "date" },
+      { key: "elc4cExpirationDate", label: "4C / ELC expiration date", type: "date" },
       { key: "medicalNotes", label: "Additional care notes", type: "textarea" },
       { key: "custodyNotes", label: "Custody or restricted pickup notes", type: "textarea" },
       { key: "restrictedPickups", label: "Restricted pickup people", type: "textarea" },
@@ -184,20 +330,78 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
     ],
   },
   {
-    id: "permissions_acknowledgments",
-    label: "Permissions, acknowledgments, and e-signature",
+    id: "permissions",
+    label: "Florida acknowledgments, release permissions, and safety consents",
     fields: [
+      { key: "photoVideoReleaseChoice", label: "Photo/video release choice", type: "select", options: ["Yes", "No"] },
       { key: "photoVideoPermission", label: "Photo/video release", type: "checkbox" },
       { key: "fieldTripPermission", label: "Field trip permission", type: "checkbox" },
       { key: "transportationPermission", label: "Transportation permission", type: "checkbox" },
       { key: "sunscreenPermission", label: "Sunscreen/topical permission", type: "checkbox" },
       { key: "waterActivityPermission", label: "Water activity permission", type: "checkbox" },
       { key: "emergencyMedicalPermission", label: "Emergency medical care permission", type: "checkbox" },
+      { key: "firstAidEmergencyConsent", label: "First aid and emergency transport consent", type: "checkbox" },
+      { key: "floridaKnowYourChildcareAcknowledgment", label: "Know Your Childcare Facility acknowledgment", type: "checkbox" },
+      { key: "floridaDistractedAdultAcknowledgment", label: "Distracted Adult Flyer acknowledgment", type: "checkbox" },
+      { key: "dcfInspectionAccessAcknowledgment", label: "DCF record access and inspection acknowledgment", type: "checkbox" },
+      { key: "physicalImmunizationThirtyDayAcknowledgment", label: "Physical and immunization record due within 30 days", type: "checkbox" },
+    ],
+  },
+  {
+    id: "food_media_uniforms",
+    label: "Nutrition policy, food activities, meal application, photo release, and uniforms",
+    fields: [
       { key: "foodProgramPermission", label: "Food program participation", type: "checkbox" },
+      { key: "nutritionPolicyAcknowledgment", label: "Nutrition and physical activity policy acknowledgment", type: "checkbox" },
+      { key: "foodActivityPermission", label: "Food-related activity permission", type: "select", options: ["Give permission", "Decline permission"] },
+      { key: "foodActivityAllergyChoice", label: "Food allergy or dietary restriction activity choice", type: "select" },
+      { key: "foodActivityRestrictedItems", label: "Foods the child may not eat or handle", type: "textarea" },
+      { key: "uniformBlackQuantity", label: "Black uniform shirt quantity", type: "text" },
+      { key: "uniformBlackSize", label: "Black uniform shirt size", type: "text" },
+      { key: "uniformYellowQuantity", label: "Yellow uniform shirt quantity", type: "text" },
+      { key: "uniformYellowSize", label: "Yellow uniform shirt size", type: "text" },
+      { key: "uniformPaymentChoice", label: "Uniform payment choice", type: "select", options: ["One-time payment", "Payment plan"] },
+      { key: "uniformPaymentAmount", label: "Uniform payment amount", type: "text" },
+      { key: "uniformComments", label: "Uniform comments", type: "textarea" },
+      { key: "mealBenefitApplicationNeeded", label: "Food program free/reduced meal application requested", type: "checkbox" },
+      { key: "mealApplicationCaseNumberSnap", label: "FAP/SNAP case number", type: "text" },
+      { key: "mealApplicationCaseNumberTanf", label: "TANF case number", type: "text" },
+      { key: "mealApplicationChildStatuses", label: "Meal application child statuses", type: "multi_checkbox" },
+      { key: "mealApplicationAttendedThisCenter", label: "Attended this center this year", type: "select", options: ["Yes", "No"] },
+      { key: "mealApplicationHeadStartPreK", label: "Head Start / Pre-K / After School status", type: "select", options: ["Yes", "No"] },
+      { key: "mealApplicationChildIncome", label: "Child income", type: "textarea" },
+      { key: "mealApplicationHouseholdMembers", label: "Household members", type: "textarea" },
+      { key: "mealApplicationAdultIncome", label: "Adult income", type: "textarea" },
+      { key: "mealApplicationLastFourSsn", label: "Adult household member last four SSN", type: "text" },
+      { key: "mealApplicationNoSsn", label: "No SSN", type: "checkbox" },
+      { key: "mealApplicationEthnicity", label: "Optional ethnicity", type: "text" },
+      { key: "mealApplicationRace", label: "Optional race", type: "text" },
+      { key: "mealApplicationSignatureName", label: "Meal application signature name", type: "text" },
+      { key: "mealApplicationSignatureDate", label: "Meal application signature date", type: "date" },
+    ],
+  },
+  {
+    id: "financial_handbook_acknowledgments",
+    label: "Financial agreement, handbook receipt, emergency procedures, and e-signature",
+    fields: [
       { key: "handbookAcknowledgment", label: "Parent handbook acknowledgment", type: "checkbox" },
+      { key: "emergencyProceduresAcknowledgment", label: "Emergency procedures acknowledgment", type: "checkbox" },
       { key: "tuitionPolicyAcknowledgment", label: "Tuition policy acknowledgment", type: "checkbox" },
       { key: "disciplinePolicyAcknowledgment", label: "Discipline policy acknowledgment", type: "checkbox" },
+      { key: "expulsionPolicyAcknowledgment", label: "Expulsion policy acknowledgment", type: "checkbox" },
+      { key: "mandatoryReportingAcknowledgment", label: "Mandatory reporting policy acknowledgment", type: "checkbox" },
       { key: "healthPolicyAcknowledgment", label: "Health policy acknowledgment", type: "checkbox" },
+      { key: "collectionResponsibilityAcknowledgment", label: "Collection responsibility acknowledgment", type: "checkbox" },
+      { key: "financialAgreementPaymentFeesInitials", label: "Financial agreement payment of fees initials", type: "text" },
+      { key: "financialAgreementAbsenteePolicyInitials", label: "Financial agreement absentee policy initials", type: "text" },
+      { key: "financialAgreementRegistrationFeeInitials", label: "Financial agreement registration fee initials", type: "text" },
+      { key: "financialAgreementReturnedPaymentInitials", label: "Financial agreement returned payment initials", type: "text" },
+      { key: "financialAgreementDischargeInitials", label: "Financial agreement discharge policy initials", type: "text" },
+      { key: "financialAgreementWithdrawalInitials", label: "Financial agreement withdrawal initials", type: "text" },
+      { key: "financialAgreementLatePickupInitials", label: "Financial agreement late pickup fee initials", type: "text" },
+      { key: "financialAgreementCollectionInitials", label: "Financial agreement collection policy initials", type: "text" },
+      { key: "financialAgreementUniformInitials", label: "Financial agreement uniform policy initials", type: "text" },
+      { key: "financialAgreementFinalTermsInitials", label: "Financial agreement final terms initials", type: "text" },
       { key: "policyAcknowledgment", label: "Information accuracy certification", type: "checkbox", required: true },
       { key: "eSignatureConsent", label: "Electronic signature consent", type: "checkbox" },
       { key: "signatureName", label: "Typed signature", type: "text", required: true },
@@ -208,9 +412,9 @@ export const kidCityRegistrationPacketSections: PacketSection[] = [
 
 export function kidCityRegistrationPacketSchema() {
   return {
-    version: 2,
+    version: 3,
     source: "public_online_registration",
-    title: "Kid City USA Online Registration Packet",
+    title: "Kid City USA Online Registration Packet - Florida March 2026",
     sections: kidCityRegistrationPacketSections,
   };
 }
@@ -319,11 +523,18 @@ export function buildRegistrationDocumentRequests(packet: Partial<RegistrationPa
     upload("family-emergency-card", "family", "Emergency Card", "emergency_card"),
     signature("family-authorized-pickup", "family", "Authorized Pickup Form", "authorized_pickup"),
     signature("family-handbook", "family", "Parent Handbook Acknowledgment", "handbook_acknowledgment"),
+    signature("family-emergency-procedures", "family", "Emergency Procedures Receipt", "emergency_procedures_receipt"),
     signature("family-tuition-policy", "family", "Tuition Policy Acknowledgment", "tuition_policy"),
+    signature("family-financial-agreement", "family", "Financial Agreement", "financial_agreement"),
+    signature("family-parent-id", "family", "Parent / Guardian Identification", "parent_guardian_identification"),
     signature("child-enrollment-packet", "child", "Enrollment Packet", "enrollment_packet"),
+    signature("child-special-profile", "child", "What Makes My Child Special", "child_profile_packet"),
     upload("child-immunization", "child", "Immunization Record", "immunization"),
     upload("child-health-assessment", "child", "Health Assessment", "health_assessment"),
+    upload("child-photo", "child", "Child Photo", "child_photo"),
+    signature("child-nutrition-activity-policy", "child", "Child Care Nutrition and Physical Activity Policies", "nutrition_activity_policy"),
     signature("child-photo-release", "child", "Photo/Video Release", "photo_video_release"),
+    signature("child-food-activity-permission", "child", "Permission for Food-related Activities", "food_activity_permission"),
     signature("child-field-trip", "child", "Field Trip Permission", "field_trip_permission"),
     signature("child-emergency-medical", "child", "Emergency Medical Authorization", "emergency_medical_authorization"),
   ];
@@ -345,6 +556,12 @@ export function buildRegistrationDocumentRequests(packet: Partial<RegistrationPa
   }
   if (packetHasValue(packet.dietaryRestrictions)) {
     requests.push(upload("child-dietary-care-plan", "child", "Dietary Care Plan", "dietary_care_plan", true));
+  }
+  if (packet?.mealBenefitApplicationNeeded || packetHasValue(packet?.mealApplicationCaseNumberSnap) || packetHasValue(packet?.mealApplicationHouseholdMembers)) {
+    requests.push(signature("family-meal-benefit-application", "family", "Food Program Free/Reduced Meal Application", "meal_benefit_application"));
+  }
+  if (packetHasValue(packet?.uniformBlackQuantity) || packetHasValue(packet?.uniformYellowQuantity) || packetHasValue(packet?.uniformPaymentChoice)) {
+    requests.push(signature("child-uniform-order", "child", "Uniform Order Form", "uniform_order"));
   }
   if (packetHasValue(packet.custodyNotes) || packetHasValue(packet.restrictedPickups)) {
     requests.push(upload("family-custody", "family", "Custody / Restricted Pickup Documents", "custody_document", true));

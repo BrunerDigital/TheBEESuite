@@ -3,15 +3,15 @@ const fteReportingDeadlineDayOffset = 4;
 const fteReportingDeadlineHour = 12;
 const fteReportingDeadlineMinute = 0;
 const ftePreDeadlineEscalationHour = 8;
-const ftePostDeadlineEscalationHour = 13;
+const ftePostDeadlineEscalationHour = 17;
 const fteEscalationMinute = 0;
 
 export const FTE_REPORTING_DEADLINE_TIME_ZONE = "America/New_York";
 export const FTE_REPORTING_DEADLINE_LABEL = "Friday by 12:00 PM ET";
 export const FTE_PRE_DEADLINE_ESCALATION_LABEL = "Friday 8:00 AM ET";
-export const FTE_POST_DEADLINE_ESCALATION_LABEL = "Friday 1:00 PM ET";
+export const FTE_POST_DEADLINE_ESCALATION_LABEL = "Friday 5:00 PM ET";
 
-export type FteExternalEscalationWindow = "friday_8am" | "friday_1pm";
+export type FteExternalEscalationWindow = "friday_8am" | "friday_5pm";
 
 export function isExecutiveFteManager(role?: string | null) {
   return Boolean(role && executiveFteRoles.has(role));
@@ -94,6 +94,13 @@ function utcDateForZonedTime(date: Date, input: { timeZone: string; hour: number
   return new Date(utcGuess.getTime() - timeZoneOffsetMs(utcGuess, input.timeZone));
 }
 
+function isFridayInFteTimeZone(date: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: FTE_REPORTING_DEADLINE_TIME_ZONE,
+    weekday: "short",
+  }).format(date) === "Fri";
+}
+
 export function fteDueAtForWeek(weekStart: Date) {
   const dueDate = new Date(weekStart);
   dueDate.setUTCDate(dueDate.getUTCDate() + fteReportingDeadlineDayOffset);
@@ -120,6 +127,8 @@ export function fteExternalEscalationWindow(now = new Date()) {
   const preDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePreDeadlineEscalationHour);
   const postDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePostDeadlineEscalationHour);
 
+  if (!isFridayInFteTimeZone(now)) return null;
+
   if (now.getTime() >= preDeadlineAt.getTime() && now.getTime() < dueAt.getTime()) {
     return {
       key: "friday_8am" as const,
@@ -132,7 +141,7 @@ export function fteExternalEscalationWindow(now = new Date()) {
 
   if (now.getTime() >= postDeadlineAt.getTime()) {
     return {
-      key: "friday_1pm" as const,
+      key: "friday_5pm" as const,
       label: FTE_POST_DEADLINE_ESCALATION_LABEL,
       startsAt: postDeadlineAt,
       weekStart,

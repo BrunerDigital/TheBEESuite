@@ -5,8 +5,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "@/lib/document-guardrails";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
+import { buildParentPortalUrl } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import { INTERNAL_SIGNATURE_PENDING_KEY, SIGNATURE_CONSENT_TEXT } from "@/lib/signature-capture";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -79,7 +81,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const portalUrl = new URL("/parent-portal", process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin).toString();
+  const portalUrl = buildParentPortalUrl(getAppBaseUrl(request.url));
   const signatureText = `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nOpen the parent portal to review and sign: ${portalUrl}\n\nSignature consent: ${SIGNATURE_CONSENT_TEXT}`;
   const email = await sendEmail({
     to: [recipient.email],

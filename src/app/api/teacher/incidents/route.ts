@@ -7,13 +7,10 @@ import { parseOperationalDate } from "@/lib/date-guardrails";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { normalizeTeacherIncidentPayload } from "@/lib/teacher-incident";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
-
-function clean(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
 
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
@@ -25,21 +22,18 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const body = await request.json();
-  const childId = clean(body.childId);
-  const type = clean(body.type);
-  const description = clean(body.description);
-  const actionTaken = clean(body.actionTaken);
-
-  if (!childId || !type || !description || !actionTaken) {
-    return NextResponse.json({ ok: false, error: "Child, type, description, and action taken are required." }, { status: 400 });
+  const parsedIncident = normalizeTeacherIncidentPayload(body);
+  if (!parsedIncident.ok) {
+    return NextResponse.json({ ok: false, error: parsedIncident.error }, { status: parsedIncident.status });
   }
-  const occurredAt = parseOperationalDate(body.occurredAt, "Incident time");
+  const incidentInput = parsedIncident.incident;
+  const occurredAt = parseOperationalDate(incidentInput.occurredAt, "Incident time");
   if (!occurredAt.ok) {
     return NextResponse.json({ ok: false, error: occurredAt.error }, { status: occurredAt.status });
   }
 
   const child = await prisma.child.findUnique({
-    where: { id: childId },
+    where: { id: incidentInput.childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
       family: { select: { centerId: true, custodyNotes: true } },
@@ -63,17 +57,17 @@ async function POSTHandler(request: NextRequest) {
 
   const incident = await prisma.incidentReport.create({
     data: {
-      childId,
+      childId: incidentInput.childId,
       classroomId: child.classroom?.id ?? null,
       staffMember: user.name,
       occurredAt: occurredAt.date,
-      type,
-      description,
-      actionTaken,
-      parentNotified: Boolean(body.parentNotified),
-      photoAttachmentPlaceholder: Boolean(body.photoAttachmentPlaceholder),
+      type: incidentInput.type,
+      description: incidentInput.description,
+      actionTaken: incidentInput.actionTaken,
+      parentNotified: incidentInput.parentNotified,
+      photoAttachmentPlaceholder: incidentInput.photoAttachmentPlaceholder,
       adminReviewStatus: "pending",
-      followUpTasks: clean(body.followUpTask) ? [clean(body.followUpTask)] : [],
+      followUpTasks: incidentInput.followUpTask ? [incidentInput.followUpTask] : [],
     },
   });
 
@@ -89,8 +83,8 @@ async function POSTHandler(request: NextRequest) {
       prisma.notification.create({
         data: {
           userId: director.id,
-          title: `Incident needs review: ${type}`,
-          body: `${child.fullName}: ${description}`,
+          title: `Incident needs review: ${incidentInput.type}`,
+          body: `${child.fullName}: ${incidentInput.description}`,
           type: "incident",
           priority: "high",
         },
@@ -104,7 +98,7 @@ async function POSTHandler(request: NextRequest) {
     resource: "IncidentReport",
     resourceId: incident.id,
     metadata: {
-      childId,
+      childId: incidentInput.childId,
       parentNotified: incident.parentNotified,
       requiresReview: true,
       custodyWarning: hasCustodyWarning(child.family),

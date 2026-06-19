@@ -4,13 +4,19 @@ import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUs
 import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
+import {
+  buildParentPortalInvitationText,
+  buildParentPortalUrl,
+  PARENT_PORTAL_INVITE_MODE,
+  PARENT_PORTAL_PATH,
+} from "@/lib/parent-portal-invitations";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import {
   ensureSupabaseAuthUser,
+  getAppBaseUrl,
   getPasswordResetRedirectUrl,
   requestSupabasePasswordReset,
-  upsertSupabaseAuthUserWithPassword,
 } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -37,8 +43,11 @@ async function POSTHandler(request: NextRequest) {
   if (!guardianId) {
     return NextResponse.json({ ok: false, error: "Guardian ID is required." }, { status: 400 });
   }
-  if (temporaryPassword && temporaryPassword.length < 8) {
-    return NextResponse.json({ ok: false, error: "Temporary passwords must be at least 8 characters." }, { status: 400 });
+  if (temporaryPassword) {
+    return NextResponse.json(
+      { ok: false, error: "Parent passwords are set by the parent from the setup email." },
+      { status: 400 },
+    );
   }
 
   const guardian = await prisma.guardian.findUnique({
@@ -98,29 +107,18 @@ async function POSTHandler(request: NextRequest) {
     | { ok: false; error?: string; passwordResetSent?: boolean; emailSent?: boolean };
 
   try {
-    if (temporaryPassword) {
-      const authResult = await upsertSupabaseAuthUserWithPassword({
-        email,
-        name: guardian.fullName,
-        password: temporaryPassword,
-        role: UserRole.PARENT_GUARDIAN,
-        source: "bee_suite_parent_portal_invite",
-      });
-      auth = { ok: true, created: authResult.created, updated: authResult.updated };
+    const ensure = await ensureSupabaseAuthUser({ email, name: guardian.fullName });
+    if (!ensure.ok) {
+      auth = { ok: false, error: ensure.error };
     } else {
-      const ensure = await ensureSupabaseAuthUser({ email, name: guardian.fullName });
-      if (!ensure.ok) {
-        auth = { ok: false, error: ensure.error };
-      } else {
-        const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(request.url));
-        auth = {
-          ok: reset.ok,
-          created: ensure.created,
-          alreadyExisted: ensure.alreadyExisted,
-          passwordResetSent: reset.ok,
-          error: reset.ok ? undefined : `Password reset email returned ${reset.status}.`,
-        };
-      }
+      const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(request.url, PARENT_PORTAL_PATH));
+      auth = {
+        ok: reset.ok,
+        created: ensure.created,
+        alreadyExisted: ensure.alreadyExisted,
+        passwordResetSent: reset.ok,
+        error: reset.ok ? undefined : `Password setup email returned ${reset.status}.`,
+      };
     }
   } catch (error) {
     auth = { ok: false, error: error instanceof Error ? error.message : "Supabase auth setup failed." };
@@ -162,21 +160,20 @@ async function POSTHandler(request: NextRequest) {
         parentPortal: {
           linkedAt: new Date().toISOString(),
           linkedBy: user.email,
-          inviteMode: temporaryPassword ? "temporary_password" : "password_reset",
+          inviteMode: PARENT_PORTAL_INVITE_MODE,
+          loginEmail: email,
         },
       },
     },
   });
 
-  const invitationText = [
-    `Hi ${guardian.fullName},`,
-    "",
-    `Your parent portal for ${center.crmLocationId ?? center.name} is ready.`,
-    temporaryPassword
-      ? "Use the temporary password provided by your school director, then reset it after signing in."
-      : "Use the password reset email from The BEE Suite to set your password.",
-    `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/parent-portal`,
-  ].join("\n");
+  const portalUrl = buildParentPortalUrl(getAppBaseUrl(request.url));
+  const invitationText = buildParentPortalInvitationText({
+    guardianName: guardian.fullName,
+    centerLabel: center.crmLocationId ?? center.name,
+    email,
+    portalUrl,
+  });
   const emailCopy = await sendEmail({
     to: [email],
     subject: "Your The BEE Suite parent portal is ready",
@@ -207,7 +204,7 @@ async function POSTHandler(request: NextRequest) {
       familyId: guardian.familyId,
       parentUserId: parentUser.id,
       email,
-      authMode: temporaryPassword ? "temporary_password" : "password_reset",
+      authMode: PARENT_PORTAL_INVITE_MODE,
       resetSent: "passwordResetSent" in auth ? auth.passwordResetSent : false,
       emailCopySent: emailCopy.ok,
     },

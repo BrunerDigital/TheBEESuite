@@ -5,7 +5,11 @@
   "crons": [
     {
       "path": "/api/cron/fte-reminders",
-      "schedule": "0 14 * * 1-5"
+      "schedule": "0 14 * * 5"
+    },
+    {
+      "path": "/api/cron/fte-reminders",
+      "schedule": "0 22 * * 5"
     },
     {
       "path": "/api/cron/integration-retries",
@@ -14,6 +18,14 @@
     {
       "path": "/api/cron/tuition-billing",
       "schedule": "15 13 * * *"
+    },
+    {
+      "path": "/api/cron/tuition-payment-reminders",
+      "schedule": "15 23 * * 5"
+    },
+    {
+      "path": "/api/cron/tuition-payment-reminders",
+      "schedule": "30 12 * * 1-5"
     },
     {
       "path": "/api/cron/document-expiration-reminders",

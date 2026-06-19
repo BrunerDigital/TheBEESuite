@@ -320,6 +320,9 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
   const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
   const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const documentRecordCount =
+    (selectedFamily?.documents.length ?? 0) +
+    (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -530,6 +533,75 @@ export function FamilyRecordEditor({ families, centers }: Props) {
       }
       loadEmergencyContact(null);
       setStatusMessage("Emergency contact removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removeAllergy() {
+    if (!selectedAllergy) return;
+    const confirmed = window.confirm(`Remove the ${selectedAllergy.allergen} allergy record from ${selectedChild?.fullName ?? "this child"}?`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "allergy", id: selectedAllergy.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Allergy record could not be removed.");
+        return;
+      }
+      loadAllergy(null);
+      setStatusMessage("Allergy record removed from the child profile.");
+      router.refresh();
+    });
+  }
+
+  function removeMedicalNote() {
+    if (!selectedMedicalNote) return;
+    const confirmed = window.confirm(`Remove this ${selectedMedicalNote.category || "medical"} note from ${selectedChild?.fullName ?? "this child"}?`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "medicalNote", id: selectedMedicalNote.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Medical note could not be removed.");
+        return;
+      }
+      loadMedicalNote(null);
+      setStatusMessage("Medical note removed from the child profile.");
+      router.refresh();
+    });
+  }
+
+  function removeDocument() {
+    if (!selectedDocument) return;
+    const confirmed = window.confirm(`Remove the ${selectedDocument.name} document request? Uploaded files and request history for this row will be removed.`);
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "document", id: selectedDocument.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Document request could not be removed.");
+        return;
+      }
+      loadDocument(null);
+      setStatusMessage("Document request removed.");
       router.refresh();
     });
   }
@@ -1137,7 +1209,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="outline" onClick={() => loadChild(null)}>New</Button>
+                <Button type="button" variant="outline" onClick={() => loadChild(null)}>Add</Button>
               </div>
             </div>
             <div className="space-y-1">
@@ -1291,8 +1363,16 @@ export function FamilyRecordEditor({ families, centers }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Allergy action plan</div>
-                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Allergy action plans</div>
+                  <p className="text-xs text-muted-foreground">Select an allergy to edit it, or add another plan for this child.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedChild?.allergies.length ?? 0} allerg{selectedChild?.allergies.length === 1 ? "y" : "ies"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadAllergy(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -1334,13 +1414,30 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   <Save data-icon="inline-start" />
                   {selectedAllergy ? "Save allergy" : "Add allergy"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedAllergy}
+                  onClick={removeAllergy}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove allergy
+                </Button>
               </div>
             </div>
 
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Restricted medical note</div>
-                <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Medical notes</div>
+                  <p className="text-xs text-muted-foreground">Select a note to edit it, or add another note for this child.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedChild?.medicalNotes.length ?? 0} note{selectedChild?.medicalNotes.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" disabled={!selectedChild} onClick={() => loadMedicalNote(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -1380,6 +1477,15 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   <Save data-icon="inline-start" />
                   {selectedMedicalNote ? "Save medical note" : "Add medical note"}
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedMedicalNote}
+                  onClick={removeMedicalNote}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove medical note
+                </Button>
               </div>
             </div>
           </div>
@@ -1392,7 +1498,12 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   Create or edit family/child document rows. Parents upload requested files from the portal; directors review them from Documents.
                 </p>
               </div>
-              <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>New</Button>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  {documentRecordCount} document{documentRecordCount === 1 ? "" : "s"}
+                </Badge>
+                <Button type="button" size="sm" variant="outline" disabled={!selectedFamily} onClick={() => loadDocument(null)}>Add</Button>
+              </div>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
@@ -1451,24 +1562,34 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                 Restricted document visibility
               </label>
             </div>
-            <Button
-              className="mt-3"
-              disabled={isPending || !selectedFamily || !documentName.trim()}
-              onClick={() => postRecord({
-                entity: "document",
-                id: selectedDocument?.id,
-                familyId: selectedFamily?.id,
-                childId: documentChildId === "family" ? undefined : documentChildId,
-                name: documentName,
-                type: documentType,
-                status: documentStatus,
-                expiresAt: documentExpiresAt,
-                restricted: documentRestricted,
-              }, "Document request")}
-            >
-              <Save data-icon="inline-start" />
-              {selectedDocument ? "Save document" : "Add document"}
-            </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                disabled={isPending || !selectedFamily || !documentName.trim()}
+                onClick={() => postRecord({
+                  entity: "document",
+                  id: selectedDocument?.id,
+                  familyId: selectedFamily?.id,
+                  childId: documentChildId === "family" ? undefined : documentChildId,
+                  name: documentName,
+                  type: documentType,
+                  status: documentStatus,
+                  expiresAt: documentExpiresAt,
+                  restricted: documentRestricted,
+                }, "Document request")}
+              >
+                <Save data-icon="inline-start" />
+                {selectedDocument ? "Save document" : "Add document"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending || !selectedDocument}
+                onClick={removeDocument}
+              >
+                <Trash2 data-icon="inline-start" />
+                Remove document
+              </Button>
+            </div>
           </div>
         </section>
       </CardContent>

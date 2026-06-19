@@ -25,6 +25,8 @@ function recordLabel(entity: string) {
     family: "Family",
     guardian: "Parent/guardian",
     child: "Child profile",
+    allergy: "Allergy record",
+    medicalNote: "Medical note",
     authorizedPickup: "Authorized pickup",
     emergencyContact: "Emergency contact",
     document: "Document request",
@@ -123,6 +125,36 @@ async function relatedUserIds(input: RecordChangeInput) {
         classroom: { select: { staff: { where: { user: { isActive: true } }, select: { userId: true } } } },
       },
     });
+    return [
+      ...(child?.family.guardians.map((guardian) => guardian.userId).filter((id): id is string => Boolean(id)) ?? []),
+      ...(child?.classroom?.staff.map((staff) => staff.userId) ?? []),
+    ];
+  }
+
+  if (input.entity === "allergy" || input.entity === "medicalNote") {
+    const child = input.entity === "allergy"
+      ? await prisma.allergy.findUnique({
+          where: { id: input.resourceId },
+          select: {
+            child: {
+              select: {
+                family: { select: { guardians: { select: { userId: true } } } },
+                classroom: { select: { staff: { where: { user: { isActive: true } }, select: { userId: true } } } },
+              },
+            },
+          },
+        }).then((allergy) => allergy?.child ?? null)
+      : await prisma.childMedicalNote.findUnique({
+          where: { id: input.resourceId },
+          select: {
+            child: {
+              select: {
+                family: { select: { guardians: { select: { userId: true } } } },
+                classroom: { select: { staff: { where: { user: { isActive: true } }, select: { userId: true } } } },
+              },
+            },
+          },
+        }).then((note) => note?.child ?? null);
     return [
       ...(child?.family.guardians.map((guardian) => guardian.userId).filter((id): id is string => Boolean(id)) ?? []),
       ...(child?.classroom?.staff.map((staff) => staff.userId) ?? []),

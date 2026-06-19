@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
@@ -1058,6 +1058,27 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                   <Badge variant="secondary">+{activeDailyReportChildren.length - 8}</Badge>
                 ) : null}
               </div>
+              <div className="mt-3 space-y-1">
+                <Label htmlFor="daily-report-child">Child</Label>
+                <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) setDailyReportTargets([value]); }}>
+                  <SelectTrigger id="daily-report-child" className="w-full">
+                    <SelectValue placeholder="Choose a child from this class" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                    {byClassroom.map((classroom) => (
+                      <SelectGroup key={classroom.id ?? "unassigned"}>
+                        <SelectLabel>{classroom.name}</SelectLabel>
+                        {classroom.children.map((child) => (
+                          <SelectItem key={child.id} value={child.id}>
+                            <span className="truncate">{child.fullName}</span>
+                            <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button type="button" size="xs" variant="outline" onClick={selectPresentDailyReports}>
                   <ClipboardCheck data-icon="inline-start" />
@@ -1133,9 +1154,9 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <Select value={row.mealType} onValueChange={(value) => updateMeal(row.id, { mealType: value ?? row.mealType })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="Breakfast">Breakfast</SelectItem>
                             <SelectItem value="Morning snack">Morning snack</SelectItem>
@@ -1144,9 +1165,14 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                             <SelectItem value="Bottle">Bottle</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input value={row.food} onChange={(event) => updateMeal(row.id, { food: event.target.value })} placeholder="Food or bottle" />
+                        <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
                       </div>
-                      <Input value={row.amount} onChange={(event) => updateMeal(row.id, { amount: event.target.value })} placeholder="Amount" />
+                      <Textarea
+                        value={row.food}
+                        onChange={(event) => updateMeal(row.id, { food: event.target.value })}
+                        placeholder="Food, bottle, or meal notes"
+                        className="min-h-24 resize-y text-base leading-6 sm:text-sm"
+                      />
                     </div>
                   ))}
                 </div>

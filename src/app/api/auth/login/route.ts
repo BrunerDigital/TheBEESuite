@@ -39,7 +39,7 @@ async function POSTHandler(request: NextRequest) {
 
   if (!email || !password) {
     return NextResponse.json(
-      { ok: false, error: "Username and password are required." },
+      { ok: false, error: "Email or username and password are required." },
       { status: 400 },
     );
   }

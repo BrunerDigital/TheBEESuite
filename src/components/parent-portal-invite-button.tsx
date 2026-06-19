@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, KeyRound, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 type Props = {
   guardianId: string;
@@ -17,7 +15,6 @@ type Props = {
 };
 
 export function ParentPortalInviteButton({ guardianId, guardianName, email, linked }: Props) {
-  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -29,23 +26,17 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       const response = await fetch("/api/parent/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guardianId,
-          temporaryPassword: temporaryPassword.trim(),
-        }),
+        body: JSON.stringify({ guardianId }),
       });
       const json = await response.json().catch(() => null) as { error?: string; auth?: { passwordResetSent?: boolean } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
         return;
       }
-      setTemporaryPassword("");
       setStatusMessage(
-        temporaryPassword.trim()
-          ? "Parent portal access was created with the password."
-          : json?.auth?.passwordResetSent
-            ? "Parent portal access was created and the reset email was requested."
-            : "Parent portal access was created.",
+        json?.auth?.passwordResetSent
+          ? "Parent portal access was created and the password setup email was sent. The parent signs in with their guardian email."
+          : "Parent portal access was created. The parent signs in with their guardian email.",
       );
     });
   }
@@ -76,21 +67,13 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        <div className="space-y-1">
-          <Label>Password</Label>
-          <Input
-            value={temporaryPassword}
-            onChange={(event) => setTemporaryPassword(event.target.value)}
-            placeholder="Optional; blank sends reset email"
-            type="text"
-          />
-          <p className="text-xs text-muted-foreground">
-            Leave blank to create the parent account and send a password setup/reset email.
-          </p>
-        </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          The guardian email becomes the parent login. The setup email lets the parent choose their own password, and the linked
+          family records are ready when they sign in.
+        </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">
-          {temporaryPassword.trim() ? <KeyRound data-icon="inline-start" /> : <Send data-icon="inline-start" />}
-          {linked ? "Reset Portal Access" : "Invite Parent"}
+          <Send data-icon="inline-start" />
+          {linked ? "Send Password Setup" : "Invite Parent"}
         </Button>
       </CardContent>
     </Card>

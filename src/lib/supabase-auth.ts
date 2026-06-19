@@ -56,10 +56,29 @@ export function getAppBaseUrl(requestUrl?: string) {
   return "http://localhost:3000";
 }
 
-export function getPasswordResetRedirectUrl(requestUrl?: string) {
-  const configured = process.env.AUTH_PASSWORD_RESET_REDIRECT_URL;
-  if (configured) return configured;
-  return `${getAppBaseUrl(requestUrl)}/reset-password`;
+export function safePasswordResetNextPath(value?: string | null) {
+  const path = value?.trim() || "";
+  if (!path || !path.startsWith("/") || path.startsWith("//") || path.startsWith("/login")) return "";
+  return path;
+}
+
+function appendPasswordResetNextPath(resetUrl: string, nextPath?: string | null) {
+  const safeNext = safePasswordResetNextPath(nextPath);
+  if (!safeNext) return resetUrl;
+
+  try {
+    const url = new URL(resetUrl);
+    url.searchParams.set("next", safeNext);
+    return url.toString();
+  } catch {
+    return resetUrl;
+  }
+}
+
+export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: string | null) {
+  const configured = process.env.AUTH_PASSWORD_RESET_REDIRECT_URL?.trim();
+  const resetUrl = configured || `${getAppBaseUrl(requestUrl)}/reset-password`;
+  return appendPasswordResetNextPath(resetUrl, nextPath);
 }
 
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {

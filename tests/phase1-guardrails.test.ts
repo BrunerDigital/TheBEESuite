@@ -22,6 +22,7 @@ import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
 import { hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
+import { buildParentPortalInvitationText, buildParentPortalUrl, PARENT_PORTAL_PATH } from "../src/lib/parent-portal-invitations";
 import {
   calculateFteCount,
   defaultFteWeekEnd,
@@ -31,7 +32,7 @@ import {
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
-import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
+import { cleanSupabaseUrl, getPasswordResetRedirectUrl, safePasswordResetNextPath } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
 import { canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
@@ -216,6 +217,47 @@ test("Supabase auth URL has no hardcoded project fallback", () => {
   assert.equal(cleanSupabaseUrl("https://example.supabase.co/"), "https://example.supabase.co");
   assert.equal(cleanSupabaseUrl(""), "");
   assert.equal(cleanSupabaseUrl(undefined), "");
+});
+
+test("password reset redirects can safely return invited parents to the portal", () => {
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalRedirect = mutableEnv.AUTH_PASSWORD_RESET_REDIRECT_URL;
+  try {
+    delete mutableEnv.AUTH_PASSWORD_RESET_REDIRECT_URL;
+    assert.equal(
+      getPasswordResetRedirectUrl("https://app.example.com/api/parent/invitations", PARENT_PORTAL_PATH),
+      "https://app.example.com/reset-password?next=%2Fparent-portal",
+    );
+
+    mutableEnv.AUTH_PASSWORD_RESET_REDIRECT_URL = "https://thebeesuite.io/reset-password";
+    assert.equal(
+      getPasswordResetRedirectUrl("https://ignored.example.com/api/auth/forgot-password", PARENT_PORTAL_PATH),
+      "https://thebeesuite.io/reset-password?next=%2Fparent-portal",
+    );
+
+    assert.equal(safePasswordResetNextPath("//evil.example.com"), "");
+    assert.equal(safePasswordResetNextPath("/login?next=/parent-portal"), "");
+  } finally {
+    if (originalRedirect === undefined) delete mutableEnv.AUTH_PASSWORD_RESET_REDIRECT_URL;
+    else mutableEnv.AUTH_PASSWORD_RESET_REDIRECT_URL = originalRedirect;
+  }
+});
+
+test("parent portal invite copy uses guardian email login and parent-owned password setup", () => {
+  const portalUrl = buildParentPortalUrl("https://thebeesuite.io/");
+  const text = buildParentPortalInvitationText({
+    guardianName: "Taylor Parent",
+    centerLabel: "Kid City Kokomo",
+    email: "taylor@example.com",
+    portalUrl,
+  });
+
+  assert.equal(portalUrl, "https://thebeesuite.io/parent-portal");
+  assert.match(text, /Use taylor@example\.com as your login email\./);
+  assert.match(text, /choose your password/);
+  assert.match(text, /child records and classroom connections/);
+  assert.doesNotMatch(text, /temporary password/i);
+  assert.doesNotMatch(text, /provided by your school director/i);
 });
 
 test("login rate limit blocks repeated attempts for the same key", () => {

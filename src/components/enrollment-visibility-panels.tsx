@@ -211,7 +211,8 @@ export function FamilyProfilesEnrollmentPanel({
         <CardHeader>
           <CardTitle>Parent Portal Access</CardTitle>
           <CardDescription>
-            Create or reset linked parent accounts. Parents only see families connected through their guardian profile.
+            Send password setup invites for linked parent accounts. Parents sign in with their guardian email and only see
+            family records connected through that guardian profile.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">

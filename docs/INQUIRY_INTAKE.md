@@ -3,7 +3,7 @@
 The public WordPress/Avada inquiry form should submit to:
 
 ```text
-https://the-bee-suite-beta.vercel.app/api/inquiries
+https://thebeesuite.io/api/inquiries
 ```
 
 The preferred Avada embed block is:
@@ -11,9 +11,9 @@ The preferred Avada embed block is:
 ```html
 <div id="bee-suite-inquiry-form"></div>
 <script
-  src="https://the-bee-suite-beta.vercel.app/kidcity-inquiry-form.js"
+  src="https://thebeesuite.io/kidcity-inquiry-form.js"
   data-target="bee-suite-inquiry-form"
-  data-endpoint="https://the-bee-suite-beta.vercel.app/api/inquiries"
+  data-endpoint="https://thebeesuite.io/api/inquiries"
   data-turnstile-site-key="OPTIONAL_CLOUDFLARE_TURNSTILE_SITE_KEY"
   async
 ></script>
@@ -128,7 +128,7 @@ director@example.com,marketing@example.com
 `INQUIRY_ALLOWED_ORIGINS` should include the WordPress origins:
 
 ```text
-https://kidcityusa.com,https://www.kidcityusa.com,https://the-bee-suite-beta.vercel.app
+https://kidcityusa.com,https://www.kidcityusa.com,https://thebeesuite.io
 ```
 
 ## Google Sheets

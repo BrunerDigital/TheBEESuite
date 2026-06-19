@@ -5,7 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { PARENT_PORTAL_PATH } from "@/lib/parent-portal-invitations";
+import { buildParentPortalUrl, PARENT_PORTAL_PATH } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import {
   asRecord,
@@ -27,6 +27,7 @@ import {
 } from "@/lib/registration-billing";
 import {
   ensureSupabaseAuthUser,
+  getAppBaseUrl,
   getPasswordResetRedirectUrl,
   requestSupabasePasswordReset,
 } from "@/lib/supabase-auth";
@@ -475,7 +476,7 @@ async function createParentPortalInvite(input: {
       },
     });
 
-    const portalUrl = `${process.env.NEXT_PUBLIC_APP_URL || new URL(input.requestUrl).origin}/parent-portal`;
+    const portalUrl = buildParentPortalUrl(getAppBaseUrl(input.requestUrl));
     const paymentLine = input.registrationPayment?.required
       ? `A registration fee/deposit invoice for ${formatRegistrationPaymentAmount(input.registrationPayment.totalCents)} is ready in the parent portal for secure checkout.`
       : "";

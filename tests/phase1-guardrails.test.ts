@@ -32,7 +32,14 @@ import {
 } from "../src/lib/fte-report-guardrails";
 import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
-import { buildPasswordResetRedirectUrl, cleanSupabaseUrl, safePasswordResetNextPath } from "../src/lib/supabase-auth";
+import {
+  buildPasswordResetRedirectUrl,
+  buildPublicAppBaseUrl,
+  canonicalizePublicUrl,
+  CANONICAL_APP_BASE_URL,
+  cleanSupabaseUrl,
+  safePasswordResetNextPath,
+} from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
 import { canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
@@ -240,6 +247,29 @@ test("password reset redirects can safely return invited parents to the portal",
 
   assert.equal(safePasswordResetNextPath("//evil.example.com"), "");
   assert.equal(safePasswordResetNextPath("/login?next=/parent-portal"), "");
+});
+
+test("public parent links never expose Vercel deployment hosts", () => {
+  assert.equal(
+    buildPublicAppBaseUrl({
+      requestUrl: "https://the-bee-suite-preview-brunerdigitals-projects.vercel.app/api/parent/invitations",
+      vercelUrl: "the-bee-suite-preview-brunerdigitals-projects.vercel.app",
+    }),
+    CANONICAL_APP_BASE_URL,
+  );
+
+  assert.equal(
+    canonicalizePublicUrl("https://the-bee-suite-beta.vercel.app/parent-portal"),
+    "https://thebeesuite.io/parent-portal",
+  );
+
+  assert.equal(
+    buildPasswordResetRedirectUrl({
+      configuredRedirectUrl: "https://the-bee-suite-beta.vercel.app/reset-password",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://thebeesuite.io/reset-password?next=%2Fparent-portal",
+  );
 });
 
 test("parent portal invite copy uses guardian email login and parent-owned password setup", () => {

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
 
 type SupabaseAuthKeyPreference = "anon" | "service";
+export const CANONICAL_APP_BASE_URL = "https://thebeesuite.io";
 
 export function cleanSupabaseUrl(value?: string | null) {
   return value?.trim().replace(/\/+$/, "") || "";
@@ -24,6 +25,58 @@ export function hasSupabaseAdminAuthConfig() {
   const url = cleanSupabaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   return Boolean(url && serviceKey);
+}
+
+function cleanUrl(value?: string | null) {
+  return value?.trim().replace(/\/+$/, "") || "";
+}
+
+function hasVercelAppHost(hostname: string) {
+  return hostname.toLowerCase() === "vercel.app" || hostname.toLowerCase().endsWith(".vercel.app");
+}
+
+export function canonicalizePublicUrl(value?: string | null) {
+  const cleaned = cleanUrl(value);
+  if (!cleaned) return "";
+
+  try {
+    const url = new URL(cleaned);
+    if (hasVercelAppHost(url.hostname)) {
+      const canonical = new URL(CANONICAL_APP_BASE_URL);
+      url.protocol = canonical.protocol;
+      url.host = canonical.host;
+    }
+    return cleanUrl(url.toString());
+  } catch {
+    return cleaned;
+  }
+}
+
+export function buildPublicAppBaseUrl({
+  configuredAppUrl,
+  requestUrl,
+  vercelUrl,
+}: {
+  configuredAppUrl?: string | null;
+  requestUrl?: string;
+  vercelUrl?: string | null;
+}) {
+  const configured = canonicalizePublicUrl(configuredAppUrl);
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      return configured;
+    }
+  }
+
+  if (requestUrl) {
+    const requestOrigin = canonicalizePublicUrl(new URL(requestUrl).origin);
+    if (requestOrigin) return new URL(requestOrigin).origin;
+  }
+
+  if (vercelUrl) return CANONICAL_APP_BASE_URL;
+  return "http://localhost:3000";
 }
 
 function getSupabaseAdminClient() {
@@ -49,11 +102,11 @@ async function findSupabaseAuthUserByEmail(email: string) {
 }
 
 export function getAppBaseUrl(requestUrl?: string) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (configured) return configured.replace(/\/+$/, "");
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`.replace(/\/+$/, "");
-  if (requestUrl) return new URL(requestUrl).origin;
-  return "http://localhost:3000";
+  return buildPublicAppBaseUrl({
+    configuredAppUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL,
+    requestUrl,
+    vercelUrl: process.env.VERCEL_URL,
+  });
 }
 
 export function safePasswordResetNextPath(value?: string | null) {
@@ -86,8 +139,8 @@ export function buildPasswordResetRedirectUrl({
   requestUrl?: string;
   nextPath?: string | null;
 }) {
-  const configured = configuredRedirectUrl?.trim();
-  const resetUrl = configured || `${appBaseUrl?.trim().replace(/\/+$/, "") || getAppBaseUrl(requestUrl)}/reset-password`;
+  const configured = canonicalizePublicUrl(configuredRedirectUrl);
+  const resetUrl = configured || `${canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl)}/reset-password`;
   return appendPasswordResetNextPath(resetUrl, nextPath);
 }
 

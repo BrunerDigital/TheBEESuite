@@ -296,24 +296,24 @@ export function KioskCheckIn({ center }: Props) {
   }
 
   return (
-    <main className="min-h-screen select-none bg-background p-4 text-foreground sm:p-6">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col gap-5">
-        <section className="rounded-3xl border bg-card/90 p-5 shadow-2xl shadow-black/20 sm:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
+      <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-6xl flex-col gap-3 sm:min-h-[calc(100dvh-1.5rem)] lg:min-h-[calc(100dvh-2rem)]">
+        <section className="rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <Badge className="mb-3">
+              <Badge className="mb-2">
                 <ShieldCheck data-icon="inline-start" />
                 Secure lobby kiosk
               </Badge>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">{center.name}</h1>
-              <p className="mt-2 text-sm text-muted-foreground sm:text-base">{center.place || "Parent check-in and check-out"}</p>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">{center.name}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{center.place || "Parent check-in and check-out"}</p>
             </div>
-            <div className="grid gap-3 rounded-2xl border bg-background/60 p-4 text-right">
+            <div className="grid gap-2 rounded-2xl border bg-background/60 p-3 text-right sm:min-w-48">
               <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
                 <Clock className="size-4" />
                 Today
               </div>
-              <div className="mt-1 text-2xl font-semibold">
+              <div className="text-xl font-semibold">
                 {new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}
               </div>
               <Badge variant="outline" className="justify-center">
@@ -341,9 +341,9 @@ export function KioskCheckIn({ center }: Props) {
           </Alert>
         ) : null}
 
-        <div className="grid flex-1 gap-5 lg:grid-cols-[24rem_1fr]">
+        <div className="grid flex-1 gap-3 lg:grid-cols-[21rem_1fr] xl:grid-cols-[24rem_1fr]">
           <Card className="glass-panel">
-            <CardHeader>
+            <CardHeader className="p-4 pb-2">
               <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in"}</CardTitle>
               <CardDescription>
                 {kioskMode === "family"
@@ -353,7 +353,7 @@ export function KioskCheckIn({ center }: Props) {
                   : "Use your work email and staff kiosk code."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-3 p-4 pt-2">
               <div className="grid grid-cols-2 gap-2 rounded-2xl border bg-background/60 p-1">
                 <Button type="button" variant={kioskMode === "family" ? "default" : "ghost"} onClick={() => selectKioskMode("family")}>
                   <ShieldCheck data-icon="inline-start" />
@@ -382,23 +382,23 @@ export function KioskCheckIn({ center }: Props) {
                     <>
                       <div className="grid grid-cols-4 gap-3">
                         {[0, 1, 2, 3].map((index) => (
-                          <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
+                          <div key={index} className="grid aspect-square min-h-14 place-items-center rounded-2xl border bg-background/60 text-3xl font-semibold sm:min-h-16 lg:min-h-14 xl:min-h-16">
                             {pin[index] ? "•" : ""}
                           </div>
                         ))}
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                          <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit(digit)}>
+                          <Button key={digit} type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-14 xl:h-16" onClick={() => appendDigit(digit)}>
                             {digit}
                           </Button>
                         ))}
-                        <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                        <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-14 xl:h-16" onClick={() => {
                           markActivity();
                           setPin("");
                         }}>Clear</Button>
-                        <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendDigit("0")}>0</Button>
-                        <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                        <Button type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-14 xl:h-16" onClick={() => appendDigit("0")}>0</Button>
+                        <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-14 xl:h-16" onClick={() => {
                           markActivity();
                           setPin((current) => current.slice(0, -1));
                         }}>Back</Button>
@@ -435,7 +435,7 @@ export function KioskCheckIn({ center }: Props) {
                     </div>
                   )}
 
-                  <Button className="h-16 w-full text-xl" disabled={isPending || !credentialReady} onClick={lookupCredential}>
+                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-14 xl:h-16" disabled={isPending || !credentialReady} onClick={lookupCredential}>
                     Find Family
                   </Button>
                 </>
@@ -461,30 +461,30 @@ export function KioskCheckIn({ center }: Props) {
                   </div>
                   <div className="grid grid-cols-4 gap-3">
                     {[0, 1, 2, 3].map((index) => (
-                      <div key={index} className="grid aspect-square min-h-20 place-items-center rounded-2xl border bg-background/60 text-4xl font-semibold">
+                      <div key={index} className="grid aspect-square min-h-14 place-items-center rounded-2xl border bg-background/60 text-3xl font-semibold sm:min-h-16 lg:min-h-14 xl:min-h-16">
                         {staffPin[index] ? "•" : ""}
                       </div>
                     ))}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                      <Button key={digit} type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendStaffDigit(digit)}>
+                      <Button key={digit} type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-14 xl:h-16" onClick={() => appendStaffDigit(digit)}>
                         {digit}
                       </Button>
                     ))}
-                    <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                    <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-14 xl:h-16" onClick={() => {
                       markActivity();
                       setStaffLookup(null);
                       setStaffPin("");
                     }}>Clear</Button>
-                    <Button type="button" variant="outline" className="h-20 text-3xl" onClick={() => appendStaffDigit("0")}>0</Button>
-                    <Button type="button" variant="outline" className="h-20 text-xl" onClick={() => {
+                    <Button type="button" variant="outline" className="h-14 text-2xl sm:h-16 lg:h-14 xl:h-16" onClick={() => appendStaffDigit("0")}>0</Button>
+                    <Button type="button" variant="outline" className="h-14 text-lg sm:h-16 lg:h-14 xl:h-16" onClick={() => {
                       markActivity();
                       setStaffLookup(null);
                       setStaffPin((current) => current.slice(0, -1));
                     }}>Back</Button>
                   </div>
-                  <Button className="h-16 w-full text-xl" disabled={isPending || !staffCredentialReady} onClick={lookupStaffCredential}>
+                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-14 xl:h-16" disabled={isPending || !staffCredentialReady} onClick={lookupStaffCredential}>
                     Find Staff
                   </Button>
                 </>
@@ -493,7 +493,7 @@ export function KioskCheckIn({ center }: Props) {
           </Card>
 
           <Card className="glass-panel">
-            <CardHeader>
+            <CardHeader className="p-4 pb-2">
               <CardTitle>
                 {kioskMode === "staff"
                   ? staffLookup
@@ -513,7 +513,7 @@ export function KioskCheckIn({ center }: Props) {
                     : "Your children will appear after PIN or QR verification."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex min-h-96 flex-col gap-4">
+            <CardContent className="flex min-h-72 flex-col gap-4 p-4 pt-2 lg:min-h-0">
               {kioskMode === "staff" ? (
                 staffLookup ? (
                   <>

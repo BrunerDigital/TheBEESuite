@@ -75,10 +75,26 @@ function appendPasswordResetNextPath(resetUrl: string, nextPath?: string | null)
   }
 }
 
-export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: string | null) {
-  const configured = process.env.AUTH_PASSWORD_RESET_REDIRECT_URL?.trim();
+export function buildPasswordResetRedirectUrl({
+  configuredRedirectUrl,
+  requestUrl,
+  nextPath,
+}: {
+  configuredRedirectUrl?: string | null;
+  requestUrl?: string;
+  nextPath?: string | null;
+}) {
+  const configured = configuredRedirectUrl?.trim();
   const resetUrl = configured || `${getAppBaseUrl(requestUrl)}/reset-password`;
   return appendPasswordResetNextPath(resetUrl, nextPath);
+}
+
+export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: string | null) {
+  return buildPasswordResetRedirectUrl({
+    configuredRedirectUrl: process.env.AUTH_PASSWORD_RESET_REDIRECT_URL,
+    requestUrl,
+    nextPath,
+  });
 }
 
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {

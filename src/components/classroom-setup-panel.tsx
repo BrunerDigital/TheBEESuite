@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useTransition } from "react";
+import { FormEvent, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Pencil, Plus, Save } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -31,12 +31,21 @@ function classroomTeacherNames(staff: ClassroomAssignmentStaff[], classroomId: s
 
 export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: configuredAgeGroups, demoMode = false }: Props) {
   const router = useRouter();
+  const [classroomOverrides, setClassroomOverrides] = useState<Record<string, ClassroomAssignmentClassroom>>({});
+  const classroomRows = useMemo(() => {
+    const overrideRows = Object.values(classroomOverrides);
+    const sourceIds = new Set(classrooms.map((classroom) => classroom.id));
+    return [
+      ...classrooms.map((classroom) => classroomOverrides[classroom.id] ?? classroom),
+      ...overrideRows.filter((classroom) => !sourceIds.has(classroom.id)),
+    ];
+  }, [classrooms, classroomOverrides]);
   const availableAgeGroups = useMemo(
-    () => mergeAgeGroupOptions(configuredAgeGroups, classrooms.map((classroom) => classroom.ageGroup)),
-    [classrooms, configuredAgeGroups],
+    () => mergeAgeGroupOptions(configuredAgeGroups, classroomRows.map((classroom) => classroom.ageGroup)),
+    [classroomRows, configuredAgeGroups],
   );
-  const [selectedClassroomId, setSelectedClassroomId] = useState(classrooms[0]?.id ?? "new");
-  const selectedClassroom = classrooms.find((classroom) => classroom.id === selectedClassroomId) ?? null;
+  const [selectedClassroomId, setSelectedClassroomId] = useState(classroomRows[0]?.id ?? "new");
+  const selectedClassroom = classroomRows.find((classroom) => classroom.id === selectedClassroomId) ?? null;
   const [centerId, setCenterId] = useState(selectedClassroom?.centerId ?? centers[0]?.id ?? "");
   const [name, setName] = useState(selectedClassroom?.name ?? "");
   const [ageGroup, setAgeGroup] = useState(selectedClassroom?.ageGroup ?? defaultAgeGroupOptions[0]);
@@ -47,7 +56,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
   const [isPending, startTransition] = useTransition();
 
   const centerOptions = useMemo(() => centers.length ? centers : [], [centers]);
-  const rows = useMemo(() => classrooms.map((classroom) => ({
+  const rows = useMemo(() => classroomRows.map((classroom) => ({
     classroom,
     warning: evaluateClassroomRatio({
       children: classroom._count.children,
@@ -55,7 +64,27 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
       capacity: classroom.capacity,
       ratioRule: classroom.ratioRule,
     }),
-  })), [classrooms]);
+  })), [classroomRows]);
+
+  useEffect(() => {
+    function selectClassroomForEditing(event: Event) {
+      const classroomId = (event as CustomEvent<{ classroomId?: string }>).detail?.classroomId;
+      const classroom = classroomRows.find((row) => row.id === classroomId);
+      if (!classroom) return;
+      setSelectedClassroomId(classroom.id);
+      setCenterId(classroom.centerId);
+      setName(classroom.name);
+      setAgeGroup(classroom.ageGroup || availableAgeGroups[0] || defaultAgeGroupOptions[0]);
+      setCapacity(classroom.capacity ? String(classroom.capacity) : "");
+      setRatioRule(classroom.ratioRule ?? "");
+      setStatusMessage("");
+      setErrorMessage("");
+      scrollToEditor();
+    }
+
+    window.addEventListener("bee-suite:edit-classroom", selectClassroomForEditing);
+    return () => window.removeEventListener("bee-suite:edit-classroom", selectClassroomForEditing);
+  }, [availableAgeGroups, classroomRows]);
 
   function scrollToEditor() {
     window.requestAnimationFrame(() => {
@@ -93,13 +122,52 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
           ratioRule,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; mode?: string; record?: { id?: string } } | null;
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        mode?: string;
+        record?: Partial<ClassroomAssignmentClassroom> & { id?: string };
+      } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Classroom could not be saved.");
         return;
       }
       setStatusMessage(`Classroom ${json?.mode ?? "saved"}.`);
-      if (json?.record?.id) setSelectedClassroomId(json.record.id);
+      if (json?.record?.id) {
+        setSelectedClassroomId(json.record.id);
+        const savedRatioRule = (json.record.ratioRule ?? ratioRule.trim()) || null;
+        setRatioRule(savedRatioRule ?? "");
+        setClassroomOverrides((current) => {
+          const sourceIds = new Set(classrooms.map((classroom) => classroom.id));
+          const currentRows = [
+            ...classrooms.map((classroom) => current[classroom.id] ?? classroom),
+            ...Object.values(current).filter((classroom) => !sourceIds.has(classroom.id)),
+          ];
+          const existing = currentRows.find((classroom) => classroom.id === json.record?.id);
+          const nextRecord = !existing
+            ? {
+                id: json.record?.id ?? "",
+                centerId,
+                name: json.record?.name ?? name.trim(),
+                ageGroup: json.record?.ageGroup ?? ageGroup,
+                capacity: Number(json.record?.capacity ?? capacity) || 0,
+                ratioRule: savedRatioRule,
+                center: {
+                  name: centers.find((row) => row.id === centerId)?.name ?? "Selected school",
+                  crmLocationId: null,
+                },
+                _count: { children: 0, staff: 0, dailyReports: 0, incidents: 0 },
+              }
+            : {
+                ...existing,
+                centerId,
+                name: json.record?.name ?? name.trim(),
+                ageGroup: json.record?.ageGroup ?? ageGroup,
+                capacity: Number(json.record?.capacity ?? capacity) || existing.capacity,
+                ratioRule: savedRatioRule,
+              };
+          return { ...current, [nextRecord.id]: nextRecord };
+        });
+      }
       router.refresh();
     });
   }
@@ -208,12 +276,12 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
               <Label>Classroom to edit</Label>
               <Select value={selectedClassroomId} onValueChange={(value) => {
                 if (value === "new") loadClassroom(null);
-                else loadClassroom(classrooms.find((classroom) => classroom.id === value) ?? null);
+                else loadClassroom(classroomRows.find((classroom) => classroom.id === value) ?? null);
               }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New classroom</SelectItem>
-                  {classrooms.map((classroom) => (
+                  {classroomRows.map((classroom) => (
                     <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
                   ))}
                 </SelectContent>

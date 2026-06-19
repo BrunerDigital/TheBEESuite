@@ -44,6 +44,10 @@ function staffLabel(staff: ClassroomAssignmentStaff) {
   return `${staff.user.name} · ${staff.classroom?.name ?? "Unassigned"}`;
 }
 
+function openClassroomEditor(classroomId: string) {
+  window.dispatchEvent(new CustomEvent("bee-suite:edit-classroom", { detail: { classroomId } }));
+}
+
 export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = false }: Props) {
   const router = useRouter();
   const ratioRows = useMemo(
@@ -188,7 +192,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
                 <p className="text-xs text-muted-foreground">
                   {selectedClassroom?.ageGroup ?? "Age group"} · {selectedClassroom?.ratioRule ?? "ratio not set"}
                   {selectedClassroom && !selectedClassroom.ratioRule ? (
-                    <Button nativeButton={false} variant="link" className="ml-1 h-auto p-0 text-xs" render={<Link href="/classroom-dashboard#classroom-editor" />}>
+                    <Button type="button" variant="link" className="ml-1 h-auto p-0 text-xs" onClick={() => openClassroomEditor(selectedClassroom.id)}>
                       Add ratio
                     </Button>
                   ) : null}

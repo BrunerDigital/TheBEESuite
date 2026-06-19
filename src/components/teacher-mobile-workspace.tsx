@@ -97,6 +97,7 @@ type MealDraft = {
   food: string;
   amount: string;
   quickLog?: boolean;
+  touched?: boolean;
 };
 
 type NapDraft = {
@@ -110,12 +111,14 @@ type DiaperDraft = {
   type: string;
   occurredAt: string;
   notes: string;
+  touched?: boolean;
 };
 
 type ActivityDraft = {
   id: string;
   title: string;
   notes: string;
+  touched?: boolean;
 };
 
 function draftId(prefix: string) {
@@ -452,7 +455,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function updateMeal(id: string, patch: Partial<MealDraft>) {
-    setMealRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setMealRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function updateNap(id: string, patch: Partial<NapDraft>) {
@@ -460,11 +463,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function updateDiaper(id: string, patch: Partial<DiaperDraft>) {
-    setDiaperRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setDiaperRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function updateActivity(id: string, patch: Partial<ActivityDraft>) {
-    setActivityRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+    setActivityRows((current) => current.map((row) => row.id === id ? { ...row, ...patch, touched: true } : row));
   }
 
   function removeMeal(id: string) {
@@ -493,46 +496,30 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function buildDailyReportEntries() {
+    const activeReportDate = reportDate || dateInputValue();
     const meals = mealRows
-      .filter((row) => row.food.trim() || row.quickLog)
+      .filter((row) => row.food.trim() || row.amount.trim() || row.quickLog || row.touched)
       .map((row) => ({
         mealType: row.mealType,
-        food: row.food.trim() || "Served",
+        food: row.food.trim(),
         amount: row.amount.trim() || null,
         quickLog: row.quickLog === true,
+        touched: row.touched === true,
       }));
     const naps = napRows
       .filter((row) => row.startsAt.trim() || row.endsAt.trim())
       .map((row) => ({
-        startsAt: normalizeReportTime(reportDate, row.startsAt),
-        endsAt: normalizeReportTime(reportDate, row.endsAt),
+        startsAt: normalizeReportTime(activeReportDate, row.startsAt),
+        endsAt: normalizeReportTime(activeReportDate, row.endsAt),
       }));
     const diapers = diaperRows
-      .filter((row) => row.type.trim())
-      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
+      .filter((row) => row.type.trim() || row.notes.trim() || row.touched)
+      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes.trim(), touched: row.touched === true }));
     const activities = activityRows
-      .filter((row) => row.title.trim())
-      .map((row) => ({ title: row.title, notes: row.notes }));
+      .filter((row) => row.title.trim() || row.notes.trim() || row.touched)
+      .map((row) => ({ title: row.title.trim(), notes: row.notes.trim(), touched: row.touched === true }));
 
     return { meals, naps, diapers, activities };
-  }
-
-  function validateNapRows() {
-    for (const [index, row] of napRows.entries()) {
-      const startsAt = row.startsAt.trim();
-      const endsAt = row.endsAt.trim();
-      if (!startsAt && !endsAt) continue;
-      if (!startsAt) return `Nap ${index + 1} start time is required.`;
-
-      const parsedStart = new Date(normalizeReportTime(reportDate, startsAt));
-      if (Number.isNaN(parsedStart.getTime())) return `Nap ${index + 1} start time must be valid.`;
-      if (endsAt) {
-        const parsedEnd = new Date(normalizeReportTime(reportDate, endsAt));
-        if (Number.isNaN(parsedEnd.getTime())) return `Nap ${index + 1} end time must be valid.`;
-        if (parsedEnd.getTime() < parsedStart.getTime()) return `Nap ${index + 1} end time cannot be before the start time.`;
-      }
-    }
-    return "";
   }
 
   function markDailyReportsLocally(childIds: string[], status: DailyReportSnapshot["status"]) {
@@ -549,7 +536,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       for (const childId of childIds) {
         next[childId] = {
           status,
-          latestReportAt: `${reportDate}T12:00:00`,
+          latestReportAt: `${reportDate || dateInputValue()}T12:00:00`,
           sentAt: status === "sent" ? now : null,
           entries: entryCounts,
         };
@@ -559,17 +546,17 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function addMealPreset(mealType: string) {
-    const nextRow = { ...createMealDraft(), mealType, quickLog: true };
+    const nextRow = { ...createMealDraft(), mealType, quickLog: true, touched: true };
     setMealRows((current) => current.length === 1 && !current[0].quickLog && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function addDiaperPreset(type: string) {
-    const nextRow = { ...createDiaperDraft(), type };
+    const nextRow = { ...createDiaperDraft(), type, touched: true };
     setDiaperRows((current) => current.length === 1 && !current[0].type.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function addActivityPreset(title: string) {
-    const nextRow = { ...createActivityDraft(), title };
+    const nextRow = { ...createActivityDraft(), title, touched: true };
     setActivityRows((current) => current.length === 1 && !current[0].title.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
   }
 
@@ -587,7 +574,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       }
     }
     if (openNapIndex < 0) {
-      showError("Start a nap before setting the end time.");
+      setNapRows((current) => [...current, { ...createNapDraft(), endsAt: timeInputValue() }]);
       return;
     }
     setNapRows((current) => {
@@ -639,11 +626,6 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       showError("Choose at least one child for the daily report.");
       return;
     }
-    const napError = validateNapRows();
-    if (napError) {
-      showError(napError);
-      return;
-    }
     startTransition(async () => {
       const entries = buildDailyReportEntries();
       const targetLabel = targetChildIds.length === 1
@@ -654,7 +636,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         body: {
           childId: targetChildIds[0],
           childIds: targetChildIds,
-          date: `${reportDate}T12:00:00`,
+          date: `${reportDate || dateInputValue()}T12:00:00`,
           mood,
           teacherNote,
           meals: entries.meals,
@@ -1359,7 +1341,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
             <Input value={incidentType} onChange={(event) => setIncidentType(event.target.value)} placeholder="Incident type" />
             <Textarea value={incidentDescription} onChange={(event) => setIncidentDescription(event.target.value)} placeholder="Objective description" />
             <Textarea value={actionTaken} onChange={(event) => setActionTaken(event.target.value)} placeholder="Action taken" />
-            <Button disabled={isPending || !selectedChild || !incidentDescription || !actionTaken} className="w-full" onClick={submitIncident}>
+            <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitIncident}>
               <ShieldAlert data-icon="inline-start" />
               Create Incident
             </Button>

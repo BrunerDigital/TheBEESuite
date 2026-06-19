@@ -65,6 +65,34 @@ test("teacher daily report parser keeps quick meal presets without saving blank 
   ]);
 });
 
+test("teacher daily report parser saves partial care rows without blocking the report", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-06-04",
+    meals: [{ mealType: "Lunch", food: "", amount: "Some", touched: true }],
+    naps: [
+      { startsAt: "", endsAt: "13:20" },
+      { startsAt: "14:00", endsAt: "13:00" },
+      { startsAt: "not a time", endsAt: "15:00" },
+    ],
+    diapers: [{ type: "", occurredAt: "not a date", notes: "Tried potty", touched: true }],
+    activities: [{ title: "", notes: "Shared well", touched: true }],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.deepEqual(parsed.report.meals, [{ mealType: "Lunch", food: "Not recorded", amount: "Some" }]);
+  assert.equal(parsed.report.naps.length, 3);
+  assert.equal(parsed.report.naps[0]?.startsAt.getHours(), 13);
+  assert.equal(parsed.report.naps[0]?.endsAt, null);
+  assert.equal(parsed.report.naps[1]?.startsAt.getHours(), 14);
+  assert.equal(parsed.report.naps[1]?.endsAt, null);
+  assert.equal(parsed.report.naps[2]?.startsAt.getHours(), 15);
+  assert.equal(parsed.report.diapers[0]?.type, "Care log");
+  assert.equal(parsed.report.diapers[0]?.occurredAt.getHours(), 12);
+  assert.deepEqual(parsed.report.activities, [{ title: "Activity", notes: "Shared well" }]);
+});
+
 test("teacher daily report parser accepts nap times on the report date", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",
@@ -107,16 +135,17 @@ test("teacher daily report parser keeps legacy single-field payload support", ()
   assert.deepEqual(parsed.report.activities, [{ title: "Music", notes: "Loved drums" }]);
 });
 
-test("teacher daily report parser rejects nap end before start", () => {
+test("teacher daily report parser saves out-of-order naps as start-only entries", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",
     naps: [{ startsAt: "2026-06-04T14:00", endsAt: "2026-06-04T13:00" }],
   });
 
-  assert.equal(parsed.ok, false);
-  if (parsed.ok) throw new Error("Expected nap validation to fail.");
-  assert.equal(parsed.status, 400);
-  assert.match(parsed.error, /end time cannot be before/);
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.equal(parsed.report.naps.length, 1);
+  assert.equal(parsed.report.naps[0]?.startsAt.getHours(), 14);
+  assert.equal(parsed.report.naps[0]?.endsAt, null);
 });
 
 test("teacher daily report parser limits batched entries", () => {

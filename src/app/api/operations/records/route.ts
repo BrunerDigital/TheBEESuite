@@ -1837,26 +1837,49 @@ async function DELETEHandler(request: NextRequest) {
   if (entity === "staff") {
     const staff = await prisma.staffProfile.findUnique({
       where: { id },
-      select: { id: true, centerId: true, userId: true },
+      select: { id: true, centerId: true, userId: true, classroomId: true },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
 
-    const result = await prisma.user.update({
-      where: { id: staff.userId },
-      data: { isActive: false },
-      select: { id: true, email: true, name: true, isActive: true },
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.staffProfile.update({
+        where: { id: staff.id },
+        data: { classroomId: null },
+      });
+      return tx.user.update({
+        where: { id: staff.userId },
+        data: { isActive: false },
+        select: { id: true, email: true, name: true, isActive: true },
+      });
     });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deactivated",
+      userId: staff.userId,
+    };
+    if (staff.classroomId) auditMetadata.previousClassroomId = staff.classroomId;
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deactivated",
+        resourceId: staff.id,
+        centerId: staff.centerId,
+        relatedUserIds: [staff.userId],
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
     await writeAuditLog(user, {
       centerId: staff.centerId,
       action: "operations.staff.deactivated",
       resource: "staff",
       resourceId: staff.id,
-      metadata: { mode: "deactivated", userId: staff.userId },
+      metadata: auditMetadata as Prisma.InputJsonObject,
     });
-    return NextResponse.json({ ok: true, entity, mode: "deactivated", record: result });
+    return NextResponse.json({ ok: true, entity, mode: "deactivated", record: result, ...auditMetadata });
   }
 
   if (entity === "certification") {

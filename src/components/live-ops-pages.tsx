@@ -2956,6 +2956,19 @@ export type StaffPageData = {
     classroom: { id: string; name: string } | null;
     certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
   }>;
+  previousStaff: Array<{
+    id: string;
+    centerId: string;
+    classroomId: string | null;
+    title: string;
+    phone: string | null;
+    backgroundCheckStatus: string | null;
+    customFields: unknown;
+    user: { name: string; email: string; role: string; isActive: boolean };
+    center: { id: string; name: string; crmLocationId: string | null };
+    classroom: { id: string; name: string } | null;
+    certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
+  }>;
   stats: {
     total: number;
     activeUsers: number;
@@ -3044,7 +3057,13 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <StaffManagementPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} schedules={data.schedules} />
+      <StaffManagementPanel
+        centers={data.centers}
+        classrooms={data.classrooms}
+        staff={data.staff}
+        previousStaff={data.previousStaff}
+        schedules={data.schedules}
+      />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Upcoming Staff Schedule</CardTitle>

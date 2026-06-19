@@ -4107,10 +4107,10 @@ async function renderLivePage(
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } };
+    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
-      ? { staff: { user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } }
-      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } }, expiresAt: { lte: thirtyDays } };
+      ? { staff: { user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } }
+      : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } };
     const staff = await prisma.staffProfile.findMany({
       where: staffWhere,
       orderBy: [{ title: "asc" }, { id: "asc" }],
@@ -4129,7 +4129,7 @@ async function renderLivePage(
       select: { id: true, centerId: true, name: true, ageGroup: true },
     });
     const schedules = await prisma.staffSchedule.findMany({
-      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay } },
+      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay }, staff: { user: { isActive: true } } },
       orderBy: { startsAt: "asc" },
       take: 120,
       include: {
@@ -4142,13 +4142,15 @@ async function renderLivePage(
       const rightCenter = right.center.crmLocationId ?? right.center.name;
       return leftCenter.localeCompare(rightCenter) || left.user.name.localeCompare(right.user.name);
     });
-    const total = sortedStaff.length;
-    const activeUsers = sortedStaff.filter((profile) => profile.user.isActive).length;
+    const activeStaff = sortedStaff.filter((profile) => profile.user.isActive);
+    const previousStaff = sortedStaff.filter((profile) => !profile.user.isActive);
+    const total = activeStaff.length;
+    const activeUsers = activeStaff.length;
     const expiringCerts = await prisma.certification.count({ where: certificationWhere });
-    const backgroundPending = sortedStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
+    const backgroundPending = activeStaff.filter((profile) => profile.backgroundCheckStatus !== "placeholder_clear").length;
     const staffChecklistItems = buildRequiredDocumentChecklist({
       families: [],
-      staff: sortedStaff,
+      staff: activeStaff,
       now: today,
     });
     const staffChecklist = {
@@ -4162,7 +4164,8 @@ async function renderLivePage(
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           classrooms,
           schedules,
-          staff: sortedStaff,
+          staff: activeStaff,
+          previousStaff,
           stats: { total, activeUsers, expiringCerts, backgroundPending, onboardingActionNeeded: staffChecklist.summary.actionNeeded },
           staffChecklist,
         }}

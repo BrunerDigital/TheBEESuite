@@ -43,6 +43,7 @@ type Props = {
   centers: CenterOption[];
   classrooms: ClassroomOption[];
   staff: TeacherRecord[];
+  previousStaff?: TeacherRecord[];
   schedules: ScheduleRecord[];
 };
 
@@ -74,8 +75,11 @@ function dateInputValue(date = new Date()) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function StaffManagementPanel({ centers, classrooms, staff, schedules }: Props) {
+export function StaffManagementPanel({ centers, classrooms, staff, previousStaff = [], schedules }: Props) {
   const router = useRouter();
+  const activeStaff = useMemo(() => staff.filter((teacher) => teacher.user.isActive), [staff]);
+  const previousStaffRows = useMemo(() => previousStaff.filter((teacher) => !teacher.user.isActive), [previousStaff]);
+  const allTeacherRows = useMemo(() => [...activeStaff, ...previousStaffRows], [activeStaff, previousStaffRows]);
   const [selectedStaffId, setSelectedStaffId] = useState("new");
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
   const [classroomId, setClassroomId] = useState("none");
@@ -86,16 +90,16 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [backgroundCheckStatus, setBackgroundCheckStatus] = useState("pending");
   const [staffKioskPin, setStaffKioskPin] = useState("");
   const [generatedLogin, setGeneratedLogin] = useState<TeacherLoginResponse | null>(null);
-  const [certStaffId, setCertStaffId] = useState(staff[0]?.id ?? "");
+  const [certStaffId, setCertStaffId] = useState(activeStaff[0]?.id ?? "");
   const [certName, setCertName] = useState("");
   const [certStatus, setCertStatus] = useState("active");
   const [certExpiresAt, setCertExpiresAt] = useState("");
   const [scheduleId, setScheduleId] = useState("new");
-  const [scheduleStaffId, setScheduleStaffId] = useState(staff[0]?.id ?? "");
+  const [scheduleStaffId, setScheduleStaffId] = useState(activeStaff[0]?.id ?? "");
   const [scheduleStartsAt, setScheduleStartsAt] = useState("");
   const [scheduleEndsAt, setScheduleEndsAt] = useState("");
   const [scheduleStatus, setScheduleStatus] = useState("scheduled");
-  const [assignmentStaffId, setAssignmentStaffId] = useState(staff[0]?.id ?? "");
+  const [assignmentStaffId, setAssignmentStaffId] = useState(activeStaff[0]?.id ?? "");
   const [assignmentClassroomId, setAssignmentClassroomId] = useState(classrooms[0]?.id ?? "none");
   const [weeklyClassroomId, setWeeklyClassroomId] = useState(classrooms[0]?.id ?? "");
   const [weeklyStartsAt, setWeeklyStartsAt] = useState(() => dateInputValue());
@@ -103,7 +107,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
   const [weeklyEndTime, setWeeklyEndTime] = useState("16:30");
   const [weeklyDays, setWeeklyDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [weeklyStatus, setWeeklyStatus] = useState("scheduled");
-  const [clockStaffId, setClockStaffId] = useState(staff[0]?.id ?? "");
+  const [clockStaffId, setClockStaffId] = useState(activeStaff[0]?.id ?? "");
   const [clockNotes, setClockNotes] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -114,21 +118,23 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     [centerId, classrooms],
   );
   const coverageSummaries = useMemo(
-    () => summarizeClassroomCoverage({ classrooms, staff, schedules }),
-    [classrooms, staff, schedules],
+    () => summarizeClassroomCoverage({ classrooms, staff: activeStaff, schedules }),
+    [classrooms, activeStaff, schedules],
   );
-  const assignmentTeacher = staff.find((teacher) => teacher.id === assignmentStaffId);
+  const assignmentTeacher = activeStaff.find((teacher) => teacher.id === assignmentStaffId);
   const assignmentClassrooms = useMemo(
     () => classrooms.filter((classroom) => !assignmentTeacher || classroom.centerId === assignmentTeacher.centerId),
     [assignmentTeacher, classrooms],
   );
   const weeklyClassroomTeachers = useMemo(
-    () => staff.filter((teacher) => teacher.classroomId === weeklyClassroomId && teacher.user.isActive),
-    [staff, weeklyClassroomId],
+    () => activeStaff.filter((teacher) => teacher.classroomId === weeklyClassroomId),
+    [activeStaff, weeklyClassroomId],
   );
-  const clockTeacher = staff.find((teacher) => teacher.id === clockStaffId) ?? staff[0] ?? null;
+  const clockTeacher = activeStaff.find((teacher) => teacher.id === clockStaffId) ?? activeStaff[0] ?? null;
   const clockState = readStaffClockState(clockTeacher?.customFields);
   const clockAction = clockState.status === "clocked_in" ? "clock_out" : "clock_in";
+  const selectedTeacher = allTeacherRows.find((teacher) => teacher.id === selectedStaffId) ?? null;
+  const selectedPreviousTeacher = selectedTeacher?.user.isActive === false ? selectedTeacher : null;
 
   function resetTeacherForm() {
     setCenterId(centers[0]?.id ?? "");
@@ -144,7 +150,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
 
   function loadTeacher(value: string) {
     setSelectedStaffId(value);
-    const teacher = staff.find((item) => item.id === value);
+    const teacher = allTeacherRows.find((item) => item.id === value);
     if (!teacher) {
       resetTeacherForm();
       return;
@@ -171,7 +177,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
     setScheduleId(value);
     const schedule = schedules.find((item) => item.id === value);
     if (!schedule) {
-      setScheduleStaffId(staff[0]?.id ?? "");
+      setScheduleStaffId(activeStaff[0]?.id ?? "");
       setScheduleStartsAt("");
       setScheduleEndsAt("");
       setScheduleStatus("scheduled");
@@ -304,7 +310,8 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
       if (json?.login) setGeneratedLogin(json.login);
       const loginStatus = json?.login ? " Bee Suite login was generated." : "";
       const kioskStatus = staffKioskPin ? " Staff kiosk code was set." : "";
-      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}`);
+      const restoreStatus = selectedPreviousTeacher ? " Previous staff member was restored to active staff." : "";
+      setStatusMessage(`Teacher profile ${json?.mode ?? "saved"}.${loginStatus}${kioskStatus}${restoreStatus}`);
       setSelectedStaffId("new");
       setStaffKioskPin("");
       router.refresh();
@@ -346,7 +353,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
 
   function deactivateTeacher() {
     if (selectedStaffId === "new") return;
-    const confirmed = window.confirm("Deactivate this teacher account? Historical records stay intact, but the teacher is removed from active staff views.");
+    const confirmed = window.confirm("Move this teacher to previous staff? Their records stay available, but they will be hidden from active teacher lists and cannot log in.");
     if (!confirmed) return;
     startTransition(async () => {
       setStatusMessage("");
@@ -358,10 +365,10 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
       });
       const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
       if (!response.ok) {
-        setErrorMessage(json?.error || "Teacher account could not be deactivated.");
+        setErrorMessage(json?.error || "Teacher account could not be moved to previous staff.");
         return;
       }
-      setStatusMessage(`Teacher ${json?.mode ?? "deactivated"}.`);
+      setStatusMessage("Teacher moved to previous staff.");
       setSelectedStaffId("new");
       resetTeacherForm();
       router.refresh();
@@ -527,7 +534,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   <Select value={assignmentStaffId} onValueChange={(value) => value && setAssignmentStaffId(value)}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
                     <SelectContent>
-                      {staff.map((teacher) => (
+                      {activeStaff.map((teacher) => (
                         <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -644,7 +651,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                 <Select value={clockTeacher?.id ?? ""} onValueChange={(value) => value && setClockStaffId(value)}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
                   <SelectContent>
-                    {staff.map((teacher) => (
+                    {activeStaff.map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -672,11 +679,19 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="new">New teacher</SelectItem>
-                    {staff.map((teacher) => (
+                    {activeStaff.map((teacher) => (
                       <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
                     ))}
+                    {selectedPreviousTeacher ? (
+                      <SelectItem value={selectedPreviousTeacher.id}>{selectedPreviousTeacher.user.name} (previous staff)</SelectItem>
+                    ) : null}
                   </SelectContent>
                 </Select>
+                {selectedPreviousTeacher ? (
+                  <p className="text-xs text-muted-foreground">
+                    This profile is currently in Previous staff. Saving it will restore active access.
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <Label>Center</Label>
@@ -744,16 +759,51 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={isPending || !centerId}>
                 {staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}
-                Save teacher
+                {selectedPreviousTeacher ? "Restore teacher" : "Save teacher"}
               </Button>
-              {selectedStaffId !== "new" ? (
+              {selectedStaffId !== "new" && !selectedPreviousTeacher ? (
                 <Button type="button" variant="outline" disabled={isPending} onClick={deactivateTeacher}>
                   <Archive data-icon="inline-start" />
-                  Deactivate teacher
+                  Move to previous staff
                 </Button>
               ) : null}
             </div>
           </form>
+          <section className="rounded-xl border bg-background/40 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Previous staff</div>
+                <p className="text-xs text-muted-foreground">
+                  Archived teachers are hidden from active assignment, clock, certification, and schedule workflows.
+                </p>
+              </div>
+              <Badge variant="outline">{previousStaffRows.length} archived</Badge>
+            </div>
+            {previousStaffRows.length ? (
+              <div className="divide-y rounded-lg border bg-card/40">
+                {previousStaffRows.map((teacher) => (
+                  <div key={teacher.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{teacher.user.name}</div>
+                      <div className="truncate text-xs text-muted-foreground">{teacher.user.email}</div>
+                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        <span>{teacher.title || "Teacher"}</span>
+                        <span>{teacher.classroom?.name ?? "No active classroom"}</span>
+                      </div>
+                    </div>
+                    <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => loadTeacher(teacher.id)}>
+                      <Pencil data-icon="inline-start" />
+                      Review / restore
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed bg-card/30 p-4 text-sm text-muted-foreground">
+                No previous staff records for this school scope.
+              </div>
+            )}
+          </section>
         </CardContent>
       </Card>
 
@@ -769,7 +819,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               <Select value={certStaffId} onValueChange={(value) => value && setCertStaffId(value)}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
                 <SelectContent>
-                  {staff.map((teacher) => (
+                  {activeStaff.map((teacher) => (
                     <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -831,7 +881,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, schedules }: 
               <Select value={scheduleStaffId} onValueChange={(value) => value && setScheduleStaffId(value)}>
                 <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
                 <SelectContent>
-                  {staff.map((teacher) => (
+                  {activeStaff.map((teacher) => (
                     <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
                   ))}
                 </SelectContent>

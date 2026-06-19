@@ -685,18 +685,19 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label>Teacher</Label>
-                <Select value={selectedStaffId} onValueChange={(value) => value && loadTeacher(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">New teacher</SelectItem>
-                    {activeStaff.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
-                    ))}
-                    {selectedPreviousTeacher ? (
-                      <SelectItem value={selectedPreviousTeacher.id}>{selectedPreviousTeacher.user.name} (previous staff)</SelectItem>
-                    ) : null}
-                  </SelectContent>
-                </Select>
+                <select
+                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+                  value={selectedStaffId}
+                  onChange={(event) => loadTeacher(event.target.value)}
+                >
+                  <option value="new">New teacher</option>
+                  {activeStaff.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                  ))}
+                  {selectedPreviousTeacher ? (
+                    <option value={selectedPreviousTeacher.id}>{selectedPreviousTeacher.user.name} (previous staff)</option>
+                  ) : null}
+                </select>
                 {selectedPreviousTeacher ? (
                   <p className="text-xs text-muted-foreground">
                     This profile is currently in Previous staff. Saving it will restore active access.

@@ -12,6 +12,11 @@ import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib
 import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import {
+  dailyReportEmailRecipientCustomFields,
+  dailyReportEmailRecipientGuardianIdsFromPayload,
+  DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+} from "@/lib/daily-report-email-settings";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -315,6 +320,37 @@ async function POSTHandler(request: NextRequest) {
     const access = await assertCenterAccess(user, requestedCenterId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.center.id;
+    const dailyReportRecipientSelectionProvided = Object.prototype.hasOwnProperty.call(
+      body,
+      DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+    );
+    const dailyReportEmailRecipientGuardianIds = dailyReportRecipientSelectionProvided
+      ? dailyReportEmailRecipientGuardianIdsFromPayload(body[DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY])
+      : [];
+    const existing = id
+      ? await prisma.family.findUnique({ where: { id }, select: { centerId: true, customFields: true } })
+      : null;
+    let familyCustomFields: Prisma.InputJsonObject | undefined;
+    if (dailyReportRecipientSelectionProvided) {
+      if (!id && dailyReportEmailRecipientGuardianIds.length) {
+        return NextResponse.json({ ok: false, error: "Save the family before selecting daily report recipients." }, { status: 400 });
+      }
+      if (id) {
+        const guardians = await prisma.guardian.findMany({
+          where: { familyId: id },
+          select: { id: true },
+        });
+        const familyGuardianIds = new Set(guardians.map((guardian) => guardian.id));
+        const invalidGuardianIds = dailyReportEmailRecipientGuardianIds.filter((guardianId) => !familyGuardianIds.has(guardianId));
+        if (invalidGuardianIds.length) {
+          return NextResponse.json({ ok: false, error: "Daily report recipients must belong to this family." }, { status: 400 });
+        }
+      }
+      familyCustomFields = dailyReportEmailRecipientCustomFields(
+        existing?.customFields,
+        dailyReportEmailRecipientGuardianIds,
+      ) as Prisma.InputJsonObject;
+    }
     const data = {
       centerId,
       name: clean(body.name),
@@ -322,10 +358,10 @@ async function POSTHandler(request: NextRequest) {
       billingEmail: clean(body.billingEmail) || clean(body.type) || null,
       notes: clean(body.notes) || clean(body.body) || null,
       custodyNotes: clean(body.custodyNotes) || null,
+      ...(familyCustomFields ? { customFields: familyCustomFields } : {}),
     };
     if (!data.name) return NextResponse.json({ ok: false, error: "Family name is required." }, { status: 400 });
     if (id) {
-      const existing = await prisma.family.findUnique({ where: { id }, select: { centerId: true } });
       const guard = scopedUpdateGuard({ entity: "Family", expectedScopeId: centerId, actualScopeId: existing?.centerId, scopeLabel: "center" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }

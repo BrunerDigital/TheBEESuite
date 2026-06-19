@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Save, Trash2, UserPen } from "lucide-react";
+import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,10 @@ import {
   findGuardianDuplicateCandidates,
 } from "@/lib/family-dedupe";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
+import {
+  DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
+  resolveDailyReportEmailRecipientGuardianIds,
+} from "@/lib/daily-report-email-settings";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -119,6 +123,7 @@ export type EditableFamilyRecord = {
   address?: string | null;
   notes?: string | null;
   custodyNotes: string | null;
+  customFields?: unknown;
   guardians: GuardianRecord[];
   children: ChildRecord[];
   pickups: AuthorizedPickupRecord[];
@@ -148,6 +153,14 @@ function toDateInput(value: Date | string | null | undefined) {
   if (Number.isNaN(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
+}
+
+function dailyReportEmailRecipientIdsForFamily(family: EditableFamilyRecord | null) {
+  if (!family) return [];
+  return resolveDailyReportEmailRecipientGuardianIds({
+    customFields: family.customFields,
+    guardians: family.guardians,
+  });
 }
 
 function scheduleNotes(value: unknown) {
@@ -194,6 +207,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [address, setAddress] = useState(selectedFamily?.address ?? "");
   const [familyNotes, setFamilyNotes] = useState(selectedFamily?.notes ?? "");
   const [custodyNotes, setCustodyNotes] = useState(selectedFamily?.custodyNotes ?? "");
+  const [dailyReportEmailRecipientGuardianIds, setDailyReportEmailRecipientGuardianIds] = useState<string[]>(
+    () => dailyReportEmailRecipientIdsForFamily(selectedFamily),
+  );
+  const [dailyReportEmailRecipientsTouched, setDailyReportEmailRecipientsTouched] = useState(false);
 
   const [selectedGuardianId, setSelectedGuardianId] = useState(selectedFamily?.guardians[0]?.id ?? "");
   const selectedGuardian = selectedGuardianId
@@ -283,6 +300,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
+  const effectiveDailyReportEmailRecipientGuardianIds = dailyReportEmailRecipientsTouched
+    ? dailyReportEmailRecipientGuardianIds
+    : dailyReportEmailRecipientIdsForFamily(selectedFamily);
+  const dailyReportEmailGuardianIds = new Set(effectiveDailyReportEmailRecipientGuardianIds);
+  const dailyReportEmailGuardians = selectedFamily?.guardians.filter((guardian) => guardian.email?.trim()) ?? [];
   const childDuplicateRecords = useMemo(
     () => families.flatMap((family) =>
       family.children.map((child) => ({
@@ -415,12 +437,23 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     setAddress(family?.address ?? "");
     setFamilyNotes(family?.notes ?? "");
     setCustodyNotes(family?.custodyNotes ?? "");
+    setDailyReportEmailRecipientGuardianIds(dailyReportEmailRecipientIdsForFamily(family));
+    setDailyReportEmailRecipientsTouched(false);
     loadGuardian(family?.guardians[0] ?? null);
     loadPickup(family?.pickups[0] ?? null);
     loadEmergencyContact(family?.emergencyContacts[0] ?? null);
     loadChild(family?.children[0] ?? null);
     loadDocument(family?.children[0]?.documents[0] ?? family?.documents[0] ?? null, family?.children[0] ?? null);
     setDuplicateFamilyId("");
+  }
+
+  function toggleDailyReportEmailRecipient(guardianId: string, checked: boolean) {
+    setDailyReportEmailRecipientsTouched(true);
+    setDailyReportEmailRecipientGuardianIds((current) => {
+      const base = dailyReportEmailRecipientsTouched ? current : dailyReportEmailRecipientIdsForFamily(selectedFamily);
+      if (checked) return Array.from(new Set([...base, guardianId]));
+      return base.filter((id) => id !== guardianId);
+    });
   }
 
   function loadGuardianById(guardianId: string) {
@@ -829,6 +862,38 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Textarea value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
             </div>
           </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>
+                <Mail data-icon="inline-start" />
+                Daily report email recipients
+              </Label>
+              <Badge variant="outline">
+                {effectiveDailyReportEmailRecipientGuardianIds.length} selected
+              </Badge>
+            </div>
+            {dailyReportEmailGuardians.length ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {dailyReportEmailGuardians.map((guardian) => (
+                  <label key={guardian.id} className="flex min-h-12 items-center gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={dailyReportEmailGuardianIds.has(guardian.id)}
+                      onChange={(event) => toggleDailyReportEmailRecipient(guardian.id, event.target.checked)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{guardian.fullName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{guardian.email}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                Add guardian emails before enabling daily report delivery.
+              </p>
+            )}
+          </div>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -886,6 +951,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               address,
               notes: familyNotes,
               custodyNotes,
+              ...(dailyReportEmailRecipientsTouched
+                ? { [DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY]: effectiveDailyReportEmailRecipientGuardianIds }
+                : {}),
             }, "Family account")}
           >
             <Save data-icon="inline-start" />

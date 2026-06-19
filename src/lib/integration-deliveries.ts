@@ -17,6 +17,7 @@ export type IntegrationDeliveryPurpose =
   | "campaign_email"
   | "registration_email"
   | "parent_invitation_email"
+  | "daily_report_email"
   | "signature_request_email"
   | "onboarding_email"
   | "fte_reminder_email"
@@ -72,6 +73,7 @@ type RecordEmailDeliveryInput = {
     | "campaign_email"
     | "registration_email"
     | "parent_invitation_email"
+    | "daily_report_email"
     | "signature_request_email"
     | "onboarding_email"
     | "fte_reminder_email"
@@ -290,6 +292,7 @@ const SENDGRID_EMAIL_PURPOSES = new Set([
   "campaign_email",
   "registration_email",
   "parent_invitation_email",
+  "daily_report_email",
   "signature_request_email",
   "onboarding_email",
   "fte_reminder_email",

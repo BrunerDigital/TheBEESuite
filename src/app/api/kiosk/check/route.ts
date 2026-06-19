@@ -4,6 +4,7 @@ import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
+import { sendCheckoutDailyReportEmail } from "@/lib/daily-report-email";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -105,7 +106,7 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, email: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -234,6 +235,42 @@ async function POSTHandler(request: NextRequest) {
     return created;
   });
 
+  const dailyReportEmails = type === "check_out"
+    ? await Promise.all(
+        allowedChildren.map(async (child) => {
+          try {
+            const email = await sendCheckoutDailyReportEmail({
+              childId: child.id,
+              tenantId: center.organization.tenantId,
+              centerId,
+              centerName: center.name,
+              centerEmail: center.email,
+              serviceDayStart,
+              serviceDayEnd,
+              checkedOutAt: occurredAt,
+              timeZone,
+            });
+            return { childId: child.id, childName: child.fullName, ...email };
+          } catch (error) {
+            return {
+              childId: child.id,
+              childName: child.fullName,
+              attempted: false,
+              reason: "provider_failed" as const,
+              reportId: null,
+              recipients: [],
+              configured: false,
+              provider: "sendgrid" as const,
+              providerMessageId: null,
+              error: error instanceof Error ? error.message : "Daily report email could not be sent.",
+              deliveryRecorded: false,
+              deliveryRecordError: null,
+            };
+          }
+        }),
+      )
+    : [];
+
   await writeSystemAuditLog({
     tenantId: center.organization.tenantId,
     centerId,
@@ -253,6 +290,7 @@ async function POSTHandler(request: NextRequest) {
       pickupAuthorizationWarning,
       kioskDate: serviceDayStart.toISOString(),
       timeZone,
+      dailyReportEmails,
     },
   });
 
@@ -265,6 +303,7 @@ async function POSTHandler(request: NextRequest) {
     latePickup,
     pickupAuthorizationWarning,
     children: allowedChildren.map((child) => ({ id: child.id, fullName: child.fullName })),
+    dailyReportEmails,
     logs,
   }, { status: 201 });
 }

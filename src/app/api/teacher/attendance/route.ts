@@ -4,6 +4,7 @@ import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurre
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { parseOperationalDate } from "@/lib/date-guardrails";
+import { sendCheckoutDailyReportEmail } from "@/lib/daily-report-email";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
 
@@ -72,15 +73,17 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const center = centerId
-    ? await prisma.center.findUnique({ where: { id: centerId }, select: { customFields: true } })
+    ? await prisma.center.findUnique({ where: { id: centerId }, select: { name: true, email: true, customFields: true } })
     : null;
   const timeZone = readCenterTimeZone(center?.customFields);
+  const serviceDayStart = startOfServiceDay(date, timeZone);
+  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
   if (logType) {
     const latestLog = await prisma.checkInOutLog.findFirst({
       where: {
         childId,
         ...(centerId ? { centerId } : {}),
-        occurredAt: { gte: startOfServiceDay(date, timeZone) },
+        occurredAt: { gte: serviceDayStart, lt: serviceDayEnd },
       },
       orderBy: { occurredAt: "desc" },
       select: { type: true },
@@ -115,6 +118,36 @@ async function POSTHandler(request: NextRequest) {
       })
     : null;
 
+  let dailyReportEmail = null;
+  if (logType === "check_out") {
+    try {
+      dailyReportEmail = await sendCheckoutDailyReportEmail({
+        childId,
+        tenantId: user.tenantId,
+        centerId,
+        centerName: center?.name ?? null,
+        centerEmail: center?.email ?? null,
+        serviceDayStart,
+        serviceDayEnd,
+        checkedOutAt: date,
+        timeZone,
+      });
+    } catch (error) {
+      dailyReportEmail = {
+        attempted: false,
+        reason: "provider_failed",
+        reportId: null,
+        recipients: [],
+        configured: false,
+        provider: "sendgrid",
+        providerMessageId: null,
+        error: error instanceof Error ? error.message : "Daily report email could not be sent.",
+        deliveryRecorded: false,
+        deliveryRecordError: null,
+      };
+    }
+  }
+
   await writeAuditLog(user, {
     centerId,
     action: "teacher.attendance.created",
@@ -124,11 +157,12 @@ async function POSTHandler(request: NextRequest) {
       childId,
       status,
       checkLogId: checkLog?.id ?? null,
+      dailyReportEmail,
       custodyWarning: hasCustodyWarning(child.family),
     },
   });
 
-  return NextResponse.json({ ok: true, record, checkLog, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
+  return NextResponse.json({ ok: true, record, checkLog, dailyReportEmail, custodyWarning: custodyWarningSummary(child.family) }, { status: 201 });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

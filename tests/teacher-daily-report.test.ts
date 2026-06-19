@@ -46,6 +46,25 @@ test("teacher daily report parser accepts multi-child tablet batches", () => {
   assert.equal(parsed.report.meals.length, 1);
 });
 
+test("teacher daily report parser keeps quick meal presets without saving blank default rows", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-06-04",
+    meals: [
+      { mealType: "Lunch", food: "", amount: "" },
+      { mealType: "Breakfast", food: "", amount: "", quickLog: true },
+      { mealType: "Afternoon snack", food: "", amount: "", quickLog: "true" },
+    ],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.deepEqual(parsed.report.meals, [
+    { mealType: "Breakfast", food: "Served", amount: null },
+    { mealType: "Afternoon snack", food: "Served", amount: null },
+  ]);
+});
+
 test("teacher daily report parser accepts nap times on the report date", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",

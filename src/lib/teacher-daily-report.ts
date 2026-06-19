@@ -129,11 +129,14 @@ function collectMeals(input: Record<string, unknown>) {
   if (!meals.ok) return meals;
 
   const records: DailyReportMealInput[] = meals.records
-    .map((meal) => ({
-      mealType: clean(meal.mealType) || "Meal",
-      food: clean(meal.food),
-      amount: clean(meal.amount) || null,
-    }))
+    .map((meal) => {
+      const mealType = clean(meal.mealType) || "Meal";
+      return {
+        mealType,
+        food: clean(meal.food) || (parseBoolean(meal.quickLog) ? "Served" : ""),
+        amount: clean(meal.amount) || null,
+      };
+    })
     .filter((meal) => Boolean(meal.food));
 
   const legacyMeal = clean(input.meal);

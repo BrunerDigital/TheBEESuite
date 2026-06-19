@@ -96,6 +96,7 @@ type MealDraft = {
   mealType: string;
   food: string;
   amount: string;
+  quickLog?: boolean;
 };
 
 type NapDraft = {
@@ -493,8 +494,13 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
 
   function buildDailyReportEntries() {
     const meals = mealRows
-      .filter((row) => row.food.trim())
-      .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
+      .filter((row) => row.food.trim() || row.quickLog)
+      .map((row) => ({
+        mealType: row.mealType,
+        food: row.food.trim() || "Served",
+        amount: row.amount.trim() || null,
+        quickLog: row.quickLog === true,
+      }));
     const naps = napRows
       .filter((row) => row.startsAt.trim() || row.endsAt.trim())
       .map((row) => ({
@@ -553,8 +559,8 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function addMealPreset(mealType: string) {
-    const nextRow = { ...createMealDraft(), mealType };
-    setMealRows((current) => current.length === 1 && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
+    const nextRow = { ...createMealDraft(), mealType, quickLog: true };
+    setMealRows((current) => current.length === 1 && !current[0].quickLog && !current[0].food.trim() && !current[0].amount.trim() ? [nextRow] : [...current, nextRow]);
   }
 
   function addDiaperPreset(type: string) {

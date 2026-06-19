@@ -122,6 +122,7 @@ test("guardian kiosk credential summary hides hashes and reports QR readiness", 
       missingPin: 1,
     });
     assert.equal(kioskPathForCenter(null), "/check-in");
+    assert.equal(kioskPathForCenter("center_1", "staff"), "/check-in/center_1?mode=staff");
   } finally {
     if (originalPinSecret === undefined) delete mutableEnv.PIN_HASH_SECRET;
     else mutableEnv.PIN_HASH_SECRET = originalPinSecret;

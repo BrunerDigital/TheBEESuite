@@ -823,7 +823,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
             </div>
             <Button type="button" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
               <ExternalLink data-icon="inline-start" />
-              Open Kiosk
+              Open Staff Clock
             </Button>
           </CardContent>
         </Card>

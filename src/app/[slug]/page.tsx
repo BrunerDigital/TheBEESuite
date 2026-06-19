@@ -2000,7 +2000,7 @@ async function renderLivePage(
         kioskAccess={staffProfile?.centerId ? {
           centerId: staffProfile.centerId,
           centerName: teacherCenter ? formatCenterName(teacherCenter) : "Assigned school",
-          kioskPath: kioskPathForCenter(staffProfile.centerId),
+          kioskPath: kioskPathForCenter(staffProfile.centerId, "staff"),
           hasStaffKioskCode: Boolean(readStaffKioskPinHash(staffProfile.customFields)),
           clockStatus: readStaffClockState(staffProfile.customFields).status,
           lastActionAt: readStaffClockState(staffProfile.customFields).lastActionAt,

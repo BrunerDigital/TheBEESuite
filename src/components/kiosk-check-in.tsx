@@ -52,6 +52,7 @@ type VerifiedCredential =
   | { method: "qr"; qrToken: string };
 
 type Props = {
+  initialMode?: KioskMode;
   center: {
     id: string;
     name: string;
@@ -72,8 +73,8 @@ function clockLabel(value?: string | null) {
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
-export function KioskCheckIn({ center }: Props) {
-  const [kioskMode, setKioskMode] = useState<KioskMode>("family");
+export function KioskCheckIn({ center, initialMode = "family" }: Props) {
+  const [kioskMode, setKioskMode] = useState<KioskMode>(initialMode);
   const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
   const [qrToken, setQrToken] = useState("");
@@ -97,6 +98,7 @@ export function KioskCheckIn({ center }: Props) {
   const credentialReady = credentialMode === "pin" ? pin.length === 4 : Boolean(qrToken.trim());
   const staffCredentialReady = staffPin.length === 4;
   const verificationLabel = verifiedCredential?.method === "qr" ? "QR scan" : "PIN";
+  const staffIsClockedIn = staffLookup?.staff.clock.status === "clocked_in";
 
   const reset = useCallback((nextStatus = "") => {
     setPin("");
@@ -306,7 +308,7 @@ export function KioskCheckIn({ center }: Props) {
                 Secure lobby kiosk
               </Badge>
               <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl lg:text-4xl">{center.name}</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{center.place || "Parent check-in and check-out"}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{center.place || "Family check-in/out and staff clock-in/out"}</p>
             </div>
             <div className="grid gap-2 rounded-2xl border bg-background/60 p-3 text-right sm:min-w-48 lg:hidden 2xl:grid">
               <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
@@ -344,13 +346,13 @@ export function KioskCheckIn({ center }: Props) {
         <div className="grid flex-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[24rem_1fr]">
           <Card className="glass-panel">
             <CardHeader className="p-4 pb-2">
-              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff PIN clock-in"}</CardTitle>
+              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in/out"}</CardTitle>
               <CardDescription>
                 {kioskMode === "family"
                   ? credentialMode === "pin"
                     ? "Use the PIN provided by your school director."
                     : "Use the guardian QR card issued by your school director."
-                  : "Use your staff kiosk code. Add work email only if the kiosk asks for it."}
+                  : "Use your staff kiosk code to clock in or clock out. Add work email only if the kiosk asks for it."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-2">
@@ -485,7 +487,7 @@ export function KioskCheckIn({ center }: Props) {
                     }}>Back</Button>
                   </div>
                   <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !staffCredentialReady} onClick={lookupStaffCredential}>
-                    Find Staff
+                    Find Staff Clock
                   </Button>
                 </>
               )}
@@ -507,7 +509,7 @@ export function KioskCheckIn({ center }: Props) {
                 {kioskMode === "staff"
                   ? staffLookup
                     ? `${staffLookup.staff.title} verified for ${center.name}.`
-                    : "Staff status appears after email and code verification."
+                    : "Staff can clock in or clock out after code verification."
                   : lookup
                     ? `${lookup.guardian.fullName} verified by ${verificationLabel}. Choose who is arriving or leaving.`
                     : "Your children will appear after PIN or QR verification."}
@@ -557,6 +559,7 @@ export function KioskCheckIn({ center }: Props) {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Button
                           className="h-20 text-xl"
+                          variant={staffIsClockedIn ? "outline" : "default"}
                           disabled={isPending || staffLookup.staff.clock.status === "clocked_in"}
                           onClick={() => submitStaff("clock_in")}
                         >
@@ -565,7 +568,7 @@ export function KioskCheckIn({ center }: Props) {
                         </Button>
                         <Button
                           className="h-20 text-xl"
-                          variant="secondary"
+                          variant={staffIsClockedIn ? "default" : "outline"}
                           disabled={isPending || staffLookup.staff.clock.status !== "clocked_in"}
                           onClick={() => submitStaff("clock_out")}
                         >
@@ -583,7 +586,7 @@ export function KioskCheckIn({ center }: Props) {
                     <div>
                       <Label className="text-lg">Ready for staff</Label>
                       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                        Enter the 4 digit staff kiosk code to view current clock status.
+                        Enter the 4 digit staff kiosk code to view current clock status, then clock in or clock out.
                       </p>
                     </div>
                   </div>

@@ -33,8 +33,9 @@ export type GuardianKioskCredentialSummary = {
   missingPin: number;
 };
 
-export function kioskPathForCenter(centerId?: string | null) {
-  return centerId ? `/check-in/${centerId}` : "/check-in";
+export function kioskPathForCenter(centerId?: string | null, mode?: "family" | "staff") {
+  const basePath = centerId ? `/check-in/${centerId}` : "/check-in";
+  return mode ? `${basePath}?mode=${mode}` : basePath;
 }
 
 function serializePinSetAt(value: Date | string | null | undefined) {

@@ -63,6 +63,7 @@ import {
   type ClassroomAssignmentStaff,
 } from "@/components/classroom-ratio-assignment-panel";
 import { ClassroomSetupPanel } from "@/components/classroom-setup-panel";
+import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
@@ -2393,6 +2394,7 @@ export type ClassroomDashboardData = {
   centers: Array<{ id: string; name: string }>;
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
+  ageGroups: string[];
   demoMode?: boolean;
 };
 
@@ -2432,7 +2434,13 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         <StatCard label="Licensed seats shown" value={capacity} />
         <StatCard label="Ratio warnings" value={ratioWarningCount} detail={`${staff} teachers assigned`} />
       </div>
-      <ClassroomSetupPanel centers={data.centers} classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
+      <ClassroomSetupPanel
+        centers={data.centers}
+        classrooms={data.classrooms}
+        staff={data.staff}
+        ageGroups={data.ageGroups}
+        demoMode={data.demoMode}
+      />
       <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
     </div>
   );
@@ -4257,6 +4265,7 @@ export type FamilyProfilesPageData = {
   importCenters: Array<{ id: string; name: string }>;
   bulkImportEnabled: boolean;
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
+  ageGroups: string[];
   guardianChangeRequests: Array<{
     id: string;
     familyId: string;
@@ -4303,6 +4312,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         allFamilies={data.allFamilies}
         centers={data.intakeCenters}
         graduatedChildren={data.stats.graduated}
+        ageGroups={data.ageGroups}
       />
       <Card className="glass-panel">
         <CardHeader>
@@ -5245,6 +5255,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
       <TuitionPaymentReminderSettingsPanel centers={data.centers} />
+      <DashboardOptionsSettingsPanel centers={data.centers} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>

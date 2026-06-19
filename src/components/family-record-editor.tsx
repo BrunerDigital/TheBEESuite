@@ -17,6 +17,7 @@ import {
   findFamilyDuplicateCandidates,
   findGuardianDuplicateCandidates,
 } from "@/lib/family-dedupe";
+import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -134,9 +135,9 @@ export type EditableFamilyRecord = {
 type Props = {
   families: EditableFamilyRecord[];
   centers: CenterOption[];
+  ageGroups?: string[];
 };
 
-const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age"];
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break", "withdrawn", "graduated", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
@@ -171,8 +172,16 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function FamilyRecordEditor({ families, centers }: Props) {
+export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups }: Props) {
   const router = useRouter();
+  const availableAgeGroups = useMemo(
+    () => mergeAgeGroupOptions(
+      configuredAgeGroups,
+      families.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      centers.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
+    ),
+    [centers, configuredAgeGroups, families],
+  );
   const [selectedFamilyId, setSelectedFamilyId] = useState(families[0]?.id ?? "");
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) ?? families[0] ?? null,
@@ -222,7 +231,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [childName, setChildName] = useState(selectedChild?.fullName ?? "");
   const [preferredName, setPreferredName] = useState(selectedChild?.preferredName ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(toDateInput(selectedChild?.dateOfBirth));
-  const [ageGroup, setAgeGroup] = useState(selectedChild?.ageGroup ?? "Preschool");
+  const [ageGroup, setAgeGroup] = useState(selectedChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [enrollmentStatus, setEnrollmentStatus] = useState(selectedChild?.enrollmentStatus ?? "enrolled");
   const [startDate, setStartDate] = useState(toDateInput(selectedChild?.startDate));
   const [classroomId, setClassroomId] = useState(selectedChild?.classroomId ?? "none");
@@ -380,7 +389,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
     setChildName(child?.fullName ?? "");
     setPreferredName(child?.preferredName ?? "");
     setDateOfBirth(toDateInput(child?.dateOfBirth));
-    setAgeGroup(child?.ageGroup ?? "Preschool");
+    setAgeGroup(child?.ageGroup ?? availableAgeGroups[0] ?? defaultAgeGroupOptions[0]);
     setEnrollmentStatus(child?.enrollmentStatus ?? "enrolled");
     setStartDate(toDateInput(child?.startDate));
     setClassroomId(child?.classroomId ?? "none");
@@ -1229,7 +1238,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ageGroups.map((group) => (
+                  {availableAgeGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
                   ))}
                 </SelectContent>

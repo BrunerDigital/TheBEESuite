@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
+import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import type { ClassroomAssignmentClassroom, ClassroomAssignmentStaff } from "@/components/classroom-ratio-assignment-panel";
 
 type CenterOption = { id: string; name: string };
@@ -20,22 +21,25 @@ type Props = {
   centers: CenterOption[];
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
+  ageGroups?: string[];
   demoMode?: boolean;
 };
-
-const ageGroups = ["Infant", "Toddler", "Twos", "Preschool", "Pre-K", "School Age", "Mixed Age"];
 
 function classroomTeacherNames(staff: ClassroomAssignmentStaff[], classroomId: string) {
   return staff.filter((teacher) => teacher.classroomId === classroomId).map((teacher) => teacher.user.name).join(", ");
 }
 
-export function ClassroomSetupPanel({ centers, classrooms, staff, demoMode = false }: Props) {
+export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: configuredAgeGroups, demoMode = false }: Props) {
   const router = useRouter();
+  const availableAgeGroups = useMemo(
+    () => mergeAgeGroupOptions(configuredAgeGroups, classrooms.map((classroom) => classroom.ageGroup)),
+    [classrooms, configuredAgeGroups],
+  );
   const [selectedClassroomId, setSelectedClassroomId] = useState(classrooms[0]?.id ?? "new");
   const selectedClassroom = classrooms.find((classroom) => classroom.id === selectedClassroomId) ?? null;
   const [centerId, setCenterId] = useState(selectedClassroom?.centerId ?? centers[0]?.id ?? "");
   const [name, setName] = useState(selectedClassroom?.name ?? "");
-  const [ageGroup, setAgeGroup] = useState(selectedClassroom?.ageGroup ?? "Preschool");
+  const [ageGroup, setAgeGroup] = useState(selectedClassroom?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [capacity, setCapacity] = useState(selectedClassroom?.capacity ? String(selectedClassroom.capacity) : "");
   const [ratioRule, setRatioRule] = useState(selectedClassroom?.ratioRule ?? "");
   const [statusMessage, setStatusMessage] = useState("");
@@ -63,7 +67,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, demoMode = fal
     setSelectedClassroomId(classroom?.id ?? "new");
     setCenterId(classroom?.centerId ?? centers[0]?.id ?? "");
     setName(classroom?.name ?? "");
-    setAgeGroup(classroom?.ageGroup ?? "Preschool");
+    setAgeGroup(classroom?.ageGroup ?? availableAgeGroups[0] ?? defaultAgeGroupOptions[0]);
     setCapacity(classroom?.capacity ? String(classroom.capacity) : "");
     setRatioRule(classroom?.ratioRule ?? "");
     setStatusMessage("");
@@ -235,7 +239,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, demoMode = fal
               <Select value={ageGroup} onValueChange={(value) => value && setAgeGroup(value)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ageGroups.map((group) => (
+                  {availableAgeGroups.map((group) => (
                     <SelectItem key={group} value={group}>{group}</SelectItem>
                   ))}
                 </SelectContent>

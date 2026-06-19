@@ -92,11 +92,13 @@ export function FamilyProfilesEnrollmentPanel({
   allFamilies,
   centers,
   graduatedChildren,
+  ageGroups,
 }: {
   currentFamilies: FamilyProfileVisibilityRecord[];
   allFamilies: FamilyProfileVisibilityRecord[];
   centers: IntakeCenter[];
   graduatedChildren: number;
+  ageGroups?: string[];
 }) {
   const [showGraduated, setShowGraduated] = useState(false);
   const visibleFamilies = showGraduated ? allFamilies : currentFamilies;
@@ -113,7 +115,12 @@ export function FamilyProfilesEnrollmentPanel({
       />
 
       {visibleFamilies.length ? (
-        <FamilyRecordEditor key={showGraduated ? "all-families" : "current-families"} families={visibleFamilies} centers={centers} />
+        <FamilyRecordEditor
+          key={showGraduated ? "all-families" : "current-families"}
+          families={visibleFamilies}
+          centers={centers}
+          ageGroups={ageGroups}
+        />
       ) : (
         <Card className="glass-panel">
           <CardContent className="p-6 text-sm text-muted-foreground">

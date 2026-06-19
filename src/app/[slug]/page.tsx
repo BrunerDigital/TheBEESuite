@@ -85,6 +85,7 @@ import {
 import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
+import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import {
   normalizeBillingCadence,
   normalizeRecurringBillingDay,
@@ -1491,6 +1492,11 @@ async function renderLivePage(
     }
     const familiesForClient = families.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: true }));
     const allFamiliesForClient = allFamilies.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: false }));
+    const familyAgeGroups = mergeAgeGroupOptions(
+      centers.map((center) => dashboardOptionsFromCustomFields(center.customFields).ageGroups),
+      allFamilies.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
+    );
 
     return (
       <FamilyProfilesPage
@@ -1500,6 +1506,7 @@ async function renderLivePage(
           importCenters: centers.map((center) => ({ id: center.id, name: center.crmLocationId ?? center.name })),
           bulkImportEnabled: tenantWide || allCenters,
           intakeCenters,
+          ageGroups: familyAgeGroups,
           guardianChangeRequests,
           stats: { total, withCustodyNotes, children, guardians, graduated, graduatedFamilies },
         }}
@@ -2571,7 +2578,12 @@ async function renderLivePage(
                 tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               })),
             })),
-            centers: centers.map((center) => ({ id: center.id, name: center.name, crmLocationId: center.crmLocationId })),
+            centers: centers.map((center) => ({
+              id: center.id,
+              name: center.name,
+              crmLocationId: center.crmLocationId,
+              dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
+            })),
             products: billingProducts,
             tuitionPlans,
           },
@@ -3823,6 +3835,10 @@ async function renderLivePage(
     ]);
 
     const demoMode = showDemoFallbackData && classrooms.length === 0;
+    const classroomAgeGroups = mergeAgeGroupOptions(
+      centers.map((center) => dashboardOptionsFromCustomFields(center.customFields).ageGroups),
+      classrooms.map((classroom) => classroom.ageGroup),
+    );
 
     return (
       <ClassroomDashboardPage
@@ -3849,6 +3865,7 @@ async function renderLivePage(
                 }),
               })),
           staff: demoMode ? [] : classroomStaff,
+          ageGroups: classroomAgeGroups,
           demoMode,
         }}
       />

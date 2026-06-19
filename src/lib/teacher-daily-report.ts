@@ -92,8 +92,25 @@ function normalizeDateInput(value: unknown) {
   return value;
 }
 
+function dateInputValue(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function normalizeDateTimeInput(value: unknown, fallback?: Date) {
+  const raw = clean(value);
+  const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (timeMatch && fallback) {
+    const hour = timeMatch[1].padStart(2, "0");
+    const second = timeMatch[3] ? `:${timeMatch[3]}` : "";
+    return `${dateInputValue(fallback)}T${hour}:${timeMatch[2]}${second}`;
+  }
+  return normalizeDateInput(value);
+}
+
 function parseDateField(value: unknown, fieldLabel: string, fallback?: Date) {
-  return parseOperationalDate(normalizeDateInput(value), fieldLabel, fallback);
+  return parseOperationalDate(normalizeDateTimeInput(value, fallback), fieldLabel, fallback);
 }
 
 function getRecordArray(value: unknown, fieldLabel: string): { ok: true; records: Record<string, unknown>[] } | { ok: false; error: string } {

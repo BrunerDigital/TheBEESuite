@@ -151,6 +151,19 @@ function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
   return { enrollmentStatus: { notIn: currentlyEnrolledStatusValues() } };
 }
 
+function visibleChildCenterWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.ChildWhereInput {
+  return {
+    OR: [
+      { classroom: { is: { centerId: scopedCenterIds } } },
+      { family: { is: { centerId: scopedCenterIds } } },
+    ],
+  };
+}
+
+function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
+  return { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
+}
+
 async function getVisibleCenters(user: CurrentUser) {
   return prisma.center.findMany({
     where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
@@ -1528,19 +1541,12 @@ async function renderLivePage(
   }
 
   if (slug === "child-profile") {
-    const childWhere: Prisma.ChildWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { family: { is: { centerId: scopedCenterIds } } },
-          ],
-        };
+    const childWhere: Prisma.ChildWhereInput = allCenters ? {} : visibleChildCenterWhere(scopedCenterIds);
     const currentChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
     const graduatedChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, notCurrentlyEnrolledChildWhere()] };
     const currentChildRelationWhere: Prisma.ChildWhereInput = allCenters
       ? currentlyEnrolledChildWhere()
-      : { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } };
+      : { AND: [visibleChildCenterWhere(scopedCenterIds), currentlyEnrolledChildWhere()] };
     const [children, allChildren, total, graduated, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: currentChildWhere,
@@ -4137,7 +4143,7 @@ async function renderLivePage(
   }
 
   if (slug === "staff") {
-    const staffWhere: Prisma.StaffProfileWhereInput = { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
+    const staffWhere = visibleTeacherStaffWhere(scopedCenterIds);
     const certificationWhere: Prisma.CertificationWhereInput = allCenters
       ? { staff: { user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } }
       : { staff: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } }, expiresAt: { lte: thirtyDays } };
@@ -4159,7 +4165,7 @@ async function renderLivePage(
       select: { id: true, centerId: true, name: true, ageGroup: true },
     });
     const schedules = await prisma.staffSchedule.findMany({
-      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay }, staff: { user: { isActive: true } } },
+      where: { centerId: scopedCenterIds, startsAt: { gte: startOfDay }, staff: { user: { role: UserRole.TEACHER, isActive: true } } },
       orderBy: { startsAt: "asc" },
       take: 120,
       include: {

@@ -135,6 +135,19 @@ function dateTimeInputValue(date = new Date()) {
   return `${date.getFullYear()}-${month}-${day}T${hour}:${minute}`;
 }
 
+function timeInputValue(date = new Date()) {
+  const hour = String(date.getHours()).padStart(2, "0");
+  const minute = String(date.getMinutes()).padStart(2, "0");
+  return `${hour}:${minute}`;
+}
+
+function normalizeReportTime(reportDate: string, value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^\d{2}:\d{2}(?::\d{2})?$/.test(trimmed)) return `${reportDate}T${trimmed}`;
+  return trimmed;
+}
+
 function formatTime(value: string | Date | null) {
   if (!value) return "";
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -483,8 +496,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       .filter((row) => row.food.trim())
       .map((row) => ({ mealType: row.mealType, food: row.food, amount: row.amount }));
     const naps = napRows
-      .filter((row) => row.startsAt)
-      .map((row) => ({ startsAt: row.startsAt, endsAt: row.endsAt }));
+      .filter((row) => row.startsAt.trim() || row.endsAt.trim())
+      .map((row) => ({
+        startsAt: normalizeReportTime(reportDate, row.startsAt),
+        endsAt: normalizeReportTime(reportDate, row.endsAt),
+      }));
     const diapers = diaperRows
       .filter((row) => row.type.trim())
       .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes }));
@@ -493,6 +509,24 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       .map((row) => ({ title: row.title, notes: row.notes }));
 
     return { meals, naps, diapers, activities };
+  }
+
+  function validateNapRows() {
+    for (const [index, row] of napRows.entries()) {
+      const startsAt = row.startsAt.trim();
+      const endsAt = row.endsAt.trim();
+      if (!startsAt && !endsAt) continue;
+      if (!startsAt) return `Nap ${index + 1} start time is required.`;
+
+      const parsedStart = new Date(normalizeReportTime(reportDate, startsAt));
+      if (Number.isNaN(parsedStart.getTime())) return `Nap ${index + 1} start time must be valid.`;
+      if (endsAt) {
+        const parsedEnd = new Date(normalizeReportTime(reportDate, endsAt));
+        if (Number.isNaN(parsedEnd.getTime())) return `Nap ${index + 1} end time must be valid.`;
+        if (parsedEnd.getTime() < parsedStart.getTime()) return `Nap ${index + 1} end time cannot be before the start time.`;
+      }
+    }
+    return "";
   }
 
   function markDailyReportsLocally(childIds: string[], status: DailyReportSnapshot["status"]) {
@@ -534,7 +568,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   }
 
   function startNapNow() {
-    const nextRow = { ...createNapDraft(), startsAt: dateTimeInputValue() };
+    const nextRow = { ...createNapDraft(), startsAt: timeInputValue() };
     setNapRows((current) => current.length === 1 && !current[0].startsAt && !current[0].endsAt ? [nextRow] : [...current, nextRow]);
   }
 
@@ -553,7 +587,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
     setNapRows((current) => {
       const next = [...current];
       if (next[openNapIndex]) {
-        next[openNapIndex] = { ...next[openNapIndex], endsAt: dateTimeInputValue() };
+        next[openNapIndex] = { ...next[openNapIndex], endsAt: timeInputValue() };
       }
       return next;
     });
@@ -597,6 +631,11 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
     const targetChildIds = activeDailyReportChildIds;
     if (!targetChildIds.length) {
       showError("Choose at least one child for the daily report.");
+      return;
+    }
+    const napError = validateNapRows();
+    if (napError) {
+      showError(napError);
       return;
     }
     startTransition(async () => {
@@ -1199,14 +1238,24 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
                           Remove
                         </Button>
                       </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2">
                         <div className="space-y-1">
-                          <Label>Start</Label>
-                          <Input type="datetime-local" value={row.startsAt} onChange={(event) => updateNap(row.id, { startsAt: event.target.value })} />
+                          <Label htmlFor={`nap-${index + 1}-start`}>Start time</Label>
+                          <Input
+                            id={`nap-${index + 1}-start`}
+                            type="time"
+                            value={row.startsAt}
+                            onChange={(event) => updateNap(row.id, { startsAt: event.target.value })}
+                          />
                         </div>
                         <div className="space-y-1">
-                          <Label>End</Label>
-                          <Input type="datetime-local" value={row.endsAt} onChange={(event) => updateNap(row.id, { endsAt: event.target.value })} />
+                          <Label htmlFor={`nap-${index + 1}-end`}>End time</Label>
+                          <Input
+                            id={`nap-${index + 1}-end`}
+                            type="time"
+                            value={row.endsAt}
+                            onChange={(event) => updateNap(row.id, { endsAt: event.target.value })}
+                          />
                         </div>
                       </div>
                     </div>

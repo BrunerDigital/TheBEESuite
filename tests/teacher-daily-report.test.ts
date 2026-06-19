@@ -46,6 +46,25 @@ test("teacher daily report parser accepts multi-child tablet batches", () => {
   assert.equal(parsed.report.meals.length, 1);
 });
 
+test("teacher daily report parser accepts nap times on the report date", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-06-04",
+    naps: [{ startsAt: "12:15", endsAt: "13:20" }],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.equal(parsed.report.naps.length, 1);
+  assert.equal(parsed.report.naps[0]?.startsAt.getFullYear(), 2026);
+  assert.equal(parsed.report.naps[0]?.startsAt.getMonth(), 5);
+  assert.equal(parsed.report.naps[0]?.startsAt.getDate(), 4);
+  assert.equal(parsed.report.naps[0]?.startsAt.getHours(), 12);
+  assert.equal(parsed.report.naps[0]?.startsAt.getMinutes(), 15);
+  assert.equal(parsed.report.naps[0]?.endsAt?.getHours(), 13);
+  assert.equal(parsed.report.naps[0]?.endsAt?.getMinutes(), 20);
+});
+
 test("teacher daily report parser keeps legacy single-field payload support", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",

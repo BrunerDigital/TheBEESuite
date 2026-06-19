@@ -2509,6 +2509,10 @@ async function renderLivePage(
           centerId: true,
           name: true,
           billingEmail: true,
+          guardians: {
+            select: { id: true, fullName: true, email: true, userId: true },
+            orderBy: { fullName: "asc" },
+          },
           billingAccount: {
             select: {
               id: true,

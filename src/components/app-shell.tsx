@@ -90,6 +90,15 @@ type NotificationSummary = {
   }>;
 };
 
+function notificationBodyUrl(body: string) {
+  return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
+}
+
+function storedNotificationHref(notification: NotificationSummary["notifications"][number]) {
+  if (notification.type === "payment_method_form") return notificationBodyUrl(notification.body) ?? "/parent-portal#billing";
+  return "/notifications";
+}
+
 function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
   return <BrandLogo href="/" branding={branding} size="md" />;
 }
@@ -150,7 +159,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
       body: notification.body,
       type: notification.type,
       priority: notification.priority,
-      href: "/notifications",
+      href: storedNotificationHref(notification),
     })) ?? []),
   ].slice(0, 6);
 

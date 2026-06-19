@@ -295,6 +295,10 @@ export type NotificationCenterData = {
   canManageRoleDefaults: boolean;
 };
 
+function notificationBodyUrl(body: string) {
+  return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
+}
+
 export function NotificationCenterPage({ data }: { data: NotificationCenterData }) {
   const items = [...data.derived, ...data.notifications].slice(0, 50);
   const isStoredNotification = (
@@ -355,6 +359,14 @@ export function NotificationCenterPage({ data }: { data: NotificationCenterData 
                   <TableCell>
                     <div className="font-medium">{item.title}</div>
                     <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{item.body}</div>
+                    {item.type === "payment_method_form" && notificationBodyUrl(item.body) ? (
+                      <a
+                        className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline"
+                        href={notificationBodyUrl(item.body) ?? undefined}
+                      >
+                        Open payment form
+                      </a>
+                    ) : null}
                   </TableCell>
                   <TableCell>{item.type}</TableCell>
                   <TableCell>
@@ -1466,6 +1478,14 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                     <TableCell>
                       <div className="font-medium">{notification.title}</div>
                       <div className="text-xs text-muted-foreground">{notification.body}</div>
+                      {notification.type === "payment_method_form" && notificationBodyUrl(notification.body) ? (
+                        <a
+                          className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline"
+                          href={notificationBodyUrl(notification.body) ?? undefined}
+                        >
+                          Open payment form
+                        </a>
+                      ) : null}
                     </TableCell>
                     <TableCell>{notification.type.replaceAll("_", " ")}</TableCell>
                     <TableCell>

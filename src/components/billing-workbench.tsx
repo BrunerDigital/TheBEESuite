@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, ReceiptText, Rows3, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,12 @@ export type BillingWorkbenchFamily = {
   centerId: string | null;
   name: string;
   billingEmail: string | null;
+  guardians: Array<{
+    id: string;
+    fullName: string;
+    email: string | null;
+    userId: string | null;
+  }>;
   billingAccount?: {
     id: string;
     balanceCents: number;
@@ -126,6 +132,31 @@ function centerLabel(center: BillingWorkbenchCenter) {
   return [center.crmLocationId, center.name].filter(Boolean).join(" · ");
 }
 
+function normalizeEmail(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function validEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function paymentRequestEmailOptions(family: BillingWorkbenchFamily | null) {
+  if (!family) return [];
+  const seen = new Set<string>();
+  const options: Array<{ email: string; label: string; hasPortalUser: boolean }> = [];
+  const add = (emailValue: string | null | undefined, label: string, hasPortalUser = false) => {
+    const email = normalizeEmail(emailValue);
+    if (!validEmail(email) || seen.has(email)) return;
+    seen.add(email);
+    options.push({ email, label, hasPortalUser });
+  };
+  add(family.billingEmail, "Billing email");
+  for (const guardian of family.guardians) {
+    add(guardian.email, guardian.fullName || "Guardian", Boolean(guardian.userId));
+  }
+  return options.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 export function BillingWorkbench({ families, centers, products, tuitionPlans }: Props) {
   const router = useRouter();
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
@@ -164,6 +195,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [isPending, startTransition] = useTransition();
 
   const filteredFamilies = useMemo(
@@ -192,6 +224,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
   const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
   const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const selectedPaymentRequestEmailOptions = paymentRequestEmailOptions(selectedFamily);
+  const selectedPaymentRequestAvailableEmails = selectedPaymentRequestEmailOptions.map((option) => option.email);
+  const selectedPaymentRequestEmails = (
+    paymentRequestEmailSelections[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails
+  ).filter((email) => selectedPaymentRequestAvailableEmails.includes(email));
   const ageGroups = useMemo(
     () => mergeAgeGroupOptions(
       selectedCenter?.dashboardOptions?.ageGroups,
@@ -237,6 +274,47 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
       }
       setStatusMessage(action === "disable_autopay" ? "Autopay disabled for the selected family." : "Payment method settings updated.");
       router.refresh();
+    });
+  }
+
+  function togglePaymentRequestEmail(email: string) {
+    setPaymentRequestEmailSelections((current) => {
+      const currentForFamily = current[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails;
+      const nextForFamily = currentForFamily.includes(email)
+        ? currentForFamily.filter((item) => item !== email)
+        : [...currentForFamily, email];
+      return { ...current, [effectiveFamilyId]: nextForFamily };
+    });
+  }
+
+  function sendPaymentMethodRequest() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before sending a payment form.");
+    if (!selectedPaymentRequestEmails.length) return setErrorMessage("Choose at least one family email to receive the payment form.");
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/payment-method-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyId: selectedFamily.id,
+          emails: selectedPaymentRequestEmails,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        emailsSent?: number;
+        notificationsCreated?: number;
+        results?: Array<{ email: string; ok: boolean; error?: string }>;
+      } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Payment form could not be sent.");
+        return;
+      }
+      const failed = json?.results?.filter((result) => !result.ok) ?? [];
+      setStatusMessage(
+        `${json?.emailsSent ?? 0} payment setup email${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} profile notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
+      );
     });
   }
 
@@ -585,6 +663,50 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
               <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("disable_autopay")} variant="outline">
                 Disable Autopay
               </Button>
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border bg-background/40 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Mail className="size-4 text-muted-foreground" />
+                  Branded payment setup form
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Send a secure The BEE Suite form by email and profile notification to selected family contacts.
+                </p>
+              </div>
+              <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={sendPaymentMethodRequest}>
+                <Send data-icon="inline-start" />
+                Send Form
+              </Button>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {selectedPaymentRequestEmailOptions.map((option) => {
+                const id = `payment-request-${option.email.replace(/[^a-z0-9]+/gi, "-")}`;
+                return (
+                  <label key={option.email} className="flex min-h-12 items-start gap-2 rounded-lg border bg-background/50 p-2 text-sm">
+                    <input
+                      id={id}
+                      type="checkbox"
+                      className="mt-1 size-4"
+                      checked={selectedPaymentRequestEmails.includes(option.email)}
+                      onChange={() => togglePaymentRequestEmail(option.email)}
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{option.label}</span>
+                      <span className="block break-all text-xs text-muted-foreground">
+                        {option.email}{option.hasPortalUser ? " · profile notification" : ""}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+              {!selectedPaymentRequestEmailOptions.length ? (
+                <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground">
+                  Add a parent or billing email to this family before sending the payment setup form.
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

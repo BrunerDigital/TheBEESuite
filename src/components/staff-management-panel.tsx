@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserAvatar } from "@/components/user-avatar";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
 import { readStaffClockState } from "@/lib/staff-kiosk";
@@ -62,6 +61,9 @@ const certificationStatuses = [
   ["expired", "Expired"],
   ["waived", "Waived"],
 ] as const;
+
+const nativeSelectClassName =
+  "flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
 
 function toDateTimeLocal(value: Date | string) {
   const date = new Date(value);
@@ -532,26 +534,28 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               <div className="grid gap-3">
                 <div className="space-y-1">
                   <Label>Teacher</Label>
-                  <Select value={assignmentStaffId} onValueChange={(value) => value && setAssignmentStaffId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
-                    <SelectContent>
-                      {activeStaff.map((teacher) => (
-                        <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    className={nativeSelectClassName}
+                    value={assignmentStaffId}
+                    onChange={(event) => setAssignmentStaffId(event.target.value)}
+                  >
+                    {activeStaff.map((teacher) => (
+                      <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1">
                   <Label>Classroom</Label>
-                  <Select value={assignmentClassroomId} onValueChange={(value) => value && setAssignmentClassroomId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose classroom" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Unassigned</SelectItem>
-                      {assignmentClassrooms.map((classroom) => (
-                        <SelectItem key={classroom.id} value={classroom.id}>{classroom.name} · {classroom.ageGroup}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    className={nativeSelectClassName}
+                    value={assignmentClassroomId}
+                    onChange={(event) => setAssignmentClassroomId(event.target.value)}
+                  >
+                    <option value="none">Unassigned</option>
+                    {assignmentClassrooms.map((classroom) => (
+                      <option key={classroom.id} value={classroom.id}>{classroom.name} - {classroom.ageGroup}</option>
+                    ))}
+                  </select>
                 </div>
                 <Button type="button" disabled={isPending || !assignmentStaffId} onClick={assignTeacherToClassroom}>
                   <Save data-icon="inline-start" />
@@ -570,16 +574,17 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <Label>Classroom</Label>
-                  <Select value={weeklyClassroomId} onValueChange={(value) => value && setWeeklyClassroomId(value)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose classroom" /></SelectTrigger>
-                    <SelectContent>
-                      {classrooms.map((classroom) => (
-                        <SelectItem key={classroom.id} value={classroom.id}>
-                          {classroom.name} · {classroom.ageGroup}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <select
+                    className={nativeSelectClassName}
+                    value={weeklyClassroomId}
+                    onChange={(event) => setWeeklyClassroomId(event.target.value)}
+                  >
+                    {classrooms.map((classroom) => (
+                      <option key={classroom.id} value={classroom.id}>
+                        {classroom.name} - {classroom.ageGroup}
+                      </option>
+                    ))}
+                  </select>
                   <p className="text-xs text-muted-foreground">
                     {weeklyClassroomTeachers.length} assigned teacher{weeklyClassroomTeachers.length === 1 ? "" : "s"} will receive rows.
                   </p>
@@ -598,13 +603,14 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
                 </div>
                 <div className="space-y-1">
                   <Label>Status</Label>
-                  <Select value={weeklyStatus} onValueChange={(value) => value && setWeeklyStatus(value)}>
-                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="scheduled">Scheduled</SelectItem>
-                      <SelectItem value="confirmed">Confirmed</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    className={nativeSelectClassName}
+                    value={weeklyStatus}
+                    onChange={(event) => setWeeklyStatus(event.target.value)}
+                  >
+                    <option value="scheduled">Scheduled</option>
+                    <option value="confirmed">Confirmed</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label>Days</Label>
@@ -649,14 +655,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
             <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
               <div className="space-y-1">
                 <Label>Teacher</Label>
-                <Select value={clockTeacher?.id ?? ""} onValueChange={(value) => value && setClockStaffId(value)}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
-                  <SelectContent>
-                    {activeStaff.map((teacher) => (
-                      <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClassName}
+                  value={clockTeacher?.id ?? ""}
+                  onChange={(event) => setClockStaffId(event.target.value)}
+                >
+                  {activeStaff.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                  ))}
+                </select>
                 <p className="text-xs text-muted-foreground">
                   Last action: {clockState.lastActionAt ? new Date(clockState.lastActionAt).toLocaleString() : "No clock history"}
                 </p>
@@ -686,7 +693,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               <div className="space-y-1">
                 <Label>Teacher</Label>
                 <select
-                  className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+                  className={nativeSelectClassName}
                   value={selectedStaffId}
                   onChange={(event) => loadTeacher(event.target.value)}
                 >
@@ -706,14 +713,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               </div>
               <div className="space-y-1">
                 <Label>Center</Label>
-                <Select value={centerId} onValueChange={(value) => value && updateCenter(value)}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Choose center" /></SelectTrigger>
-                  <SelectContent>
-                    {centers.map((center) => (
-                      <SelectItem key={center.id} value={center.id}>{center.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClassName}
+                  value={centerId}
+                  onChange={(event) => updateCenter(event.target.value)}
+                >
+                  {centers.map((center) => (
+                    <option key={center.id} value={center.id}>{center.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <Label>Full name</Label>
@@ -733,28 +741,30 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               </div>
               <div className="space-y-1">
                 <Label>Classroom</Label>
-                <Select value={classroomId} onValueChange={(value) => value && setClassroomId(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {classroomOptions.map((classroom) => (
-                      <SelectItem key={classroom.id} value={classroom.id}>
-                        {classroom.name} · {classroom.ageGroup}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClassName}
+                  value={classroomId}
+                  onChange={(event) => setClassroomId(event.target.value)}
+                >
+                  <option value="none">Unassigned</option>
+                  {classroomOptions.map((classroom) => (
+                    <option key={classroom.id} value={classroom.id}>
+                      {classroom.name} - {classroom.ageGroup}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <Label>Background status</Label>
-                <Select value={backgroundCheckStatus} onValueChange={(value) => value && setBackgroundCheckStatus(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {backgroundStatuses.map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  className={nativeSelectClassName}
+                  value={backgroundCheckStatus}
+                  onChange={(event) => setBackgroundCheckStatus(event.target.value)}
+                >
+                  {backgroundStatuses.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
               </div>
               <div className="space-y-1">
                 <Label>Staff kiosk code</Label>
@@ -830,14 +840,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
           <form className="space-y-4" onSubmit={saveCertification}>
             <div className="space-y-1">
               <Label>Teacher</Label>
-              <Select value={certStaffId} onValueChange={(value) => value && setCertStaffId(value)}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
-                <SelectContent>
-                  {activeStaff.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className={nativeSelectClassName}
+                value={certStaffId}
+                onChange={(event) => setCertStaffId(event.target.value)}
+              >
+                {activeStaff.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <Label>Certification name</Label>
@@ -845,14 +856,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
             </div>
             <div className="space-y-1">
               <Label>Status</Label>
-              <Select value={certStatus} onValueChange={(value) => value && setCertStatus(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {certificationStatuses.map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className={nativeSelectClassName}
+                value={certStatus}
+                onChange={(event) => setCertStatus(event.target.value)}
+              >
+                {certificationStatuses.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <Label>Expiration</Label>
@@ -878,28 +890,30 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
           <form className="grid gap-3 md:grid-cols-2 lg:grid-cols-5" onSubmit={saveSchedule}>
             <div className="space-y-1">
               <Label>Schedule row</Label>
-              <Select value={scheduleId} onValueChange={(value) => value && loadSchedule(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">New schedule</SelectItem>
-                  {schedules.map((schedule) => (
-                    <SelectItem key={schedule.id} value={schedule.id}>
-                      {schedule.staff.user.name} · {new Date(schedule.startsAt).toLocaleDateString()}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className={nativeSelectClassName}
+                value={scheduleId}
+                onChange={(event) => loadSchedule(event.target.value)}
+              >
+                <option value="new">New schedule</option>
+                {schedules.map((schedule) => (
+                  <option key={schedule.id} value={schedule.id}>
+                    {schedule.staff.user.name} - {new Date(schedule.startsAt).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <Label>Teacher</Label>
-              <Select value={scheduleStaffId} onValueChange={(value) => value && setScheduleStaffId(value)}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Choose teacher" /></SelectTrigger>
-                <SelectContent>
-                  {activeStaff.map((teacher) => (
-                    <SelectItem key={teacher.id} value={teacher.id}>{teacher.user.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                className={nativeSelectClassName}
+                value={scheduleStaffId}
+                onChange={(event) => setScheduleStaffId(event.target.value)}
+              >
+                {activeStaff.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <Label>Starts</Label>
@@ -911,17 +925,18 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
             </div>
             <div className="space-y-1">
               <Label>Status</Label>
-              <Select value={scheduleStatus} onValueChange={(value) => value && setScheduleStatus(value)}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="confirmed">Confirmed</SelectItem>
-                  <SelectItem value="pto">PTO</SelectItem>
-                  <SelectItem value="unavailable">Unavailable</SelectItem>
-                  <SelectItem value="called_out">Called out</SelectItem>
-                  <SelectItem value="covered">Covered</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                className={nativeSelectClassName}
+                value={scheduleStatus}
+                onChange={(event) => setScheduleStatus(event.target.value)}
+              >
+                <option value="scheduled">Scheduled</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="pto">PTO</option>
+                <option value="unavailable">Unavailable</option>
+                <option value="called_out">Called out</option>
+                <option value="covered">Covered</option>
+              </select>
             </div>
             <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-5">
               <Button type="submit" disabled={isPending || !scheduleStaffId}>

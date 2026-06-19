@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSessionToken, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
+import { createSessionToken, requiresPasswordResetGate, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import {
   buildDeviceSessionLabel,
   cleanDeviceLabel,
@@ -109,7 +109,7 @@ async function POSTHandler(request: NextRequest) {
       name: user.name,
       role: user.role,
     },
-    requiresPasswordReset: user.mustResetPassword,
+    requiresPasswordReset: requiresPasswordResetGate(user),
   });
   response.cookies.set(SESSION_COOKIE, createSessionToken({ ...user, deviceSessionId: deviceSession?.id }), sessionCookieOptions());
   return response;

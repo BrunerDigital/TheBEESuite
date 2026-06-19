@@ -907,7 +907,7 @@ async function POSTHandler(request: NextRequest) {
               name: staffName,
               role: staffRole,
               isActive: true,
-              mustResetPassword: true,
+              mustResetPassword: false,
             },
           });
 

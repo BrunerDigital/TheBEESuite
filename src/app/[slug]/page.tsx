@@ -51,7 +51,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { canAccessAllCenters, canManageOperations, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -4726,7 +4726,7 @@ export default async function SlugPage({
   if (!user) {
     redirect(`/login?next=/${encodeURIComponent(slug)}`);
   }
-  if (user.mustResetPassword) {
+  if (requiresPasswordResetGate(user)) {
     redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
   }
 

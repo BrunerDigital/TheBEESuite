@@ -1091,7 +1091,7 @@ async function POSTHandler(request: NextRequest) {
                   name: employeeName,
                   role: UserRole.TEACHER,
                   isActive: employeeIsActive,
-                  mustResetPassword: true,
+                  mustResetPassword: false,
                 },
                 select: { id: true },
               });

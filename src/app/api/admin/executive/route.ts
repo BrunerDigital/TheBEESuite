@@ -573,7 +573,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     : payload.mustResetPassword === false
       ? false
       : undefined;
-  const forcePasswordReset = requestedMustResetPassword ?? Boolean(generatedLogin || password || payload.sendPasswordReset === true);
+  const forcePasswordReset = requestedMustResetPassword ?? Boolean((password && !generatedLogin) || payload.sendPasswordReset === true);
 
   const scopeType = clean(payload.accessScopeType) || (center ? "CENTER" : ownerGroupId ? "OWNER_GROUP" : "TENANT");
   const ownerGroup = ownerGroupId ? await getOwnerGroup(actor.tenantId, organization.id, ownerGroupId) : null;

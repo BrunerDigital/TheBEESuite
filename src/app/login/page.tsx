@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/login-form";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requiresPasswordResetGate } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const nextPath = safeNextPath(resolvedSearchParams.next);
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
-  if (user?.mustResetPassword) redirect(`/reset-password?force=1&next=${encodeURIComponent(nextPath)}`);
+  if (user && requiresPasswordResetGate(user)) redirect(`/reset-password?force=1&next=${encodeURIComponent(nextPath)}`);
   if (user) redirect(nextPath);
 
   return (

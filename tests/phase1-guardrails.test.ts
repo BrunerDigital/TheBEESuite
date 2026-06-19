@@ -33,8 +33,14 @@ import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
 import { cleanSupabaseUrl } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
-import { canViewDemoFallbackData, readSessionVersion, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
+
+test("password reset gate does not block teacher profile accounts", () => {
+  assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
+});
 
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({

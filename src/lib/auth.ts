@@ -34,6 +34,10 @@ export type CurrentUser = {
   branding: WorkspaceBranding;
 };
 
+export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
+  return user.mustResetPassword && user.role !== UserRole.TEACHER;
+}
+
 const tenantWideAccessRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
   UserRole.BRAND_ADMIN,
@@ -268,7 +272,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
   if (!user) return null;
   if (!sessionMatchesCurrentVersion(session, user.sessionVersion)) return null;
   if (!(await sessionDeviceIsActive(session, user.tenantId))) return null;
-  if (user.mustResetPassword && !options.allowPasswordResetRequired) return null;
+  if (requiresPasswordResetGate(user) && !options.allowPasswordResetRequired) return null;
 
   const brandName =
     user.organization?.brand?.settings?.brandName ??

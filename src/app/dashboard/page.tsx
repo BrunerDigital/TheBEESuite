@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
-import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect("/login?next=/dashboard");
-  if (user.mustResetPassword) redirect("/reset-password?force=1&next=/dashboard");
+  if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
   const centers = await prisma.center.findMany({

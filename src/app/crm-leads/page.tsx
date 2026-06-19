@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
-import { canViewCrmLeads, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canViewCrmLeads, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function CrmLeadsPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect("/login?next=/crm-leads");
-  if (user.mustResetPassword) redirect("/reset-password?force=1&next=/crm-leads");
+  if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/crm-leads");
   if (!canViewCrmLeads(user)) notFound();
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };

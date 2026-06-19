@@ -27,6 +27,7 @@ type ChildOption = {
   fullName: string;
   ageGroup: string;
   enrollmentStatus: string;
+  photoVideoPermission: boolean;
   classroom: { id: string; name: string } | null;
   family?: { custodyNotes: string | null } | null;
   attendance?: AttendanceSnapshot;
@@ -1038,9 +1039,36 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
         <Card id="teacher-photo" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Photo</CardTitle>
-            <CardDescription>Share a private classroom moment with parent permission checks.</CardDescription>
+            <CardDescription>{selectedChild?.fullName ?? "Choose a child"}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="photo-child">Child</Label>
+              <Select value={selectedChild?.id ?? ""} onValueChange={(value) => { if (value) chooseChild(value); }}>
+                <SelectTrigger id="photo-child" className="w-full">
+                  <SelectValue placeholder="Choose a child from this class" />
+                </SelectTrigger>
+                <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                  {byClassroom.map((classroom) => (
+                    <SelectGroup key={classroom.id ?? "unassigned-photo"}>
+                      <SelectLabel>{classroom.name}</SelectLabel>
+                      {classroom.children.map((child) => (
+                        <SelectItem key={child.id} value={child.id}>
+                          <span className="truncate">{child.fullName}</span>
+                          <span className="text-xs text-muted-foreground">{child.ageGroup}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={selectedChild?.photoVideoPermission ? "default" : "secondary"}>
+                {selectedChild?.photoVideoPermission ? "Parent sharing ready" : "Director review required"}
+              </Badge>
+              <Badge variant="outline">Private storage</Badge>
+            </div>
             <Input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
             <Textarea value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
             <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>

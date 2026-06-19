@@ -95,7 +95,7 @@ export function KioskCheckIn({ center }: Props) {
     [lookup, selectedIds],
   );
   const credentialReady = credentialMode === "pin" ? pin.length === 4 : Boolean(qrToken.trim());
-  const staffCredentialReady = Boolean(staffEmail.trim()) && staffPin.length === 4;
+  const staffCredentialReady = staffPin.length === 4;
   const verificationLabel = verifiedCredential?.method === "qr" ? "QR scan" : "PIN";
 
   const reset = useCallback((nextStatus = "") => {
@@ -237,7 +237,7 @@ export function KioskCheckIn({ center }: Props) {
   function lookupStaffCredential() {
     markActivity();
     if (!staffCredentialReady) {
-      setError("Enter your work email and 4 digit staff code.");
+      setError("Enter your 4 digit staff code.");
       return;
     }
 
@@ -266,7 +266,7 @@ export function KioskCheckIn({ center }: Props) {
   function submitStaff(action: "clock_in" | "clock_out") {
     markActivity();
     if (!staffCredentialReady) {
-      setError("Enter your work email and 4 digit staff code.");
+      setError("Enter your 4 digit staff code.");
       return;
     }
 
@@ -344,13 +344,13 @@ export function KioskCheckIn({ center }: Props) {
         <div className="grid flex-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[24rem_1fr]">
           <Card className="glass-panel">
             <CardHeader className="p-4 pb-2">
-              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in"}</CardTitle>
+              <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff PIN clock-in"}</CardTitle>
               <CardDescription>
                 {kioskMode === "family"
                   ? credentialMode === "pin"
                     ? "Use the PIN provided by your school director."
                     : "Use the guardian QR card issued by your school director."
-                  : "Use your work email and staff kiosk code."}
+                  : "Use your staff kiosk code. Add work email only if the kiosk asks for it."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 p-4 pt-2">
@@ -442,7 +442,7 @@ export function KioskCheckIn({ center }: Props) {
               ) : (
                 <>
                   <div className="grid gap-2">
-                    <Label htmlFor="staff-email" className="text-base">Work email</Label>
+                    <Label htmlFor="staff-email" className="text-base">Work email (optional)</Label>
                     <Input
                       id="staff-email"
                       className="h-14 text-lg"
@@ -456,7 +456,7 @@ export function KioskCheckIn({ center }: Props) {
                       }}
                       type="email"
                       autoComplete="email"
-                      placeholder="teacher@example.com"
+                      placeholder="Optional if code is unique"
                     />
                   </div>
                   <div className="grid grid-cols-4 gap-3">
@@ -583,7 +583,7 @@ export function KioskCheckIn({ center }: Props) {
                     <div>
                       <Label className="text-lg">Ready for staff</Label>
                       <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                        Enter the teacher work email and staff kiosk code to view current clock status.
+                        Enter the 4 digit staff kiosk code to view current clock status.
                       </p>
                     </div>
                   </div>

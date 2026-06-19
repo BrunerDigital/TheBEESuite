@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
-import { normalizePin, verifyStaffPin } from "@/lib/kiosk";
+import { normalizePin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import {
   normalizeStaffClockAction,
   readStaffClockState,
-  readStaffKioskPinHash,
+  resolveStaffKioskCredential,
   staffClockFields,
   validateNextStaffClockAction,
 } from "@/lib/staff-kiosk";
@@ -54,8 +53,8 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  if (!centerId || !email || !pin) {
-    return NextResponse.json({ ok: false, error: "Center, teacher email, and 4 digit staff code are required." }, { status: 400 });
+  if (!centerId || !pin) {
+    return NextResponse.json({ ok: false, error: "Center and 4 digit staff code are required." }, { status: 400 });
   }
   if (requestedAction !== "lookup" && !action) {
     return NextResponse.json({ ok: false, error: "Staff kiosk action must be lookup, clock_in, or clock_out." }, { status: 400 });
@@ -69,12 +68,10 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
   }
 
-  const staff = await prisma.staffProfile.findFirst({
+  const staffCandidates = await prisma.staffProfile.findMany({
     where: {
       centerId,
       user: {
-        email,
-        role: UserRole.TEACHER,
         isActive: true,
       },
     },
@@ -83,17 +80,23 @@ async function POSTHandler(request: NextRequest) {
       classroom: { select: { id: true, name: true } },
     },
   });
-  if (!staff) {
-    return NextResponse.json({ ok: false, error: "Teacher was not found for this school." }, { status: 401 });
+  const credential = resolveStaffKioskCredential({ candidates: staffCandidates, pin, email });
+  if (!credential.ok) {
+    if (credential.status === "ambiguous") {
+      return NextResponse.json(
+        { ok: false, error: "More than one staff member uses this kiosk code. Enter work email too." },
+        { status: 409 },
+      );
+    }
+    if (credential.status === "missing_code") {
+      return NextResponse.json(
+        { ok: false, error: email ? "This staff member does not have a staff kiosk code yet." : "No active staff with a kiosk code was found for this school." },
+        { status: 403 },
+      );
+    }
+    return NextResponse.json({ ok: false, error: "Staff kiosk code was not recognized for this school." }, { status: 401 });
   }
-
-  const pinHash = readStaffKioskPinHash(staff.customFields);
-  if (!pinHash) {
-    return NextResponse.json({ ok: false, error: "This teacher does not have a staff kiosk code yet." }, { status: 403 });
-  }
-  if (!verifyStaffPin(staff.id, pin, pinHash)) {
-    return NextResponse.json({ ok: false, error: "Staff kiosk code was not recognized for this teacher." }, { status: 401 });
-  }
+  const staff = credential.staff;
 
   if (!action) {
     return NextResponse.json({

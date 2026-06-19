@@ -748,7 +748,7 @@ export function ParentPortalWorkspace({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card id="documents" className="glass-panel scroll-mt-28">
+        <Card id="photos" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Photos and Moments</CardTitle>
             <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
@@ -768,7 +768,7 @@ export function ParentPortalWorkspace({
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="daily-reports" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Daily Reports</CardTitle>
             <CardDescription>Recent teacher notes and care details</CardDescription>
@@ -801,7 +801,7 @@ export function ParentPortalWorkspace({
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card id="documents" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Documents and Requests</CardTitle>
             <CardDescription>Director-reviewed changes protect child safety data.</CardDescription>

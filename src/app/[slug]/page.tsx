@@ -1906,6 +1906,7 @@ async function renderLivePage(
         fullName: true,
         ageGroup: true,
         enrollmentStatus: true,
+        photoVideoPermission: true,
         classroom: { select: { id: true, name: true } },
         family: { select: { custodyNotes: true } },
       },

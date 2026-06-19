@@ -121,6 +121,7 @@ import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import { TuitionPaymentReminderSettingsPanel } from "@/components/tuition-payment-reminder-settings-panel";
 import {
   TenantControlsPanel,
   type SupportAccessAuditRow,
@@ -5224,6 +5225,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
+      <TuitionPaymentReminderSettingsPanel centers={data.centers} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="glass-panel">
           <CardHeader>

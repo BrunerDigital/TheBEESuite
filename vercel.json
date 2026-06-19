@@ -20,6 +20,14 @@
       "schedule": "15 13 * * *"
     },
     {
+      "path": "/api/cron/tuition-payment-reminders",
+      "schedule": "15 23 * * 5"
+    },
+    {
+      "path": "/api/cron/tuition-payment-reminders",
+      "schedule": "30 12 * * 1-5"
+    },
+    {
       "path": "/api/cron/document-expiration-reminders",
       "schedule": "45 14 * * *"
     },

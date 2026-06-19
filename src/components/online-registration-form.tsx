@@ -9,6 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel as SelectGroupLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type CenterOption = {
@@ -116,9 +125,16 @@ const financialAgreementItems = [
   ["financialAgreementFinalTermsInitials", "Final financial agreement terms"],
 ] as const;
 
+const registrationSelectTriggerClassName =
+  "w-full bg-background px-3 text-foreground dark:bg-input/30 data-[size=default]:h-10";
+
 function centerLabel(center: CenterOption) {
   const location = [center.city, center.state].filter(Boolean).join(", ");
   return [center.crmLocationId ?? center.name, location].filter(Boolean).join(" · ");
+}
+
+function normalizeOption(option: string | Option): Option {
+  return typeof option === "string" ? { value: option, label: option } : option;
 }
 
 function collectForm(form: HTMLFormElement) {
@@ -351,19 +367,18 @@ function SelectField({
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label htmlFor={id}>{label}</Label>
-      <select
-        id={id}
-        name={id}
-        className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-        required={required}
-      >
-        <option value="">{emptyLabel}</option>
-        {options.map((option) => {
-          const value = typeof option === "string" ? option : option.value;
-          const label = typeof option === "string" ? option : option.label;
-          return <option key={value} value={value}>{label}</option>;
-        })}
-      </select>
+      <Select name={id} required={required}>
+        <SelectTrigger id={id} className={registrationSelectTriggerClassName}>
+          <SelectValue placeholder={emptyLabel} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">{emptyLabel}</SelectItem>
+          {options.map((option) => {
+            const { value, label } = normalizeOption(option);
+            return <SelectItem key={value} value={value}>{label}</SelectItem>;
+          })}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -466,23 +481,24 @@ export function OnlineRegistrationForm({ centers }: RegistrationFormProps) {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="centerId">School</Label>
-            <select
-              id="centerId"
-              name="centerId"
-              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-              required
-            >
-              <option value="">Choose a school</option>
-              {groupedCenters.map(([state, stateCenters]) => (
-                <optgroup key={state} label={state}>
-                  {stateCenters.map((center) => (
-                    <option key={center.id} value={center.id}>
-                      {centerLabel(center)}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+            <Select name="centerId" required>
+              <SelectTrigger id="centerId" className={registrationSelectTriggerClassName}>
+                <SelectValue placeholder="Choose a school" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Choose a school</SelectItem>
+                {groupedCenters.map(([state, stateCenters]) => (
+                  <SelectGroup key={state}>
+                    <SelectGroupLabel>{state}</SelectGroupLabel>
+                    {stateCenters.map((center) => (
+                      <SelectItem key={center.id} value={center.id}>
+                        {centerLabel(center)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <SelectField id="program" label="Program" options={programs} required emptyLabel="Choose a program" />
           <SelectField id="schedule" label="Schedule" options={schedules} required emptyLabel="Choose a schedule" />

@@ -102,7 +102,7 @@ export function LoginForm() {
                 <Alert className="border-amber-500/30 bg-amber-500/10">
                   <ShieldCheck />
                   <AlertTitle>Password reset required</AlertTitle>
-                  <AlertDescription>Use your temporary password one more time, then choose a new private password.</AlertDescription>
+                  <AlertDescription>Use your password one more time, then choose a new private password.</AlertDescription>
                 </Alert>
               ) : null}
               {error ? (
@@ -113,12 +113,12 @@ export function LoginForm() {
                 </Alert>
               ) : null}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="email">Email or username</Label>
+                <Label htmlFor="email">Username</Label>
                 <Input
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="school@kidcityusa.com, demoschool, or demoteacher"
+                  placeholder="Username"
                   type="text"
                   autoComplete="username"
                   required
@@ -135,7 +135,7 @@ export function LoginForm() {
                   id="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Temporary password"
+                  placeholder="Password"
                   type="password"
                   autoComplete="current-password"
                   required

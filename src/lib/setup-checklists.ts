@@ -11,7 +11,7 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   {
     id: "login-school-profile",
     title: "Log in and confirm school profile",
-    description: "Sign in with the school email, reset the temporary password if prompted, and confirm school contact details, hours, timezone, capacity, and launch owner.",
+    description: "Sign in with the school email, reset the password if prompted, and confirm school contact details, hours, timezone, capacity, and launch owner.",
     href: "/school-setup",
   },
   {
@@ -104,7 +104,7 @@ export const teacherProfileChecklistTasks: SetupChecklistTask[] = [
   {
     id: "teacher-login",
     title: "Log in with your teacher account",
-    description: "Use your teacher username or work email and the temporary password, then reset the password if prompted.",
+    description: "Use your teacher username or work email and password, then reset the password if prompted.",
     href: "/teacher-portal",
   },
   {

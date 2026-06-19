@@ -567,7 +567,7 @@ async function saveUser(payload: Payload, actor: Awaited<ReturnType<typeof requi
     : undefined;
   const email = generatedLogin?.email ?? submittedEmail;
   if (generatedLogin) password = generatedLogin.temporary_password;
-  if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
+  if (password && password.length < 8) throw new Error("Passwords must be at least 8 characters.");
   const requestedMustResetPassword = payload.mustResetPassword === true
     ? true
     : payload.mustResetPassword === false
@@ -707,7 +707,7 @@ async function resetUserPassword(payload: Payload, actor: Awaited<ReturnType<typ
   const email = clean(payload.email).toLowerCase();
   const password = clean(payload.password);
   if (!isEmail(email)) throw new Error("A valid user email is required.");
-  if (password && password.length < 8) throw new Error("Temporary passwords must be at least 8 characters.");
+  if (password && password.length < 8) throw new Error("Passwords must be at least 8 characters.");
 
   const appUser = await prisma.user.findFirst({ where: { email, tenantId: actor.tenantId } });
   if (!appUser) throw new Error("User not found in this tenant.");

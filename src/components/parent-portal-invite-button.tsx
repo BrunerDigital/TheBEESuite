@@ -42,7 +42,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       setTemporaryPassword("");
       setStatusMessage(
         temporaryPassword.trim()
-          ? "Parent portal access was created with the temporary password."
+          ? "Parent portal access was created with the password."
           : json?.auth?.passwordResetSent
             ? "Parent portal access was created and the reset email was requested."
             : "Parent portal access was created.",
@@ -77,7 +77,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <div className="space-y-1">
-          <Label>Temporary password</Label>
+          <Label>Password</Label>
           <Input
             value={temporaryPassword}
             onChange={(event) => setTemporaryPassword(event.target.value)}

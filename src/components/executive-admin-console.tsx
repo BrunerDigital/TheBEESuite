@@ -332,7 +332,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
     if (action === "resetUserPassword" && json?.user) {
       return json.auth?.passwordResetSent
         ? `Password setup/reset email sent to ${json.user.email ?? "the user"}.`
-        : `Temporary password set for ${json.user.email ?? "the user"}.`;
+        : `Password set for ${json.user.email ?? "the user"}.`;
     }
     if (action === "setUserStatus" && json?.user) {
       return `${json.user.email ?? "User"} ${json.user.isActive ? "reactivated" : "deactivated"}.`;
@@ -534,20 +534,20 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
 
   function copyGeneratedLogin() {
     if (!generatedLogin || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nTemporary password: ${generatedLogin.temporary_password}`);
+    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nPassword: ${generatedLogin.temporary_password}`);
   }
 
   function resetPassword() {
     submitValidated(passwordValidationErrors, {
       action: "resetUserPassword",
       payload: resetForm,
-      success: resetForm.password ? "Temporary password set." : "Password reset email sent.",
-      working: resetForm.password ? "Setting temporary password..." : "Sending password reset...",
+      success: resetForm.password ? "Password set." : "Password reset email sent.",
+      working: resetForm.password ? "Setting password..." : "Sending password reset...",
       after: () => setResetForm({ email: "", password: "" }),
       confirmation: {
-        title: resetForm.password ? "Set temporary password?" : "Send password reset?",
+        title: resetForm.password ? "Set password?" : "Send password reset?",
         description: resetForm.password
-          ? `${resetForm.email} will be required to replace the temporary password before workspace access.`
+          ? `${resetForm.email} will be required to replace the password before workspace access.`
           : `${resetForm.email} will receive a password setup/reset email.`,
         confirmLabel: resetForm.password ? "Set password" : "Send reset",
       },
@@ -1000,7 +1000,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 <UserPlus className="size-5 text-primary" />
                 User and Password Access
               </CardTitle>
-              <CardDescription>Create school users, assign scope, and set or send temporary credentials. Temporary-password users must choose a new private password before workspace access.</CardDescription>
+              <CardDescription>Create school users, assign scope, and set or send credentials. Users must choose a new private password before workspace access.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {generatedLogin ? (
@@ -1015,7 +1015,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                           <div className="break-all font-mono">{generatedLogin.email}</div>
                         </div>
                         <div>
-                          <div className="text-xs font-medium uppercase text-muted-foreground">Temporary password</div>
+                          <div className="text-xs font-medium uppercase text-muted-foreground">Password</div>
                           <div className="font-mono">{generatedLogin.temporary_password}</div>
                         </div>
                       </div>
@@ -1083,7 +1083,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 {!userFormIsTeacher ? (
                   <>
                     <div className="space-y-1">
-                      <Label>Temporary password</Label>
+                      <Label>Password</Label>
                       <Input value={userForm.password} onChange={(event) => setUserField("password", event.target.value)} type="password" placeholder="Optional" />
                     </div>
                     <div className="space-y-1">
@@ -1314,7 +1314,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 <KeyRound className="size-5 text-primary" />
                 Password and Session Controls
               </CardTitle>
-              <CardDescription>Send a reset email, set a temporary password, deactivate users, or force a fresh login. Password resets also require the user to replace temporary credentials.</CardDescription>
+              <CardDescription>Send a reset email, set a password, deactivate users, or force a fresh login. Password resets also require the user to replace credentials.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
@@ -1322,7 +1322,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 <Input value={resetForm.email} onChange={(event) => setResetField("email", event.target.value)} type="email" />
               </div>
               <div className="space-y-1">
-                <Label>Temporary password</Label>
+                <Label>Password</Label>
                 <Input value={resetForm.password} onChange={(event) => setResetField("password", event.target.value)} type="password" placeholder="Blank sends reset email" />
               </div>
               <div className="md:col-span-2">

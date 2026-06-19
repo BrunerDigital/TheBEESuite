@@ -38,7 +38,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Guardian ID is required." }, { status: 400 });
   }
   if (temporaryPassword && temporaryPassword.length < 8) {
-    return NextResponse.json({ ok: false, error: "Temporary passwords must be at least 8 characters." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Passwords must be at least 8 characters." }, { status: 400 });
   }
 
   const guardian = await prisma.guardian.findUnique({
@@ -173,7 +173,7 @@ async function POSTHandler(request: NextRequest) {
     "",
     `Your parent portal for ${center.crmLocationId ?? center.name} is ready.`,
     temporaryPassword
-      ? "Use the temporary password provided by your school director, then reset it after signing in."
+      ? "Use the password provided by your school director, then reset it after signing in."
       : "Use the password reset email from The BEE Suite to set your password.",
     `${process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin}/parent-portal`,
   ].join("\n");

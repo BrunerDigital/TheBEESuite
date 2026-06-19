@@ -320,7 +320,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
 
   function copyGeneratedLogin() {
     if (!generatedLogin || !navigator.clipboard) return;
-    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nTemporary password: ${generatedLogin.temporary_password}`);
+    void navigator.clipboard.writeText(`Username: ${generatedLogin.email}\nPassword: ${generatedLogin.temporary_password}`);
   }
 
   function saveCertification(event: FormEvent<HTMLFormElement>) {
@@ -467,7 +467,7 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
                       <div className="break-all font-mono">{generatedLogin.email}</div>
                     </div>
                     <div>
-                      <div className="text-xs font-medium uppercase text-muted-foreground">Temporary password</div>
+                      <div className="text-xs font-medium uppercase text-muted-foreground">Password</div>
                       <div className="font-mono">{generatedLogin.temporary_password}</div>
                     </div>
                   </div>

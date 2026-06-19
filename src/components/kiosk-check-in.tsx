@@ -594,13 +594,16 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
               ) : lookup ? (
                 <>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {lookup.warnings?.length ? (
-                      <Alert variant="destructive" className="md:col-span-2">
-                        <AlertCircle className="size-4" />
-                        <AlertTitle>Front desk verification</AlertTitle>
-                        <AlertDescription>{lookup.warnings[0].message}</AlertDescription>
-                      </Alert>
-                    ) : null}
+                    {lookup.warnings?.map((warning) => {
+                      const protectedPickup = warning.type === "protected_pickup_note";
+                      return (
+                        <Alert key={warning.type} variant={protectedPickup ? "destructive" : undefined} className="md:col-span-2">
+                          <AlertCircle className="size-4" />
+                          <AlertTitle>{protectedPickup ? "Front desk verification" : "Tuition reminder"}</AlertTitle>
+                          <AlertDescription>{warning.message}</AlertDescription>
+                        </Alert>
+                      );
+                    })}
                     {lookup.children.map((child) => {
                       const checked = selectedIds.includes(child.id);
                       return (

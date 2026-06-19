@@ -72,6 +72,12 @@ export function paymentMethodManagementSummary(input: {
   };
 }
 
+export function paymentMethodAutopayCategory(summary: Pick<PaymentMethodManagementSummary, "paymentMethodType">) {
+  if (summary.paymentMethodType === "card") return "card" as const;
+  if (summary.paymentMethodType === "us_bank_account") return "ach" as const;
+  return "default" as const;
+}
+
 export function canCreatePaymentMethodManagementSession(input: {
   isLinkedGuardian: boolean;
   hasCenterAccess: boolean;

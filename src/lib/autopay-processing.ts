@@ -7,13 +7,14 @@ import {
 import {
   createStripeOffSessionPaymentIntent,
   getStripeCheckoutAmounts,
+  getStripeProcessingRecoveryAmount,
   getStripeSecretKey,
   getStripeWebhookSecret,
   readStripeConnectedAccountId,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
 } from "@/lib/integrations";
-import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { paymentMethodAutopayCategory, paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import {
   stripeConnectCustomFieldPatch,
@@ -247,6 +248,19 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       results.push({ ...baseResult, status: "skipped", reason: "Autopay is not enabled with a saved payment method." });
       continue;
     }
+    const autopayPaymentMethodCategory = paymentMethodAutopayCategory(paymentMethod);
+    const billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
+    const cardRecoveryRequiresAcceptance =
+      autopayPaymentMethodCategory === "card" &&
+      getStripeProcessingRecoveryAmount(invoice.totalCents, "card") > 0;
+    if (cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt)) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "Card autopay needs the card processing recovery disclosure accepted before charging.",
+      });
+      continue;
+    }
 
     const tenantId = center.organization.tenantId;
     const config = await tenantStripeConfig(tenantId, configCache);
@@ -318,7 +332,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       brandName: center.organization.brand?.name,
     });
     const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
-      paymentMethodCategory: "default",
+      paymentMethodCategory: autopayPaymentMethodCategory,
       waiveBeeSuitePaymentOperationsFee,
     });
 
@@ -346,6 +360,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
           checkoutTotalCents: amounts.checkoutTotalCents,
           applicationFeeAmountCents: amounts.applicationFeeAmountCents,
+          requestedPaymentMethodCategory: autopayPaymentMethodCategory,
           paymentMethodCategory: amounts.paymentMethodCategory,
           stripeConnectedAccountId: connectedAccountId || null,
           collectionMode: "autopay",
@@ -379,6 +394,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
         beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
         beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
+        requestedPaymentMethodCategory: autopayPaymentMethodCategory,
+        paymentMethodCategory: amounts.paymentMethodCategory,
         checkoutTotalCents: String(amounts.checkoutTotalCents),
         applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
         environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",

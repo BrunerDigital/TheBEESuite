@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PaymentStatus } from "@prisma/client";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
+import { buildKioskTuitionBalanceWarning } from "@/lib/kiosk-billing-reminders";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -24,6 +26,17 @@ async function findGuardianByPin(centerId: string, pin: string) {
           id: true,
           name: true,
           custodyNotes: true,
+          billingAccount: {
+            select: {
+              balanceCents: true,
+              invoices: {
+                where: { status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+                orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+                take: 1,
+                select: { number: true, totalCents: true, dueDate: true },
+              },
+            },
+          },
           children: {
             where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
@@ -58,6 +71,17 @@ async function findGuardianByQrToken(centerId: string, qrToken: string) {
           id: true,
           name: true,
           custodyNotes: true,
+          billingAccount: {
+            select: {
+              balanceCents: true,
+              invoices: {
+                where: { status: PaymentStatus.OPEN, totalCents: { gt: 0 } },
+                orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+                take: 1,
+                select: { number: true, totalCents: true, dueDate: true },
+              },
+            },
+          },
           children: {
             where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
@@ -134,6 +158,19 @@ async function POSTHandler(request: NextRequest) {
       })
     : [];
   const latestByChild = latestLogMap(latestLogs);
+  const tuitionBalanceWarning = buildKioskTuitionBalanceWarning({
+    balanceCents: guardian.family.billingAccount?.balanceCents,
+    nextOpenInvoice: guardian.family.billingAccount?.invoices[0] ?? null,
+  });
+  const warnings = [
+    ...(guardian.family.custodyNotes
+      ? [{
+          type: "protected_pickup_note",
+          message: "A protected pickup note is on file. Please ask the front desk to verify before checkout.",
+        }]
+      : []),
+    ...(tuitionBalanceWarning ? [tuitionBalanceWarning] : []),
+  ];
 
   return NextResponse.json({
     ok: true,
@@ -141,12 +178,7 @@ async function POSTHandler(request: NextRequest) {
     guardian: { id: guardian.id, fullName: guardian.fullName, relation: guardian.relation },
     family: { id: guardian.family.id, name: guardian.family.name },
     verification: { method: verificationMethod },
-    warnings: guardian.family.custodyNotes
-      ? [{
-          type: "protected_pickup_note",
-          message: "A protected pickup note is on file. Please ask the front desk to verify before checkout.",
-        }]
-      : [],
+    warnings,
     children: visibleChildren.map((child) => {
       const latest = latestByChild.get(child.id);
       return {

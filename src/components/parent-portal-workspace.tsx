@@ -347,6 +347,16 @@ export function ParentPortalWorkspace({
     if (checkoutBlocked) {
       return showError(checkoutReadiness.blockingReason || "Parent checkout is not ready for this school yet.");
     }
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    const recoveryAmount = paymentMethodCategory === "card"
+      ? invoice?.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice?.totalCents ?? 0)
+      : invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0);
+    if (recoveryAmount > 0) {
+      const accepted = window.confirm(
+        `${paymentMethodCategory === "card" ? "Debit/credit card" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
+      );
+      if (!accepted) return;
+    }
     startTransition(async () => {
       const response = await fetch("/api/billing/checkout-session", {
         method: "POST",
@@ -367,15 +377,24 @@ export function ParentPortalWorkspace({
   }
 
   function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
-    if (!billingAccount) return showError("A billing account is required before saving payment methods.");
+    if (!family) return showError("A family profile is required before saving payment methods.");
+    if (action !== "setup" && !billingAccount) return showError("Save a payment method before managing autopay settings.");
+    if (action === "setup" && paymentMethodCategory === "card") {
+      const accepted = window.confirm(
+        "Card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
+      );
+      if (!accepted) return;
+    }
     startTransition(async () => {
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          billingAccountId: billingAccount.id,
+          billingAccountId: billingAccount?.id,
+          familyId: family.id,
           action,
           paymentMethodCategory,
+          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
           returnPath: "/parent-portal",
         }),
       });
@@ -591,11 +610,11 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "ach")}>
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "ach")}>
                     <Building2 data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
                   </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || !billingAccount} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
                   </Button>
@@ -634,7 +653,7 @@ export function ParentPortalWorkspace({
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
-                      Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -667,7 +686,7 @@ export function ParentPortalWorkspace({
                     variant="outline"
                   >
                     <CreditCard data-icon="inline-start" />
-                    Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">

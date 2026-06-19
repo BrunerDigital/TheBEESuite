@@ -88,6 +88,7 @@ import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import {
   normalizeBillingCadence,
+  defaultRecurringBillingPeriod,
   normalizeRecurringBillingDay,
   normalizeRecurringBillingPeriod,
   shouldCreateRecurringTuitionInvoice,
@@ -2508,7 +2509,14 @@ async function renderLivePage(
           centerId: true,
           name: true,
           billingEmail: true,
-          billingAccount: { select: { balanceCents: true } },
+          billingAccount: {
+            select: {
+              id: true,
+              balanceCents: true,
+              autopayPlaceholder: true,
+              customFields: true,
+            },
+          },
           children: {
             where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
@@ -2555,7 +2563,7 @@ async function renderLivePage(
     });
     const schedulerDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12));
     const currentMonthlyPeriod = normalizeRecurringBillingPeriod(null, schedulerDate, "monthly");
-    const currentWeeklyPeriod = normalizeRecurringBillingPeriod(null, schedulerDate, "weekly");
+    const currentWeeklyPeriod = defaultRecurringBillingPeriod(null, schedulerDate, "weekly");
     const recurringScheduler = billingFamilies.reduce(
       (summary, family) => {
         for (const child of family.children) {
@@ -2599,6 +2607,17 @@ async function renderLivePage(
           workbench: {
             families: billingFamilies.map((family) => ({
               ...family,
+              billingAccount: family.billingAccount
+                ? {
+                    id: family.billingAccount.id,
+                    balanceCents: family.billingAccount.balanceCents,
+                    autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+                    paymentMethodManagement: paymentMethodManagementSummary({
+                      autopayPlaceholder: family.billingAccount.autopayPlaceholder,
+                      customFields: family.billingAccount.customFields,
+                    }),
+                  }
+                : null,
               children: family.children.map((child) => ({
                 id: child.id,
                 fullName: child.fullName,

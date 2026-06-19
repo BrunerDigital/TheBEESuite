@@ -5,8 +5,10 @@ import {
   createStripeBillingPortalSession,
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  getStripeProcessingRecoveryAmount,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
+import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 
@@ -63,43 +65,95 @@ async function POSTHandler(request: NextRequest) {
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const billingAccountId = clean(body.billingAccountId);
+  const familyId = clean(body.familyId);
   const action = actionFrom(body.action);
   const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
+  const processingRecoveryAccepted = body.processingRecoveryAccepted === true ||
+    clean(body.processingRecoveryAccepted).toLowerCase() === "true";
   const returnPath = safeReturnPath(body.returnPath, isParentGuardian(user) ? "/parent-portal" : "/family-detail");
-  if (!billingAccountId) {
-    return NextResponse.json({ ok: false, error: "Billing account ID is required." }, { status: 400 });
+  if (!billingAccountId && !familyId) {
+    return NextResponse.json({ ok: false, error: "Billing account or family ID is required." }, { status: 400 });
   }
 
-  const billingAccount = await prisma.billingAccount.findUnique({
-    where: { id: billingAccountId },
-    include: {
-      family: {
-        include: {
-          guardians: { select: { userId: true, email: true } },
-          children: {
-            select: {
-              classroom: {
-                select: {
-                  center: {
-                    select: {
-                      id: true,
-                      name: true,
-                      organization: { select: { tenantId: true } },
-                    },
+  const billingAccountInclude = {
+    family: {
+      include: {
+        guardians: { select: { userId: true, email: true } },
+        children: {
+          select: {
+            classroom: {
+              select: {
+                center: {
+                  select: {
+                    id: true,
+                    name: true,
+                    organization: { select: { tenantId: true } },
                   },
                 },
               },
             },
-            take: 1,
           },
+          take: 1,
         },
       },
     },
-  });
+  };
+
+  let billingAccount = billingAccountId
+    ? await prisma.billingAccount.findUnique({
+        where: { id: billingAccountId },
+        include: billingAccountInclude,
+      })
+    : null;
+
+  if (!billingAccount && familyId) {
+    const family = await prisma.family.findUnique({
+      where: { id: familyId },
+      include: {
+        guardians: { select: { userId: true, email: true } },
+        children: {
+          select: {
+            classroom: {
+              select: {
+                center: {
+                  select: {
+                    id: true,
+                    name: true,
+                    organization: { select: { tenantId: true } },
+                  },
+                },
+              },
+            },
+          },
+          take: 1,
+        },
+      },
+    });
+    if (!family) {
+      return NextResponse.json({ ok: false, error: "Family not found." }, { status: 404 });
+    }
+
+    const familyCenterId = family.centerId ?? family.children[0]?.classroom?.center?.id ?? null;
+    const isLinkedGuardian = family.guardians.some((guardian) => guardian.userId === user.id);
+    const hasCenterAccess = canAccessAllCenters(user) || Boolean(familyCenterId && user.centerIds.includes(familyCenterId));
+    const access = canCreatePaymentMethodManagementSession({ isLinkedGuardian, hasCenterAccess });
+    if (!access.ok) {
+      return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+    }
+
+    billingAccount = await prisma.billingAccount.upsert({
+      where: { familyId: family.id },
+      update: {},
+      create: { familyId: family.id, balanceCents: 0 },
+      include: billingAccountInclude,
+    });
+  }
+
   if (!billingAccount) {
     return NextResponse.json({ ok: false, error: "Billing account not found." }, { status: 404 });
   }
 
+  const currentFields = jsonObject(billingAccount.customFields);
   const centerId = billingAccount.family.centerId ?? billingAccount.family.children[0]?.classroom?.center?.id ?? null;
   const isLinkedGuardian = billingAccount.family.guardians.some((guardian) => guardian.userId === user.id);
   const hasCenterAccess = canAccessAllCenters(user) || Boolean(centerId && user.centerIds.includes(centerId));
@@ -108,7 +162,18 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   }
 
-  const currentFields = jsonObject(billingAccount.customFields);
+  if (
+    action === "setup" &&
+    paymentMethodCategory === "card" &&
+    getStripeProcessingRecoveryAmount(10_000, "card") > 0 &&
+    !processingRecoveryAccepted
+  ) {
+    return NextResponse.json(
+      { ok: false, error: "Card setup requires confirming the processing recovery disclosure before continuing." },
+      { status: 400 },
+    );
+  }
+
   const baseUrl = requestBaseUrl(request);
   const tenantId = billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
 
@@ -220,6 +285,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  const paymentMethodManagementUpdatedAt = new Date().toISOString();
   await prisma.billingAccount.update({
     where: { id: billingAccount.id },
     data: {
@@ -228,8 +294,15 @@ async function POSTHandler(request: NextRequest) {
         stripeCustomerId: customerId,
         stripeSetupCheckoutSessionId: setup.id || null,
         paymentMethodManagementStatus: "setup_session_created",
-        paymentMethodManagementUpdatedAt: new Date().toISOString(),
+        paymentMethodManagementUpdatedAt,
         autopayStatus: "pending",
+        ...(paymentMethodCategory === "card" && processingRecoveryAccepted
+          ? {
+              cardProcessingRecoveryAcceptedAt: paymentMethodManagementUpdatedAt,
+              cardProcessingRecoveryAcceptedByUserId: user.id,
+              cardProcessingRecoveryDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+            }
+          : {}),
       },
     },
   });

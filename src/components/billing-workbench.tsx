@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BadgeDollarSign, CalendarClock, CheckCircle2, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
+import { AlertCircle, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, MinusCircle, ReceiptText, Rows3 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,22 @@ export type BillingWorkbenchFamily = {
   centerId: string | null;
   name: string;
   billingEmail: string | null;
-  billingAccount?: { balanceCents: number } | null;
+  billingAccount?: {
+    id: string;
+    balanceCents: number;
+    autopayPlaceholder: boolean;
+    paymentMethodManagement?: {
+      autopayEnabled: boolean;
+      autopayStatus: "enabled" | "disabled" | "pending";
+      hasStripeCustomer: boolean;
+      hasSavedPaymentMethod: boolean;
+      stripeCustomerId: string | null;
+      stripeDefaultPaymentMethodId: string | null;
+      paymentMethodType: string | null;
+      paymentMethodLabel: string | null;
+      lastUpdatedAt: string | null;
+    };
+  } | null;
   children: Array<{
     id: string;
     fullName: string;
@@ -76,7 +91,7 @@ function currentBillingPeriod() {
 }
 
 function currentWeeklyPeriod(date = new Date()) {
-  const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const value = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() + 7));
   const day = value.getUTCDay() || 7;
   value.setUTCDate(value.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(value.getUTCFullYear(), 0, 1));
@@ -98,7 +113,7 @@ function periodMatchesCadence(value: string, cadence: string) {
 
 function normalizeBillingDayForCadence(value: string | number | null | undefined, cadence: string) {
   const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed)) return "1";
+  if (!Number.isFinite(parsed)) return cadence === "weekly" ? "5" : "1";
   const max = cadence === "weekly" ? 7 : 28;
   return String(Math.min(Math.max(parsed, 1), max));
 }
@@ -174,6 +189,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   const effectiveAssignmentBillingDay = normalizeBillingDayForCadence(assignmentBillingDay || selectedAssignment?.billingDay, effectiveAssignmentCadence);
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
+  const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
+  const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
+  const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const ageGroups = useMemo(
     () => mergeAgeGroupOptions(
       selectedCenter?.dashboardOptions?.ageGroups,
@@ -184,6 +202,43 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     [families, planAgeGroup, selectedCenter, tuitionPlans],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
+
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
+    if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
+    if (action === "setup" && paymentMethodCategory === "card") {
+      const accepted = window.confirm(
+        "Card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
+      );
+      if (!accepted) return;
+    }
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/payment-method-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billingAccountId: selectedBillingAccount?.id,
+          familyId: selectedFamily.id,
+          action,
+          paymentMethodCategory,
+          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
+          returnPath: "/billing-invoices",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Payment method management could not be opened.");
+        return;
+      }
+      if (json?.url) {
+        window.location.href = json.url;
+        return;
+      }
+      setStatusMessage(action === "disable_autopay" ? "Autopay disabled for the selected family." : "Payment method settings updated.");
+      router.refresh();
+    });
+  }
 
   function chargePayload() {
     return {
@@ -494,6 +549,49 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
+              <div className="text-sm font-medium">Family payment profile</div>
+              <p className="text-xs text-muted-foreground">
+                Add or update the family&apos;s saved payment method, enable autopay, or open Stripe&apos;s secure payment method manager.
+              </p>
+            </div>
+            <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">{selectedAutopayStatus}</Badge>
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="rounded-lg border bg-background/40 p-3">
+              <div className="text-xs text-muted-foreground">Saved method</div>
+              <div className="mt-1 text-sm font-medium">
+                {selectedPaymentMethod?.hasSavedPaymentMethod
+                  ? selectedPaymentMethod.paymentMethodLabel ?? "Saved securely with Stripe"
+                  : selectedPaymentMethod?.autopayStatus === "pending"
+                    ? "Setup pending"
+                    : "No saved payment method"}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${new Date(selectedPaymentMethod.lastUpdatedAt).toLocaleDateString()}` : "Families can also update this from the parent portal."}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "ach")}>
+                <Building2 data-icon="inline-start" />
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace Bank" : "Add Bank"}
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
+                <CreditCard data-icon="inline-start" />
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace Card" : "Add Card"}
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
+                Manage Saved
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("disable_autopay")} variant="outline">
+                Disable Autopay
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border bg-background/35 p-4">
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+            <div>
               <div className="text-sm font-medium">Tuition rate setup</div>
               <p className="text-xs text-muted-foreground">
                 School users can add or edit weekly/monthly rates here, then assign them to children for scheduled billing or charge a family manually.
@@ -743,7 +841,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Recurring billing creates the child&apos;s invoice on the selected weekday or monthly day when the tuition cron runs. Charge now posts the selected rate immediately to the family balance and parent portal.
+              Weekly tuition bills on the selected weekday for the following week and is due before Monday drop-off. Charge now posts the selected rate immediately to the family balance and parent portal.
             </p>
           </TabsContent>
 

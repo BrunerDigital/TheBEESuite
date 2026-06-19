@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
-import { normalizeBillingCadence, normalizeRecurringBillingDay, normalizeRecurringBillingPeriod } from "@/lib/billing-workflows";
+import { defaultRecurringBillingPeriod, normalizeBillingCadence, normalizeRecurringBillingDay } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -88,7 +88,7 @@ async function POSTHandler(request: NextRequest) {
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
   const cadence = normalizeBillingCadence(plan.cadence);
   const billingDay = normalizeRecurringBillingDay(body.billingDay, cadence);
-  const billingStartPeriod = normalizeRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
 
   const updated = await prisma.child.update({
     where: { id: childId },

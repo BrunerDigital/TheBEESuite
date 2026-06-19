@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   canCreatePaymentMethodManagementSession,
+  paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
 } from "../src/lib/payment-method-management";
 
@@ -28,6 +29,7 @@ test("payment method summary identifies saved Stripe customer and autopay status
   assert.equal(summary.paymentMethodType, "us_bank_account");
   assert.equal(summary.paymentMethodLabel, "Test Bank ending 6789");
   assert.equal(summary.lastUpdatedAt, "2026-06-04T15:00:00.000Z");
+  assert.equal(paymentMethodAutopayCategory(summary), "ach");
 });
 
 test("payment method summary labels saved cards without storing full numbers", () => {
@@ -44,6 +46,7 @@ test("payment method summary labels saved cards without storing full numbers", (
 
   assert.equal(summary.paymentMethodType, "card");
   assert.equal(summary.paymentMethodLabel, "Visa ending 4242");
+  assert.equal(paymentMethodAutopayCategory(summary), "card");
 });
 
 test("payment method summary treats setup sessions as pending", () => {
@@ -60,6 +63,7 @@ test("payment method summary treats setup sessions as pending", () => {
   assert.equal(summary.autopayStatus, "pending");
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
+  assert.equal(paymentMethodAutopayCategory(summary), "default");
 });
 
 test("payment method management requires linked guardian or center billing access", () => {

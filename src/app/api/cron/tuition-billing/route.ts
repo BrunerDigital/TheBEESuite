@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import {
   billingDedupeKey,
+  defaultRecurringBillingPeriod,
   normalizeBillingCadence,
   normalizeBillingPeriod,
   normalizeRecurringBillingDay,
-  normalizeRecurringBillingPeriod,
   recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
@@ -43,7 +43,7 @@ async function GETHandler(request: NextRequest) {
   const safeAsOf = Number.isNaN(asOf.getTime()) ? new Date() : asOf;
   const requestedPeriod = request.nextUrl.searchParams.get("period");
   const monthlyBillingPeriod = normalizeBillingPeriod(requestedPeriod, safeAsOf);
-  const weeklyBillingPeriod = normalizeRecurringBillingPeriod(requestedPeriod, safeAsOf, "weekly");
+  const weeklyBillingPeriod = defaultRecurringBillingPeriod(requestedPeriod, safeAsOf, "weekly");
   const currentMonthlyDay = safeAsOf.getUTCDate();
   const currentWeeklyDay = utcBillingWeekday(safeAsOf);
   const openCenters = await prisma.center.findMany({
@@ -91,7 +91,7 @@ async function GETHandler(request: NextRequest) {
     const plan = plansById.get(entry.planId);
     const cadence = normalizeBillingCadence(plan?.cadence ?? entry.fields.tuitionPlanCadence);
     const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
-    const startsPeriod = normalizeRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
+    const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
     const billingDay = normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
     const currentDay = cadence === "weekly" ? currentWeeklyDay : currentMonthlyDay;
     if (!shouldCreateRecurringTuitionInvoice({

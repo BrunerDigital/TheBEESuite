@@ -85,9 +85,22 @@ export function normalizeWeeklyBillingPeriod(value: unknown, fallbackDate: Date)
   return isoWeekBillingPeriod(fallbackDate);
 }
 
+export function nextWeeklyBillingPeriod(date: Date) {
+  const nextWeek = utcDateOnly(date);
+  nextWeek.setUTCDate(nextWeek.getUTCDate() + 7);
+  return isoWeekBillingPeriod(nextWeek);
+}
+
 export function normalizeRecurringBillingPeriod(value: unknown, fallbackDate: Date, cadence: unknown) {
   return normalizeBillingCadence(cadence) === "weekly"
     ? normalizeWeeklyBillingPeriod(value, fallbackDate)
+    : normalizeBillingPeriod(value, fallbackDate);
+}
+
+export function defaultRecurringBillingPeriod(value: unknown, fallbackDate: Date, cadence: unknown) {
+  if (clean(value)) return normalizeRecurringBillingPeriod(value, fallbackDate, cadence);
+  return normalizeBillingCadence(cadence) === "weekly"
+    ? nextWeeklyBillingPeriod(fallbackDate)
     : normalizeBillingPeriod(value, fallbackDate);
 }
 
@@ -103,7 +116,7 @@ export function normalizeBillingDay(value: unknown) {
 
 export function normalizeWeeklyBillingDay(value: unknown) {
   const parsed = typeof value === "number" ? value : Number.parseInt(clean(value), 10);
-  if (!Number.isFinite(parsed)) return 1;
+  if (!Number.isFinite(parsed)) return 5;
   return Math.min(Math.max(parsed, 1), 7);
 }
 
@@ -127,7 +140,7 @@ export function recurringDueDateForPeriod(period: string, billingDay: number, ca
   const weekOneMonday = new Date(fourthOfJanuary);
   weekOneMonday.setUTCDate(fourthOfJanuary.getUTCDate() - (fourthOfJanuary.getUTCDay() || 7) + 1);
   const dueDate = new Date(weekOneMonday);
-  dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7) + normalizeWeeklyBillingDay(billingDay) - 1);
+  dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7));
   return dueDate;
 }
 

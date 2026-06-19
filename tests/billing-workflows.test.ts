@@ -3,7 +3,9 @@ import { test } from "node:test";
 import {
   agencyPaymentDescription,
   billingDedupeKey,
+  defaultRecurringBillingPeriod,
   isoWeekBillingPeriod,
+  nextWeeklyBillingPeriod,
   normalizeAgencyPaymentMetadata,
   normalizeBillingDay,
   normalizeBillingCadence,
@@ -67,10 +69,14 @@ test("billing workflow helpers normalize weekly recurring periods and weekdays",
   assert.equal(normalizeRecurringBillingPeriod("2026-W7", new Date("2026-06-04T12:00:00.000Z"), "weekly"), "2026-W07");
   assert.equal(normalizeRecurringBillingPeriod("2026-06", new Date("2026-07-15T12:00:00.000Z"), "weekly"), "2026-W23");
   assert.equal(normalizeRecurringBillingPeriod("2026-06", new Date("2026-07-15T12:00:00.000Z"), "monthly"), "2026-06");
+  assert.equal(nextWeeklyBillingPeriod(new Date("2026-06-19T12:00:00.000Z")), "2026-W26");
+  assert.equal(defaultRecurringBillingPeriod(null, new Date("2026-06-19T12:00:00.000Z"), "weekly"), "2026-W26");
+  assert.equal(defaultRecurringBillingPeriod("2026-W30", new Date("2026-06-19T12:00:00.000Z"), "weekly"), "2026-W30");
+  assert.equal(normalizeRecurringBillingDay("", "weekly"), 5);
   assert.equal(normalizeRecurringBillingDay("9", "weekly"), 7);
   assert.equal(normalizeRecurringBillingDay("31", "monthly"), 28);
   assert.equal(utcBillingWeekday(new Date("2026-06-04T12:00:00.000Z")), 4);
-  assert.equal(recurringDueDateForPeriod("2026-W23", 5, "weekly").toISOString(), "2026-06-05T12:00:00.000Z");
+  assert.equal(recurringDueDateForPeriod("2026-W26", 5, "weekly").toISOString(), "2026-06-22T12:00:00.000Z");
   assert.equal(recurringDueDateForPeriod("2026-06", 15, "monthly").toISOString(), "2026-06-15T12:00:00.000Z");
 });
 

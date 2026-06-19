@@ -222,6 +222,7 @@ test("Supabase auth URL has no hardcoded project fallback", () => {
 test("password reset redirects can safely return invited parents to the portal", () => {
   assert.equal(
     buildPasswordResetRedirectUrl({
+      appBaseUrl: "https://app.example.com",
       requestUrl: "https://app.example.com/api/parent/invitations",
       nextPath: PARENT_PORTAL_PATH,
     }),

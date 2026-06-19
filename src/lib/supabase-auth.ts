@@ -77,15 +77,17 @@ function appendPasswordResetNextPath(resetUrl: string, nextPath?: string | null)
 
 export function buildPasswordResetRedirectUrl({
   configuredRedirectUrl,
+  appBaseUrl,
   requestUrl,
   nextPath,
 }: {
   configuredRedirectUrl?: string | null;
+  appBaseUrl?: string | null;
   requestUrl?: string;
   nextPath?: string | null;
 }) {
   const configured = configuredRedirectUrl?.trim();
-  const resetUrl = configured || `${getAppBaseUrl(requestUrl)}/reset-password`;
+  const resetUrl = configured || `${appBaseUrl?.trim().replace(/\/+$/, "") || getAppBaseUrl(requestUrl)}/reset-password`;
   return appendPasswordResetNextPath(resetUrl, nextPath);
 }
 

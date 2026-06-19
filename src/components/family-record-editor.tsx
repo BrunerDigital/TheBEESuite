@@ -199,23 +199,26 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [isBillingContact, setIsBillingContact] = useState(Boolean(selectedGuardian?.isBillingContact));
 
   const [selectedPickupId, setSelectedPickupId] = useState(selectedFamily?.pickups[0]?.id ?? "");
-  const selectedPickup = selectedFamily?.pickups.find((pickup) => pickup.id === selectedPickupId) ?? selectedFamily?.pickups[0] ?? null;
+  const selectedPickup = selectedPickupId
+    ? selectedFamily?.pickups.find((pickup) => pickup.id === selectedPickupId) ?? null
+    : null;
   const [pickupName, setPickupName] = useState(selectedPickup?.fullName ?? "");
   const [pickupPhone, setPickupPhone] = useState(selectedPickup?.phone ?? "");
   const [pickupRelation, setPickupRelation] = useState(selectedPickup?.relation ?? "");
   const [pickupVerificationNotes, setPickupVerificationNotes] = useState(selectedPickup?.verificationNotes ?? "");
 
   const [selectedEmergencyContactId, setSelectedEmergencyContactId] = useState(selectedFamily?.emergencyContacts[0]?.id ?? "");
-  const selectedEmergencyContact =
-    selectedFamily?.emergencyContacts.find((contact) => contact.id === selectedEmergencyContactId) ??
-    selectedFamily?.emergencyContacts[0] ??
-    null;
+  const selectedEmergencyContact = selectedEmergencyContactId
+    ? selectedFamily?.emergencyContacts.find((contact) => contact.id === selectedEmergencyContactId) ?? null
+    : null;
   const [emergencyContactName, setEmergencyContactName] = useState(selectedEmergencyContact?.fullName ?? "");
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(selectedEmergencyContact?.phone ?? "");
   const [emergencyContactRelation, setEmergencyContactRelation] = useState(selectedEmergencyContact?.relation ?? "");
 
   const [selectedChildId, setSelectedChildId] = useState(selectedFamily?.children[0]?.id ?? "");
-  const selectedChild = selectedFamily?.children.find((child) => child.id === selectedChildId) ?? selectedFamily?.children[0] ?? null;
+  const selectedChild = selectedChildId
+    ? selectedFamily?.children.find((child) => child.id === selectedChildId) ?? null
+    : null;
   const [childName, setChildName] = useState(selectedChild?.fullName ?? "");
   const [preferredName, setPreferredName] = useState(selectedChild?.preferredName ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(toDateInput(selectedChild?.dateOfBirth));
@@ -232,24 +235,28 @@ export function FamilyRecordEditor({ families, centers }: Props) {
   const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(selectedChild?.fieldTripPermission));
 
   const [selectedAllergyId, setSelectedAllergyId] = useState(selectedChild?.allergies[0]?.id ?? "");
-  const selectedAllergy = selectedChild?.allergies.find((allergy) => allergy.id === selectedAllergyId) ?? selectedChild?.allergies[0] ?? null;
+  const selectedAllergy = selectedAllergyId
+    ? selectedChild?.allergies.find((allergy) => allergy.id === selectedAllergyId) ?? null
+    : null;
   const [allergen, setAllergen] = useState(selectedAllergy?.allergen ?? "");
   const [allergySeverity, setAllergySeverity] = useState(selectedAllergy?.severity ?? "");
   const [allergyActionPlan, setAllergyActionPlan] = useState(selectedAllergy?.actionPlan ?? "");
 
   const [selectedMedicalNoteId, setSelectedMedicalNoteId] = useState(selectedChild?.medicalNotes[0]?.id ?? "");
-  const selectedMedicalNote =
-    selectedChild?.medicalNotes.find((note) => note.id === selectedMedicalNoteId) ?? selectedChild?.medicalNotes[0] ?? null;
+  const selectedMedicalNote = selectedMedicalNoteId
+    ? selectedChild?.medicalNotes.find((note) => note.id === selectedMedicalNoteId) ?? null
+    : null;
   const [medicalCategory, setMedicalCategory] = useState(selectedMedicalNote?.category ?? "");
   const [medicalNote, setMedicalNote] = useState(selectedMedicalNote?.note ?? "");
   const [medicalRestricted, setMedicalRestricted] = useState(selectedMedicalNote?.restricted ?? true);
 
   const firstDocument = selectedChild?.documents[0] ?? selectedFamily?.documents[0] ?? null;
   const [selectedDocumentId, setSelectedDocumentId] = useState(firstDocument?.id ?? "");
-  const selectedDocument =
-    selectedChild?.documents.find((document) => document.id === selectedDocumentId) ??
-    selectedFamily?.documents.find((document) => document.id === selectedDocumentId) ??
-    firstDocument;
+  const selectedDocument = selectedDocumentId
+    ? selectedChild?.documents.find((document) => document.id === selectedDocumentId) ??
+      selectedFamily?.documents.find((document) => document.id === selectedDocumentId) ??
+      null
+    : null;
   const [documentName, setDocumentName] = useState(selectedDocument?.name ?? "");
   const [documentType, setDocumentType] = useState(selectedDocument?.type ?? "");
   const [documentStatus, setDocumentStatus] = useState(selectedDocument?.status ?? "REQUESTED");
@@ -473,6 +480,56 @@ export function FamilyRecordEditor({ families, centers }: Props) {
       }
       loadGuardian(null);
       setStatusMessage("Parent/guardian removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removePickup() {
+    if (!selectedPickup) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedPickup.fullName} from ${selectedFamily?.name ?? "this family"} as an authorized pickup?`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "authorizedPickup", id: selectedPickup.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Authorized pickup could not be removed.");
+        return;
+      }
+      loadPickup(null);
+      setStatusMessage("Authorized pickup removed from the family.");
+      router.refresh();
+    });
+  }
+
+  function removeEmergencyContact() {
+    if (!selectedEmergencyContact) return;
+    const confirmed = window.confirm(
+      `Remove ${selectedEmergencyContact.fullName} from ${selectedFamily?.name ?? "this family"} as an emergency contact?`,
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "emergencyContact", id: selectedEmergencyContact.id }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Emergency contact could not be removed.");
+        return;
+      }
+      loadEmergencyContact(null);
+      setStatusMessage("Emergency contact removed from the family.");
       router.refresh();
     });
   }
@@ -927,8 +984,18 @@ export function FamilyRecordEditor({ families, centers }: Props) {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Authorized pickup</div>
-                <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Authorized pickups</div>
+                  <p className="text-xs text-muted-foreground">
+                    Add every person allowed to pick up children in this family.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedFamily?.pickups.length ?? 0} pickup{selectedFamily?.pickups.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" onClick={() => loadPickup(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -973,15 +1040,34 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Authorized pickup")}
                 >
                   <Save data-icon="inline-start" />
-                  Save pickup
+                  {selectedPickup ? "Save pickup" : "Add pickup"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedPickup}
+                  onClick={removePickup}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove pickup
                 </Button>
               </div>
             </div>
 
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="text-sm font-medium">Emergency contact</div>
-                <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>New</Button>
+                <div>
+                  <div className="text-sm font-medium">Emergency contacts</div>
+                  <p className="text-xs text-muted-foreground">
+                    Add every backup contact the school may call in an emergency.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">
+                    {selectedFamily?.emergencyContacts.length ?? 0} contact{selectedFamily?.emergencyContacts.length === 1 ? "" : "s"}
+                  </Badge>
+                  <Button type="button" size="sm" variant="outline" onClick={() => loadEmergencyContact(null)}>Add</Button>
+                </div>
               </div>
               <div className="grid gap-3">
                 <div className="space-y-1">
@@ -1021,7 +1107,16 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Emergency contact")}
                 >
                   <Save data-icon="inline-start" />
-                  Save contact
+                  {selectedEmergencyContact ? "Save contact" : "Add contact"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isPending || !selectedEmergencyContact}
+                  onClick={removeEmergencyContact}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Remove contact
                 </Button>
               </div>
             </div>
@@ -1149,7 +1244,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
             }, "Child profile")}
           >
             <Save data-icon="inline-start" />
-            Save child
+            {selectedChild ? "Save child" : "Add child"}
           </Button>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1237,7 +1332,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Allergy record")}
                 >
                   <Save data-icon="inline-start" />
-                  Save allergy
+                  {selectedAllergy ? "Save allergy" : "Add allergy"}
                 </Button>
               </div>
             </div>
@@ -1283,7 +1378,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
                   }, "Medical note")}
                 >
                   <Save data-icon="inline-start" />
-                  Save medical note
+                  {selectedMedicalNote ? "Save medical note" : "Add medical note"}
                 </Button>
               </div>
             </div>
@@ -1372,7 +1467,7 @@ export function FamilyRecordEditor({ families, centers }: Props) {
               }, "Document request")}
             >
               <Save data-icon="inline-start" />
-              Save document
+              {selectedDocument ? "Save document" : "Add document"}
             </Button>
           </div>
         </section>

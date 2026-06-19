@@ -1568,6 +1568,108 @@ async function DELETEHandler(request: NextRequest) {
     return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
   }
 
+  if (entity === "authorizedPickup") {
+    const pickup = await prisma.authorizedPickup.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        fullName: true,
+        phone: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!pickup) return NextResponse.json({ ok: false, error: "Authorized pickup not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, pickup.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set(pickup.family.guardians.map((item) => item.userId).filter((userId): userId is string => Boolean(userId))),
+    );
+    const result = await prisma.authorizedPickup.delete({ where: { id: pickup.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: pickup.familyId,
+      pickupName: pickup.fullName,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: pickup.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.authorizedPickup.deleted",
+      resource: "authorizedPickup",
+      resourceId: pickup.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
+  if (entity === "emergencyContact") {
+    const contact = await prisma.emergencyContact.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        familyId: true,
+        fullName: true,
+        phone: true,
+        family: {
+          select: {
+            guardians: { select: { userId: true } },
+          },
+        },
+      },
+    });
+    if (!contact) return NextResponse.json({ ok: false, error: "Emergency contact not found." }, { status: 404 });
+    const access = await assertFamilyAccess(user, contact.familyId);
+    if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
+
+    const relatedUserIds = Array.from(
+      new Set(contact.family.guardians.map((item) => item.userId).filter((userId): userId is string => Boolean(userId))),
+    );
+    const result = await prisma.emergencyContact.delete({ where: { id: contact.id } });
+    const auditMetadata: Record<string, Prisma.InputJsonValue> = {
+      mode: "deleted",
+      familyId: contact.familyId,
+      contactName: contact.fullName,
+    };
+    try {
+      auditMetadata.notificationsCreated = await notifyOperationsRecordChange({
+        actor: user,
+        entity,
+        mode: "deleted",
+        resourceId: contact.id,
+        centerId: access.centerId,
+        relatedUserIds,
+      });
+    } catch (error) {
+      auditMetadata.notificationError = error instanceof Error ? error.message : "Notification could not be created.";
+    }
+
+    await writeAuditLog(user, {
+      centerId: access.centerId,
+      action: "operations.emergencyContact.deleted",
+      resource: "emergencyContact",
+      resourceId: contact.id,
+      metadata: auditMetadata as Prisma.InputJsonObject,
+    });
+    return NextResponse.json({ ok: true, entity, mode: "deleted", record: result, ...auditMetadata });
+  }
+
   if (entity === "staff") {
     const staff = await prisma.staffProfile.findUnique({
       where: { id },

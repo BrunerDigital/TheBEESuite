@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UserAvatar } from "@/components/user-avatar";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
 import { readStaffClockState } from "@/lib/staff-kiosk";
 
@@ -24,7 +25,7 @@ type TeacherRecord = {
   phone: string | null;
   backgroundCheckStatus: string | null;
   customFields?: unknown;
-  user: { name: string; email: string; isActive: boolean };
+  user: { name: string; email: string; isActive: boolean; profilePhotoUrl?: string | null };
   classroom: { id: string; name: string } | null;
 };
 type ScheduleRecord = {
@@ -672,6 +673,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
           </section>
 
           <form className="space-y-4" onSubmit={saveTeacher}>
+            {selectedTeacher ? (
+              <div className="flex items-center gap-3 rounded-xl border bg-background/40 p-3">
+                <UserAvatar name={selectedTeacher.user.name} src={selectedTeacher.user.profilePhotoUrl} size="lg" />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{selectedTeacher.user.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{selectedTeacher.user.email}</div>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1">
                 <Label>Teacher</Label>
@@ -783,12 +793,15 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
               <div className="divide-y rounded-lg border bg-card/40">
                 {previousStaffRows.map((teacher) => (
                   <div key={teacher.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{teacher.user.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">{teacher.user.email}</div>
-                      <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span>{teacher.title || "Teacher"}</span>
-                        <span>{teacher.classroom?.name ?? "No active classroom"}</span>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <UserAvatar name={teacher.user.name} src={teacher.user.profilePhotoUrl} size="md" />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{teacher.user.name}</div>
+                        <div className="truncate text-xs text-muted-foreground">{teacher.user.email}</div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>{teacher.title || "Teacher"}</span>
+                          <span>{teacher.classroom?.name ?? "No active classroom"}</span>
+                        </div>
                       </div>
                     </div>
                     <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => loadTeacher(teacher.id)}>

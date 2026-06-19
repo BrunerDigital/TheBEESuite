@@ -20,12 +20,13 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
-  UserCircle,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
+import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,7 @@ type ShellUser = {
   role: string;
   accessScope?: string;
   centerIds?: string[];
+  profilePhotoUrl?: string | null;
   branding?: WorkspaceBranding;
 };
 
@@ -303,13 +305,14 @@ function isParentFacingUser(currentUser?: ShellUser) {
 function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" />}>
-        <UserCircle />
+      <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
+        <UserAvatar name={currentUser.name} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <div className="px-2 py-2">
-          <span className="block truncate text-sm font-semibold text-foreground">{currentUser.name}</span>
-          <span className="mt-1 block truncate text-[0.7rem] font-normal text-muted-foreground">{currentUser.email}</span>
+      <DropdownMenuContent align="end" className="w-80">
+        <div className="p-2">
+          <ProfilePhotoUploader name={currentUser.name} email={currentUser.email} profilePhotoUrl={currentUser.profilePhotoUrl} />
+        </div>
+        <div className="px-3 pb-2">
           <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
         </div>
         <DropdownMenuSeparator />
@@ -505,9 +508,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                     <AccountMenu currentUser={currentUser} onLogout={logout} />
                   </div>
                   <div className="hidden items-center gap-2 sm:flex">
+                    <AccountMenu currentUser={currentUser} onLogout={logout} />
                     <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
-                    <div className="text-xs font-medium leading-none">{currentUser.name}</div>
-                    <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
+                      <div className="text-xs font-medium leading-none">{currentUser.name}</div>
+                      <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
                     </div>
                     <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
                       <LogOut />

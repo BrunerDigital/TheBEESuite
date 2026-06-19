@@ -102,6 +102,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
@@ -116,12 +117,24 @@ import {
   summarizeEnrollmentChecklist,
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
-import { signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
+import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
 import { readStaffClockState, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
+
+async function signedProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createProfilePhotoSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
+}
 
 export function generateStaticParams() {
   return [
@@ -4133,7 +4146,7 @@ async function renderLivePage(
       orderBy: [{ title: "asc" }, { id: "asc" }],
       take: 200,
       include: {
-        user: { select: { name: true, email: true, role: true, isActive: true } },
+        user: { select: { name: true, email: true, role: true, isActive: true, customFields: true } },
         center: { select: { id: true, name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
         classroom: { select: { id: true, name: true } },
         certifications: { orderBy: [{ expiresAt: "asc" }, { name: "asc" }] },
@@ -4159,8 +4172,17 @@ async function renderLivePage(
       const rightCenter = right.center.crmLocationId ?? right.center.name;
       return leftCenter.localeCompare(rightCenter) || left.user.name.localeCompare(right.user.name);
     });
-    const activeStaff = sortedStaff.filter((profile) => profile.user.isActive);
-    const previousStaff = sortedStaff.filter((profile) => !profile.user.isActive);
+    const staffWithProfilePhotos = await Promise.all(
+      sortedStaff.map(async (profile) => ({
+        ...profile,
+        user: {
+          ...profile.user,
+          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields),
+        },
+      })),
+    );
+    const activeStaff = staffWithProfilePhotos.filter((profile) => profile.user.isActive);
+    const previousStaff = staffWithProfilePhotos.filter((profile) => !profile.user.isActive);
     const total = activeStaff.length;
     const activeUsers = activeStaff.length;
     const expiringCerts = await prisma.certification.count({ where: certificationWhere });

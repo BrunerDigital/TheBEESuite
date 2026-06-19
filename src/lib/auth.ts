@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
 import { isDemoAccountEmail } from "@/lib/demo-accounts";
+import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
+import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -31,6 +33,7 @@ export type CurrentUser = {
   deviceSessionId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
+  profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
 };
 
@@ -157,6 +160,18 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
   };
   const data = base64Url(JSON.stringify(payload));
   return `${data}.${sign(data)}`;
+}
+
+async function resolveCurrentUserProfilePhotoUrl(customFields: unknown) {
+  const storageKey = readProfilePhotoStorageKey(customFields);
+  if (storageKey && isSupabaseStorageConfigured()) {
+    try {
+      return await createProfilePhotoSignedUrl(storageKey);
+    } catch {
+      return readProfilePhotoUrl(customFields);
+    }
+  }
+  return readProfilePhotoUrl(customFields);
 }
 
 export function verifySessionToken(token?: string) {
@@ -321,6 +336,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
+    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields),
     branding: resolveWorkspaceBranding({
       tenantName: user.tenant.name,
       tenantSlug: user.tenant.slug,

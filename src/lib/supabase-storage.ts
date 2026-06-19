@@ -4,10 +4,13 @@ import { cleanSupabaseUrl } from "@/lib/supabase-auth";
 
 export const CHILD_MEDIA_BUCKET = process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
+export const PROFILE_PHOTO_BUCKET = process.env.SUPABASE_PROFILE_PHOTO_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const CHILD_MEDIA_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS || 60 * 60 * 2);
 export const DOCUMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_DOCUMENT_SIGNED_URL_SECONDS || 60 * 60);
+export const PROFILE_PHOTO_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_PROFILE_PHOTO_SIGNED_URL_SECONDS || 60 * 60 * 12);
 export const CHILD_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
 export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 type StorageClient = SupabaseClient;
 
@@ -111,6 +114,74 @@ export function buildChildMediaPath({
     month,
     `${randomUUID()}.${ext}`,
   ].join("/");
+}
+
+export function buildProfilePhotoPath({
+  tenantId,
+  userId,
+  originalName,
+  contentType,
+}: {
+  tenantId: string;
+  userId: string;
+  originalName?: string;
+  contentType: string;
+}) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const ext = extensionFor(contentType, originalName);
+  return [
+    "profile-photos",
+    safePathPart(tenantId),
+    safePathPart(userId),
+    String(year),
+    month,
+    `${randomUUID()}.${ext}`,
+  ].join("/");
+}
+
+export async function uploadProfilePhotoBuffer({
+  bytes,
+  contentType,
+  originalName,
+  tenantId,
+  userId,
+}: {
+  bytes: Buffer;
+  contentType: string;
+  originalName?: string;
+  tenantId: string;
+  userId: string;
+}) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+    throw new Error("Profile photo must be a JPG, PNG, or WebP image.");
+  }
+  if (bytes.byteLength > PROFILE_PHOTO_MAX_BYTES) throw new Error("Profile photo must be 5MB or smaller.");
+
+  const client = getSupabaseStorageClient();
+  const storageKey = buildProfilePhotoPath({ tenantId, userId, originalName, contentType });
+  const { error: uploadError } = await client.storage.from(PROFILE_PHOTO_BUCKET).upload(storageKey, bytes, {
+    cacheControl: "3600",
+    contentType,
+    upsert: false,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const signedUrl = await createProfilePhotoSignedUrl(storageKey);
+  return {
+    bucket: PROFILE_PHOTO_BUCKET,
+    storageKey,
+    recordUrl: `supabase://${PROFILE_PHOTO_BUCKET}/${storageKey}`,
+    signedUrl,
+  };
+}
+
+export async function createProfilePhotoSignedUrl(storageKey: string, expiresIn = PROFILE_PHOTO_SIGNED_URL_SECONDS) {
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.from(PROFILE_PHOTO_BUCKET).createSignedUrl(storageKey, expiresIn);
+  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed profile photo URL.");
+  return data.signedUrl;
 }
 
 export async function uploadChildMediaBuffer({

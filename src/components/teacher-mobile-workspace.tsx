@@ -49,6 +49,12 @@ type TeacherKioskAccess = {
   hasStaffKioskCode: boolean;
   clockStatus: "clocked_in" | "clocked_out";
   lastActionAt: string | null;
+  timeClockSummary: {
+    totalMinutes: number;
+    closedShiftCount: number;
+    openShiftMinutes: number;
+    openShiftStartedAt: string | null;
+  };
 };
 
 type ClassroomRatioSnapshot = {
@@ -156,6 +162,10 @@ function normalizeReportTime(reportDate: string, value: string) {
 function formatTime(value: string | Date | null) {
   if (!value) return "";
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatHours(minutes: number) {
+  return `${(Math.max(0, minutes) / 60).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
 }
 
 function attendanceLabel(snapshot: AttendanceSnapshot) {
@@ -809,17 +819,37 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
             </div>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant={kioskAccess.clockStatus === "clocked_in" ? "default" : "outline"}>
-                {kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"}
-              </Badge>
-              {kioskAccess.lastActionAt ? (
-                <Badge variant="secondary">Last action {formatTime(kioskAccess.lastActionAt)}</Badge>
-              ) : null}
-              <Badge variant="outline">
-                <KeyRound data-icon="inline-start" />
-                Staff PIN
-              </Badge>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Badge variant={kioskAccess.clockStatus === "clocked_in" ? "default" : "outline"}>
+                  {kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"}
+                </Badge>
+                {kioskAccess.lastActionAt ? (
+                  <Badge variant="secondary">Last action {formatTime(kioskAccess.lastActionAt)}</Badge>
+                ) : null}
+                <Badge variant="outline">
+                  <KeyRound data-icon="inline-start" />
+                  Staff PIN
+                </Badge>
+              </div>
+              <div className="grid gap-2 text-sm sm:grid-cols-3">
+                <div className="rounded-lg border bg-background/40 px-3 py-2">
+                  <div className="text-xs text-muted-foreground">My stored hours</div>
+                  <div className="font-medium">{formatHours(kioskAccess.timeClockSummary.totalMinutes)}</div>
+                </div>
+                <div className="rounded-lg border bg-background/40 px-3 py-2">
+                  <div className="text-xs text-muted-foreground">Closed shifts</div>
+                  <div className="font-medium">{kioskAccess.timeClockSummary.closedShiftCount}</div>
+                </div>
+                <div className="rounded-lg border bg-background/40 px-3 py-2">
+                  <div className="text-xs text-muted-foreground">Open shift</div>
+                  <div className="font-medium">
+                    {kioskAccess.timeClockSummary.openShiftMinutes
+                      ? formatHours(kioskAccess.timeClockSummary.openShiftMinutes)
+                      : "None"}
+                  </div>
+                </div>
+              </div>
             </div>
             <Button type="button" onClick={() => window.location.assign(kioskAccess.kioskPath)}>
               <ExternalLink data-icon="inline-start" />

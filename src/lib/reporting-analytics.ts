@@ -1,8 +1,9 @@
 import { EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 
-export type ReportKind = "lead_funnel" | "attendance" | "billing" | "messages";
+export type ReportKind = "lead_funnel" | "attendance" | "billing" | "messages" | "staff_hours";
 export type ReportFormat = "csv" | "pdf";
 
 export type ReportCenterOption = {
@@ -62,6 +63,24 @@ export type MessageAnalyticsReportRow = {
   responseRate: number;
 };
 
+export type StaffHoursReportRow = {
+  staffId: string;
+  staffName: string;
+  staffEmail: string;
+  title: string;
+  centerId: string;
+  centerLabel: string;
+  classroomName: string;
+  status: "clocked_in" | "clocked_out";
+  totalMinutes: number;
+  closedShiftMinutes: number;
+  openShiftMinutes: number;
+  closedShiftCount: number;
+  lastActionAt: string | null;
+  openShiftStartedAt: string | null;
+  activeUser: boolean;
+};
+
 export type AnalyticsReportData = {
   generatedAt: string;
   range: {
@@ -74,6 +93,7 @@ export type AnalyticsReportData = {
   attendanceTrends: AttendanceTrendReportRow[];
   billing: BillingReportRow[];
   messages: MessageAnalyticsReportRow[];
+  staffHours: StaffHoursReportRow[];
   totals: {
     leadCount: number;
     enrolledCount: number;
@@ -88,6 +108,9 @@ export type AnalyticsReportData = {
     parentMessages: number;
     unreadMessages: number;
     avgResponseHours: number | null;
+    staffHoursMinutes: number;
+    staffOpenShiftMinutes: number;
+    staffClockedIn: number;
   };
 };
 
@@ -452,6 +475,50 @@ function buildMessageReports(messages: Array<{
     .sort((a, b) => b.parentMessages - a.parentMessages);
 }
 
+function buildStaffHoursReports(
+  staffProfiles: Array<{
+    id: string;
+    title: string;
+    customFields: unknown;
+    centerId: string;
+    user: { name: string; email: string; isActive: boolean };
+    center: { name: string; crmLocationId: string | null };
+    classroom: { name: string } | null;
+  }>,
+  input: {
+    startDate: Date;
+    endDate: Date;
+    now: Date;
+  },
+) {
+  return staffProfiles
+    .map((staff) => {
+      const clock = readStaffClockState(staff.customFields);
+      const summary = readStaffClockSummary(staff.customFields, input);
+      return {
+        staffId: staff.id,
+        staffName: staff.user.name,
+        staffEmail: staff.user.email,
+        title: staff.title,
+        centerId: staff.centerId,
+        centerLabel: centerLabel(staff.center),
+        classroomName: staff.classroom?.name ?? "Unassigned",
+        status: clock.status,
+        totalMinutes: summary.totalMinutes,
+        closedShiftMinutes: summary.closedShiftMinutes,
+        openShiftMinutes: summary.openShiftMinutes,
+        closedShiftCount: summary.closedShiftCount,
+        lastActionAt: clock.lastActionAt,
+        openShiftStartedAt: summary.openShiftStartedAt,
+        activeUser: staff.user.isActive,
+      };
+    })
+    .sort((left, right) =>
+      left.centerLabel.localeCompare(right.centerLabel)
+      || left.staffName.localeCompare(right.staffName),
+    );
+}
+
 export async function buildAnalyticsReportData(
   user: CurrentUser,
   filters: AnalyticsReportFilters = {},
@@ -496,6 +563,7 @@ export async function buildAnalyticsReportData(
     invoices,
     payments,
     messages,
+    staffProfiles,
   ] = await Promise.all([
     prisma.lead.findMany({
       where: leadWhere,
@@ -580,12 +648,30 @@ export async function buildAnalyticsReportData(
         sender: { select: { role: true } },
       },
     }),
+    prisma.staffProfile.findMany({
+      where: {
+        centerId: selectedCenterFilter,
+        user: { role: UserRole.TEACHER },
+      },
+      orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
+      take: 5000,
+      select: {
+        id: true,
+        title: true,
+        customFields: true,
+        centerId: true,
+        user: { select: { name: true, email: true, isActive: true } },
+        center: { select: { name: true, crmLocationId: true } },
+        classroom: { select: { name: true } },
+      },
+    }),
   ]);
 
   const { leadSources, funnelStages } = buildLeadReports(leads, centerById);
   const attendanceTrends = buildAttendanceReports({ attendanceRecords, checkLogs, centerById, daily });
   const billing = buildBillingReports({ invoices, payments, centerById, daily, now });
   const messageRows = buildMessageReports(messages, centerById);
+  const staffHours = buildStaffHoursReports(staffProfiles, { startDate, endDate, now });
   const enrolledCount = leads.filter((lead) => lead.stage === EnrollmentStage.ENROLLED).length;
   const presentCount = attendanceTrends.reduce((sum, row) => sum + row.present, 0);
   const absentCount = attendanceTrends.reduce((sum, row) => sum + row.absent, 0);
@@ -603,6 +689,7 @@ export async function buildAnalyticsReportData(
     attendanceTrends,
     billing,
     messages: messageRows,
+    staffHours,
     totals: {
       leadCount: leads.length,
       enrolledCount,
@@ -617,6 +704,9 @@ export async function buildAnalyticsReportData(
       parentMessages: messageRows.reduce((sum, row) => sum + row.parentMessages, 0),
       unreadMessages: messageRows.reduce((sum, row) => sum + row.unreadMessages, 0),
       avgResponseHours,
+      staffHoursMinutes: staffHours.reduce((sum, row) => sum + row.totalMinutes, 0),
+      staffOpenShiftMinutes: staffHours.reduce((sum, row) => sum + row.openShiftMinutes, 0),
+      staffClockedIn: staffHours.filter((row) => row.status === "clocked_in").length,
     },
   };
 }
@@ -669,16 +759,51 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
       ]),
     };
   }
+  if (kind === "messages") {
+    return {
+      title: "Parent Response Time And Message Analytics",
+      headers: ["Center", "Parent messages", "Staff replies", "Unread", "Avg response hours", "Response rate"],
+      rows: data.messages.map((row) => [
+        row.centerLabel,
+        row.parentMessages,
+        row.staffReplies,
+        row.unreadMessages,
+        row.avgResponseHours ?? "No replies",
+        `${row.responseRate}%`,
+      ]),
+    };
+  }
   return {
-    title: "Parent Response Time And Message Analytics",
-    headers: ["Center", "Parent messages", "Staff replies", "Unread", "Avg response hours", "Response rate"],
-    rows: data.messages.map((row) => [
+    title: "Staff Hours And Time Clock",
+    headers: [
+      "Center",
+      "Teacher",
+      "Email",
+      "Classroom",
+      "Role",
+      "Clock status",
+      "Total hours",
+      "Closed shift hours",
+      "Open shift hours",
+      "Closed shifts",
+      "Last action",
+      "Open shift started",
+      "Active user",
+    ],
+    rows: data.staffHours.map((row) => [
       row.centerLabel,
-      row.parentMessages,
-      row.staffReplies,
-      row.unreadMessages,
-      row.avgResponseHours ?? "No replies",
-      `${row.responseRate}%`,
+      row.staffName,
+      row.staffEmail,
+      row.classroomName,
+      row.title,
+      row.status === "clocked_in" ? "Clocked in" : "Clocked out",
+      formatStaffHours(row.totalMinutes),
+      formatStaffHours(row.closedShiftMinutes),
+      formatStaffHours(row.openShiftMinutes),
+      row.closedShiftCount,
+      row.lastActionAt ?? "",
+      row.openShiftStartedAt ?? "",
+      row.activeUser ? "Active" : "Inactive",
     ]),
   };
 }

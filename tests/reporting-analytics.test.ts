@@ -30,6 +30,25 @@ const emptyReportData: AnalyticsReportData = {
   attendanceTrends: [],
   billing: [],
   messages: [],
+  staffHours: [
+    {
+      staffId: "staff_1",
+      staffName: "Lead Teacher",
+      staffEmail: "lead@example.com",
+      title: "Lead Teacher",
+      centerId: "center_1",
+      centerLabel: "FL | Tampa",
+      classroomName: "Pre-K",
+      status: "clocked_out",
+      totalMinutes: 510,
+      closedShiftMinutes: 510,
+      openShiftMinutes: 0,
+      closedShiftCount: 1,
+      lastActionAt: "2026-06-04T20:30:00.000Z",
+      openShiftStartedAt: null,
+      activeUser: true,
+    },
+  ],
   totals: {
     leadCount: 10,
     enrolledCount: 3,
@@ -44,6 +63,9 @@ const emptyReportData: AnalyticsReportData = {
     parentMessages: 0,
     unreadMessages: 0,
     avgResponseHours: null,
+    staffHoursMinutes: 510,
+    staffOpenShiftMinutes: 0,
+    staffClockedIn: 0,
   },
 };
 
@@ -79,6 +101,15 @@ test("lead funnel report exports CSV rows", () => {
   assert.match(csv, /Lead Source And Funnel Conversion/);
   assert.match(csv, /Website/);
   assert.match(csv, /30%/);
+});
+
+test("staff hours report exports clock totals", () => {
+  const report = rowsForReportKind(emptyReportData, "staff_hours");
+  const csv = reportRowsToCsv(report);
+
+  assert.match(csv, /Staff Hours And Time Clock/);
+  assert.match(csv, /Lead Teacher/);
+  assert.match(csv, /8.5h/);
 });
 
 test("report PDF export returns a PDF buffer", () => {

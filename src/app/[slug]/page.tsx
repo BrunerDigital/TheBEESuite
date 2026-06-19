@@ -119,7 +119,7 @@ import {
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
-import { readStaffClockState, readStaffKioskPinHash } from "@/lib/staff-kiosk";
+import { readStaffClockState, readStaffClockSummary, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
@@ -1993,6 +1993,9 @@ async function renderLivePage(
       };
     });
 
+    const teacherClockState = staffProfile ? readStaffClockState(staffProfile.customFields) : null;
+    const teacherClockSummary = staffProfile ? readStaffClockSummary(staffProfile.customFields) : null;
+
     return (
       <TeacherMobileWorkspace
         roster={roster}
@@ -2002,8 +2005,14 @@ async function renderLivePage(
           centerName: teacherCenter ? formatCenterName(teacherCenter) : "Assigned school",
           kioskPath: kioskPathForCenter(staffProfile.centerId, "staff"),
           hasStaffKioskCode: Boolean(readStaffKioskPinHash(staffProfile.customFields)),
-          clockStatus: readStaffClockState(staffProfile.customFields).status,
-          lastActionAt: readStaffClockState(staffProfile.customFields).lastActionAt,
+          clockStatus: teacherClockState?.status ?? "clocked_out",
+          lastActionAt: teacherClockState?.lastActionAt ?? null,
+          timeClockSummary: {
+            totalMinutes: teacherClockSummary?.totalMinutes ?? 0,
+            closedShiftCount: teacherClockSummary?.closedShiftCount ?? 0,
+            openShiftMinutes: teacherClockSummary?.openShiftMinutes ?? 0,
+            openShiftStartedAt: teacherClockSummary?.openShiftStartedAt ?? null,
+          },
         } : null}
         classroomRatios={classroomRatios.map((classroom) => ({
           classroomId: classroom.id,
@@ -3761,7 +3770,7 @@ async function renderLivePage(
   if (slug === "center-dashboard") {
     const center = centers.find((item) => item.id === user.primaryCenterId) ?? centers[0];
     const centerWhere = center ? { centerId: center.id } : { centerId: "__none__" };
-    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills] = await Promise.all([
+    const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills, staffClockProfiles] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
       center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER } } }) : 0,
@@ -3789,10 +3798,21 @@ async function renderLivePage(
       }),
       center ? getFteReports([center.id], 24) : [],
       center ? buildFtePrefills([center]) : [],
+      center
+        ? prisma.staffProfile.findMany({
+            where: { centerId: center.id, user: { role: UserRole.TEACHER, isActive: true } },
+            select: { customFields: true },
+            take: 500,
+          })
+        : [],
     ]);
     const currentFteWeekStart = startOfFteWeek(today);
     const currentWeekFteReport = fteReports.find((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
     const latestFteReport = fteReports[0];
+    const staffClockSummaries = staffClockProfiles.map((profile) =>
+      readStaffClockSummary(profile.customFields, { startDate: startOfDay, endDate: endOfDay, now: today }),
+    );
+    const staffClockStates = staffClockProfiles.map((profile) => readStaffClockState(profile.customFields));
 
     return (
       <CenterDashboardPage
@@ -3813,6 +3833,8 @@ async function renderLivePage(
             currentWeekFte: currentWeekFteReport?.fteCount ?? null,
             latestFte: latestFteReport?.fteCount ?? null,
             fteSubmittedThisWeek: Boolean(currentWeekFteReport),
+            staffClockedIn: staffClockStates.filter((state) => state.status === "clocked_in").length,
+            staffHoursToday: staffClockSummaries.reduce((sum, summary) => sum + summary.totalMinutes, 0),
           },
           recentLeads,
         }}
@@ -4207,6 +4229,7 @@ async function renderLivePage(
     return (
       <StaffPage
         data={{
+          timeClockSummaryGeneratedAt: today.toISOString(),
           centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
           classrooms,
           schedules,

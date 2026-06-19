@@ -14,7 +14,7 @@ import { canAccessModule } from "@/lib/rbac";
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
-const reportKinds = new Set<ReportKind>(["lead_funnel", "attendance", "billing", "messages"]);
+const reportKinds = new Set<ReportKind>(["lead_funnel", "attendance", "billing", "messages", "staff_hours"]);
 const reportFormats = new Set<ReportFormat>(["csv", "pdf"]);
 
 function safeFilename(value: string) {

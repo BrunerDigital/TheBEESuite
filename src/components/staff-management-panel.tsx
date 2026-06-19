@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
-import { readStaffClockState } from "@/lib/staff-kiosk";
+import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 
 type CenterOption = { id: string; name: string };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
@@ -45,6 +45,7 @@ type Props = {
   staff: TeacherRecord[];
   previousStaff?: TeacherRecord[];
   schedules: ScheduleRecord[];
+  timeClockSummaryGeneratedAt: string;
 };
 
 const backgroundStatuses = [
@@ -78,7 +79,14 @@ function dateInputValue(date = new Date()) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-export function StaffManagementPanel({ centers, classrooms, staff, previousStaff = [], schedules }: Props) {
+export function StaffManagementPanel({
+  centers,
+  classrooms,
+  staff,
+  previousStaff = [],
+  schedules,
+  timeClockSummaryGeneratedAt,
+}: Props) {
   const router = useRouter();
   const activeStaff = useMemo(() => staff.filter((teacher) => teacher.user.isActive), [staff]);
   const previousStaffRows = useMemo(() => previousStaff.filter((teacher) => !teacher.user.isActive), [previousStaff]);
@@ -138,6 +146,28 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
   const clockAction = clockState.status === "clocked_in" ? "clock_out" : "clock_in";
   const selectedTeacher = allTeacherRows.find((teacher) => teacher.id === selectedStaffId) ?? null;
   const selectedPreviousTeacher = selectedTeacher?.user.isActive === false ? selectedTeacher : null;
+  const centerNameById = useMemo(() => new Map(centers.map((center) => [center.id, center.name])), [centers]);
+  const summaryNow = useMemo(() => new Date(timeClockSummaryGeneratedAt), [timeClockSummaryGeneratedAt]);
+  const staffHoursRows = useMemo(() => {
+    return allTeacherRows
+      .map((teacher) => {
+        const clock = readStaffClockState(teacher.customFields);
+        const summary = readStaffClockSummary(teacher.customFields, { now: summaryNow });
+        return {
+          id: teacher.id,
+          name: teacher.user.name,
+          email: teacher.user.email,
+          centerName: centerNameById.get(teacher.centerId) ?? "Unknown center",
+          classroomName: teacher.classroom?.name ?? "Unassigned",
+          active: teacher.user.isActive,
+          clock,
+          summary,
+        };
+      })
+      .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
+  }, [allTeacherRows, centerNameById, summaryNow]);
+  const staffHoursTotalMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.totalMinutes, 0);
+  const staffClockedInCount = staffHoursRows.filter((row) => row.clock.status === "clocked_in").length;
 
   function resetTeacherForm() {
     setCenterId(centers[0]?.id ?? "");
@@ -676,6 +706,57 @@ export function StaffManagementPanel({ centers, classrooms, staff, previousStaff
                 <Clock data-icon="inline-start" />
                 {clockAction === "clock_in" ? "Clock in" : "Clock out"}
               </Button>
+            </div>
+          </section>
+
+          <section className="rounded-xl border bg-background/40 p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Staff hours summary</div>
+                <p className="text-xs text-muted-foreground">
+                  Stored kiosk and director clock events for every visible teacher profile.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">{formatStaffHours(staffHoursTotalMinutes)} total</Badge>
+                <Badge variant={staffClockedInCount ? "default" : "outline"}>{staffClockedInCount} clocked in</Badge>
+              </div>
+            </div>
+            <div className="divide-y rounded-lg border bg-card/40">
+              {staffHoursRows.map((row) => (
+                <div key={row.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_minmax(8rem,0.35fr)_minmax(8rem,0.35fr)_minmax(8rem,0.4fr)] md:items-center">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{row.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{row.email}</div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      <span>{row.centerName}</span>
+                      <span>{row.classroomName}</span>
+                      {!row.active ? <span>Previous staff</span> : null}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Status</div>
+                    <Badge className="mt-1" variant={row.clock.status === "clocked_in" ? "default" : "outline"}>
+                      {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}
+                    </Badge>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Hours stored</div>
+                    <div className="mt-1 text-sm font-medium">{formatStaffHours(row.summary.totalMinutes)}</div>
+                    <div className="text-xs text-muted-foreground">{row.summary.closedShiftCount} closed shift{row.summary.closedShiftCount === 1 ? "" : "s"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Last / open</div>
+                    <div className="mt-1 text-sm font-medium">{row.clock.lastActionAt ? new Date(row.clock.lastActionAt).toLocaleString() : "No history"}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {row.summary.openShiftMinutes ? `${formatStaffHours(row.summary.openShiftMinutes)} open` : "No open shift"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {!staffHoursRows.length ? (
+                <div className="p-4 text-sm text-muted-foreground">No staff profiles are visible in this scope.</div>
+              ) : null}
             </div>
           </section>
 

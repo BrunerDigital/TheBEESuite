@@ -5,10 +5,29 @@ export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
 export type StaffClockAction = typeof STAFF_CLOCK_ACTIONS[number];
 export type StaffClockStatus = "clocked_in" | "clocked_out";
 
-type StaffClockEvent = {
+export type StaffClockEvent = {
   action: StaffClockAction;
   occurredAt: string;
   notes?: string | null;
+};
+
+export type StaffClockShift = {
+  clockInAt: string;
+  clockOutAt: string | null;
+  minutes: number;
+  status: "closed" | "open";
+  notes: string | null;
+};
+
+export type StaffClockSummary = {
+  totalMinutes: number;
+  closedShiftMinutes: number;
+  openShiftMinutes: number;
+  closedShiftCount: number;
+  shiftCount: number;
+  openShiftStartedAt: string | null;
+  lastShiftMinutes: number | null;
+  recentShifts: StaffClockShift[];
 };
 
 export type StaffClockState = {
@@ -44,6 +63,100 @@ export function normalizeStaffClockAction(value: unknown): StaffClockAction | nu
   return STAFF_CLOCK_ACTIONS.includes(value as StaffClockAction) ? value as StaffClockAction : null;
 }
 
+function dateMs(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function minutesBetween(startAt: string, endAt: string | Date) {
+  const startMs = dateMs(startAt);
+  const endMs = dateMs(endAt);
+  if (startMs === null || endMs === null || endMs <= startMs) return 0;
+  return Math.round((endMs - startMs) / 60_000);
+}
+
+function summarizeClockEvents(
+  events: StaffClockEvent[],
+  options: {
+    now?: Date;
+    startDate?: Date | null;
+    endDate?: Date | null;
+  } = {},
+): StaffClockSummary {
+  const now = options.now ?? new Date();
+  const startMs = dateMs(options.startDate ?? null);
+  const endMs = dateMs(options.endDate ?? null);
+  const sorted = [...events]
+    .filter((event) => dateMs(event.occurredAt) !== null)
+    .sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
+  const shifts: StaffClockShift[] = [];
+  let openClockIn: StaffClockEvent | null = null;
+
+  for (const event of sorted) {
+    if (event.action === "clock_in") {
+      openClockIn = event;
+      continue;
+    }
+
+    if (!openClockIn) continue;
+    shifts.push({
+      clockInAt: openClockIn.occurredAt,
+      clockOutAt: event.occurredAt,
+      minutes: minutesBetween(openClockIn.occurredAt, event.occurredAt),
+      status: "closed",
+      notes: event.notes || openClockIn.notes || null,
+    });
+    openClockIn = null;
+  }
+
+  if (openClockIn) {
+    shifts.push({
+      clockInAt: openClockIn.occurredAt,
+      clockOutAt: null,
+      minutes: minutesBetween(openClockIn.occurredAt, now),
+      status: "open",
+      notes: openClockIn.notes || null,
+    });
+  }
+
+  const scopedShifts = shifts
+    .map((shift) => {
+      const shiftStartMs = dateMs(shift.clockInAt);
+      const shiftEndMs = dateMs(shift.clockOutAt) ?? dateMs(now);
+      if (shiftStartMs === null || shiftEndMs === null) return null;
+      if (startMs !== null && shiftEndMs < startMs) return null;
+      if (endMs !== null && shiftStartMs > endMs) return null;
+      const scopedStart = startMs === null ? shiftStartMs : Math.max(shiftStartMs, startMs);
+      const scopedEnd = endMs === null ? shiftEndMs : Math.min(shiftEndMs, endMs);
+      const minutes = Math.max(0, Math.round((scopedEnd - scopedStart) / 60_000));
+      return { ...shift, minutes };
+    })
+    .filter((shift): shift is StaffClockShift => Boolean(shift))
+    .filter((shift) => shift.minutes > 0 || shift.status === "open");
+
+  const closedShifts = scopedShifts.filter((shift) => shift.status === "closed");
+  const openShifts = scopedShifts.filter((shift) => shift.status === "open");
+  const closedShiftMinutes = closedShifts.reduce((sum, shift) => sum + shift.minutes, 0);
+  const openShiftMinutes = openShifts.reduce((sum, shift) => sum + shift.minutes, 0);
+  const newestFirst = [...scopedShifts].sort((left, right) => {
+    const leftTime = dateMs(left.clockOutAt) ?? dateMs(left.clockInAt) ?? 0;
+    const rightTime = dateMs(right.clockOutAt) ?? dateMs(right.clockInAt) ?? 0;
+    return rightTime - leftTime;
+  });
+
+  return {
+    totalMinutes: closedShiftMinutes + openShiftMinutes,
+    closedShiftMinutes,
+    openShiftMinutes,
+    closedShiftCount: closedShifts.length,
+    shiftCount: scopedShifts.length,
+    openShiftStartedAt: openShifts[0]?.clockInAt ?? null,
+    lastShiftMinutes: newestFirst[0]?.minutes ?? null,
+    recentShifts: newestFirst.slice(0, 12),
+  };
+}
+
 export function readStaffClockState(customFields: unknown): StaffClockState {
   const fields = asRecord(customFields);
   const timeClock = asRecord(fields.timeClock);
@@ -65,6 +178,23 @@ export function readStaffClockState(customFields: unknown): StaffClockState {
     currentClockOutAt,
     events,
   };
+}
+
+export function readStaffClockSummary(
+  customFields: unknown,
+  options: {
+    now?: Date;
+    startDate?: Date | null;
+    endDate?: Date | null;
+  } = {},
+) {
+  return summarizeClockEvents(readStaffClockState(customFields).events, options);
+}
+
+export function formatStaffHours(minutes: number) {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  const hours = safeMinutes / 60;
+  return `${hours.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
 }
 
 export function readStaffKioskPinHash(customFields: unknown) {
@@ -162,6 +292,8 @@ export function staffClockFields({
     occurredAt: occurredAt.toISOString(),
     notes: notes || null,
   };
+  const events = [event, ...previous.events].slice(0, 60);
+  const summary = summarizeClockEvents(events, { now: occurredAt });
 
   return {
     ...fields,
@@ -171,7 +303,12 @@ export function staffClockFields({
       lastActionAt: event.occurredAt,
       currentClockInAt: action === "clock_in" ? event.occurredAt : null,
       currentClockOutAt: action === "clock_out" ? event.occurredAt : null,
-      events: [event, ...previous.events].slice(0, 60),
+      totalMinutes: summary.totalMinutes,
+      closedShiftMinutes: summary.closedShiftMinutes,
+      closedShiftCount: summary.closedShiftCount,
+      lastShiftMinutes: summary.lastShiftMinutes,
+      summaryUpdatedAt: event.occurredAt,
+      events,
     },
   } as Prisma.InputJsonObject;
 }

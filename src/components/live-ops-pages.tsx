@@ -137,7 +137,7 @@ import type { IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
 import type { RegistrationReviewStatus } from "@/lib/registration-packet";
 import { formatRegistrationPaymentAmount, type RegistrationPaymentStatus } from "@/lib/registration-billing";
-import { readStaffClockState } from "@/lib/staff-kiosk";
+import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
 
 function formatDate(value: Date | string | null | undefined) {
@@ -1542,6 +1542,8 @@ export type CenterDashboardData = {
     currentWeekFte: number | null;
     latestFte: number | null;
     fteSubmittedThisWeek: boolean;
+    staffClockedIn: number;
+    staffHoursToday: number;
   };
   recentLeads: Array<{
     id: string;
@@ -1569,6 +1571,8 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
         <StatCard label="Teachers" value={data.stats.staff} />
+        <StatCard label="Staff clocked in" value={data.stats.staffClockedIn.toLocaleString()} />
+        <StatCard label="Staff hours today" value={formatStaffHours(data.stats.staffHoursToday)} />
         <StatCard label="Classrooms" value={data.stats.classrooms} />
         <StatCard label="Upcoming tours" value={data.stats.toursUpcoming} />
         <StatCard label="Open tasks" value={data.stats.openTasks} />
@@ -2941,6 +2945,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
 }
 
 export type StaffPageData = {
+  timeClockSummaryGeneratedAt: string;
   centers: Array<{ id: string; name: string }>;
   classrooms: Array<{ id: string; centerId: string; name: string; ageGroup: string }>;
   schedules: Array<{
@@ -2990,16 +2995,22 @@ export type StaffPageData = {
   };
 };
 
-function staffClockBadge(customFields: unknown) {
+function staffClockBadge(customFields: unknown, now: Date) {
   const state = readStaffClockState(customFields);
+  const summary = readStaffClockSummary(customFields, { now });
   return {
     label: state.status === "clocked_in" ? "Clocked in" : "Clocked out",
     detail: state.lastActionAt ? formatDateTime(state.lastActionAt) : "No staff kiosk event",
     variant: state.status === "clocked_in" ? "default" as const : "outline" as const,
+    hours: formatStaffHours(summary.totalMinutes),
+    openHours: summary.openShiftMinutes ? formatStaffHours(summary.openShiftMinutes) : null,
+    shifts: summary.closedShiftCount,
   };
 }
 
 export function StaffPage({ data }: { data: StaffPageData }) {
+  const timeClockSummaryNow = new Date(data.timeClockSummaryGeneratedAt);
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -3035,12 +3046,13 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                 <TableHead>Role</TableHead>
                 <TableHead>Background</TableHead>
                 <TableHead>Kiosk</TableHead>
+                <TableHead>Hours</TableHead>
                 <TableHead>Certifications</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.staff.map((staff) => {
-                const clock = staffClockBadge(staff.customFields);
+                const clock = staffClockBadge(staff.customFields, timeClockSummaryNow);
                 return (
                   <TableRow key={staff.id}>
                     <TableCell>
@@ -3057,6 +3069,12 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                         <span className="text-xs text-muted-foreground">{clock.detail}</span>
                       </div>
                     </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{clock.hours}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {clock.shifts} shift{clock.shifts === 1 ? "" : "s"}{clock.openHours ? ` · ${clock.openHours} open` : ""}
+                      </div>
+                    </TableCell>
                     <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
                   </TableRow>
                 );
@@ -3065,13 +3083,14 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           </Table>
         </CardContent>
       </Card>
-      <StaffManagementPanel
-        centers={data.centers}
-        classrooms={data.classrooms}
-        staff={data.staff}
-        previousStaff={data.previousStaff}
-        schedules={data.schedules}
-      />
+        <StaffManagementPanel
+          centers={data.centers}
+          classrooms={data.classrooms}
+          staff={data.staff}
+          previousStaff={data.previousStaff}
+          schedules={data.schedules}
+          timeClockSummaryGeneratedAt={data.timeClockSummaryGeneratedAt}
+        />
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Upcoming Staff Schedule</CardTitle>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Download, FileText, MessageSquare, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
+import { CalendarDays, Clock, Download, FileText, MessageSquare, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,10 +24,15 @@ const reportOptions: Array<{ value: ReportKind; label: string }> = [
   { value: "attendance", label: "Attendance" },
   { value: "billing", label: "Billing/AR" },
   { value: "messages", label: "Messages" },
+  { value: "staff_hours", label: "Staff hours" },
 ];
 
 function money(cents: number) {
   return `$${(cents / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function hours(minutes: number) {
+  return `${(Math.max(0, minutes) / 60).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
 }
 
 function formatDate(value: string) {
@@ -99,6 +104,17 @@ export function AnalyticsReportBuilder({
     return data.messages.filter((row) => !needle || row.centerLabel.toLowerCase().includes(needle));
   }, [data.messages, query]);
 
+  const filteredStaffHours = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return data.staffHours.filter((row) =>
+      !needle ||
+      row.staffName.toLowerCase().includes(needle) ||
+      row.staffEmail.toLowerCase().includes(needle) ||
+      row.centerLabel.toLowerCase().includes(needle) ||
+      row.classroomName.toLowerCase().includes(needle),
+    );
+  }, [data.staffHours, query]);
+
   function download(format: "csv" | "pdf") {
     window.location.href = exportParams({ ...exportState, format });
   }
@@ -145,7 +161,7 @@ export function AnalyticsReportBuilder({
               <Label>Search Visible Rows</Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Source, center, period..." />
+                <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Source, center, period, teacher..." />
               </div>
             </div>
             <div className="space-y-1">
@@ -194,7 +210,7 @@ export function AnalyticsReportBuilder({
               </Button>
             </div>
           </form>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-5">
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Loaded range</div>
               <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</div>
@@ -211,6 +227,10 @@ export function AnalyticsReportBuilder({
               <div className="text-xs text-muted-foreground">Message response</div>
               <div className="mt-1 text-sm font-medium">{data.totals.avgResponseHours === null ? "No replies" : `${data.totals.avgResponseHours}h avg`}</div>
             </div>
+            <div className="rounded-xl border bg-background/40 p-3">
+              <div className="text-xs text-muted-foreground">Staff hours</div>
+              <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} logged</div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -221,6 +241,7 @@ export function AnalyticsReportBuilder({
           <TabsTrigger value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
           <TabsTrigger value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
           <TabsTrigger value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
+          <TabsTrigger value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
         <TabsContent value="lead_funnel" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -399,6 +420,54 @@ export function AnalyticsReportBuilder({
                   ))}
                   {!filteredMessages.length ? (
                     <TableRow><TableCell colSpan={6} className="text-muted-foreground">No message rows match the report filters.</TableCell></TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="staff_hours">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Staff Hours And Time Clock</CardTitle>
+              <CardDescription>Teacher clock status, closed shifts, open shift time, and range totals for the selected centers.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Teacher</TableHead>
+                    <TableHead>Center</TableHead>
+                    <TableHead>Classroom</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>Closed shifts</TableHead>
+                    <TableHead>Open</TableHead>
+                    <TableHead>Last action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredStaffHours.map((row) => (
+                    <TableRow key={row.staffId}>
+                      <TableCell>
+                        <div className="font-medium">{row.staffName}</div>
+                        <div className="text-xs text-muted-foreground">{row.staffEmail}</div>
+                      </TableCell>
+                      <TableCell>{row.centerLabel}</TableCell>
+                      <TableCell>{row.classroomName}</TableCell>
+                      <TableCell>
+                        <Badge variant={row.status === "clocked_in" ? "default" : "outline"}>
+                          {row.status === "clocked_in" ? "Clocked in" : "Clocked out"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{hours(row.totalMinutes)}</TableCell>
+                      <TableCell>{row.closedShiftCount} / {hours(row.closedShiftMinutes)}</TableCell>
+                      <TableCell>{row.openShiftMinutes ? hours(row.openShiftMinutes) : "None"}</TableCell>
+                      <TableCell>{row.lastActionAt ? formatDate(row.lastActionAt) : "No history"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!filteredStaffHours.length ? (
+                    <TableRow><TableCell colSpan={8} className="text-muted-foreground">No staff hour rows match the report filters.</TableCell></TableRow>
                   ) : null}
                 </TableBody>
               </Table>

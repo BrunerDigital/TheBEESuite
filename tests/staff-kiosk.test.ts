@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   readStaffClockState,
+  readStaffClockSummary,
   resolveStaffKioskCredential,
   staffKioskPinFields,
   staffClockFields,
   validateNextStaffClockAction,
+  formatStaffHours,
 } from "@/lib/staff-kiosk";
 import { hashStaffPin } from "@/lib/kiosk";
 
@@ -42,6 +44,40 @@ test("staff kiosk clock state blocks duplicate clock actions", () => {
   assert.equal(clockedOut.currentClockOutAt, "2026-06-04T20:30:00.000Z");
   assert.equal(clockedOut.events.length, 2);
   assert.equal(clockedOut.events[0].notes, "Closing shift");
+  const summary = readStaffClockSummary(clockOutFields, { now: new Date("2026-06-04T21:00:00.000Z") });
+  assert.equal(summary.totalMinutes, 510);
+  assert.equal(summary.closedShiftMinutes, 510);
+  assert.equal(summary.closedShiftCount, 1);
+  assert.equal(summary.openShiftMinutes, 0);
+  assert.equal(summary.lastShiftMinutes, 510);
+  assert.equal(summary.recentShifts[0]?.clockInAt, "2026-06-04T12:00:00.000Z");
+  assert.equal(summary.recentShifts[0]?.clockOutAt, "2026-06-04T20:30:00.000Z");
+  assert.equal(formatStaffHours(summary.totalMinutes), "8.5h");
+});
+
+test("staff kiosk summary includes open shifts and date range overlap", () => {
+  const fields = staffClockFields({
+    customFields: null,
+    action: "clock_in",
+    occurredAt: new Date("2026-06-04T12:00:00.000Z"),
+  });
+
+  const openSummary = readStaffClockSummary(fields, { now: new Date("2026-06-04T15:15:00.000Z") });
+
+  assert.equal(openSummary.totalMinutes, 195);
+  assert.equal(openSummary.closedShiftCount, 0);
+  assert.equal(openSummary.openShiftMinutes, 195);
+  assert.equal(openSummary.openShiftStartedAt, "2026-06-04T12:00:00.000Z");
+  assert.equal(openSummary.recentShifts[0]?.status, "open");
+
+  const rangedSummary = readStaffClockSummary(fields, {
+    now: new Date("2026-06-04T15:15:00.000Z"),
+    startDate: new Date("2026-06-04T14:00:00.000Z"),
+    endDate: new Date("2026-06-04T15:00:00.000Z"),
+  });
+
+  assert.equal(rangedSummary.totalMinutes, 60);
+  assert.equal(rangedSummary.openShiftMinutes, 60);
 });
 
 test("staff kiosk credential resolves by unique PIN without requiring email", () => {

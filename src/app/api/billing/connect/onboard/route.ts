@@ -5,11 +5,13 @@ import { writeAuditLog } from "@/lib/audit";
 import {
   createStripeAccountLink,
   createStripeConnectedAccount,
+  getStripeSecretKey,
   readStripeConnectedAccountId,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import {
+  STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
   normalizeStripeConnectSetupInput,
   stripeConnectSetupCustomFieldPatch,
   type StripeConnectSetupInput,
@@ -32,6 +34,25 @@ function jsonObject(value: unknown): Prisma.JsonObject {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Prisma.JsonObject
     : {};
+}
+
+function stripeConnectFailureMessage(error: string | undefined, fallback: string) {
+  const message = clean(error);
+  if (/permission denied|does not have permission|forbidden/i.test(message)) {
+    return STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE;
+  }
+  if (/invalid api key|expired api key|no api key/i.test(message)) {
+    return "Stripe rejected the payout setup because the configured API key is invalid. Update the live Stripe key, then try again.";
+  }
+  return message || fallback;
+}
+
+function stripeConnectFailurePatch(status: string, error: string | undefined): Prisma.JsonObject {
+  return {
+    stripePayoutStatus: status,
+    stripeConnectLastError: stripeConnectFailureMessage(error, "Payout onboarding could not be started.").slice(0, 240),
+    stripeConnectLastSyncedAt: new Date().toISOString(),
+  };
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -108,6 +129,29 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
+  const stripeSecretKey = await getStripeSecretKey({ tenantId: user.tenantId });
+  if (!stripeSecretKey) {
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "billing.connect.setup_profile_saved",
+      resource: "Center",
+      resourceId: center.id,
+      metadata: {
+        crmLocationId: center.crmLocationId || null,
+        stripeConfigured: false,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      saved: true,
+      configured: false,
+      stripeConfigured: false,
+      centerId: center.id,
+      message: "Payout setup profile was saved. Add Stripe keys before creating the onboarding link.",
+    });
+  }
+
   if (!accountId) {
     const created = await createStripeConnectedAccount({
       businessName: setup.details.legalBusinessName,
@@ -127,8 +171,18 @@ async function POSTHandler(request: NextRequest) {
     });
 
     if (!created.ok || !created.id) {
+      const errorMessage = stripeConnectFailureMessage(created.error, "Connected payout account could not be created.");
+      await prisma.center.update({
+        where: { id: center.id },
+        data: {
+          customFields: {
+            ...currentFields,
+            ...stripeConnectFailurePatch("account_creation_failed", created.error),
+          },
+        },
+      });
       return NextResponse.json(
-        { ok: false, configured: created.configured, error: created.error || "Connected payout account could not be created." },
+        { ok: false, configured: created.configured, error: errorMessage },
         { status: created.configured ? 502 : 503 },
       );
     }
@@ -159,8 +213,19 @@ async function POSTHandler(request: NextRequest) {
   const link = await createStripeAccountLink({ accountId, refreshUrl, returnUrl, tenantId: user.tenantId });
 
   if (!link.ok || !link.url) {
+    const errorMessage = stripeConnectFailureMessage(link.error, "Payout onboarding link could not be created.");
+    await prisma.center.update({
+      where: { id: center.id },
+      data: {
+        customFields: {
+          ...currentFields,
+          stripeConnectAccountId: accountId,
+          ...stripeConnectFailurePatch("onboarding_link_failed", link.error),
+        },
+      },
+    });
     return NextResponse.json(
-      { ok: false, configured: link.configured, error: link.error || "Payout onboarding link could not be created." },
+      { ok: false, configured: link.configured, error: errorMessage },
       { status: link.configured ? 502 : 503 },
     );
   }

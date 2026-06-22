@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createStripeConnectedAccount } from "../src/lib/integrations";
 import {
+  STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
+  STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS,
   normalizeStripeConnectSetupInput,
   stripeConnectSetupCustomFieldPatch,
 } from "../src/lib/stripe-connect-setup";
@@ -80,6 +82,13 @@ test("Stripe Connect setup patch excludes bank account and routing fields", () =
   assert.equal(serialized.includes("000111000"), false);
 });
 
+test("Stripe Connect restricted key fix message names required permissions", () => {
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Accounts Write"), true);
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Account Links Write"), true);
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Basic Business Contact Information Read"), true);
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Full Bank Account Information Read"), true);
+});
+
 test("Stripe connected account creation sends dashboard profile details to Accounts v2", async () => {
   const originalFetch = globalThis.fetch;
   let payload: Record<string, unknown> = {};
@@ -129,6 +138,7 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
+    assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1268,7 +1268,6 @@ export async function createStripeConnectedAccount({
       responsibilities: {
         fees_collector: "application",
         losses_collector: "application",
-        requirements_collector: "stripe",
       },
     },
     include: ["configuration.merchant", "configuration.recipient", "defaults", "identity", "requirements"],

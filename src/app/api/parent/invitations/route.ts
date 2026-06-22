@@ -6,16 +6,15 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
   buildParentPortalInvitationText,
-  buildParentPortalUrl,
+  buildParentPortalSetupUrl,
   PARENT_PORTAL_INVITE_MODE,
-  PARENT_PORTAL_PATH,
 } from "@/lib/parent-portal-invitations";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import {
   ensureSupabaseAuthUser,
   getAppBaseUrl,
-  getPasswordResetRedirectUrl,
+  getParentPortalPasswordResetRedirectUrl,
   requestSupabasePasswordReset,
 } from "@/lib/supabase-auth";
 
@@ -111,7 +110,7 @@ async function POSTHandler(request: NextRequest) {
     if (!ensure.ok) {
       auth = { ok: false, error: ensure.error };
     } else {
-      const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(request.url, PARENT_PORTAL_PATH));
+      const reset = await requestSupabasePasswordReset(email, getParentPortalPasswordResetRedirectUrl(request.url));
       auth = {
         ok: reset.ok,
         created: ensure.created,
@@ -167,7 +166,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const portalUrl = buildParentPortalUrl(getAppBaseUrl(request.url));
+  const portalUrl = buildParentPortalSetupUrl(getAppBaseUrl(request.url));
   const invitationText = buildParentPortalInvitationText({
     guardianName: guardian.fullName,
     centerLabel: center.crmLocationId ?? center.name,

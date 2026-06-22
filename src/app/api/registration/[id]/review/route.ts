@@ -5,7 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { buildParentPortalUrl, PARENT_PORTAL_PATH } from "@/lib/parent-portal-invitations";
+import { buildParentPortalSetupUrl } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import {
   asRecord,
@@ -28,7 +28,7 @@ import {
 import {
   ensureSupabaseAuthUser,
   getAppBaseUrl,
-  getPasswordResetRedirectUrl,
+  getParentPortalPasswordResetRedirectUrl,
   requestSupabasePasswordReset,
 } from "@/lib/supabase-auth";
 
@@ -435,7 +435,7 @@ async function createParentPortalInvite(input: {
     if (!ensure.ok) {
       return { ok: false, error: ensure.error || "Parent auth user could not be created.", emailSent: false, passwordResetSent: false };
     }
-    const reset = await requestSupabasePasswordReset(email, getPasswordResetRedirectUrl(input.requestUrl, PARENT_PORTAL_PATH));
+    const reset = await requestSupabasePasswordReset(email, getParentPortalPasswordResetRedirectUrl(input.requestUrl));
     if (!reset.ok) {
       return { ok: false, error: `Password setup email returned ${reset.status}.`, emailSent: false, passwordResetSent: false };
     }
@@ -476,7 +476,7 @@ async function createParentPortalInvite(input: {
       },
     });
 
-    const portalUrl = buildParentPortalUrl(getAppBaseUrl(input.requestUrl));
+    const portalUrl = buildParentPortalSetupUrl(getAppBaseUrl(input.requestUrl));
     const paymentLine = input.registrationPayment?.required
       ? `A registration fee/deposit invoice for ${formatRegistrationPaymentAmount(input.registrationPayment.totalCents)} is ready in the parent portal for secure checkout.`
       : "";
@@ -487,7 +487,7 @@ async function createParentPortalInvite(input: {
       `Use ${email} as your login email.`,
       "Use the password setup email from The BEE Suite to create your parent portal password.",
       "Your approved child records and school connections are already linked in the portal.",
-      `Open the parent portal: ${portalUrl}`,
+      `Confirm your family portal information and check-in PIN: ${portalUrl}`,
       paymentLine || null,
       "",
       "The school may still need uploaded documents, signatures, tuition/deposit setup, classroom assignment, and start-date confirmation before final enrollment.",

@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
+import {
+  buildParentPortalSetupUrl,
+  PARENT_PORTAL_SETUP_PATH,
+} from "@/lib/parent-portal-invitations";
 
 type SupabaseAuthKeyPreference = "anon" | "service";
 export const CANONICAL_APP_BASE_URL = "https://thebeesuite.io";
@@ -150,6 +154,18 @@ export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: stri
     requestUrl,
     nextPath,
   });
+}
+
+export { PARENT_PORTAL_SETUP_PATH };
+
+export function getParentPortalSetupUrl(requestUrl?: string) {
+  return buildParentPortalSetupUrl(getAppBaseUrl(requestUrl));
+}
+
+export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {
+  const resetUrl = new URL(`${getAppBaseUrl(requestUrl)}/reset-password`);
+  resetUrl.searchParams.set("next", PARENT_PORTAL_SETUP_PATH);
+  return resetUrl.toString();
 }
 
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {

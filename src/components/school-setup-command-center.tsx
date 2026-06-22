@@ -56,6 +56,7 @@ export type SchoolSetupCommandCenterData = {
   sections: SchoolSetupCommandSection[];
   externalNeeds: string[];
   directorChecklistCompletedIds: string[];
+  directorChecklistAutomaticCompletedIds?: string[];
 };
 
 const emptySections: SchoolSetupCommandSection[] = [];
@@ -168,6 +169,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         description="Check off each setup task as your school finishes it. This is your per-user progress tracker for the director implementation guide."
         tasks={directorLaunchChecklistTasks}
         initialCompletedIds={data.directorChecklistCompletedIds}
+        automaticCompletedIds={data.directorChecklistAutomaticCompletedIds}
         graphicHref="/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg"
       />
 

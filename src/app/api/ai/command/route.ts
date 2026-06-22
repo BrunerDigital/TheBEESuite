@@ -3,7 +3,7 @@ import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { AI_COMMAND_GUARDRAIL_NOTE, buildAiOperationsSummary } from "@/lib/ai-command";
-import { latestLogMap, startOfServiceDay } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -87,7 +87,7 @@ async function generateOperationsSummary(
   const visibleCenters = await prisma.center.findMany({
     where: centerWhereForUser(user),
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, crmLocationId: true, city: true, state: true, timezone: true },
+    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
   });
 
   let selectedCenters = visibleCenters;
@@ -105,8 +105,7 @@ async function generateOperationsSummary(
   const centerIds = selectedCenters.map((center) => center.id);
   const selectedCenterFilter = centerIdFilter(centerIds);
   const now = new Date();
-  const serviceDayStart = startOfServiceDay(now, selectedCenters.length === 1 ? selectedCenters[0].timezone : "America/New_York");
-  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
+  const serviceDay = centerServiceDayWindow(now, selectedCenters.length === 1 ? selectedCenters[0] : null);
   const scopeLabel = selectedCenters.length === 1 ? centerLabel(selectedCenters[0]) : `${selectedCenters.length.toLocaleString()} visible schools`;
   const scope = selectedCenters.length === 1 ? "center" : "center_group";
   const scopeId = selectedCenters.length === 1 ? selectedCenters[0].id : null;
@@ -136,7 +135,7 @@ async function generateOperationsSummary(
   ] = await Promise.all([
     prisma.lead.count({ where: { centerId: selectedCenterFilter, status: { notIn: ["closed", "merged"] } } }),
     prisma.lead.count({ where: { centerId: selectedCenterFilter, status: { notIn: ["closed", "merged"] }, score: { gte: 75 } } }),
-    prisma.tour.count({ where: { centerId: selectedCenterFilter, startsAt: { gte: serviceDayStart, lt: serviceDayEnd } } }),
+    prisma.tour.count({ where: { centerId: selectedCenterFilter, startsAt: { gte: serviceDay.start, lt: serviceDay.end } } }),
     prisma.child.count({
       where: {
         ...currentlyEnrolledChildWhere(),
@@ -144,7 +143,7 @@ async function generateOperationsSummary(
       },
     }),
     prisma.checkInOutLog.findMany({
-      where: { centerId: selectedCenterFilter, occurredAt: { gte: serviceDayStart, lt: serviceDayEnd } },
+      where: { centerId: selectedCenterFilter, occurredAt: { gte: serviceDay.start, lt: serviceDay.end } },
       orderBy: { occurredAt: "desc" },
       select: { childId: true, type: true, occurredAt: true },
     }),
@@ -167,7 +166,7 @@ async function generateOperationsSummary(
     prisma.message.count({ where: { readAt: null, family: { centerId: selectedCenterFilter } } }),
     prisma.dailyReport.count({
       where: {
-        date: { gte: serviceDayStart, lt: serviceDayEnd },
+        date: { gte: serviceDay.start, lt: serviceDay.end },
         sentAt: null,
         child: { family: { is: { centerId: selectedCenterFilter } } },
       },

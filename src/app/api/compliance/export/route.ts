@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { canAccessAllCenters, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -18,6 +18,9 @@ async function GETHandler() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "Compliance exports are not allowed for this role." }, { status: 403 });
   }
 
   const scopedCenterIds = user.centerIds.length ? { in: user.centerIds } : { in: ["__no_visible_centers__"] };

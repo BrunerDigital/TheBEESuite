@@ -179,7 +179,7 @@ function emailSummaryForSkipped(
     configured: false,
     provider: "sendgrid",
     providerMessageId: null,
-    error: reason === "no_report" ? "No daily report was found for this checkout day." : "No daily report email recipients are selected.",
+    error: reason === "no_report" ? "No daily report was found for this checkout day." : "No parent or guardian emails are on file for this family.",
     deliveryRecorded: false,
     deliveryRecordError: null,
   };

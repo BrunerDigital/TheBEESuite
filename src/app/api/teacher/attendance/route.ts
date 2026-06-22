@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { normalizeCheckAction, readCenterTimeZone, startOfServiceDay, validateNextCheckAction } from "@/lib/attendance-state";
+import { centerServiceDayWindow, normalizeCheckAction, validateNextCheckAction } from "@/lib/attendance-state";
 import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -73,17 +73,16 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const center = centerId
-    ? await prisma.center.findUnique({ where: { id: centerId }, select: { name: true, email: true, customFields: true } })
+    ? await prisma.center.findUnique({ where: { id: centerId }, select: { name: true, email: true, city: true, state: true, postalCode: true, timezone: true, customFields: true } })
     : null;
-  const timeZone = readCenterTimeZone(center?.customFields);
-  const serviceDayStart = startOfServiceDay(date, timeZone);
-  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
+  const serviceDay = centerServiceDayWindow(date, center);
+  const timeZone = serviceDay.timeZone;
   if (logType) {
     const latestLog = await prisma.checkInOutLog.findFirst({
       where: {
         childId,
         ...(centerId ? { centerId } : {}),
-        occurredAt: { gte: serviceDayStart, lt: serviceDayEnd },
+        occurredAt: { gte: serviceDay.start, lt: serviceDay.end },
       },
       orderBy: { occurredAt: "desc" },
       select: { type: true },
@@ -114,6 +113,10 @@ async function POSTHandler(request: NextRequest) {
           pickupName: pickupName || null,
           signaturePlaceholder: Boolean(body.signaturePlaceholder),
           verificationStatus: clean(body.verificationStatus) || "staff_verified",
+          metadata: {
+            timeZone,
+            serviceDay: serviceDay.start.toISOString(),
+          },
         },
       })
     : null;
@@ -127,8 +130,8 @@ async function POSTHandler(request: NextRequest) {
         centerId,
         centerName: center?.name ?? null,
         centerEmail: center?.email ?? null,
-        serviceDayStart,
-        serviceDayEnd,
+        serviceDayStart: serviceDay.start,
+        serviceDayEnd: serviceDay.end,
         checkedOutAt: date,
         timeZone,
       });

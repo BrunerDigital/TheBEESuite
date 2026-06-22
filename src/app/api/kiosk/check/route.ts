@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isLatePickup, latestLogMap, normalizeCheckAction, readCenterTimeZone, readLatePickupCutoff, startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
+import { centerServiceDayWindow, isLatePickup, latestLogMap, normalizeCheckAction, readLatePickupCutoff, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
@@ -106,7 +106,7 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, email: true, crmLocationId: true, customFields: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, email: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -139,17 +139,16 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const occurredAt = new Date();
-  const timeZone = readCenterTimeZone(center.customFields);
+  const serviceDay = centerServiceDayWindow(occurredAt, center);
+  const timeZone = serviceDay.timeZone;
   const latePickupCutoff = readLatePickupCutoff(center.customFields);
   const latePickup = type === "check_out" && isLatePickup(occurredAt, timeZone, latePickupCutoff);
   const pickupAuthorizationWarning = Boolean(guardian.family.custodyNotes);
-  const serviceDayStart = startOfServiceDay(occurredAt, timeZone);
-  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
   const latestLogs = await prisma.checkInOutLog.findMany({
     where: {
       childId: { in: allowedChildren.map((child) => child.id) },
       centerId,
-      occurredAt: { gte: serviceDayStart, lt: serviceDayEnd },
+      occurredAt: { gte: serviceDay.start, lt: serviceDay.end },
     },
     orderBy: { occurredAt: "desc" },
     select: { childId: true, type: true, occurredAt: true },
@@ -175,10 +174,10 @@ async function POSTHandler(request: NextRequest) {
         status,
         absenceReason: null,
         sourceSystem: "kiosk",
-        externalId: `kiosk-attendance:${child.id}:${serviceDayStart.toISOString()}`,
+        externalId: `kiosk-attendance:${child.id}:${serviceDay.start.toISOString()}`,
         metadata: {
           centerId,
-          serviceDay: serviceDayStart.toISOString(),
+          serviceDay: serviceDay.start.toISOString(),
           lastKioskAction: type,
           lastKioskActionAt: occurredAt.toISOString(),
           verificationMethod,
@@ -190,7 +189,7 @@ async function POSTHandler(request: NextRequest) {
       const existingAttendance = await tx.attendanceRecord.findFirst({
         where: {
           childId: child.id,
-          date: { gte: serviceDayStart, lt: serviceDayEnd },
+          date: { gte: serviceDay.start, lt: serviceDay.end },
         },
         select: { id: true },
       });
@@ -245,8 +244,8 @@ async function POSTHandler(request: NextRequest) {
               centerId,
               centerName: center.name,
               centerEmail: center.email,
-              serviceDayStart,
-              serviceDayEnd,
+              serviceDayStart: serviceDay.start,
+              serviceDayEnd: serviceDay.end,
               checkedOutAt: occurredAt,
               timeZone,
             });
@@ -288,7 +287,7 @@ async function POSTHandler(request: NextRequest) {
       latePickup,
       latePickupCutoff,
       pickupAuthorizationWarning,
-      kioskDate: serviceDayStart.toISOString(),
+      kioskDate: serviceDay.start.toISOString(),
       timeZone,
       dailyReportEmails,
     },

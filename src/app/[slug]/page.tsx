@@ -107,8 +107,9 @@ import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-p
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
+import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
-import { stripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
   asRecord,
@@ -119,7 +120,7 @@ import {
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
-import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { readStaffClockState, readStaffClockSummary, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
@@ -176,6 +177,8 @@ async function getVisibleCenters(user: CurrentUser) {
       locationId: true,
       city: true,
       state: true,
+      postalCode: true,
+      timezone: true,
       email: true,
       status: true,
       licensedCapacity: true,
@@ -192,6 +195,7 @@ async function getVisibleCenters(user: CurrentUser) {
           leads: true,
           staff: { where: { user: { role: UserRole.TEACHER } } },
           classrooms: true,
+          calendarEvents: true,
         },
       },
     },
@@ -861,6 +865,27 @@ async function renderLivePage(
     const completedSections = sections.filter((section) => section.status === "complete").length;
     const blockingSections = sections.filter((section) => section.status === "missing").length;
     const progress = sections.length ? Math.round((completedSections / sections.length) * 100) : 0;
+    const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
+      centerCount: selectedCenter ? 1 : 0,
+      schoolProfileReady: Boolean(selectedCenter?.email && selectedCenter?.state && selectedCenter.licensedCapacity > 0),
+      classroomCount,
+      teacherStaffCount: staffCount,
+      importedFamilyCount: familyCount,
+      importedChildCount: childCount,
+      documentCount,
+      tuitionPlanCount,
+      productCount,
+      billingAccountCount,
+      invoiceCount,
+      guardianLoginCount,
+      messageTemplateCount,
+      calendarEventCount: selectedCenter?._count.calendarEvents ?? 0,
+      fteReportCount,
+      licensingReady: licensingConfiguration?.status === "ready_for_review",
+      leadCount,
+      dashboardConfigured: true,
+      payoutReady: selectedCenter ? stripeConnectReadinessFromFields(selectedCenter.customFields).status === "ready" : false,
+    });
     const externalNeeds = [
       procareImportCount ? null : "Unencrypted Procare exports for each school: families, children, guardians, classrooms, balances, and staff.",
       tuitionPlanCount || productCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
@@ -890,6 +915,7 @@ async function renderLivePage(
       sections,
       externalNeeds,
       directorChecklistCompletedIds: readCompletedSetupChecklistIds(setupChecklistUser?.customFields, "director_launch"),
+      directorChecklistAutomaticCompletedIds,
     };
 
     return <SchoolSetupCommandCenter data={data} />;
@@ -1885,10 +1911,10 @@ async function renderLivePage(
     const teacherCenter = staffProfile?.centerId
       ? await prisma.center.findUnique({
           where: { id: staffProfile.centerId },
-          select: { id: true, name: true, crmLocationId: true, customFields: true },
+          select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
         })
       : null;
-    const serviceDayStart = startOfServiceDay(today, readCenterTimeZone(teacherCenter?.customFields));
+    const teacherServiceDay = centerServiceDayWindow(today, teacherCenter);
     const teacherChildScopeWhere: Prisma.ChildWhereInput = allCenters
       ? {}
       : staffProfile?.classroomId
@@ -1940,17 +1966,17 @@ async function renderLivePage(
     const [attendanceRecords, checkLogs, dailyReports] = childIds.length
       ? await Promise.all([
           prisma.attendanceRecord.findMany({
-            where: { childId: { in: childIds }, date: { gte: serviceDayStart } },
+            where: { childId: { in: childIds }, date: { gte: teacherServiceDay.start, lt: teacherServiceDay.end } },
             orderBy: { date: "desc" },
             select: { childId: true, date: true, status: true },
           }),
           prisma.checkInOutLog.findMany({
-            where: { childId: { in: childIds }, occurredAt: { gte: serviceDayStart } },
+            where: { childId: { in: childIds }, occurredAt: { gte: teacherServiceDay.start, lt: teacherServiceDay.end } },
             orderBy: { occurredAt: "desc" },
             select: { childId: true, type: true, occurredAt: true },
           }),
           prisma.dailyReport.findMany({
-            where: { childId: { in: childIds }, date: { gte: serviceDayStart } },
+            where: { childId: { in: childIds }, date: { gte: teacherServiceDay.start, lt: teacherServiceDay.end } },
             orderBy: { date: "desc" },
             select: {
               childId: true,
@@ -3803,6 +3829,7 @@ async function renderLivePage(
 
   if (slug === "center-dashboard") {
     const center = centers.find((item) => item.id === user.primaryCenterId) ?? centers[0];
+    const centerDay = centerServiceDayWindow(today, center);
     const centerWhere = center ? { centerId: center.id } : { centerId: "__none__" };
     const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills, staffClockProfiles] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
@@ -3844,7 +3871,7 @@ async function renderLivePage(
     const currentWeekFteReport = fteReports.find((report) => report.weekStart.getTime() === currentFteWeekStart.getTime());
     const latestFteReport = fteReports[0];
     const staffClockSummaries = staffClockProfiles.map((profile) =>
-      readStaffClockSummary(profile.customFields, { startDate: startOfDay, endDate: endOfDay, now: today }),
+      readStaffClockSummary(profile.customFields, { startDate: centerDay.start, endDate: centerDay.end, now: today }),
     );
     const staffClockStates = staffClockProfiles.map((profile) => readStaffClockState(profile.customFields));
 
@@ -3942,6 +3969,7 @@ async function renderLivePage(
               })),
           staff: demoMode ? [] : classroomStaff,
           ageGroups: classroomAgeGroups,
+          canManageClassroomSetup: canManageOperations(user),
           demoMode,
         }}
       />
@@ -3949,11 +3977,17 @@ async function renderLivePage(
   }
 
   if (slug === "attendance") {
+    const attendanceCenter = !allCenters
+      ? centers.find((item) => item.id === user.primaryCenterId) ?? centers[0] ?? null
+      : null;
+    const attendanceDay = attendanceCenter
+      ? centerServiceDayWindow(today, attendanceCenter)
+      : { start: startOfDay, end: endOfDay };
     const attendanceWhere: Prisma.AttendanceRecordWhereInput = allCenters
       ? {}
       : { classroom: { is: { centerId: scopedCenterIds } } };
     const checkLogWhere: Prisma.CheckInOutLogWhereInput = {
-      occurredAt: { gte: startOfDay, lte: endOfDay },
+      occurredAt: { gte: attendanceDay.start, lt: attendanceDay.end },
       ...(allCenters ? {} : { centerId: scopedCenterIds }),
     };
     const [records, total, present, absent, checkLogs] = await Promise.all([

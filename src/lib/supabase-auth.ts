@@ -168,6 +168,26 @@ export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {
   return resetUrl.toString();
 }
 
+export function buildPasswordResetTokenUrl({
+  tokenHash,
+  appBaseUrl,
+  requestUrl,
+  nextPath,
+}: {
+  tokenHash: string;
+  appBaseUrl?: string | null;
+  requestUrl?: string;
+  nextPath?: string | null;
+}) {
+  const baseUrl = canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl);
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/reset-password`);
+  url.searchParams.set("token_hash", tokenHash);
+  url.searchParams.set("type", "recovery");
+  const safeNext = safePasswordResetNextPath(nextPath);
+  if (safeNext) url.searchParams.set("next", safeNext);
+  return url.toString();
+}
+
 export async function requestSupabasePasswordReset(email: string, redirectTo: string) {
   const { url, key } = getSupabaseAuthConfig("anon");
   return fetch(`${url}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
@@ -180,6 +200,56 @@ export async function requestSupabasePasswordReset(email: string, redirectTo: st
     body: JSON.stringify({ email }),
     signal: AbortSignal.timeout(10_000),
   });
+}
+
+export async function generateSupabasePasswordRecoveryLink({
+  email,
+  redirectTo,
+}: {
+  email: string;
+  redirectTo?: string | null;
+}) {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (error) {
+    return { ok: false as const, error: error.message || "Password setup link could not be created." };
+  }
+  const tokenHash = data.properties?.hashed_token;
+  if (!tokenHash) {
+    return { ok: false as const, error: "Password setup token was not returned." };
+  }
+  return {
+    ok: true as const,
+    tokenHash,
+    redirectTo: data.properties.redirect_to,
+  };
+}
+
+export async function verifySupabaseRecoveryTokenHash(tokenHash: string) {
+  const { url, key } = getSupabaseAuthConfig("anon");
+  const supabase = createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+  if (error || !data.session?.access_token) {
+    return {
+      ok: false as const,
+      error: error?.message || "Password setup link is invalid or expired.",
+    };
+  }
+  return {
+    ok: true as const,
+    accessToken: data.session.access_token,
+    email: data.user?.email?.toLowerCase() || data.session.user.email?.toLowerCase() || "",
+  };
 }
 
 export async function ensureSupabaseAuthUser({

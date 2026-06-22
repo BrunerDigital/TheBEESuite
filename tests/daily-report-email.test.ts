@@ -26,7 +26,7 @@ test("daily report recipient settings default to all guardians with email", () =
   );
 });
 
-test("daily report recipient settings honor director-selected guardians", () => {
+test("daily report recipients ignore legacy director selections and use guardian emails on file", () => {
   const customFields = dailyReportEmailRecipientCustomFields(
     { existing: true },
     ["guardian-2", "guardian-3", "guardian-2"],
@@ -35,15 +35,22 @@ test("daily report recipient settings honor director-selected guardians", () => 
   assert.deepEqual(readDailyReportEmailRecipientGuardianIds(customFields), ["guardian-2", "guardian-3"]);
   assert.equal((customFields as Record<string, unknown>).existing, true);
   assert.deepEqual(
+    resolveDailyReportEmailRecipientGuardianIds({ customFields, guardians }),
+    ["guardian-1", "guardian-2"],
+  );
+  assert.deepEqual(
     resolveDailyReportEmailRecipients({ customFields, guardians }).map((recipient) => recipient.email),
-    ["bailey@example.com"],
+    ["alex@example.com", "bailey@example.com"],
   );
 });
 
-test("daily report recipient settings allow an explicit empty recipient list", () => {
+test("daily report recipients ignore legacy empty selections and still use guardian emails", () => {
   const customFields = dailyReportEmailRecipientCustomFields(null, []);
   assert.deepEqual(readDailyReportEmailRecipientGuardianIds(customFields), []);
-  assert.deepEqual(resolveDailyReportEmailRecipients({ customFields, guardians }), []);
+  assert.deepEqual(
+    resolveDailyReportEmailRecipients({ customFields, guardians }).map((recipient) => recipient.email),
+    ["alex@example.com", "bailey@example.com"],
+  );
 });
 
 test("daily report email copy includes care entries and family context", () => {

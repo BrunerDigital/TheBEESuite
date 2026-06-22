@@ -82,12 +82,22 @@ async function POSTHandler(request: NextRequest) {
   });
 
   const portalUrl = buildParentPortalUrl(getAppBaseUrl(request.url));
-  const signatureText = `A Kid City USA document signature has been requested for ${family.name}.\n\nDocument: ${name}\nType: ${type}\n\nOpen the parent portal to review and sign: ${portalUrl}\n\nSignature consent: ${SIGNATURE_CONSENT_TEXT}`;
+  const signatureText = [
+    `A document signature has been requested for ${family.name} in The BEE Suite.`,
+    "",
+    `Document: ${name}`,
+    `Type: ${type}`,
+    "",
+    `Open the branded parent form to review and sign: ${portalUrl}#documents`,
+    "Sign in with the guardian email where you received this message. Use the school default parent password if you have not changed it yet.",
+    "",
+    `Signature consent: ${SIGNATURE_CONSENT_TEXT}`,
+  ].join("\n");
   const email = await sendEmail({
     to: [recipient.email],
     subject: `Signature requested: ${name}`,
     text: signatureText,
-    fromName: "Kid City USA",
+    fromName: "The BEE Suite",
     categories: ["signature_request_email"],
     customArgs: { documentId: document.id, familyId, childId: childId ?? "" },
     tenantId: user.tenantId,
@@ -99,7 +109,7 @@ async function POSTHandler(request: NextRequest) {
     to: [recipient.email],
     subject: `Signature requested: ${name}`,
     text: signatureText,
-    fromName: "Kid City USA",
+    fromName: "The BEE Suite",
     result: email,
     metadata: { documentId: document.id, familyId, childId },
   });

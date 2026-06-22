@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { updateSupabasePassword } from "@/lib/supabase-auth";
+import { updateSupabasePassword, verifySupabaseRecoveryTokenHash } from "@/lib/supabase-auth";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -12,12 +12,14 @@ function clean(value: unknown) {
 async function POSTHandler(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as {
     accessToken?: unknown;
+    tokenHash?: unknown;
     password?: unknown;
   } | null;
   const accessToken = clean(body?.accessToken);
+  const tokenHash = clean(body?.tokenHash);
   const password = clean(body?.password);
 
-  if (!accessToken) {
+  if (!accessToken && !tokenHash) {
     return NextResponse.json({ ok: false, error: "Password reset link is missing or expired." }, { status: 400 });
   }
 
@@ -26,7 +28,22 @@ async function POSTHandler(request: NextRequest) {
   }
 
   try {
-    const response = await updateSupabasePassword(accessToken, password);
+    let resetAccessToken = accessToken;
+    let verifiedEmail = "";
+    if (!resetAccessToken && tokenHash) {
+      const verified = await verifySupabaseRecoveryTokenHash(tokenHash);
+      if (!verified.ok) {
+        logOperationalError("auth.reset_password.supabase_token_hash_failed", null);
+        return NextResponse.json(
+          { ok: false, error: "Password reset link is invalid or expired. Request a fresh reset link." },
+          { status: 400 },
+        );
+      }
+      resetAccessToken = verified.accessToken;
+      verifiedEmail = verified.email;
+    }
+
+    const response = await updateSupabasePassword(resetAccessToken, password);
     if (!response.ok) {
       logOperationalError("auth.reset_password.supabase_update_failed", null, { status: response.status });
       return NextResponse.json(
@@ -35,7 +52,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
     const payload = (await response.json().catch(() => null)) as { email?: string; user?: { email?: string } } | null;
-    const email = (payload?.email ?? payload?.user?.email ?? "").toLowerCase();
+    const email = verifiedEmail || (payload?.email ?? payload?.user?.email ?? "").toLowerCase();
     if (email) {
       await prisma.user.updateMany({
         where: { email },

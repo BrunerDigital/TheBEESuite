@@ -132,14 +132,14 @@ export const dashboardWidgetCatalog: readonly DashboardWidgetDefinition[] = [
     title: "Staffing and ratios",
     description: "Teacher counts and classroom ratio coverage.",
     category: "Staffing",
-    roles: operationsRoles,
+    roles: staffAdminRoles,
   },
   {
     id: "complianceQueue",
     title: "Compliance queue",
     description: "Incident review, expiring documents, and compliance reminders.",
     category: "Compliance",
-    roles: [...staffAdminRoles, ...teacherRoles],
+    roles: staffAdminRoles,
   },
   {
     id: "familyCommunication",
@@ -234,8 +234,6 @@ const defaultWidgetIdsByRole: Record<UserRole, readonly DashboardWidgetId[]> = {
   [UserRole.TEACHER]: [
     "aiBrief",
     "attendanceSnapshot",
-    "staffingRatios",
-    "complianceQueue",
     "familyCommunication",
   ],
   [UserRole.PARENT_GUARDIAN]: [

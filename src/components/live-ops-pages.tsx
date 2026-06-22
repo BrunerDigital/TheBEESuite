@@ -2419,6 +2419,7 @@ export type ClassroomDashboardData = {
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
   ageGroups: string[];
+  canManageClassroomSetup: boolean;
   demoMode?: boolean;
 };
 
@@ -2463,9 +2464,15 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         classrooms={data.classrooms}
         staff={data.staff}
         ageGroups={data.ageGroups}
+        canManage={data.canManageClassroomSetup}
         demoMode={data.demoMode}
       />
-      <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
+      <ClassroomRatioAssignmentPanel
+        classrooms={data.classrooms}
+        staff={data.staff}
+        canManage={data.canManageClassroomSetup}
+        demoMode={data.demoMode}
+      />
     </div>
   );
 }

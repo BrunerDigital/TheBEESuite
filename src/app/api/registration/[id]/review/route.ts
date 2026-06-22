@@ -5,7 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { buildParentPortalSetupUrl } from "@/lib/parent-portal-invitations";
+import { buildParentPortalSetupUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import {
   asRecord,
@@ -25,12 +25,7 @@ import {
   registrationLedgerExternalId,
   type RegistrationPaymentStatus,
 } from "@/lib/registration-billing";
-import {
-  ensureSupabaseAuthUser,
-  getAppBaseUrl,
-  getParentPortalPasswordResetRedirectUrl,
-  requestSupabasePasswordReset,
-} from "@/lib/supabase-auth";
+import { getAppBaseUrl, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -427,18 +422,28 @@ async function createParentPortalInvite(input: {
 }) {
   const email = normalizeEmailText(input.guardian.email);
   if (!validEmail(email)) {
-    return { ok: false, error: "Primary guardian email is not valid.", emailSent: false, passwordResetSent: false };
+    return { ok: false, error: "Primary guardian email is not valid.", emailSent: false, passwordResetSent: false, defaultPasswordSet: false };
+  }
+  const defaultPassword = getParentPortalDefaultPassword();
+  if (defaultPassword.length < 8) {
+    return {
+      ok: false,
+      error: "Parent portal default password is not configured.",
+      emailSent: false,
+      passwordResetSent: false,
+      defaultPasswordSet: false,
+    };
   }
 
   try {
-    const ensure = await ensureSupabaseAuthUser({ email, name: input.guardian.fullName });
-    if (!ensure.ok) {
-      return { ok: false, error: ensure.error || "Parent auth user could not be created.", emailSent: false, passwordResetSent: false };
-    }
-    const reset = await requestSupabasePasswordReset(email, getParentPortalPasswordResetRedirectUrl(input.requestUrl));
-    if (!reset.ok) {
-      return { ok: false, error: `Password setup email returned ${reset.status}.`, emailSent: false, passwordResetSent: false };
-    }
+    const appBaseUrl = getAppBaseUrl(input.requestUrl);
+    await upsertSupabaseAuthUserWithPassword({
+      email,
+      name: input.guardian.fullName,
+      password: defaultPassword,
+      role: UserRole.PARENT_GUARDIAN,
+      source: PARENT_PORTAL_INVITE_MODE,
+    });
 
     const parentUser = await prisma.user.upsert({
       where: { email },
@@ -447,7 +452,7 @@ async function createParentPortalInvite(input: {
         role: UserRole.PARENT_GUARDIAN,
         isActive: true,
         organizationId: input.center.organizationId,
-        mustResetPassword: true,
+        mustResetPassword: false,
         sessionVersion: { increment: 1 },
       },
       create: {
@@ -457,7 +462,7 @@ async function createParentPortalInvite(input: {
         name: input.guardian.fullName,
         role: UserRole.PARENT_GUARDIAN,
         isActive: true,
-        mustResetPassword: true,
+        mustResetPassword: false,
       },
     });
 
@@ -469,14 +474,14 @@ async function createParentPortalInvite(input: {
           parentPortal: {
             linkedAt: new Date().toISOString(),
             linkedBy: input.user.email,
-            inviteMode: "registration_approval_password_reset",
+            inviteMode: PARENT_PORTAL_INVITE_MODE,
             registrationApproval: true,
           },
         }),
       },
     });
 
-    const portalUrl = buildParentPortalSetupUrl(getAppBaseUrl(input.requestUrl));
+    const portalUrl = buildParentPortalSetupUrl(appBaseUrl);
     const paymentLine = input.registrationPayment?.required
       ? `A registration fee/deposit invoice for ${formatRegistrationPaymentAmount(input.registrationPayment.totalCents)} is ready in the parent portal for secure checkout.`
       : "";
@@ -485,9 +490,10 @@ async function createParentPortalInvite(input: {
       "",
       `Your registration application for ${input.center.crmLocationId ?? input.center.name} was approved for the next enrollment steps.`,
       `Use ${email} as your login email.`,
-      "Use the password setup email from The BEE Suite to create your parent portal password.",
+      "Use the default parent portal password provided by your school.",
       "Your approved child records and school connections are already linked in the portal.",
       `Confirm your family portal information and check-in PIN: ${portalUrl}`,
+      "You can choose a different password any time from the Forgot password link on the login screen.",
       paymentLine || null,
       "",
       "The school may still need uploaded documents, signatures, tuition/deposit setup, classroom assignment, and start-date confirmation before final enrollment.",
@@ -522,18 +528,30 @@ async function createParentPortalInvite(input: {
         familyId: input.family.id,
         parentUserId: parentUser.id,
         email,
-        passwordResetSent: true,
+        authMode: PARENT_PORTAL_INVITE_MODE,
+        defaultPasswordSet: true,
         emailCopySent: emailCopy.ok,
       },
     });
 
-    return { ok: true, emailSent: emailCopy.ok, passwordResetSent: true, parentUserId: parentUser.id };
+    if (!emailCopy.ok) {
+      return {
+        ok: false,
+        error: emailCopy.error || "The parent portal user was linked, but the login email could not be sent.",
+        emailSent: false,
+        passwordResetSent: false,
+        defaultPasswordSet: true,
+      };
+    }
+
+    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet: true, parentUserId: parentUser.id };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Parent portal invite failed.",
       emailSent: false,
       passwordResetSent: false,
+      defaultPasswordSet: false,
     };
   }
 }
@@ -1226,11 +1244,12 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
 
   let parentInvite:
     | Awaited<ReturnType<typeof createParentPortalInvite>>
-    | { ok: false; error: string; emailSent: false; passwordResetSent: false } = {
+    | { ok: false; error: string; emailSent: false; passwordResetSent: false; defaultPasswordSet: false } = {
       ok: false,
       error: "Parent portal invite was not requested.",
       emailSent: false,
       passwordResetSent: false,
+      defaultPasswordSet: false,
     };
   if (inviteParent && approval.primaryGuardian) {
     parentInvite = await createParentPortalInvite({

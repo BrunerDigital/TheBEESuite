@@ -18,10 +18,7 @@ import {
   findGuardianDuplicateCandidates,
 } from "@/lib/family-dedupe";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
-import {
-  DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
-  resolveDailyReportEmailRecipientGuardianIds,
-} from "@/lib/daily-report-email-settings";
+import { resolveDailyReportEmailRecipients } from "@/lib/daily-report-email-settings";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -155,14 +152,6 @@ function toDateInput(value: Date | string | null | undefined) {
   return local.toISOString().slice(0, 10);
 }
 
-function dailyReportEmailRecipientIdsForFamily(family: EditableFamilyRecord | null) {
-  if (!family) return [];
-  return resolveDailyReportEmailRecipientGuardianIds({
-    customFields: family.customFields,
-    guardians: family.guardians,
-  });
-}
-
 function scheduleNotes(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const notes = (value as { notes?: unknown }).notes;
@@ -207,11 +196,6 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [address, setAddress] = useState(selectedFamily?.address ?? "");
   const [familyNotes, setFamilyNotes] = useState(selectedFamily?.notes ?? "");
   const [custodyNotes, setCustodyNotes] = useState(selectedFamily?.custodyNotes ?? "");
-  const [dailyReportEmailRecipientGuardianIds, setDailyReportEmailRecipientGuardianIds] = useState<string[]>(
-    () => dailyReportEmailRecipientIdsForFamily(selectedFamily),
-  );
-  const [dailyReportEmailRecipientsTouched, setDailyReportEmailRecipientsTouched] = useState(false);
-
   const [selectedGuardianId, setSelectedGuardianId] = useState(selectedFamily?.guardians[0]?.id ?? "");
   const selectedGuardian = selectedGuardianId
     ? selectedFamily?.guardians.find((guardian) => guardian.id === selectedGuardianId) ?? null
@@ -300,11 +284,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
-  const effectiveDailyReportEmailRecipientGuardianIds = dailyReportEmailRecipientsTouched
-    ? dailyReportEmailRecipientGuardianIds
-    : dailyReportEmailRecipientIdsForFamily(selectedFamily);
-  const dailyReportEmailGuardianIds = new Set(effectiveDailyReportEmailRecipientGuardianIds);
-  const dailyReportEmailGuardians = selectedFamily?.guardians.filter((guardian) => guardian.email?.trim()) ?? [];
+  const dailyReportEmailRecipients = selectedFamily
+    ? resolveDailyReportEmailRecipients({
+        customFields: selectedFamily.customFields,
+        guardians: selectedFamily.guardians,
+      })
+    : [];
   const childDuplicateRecords = useMemo(
     () => families.flatMap((family) =>
       family.children.map((child) => ({
@@ -437,23 +422,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     setAddress(family?.address ?? "");
     setFamilyNotes(family?.notes ?? "");
     setCustodyNotes(family?.custodyNotes ?? "");
-    setDailyReportEmailRecipientGuardianIds(dailyReportEmailRecipientIdsForFamily(family));
-    setDailyReportEmailRecipientsTouched(false);
     loadGuardian(family?.guardians[0] ?? null);
     loadPickup(family?.pickups[0] ?? null);
     loadEmergencyContact(family?.emergencyContacts[0] ?? null);
     loadChild(family?.children[0] ?? null);
     loadDocument(family?.children[0]?.documents[0] ?? family?.documents[0] ?? null, family?.children[0] ?? null);
     setDuplicateFamilyId("");
-  }
-
-  function toggleDailyReportEmailRecipient(guardianId: string, checked: boolean) {
-    setDailyReportEmailRecipientsTouched(true);
-    setDailyReportEmailRecipientGuardianIds((current) => {
-      const base = dailyReportEmailRecipientsTouched ? current : dailyReportEmailRecipientIdsForFamily(selectedFamily);
-      if (checked) return Array.from(new Set([...base, guardianId]));
-      return base.filter((id) => id !== guardianId);
-    });
   }
 
   function loadGuardianById(guardianId: string) {
@@ -644,6 +618,27 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
       }
       loadDocument(null);
       setStatusMessage("Document request removed.");
+      router.refresh();
+    });
+  }
+
+  function emailDocumentRequest() {
+    if (!selectedDocument) return;
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch(`/api/documents/${encodeURIComponent(selectedDocument.id)}/request-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const json = await response.json().catch(() => null) as { error?: string; emailsSent?: number; parentAccountsLinked?: number } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Parent document request email could not be sent.");
+        return;
+      }
+      const emailsSent = json?.emailsSent ?? 0;
+      const linkedText = json?.parentAccountsLinked ? ` ${json.parentAccountsLinked} parent portal account linked.` : "";
+      setStatusMessage(`${emailsSent} parent document request email${emailsSent === 1 ? "" : "s"} sent.${linkedText}`);
       router.refresh();
     });
   }
@@ -869,28 +864,24 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 Daily report email recipients
               </Label>
               <Badge variant="outline">
-                {effectiveDailyReportEmailRecipientGuardianIds.length} selected
+                {dailyReportEmailRecipients.length} email{dailyReportEmailRecipients.length === 1 ? "" : "s"} on file
               </Badge>
             </div>
-            {dailyReportEmailGuardians.length ? (
+            {dailyReportEmailRecipients.length ? (
               <div className="grid gap-2 sm:grid-cols-2">
-                {dailyReportEmailGuardians.map((guardian) => (
-                  <label key={guardian.id} className="flex min-h-12 items-center gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={dailyReportEmailGuardianIds.has(guardian.id)}
-                      onChange={(event) => toggleDailyReportEmailRecipient(guardian.id, event.target.checked)}
-                    />
+                {dailyReportEmailRecipients.map((recipient) => (
+                  <div key={recipient.guardianId} className="flex min-h-12 items-center gap-3 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+                    <Mail className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     <span className="min-w-0">
-                      <span className="block truncate font-medium">{guardian.fullName}</span>
-                      <span className="block truncate text-xs text-muted-foreground">{guardian.email}</span>
+                      <span className="block truncate font-medium">{recipient.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{recipient.email}</span>
                     </span>
-                  </label>
+                  </div>
                 ))}
               </div>
             ) : (
               <p className="rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
-                Add guardian emails before enabling daily report delivery.
+                Add parent or guardian emails before daily report delivery.
               </p>
             )}
           </div>
@@ -951,9 +942,6 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               address,
               notes: familyNotes,
               custodyNotes,
-              ...(dailyReportEmailRecipientsTouched
-                ? { [DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY]: effectiveDailyReportEmailRecipientGuardianIds }
-                : {}),
             }, "Family account")}
           >
             <Save data-icon="inline-start" />
@@ -1656,6 +1644,15 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               >
                 <Save data-icon="inline-start" />
                 {selectedDocument ? "Save document" : "Add document"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending || !selectedDocument}
+                onClick={emailDocumentRequest}
+              >
+                <Mail data-icon="inline-start" />
+                Email parent request
               </Button>
               <Button
                 type="button"

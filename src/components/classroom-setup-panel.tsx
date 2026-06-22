@@ -22,6 +22,7 @@ type Props = {
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
   ageGroups?: string[];
+  canManage?: boolean;
   demoMode?: boolean;
 };
 
@@ -29,7 +30,7 @@ function classroomTeacherNames(staff: ClassroomAssignmentStaff[], classroomId: s
   return staff.filter((teacher) => teacher.classroomId === classroomId).map((teacher) => teacher.user.name).join(", ");
 }
 
-export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: configuredAgeGroups, demoMode = false }: Props) {
+export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: configuredAgeGroups, canManage = false, demoMode = false }: Props) {
   const router = useRouter();
   const [classroomOverrides, setClassroomOverrides] = useState<Record<string, ClassroomAssignmentClassroom>>({});
   const classroomRows = useMemo(() => {
@@ -176,7 +177,11 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
     <Card className="glass-panel">
       <CardHeader>
         <CardTitle>Classrooms</CardTitle>
-        <CardDescription>Set up each room with the school, age group, licensed seats, and staff-to-child ratio directors use for daily coverage.</CardDescription>
+        <CardDescription>
+          {canManage
+            ? "Set up each room with the school, age group, licensed seats, and staff-to-child ratio directors use for daily coverage."
+            : "Classroom capacity and roster details are visible for daily operations. Room setup, capacity, and ratio changes are director-only."}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="overflow-x-auto">
@@ -191,7 +196,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                 <TableHead>Staff-to-child ratio</TableHead>
                 <TableHead>Ratio status</TableHead>
                 <TableHead>Incidents</TableHead>
-                <TableHead>Action</TableHead>
+                {canManage ? <TableHead>Action</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -212,10 +217,12 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                   <TableCell>
                     {classroom.ratioRule ? (
                       classroom.ratioRule
-                    ) : (
+                    ) : canManage ? (
                       <Button type="button" variant="link" className="h-auto p-0" onClick={() => loadClassroom(classroom)}>
                         Add ratio
                       </Button>
+                    ) : (
+                      "Not set"
                     )}
                   </TableCell>
                   <TableCell>
@@ -225,17 +232,19 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                     </div>
                   </TableCell>
                   <TableCell>{classroom._count.incidents}</TableCell>
+                  {canManage ? (
                   <TableCell>
                     <Button type="button" size="sm" variant="outline" onClick={() => loadClassroom(classroom)}>
                       <Pencil data-icon="inline-start" />
                       Edit
                     </Button>
                   </TableCell>
+                  ) : null}
                 </TableRow>
               ))}
               {!rows.length ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">
+                  <TableCell colSpan={canManage ? 9 : 8} className="text-muted-foreground">
                     No classrooms have been added yet.
                   </TableCell>
                 </TableRow>
@@ -244,6 +253,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
           </Table>
         </div>
 
+        {canManage ? (
         <form id="classroom-editor" className="scroll-mt-24 rounded-xl border bg-background/40 p-4" onSubmit={saveClassroom}>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -330,6 +340,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
             </Button>
           </div>
         </form>
+        ) : null}
       </CardContent>
     </Card>
   );

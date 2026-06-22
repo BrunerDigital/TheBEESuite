@@ -26,6 +26,7 @@ import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-confi
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
@@ -56,6 +57,7 @@ export type LiveDashboardData = {
   aiSummary: string;
   aiHighlights?: string[];
   analytics?: typeof analytics;
+  attendanceSnapshot?: DashboardAttendanceSnapshot;
   classroomSnapshots?: typeof classrooms;
   notifications?: DashboardNotification[];
   parentMessages?: typeof messages;
@@ -79,6 +81,7 @@ export type LiveDashboardData = {
     title: string;
     description: string;
     completedIds: string[];
+    automaticCompletedIds?: string[];
     graphicHref: string;
   }>;
   executiveMetrics?: {
@@ -326,6 +329,145 @@ function ExecutiveLensDashboard({
   );
 }
 
+function percent(value: number, total: number) {
+  if (!total) return 0;
+  return Math.max(0, Math.min(100, (value / total) * 100));
+}
+
+function AttendanceSegmentBar({
+  present,
+  checkedOut,
+  absent,
+  notMarked,
+  total,
+}: {
+  present: number;
+  checkedOut: number;
+  absent: number;
+  notMarked: number;
+  total: number;
+}) {
+  const segments = [
+    { key: "present", value: present, className: "bg-primary" },
+    { key: "checkedOut", value: checkedOut, className: "bg-[var(--chart-2)]" },
+    { key: "absent", value: absent, className: "bg-destructive" },
+    { key: "notMarked", value: notMarked, className: "bg-muted-foreground/40" },
+  ];
+
+  return (
+    <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+      {total ? segments.map((segment) => (
+        segment.value ? (
+          <span
+            key={segment.key}
+            className={segment.className}
+            style={{ width: `${percent(segment.value, total)}%` }}
+          />
+        ) : null
+      )) : <span className="w-full bg-muted-foreground/20" />}
+    </div>
+  );
+}
+
+function AttendanceClassroomRow({ row }: { row: DashboardAttendanceSnapshotRow }) {
+  return (
+    <div className="grid gap-3 rounded-lg border bg-background/45 p-3 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">{row.classroomName}</div>
+        <div className="text-xs text-muted-foreground">{row.centerName}</div>
+      </div>
+      <div className="grid gap-2">
+        <AttendanceSegmentBar
+          present={row.present}
+          checkedOut={row.checkedOut}
+          absent={row.absent}
+          notMarked={row.notMarked}
+          total={row.total}
+        />
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          <span>{row.present} in</span>
+          <span>{row.checkedOut} out</span>
+          <span>{row.absent} absent</span>
+          <span>{row.notMarked} open</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AttendanceSnapshotCard({
+  snapshot,
+  isTeacherDashboard,
+}: {
+  snapshot: DashboardAttendanceSnapshot;
+  isTeacherDashboard: boolean;
+}) {
+  const attendanceRate = snapshot.total ? Math.round((snapshot.present / snapshot.total) * 100) : 0;
+  return (
+    <Card className="glass-panel">
+      <CardHeader>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <CardTitle>Attendance Snapshot</CardTitle>
+            <CardDescription>
+              {isTeacherDashboard
+                ? "Current check-in view for your assigned classroom."
+                : "Current check-in view across all classes in your school scope."}
+            </CardDescription>
+          </div>
+          <Badge variant="outline">{snapshot.scopeLabel}</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-5">
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border bg-background/45 p-3">
+            <div className="text-xs text-muted-foreground">Present now</div>
+            <div className="mt-1 text-2xl font-semibold">{snapshot.present}/{snapshot.total}</div>
+          </div>
+          <div className="rounded-lg border bg-background/45 p-3">
+            <div className="text-xs text-muted-foreground">Attendance rate</div>
+            <div className="mt-1 text-2xl font-semibold">{attendanceRate}%</div>
+          </div>
+          <div className="rounded-lg border bg-background/45 p-3">
+            <div className="text-xs text-muted-foreground">Checked out</div>
+            <div className="mt-1 text-2xl font-semibold">{snapshot.checkedOut}</div>
+          </div>
+          <div className="rounded-lg border bg-background/45 p-3">
+            <div className="text-xs text-muted-foreground">Needs mark</div>
+            <div className="mt-1 text-2xl font-semibold">{snapshot.notMarked}</div>
+          </div>
+        </div>
+        <div className="grid gap-2">
+          <AttendanceSegmentBar
+            present={snapshot.present}
+            checkedOut={snapshot.checkedOut}
+            absent={snapshot.absent}
+            notMarked={snapshot.notMarked}
+            total={snapshot.total}
+          />
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            <span><b className="text-foreground">{snapshot.present}</b> present</span>
+            <span><b className="text-foreground">{snapshot.checkedOut}</b> checked out</span>
+            <span><b className="text-foreground">{snapshot.absent}</b> absent</span>
+            <span><b className="text-foreground">{snapshot.notMarked}</b> not marked</span>
+          </div>
+        </div>
+        {snapshot.rows.length ? (
+          <div className="grid gap-3">
+            {snapshot.rows.map((row) => (
+              <AttendanceClassroomRow key={row.classroomId} row={row} />
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border bg-background/45 p-3 text-sm text-muted-foreground">
+            No classroom attendance records are visible for this login yet.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const dashboardKpis = live?.kpis ?? kpis;
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
@@ -375,6 +517,24 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : showDemoFallbackData
       ? classrooms
       : [];
+  const attendanceSnapshot = live?.attendanceSnapshot ?? (showDemoFallbackData ? {
+    scopeLabel: "Demo school",
+    total: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
+    present: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
+    checkedOut: 0,
+    absent: 0,
+    notMarked: 0,
+    rows: classroomSnapshots.map((room) => ({
+      classroomId: String(room.name),
+      classroomName: String(room.name),
+      centerName: "Kid City USA - Demo",
+      total: Number(room.present),
+      present: Number(room.present),
+      checkedOut: 0,
+      absent: 0,
+      notMarked: 0,
+    })),
+  } : null);
   const parentMessages = live?.parentMessages?.length
     ? live.parentMessages
     : showDemoFallbackData
@@ -443,13 +603,22 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : isTeacherDashboard
       ? "Classroom attendance"
       : kpiTrend("Occupancy", "Attendance and occupancy");
+  const showAttendanceSnapshotCard = Boolean(attendanceSnapshot)
+    && isWidgetVisible("attendanceSnapshot")
+    && (isTeacherDashboard || visibleLenses.includes("director"));
   const visibleConfiguredWidgets = hasWidgetConfiguration ? configuredWidgets.filter((widget) => widget.visible) : [];
   const widgetSummaries: Partial<Record<DashboardWidgetId, { value: string; detail: string; href: string }>> = {
     aiBrief: { value: aiHighlights.length ? aiHighlights.join(" · ") : "Ready", detail: "Human review required", href: aiBriefHref },
     executiveRollup: { value: `${dashboardCenters.length}`, detail: "Visible centers", href: "/multi-location-dashboard" },
     enrollmentPipeline: { value: kpiValue("New leads"), detail: kpiTrend("New leads", "Live enrollment pipeline"), href: "/crm-leads" },
     toursAndTasks: { value: kpiValue("Tours today"), detail: kpiTrend("Tours today", "Open tour and CRM tasks"), href: "/tours" },
-    attendanceSnapshot: { value: kpiValue("Active children"), detail: attendanceDetail, href: attendanceHref },
+    attendanceSnapshot: attendanceSnapshot
+      ? {
+          value: `${attendanceSnapshot.present}/${attendanceSnapshot.total}`,
+          detail: `${attendanceSnapshot.checkedOut} checked out · ${attendanceSnapshot.absent} absent · ${attendanceSnapshot.notMarked} not marked`,
+          href: attendanceHref,
+        }
+      : { value: kpiValue("Active children"), detail: attendanceDetail, href: attendanceHref },
     classroomCapacity: { value: `${totalOpenSeats}`, detail: "Open seats by age group", href: "/center-dashboard" },
     billingRevenue: { value: kpiValue("Outstanding balances"), detail: kpiTrend("Outstanding balances", "Billing snapshot"), href: "/billing-invoices" },
     staffingRatios: {
@@ -558,11 +727,16 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               description={checklist.description}
               tasks={checklist.key === "director_launch" ? directorLaunchChecklistTasks : teacherProfileChecklistTasks}
               initialCompletedIds={checklist.completedIds}
+              automaticCompletedIds={checklist.automaticCompletedIds}
               graphicHref={checklist.graphicHref}
               compact
             />
           ))}
         </section>
+      ) : null}
+
+      {showAttendanceSnapshotCard && attendanceSnapshot ? (
+        <AttendanceSnapshotCard snapshot={attendanceSnapshot} isTeacherDashboard={isTeacherDashboard} />
       ) : null}
 
       <DashboardSnapshotControls

@@ -52,6 +52,23 @@ Create separate Stripe payment method configurations for ACH and card before ena
 
 See `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for the final product copy, approval checklist, and source links.
 
+
+## Kokomo Payout Setup
+
+Use this helper to prefill the Kokomo payout profile with the known school details before the director or accounting owner enters bank account and routing information in Stripe:
+
+```bash
+npm run kidcity:prepare-kokomo-payout -- --payout-contact-name="Kokomo payout owner" --payout-contact-email="kokomo@kidcityusa.com" --payout-contact-phone="7655550100"
+```
+
+When production Stripe keys are available, generate the single-use hosted onboarding link:
+
+```bash
+npm run kidcity:prepare-kokomo-payout -- --create-link --payout-contact-name="Kokomo payout owner" --payout-contact-email="kokomo@kidcityusa.com" --payout-contact-phone="7655550100" --app-url="https://thebeesuite.io"
+```
+
+The script never stores bank account or routing numbers in The BEE Suite. The school must enter those values only on Stripe-hosted onboarding. After the account owner submits the Stripe form, open `Billing Settings` and click `Check` for Kid City USA - Kokomo. Parent checkout remains blocked until Stripe reports the connected account can accept charges and receive payouts.
+
 ## Webhook
 
 Create a Stripe webhook endpoint:

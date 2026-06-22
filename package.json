@@ -45,7 +45,8 @@
     "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",
     "pilot:check": "tsx -r tsconfig-paths/register scripts/pilot-readiness-check.ts",
     "supabase:setup-storage": "tsx -r tsconfig-paths/register scripts/setup-supabase-storage.ts",
-    "supabase:migrate-child-media": "tsx -r tsconfig-paths/register scripts/migrate-inline-child-media-to-storage.ts"
+    "supabase:migrate-child-media": "tsx -r tsconfig-paths/register scripts/migrate-inline-child-media-to-storage.ts",
+    "kidcity:prepare-kokomo-payout": "tsx -r tsconfig-paths/register scripts/prepare-kokomo-payout-onboarding.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

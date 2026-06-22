@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "../src/lib/onboarding-setup";
+import { directorLaunchChecklistTasks } from "../src/lib/setup-checklists";
 
 function completeSetupInput(overrides: SchoolOnboardingSetupInput = {}) {
   return {
@@ -43,4 +44,13 @@ test("school onboarding setup is ready when all school-specific sections are pre
 
   assert.equal(setup.status, "ready_for_review");
   assert.deepEqual(setup.missingSections, []);
+});
+
+test("director launch checklist opens payout bank setup in billing settings", () => {
+  const payoutTask = directorLaunchChecklistTasks.find((task) => task.id === "payout-bank-account");
+
+  assert.ok(payoutTask);
+  assert.equal(payoutTask.href, "/billing-settings");
+  assert.match(payoutTask.description, /Directors and executives/i);
+  assert.match(payoutTask.description, /Stripe Connect payout onboarding/i);
 });

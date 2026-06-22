@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { DEFAULT_PROFILE_PHOTO_URL } from "@/lib/profile-photo";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +18,16 @@ const sizeClasses = {
   xl: "size-20",
 };
 
+const imageSizes = {
+  sm: 32,
+  md: 40,
+  lg: 56,
+  xl: 80,
+};
+
 export function UserAvatar({ name, src, size = "md", className }: UserAvatarProps) {
+  const imageSize = imageSizes[size];
+
   return (
     <span
       className={cn(
@@ -26,10 +36,13 @@ export function UserAvatar({ name, src, size = "md", className }: UserAvatarProp
         className,
       )}
     >
-      <img
+      <Image
         src={src || DEFAULT_PROFILE_PHOTO_URL}
         alt={`${name || "User"} profile photo`}
+        width={imageSize}
+        height={imageSize}
         className="size-full object-cover"
+        unoptimized
       />
     </span>
   );

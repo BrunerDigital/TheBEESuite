@@ -31,3 +31,8 @@ for (const file of [".env.local", ".env"]) {
     process.env[parsed.key] = parsed.value;
   }
 }
+
+if (!process.env.DATABASE_URL?.trim()) {
+  const databaseUrl = process.env.POSTGRES_PRISMA_URL || process.env.POSTGRES_URL;
+  if (databaseUrl?.trim()) process.env.DATABASE_URL = databaseUrl;
+}

@@ -1,6 +1,6 @@
 import "./load-env";
 import { prisma } from "@/lib/prisma";
-import { hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
+import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 type CheckStatus = "pass" | "warn" | "fail";
@@ -19,6 +19,8 @@ function envPresent(name: string) {
   return Boolean(process.env[name]?.trim());
 }
 
+const DEMO_TENANT_SLUGS = ["bee-suite-demo", "bee-suite-isolated-demo"];
+
 function printSection(title: string, checks: Check[]) {
   console.log(`\n${title}`);
   for (const item of checks) {
@@ -29,7 +31,13 @@ function printSection(title: string, checks: Check[]) {
 
 async function main() {
   const configChecks: Check[] = [
-    check(envPresent("DATABASE_URL") ? "pass" : "fail", "DATABASE_URL", envPresent("DATABASE_URL") ? "Configured." : "Missing. Migrations, seed, readiness, and live data checks cannot run."),
+    check(
+      hasDatabaseConfig(process.env) ? "pass" : "fail",
+      "Database URL",
+      hasDatabaseConfig(process.env)
+        ? `Configured through ${databaseUrlEnvNames.find((name) => envPresent(name))}.`
+        : `Missing one of ${databaseUrlEnvNames.join(", ")}. Migrations, seed, readiness, and live data checks cannot run.`,
+    ),
     check(envPresent("AUTH_SECRET") ? "pass" : "fail", "AUTH_SECRET", envPresent("AUTH_SECRET") ? "Configured." : "Missing. Production sessions must not use the dev fallback."),
     check(envPresent("PIN_HASH_SECRET") ? "pass" : "fail", "PIN_HASH_SECRET", envPresent("PIN_HASH_SECRET") ? "Configured." : "Missing. Guardian kiosk PIN hashing must fail closed in production."),
     check(hasSupabaseAuthConfig(process.env) ? "pass" : "fail", "Supabase Auth", hasSupabaseAuthConfig(process.env) ? "URL, anon key, and service role key are configured." : "Missing Supabase URL, anon key, or service role key."),
@@ -51,6 +59,14 @@ async function main() {
     return;
   }
 
+  const liveTenantWhere = { slug: { notIn: DEMO_TENANT_SLUGS } };
+  const liveCenters = await prisma.center.findMany({
+    where: { organization: { tenant: liveTenantWhere } },
+    select: { id: true, status: true },
+  });
+  const liveCenterIds = liveCenters.map((center) => center.id);
+  const activeLiveCenterIds = liveCenters.filter((center) => center.status === "active").map((center) => center.id);
+
   const [
     tenantCount,
     activeCenterCount,
@@ -65,22 +81,22 @@ async function main() {
     pendingIncidents,
     mediaReviewQueue,
   ] = await Promise.all([
-    prisma.tenant.count(),
-    prisma.center.count({ where: { status: "active" } }),
-    prisma.user.count({ where: { isActive: true } }),
-    prisma.family.count(),
-    prisma.child.count(),
-    prisma.guardian.count(),
-    prisma.guardian.count({ where: { checkInPinHash: { not: null } } }),
+    prisma.tenant.count({ where: liveTenantWhere }),
+    prisma.center.count({ where: { id: { in: liveCenterIds }, status: "active" } }),
+    prisma.user.count({ where: { isActive: true, tenant: liveTenantWhere } }),
+    prisma.family.count({ where: { centerId: { in: liveCenterIds } } }),
+    prisma.child.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
+    prisma.guardian.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
+    prisma.guardian.count({ where: { checkInPinHash: { not: null }, family: { centerId: { in: liveCenterIds } } } }),
     prisma.family.count({ where: { centerId: null } }),
-    prisma.center.count({ where: { status: "active", classrooms: { none: {} } } }),
-    prisma.invoice.count({ where: { status: "OPEN" } }),
-    prisma.incidentReport.count({ where: { adminReviewStatus: "pending" } }),
-    prisma.childMedia.count({ where: { status: "permission_review", sharedWithParents: false } }),
+    prisma.center.count({ where: { id: { in: activeLiveCenterIds }, classrooms: { none: {} } } }),
+    prisma.invoice.count({ where: { status: "OPEN", billingAccount: { family: { centerId: { in: liveCenterIds } } } } }),
+    prisma.incidentReport.count({ where: { adminReviewStatus: "pending", child: { family: { centerId: { in: liveCenterIds } } } } }),
+    prisma.childMedia.count({ where: { status: "permission_review", sharedWithParents: false, child: { family: { centerId: { in: liveCenterIds } } } } }),
   ]);
 
   const childClassroomPairs = await prisma.child.findMany({
-    where: { classroomId: { not: null } },
+    where: { classroomId: { not: null }, family: { centerId: { in: liveCenterIds } } },
     select: {
       id: true,
       fullName: true,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { envPresent, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
+import { envPresent, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { CHILD_MEDIA_BUCKET, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -35,8 +35,8 @@ async function GETHandler() {
   }
 
   let databaseReady = false;
-  let databaseDetail = env("DATABASE_URL") ? "Database query failed." : "DATABASE_URL is not configured.";
-  if (env("DATABASE_URL")) {
+  let databaseDetail = hasDatabaseConfig(process.env) ? "Database query failed." : "Database URL is not configured.";
+  if (hasDatabaseConfig(process.env)) {
     try {
       await prisma.$queryRaw`SELECT 1`;
       databaseReady = true;

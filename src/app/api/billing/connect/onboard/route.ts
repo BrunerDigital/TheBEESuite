@@ -9,6 +9,11 @@ import {
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import {
+  normalizeStripeConnectSetupInput,
+  stripeConnectSetupCustomFieldPatch,
+  type StripeConnectSetupInput,
+} from "@/lib/stripe-connect-setup";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -39,7 +44,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Payout setup is not allowed for this role." }, { status: 403 });
   }
 
-  const body = await request.json().catch(() => ({})) as { centerId?: unknown };
+  const body = await request.json().catch(() => ({})) as { centerId?: unknown; setup?: unknown };
   const centerId = clean(body.centerId) || user.primaryCenterId;
   if (!centerId) {
     return NextResponse.json({ ok: false, error: "Choose a center before starting payout setup." }, { status: 400 });
@@ -69,19 +74,55 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const existingFields = jsonObject(center.customFields);
-  let currentFields = existingFields;
+  const setupInput = body.setup && typeof body.setup === "object" && !Array.isArray(body.setup)
+    ? body.setup as StripeConnectSetupInput
+    : {};
+  const setup = normalizeStripeConnectSetupInput(setupInput, center);
+  if (!setup.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Complete the required payout setup fields before continuing to Stripe.", fields: setup.errors },
+      { status: 400 },
+    );
+  }
+
+  const now = new Date().toISOString();
+  let currentFields: Prisma.JsonObject = {
+    ...existingFields,
+    ...(stripeConnectSetupCustomFieldPatch(setup.details) as Prisma.JsonObject),
+    stripeConnectSetupUpdatedAt: now,
+    stripeConnectSetupVersion: "2026-06-dashboard-v1",
+  };
   let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;
 
+  await prisma.center.update({
+    where: { id: center.id },
+    data: {
+      email: setup.details.payoutContactEmail || center.email,
+      phone: setup.details.payoutContactPhone || center.phone,
+      address: setup.details.addressLine1 || center.address,
+      city: setup.details.city || center.city,
+      state: setup.details.state || center.state,
+      postalCode: setup.details.postalCode || center.postalCode,
+      customFields: currentFields,
+    },
+  });
+
   if (!accountId) {
     const created = await createStripeConnectedAccount({
-      businessName: center.name,
-      email: center.email,
-      phone: center.phone,
-      address: center.address,
-      city: center.city,
-      state: center.state,
-      postalCode: center.postalCode,
+      businessName: setup.details.legalBusinessName,
+      displayName: setup.details.displayName,
+      email: setup.details.payoutContactEmail,
+      phone: setup.details.payoutContactPhone,
+      supportEmail: setup.details.supportEmail,
+      supportPhone: setup.details.supportPhone,
+      address: setup.details.addressLine1,
+      addressLine2: setup.details.addressLine2,
+      city: setup.details.city,
+      state: setup.details.state,
+      postalCode: setup.details.postalCode,
+      businessUrl: setup.details.businessUrl,
+      productDescription: setup.details.productDescription,
       tenantId: user.tenantId,
     });
 
@@ -96,7 +137,7 @@ async function POSTHandler(request: NextRequest) {
     createdAccount = true;
     const readiness = created.account ? stripeConnectReadinessFromSnapshot(created.account) : null;
     currentFields = {
-      ...existingFields,
+      ...currentFields,
       stripeConnectAccountId: accountId,
       ...(readiness ? stripeConnectCustomFieldPatch(readiness) : {}),
       stripePayoutStatus: "onboarding_started",
@@ -146,6 +187,7 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       stripeConnectedAccountId: accountId,
       crmLocationId: center.crmLocationId || null,
+      setupProfileSaved: true,
     },
   });
 

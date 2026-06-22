@@ -1,11 +1,12 @@
 import { PrismaClient } from "@prisma/client";
+import { getDatabaseUrl } from "@/lib/readiness-guardrails";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
 };
 
 function getRuntimeDatabaseUrl() {
-  const rawUrl = process.env.DATABASE_URL;
+  const rawUrl = getDatabaseUrl(process.env);
   if (!rawUrl) return undefined;
 
   try {

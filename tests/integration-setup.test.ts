@@ -25,6 +25,18 @@ test("Google Calendar setup accepts access token credentials", () => {
   assert.equal(status.status, "Connected");
 });
 
+test("Supabase setup accepts Vercel Postgres database URL aliases", () => {
+  const status = getIntegrationRuntimeStatus("supabase", {
+    POSTGRES_PRISMA_URL: "postgresql://example",
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_ANON_KEY: "anon",
+    SUPABASE_SERVICE_ROLE_KEY: "service",
+  });
+
+  assert.equal(status.configured, true);
+  assert.equal(status.status, "Connected");
+});
+
 test("integration setup sanitization keeps only approved non-secret fields", () => {
   const config = sanitizeIntegrationConfig("sendgrid", {
     fromEmail: " hello@thebeesuite.io ",

@@ -1,3 +1,4 @@
+import "../scripts/load-env";
 import { PrismaClient, UserRole, EnrollmentStage, PaymentStatus, DocumentStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();

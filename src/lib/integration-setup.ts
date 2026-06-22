@@ -77,7 +77,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     purpose: "Database, Auth, and Storage",
     detail: "Stores app data, supports login and password recovery, and signs private child media/document storage URLs.",
     envRequirements: [
-      { label: "Database URL", names: ["DATABASE_URL"] },
+      { label: "Database URL", names: ["DATABASE_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL"], mode: "any" },
       { label: "Project URL", names: ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"], mode: "any" },
       { label: "Anon key", names: ["SUPABASE_ANON_KEY", "NEXT_PUBLIC_SUPABASE_ANON_KEY"], mode: "any" },
       { label: "Service role key", names: ["SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SECRET_KEY"], mode: "any" },

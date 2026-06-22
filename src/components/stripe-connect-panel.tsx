@@ -2,22 +2,35 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import {
   PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
   PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE,
 } from "@/lib/payment-disclosures";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import {
+  normalizeStripeConnectSetupInput,
+  type StripeConnectSetupDetails,
+} from "@/lib/stripe-connect-setup";
 
 export type StripeConnectCenter = {
   id: string;
   name: string;
   crmLocationId: string | null;
   email: string | null;
+  phone: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
   customFields: unknown;
 };
 
@@ -66,6 +79,13 @@ function centsLabel(cents: number) {
   return ` + ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100)}`;
 }
 
+function setupErrorsFromResponse(value: unknown): Partial<Record<keyof StripeConnectSetupDetails, string>> {
+  return Object.fromEntries(
+    Object.entries(fields(value))
+      .filter((entry): entry is [keyof StripeConnectSetupDetails, string] => typeof entry[1] === "string"),
+  ) as Partial<Record<keyof StripeConnectSetupDetails, string>>;
+}
+
 export function StripeConnectPanel({
   centers,
   stripeConfigured,
@@ -80,6 +100,14 @@ export function StripeConnectPanel({
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [localCenters, setLocalCenters] = useState(centers);
+  const [setupCenterId, setSetupCenterId] = useState<string | null>(null);
+  const [setupForm, setSetupForm] = useState<StripeConnectSetupDetails | null>(null);
+  const [setupErrors, setSetupErrors] = useState<Partial<Record<keyof StripeConnectSetupDetails, string>>>({});
+
+  const setupCenter = useMemo(
+    () => localCenters.find((center) => center.id === setupCenterId) ?? null,
+    [localCenters, setupCenterId],
+  );
 
   const stats = useMemo(() => {
     const ready = localCenters.filter((center) => statusLabel(center) === "Ready").length;
@@ -91,17 +119,50 @@ export function StripeConnectPanel({
     };
   }, [localCenters]);
 
-  async function startOnboarding(centerId: string) {
-    setBusyCenterId(centerId);
+  function openSetupDialog(center: StripeConnectCenter) {
+    const setup = normalizeStripeConnectSetupInput({}, center);
+    setSetupCenterId(center.id);
+    setSetupForm(setup.details);
+    setSetupErrors({});
+    setMessage(null);
+  }
+
+  function closeSetupDialog() {
+    setSetupCenterId(null);
+    setSetupForm(null);
+    setSetupErrors({});
+  }
+
+  function updateSetupField(field: keyof StripeConnectSetupDetails, value: string) {
+    setSetupForm((current) => current ? { ...current, [field]: value } : current);
+    setSetupErrors((current) => {
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  }
+
+  async function startOnboarding() {
+    if (!setupCenter || !setupForm) return;
+    const validation = normalizeStripeConnectSetupInput(setupForm, setupCenter);
+    if (!validation.ok) {
+      setSetupErrors(validation.errors);
+      setMessage("Complete the required payout setup fields before continuing to Stripe.");
+      return;
+    }
+
+    setBusyCenterId(setupCenter.id);
     setMessage(null);
     try {
       const response = await fetch("/api/billing/connect/onboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId }),
+        body: JSON.stringify({ centerId: setupCenter.id, setup: validation.details }),
       });
       const json = await response.json();
       if (!response.ok || !json.ok || !json.url) {
+        const serverErrors = setupErrorsFromResponse(json.fields);
+        if (Object.keys(serverErrors).length) setSetupErrors(serverErrors);
         throw new Error(json.error || "Payout onboarding could not be started.");
       }
       window.location.href = json.url as string;
@@ -171,6 +232,37 @@ export function StripeConnectPanel({
     }
     return undefined;
   }, [searchParams, stripeConfigured, syncStatus]);
+
+  const setupBusy = Boolean(setupCenter && busyCenterId === setupCenter.id);
+  const setupDialogTitle = setupCenter ? `${setupCenter.name} payout setup` : "School payout setup";
+
+  function setupFieldError(field: keyof StripeConnectSetupDetails) {
+    const error = setupErrors[field];
+    return error ? <p className="text-xs text-destructive">{error}</p> : null;
+  }
+
+  function setupInput(
+    field: keyof StripeConnectSetupDetails,
+    label: string,
+    inputProps: { type?: string; placeholder?: string; autoComplete?: string; maxLength?: number } = {},
+  ) {
+    if (!setupForm) return null;
+    const inputId = `stripe-connect-${field}`;
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor={inputId}>{label}</Label>
+        <Input
+          id={inputId}
+          value={setupForm[field]}
+          onChange={(event) => updateSetupField(field, event.target.value)}
+          aria-invalid={Boolean(setupErrors[field])}
+          disabled={setupBusy}
+          {...inputProps}
+        />
+        {setupFieldError(field)}
+      </div>
+    );
+  }
 
   return (
     <Card className="glass-panel">
@@ -243,6 +335,78 @@ export function StripeConnectPanel({
 
         {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
 
+        <Dialog open={Boolean(setupCenterId)} onOpenChange={(open) => {
+          if (!open && !setupBusy) closeSetupDialog();
+        }}>
+          <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>{setupDialogTitle}</DialogTitle>
+              <DialogDescription>
+                Save the school profile used to create the connected payout account.
+              </DialogDescription>
+            </DialogHeader>
+            {setupForm ? (
+              <form className="space-y-4" onSubmit={(event) => {
+                event.preventDefault();
+                void startOnboarding();
+              }}>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {setupInput("legalBusinessName", "Legal business name", { autoComplete: "organization" })}
+                  {setupInput("displayName", "Stripe display/DBA name", { autoComplete: "organization" })}
+                  {setupInput("payoutContactName", "Payout contact name", { autoComplete: "name" })}
+                  {setupInput("payoutContactEmail", "Payout contact email", { type: "email", autoComplete: "email" })}
+                  {setupInput("payoutContactPhone", "Payout contact phone", { type: "tel", autoComplete: "tel" })}
+                  {setupInput("supportEmail", "Public support email", { type: "email", autoComplete: "email" })}
+                  {setupInput("supportPhone", "Public support phone", { type: "tel", autoComplete: "tel" })}
+                  {setupInput("businessUrl", "Business website", { type: "url", placeholder: "https://example.com" })}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-[1fr_6rem_8rem]">
+                  <div className="md:col-span-3">
+                    {setupInput("addressLine1", "Business address", { autoComplete: "address-line1" })}
+                  </div>
+                  <div className="md:col-span-3">
+                    {setupInput("addressLine2", "Address line 2", { autoComplete: "address-line2" })}
+                  </div>
+                  {setupInput("city", "City", { autoComplete: "address-level2" })}
+                  {setupInput("state", "State", { autoComplete: "address-level1", maxLength: 2 })}
+                  {setupInput("postalCode", "ZIP", { autoComplete: "postal-code" })}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="stripe-connect-product-description">Products and services</Label>
+                  <Textarea
+                    id="stripe-connect-product-description"
+                    value={setupForm.productDescription}
+                    onChange={(event) => updateSetupField("productDescription", event.target.value)}
+                    aria-invalid={Boolean(setupErrors.productDescription)}
+                    disabled={setupBusy}
+                    maxLength={240}
+                  />
+                  {setupFieldError("productDescription")}
+                </div>
+
+                <div className="flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-6 text-muted-foreground">
+                  <LockKeyhole className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>
+                    Bank account, routing details, representative identity, tax ID, and verification documents are entered only on Stripe&apos;s secure onboarding screen.
+                  </span>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={closeSetupDialog} disabled={setupBusy}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={!stripeConfigured || setupBusy}>
+                    {setupBusy ? "Opening Stripe..." : "Save and continue"}
+                    <ArrowUpRight data-icon="inline-end" />
+                  </Button>
+                </DialogFooter>
+              </form>
+            ) : null}
+          </DialogContent>
+        </Dialog>
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -292,7 +456,7 @@ export function StripeConnectPanel({
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => startOnboarding(center.id)}
+                        onClick={() => openSetupDialog(center)}
                         disabled={busyCenterId === center.id || !stripeConfigured}
                       >
                         {hasAccount ? "Continue" : "Set up"}

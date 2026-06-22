@@ -1173,22 +1173,34 @@ export async function retrieveStripeSetupIntent(setupIntentId: string, input: Te
 
 export async function createStripeConnectedAccount({
   businessName,
+  displayName,
   email,
   phone,
+  supportEmail,
+  supportPhone,
   city,
   state,
   postalCode,
   address,
+  addressLine2,
+  businessUrl,
+  productDescription,
   tenantId,
   credentials,
 }: {
   businessName: string;
+  displayName?: string | null;
   email?: string | null;
   phone?: string | null;
+  supportEmail?: string | null;
+  supportPhone?: string | null;
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
   address?: string | null;
+  addressLine2?: string | null;
+  businessUrl?: string | null;
+  productDescription?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
@@ -1197,14 +1209,30 @@ export async function createStripeConnectedAccount({
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
 
+  const registeredName = clean(businessName);
+  const accountDisplayName = clean(displayName) || registeredName;
+  const contactEmail = email && isEmail(email) ? email : undefined;
+  const publicSupportEmail = supportEmail && isEmail(supportEmail) ? supportEmail : contactEmail;
+  const contactPhone = clean(phone) || undefined;
+  const publicSupportPhone = clean(supportPhone) || contactPhone;
+  const businessAddress = address || city || state || postalCode || addressLine2 ? {
+    country: "US",
+    line1: clean(address) || undefined,
+    line2: clean(addressLine2) || undefined,
+    city: clean(city) || undefined,
+    state: clean(state) || undefined,
+    postal_code: clean(postalCode) || undefined,
+  } : undefined;
+
   const payload = {
-    contact_email: email && isEmail(email) ? email : undefined,
-    contact_phone: clean(phone) || undefined,
-    display_name: businessName,
+    contact_email: contactEmail,
+    contact_phone: contactPhone,
+    display_name: accountDisplayName,
     dashboard: "express",
     identity: {
       business_details: {
-        registered_name: businessName,
+        registered_name: registeredName,
+        address: businessAddress,
       },
       country: "us",
       entity_type: "company",
@@ -1215,15 +1243,10 @@ export async function createStripeConnectedAccount({
           card_payments: { requested: true },
         },
         support: {
-          address: address || city || state || postalCode ? {
-            country: "US",
-            line1: clean(address) || undefined,
-            city: clean(city) || undefined,
-            state: clean(state) || undefined,
-            postal_code: clean(postalCode) || undefined,
-          } : undefined,
-          email: email && isEmail(email) ? email : undefined,
-          phone: clean(phone) || undefined,
+          address: businessAddress,
+          email: publicSupportEmail,
+          phone: publicSupportPhone,
+          url: clean(businessUrl) || undefined,
         },
       },
       recipient: {
@@ -1238,8 +1261,9 @@ export async function createStripeConnectedAccount({
       currency: "usd",
       locales: ["en-US"],
       profile: {
-        doing_business_as: businessName,
-        product_description: "Childcare tuition, registration fees, deposits, and school account payouts.",
+        business_url: clean(businessUrl) || undefined,
+        doing_business_as: accountDisplayName,
+        product_description: clean(productDescription) || "Childcare tuition, registration fees, deposits, and school account payouts.",
       },
       responsibilities: {
         fees_collector: "application",

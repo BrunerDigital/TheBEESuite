@@ -20,7 +20,7 @@
     "cloud:status": "node scripts/check-local-cloud-setup.mjs",
     "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "cloud:validate": "npm run clean:next && npm audit --omit=dev && npm run vercel-build",
-    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test": "node --import tsx --test tests/*.test.ts",
     "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
     "lint": "eslint",

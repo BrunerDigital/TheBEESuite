@@ -47,8 +47,8 @@ export const directorLaunchChecklistTasks: SetupChecklistTask[] = [
   {
     id: "payout-bank-account",
     title: "Connect the school bank account",
-    description: "Complete Stripe Connect payout onboarding so tuition funds can route to the school account once parent checkout is enabled.",
-    href: "/payments",
+    description: "Directors and executives open Billing Settings to complete Stripe Connect payout onboarding so tuition funds can route to the school account once parent checkout is enabled.",
+    href: "/billing-settings",
   },
   {
     id: "parent-portal",

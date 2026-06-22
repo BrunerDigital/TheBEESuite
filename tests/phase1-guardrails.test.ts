@@ -20,7 +20,7 @@ import {
 import { checkRateLimit } from "../src/lib/rate-limit";
 import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
-import { hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
+import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import { buildParentPortalInvitationText, buildParentPortalUrl, PARENT_PORTAL_PATH } from "../src/lib/parent-portal-invitations";
 import {
@@ -596,6 +596,13 @@ test("readiness guard requires a Supabase URL for Auth readiness", () => {
     SUPABASE_ANON_KEY: "anon",
     SUPABASE_SERVICE_ROLE_KEY: "service",
   }), true);
+});
+
+test("readiness guard accepts Vercel Postgres database URL aliases", () => {
+  assert.equal(hasDatabaseConfig({}), false);
+  assert.equal(getDatabaseUrl({ POSTGRES_PRISMA_URL: " postgresql://pooled " }), "postgresql://pooled");
+  assert.equal(hasDatabaseConfig({ POSTGRES_URL: "postgresql://direct" }), true);
+  assert.equal(getDatabaseUrl({ DATABASE_URL: "postgresql://primary", POSTGRES_URL: "postgresql://direct" }), "postgresql://primary");
 });
 
 test("signature requests require valid family child target and recipient", () => {

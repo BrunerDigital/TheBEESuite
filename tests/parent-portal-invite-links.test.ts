@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getPasswordResetRedirectUrl,
   getParentPortalPasswordResetRedirectUrl,
   getParentPortalSetupUrl,
   PARENT_PORTAL_SETUP_PATH,
@@ -46,4 +47,8 @@ test("parent portal invite links fall back to request origin", () => {
   delete process.env.VERCEL_URL;
 
   assert.equal(getParentPortalSetupUrl("https://pilot.thebeesuite.io/api/parent/invitations"), "https://pilot.thebeesuite.io/parent-portal/setup");
+  assert.equal(
+    getPasswordResetRedirectUrl("https://pilot.thebeesuite.io/api/auth/forgot-password", PARENT_PORTAL_SETUP_PATH),
+    "https://pilot.thebeesuite.io/reset-password?next=%2Fparent-portal%2Fsetup",
+  );
 });

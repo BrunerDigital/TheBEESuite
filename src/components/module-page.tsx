@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -277,12 +277,16 @@ export function ModulePage({ module }: { module: ModuleDefinition }) {
   );
 }
 
-export function AuthLikePage({ type }: { type: "login" | "forgot-password" | "onboarding" }) {
+export function AuthLikePage({ type, nextPath = "" }: { type: "login" | "forgot-password" | "onboarding"; nextPath?: string }) {
   const isLogin = type === "login";
   const isForgot = type === "forgot-password";
 
   if (isForgot) {
-    return <ForgotPasswordForm />;
+    return (
+      <Suspense fallback={null}>
+        <ForgotPasswordForm initialNext={nextPath} />
+      </Suspense>
+    );
   }
 
   return (

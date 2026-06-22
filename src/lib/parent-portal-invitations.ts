@@ -26,9 +26,9 @@ export function buildParentPortalInvitationText({
     "",
     `Your parent portal for ${centerLabel} is ready.`,
     `Use ${email} as your login email.`,
-    "Open the password setup email from The BEE Suite to choose your password.",
+    "Open the password setup email from The BEE Suite to choose your password for this parent login.",
     "Your child records and classroom connections from the school are already linked in the portal.",
-    "Confirm your contact details and set your check-in PIN before opening the portal.",
-    `After setting your password, continue here: ${portalUrl}`,
+    "After you set your password, the setup screen will ask you to confirm your contact details, create your check-in PIN, and see how to add the portal to your phone home screen.",
+    `Continue here after password setup: ${portalUrl}`,
   ].join("\n");
 }

@@ -14,8 +14,9 @@ function looksLikeEmail(value: string) {
 }
 
 async function POSTHandler(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as { email?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { email?: unknown; next?: unknown } | null;
   const email = clean(body?.email).toLowerCase();
+  const nextPath = clean(body?.next);
 
   if (!looksLikeEmail(email)) {
     return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 400 });
@@ -33,7 +34,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const redirectTo = getPasswordResetRedirectUrl(request.url);
+  const redirectTo = getPasswordResetRedirectUrl(request.url, nextPath);
 
   try {
     const response = await requestSupabasePasswordReset(email, redirectTo);

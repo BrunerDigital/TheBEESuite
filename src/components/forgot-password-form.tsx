@@ -16,7 +16,14 @@ type ResetResponse = {
   message?: string;
 };
 
-export function ForgotPasswordForm() {
+function safeNextPath(value: string | null) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "";
+  return value;
+}
+
+export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string }) {
+  const next = safeNextPath(initialNext);
+  const parentSetupFlow = next === "/parent-portal/setup";
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -31,7 +38,7 @@ export function ForgotPasswordForm() {
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, next }),
       });
       const data = (await response.json().catch(() => null)) as ResetResponse | null;
 
@@ -47,14 +54,22 @@ export function ForgotPasswordForm() {
   return (
     <div className="grid min-h-screen bg-slate-950 p-4 text-white lg:grid-cols-[1fr_0.86fr]">
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
-        <BrandLogo href="/" size="md" priority />
+        <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
-          <h1 className="text-5xl font-semibold leading-tight tracking-normal">Get back into your school workspace.</h1>
+          <h1 className="text-5xl font-semibold leading-tight tracking-normal">
+            {parentSetupFlow ? "Reset your parent portal password." : "Get back into your school workspace."}
+          </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            We’ll send a secure Supabase Auth recovery link so your Kid City USA or BEE Suite account can set a fresh password.
+            {parentSetupFlow
+              ? "We will send a secure recovery link for the email your school invited. After updating your password, finish parent setup."
+              : "We’ll send a secure Supabase Auth recovery link so your Kid City USA or BEE Suite account can set a fresh password."}
           </p>
         </div>
-        <p className="text-sm text-slate-300">Reset links should only be used by the account owner and expire through Supabase Auth.</p>
+        <p className="text-sm text-slate-300">
+          {parentSetupFlow
+            ? "Reset links should only be used by the parent or guardian who owns this account."
+            : "Reset links should only be used by the account owner and expire through Supabase Auth."}
+        </p>
       </section>
 
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
@@ -65,7 +80,9 @@ export function ForgotPasswordForm() {
             </Link>
             <CardTitle className="mt-4 text-3xl">Reset your password</CardTitle>
             <CardDescription>
-              Enter the email tied to your school user account. For privacy, we show the same confirmation either way.
+              {parentSetupFlow
+                ? "Enter the email from your parent portal invitation. For privacy, we show the same confirmation either way."
+                : "Enter the email tied to your school user account. For privacy, we show the same confirmation either way."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -90,7 +107,7 @@ export function ForgotPasswordForm() {
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="school@kidcityusa.com"
+                  placeholder={parentSetupFlow ? "parent@example.com" : "school@kidcityusa.com"}
                   type="email"
                   autoComplete="email"
                   required
@@ -100,7 +117,10 @@ export function ForgotPasswordForm() {
                 {isPending ? "Sending reset link..." : "Send reset link"}
               </Button>
             </form>
-            <Link href="/login" className="mt-5 inline-flex items-center text-sm font-semibold text-slate-950 hover:underline">
+            <Link
+              href={parentSetupFlow ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+              className="mt-5 inline-flex items-center text-sm font-semibold text-slate-950 hover:underline"
+            >
               <ArrowLeft className="mr-1 size-3.5" />
               Back to login
             </Link>

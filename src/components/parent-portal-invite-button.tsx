@@ -35,8 +35,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       }
       setStatusMessage(
         json?.auth?.passwordResetSent
-          ? "Parent portal access was created and the password setup email was sent. The parent signs in with their guardian email."
-          : "Parent portal access was created. The parent signs in with their guardian email.",
+          ? "Parent portal access was created and the password setup email was sent. The parent uses their guardian email, creates a password, then finishes the parent setup screen."
+          : "Parent portal access was created. The parent uses their guardian email, then finishes the parent setup screen.",
       );
     });
   }
@@ -68,8 +68,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email becomes the parent login. The setup email lets the parent choose their own password, and the linked
-          family records are ready when they sign in.
+          The guardian email becomes the parent login. The setup email lets the parent choose their own password, then the setup
+          screen confirms contact details and the check-in PIN.
         </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">
           <Send data-icon="inline-start" />

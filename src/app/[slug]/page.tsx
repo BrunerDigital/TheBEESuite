@@ -369,6 +369,12 @@ function firstSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function safeAuthNextPath(value: string | string[] | undefined) {
+  const path = firstSearchParam(value) || "";
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/login")) return "";
+  return path;
+}
+
 function formatSavedAt(value: string | null) {
   if (!value) return null;
   return new Intl.DateTimeFormat("en", {
@@ -4799,7 +4805,7 @@ export default async function SlugPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
 
   if (slug === "forgot-password" || slug === "onboarding") {
-    return <AuthLikePage type={slug} />;
+    return <AuthLikePage type={slug} nextPath={safeAuthNextPath(resolvedSearchParams.next)} />;
   }
 
   const user = await getCurrentUser({ allowPasswordResetRequired: true });

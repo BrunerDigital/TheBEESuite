@@ -36,6 +36,7 @@ export function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const forceReset = searchParams.get("force") === "1";
   const next = safeNextPath(searchParams.get("next"));
+  const parentSetupFlow = next === "/parent-portal/setup";
   const accessTokenRef = useRef("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
@@ -82,7 +83,7 @@ export function ResetPasswordForm() {
         return;
       }
 
-      setMessage(data?.message ?? "Password updated. You can now sign in.");
+      setMessage(data?.message ?? (parentSetupFlow ? "Password updated. Sign in to finish parent setup." : "Password updated. You can now sign in."));
       const loginNext = `/login?reset=complete&next=${encodeURIComponent(next)}`;
       setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
     });
@@ -91,16 +92,26 @@ export function ResetPasswordForm() {
   return (
     <div className="grid min-h-screen bg-slate-950 p-4 text-white lg:grid-cols-[1fr_0.86fr]">
       <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 lg:flex">
-        <BrandLogo href="/" size="md" priority />
+        <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
-          <h1 className="text-5xl font-semibold leading-tight tracking-normal">Create a new secure password.</h1>
+          <h1 className="text-5xl font-semibold leading-tight tracking-normal">
+            {parentSetupFlow ? "Create your parent portal password." : "Create a new secure password."}
+          </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            {forceReset
-              ? "Passwords must be updated before workspace access is allowed."
-              : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your email."}
+            {parentSetupFlow
+              ? forceReset
+                ? "Choose a private password before opening your family portal."
+                : "This secure link lets you create the password for the email your school invited. After saving it, sign in and finish parent setup."
+              : forceReset
+                ? "Passwords must be updated before workspace access is allowed."
+                : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your email."}
           </p>
         </div>
-        <p className="text-sm text-slate-300">Human review remains required for sensitive child, billing, and compliance workflows.</p>
+        <p className="text-sm text-slate-300">
+          {parentSetupFlow
+            ? "Your family portal keeps child updates, messages, documents, billing, and check-in access in one place."
+            : "Human review remains required for sensitive child, billing, and compliance workflows."}
+        </p>
       </section>
 
       <section className="grid place-items-center px-0 py-6 sm:px-6 lg:px-10">
@@ -109,9 +120,13 @@ export function ResetPasswordForm() {
             <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
               <LockKeyhole />
             </div>
-            <CardTitle className="mt-4 text-3xl">Set a new password</CardTitle>
+            <CardTitle className="mt-4 text-3xl">{parentSetupFlow ? "Set your parent portal password" : "Set a new password"}</CardTitle>
             <CardDescription>
-              {forceReset ? "Enter your password, then choose something only you know." : "Use at least 8 characters. Choose something only you know."}
+              {parentSetupFlow
+                ? "Use at least 8 characters. You will use this with the email from your invite."
+                : forceReset
+                  ? "Enter your password, then choose something only you know."
+                  : "Use at least 8 characters. Choose something only you know."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -132,7 +147,7 @@ export function ResetPasswordForm() {
               ) : null}
               {forceReset ? (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="currentPassword">Password</Label>
+                  <Label htmlFor="currentPassword">Current password</Label>
                   <Input
                     id="currentPassword"
                     value={currentPassword}
@@ -172,11 +187,14 @@ export function ResetPasswordForm() {
               </Button>
             </form>
             {forceReset ? (
-              <Link href="/login?reset=required" className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+              <Link href={`/login?reset=required&next=${encodeURIComponent(next)}`} className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
                 Back to login
               </Link>
             ) : (
-              <Link href="/forgot-password" className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+              <Link
+                href={parentSetupFlow ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password"}
+                className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline"
+              >
                 Request a fresh reset link
               </Link>
             )}

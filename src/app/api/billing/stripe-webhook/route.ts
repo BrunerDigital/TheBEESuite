@@ -12,6 +12,7 @@ import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credent
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -26,6 +27,7 @@ type StripeCheckoutSessionCompleted = {
   setup_intent?: string | null;
   customer?: string | null;
   metadata?: {
+    source?: string;
     setupFlow?: string;
     tenantId?: string;
     billingAccountId?: string;
@@ -34,6 +36,7 @@ type StripeCheckoutSessionCompleted = {
     familyId?: string;
     centerId?: string;
     stripeConnectedAccountId?: string;
+    stripeCustomerId?: string;
     invoiceAmountCents?: string;
     parentSurchargeAmountCents?: string;
     parentProcessingRecoveryAmountCents?: string;
@@ -41,10 +44,16 @@ type StripeCheckoutSessionCompleted = {
     checkoutTotalCents?: string;
     applicationFeeAmountCents?: string;
     collectionMode?: string;
+    orderReference?: string;
+    purchaserUserId?: string;
+    itemSummary?: string;
+    stripeBaseSubtotalCents?: string;
+    beeSuiteMarkupCents?: string;
   };
 };
 
 type StripeMetadata = {
+  source?: string;
   tenantId?: string;
   invoiceId?: string;
   paymentId?: string;
@@ -58,6 +67,11 @@ type StripeMetadata = {
   checkoutTotalCents?: string;
   applicationFeeAmountCents?: string;
   collectionMode?: string;
+  orderReference?: string;
+  purchaserUserId?: string;
+  itemSummary?: string;
+  stripeBaseSubtotalCents?: string;
+  beeSuiteMarkupCents?: string;
 };
 
 type StripePaymentIntentObject = {
@@ -95,6 +109,7 @@ type StripeWebhookEvent = {
   type: string;
   created?: number;
   livemode?: boolean;
+  account?: string;
   data: {
     object: StripeCheckoutSessionCompleted | StripePaymentIntentObject | StripeChargeObject | StripeDisputeObject | { id?: string; object?: string };
   };
@@ -156,6 +171,7 @@ function compactEventPayload(event: StripeWebhookEvent): Prisma.InputJsonObject 
   return {
     object: typeof object.object === "string" ? object.object : null,
     objectId: stripeObjectId(event),
+    account: clean(event.account) || null,
     paymentStatus: typeof object.payment_status === "string" ? object.payment_status : null,
     amountTotal: typeof object.amount_total === "number" ? object.amount_total : null,
     metadata: jsonObject(object.metadata) as Prisma.InputJsonObject,
@@ -179,6 +195,62 @@ async function recordStripeWebhookEvent(
       processedAt: new Date(),
     },
   });
+}
+
+async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  const metadata = jsonObject(session.metadata) as StripeMetadata;
+  const tenantId = clean(metadata.tenantId);
+  if (!tenantId) {
+    return NextResponse.json({ ok: false, error: "Missing terminal store tenant metadata." }, { status: 400 });
+  }
+
+  const action = event.type === "checkout.session.completed"
+    ? session.payment_status === "paid"
+      ? "terminal_store.checkout.completed"
+      : "terminal_store.checkout.pending"
+    : event.type === "checkout.session.expired"
+      ? "terminal_store.checkout.expired"
+      : event.type === "checkout.session.async_payment_failed"
+        ? "terminal_store.checkout.failed"
+        : "terminal_store.checkout.updated";
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event, action.endsWith(".pending") ? "pending" : "processed");
+      await tx.auditLog.create({
+        data: {
+          tenantId,
+          centerId: clean(metadata.centerId) || null,
+          userId: null,
+          action,
+          resource: "TerminalStoreOrder",
+          resourceId: session.id,
+          metadata: {
+            stripeCheckoutSessionId: session.id,
+            stripePaymentIntentId: session.payment_intent || null,
+            stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+            stripePaymentStatus: session.payment_status || null,
+            stripeAmountTotalCents: session.amount_total ?? null,
+            orderReference: clean(metadata.orderReference) || null,
+            purchaserUserId: clean(metadata.purchaserUserId) || null,
+            itemSummary: clean(metadata.itemSummary) || null,
+            checkoutTotalCents: Number(metadata.checkoutTotalCents || session.amount_total || 0) || null,
+            stripeBaseSubtotalCents: Number(metadata.stripeBaseSubtotalCents || 0) || null,
+            beeSuiteMarkupCents: Number(metadata.beeSuiteMarkupCents || 0) || null,
+            source: "terminal_store",
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  return NextResponse.json({ ok: true });
 }
 
 function isDuplicateWebhookEvent(error: unknown) {
@@ -469,7 +541,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
 
   const setupIntentId = clean(session.setup_intent);
   const tenantId = matchedTenantId || session.metadata?.tenantId || null;
-  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
+  const connectedAccountId = clean(session.metadata?.stripeConnectedAccountId) || clean(event.account) || null;
+  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId, connectedAccountId }) : null;
   if (setupIntent && !setupIntent.ok) {
     return NextResponse.json(
       { ok: false, configured: setupIntent.configured, error: setupIntent.error || "Payment setup session could not be retrieved." },
@@ -478,7 +551,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   }
   const setupPaymentMethodId = setupIntent?.setupIntent?.paymentMethodId || null;
   const paymentMethodLookup = setupPaymentMethodId
-    ? await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId })
+    ? await retrieveStripePaymentMethod(setupPaymentMethodId, { tenantId, connectedAccountId })
     : null;
   const paymentMethodDetails = paymentMethodLookup?.ok ? paymentMethodLookup.paymentMethod : null;
 
@@ -502,8 +575,9 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
           autopayPlaceholder: Boolean(paymentMethodId),
           customFields: {
             ...currentFields,
-            stripeCustomerId: customerId || null,
+            ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),
             stripeDefaultPaymentMethodId: paymentMethodId || null,
+            stripeDefaultPaymentMethodConnectedAccountId: connectedAccountId || null,
             stripePaymentMethodType: paymentMethodDetails?.type ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodType) || null),
             stripePaymentMethodLast4: paymentMethodDetails?.last4 ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodLast4) || null),
             stripePaymentMethodBrand: paymentMethodDetails?.brand ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodBrand) || null),
@@ -511,6 +585,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             stripeSetupIntentId: setupIntentId || null,
             stripeSetupIntentStatus: setupIntent?.setupIntent?.status || null,
             stripeSetupCheckoutSessionId: session.id,
+            stripeSetupConnectedAccountId: connectedAccountId || null,
             stripeEventId: event.id,
             stripePaymentMethodSavedAt: new Date().toISOString(),
             autopayEnabled: Boolean(paymentMethodId),
@@ -941,6 +1016,10 @@ async function POSTHandler(request: NextRequest) {
   const session = event.data.object as StripeCheckoutSessionCompleted;
   if (event.type === "checkout.session.completed" && (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method")) {
     return handlePaymentMethodSetupCompleted(event, session, signatureMatch.tenantId);
+  }
+
+  if (session.metadata?.source === "terminal_store") {
+    return handleTerminalStoreCheckoutEvent(event, session);
   }
 
   const invoiceId = session.metadata?.invoiceId;

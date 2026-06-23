@@ -24,6 +24,7 @@ export type EmailAttachment = {
 
 const STRIPE_API_VERSION = "2026-04-22.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || "2026-04-22.dahlia";
+const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "requirements"];
 
 export type StripePaymentMethodCategory = "default" | "ach" | "card" | "link_bank";
 
@@ -73,6 +74,7 @@ export type StripeConnectedAccountSnapshot = {
 type TenantCredentialRuntimeInput = {
   tenantId?: string | null;
   credentials?: Record<string, string>;
+  connectedAccountId?: string | null;
 };
 
 function clean(value: unknown) {
@@ -153,6 +155,17 @@ function stripeHeaders(apiKey: string, contentType: "json" | "form", apiVersion 
     "Stripe-Version": apiVersion,
     "Content-Type": contentType === "json" ? "application/json" : "application/x-www-form-urlencoded",
   };
+}
+
+function connectedStripeHeaders(
+  apiKey: string,
+  contentType: "json" | "form",
+  connectedAccountId?: string | null,
+  apiVersion = STRIPE_API_VERSION,
+) {
+  const headers = stripeHeaders(apiKey, contentType, apiVersion);
+  const accountId = clean(connectedAccountId);
+  return accountId.startsWith("acct_") ? { ...headers, "Stripe-Account": accountId } : headers;
 }
 
 export function getStripeApplicationFeeBps() {
@@ -520,6 +533,7 @@ export async function createStripeCheckoutSession({
   parentSurchargeAmountCents = 0,
   invoiceNumber,
   centerName,
+  customerId,
   customerEmail,
   successUrl,
   cancelUrl,
@@ -527,7 +541,6 @@ export async function createStripeCheckoutSession({
   connectedAccountId,
   applicationFeeAmountCents = 0,
   paymentMethodConfigurationId,
-  onBehalfOfConnectedAccount = false,
   idempotencyKey,
   tenantId,
   credentials,
@@ -537,6 +550,7 @@ export async function createStripeCheckoutSession({
   parentSurchargeAmountCents?: number;
   invoiceNumber: string;
   centerName?: string | null;
+  customerId?: string | null;
   customerEmail?: string | null;
   successUrl: string;
   cancelUrl: string;
@@ -573,7 +587,9 @@ export async function createStripeCheckoutSession({
     body.set("line_items[1][price_data][product_data][description]", PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION);
   }
 
-  if (customerEmail && isEmail(customerEmail)) {
+  if (customerId && clean(customerId).startsWith("cus_")) {
+    body.set("customer", clean(customerId));
+  } else if (customerEmail && isEmail(customerEmail)) {
     body.set("customer_email", customerEmail);
   }
 
@@ -582,10 +598,6 @@ export async function createStripeCheckoutSession({
   }
 
   if (connectedAccountId) {
-    body.set("payment_intent_data[transfer_data][destination]", connectedAccountId);
-    if (onBehalfOfConnectedAccount) {
-      body.set("payment_intent_data[on_behalf_of]", connectedAccountId);
-    }
     if (applicationFeeAmountCents > 0) {
       body.set("payment_intent_data[application_fee_amount]", String(Math.min(applicationFeeAmountCents, amountCents)));
     }
@@ -599,9 +611,7 @@ export async function createStripeCheckoutSession({
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-      "Content-Type": "application/x-www-form-urlencoded",
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body,
@@ -634,7 +644,6 @@ export async function createStripeOffSessionPaymentIntent({
   metadata,
   connectedAccountId,
   applicationFeeAmountCents = 0,
-  onBehalfOfConnectedAccount = false,
   idempotencyKey,
   tenantId,
   credentials,
@@ -685,10 +694,6 @@ export async function createStripeOffSessionPaymentIntent({
   }
 
   if (connectedAccountId) {
-    body.set("transfer_data[destination]", connectedAccountId);
-    if (onBehalfOfConnectedAccount) {
-      body.set("on_behalf_of", connectedAccountId);
-    }
     if (applicationFeeAmountCents > 0) {
       body.set("application_fee_amount", String(Math.min(applicationFeeAmountCents, amountCents)));
     }
@@ -705,7 +710,7 @@ export async function createStripeOffSessionPaymentIntent({
   const response = await fetch("https://api.stripe.com/v1/payment_intents", {
     method: "POST",
     headers: {
-      ...stripeHeaders(apiKey, "form"),
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
       ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body,
@@ -750,12 +755,14 @@ export async function createStripeCustomer({
   email,
   name,
   metadata,
+  connectedAccountId,
   tenantId,
   credentials,
 }: {
   email?: string | null;
   name?: string | null;
   metadata?: Record<string, string>;
+  connectedAccountId?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -773,7 +780,7 @@ export async function createStripeCustomer({
 
   const response = await fetch("https://api.stripe.com/v1/customers", {
     method: "POST",
-    headers: stripeHeaders(apiKey, "form"),
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -965,6 +972,7 @@ export async function createStripeSetupCheckoutSession({
   successUrl,
   cancelUrl,
   metadata,
+  connectedAccountId,
   tenantId,
   credentials,
 }: {
@@ -974,6 +982,7 @@ export async function createStripeSetupCheckoutSession({
   successUrl: string;
   cancelUrl: string;
   metadata: Record<string, string>;
+  connectedAccountId?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -1005,7 +1014,7 @@ export async function createStripeSetupCheckoutSession({
 
   const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
     method: "POST",
-    headers: stripeHeaders(apiKey, "form"),
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -1040,10 +1049,7 @@ export async function retrieveStripePaymentMethod(paymentMethodId: string, input
 
   const response = await fetch(`https://api.stripe.com/v1/payment_methods/${encodeURIComponent(paymentMethodId)}`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-    },
+    headers: connectedStripeHeaders(apiKey, "form", input.connectedAccountId),
     signal: AbortSignal.timeout(10_000),
   });
   const json = await response.json().catch(() => null) as {
@@ -1083,11 +1089,13 @@ export async function retrieveStripePaymentMethod(paymentMethodId: string, input
 export async function createStripeBillingPortalSession({
   customerId,
   returnUrl,
+  connectedAccountId,
   tenantId,
   credentials,
 }: {
   customerId: string;
   returnUrl: string;
+  connectedAccountId?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -1102,7 +1110,7 @@ export async function createStripeBillingPortalSession({
   });
   const response = await fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "POST",
-    headers: stripeHeaders(apiKey, "form"),
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
     body,
     signal: AbortSignal.timeout(10_000),
   });
@@ -1134,10 +1142,7 @@ export async function retrieveStripeSetupIntent(setupIntentId: string, input: Te
 
   const response = await fetch(`https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`, {
     method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Stripe-Version": STRIPE_API_VERSION,
-    },
+    headers: connectedStripeHeaders(apiKey, "form", input.connectedAccountId),
     signal: AbortSignal.timeout(10_000),
   });
   const json = await response.json().catch(() => null) as {
@@ -1355,8 +1360,8 @@ export async function retrieveStripeConnectedAccount(
   }
 
   const params = new URLSearchParams();
-  ["configuration.merchant", "configuration.recipient", "requirements"].forEach((include) => {
-    params.append("include[]", include);
+  STRIPE_CONNECTED_ACCOUNT_INCLUDES.forEach((include, index) => {
+    params.append(`include[${index}]`, include);
   });
 
   const response = await fetch(`https://api.stripe.com/v2/core/accounts/${accountId}?${params.toString()}`, {
@@ -1364,6 +1369,35 @@ export async function retrieveStripeConnectedAccount(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Stripe-Version": STRIPE_ACCOUNTS_V2_API_VERSION,
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.id) {
+    const legacy = await retrieveLegacyStripeConnectedAccount(accountId, apiKey);
+    if (legacy.ok) return legacy;
+
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Stripe returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: json.id, account: normalizeStripeAccount(json) };
+}
+
+async function retrieveLegacyStripeConnectedAccount(
+  accountId: string,
+  apiKey: string,
+): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
+  const response = await fetch(`https://api.stripe.com/v1/accounts/${encodeURIComponent(accountId)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Stripe-Version": STRIPE_API_VERSION,
     },
     signal: AbortSignal.timeout(10_000),
   });

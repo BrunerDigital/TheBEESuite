@@ -37,6 +37,7 @@ import {
   StaffPage,
   TeamPermissionsPage,
   TeacherDocumentsPage,
+  TerminalStorePage,
   ToursPage,
   WaitlistPage,
   WhiteLabelPage,
@@ -110,6 +111,7 @@ import { canAccessModule } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
   asRecord,
@@ -2476,7 +2478,21 @@ async function renderLivePage(
       centerId: scopedCenterIds,
       children: { some: currentlyEnrolledChildWhere() },
     };
-    const [invoices, ledgerEntries, total, open, paid, openRows, ledgerRollupRows, billingAccountRows, billingFamilies, billingProducts, tuitionPlans] = await Promise.all([
+    const [
+      invoices,
+      ledgerEntries,
+      total,
+      open,
+      paid,
+      openRows,
+      ledgerRollupRows,
+      billingAccountRows,
+      billingFamilies,
+      billingProducts,
+      tuitionPlans,
+      billingStripeConfigured,
+      billingStripeWebhookConfigured,
+    ] = await Promise.all([
       prisma.invoice.findMany({
         where: invoiceWhere,
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
@@ -2562,7 +2578,10 @@ async function renderLivePage(
       }),
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], take: 100 }),
       prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { name: "asc" }], take: 100 }),
+      getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
+      getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
+    const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
     const arReport = openRows.reduce(
       (report, invoice) => {
         const daysPastDue = Math.floor((startOfDay.getTime() - new Date(invoice.dueDate).getTime()) / 86_400_000);
@@ -2667,6 +2686,12 @@ async function renderLivePage(
               name: center.name,
               crmLocationId: center.crmLocationId,
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
+              checkoutReadiness: stripeCheckoutReadiness({
+                customFields: center.customFields,
+                stripeConfigured: billingStripeConfigured,
+                webhookConfigured: billingStripeWebhookConfigured,
+                allowPlatformOnlyPayments,
+              }),
             })),
             products: billingProducts,
             tuitionPlans,
@@ -2836,6 +2861,18 @@ async function renderLivePage(
             autopayDueInvoices: dueAutopayInvoices.length,
             autopayDueCents,
           },
+        }}
+      />
+    );
+  }
+
+  if (slug === "terminal-store") {
+    return (
+      <TerminalStorePage
+        data={{
+          items: terminalStoreCatalog,
+          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          defaultCenterId: user.primaryCenterId ?? centers[0]?.id ?? null,
         }}
       />
     );

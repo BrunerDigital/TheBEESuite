@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
+import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 
 export type BillingWorkbenchFamily = {
   id: string;
@@ -64,6 +65,10 @@ export type BillingWorkbenchCenter = {
   name: string;
   crmLocationId: string | null;
   dashboardOptions?: DashboardOptions;
+  checkoutReadiness?: Pick<
+    StripeCheckoutReadiness,
+    "accountId" | "label" | "canAcceptParentPayments" | "blockingReason" | "stripeConfigured" | "webhookConfigured"
+  >;
 };
 
 export type BillingWorkbenchProduct = {
@@ -130,6 +135,12 @@ function money(cents: number) {
 
 function centerLabel(center: BillingWorkbenchCenter) {
   return [center.crmLocationId, center.name].filter(Boolean).join(" · ");
+}
+
+function stripeAccountLabel(accountId: string | null | undefined) {
+  if (!accountId) return "No payout account";
+  if (accountId.length <= 12) return accountId;
+  return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
 }
 
 function normalizeEmail(value: string | null | undefined) {
@@ -207,6 +218,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
   const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
+  const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
   const selectedPlan = tuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
@@ -623,6 +635,25 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
             <div className="text-lg font-semibold">{money(familyBalanceCents)}</div>
           </div>
         </div>
+
+        {selectedCheckoutReadiness?.canAcceptParentPayments ? (
+          <Alert className="border-emerald-500/30 bg-emerald-500/10">
+            <CheckCircle2 className="size-4 text-emerald-600" />
+            <AlertTitle>Parent checkout connected</AlertTitle>
+            <AlertDescription>
+              Invoices for {selectedCenter ? centerLabel(selectedCenter) : "this school"} route through{" "}
+              {stripeAccountLabel(selectedCheckoutReadiness.accountId)}.
+            </AlertDescription>
+          </Alert>
+        ) : selectedCheckoutReadiness ? (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" />
+            <AlertTitle>Parent checkout blocked</AlertTitle>
+            <AlertDescription>
+              {selectedCheckoutReadiness.blockingReason || "Finish payout setup before parents can pay invoices for this school."}
+            </AlertDescription>
+          </Alert>
+        ) : null}
 
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">

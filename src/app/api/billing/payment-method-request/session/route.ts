@@ -3,6 +3,7 @@ import {
   createStripeCustomer,
   createStripeSetupCheckoutSession,
   getStripeProcessingRecoveryAmount,
+  readStripeConnectedAccountId,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
@@ -13,6 +14,7 @@ import {
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -94,6 +96,7 @@ async function POSTHandler(request: NextRequest) {
       id: true,
       name: true,
       crmLocationId: true,
+      customFields: true,
       organization: { select: { tenantId: true } },
     },
   });
@@ -119,7 +122,8 @@ async function POSTHandler(request: NextRequest) {
     select: { id: true, customFields: true },
   });
   const currentFields = jsonObject(billingAccount.customFields);
-  let customerId = clean(currentFields.stripeCustomerId);
+  const connectedAccountId = readStripeConnectedAccountId(center.customFields);
+  let customerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
   if (!customerId) {
     const customer = await createStripeCustomer({
       email: payload.email,
@@ -130,10 +134,12 @@ async function POSTHandler(request: NextRequest) {
         billingAccountId: billingAccount.id,
         familyId: family.id,
         centerId: center.id,
+        stripeConnectedAccountId: connectedAccountId || "",
         setupSource: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
         recipientEmail: payload.email,
         environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
       },
+      connectedAccountId,
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
@@ -159,11 +165,14 @@ async function POSTHandler(request: NextRequest) {
       billingAccountId: billingAccount.id,
       familyId: family.id,
       centerId: center.id,
+      stripeConnectedAccountId: connectedAccountId || "",
+      stripeCustomerId: customerId,
       recipientEmail: payload.email,
       enableAutopay: "true",
       preferredPaymentMethodCategory: paymentMethodCategory,
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
+    connectedAccountId,
     tenantId: payload.tenantId,
   });
   if (!setup.ok || !setup.url) {
@@ -179,8 +188,9 @@ async function POSTHandler(request: NextRequest) {
     data: {
       customFields: {
         ...currentFields,
-        stripeCustomerId: customerId,
+        ...stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId),
         stripeSetupCheckoutSessionId: setup.id || null,
+        stripeSetupConnectedAccountId: connectedAccountId || null,
         paymentMethodManagementStatus: "setup_session_created",
         paymentMethodManagementUpdatedAt: updatedAt,
         paymentMethodRequestLastOpenedAt: updatedAt,

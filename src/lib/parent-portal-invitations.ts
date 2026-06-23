@@ -33,7 +33,7 @@ export function buildParentPortalInvitationText({
     "Use the default parent portal password provided by your school.",
     "Your child records and classroom connections from the school are already linked in the portal.",
     "The setup screen will ask you to confirm your contact details, create your check-in PIN, and see how to add the portal to your phone home screen.",
-    `Sign in and finish setup here: ${portalUrl}`,
+    `Sign in here: ${portalUrl}`,
     "You can choose a different password any time from the Forgot password link on the login screen.",
   ].join("\n");
 }

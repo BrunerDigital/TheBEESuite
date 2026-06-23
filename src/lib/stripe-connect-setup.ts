@@ -40,12 +40,10 @@ export const STRIPE_CONNECT_PRODUCT_DESCRIPTION_DEFAULT =
 export const STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS = [
   "Accounts Write",
   "Account Links Write",
-  "Basic Business Contact Information Read",
-  "Full Bank Account Information Read",
 ] as const;
 
 export const STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE =
-  `Stripe rejected payout setup because the restricted key is missing Connect permissions. In Stripe Dashboard > API keys, edit the restricted key and enable: ${STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.join(", ")}. Then try Save and continue again.`;
+  `Stripe rejected payout setup because the restricted key is missing Connect permissions. In Stripe Dashboard > API keys, edit the restricted key and enable: ${STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.join(", ")}. Stripe write permissions include read access for the same resource. Then try Save and continue again.`;
 
 const US_STATES = new Set([
   "AL",

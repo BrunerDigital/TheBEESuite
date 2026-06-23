@@ -85,8 +85,8 @@ test("Stripe Connect setup patch excludes bank account and routing fields", () =
 test("Stripe Connect restricted key fix message names required permissions", () => {
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Accounts Write"), true);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Account Links Write"), true);
-  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Basic Business Contact Information Read"), true);
-  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Full Bank Account Information Read"), true);
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("full bank-account information"), false);
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("write permissions include read access"), true);
 });
 
 test("Stripe connected account creation sends dashboard profile details to Accounts v2", async () => {
@@ -137,6 +137,7 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.equal(support.url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
+    assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
   } finally {

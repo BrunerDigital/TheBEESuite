@@ -1270,7 +1270,7 @@ export async function createStripeConnectedAccount({
         losses_collector: "application",
       },
     },
-    include: ["configuration.merchant", "configuration.recipient", "defaults", "identity", "requirements"],
+    include: ["configuration.merchant", "configuration.recipient", "requirements"],
   };
 
   const response = await fetch("https://api.stripe.com/v2/core/accounts", {
@@ -1355,7 +1355,7 @@ export async function retrieveStripeConnectedAccount(
   }
 
   const params = new URLSearchParams();
-  ["configuration.merchant", "configuration.recipient", "defaults", "identity", "requirements"].forEach((include) => {
+  ["configuration.merchant", "configuration.recipient", "requirements"].forEach((include) => {
     params.append("include[]", include);
   });
 

@@ -600,23 +600,23 @@ export function ParentPortalWorkspace({
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-medium">Payment Method And Autopay</div>
+                  <div className="font-medium">Payment Methods And Autopay</div>
                   <div className="text-xs text-muted-foreground">
                     {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
+                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "A secure setup session is pending."
-                        : "Add a bank account or card to enable autopay."}
+                        ? "A secure setup session is pending. Saving a method lets you choose autopay, while invoices can still be paid one time below."
+                        : "Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "ach")}>
                     <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Bank" : "Set Up Bank Autopay"}
                   </Button>
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Card" : "Set Up Card Autopay"}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -641,7 +641,7 @@ export function ParentPortalWorkspace({
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Next balance payment</div>
+                    <div className="text-xs text-muted-foreground">One-time balance payment</div>
                     <div className="font-medium">
                       {nextOpenInvoice.purposeLabel ? `${nextOpenInvoice.purposeLabel} · ` : ""}{nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
                     </div>
@@ -649,11 +649,11 @@ export function ParentPortalWorkspace({
                   <div className="flex flex-wrap gap-2">
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
                       <Building2 data-icon="inline-start" />
-                      Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
+                      Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                      Pay by Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -677,7 +677,7 @@ export function ParentPortalWorkspace({
                 <div className="flex flex-wrap gap-2">
                   <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
                     <Building2 data-icon="inline-start" />
-                    Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
+                    One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -686,7 +686,7 @@ export function ParentPortalWorkspace({
                     variant="outline"
                   >
                     <CreditCard data-icon="inline-start" />
-                    Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    One-Time Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">
@@ -713,7 +713,7 @@ export function ParentPortalWorkspace({
                 {payments.slice(0, 5).map((payment) => (
                   <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
                     <span className="text-muted-foreground">
-                      {payment.provider} · {payment.status} · {formatDate(payment.paidAt)}
+                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · Paid · {formatDate(payment.paidAt)}
                     </span>
                     <span className="font-medium">{money(payment.amountCents)}</span>
                   </div>

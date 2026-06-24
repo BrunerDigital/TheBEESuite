@@ -79,8 +79,6 @@ const parentGuardianModules = new Set<ModuleSlug>([
   "parent-portal",
   "messages",
   "documents",
-  "billing-invoices",
-  "payments",
   "notifications",
   "help",
 ]);

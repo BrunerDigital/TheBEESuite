@@ -5,6 +5,7 @@ import {
   sendInquiryNotificationEmail,
 } from "@/lib/inquiry-integrations";
 import { resolveInquiryLocationNotificationEmails } from "@/lib/inquiry-notifications";
+import { inquiryCorsHeaders, isAllowedInquiryOrigin } from "@/lib/inquiry-origins";
 import { recordIntegrationDeliveryAttempt } from "@/lib/integration-deliveries";
 import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
@@ -92,12 +93,6 @@ class InquiryRoutingError extends Error {
   }
 }
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://kidcityusa.com",
-  "https://www.kidcityusa.com",
-  "https://the-bee-suite-beta.vercel.app",
-];
-
 const intakeCenterSelect = {
   id: true,
   name: true,
@@ -127,38 +122,8 @@ function toIntakeCenter(center: IntakeCenterRecord): IntakeCenter {
 function json(data: unknown, status = 200, origin?: string | null) {
   return NextResponse.json(data, {
     status,
-    headers: corsHeaders(origin),
+    headers: inquiryCorsHeaders(origin),
   });
-}
-
-function corsHeaders(origin?: string | null) {
-  const allowedOrigin = getAllowedOrigin(origin);
-
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-    Vary: "Origin",
-  };
-}
-
-function getAllowedOrigin(origin?: string | null) {
-  if (!origin) return DEFAULT_ALLOWED_ORIGINS[0];
-
-  return isAllowedOrigin(origin) ? origin : getConfiguredAllowedOrigins()[0];
-}
-
-function getConfiguredAllowedOrigins() {
-  const configured = process.env.INQUIRY_ALLOWED_ORIGINS?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-  return configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS;
-}
-
-function isAllowedOrigin(origin?: string | null) {
-  if (!origin) return true;
-  return getConfiguredAllowedOrigins().includes(origin);
 }
 
 function clean(value: unknown) {
@@ -480,7 +445,7 @@ async function verifyTurnstileToken({
 async function OPTIONSHandler(request: NextRequest) {
   return new NextResponse(null, {
     status: 204,
-    headers: corsHeaders(request.headers.get("origin")),
+    headers: inquiryCorsHeaders(request.headers.get("origin")),
   });
 }
 
@@ -488,7 +453,7 @@ async function POSTHandler(request: NextRequest) {
   const origin = request.headers.get("origin");
 
   try {
-    if (!isAllowedOrigin(origin)) {
+    if (!isAllowedInquiryOrigin(origin)) {
       return json({ ok: false, error: "Origin is not allowed." }, 403, origin);
     }
     const ip = requestIp(request.headers);

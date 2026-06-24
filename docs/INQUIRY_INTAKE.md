@@ -25,7 +25,7 @@ Executive and center users can also copy live embed code from their BEE Suite da
 - Single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
 - New public onboarding creates a gated trial workspace with a primary center profile and a center-linked embed code. Providers can copy that form immediately, then add more center-specific codes as additional profiles are completed.
 
-The hosted embed currently loads 94 Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show 95 `<option>` elements total.
+The hosted embed loads active Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show one more `<option>` element than the live API location count.
 
 ## What Happens
 

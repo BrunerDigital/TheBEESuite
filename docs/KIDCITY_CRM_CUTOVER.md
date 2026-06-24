@@ -66,7 +66,7 @@ Paste this into an Avada Code Block or the old form replacement area:
 ></script>
 ```
 
-The embed loads school options from `/kidcity-locations.json` and posts inquiries to `/api/inquiries`.
+The embed loads school options from `/api/public/kidcity-locations` and posts inquiries to `/api/inquiries`.
 
 ## Google Sheet Backup
 

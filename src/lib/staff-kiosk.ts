@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { verifyStaffPin } from "@/lib/kiosk";
 
 export const STAFF_CLOCK_ACTIONS = ["clock_in", "clock_out"] as const;
+const STAFF_CLOCK_EVENT_LIMIT = 120;
 export type StaffClockAction = typeof STAFF_CLOCK_ACTIONS[number];
 export type StaffClockStatus = "clocked_in" | "clocked_out";
 
@@ -71,6 +72,12 @@ function dateMs(value: string | Date | null | undefined) {
   if (!value) return null;
   const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
   return Number.isFinite(time) ? time : null;
+}
+
+function dateIso(value: unknown) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(stringValue(value));
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function minutesBetween(startAt: string, endAt: string | Date) {
@@ -270,6 +277,65 @@ export function validateNextStaffClockAction(action: StaffClockAction, state: St
   return { ok: true as const };
 }
 
+export function normalizeStaffClockEventEdits(
+  value: unknown,
+  options: { timeZone?: string | null; maxEvents?: number } = {},
+) {
+  if (!Array.isArray(value)) {
+    return { ok: false as const, error: "Clock events must be an array." };
+  }
+
+  const maxEvents = options.maxEvents ?? STAFF_CLOCK_EVENT_LIMIT;
+  if (value.length > maxEvents) {
+    return { ok: false as const, error: `A time card can include up to ${maxEvents} punch events.` };
+  }
+
+  const events: StaffClockEvent[] = [];
+  for (const [index, item] of value.entries()) {
+    const record = asRecord(item);
+    const action = normalizeStaffClockAction(record.action);
+    const occurredAt = dateIso(record.occurredAt);
+    if (!action) {
+      return { ok: false as const, error: `Punch ${index + 1} must be clock in or clock out.` };
+    }
+    if (!occurredAt) {
+      return { ok: false as const, error: `Punch ${index + 1} needs a valid date and time.` };
+    }
+    events.push({
+      action,
+      occurredAt,
+      timeZone: stringValue(record.timeZone) || stringValue(record.timezone) || options.timeZone || null,
+      notes: stringValue(record.notes) || null,
+    });
+  }
+
+  const sorted = [...events].sort((left, right) => (dateMs(left.occurredAt) ?? 0) - (dateMs(right.occurredAt) ?? 0));
+  let expectedAction: StaffClockAction = "clock_in";
+  let previousMs: number | null = null;
+
+  for (const [index, event] of sorted.entries()) {
+    const currentMs = dateMs(event.occurredAt);
+    if (currentMs === null) {
+      return { ok: false as const, error: `Punch ${index + 1} needs a valid date and time.` };
+    }
+    if (previousMs !== null && currentMs <= previousMs) {
+      return { ok: false as const, error: "Punch times must not be duplicated." };
+    }
+    if (event.action !== expectedAction) {
+      return {
+        ok: false as const,
+        error: expectedAction === "clock_in"
+          ? "A time card must start with clock in."
+          : "A clock in must be followed by clock out before another clock in.",
+      };
+    }
+    previousMs = currentMs;
+    expectedAction = event.action === "clock_in" ? "clock_out" : "clock_in";
+  }
+
+  return { ok: true as const, events: sorted };
+}
+
 export function staffKioskPinFields({
   customFields,
   pinHash,
@@ -286,6 +352,47 @@ export function staffKioskPinFields({
     staffKioskPinHash: pinHash,
     staffKioskPinSetAt: pinSetAt.toISOString(),
     staffKioskPinSetById: pinSetById,
+  } as Prisma.InputJsonObject;
+}
+
+export function staffClockEditFields({
+  customFields,
+  events,
+  editedAt,
+  timeZone,
+}: {
+  customFields: unknown;
+  events: StaffClockEvent[];
+  editedAt: Date;
+  timeZone?: string | null;
+}) {
+  const fields = asRecord(customFields);
+  const previous = readStaffClockState(fields);
+  const storedEvents = [...events]
+    .filter((event) => dateMs(event.occurredAt) !== null)
+    .sort((left, right) => (dateMs(right.occurredAt) ?? 0) - (dateMs(left.occurredAt) ?? 0))
+    .slice(0, STAFF_CLOCK_EVENT_LIMIT);
+  const newest = storedEvents[0] ?? null;
+  const status: StaffClockStatus = newest?.action === "clock_in" ? "clocked_in" : "clocked_out";
+  const summary = summarizeClockEvents(storedEvents, { now: editedAt });
+
+  return {
+    ...fields,
+    timeClock: {
+      status,
+      lastAction: newest?.action ?? null,
+      lastActionAt: newest?.occurredAt ?? null,
+      currentClockInAt: status === "clocked_in" ? newest?.occurredAt ?? null : null,
+      currentClockOutAt: newest?.action === "clock_out" ? newest.occurredAt : null,
+      timeZone: timeZone || previous.timeZone,
+      totalMinutes: summary.totalMinutes,
+      closedShiftMinutes: summary.closedShiftMinutes,
+      closedShiftCount: summary.closedShiftCount,
+      lastShiftMinutes: summary.lastShiftMinutes,
+      summaryUpdatedAt: editedAt.toISOString(),
+      manualEditUpdatedAt: editedAt.toISOString(),
+      events: storedEvents,
+    },
   } as Prisma.InputJsonObject;
 }
 
@@ -310,7 +417,7 @@ export function staffClockFields({
     timeZone: timeZone || null,
     notes: notes || null,
   };
-  const events = [event, ...previous.events].slice(0, 60);
+  const events = [event, ...previous.events].slice(0, STAFF_CLOCK_EVENT_LIMIT);
   const summary = summarizeClockEvents(events, { now: occurredAt });
 
   return {

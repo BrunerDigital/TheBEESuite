@@ -158,11 +158,16 @@ async function run() {
       const text = await response.text();
       if (!check.expected.test(text)) throw new Error(`${check.name} did not return expected content.`);
     }
-    const options = await api.fetch("/api/inquiries", {
-      method: "OPTIONS",
-      headers: { Origin: "https://kidcityusa.com" },
-    });
-    if (options.status() !== 204) throw new Error(`Inquiry OPTIONS returned ${options.status()}.`);
+    for (const origin of ["https://kidcityusa.com", "https://thebeesuite.io", "https://www.thebeesuite.io"]) {
+      const options = await api.fetch("/api/inquiries", {
+        method: "OPTIONS",
+        headers: { Origin: origin },
+      });
+      if (options.status() !== 204) throw new Error(`Inquiry OPTIONS returned ${options.status()} for ${origin}.`);
+      if (options.headers()["access-control-allow-origin"] !== origin) {
+        throw new Error(`Inquiry OPTIONS did not allow ${origin}.`);
+      }
+    }
 
     const loggedIn = await optionalLogin(baseUrl);
     if (loggedIn) {

@@ -23,7 +23,7 @@ import {
   type StaffPayType,
 } from "@/lib/staff-compensation";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
-import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockShift } from "@/lib/staff-kiosk";
+import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockAction, type StaffClockEvent, type StaffClockShift } from "@/lib/staff-kiosk";
 
 type CenterOption = { id: string; name: string };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
@@ -86,6 +86,13 @@ type PayrollShiftRow = StaffClockShift & {
   clockOutLabel: string;
   regularMinutes: number;
   overtimeMinutes: number;
+};
+
+type ClockEditRow = {
+  id: string;
+  action: StaffClockAction;
+  occurredAt: string;
+  notes: string;
 };
 
 type PayCodeSummaryRow = {
@@ -162,6 +169,35 @@ function formatDateTime(value: Date | string | null) {
         hour: "numeric",
         minute: "2-digit",
       }).format(date);
+}
+
+function clockEditRowId() {
+  return `clock-row-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function sortClockEditRows(rows: ClockEditRow[]) {
+  return [...rows].sort((left, right) => {
+    const leftTime = new Date(left.occurredAt).getTime();
+    const rightTime = new Date(right.occurredAt).getTime();
+    return (Number.isFinite(leftTime) ? leftTime : 0) - (Number.isFinite(rightTime) ? rightTime : 0);
+  });
+}
+
+function clockEditRowsFromEvents(events: StaffClockEvent[]): ClockEditRow[] {
+  return [...events]
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .map((event, index) => ({
+      id: `clock-event-${index}-${event.occurredAt}`,
+      action: event.action,
+      occurredAt: toDateTimeLocal(event.occurredAt),
+      notes: event.notes ?? "",
+    }));
+}
+
+function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
+  const sorted = sortClockEditRows(rows).filter((row) => row.occurredAt);
+  const last = sorted[sorted.length - 1];
+  return last?.action === "clock_in" ? "clock_out" : "clock_in";
 }
 
 function payrollWeekStart(date: Date) {
@@ -272,8 +308,11 @@ export function StaffManagementPanel({
   const [weeklyEndTime, setWeeklyEndTime] = useState("16:30");
   const [weeklyDays, setWeeklyDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [weeklyStatus, setWeeklyStatus] = useState("scheduled");
-  const [clockStaffId, setClockStaffId] = useState(activeStaff[0]?.id ?? "");
+  const [clockStaffId, setClockStaffId] = useState(allTeacherRows[0]?.id ?? "");
   const [clockNotes, setClockNotes] = useState("");
+  const [clockEditRows, setClockEditRows] = useState<ClockEditRow[]>(() =>
+    clockEditRowsFromEvents(readStaffClockState(allTeacherRows[0]?.customFields).events),
+  );
   const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt));
   const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt));
   const [statusMessage, setStatusMessage] = useState("");
@@ -297,7 +336,7 @@ export function StaffManagementPanel({
     () => activeStaff.filter((teacher) => teacher.classroomId === weeklyClassroomId),
     [activeStaff, weeklyClassroomId],
   );
-  const clockTeacher = activeStaff.find((teacher) => teacher.id === clockStaffId) ?? activeStaff[0] ?? null;
+  const clockTeacher = allTeacherRows.find((teacher) => teacher.id === clockStaffId) ?? allTeacherRows[0] ?? null;
   const clockState = readStaffClockState(clockTeacher?.customFields);
   const clockAction = clockState.status === "clocked_in" ? "clock_out" : "clock_in";
   const selectedTeacher = allTeacherRows.find((teacher) => teacher.id === selectedStaffId) ?? null;
@@ -498,7 +537,7 @@ export function StaffManagementPanel({
   }
 
   function saveClockAction() {
-    if (!clockTeacher) return;
+    if (!clockTeacher || !clockTeacher.user.isActive) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -512,13 +551,92 @@ export function StaffManagementPanel({
           notes: clockNotes,
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
+      const json = await response.json().catch(() => null) as { error?: string; record?: { customFields?: unknown } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Staff clock action could not be saved.");
         return;
       }
       setStatusMessage(`${clockTeacher.user.name} ${clockAction === "clock_in" ? "clocked in" : "clocked out"}.`);
       setClockNotes("");
+      if (json?.record?.customFields !== undefined) {
+        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events));
+      }
+      router.refresh();
+    });
+  }
+
+  function updateClockEditRow(rowId: string, patch: Partial<ClockEditRow>) {
+    setClockEditRows((current) =>
+      current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
+    );
+  }
+
+  function addClockEditRow() {
+    setClockEditRows((current) => [
+      ...current,
+      {
+        id: clockEditRowId(),
+        action: nextClockEditAction(current),
+        occurredAt: toDateTimeLocal(new Date()),
+        notes: "",
+      },
+    ]);
+  }
+
+  function removeClockEditRow(rowId: string) {
+    setClockEditRows((current) => current.filter((row) => row.id !== rowId));
+  }
+
+  function selectClockStaffForEdit(staffId: string) {
+    setClockStaffId(staffId);
+    const teacher = allTeacherRows.find((row) => row.id === staffId);
+    setClockEditRows(clockEditRowsFromEvents(readStaffClockState(teacher?.customFields).events));
+  }
+
+  function saveTimeCardEdits() {
+    if (!clockTeacher) return;
+    if (!clockEditRows.length && clockState.events.length && !window.confirm(`Clear all time-card punches for ${clockTeacher.user.name}?`)) {
+      return;
+    }
+
+    const events: { action: StaffClockAction; occurredAt: string; notes: string | null }[] = [];
+    for (const row of clockEditRows) {
+      const occurredAt = new Date(row.occurredAt);
+      if (!row.occurredAt || Number.isNaN(occurredAt.getTime())) {
+        setErrorMessage("Every punch needs a valid date and time.");
+        return;
+      }
+      events.push({
+        action: row.action,
+        occurredAt: occurredAt.toISOString(),
+        notes: row.notes.trim() || null,
+      });
+    }
+
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entity: "staffTimeClock",
+          staffId: clockTeacher.id,
+          events,
+          editReason: "Director time card edit",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; record?: { customFields?: unknown } } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Time card edits could not be saved.");
+        return;
+      }
+      setStatusMessage(`${clockTeacher.user.name}'s time card was saved.`);
+      if (json?.record?.customFields !== undefined) {
+        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events));
+      } else {
+        setClockEditRows(sortClockEditRows(clockEditRows));
+      }
       router.refresh();
     });
   }
@@ -919,10 +1037,12 @@ export function StaffManagementPanel({
                 <select
                   className={nativeSelectClassName}
                   value={clockTeacher?.id ?? ""}
-                  onChange={(event) => setClockStaffId(event.target.value)}
+                  onChange={(event) => selectClockStaffForEdit(event.target.value)}
                 >
-                  {activeStaff.map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>{teacher.user.name}</option>
+                  {allTeacherRows.map((teacher) => (
+                    <option key={teacher.id} value={teacher.id}>
+                      {teacher.user.name}{teacher.user.isActive ? "" : " (previous staff)"}
+                    </option>
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
@@ -933,10 +1053,86 @@ export function StaffManagementPanel({
                 <Label>Notes</Label>
                 <Input value={clockNotes} onChange={(event) => setClockNotes(event.target.value)} placeholder="Optional director note" />
               </div>
-              <Button type="button" className="self-end" disabled={isPending || !clockTeacher} onClick={saveClockAction}>
+              <Button type="button" className="self-end" disabled={isPending || !clockTeacher || !clockTeacher.user.isActive} onClick={saveClockAction}>
                 <Clock data-icon="inline-start" />
                 {clockAction === "clock_in" ? "Clock in" : "Clock out"}
               </Button>
+            </div>
+            <div className="mt-4 rounded-lg border bg-card/40 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Pencil className="size-4" />
+                    Time card punches
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Manual payroll corrections for saved clock history.</p>
+                </div>
+                <Button type="button" variant="outline" size="sm" disabled={isPending || !clockTeacher} onClick={addClockEditRow}>
+                  <Clock data-icon="inline-start" />
+                  Add punch
+                </Button>
+              </div>
+
+              <div className="mt-3 overflow-x-auto rounded-md border bg-background/60">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Action</th>
+                      <th className="px-3 py-2 text-left font-medium">Date and time</th>
+                      <th className="px-3 py-2 text-left font-medium">Notes</th>
+                      <th className="px-3 py-2 text-right font-medium">Remove</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {sortClockEditRows(clockEditRows).map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-3 py-2">
+                          <select
+                            className={nativeSelectClassName}
+                            value={row.action}
+                            onChange={(event) => updateClockEditRow(row.id, { action: event.target.value as StaffClockAction })}
+                          >
+                            <option value="clock_in">Clock in</option>
+                            <option value="clock_out">Clock out</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            type="datetime-local"
+                            value={row.occurredAt}
+                            onChange={(event) => updateClockEditRow(row.id, { occurredAt: event.target.value })}
+                          />
+                        </td>
+                        <td className="px-3 py-2">
+                          <Input
+                            value={row.notes}
+                            onChange={(event) => updateClockEditRow(row.id, { notes: event.target.value })}
+                            placeholder="Optional note"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button type="button" variant="ghost" size="icon-sm" disabled={isPending} onClick={() => removeClockEditRow(row.id)}>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {!clockEditRows.length ? (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-4 text-sm text-muted-foreground">No punches saved for this staff member.</td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">{clockEditRows.length} punch{clockEditRows.length === 1 ? "" : "es"} ready to save</div>
+                <Button type="button" disabled={isPending || !clockTeacher} onClick={saveTimeCardEdits}>
+                  <Save data-icon="inline-start" />
+                  Save time card
+                </Button>
+              </div>
             </div>
           </section>
 
@@ -1040,6 +1236,10 @@ export function StaffManagementPanel({
                         <div className="font-medium">{row.name}</div>
                         <div className="text-xs text-muted-foreground">{row.email}</div>
                         {!row.active ? <div className="text-xs text-muted-foreground">Previous staff</div> : null}
+                        <Button type="button" variant="outline" size="xs" className="mt-2" onClick={() => selectClockStaffForEdit(row.id)}>
+                          <Pencil data-icon="inline-start" />
+                          Edit
+                        </Button>
                       </td>
                       <td className="px-3 py-2">
                         <div>{row.centerName}</div>

@@ -11,7 +11,15 @@ import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
 import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
-import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
+import {
+  normalizeStaffClockAction,
+  normalizeStaffClockEventEdits,
+  readStaffClockState,
+  staffClockEditFields,
+  staffClockFields,
+  staffKioskPinFields,
+  validateNextStaffClockAction,
+} from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import {
@@ -1067,8 +1075,9 @@ async function POSTHandler(request: NextRequest) {
   } else if (entity === "staffTimeClock") {
     const staffId = clean(body.staffId) || id;
     if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });
-    const action = normalizeStaffClockAction(clean(body.action) || clean(body.status));
-    if (!action) return NextResponse.json({ ok: false, error: "Clock action must be clock_in or clock_out." }, { status: 400 });
+    const hasEventEditPayload = Array.isArray(body.events);
+    const action = hasEventEditPayload ? null : normalizeStaffClockAction(clean(body.action) || clean(body.status));
+    if (!hasEventEditPayload && !action) return NextResponse.json({ ok: false, error: "Clock action must be clock_in or clock_out." }, { status: 400 });
     const staff = await prisma.staffProfile.findUnique({
       where: { id: staffId },
       select: {
@@ -1083,31 +1092,60 @@ async function POSTHandler(request: NextRequest) {
     if (!canAccessCenter(user, staff.centerId)) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
-    if (!staff.user.isActive || staff.user.role !== UserRole.TEACHER) {
-      return NextResponse.json({ ok: false, error: "Only active teacher profiles can use staff time clock actions." }, { status: 400 });
+    if (staff.user.role !== UserRole.TEACHER) {
+      return NextResponse.json({ ok: false, error: "Only teacher profiles can use staff time clock actions." }, { status: 400 });
     }
-    const state = readStaffClockState(staff.customFields);
-    const validation = validateNextStaffClockAction(action, state);
-    if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
-    const occurredAt = parseDate(body.occurredAt) ?? new Date();
     const timeZone = readCenterTimeZone(staff.center);
     centerId = staff.centerId;
-    result = await prisma.staffProfile.update({
-      where: { id: staff.id },
-      data: {
-        customFields: staffClockFields({
-          customFields: staff.customFields,
-          action,
-          occurredAt,
-          timeZone,
-          notes: clean(body.notes) || `Director action by ${user.email}`,
-        }),
-      },
-      select: { id: true, customFields: true, user: { select: { name: true, email: true } } },
-    });
-    auditMetadata.action = action;
-    auditMetadata.occurredAt = occurredAt.toISOString();
-    auditMetadata.timeZone = timeZone;
+
+    if (hasEventEditPayload) {
+      const normalized = normalizeStaffClockEventEdits(body.events, { timeZone });
+      if (!normalized.ok) return NextResponse.json({ ok: false, error: normalized.error }, { status: 400 });
+      const editedAt = new Date();
+      result = await prisma.staffProfile.update({
+        where: { id: staff.id },
+        data: {
+          customFields: staffClockEditFields({
+            customFields: staff.customFields,
+            events: normalized.events,
+            editedAt,
+            timeZone,
+          }),
+        },
+        select: { id: true, customFields: true, user: { select: { name: true, email: true } } },
+      });
+      auditMetadata.action = "manual_edit";
+      auditMetadata.eventCount = normalized.events.length;
+      auditMetadata.editedAt = editedAt.toISOString();
+      auditMetadata.timeZone = timeZone;
+      const editReason = clean(body.editReason);
+      if (editReason) auditMetadata.editReason = editReason;
+    } else if (!staff.user.isActive) {
+      return NextResponse.json({ ok: false, error: "Only active teacher profiles can use staff time clock actions." }, { status: 400 });
+    } else {
+      const clockAction = action;
+      if (!clockAction) return NextResponse.json({ ok: false, error: "Clock action must be clock_in or clock_out." }, { status: 400 });
+      const state = readStaffClockState(staff.customFields);
+      const validation = validateNextStaffClockAction(clockAction, state);
+      if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
+      const occurredAt = parseDate(body.occurredAt) ?? new Date();
+      result = await prisma.staffProfile.update({
+        where: { id: staff.id },
+        data: {
+          customFields: staffClockFields({
+            customFields: staff.customFields,
+            action: clockAction,
+            occurredAt,
+            timeZone,
+            notes: clean(body.notes) || `Director action by ${user.email}`,
+          }),
+        },
+        select: { id: true, customFields: true, user: { select: { name: true, email: true } } },
+      });
+      auditMetadata.action = clockAction;
+      auditMetadata.occurredAt = occurredAt.toISOString();
+      auditMetadata.timeZone = timeZone;
+    }
   } else if (entity === "staffScheduleBatch") {
     const classroomId = clean(body.classroomId);
     if (!classroomId) return NextResponse.json({ ok: false, error: "Classroom ID is required." }, { status: 400 });

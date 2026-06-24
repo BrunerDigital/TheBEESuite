@@ -5,6 +5,8 @@ import {
   readStaffClockSummary,
   resolveStaffKioskCredential,
   staffKioskPinFields,
+  normalizeStaffClockEventEdits,
+  staffClockEditFields,
   staffClockFields,
   validateNextStaffClockAction,
   formatStaffHours,
@@ -84,6 +86,47 @@ test("staff kiosk summary includes open shifts and date range overlap", () => {
 
   assert.equal(rangedSummary.totalMinutes, 60);
   assert.equal(rangedSummary.openShiftMinutes, 60);
+});
+
+test("director time card edits can split a missed lunch break", () => {
+  const normalized = normalizeStaffClockEventEdits([
+    { action: "clock_in", occurredAt: "2026-06-22T12:00:00.000Z" },
+    { action: "clock_out", occurredAt: "2026-06-22T16:00:00.000Z", notes: "Lunch out" },
+    { action: "clock_in", occurredAt: "2026-06-22T16:30:00.000Z", notes: "Lunch return" },
+    { action: "clock_out", occurredAt: "2026-06-22T21:00:00.000Z" },
+  ], { timeZone: "America/New_York" });
+
+  assert.equal(normalized.ok, true);
+  if (!normalized.ok) return;
+
+  const fields = staffClockEditFields({
+    customFields: null,
+    events: normalized.events,
+    editedAt: new Date("2026-06-22T22:00:00.000Z"),
+    timeZone: "America/New_York",
+  });
+  const state = readStaffClockState(fields);
+  const summary = readStaffClockSummary(fields, { now: new Date("2026-06-22T22:00:00.000Z") });
+
+  assert.equal(state.status, "clocked_out");
+  assert.equal(state.events[0]?.action, "clock_out");
+  assert.equal(state.events[0]?.occurredAt, "2026-06-22T21:00:00.000Z");
+  assert.equal(summary.closedShiftCount, 2);
+  assert.equal(summary.totalMinutes, 510);
+  assert.equal(summary.shifts[0]?.minutes, 240);
+  assert.equal(summary.shifts[1]?.minutes, 270);
+});
+
+test("director time card edits reject invalid punch order", () => {
+  const normalized = normalizeStaffClockEventEdits([
+    { action: "clock_in", occurredAt: "2026-06-22T12:00:00.000Z" },
+    { action: "clock_in", occurredAt: "2026-06-22T16:30:00.000Z" },
+  ]);
+
+  assert.deepEqual(normalized, {
+    ok: false,
+    error: "A clock in must be followed by clock out before another clock in.",
+  });
 });
 
 test("staff kiosk credential resolves by unique PIN without requiring email", () => {

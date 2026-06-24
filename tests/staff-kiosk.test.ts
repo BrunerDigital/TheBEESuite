@@ -23,10 +23,13 @@ test("staff kiosk clock state blocks duplicate clock actions", () => {
     customFields: null,
     action: "clock_in",
     occurredAt: new Date("2026-06-04T12:00:00.000Z"),
+    timeZone: "America/Indiana/Indianapolis",
   });
   const clockedIn = readStaffClockState(clockInFields);
   assert.equal(clockedIn.status, "clocked_in");
   assert.equal(clockedIn.currentClockInAt, "2026-06-04T12:00:00.000Z");
+  assert.equal(clockedIn.timeZone, "America/Indiana/Indianapolis");
+  assert.equal(clockedIn.events[0]?.timeZone, "America/Indiana/Indianapolis");
   assert.deepEqual(validateNextStaffClockAction("clock_in", clockedIn), {
     ok: false,
     error: "Staff member is already clocked in.",

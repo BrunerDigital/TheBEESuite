@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { googleSheetsRuntimeConfig, hasGoogleSheetsApiConfig } from "@/lib/google-sheets";
-import { createStripeCustomer, getStripeSecretKey } from "@/lib/integrations";
+import { createStripeCheckoutSession, createStripeCustomer, getStripeSecretKey } from "@/lib/integrations";
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
 
@@ -69,6 +69,73 @@ test("Stripe customer creation uses the tenant secret key when provided", async 
     assert.equal(result.ok, true);
     assert.equal(result.id, "cus_tenant");
     assert.equal(authorization, "Bearer sk_tenant");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe customer creation can target a connected school account", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.STRIPE_SECRET_KEY = "sk_platform";
+  let stripeAccount = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    stripeAccount = String((init?.headers as Record<string, string> | undefined)?.["Stripe-Account"] ?? "");
+    return new Response(JSON.stringify({ id: "cus_connected" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCustomer({
+      email: "family@example.com",
+      name: "Example Family",
+      connectedAccountId: "acct_school",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.id, "cus_connected");
+    assert.equal(stripeAccount, "acct_school");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe checkout creates direct connected-account sessions for school customers", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.STRIPE_SECRET_KEY = "sk_platform";
+  let stripeAccount = "";
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    stripeAccount = String((init?.headers as Record<string, string> | undefined)?.["Stripe-Account"] ?? "");
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_connected", url: "https://checkout.stripe.test/session" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      connectedAccountId: "acct_school",
+      applicationFeeAmountCents: 3,
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(stripeAccount, "acct_school");
+    assert.match(body, /customer=cus_connected/);
+    assert.match(body, /payment_intent_data%5Bapplication_fee_amount%5D=3/);
+    assert.doesNotMatch(body, /transfer_data/);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { parseOperationalDate } from "@/lib/date-guardrails";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
@@ -17,7 +17,7 @@ async function POSTHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageClassroomTasks(user)) {
+  if (!canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Medication logs are not allowed for this role." }, { status: 403 });
   }
 

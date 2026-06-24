@@ -103,11 +103,19 @@ export function RequiredDocumentChecklistPanel({
         requirementId: item.requirementId,
       }),
     });
-    const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+    const json = await response.json().catch(() => null) as {
+      error?: string;
+      mode?: string;
+      email?: { emailsSent?: number; error?: string };
+    } | null;
     if (!response.ok) {
       throw new Error(json?.error || "Checklist request could not be created.");
     }
-    return json?.mode === "existing" ? "existing" : "created";
+    return {
+      mode: json?.mode === "existing" ? "existing" as const : "created" as const,
+      emailsSent: json?.email?.emailsSent ?? 0,
+      emailError: json?.email?.error ?? "",
+    };
   }
 
   function requestItems(targetItems: RequiredChecklistItem[], key: string) {
@@ -119,13 +127,17 @@ export function RequiredDocumentChecklistPanel({
 
       let created = 0;
       let existing = 0;
+      let emailsSent = 0;
+      let emailFailures = 0;
       const failures: Array<{ item: RequiredChecklistItem; error: unknown }> = [];
 
       for (const item of targetItems) {
         try {
-          const mode = await requestChecklistItem(item);
-          if (mode === "existing") existing += 1;
+          const result = await requestChecklistItem(item);
+          if (result.mode === "existing") existing += 1;
           else created += 1;
+          emailsSent += result.emailsSent;
+          if ((item.scope === "family" || item.scope === "child") && !result.emailsSent) emailFailures += 1;
         } catch (requestError) {
           failures.push({ item, error: requestError });
         }
@@ -136,7 +148,9 @@ export function RequiredDocumentChecklistPanel({
       if (created || existing) {
         const createdText = created ? pluralize(created, "request") + " created" : "";
         const existingText = existing ? pluralize(existing, "request") + " already existed" : "";
-        setMessage([createdText, existingText].filter(Boolean).join(". ") + ".");
+        const emailText = emailsSent ? `${pluralize(emailsSent, "parent email")} sent` : "";
+        const emailFailureText = emailFailures ? `${pluralize(emailFailures, "parent email")} need attention` : "";
+        setMessage([createdText, existingText, emailText, emailFailureText].filter(Boolean).join(". ") + ".");
         router.refresh();
       }
 
@@ -170,7 +184,7 @@ export function RequiredDocumentChecklistPanel({
             Required Checklist
           </CardTitle>
           <CardDescription>
-            Required family, child, and staff documentation by visible school scope.
+            Required family, child, and staff documentation by visible school scope. Family and child requests email the saved parent addresses with the branded parent form.
           </CardDescription>
         </div>
         <Button
@@ -370,7 +384,7 @@ export function RequiredDocumentChecklistPanel({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold">Requirement rows</h3>
-            <span className="text-xs text-muted-foreground">Use row actions for individual family, child, or staff document requests.</span>
+            <span className="text-xs text-muted-foreground">Family and child row actions create the request and email the parent form.</span>
           </div>
           <div className="overflow-x-auto">
             <Table>
@@ -404,7 +418,7 @@ export function RequiredDocumentChecklistPanel({
                           onClick={() => createRequest(item)}
                         >
                           <FilePlus2 data-icon="inline-start" />
-                          Request
+                          {item.scope === "staff" ? "Request" : "Request parent info"}
                         </Button>
                       ) : (
                         <span className="text-xs text-muted-foreground">No action</span>

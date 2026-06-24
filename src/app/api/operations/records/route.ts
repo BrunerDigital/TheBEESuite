@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
+import { readCenterTimeZone } from "@/lib/attendance-state";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
@@ -1048,7 +1049,13 @@ async function POSTHandler(request: NextRequest) {
     if (!action) return NextResponse.json({ ok: false, error: "Clock action must be clock_in or clock_out." }, { status: 400 });
     const staff = await prisma.staffProfile.findUnique({
       where: { id: staffId },
-      select: { id: true, centerId: true, customFields: true, user: { select: { name: true, isActive: true, role: true } } },
+      select: {
+        id: true,
+        centerId: true,
+        customFields: true,
+        center: { select: { city: true, state: true, postalCode: true, timezone: true, customFields: true } },
+        user: { select: { name: true, isActive: true, role: true } },
+      },
     });
     if (!staff) return NextResponse.json({ ok: false, error: "Teacher profile not found." }, { status: 404 });
     if (!canAccessCenter(user, staff.centerId)) {
@@ -1061,6 +1068,7 @@ async function POSTHandler(request: NextRequest) {
     const validation = validateNextStaffClockAction(action, state);
     if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 });
     const occurredAt = parseDate(body.occurredAt) ?? new Date();
+    const timeZone = readCenterTimeZone(staff.center);
     centerId = staff.centerId;
     result = await prisma.staffProfile.update({
       where: { id: staff.id },
@@ -1069,6 +1077,7 @@ async function POSTHandler(request: NextRequest) {
           customFields: staff.customFields,
           action,
           occurredAt,
+          timeZone,
           notes: clean(body.notes) || `Director action by ${user.email}`,
         }),
       },
@@ -1076,6 +1085,7 @@ async function POSTHandler(request: NextRequest) {
     });
     auditMetadata.action = action;
     auditMetadata.occurredAt = occurredAt.toISOString();
+    auditMetadata.timeZone = timeZone;
   } else if (entity === "staffScheduleBatch") {
     const classroomId = clean(body.classroomId);
     if (!classroomId) return NextResponse.json({ ok: false, error: "Classroom ID is required." }, { status: 400 });

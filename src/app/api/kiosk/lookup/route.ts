@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus } from "@prisma/client";
-import { latestLogMap, readCenterTimeZone, startOfServiceDay } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
@@ -128,7 +128,7 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true, customFields: true },
+    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -147,12 +147,10 @@ async function POSTHandler(request: NextRequest) {
 
   const visibleChildren = guardian.family.children.filter((child) => child.classroom?.centerId === centerId);
   const childIds = visibleChildren.map((child) => child.id);
-  const timeZone = readCenterTimeZone(center.customFields);
-  const serviceDayStart = startOfServiceDay(new Date(), timeZone);
-  const serviceDayEnd = new Date(serviceDayStart.getTime() + 24 * 60 * 60 * 1000);
+  const serviceDay = centerServiceDayWindow(new Date(), center);
   const latestLogs = childIds.length
     ? await prisma.checkInOutLog.findMany({
-        where: { childId: { in: childIds }, occurredAt: { gte: serviceDayStart, lt: serviceDayEnd } },
+        where: { childId: { in: childIds }, occurredAt: { gte: serviceDay.start, lt: serviceDay.end } },
         orderBy: { occurredAt: "desc" },
         select: { childId: true, type: true, occurredAt: true },
       })

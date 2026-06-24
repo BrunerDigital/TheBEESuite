@@ -23,6 +23,8 @@ import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/
 import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import { buildParentPortalInvitationText, buildParentPortalUrl, PARENT_PORTAL_PATH } from "../src/lib/parent-portal-invitations";
+import { buildParentDocumentRequestEmailText, parentDocumentRequestRecipientOptions } from "../src/lib/parent-document-requests";
+import { deriveDirectorLaunchAutoCompletedIds, mergeSetupChecklistCompletedIds } from "../src/lib/setup-checklist-auto";
 import {
   calculateFteCount,
   defaultFteWeekEnd,
@@ -34,6 +36,7 @@ import { notificationTargetGuard } from "../src/lib/notification-guardrails";
 import { activeNotificationWhere, notificationDedupeKey, notificationExpiresAt } from "../src/lib/notification-policy";
 import {
   buildPasswordResetRedirectUrl,
+  buildPasswordResetTokenUrl,
   buildPublicAppBaseUrl,
   canonicalizePublicUrl,
   CANONICAL_APP_BASE_URL,
@@ -270,9 +273,18 @@ test("public parent links never expose Vercel deployment hosts", () => {
     }),
     "https://thebeesuite.io/reset-password?next=%2Fparent-portal",
   );
+
+  assert.equal(
+    buildPasswordResetTokenUrl({
+      appBaseUrl: "https://the-bee-suite-beta.vercel.app",
+      tokenHash: "hash_123",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://thebeesuite.io/reset-password?token_hash=hash_123&type=recovery&next=%2Fparent-portal",
+  );
 });
 
-test("parent portal invite copy uses guardian email login and parent-owned password setup", () => {
+test("parent portal invite copy uses guardian email and school default password login", () => {
   const portalUrl = buildParentPortalUrl("https://thebeesuite.io/");
   const text = buildParentPortalInvitationText({
     guardianName: "Taylor Parent",
@@ -283,10 +295,71 @@ test("parent portal invite copy uses guardian email login and parent-owned passw
 
   assert.equal(portalUrl, "https://thebeesuite.io/parent-portal");
   assert.match(text, /Use taylor@example\.com as your login email\./);
-  assert.match(text, /choose your password/);
+  assert.match(text, /Use the default parent portal password provided by your school\./);
+  assert.match(text, /Sign in here: https:\/\/thebeesuite\.io\/parent-portal/);
+  assert.match(text, /Forgot password link on the login screen/);
   assert.match(text, /child records and classroom connections/);
   assert.doesNotMatch(text, /temporary password/i);
-  assert.doesNotMatch(text, /provided by your school director/i);
+  assert.doesNotMatch(text, /token_hash/i);
+  assert.doesNotMatch(text, /Open the password setup email/i);
+  assert.doesNotMatch(text, /vercel\.app/i);
+});
+
+test("parent document request emails use guardian personal emails and branded form copy", () => {
+  const recipients = parentDocumentRequestRecipientOptions([
+    { id: "guardian_1", fullName: "Taylor Parent", email: "Taylor@Example.com", userId: "user_1" },
+    { id: "guardian_2", fullName: "Duplicate Parent", email: "taylor@example.com", userId: "user_1" },
+    { id: "guardian_3", fullName: "No Email", email: "", userId: null },
+  ]);
+  assert.equal(recipients.length, 1);
+  assert.equal(recipients[0].email, "taylor@example.com");
+  assert.deepEqual(recipients[0].guardianIds, ["guardian_1", "guardian_2"]);
+
+  const text = buildParentDocumentRequestEmailText({
+    recipientLabel: "Taylor Parent",
+    familyName: "Taylor Family",
+    childName: "Avery Taylor",
+    centerLabel: "Kokomo",
+    documentName: "Immunization Record",
+    actionLabel: "upload or submit",
+    portalUrl: "https://thebeesuite.io/parent-portal#documents",
+  });
+  assert.match(text, /Kokomo is requesting Immunization Record for Avery Taylor in The BEE Suite\./);
+  assert.match(text, /Open the branded parent form: https:\/\/thebeesuite\.io\/parent-portal#documents/);
+  assert.match(text, /guardian email where you received this message/);
+  assert.doesNotMatch(text, /vercel\.app/i);
+});
+
+test("director launch setup checklist auto-completes from app evidence", () => {
+  const automatic = deriveDirectorLaunchAutoCompletedIds({
+    centerCount: 1,
+    schoolProfileReady: true,
+    classroomCount: 4,
+    teacherStaffCount: 8,
+    importedFamilyCount: 30,
+    importedChildCount: 42,
+    documentCount: 12,
+    tuitionPlanCount: 2,
+    guardianLoginCount: 10,
+    attendanceRecordCount: 5,
+    messageTemplateCount: 3,
+    fteReportCount: 1,
+    licensingReady: true,
+    leadCount: 4,
+    dashboardConfigured: true,
+  });
+
+  assert.ok(automatic.includes("login-school-profile"));
+  assert.ok(automatic.includes("required-documents"));
+  assert.ok(automatic.includes("parent-portal"));
+  assert.ok(!automatic.includes("launch-smoke-test"));
+  assert.deepEqual(
+    mergeSetupChecklistCompletedIds({
+      manualCompletedIds: ["launch-smoke-test", "parent-portal"],
+      automaticCompletedIds: automatic,
+    }).filter((id) => id === "parent-portal"),
+    ["parent-portal"],
+  );
 });
 
 test("login rate limit blocks repeated attempts for the same key", () => {
@@ -553,8 +626,10 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
   assert.equal(canAccessModule(teacher, "daily-reports"), true);
   assert.equal(canAccessModule(teacher, "school-setup"), false);
   assert.equal(canAccessModule(teacher, "staff"), false);
+  assert.equal(canAccessModule(teacher, "compliance"), false);
   assert.equal(canAccessModule(director, "school-setup"), true);
   assert.equal(canAccessModule(director, "staff"), true);
+  assert.equal(canAccessModule(director, "compliance"), true);
   assert.equal(canAccessModule(director, "calendar"), true);
   assert.equal(canAccessModule(teacher, "calendar"), false);
 });

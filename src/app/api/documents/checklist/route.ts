@@ -7,6 +7,7 @@ import {
   matchesRequiredChecklistDefinition,
   type RequirementScope,
 } from "@/lib/required-document-checklist";
+import { sendParentDocumentRequestEmailForDocument } from "@/lib/parent-document-requests";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -61,7 +62,12 @@ async function POSTHandler(request: NextRequest) {
     }
     const existing = family.documents.find((document) => matchesRequiredChecklistDefinition(requirement, document));
     if (existing && existing.status !== DocumentStatus.REJECTED) {
-      return NextResponse.json({ ok: true, mode: "existing", record: existing });
+      const email = await sendParentDocumentRequestEmailForDocument({
+        documentId: existing.id,
+        user,
+        requestUrl: request.url,
+      });
+      return NextResponse.json({ ok: true, mode: "existing", record: existing, email });
     }
 
     const document = await prisma.document.create({
@@ -81,7 +87,12 @@ async function POSTHandler(request: NextRequest) {
       resourceId: document.id,
       metadata: { scope, subjectId, requirementId },
     });
-    return NextResponse.json({ ok: true, mode: "created", record: document }, { status: 201 });
+    const email = await sendParentDocumentRequestEmailForDocument({
+      documentId: document.id,
+      user,
+      requestUrl: request.url,
+    });
+    return NextResponse.json({ ok: true, mode: "created", record: document, email }, { status: 201 });
   }
 
   if (scope === "child") {
@@ -105,7 +116,12 @@ async function POSTHandler(request: NextRequest) {
     }
     const existing = child.documents.find((document) => matchesRequiredChecklistDefinition(requirement, document));
     if (existing && existing.status !== DocumentStatus.REJECTED) {
-      return NextResponse.json({ ok: true, mode: "existing", record: existing });
+      const email = await sendParentDocumentRequestEmailForDocument({
+        documentId: existing.id,
+        user,
+        requestUrl: request.url,
+      });
+      return NextResponse.json({ ok: true, mode: "existing", record: existing, email });
     }
 
     const document = await prisma.document.create({
@@ -126,7 +142,12 @@ async function POSTHandler(request: NextRequest) {
       resourceId: document.id,
       metadata: { scope, subjectId, requirementId },
     });
-    return NextResponse.json({ ok: true, mode: "created", record: document }, { status: 201 });
+    const email = await sendParentDocumentRequestEmailForDocument({
+      documentId: document.id,
+      user,
+      requestUrl: request.url,
+    });
+    return NextResponse.json({ ok: true, mode: "created", record: document, email }, { status: 201 });
   }
 
   const staff = await prisma.staffProfile.findUnique({

@@ -53,14 +53,10 @@ export function resolveDailyReportEmailRecipientGuardianIds({
   customFields: unknown;
   guardians: DailyReportEmailGuardian[];
 }) {
-  const configuredGuardianIds = readDailyReportEmailRecipientGuardianIds(customFields);
-  const emailGuardianIds = new Set(
-    guardians
-      .filter((guardian) => guardian.email && isEmail(guardian.email))
-      .map((guardian) => guardian.id),
-  );
-  const ids = configuredGuardianIds ?? Array.from(emailGuardianIds);
-  return ids.filter((id) => emailGuardianIds.has(id));
+  void customFields;
+  return guardians
+    .filter((guardian) => guardian.email && isEmail(guardian.email))
+    .map((guardian) => guardian.id);
 }
 
 export function resolveDailyReportEmailRecipients({

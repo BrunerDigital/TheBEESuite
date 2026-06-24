@@ -8,6 +8,7 @@ export type StaffClockStatus = "clocked_in" | "clocked_out";
 export type StaffClockEvent = {
   action: StaffClockAction;
   occurredAt: string;
+  timeZone?: string | null;
   notes?: string | null;
 };
 
@@ -36,6 +37,7 @@ export type StaffClockState = {
   lastActionAt: string | null;
   currentClockInAt: string | null;
   currentClockOutAt: string | null;
+  timeZone: string | null;
   events: StaffClockEvent[];
 };
 
@@ -55,6 +57,7 @@ function clockEvent(value: unknown): StaffClockEvent | null {
   return {
     action,
     occurredAt,
+    timeZone: stringValue(record.timeZone) || stringValue(record.timezone) || null,
     notes: stringValue(record.notes) || null,
   };
 }
@@ -166,6 +169,7 @@ export function readStaffClockState(customFields: unknown): StaffClockState {
     : [];
   const currentClockInAt = stringValue(timeClock.currentClockInAt) || null;
   const currentClockOutAt = stringValue(timeClock.currentClockOutAt) || null;
+  const timeZone = stringValue(timeClock.timeZone) || stringValue(timeClock.timezone) || events.find((event) => event.timeZone)?.timeZone || null;
   const status = timeClock.status === "clocked_in" || (lastAction === "clock_in" && currentClockInAt)
     ? "clocked_in"
     : "clocked_out";
@@ -176,6 +180,7 @@ export function readStaffClockState(customFields: unknown): StaffClockState {
     lastActionAt: stringValue(timeClock.lastActionAt) || events[0]?.occurredAt || null,
     currentClockInAt: status === "clocked_in" ? currentClockInAt : null,
     currentClockOutAt,
+    timeZone,
     events,
   };
 }
@@ -278,11 +283,13 @@ export function staffClockFields({
   customFields,
   action,
   occurredAt,
+  timeZone,
   notes,
 }: {
   customFields: unknown;
   action: StaffClockAction;
   occurredAt: Date;
+  timeZone?: string | null;
   notes?: string | null;
 }) {
   const fields = asRecord(customFields);
@@ -290,6 +297,7 @@ export function staffClockFields({
   const event: StaffClockEvent = {
     action,
     occurredAt: occurredAt.toISOString(),
+    timeZone: timeZone || null,
     notes: notes || null,
   };
   const events = [event, ...previous.events].slice(0, 60);
@@ -303,6 +311,7 @@ export function staffClockFields({
       lastActionAt: event.occurredAt,
       currentClockInAt: action === "clock_in" ? event.occurredAt : null,
       currentClockOutAt: action === "clock_out" ? event.occurredAt : null,
+      timeZone: timeZone || previous.timeZone,
       totalMinutes: summary.totalMinutes,
       closedShiftMinutes: summary.closedShiftMinutes,
       closedShiftCount: summary.closedShiftCount,

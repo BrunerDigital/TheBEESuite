@@ -22,14 +22,32 @@ test("saved preferences clamp invalid and cross-role widget ids", () => {
     role: UserRole.TEACHER,
     value: {
       order: ["billingRevenue", "familyCommunication", "attendanceSnapshot", "missingWidget"],
-      hiddenWidgetIds: ["complianceQueue", "billingRevenue", "missingWidget"],
+      hiddenWidgetIds: ["staffingRatios", "complianceQueue", "billingRevenue", "missingWidget"],
     },
   });
 
   assert.deepEqual(config.order.slice(0, 2), ["familyCommunication", "attendanceSnapshot"]);
-  assert.ok(config.hiddenWidgetIds.includes("complianceQueue"));
+  assert.ok(!config.widgets.some((widget) => widget.id === "staffingRatios"));
+  assert.ok(!config.widgets.some((widget) => widget.id === "complianceQueue"));
   assert.ok(!config.widgets.some((widget) => widget.id === "billingRevenue"));
+  assert.ok(!config.hiddenWidgetIds.includes("staffingRatios"));
+  assert.ok(!config.hiddenWidgetIds.includes("complianceQueue"));
   assert.ok(!config.hiddenWidgetIds.includes("billingRevenue"));
+});
+
+test("teacher dashboard widgets exclude director-only staffing and compliance", () => {
+  const config = normalizeDashboardWidgetPreferences({
+    role: UserRole.TEACHER,
+    value: {
+      visibleWidgetIds: ["aiBrief", "staffingRatios", "complianceQueue", "familyCommunication"],
+      order: ["staffingRatios", "complianceQueue", "aiBrief", "familyCommunication"],
+    },
+  });
+
+  assert.deepEqual(config.visibleWidgetIds, ["aiBrief", "familyCommunication"]);
+  assert.ok(!config.order.includes("staffingRatios"));
+  assert.ok(!config.order.includes("complianceQueue"));
+  assert.ok(config.widgets.every((widget) => widget.roles.includes(UserRole.TEACHER)));
 });
 
 test("submitted widget rows drive both visibility and ordering", () => {

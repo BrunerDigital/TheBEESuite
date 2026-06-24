@@ -28,15 +28,15 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; auth?: { passwordResetSent?: boolean } } | null;
+      const json = await response.json().catch(() => null) as { error?: string; auth?: { defaultPasswordSet?: boolean } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
         return;
       }
       setStatusMessage(
-        json?.auth?.passwordResetSent
-          ? "Parent portal access was created and the password setup email was sent. The parent uses their guardian email, creates a password, then finishes the parent setup screen."
-          : "Parent portal access was created. The parent uses their guardian email, then finishes the parent setup screen.",
+        json?.auth?.defaultPasswordSet
+          ? "Parent portal access was created and the login email was sent. The parent signs in with their guardian email and the default parent password, then finishes the parent setup screen."
+          : "Parent portal access was created. The parent signs in with their guardian email, then finishes the parent setup screen.",
       );
     });
   }
@@ -68,12 +68,12 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email becomes the parent login. The setup email lets the parent choose their own password, then the setup
-          screen confirms contact details and the check-in PIN.
+          The guardian email becomes the parent login. Parents use the default parent password from the school and can change it
+          later from the login screen. The setup screen confirms contact details and the check-in PIN.
         </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">
           <Send data-icon="inline-start" />
-          {linked ? "Send Password Setup" : "Invite Parent"}
+          {linked ? "Send Parent Login" : "Invite Parent"}
         </Button>
       </CardContent>
     </Card>

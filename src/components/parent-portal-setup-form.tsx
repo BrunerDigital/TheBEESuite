@@ -52,7 +52,7 @@ function pinDigits(value: string) {
 const setupSteps = [
   {
     title: "Create your password",
-    body: "Use the secure password setup email before signing in to this page.",
+    body: "Sign in with the default parent password from your school. You can change it later from Forgot password.",
   },
   {
     title: "Confirm this profile",

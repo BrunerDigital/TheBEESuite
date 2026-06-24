@@ -17,13 +17,34 @@ type ResetResponse = {
   message?: string;
 };
 
-function readRecoveryTokenFromHash() {
-  if (typeof window === "undefined") return "";
+type ResetCredential = {
+  accessToken?: string;
+  tokenHash?: string;
+};
+
+function readRecoveryTokenFromHash(): ResetCredential {
+  if (typeof window === "undefined") return {};
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
   const params = new URLSearchParams(hash);
   const type = params.get("type");
   const accessToken = params.get("access_token");
-  return type === "recovery" && accessToken ? accessToken : "";
+  return type === "recovery" && accessToken ? { accessToken } : {};
+}
+
+function readRecoveryCredential(searchParams: URLSearchParams): ResetCredential {
+  const type = searchParams.get("type");
+  const tokenHash = searchParams.get("token_hash") || searchParams.get("tokenHash");
+  if (type === "recovery" && tokenHash) return { tokenHash };
+  return readRecoveryTokenFromHash();
+}
+
+function removeRecoveryCredentialFromUrl() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("token_hash");
+  url.searchParams.delete("tokenHash");
+  url.searchParams.delete("type");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
 }
 
 function safeNextPath(value: string | null) {
@@ -37,7 +58,7 @@ export function ResetPasswordForm() {
   const forceReset = searchParams.get("force") === "1";
   const next = safeNextPath(searchParams.get("next"));
   const parentSetupFlow = next === "/parent-portal/setup";
-  const accessTokenRef = useRef("");
+  const credentialRef = useRef<ResetCredential>({});
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -47,19 +68,19 @@ export function ResetPasswordForm() {
 
   useEffect(() => {
     if (forceReset) return;
-    const token = readRecoveryTokenFromHash();
-    accessTokenRef.current = token;
-    if (token && window.location.hash) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    const credential = readRecoveryCredential(new URLSearchParams(searchParams.toString()));
+    if (credential.accessToken || credential.tokenHash) {
+      credentialRef.current = credential;
+      removeRecoveryCredentialFromUrl();
     }
-  }, [forceReset]);
+  }, [forceReset, searchParams]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setMessage("");
 
-    if (!forceReset && !accessTokenRef.current) {
+    if (!forceReset && !credentialRef.current.accessToken && !credentialRef.current.tokenHash) {
       setError("This reset link is missing or expired. Request a fresh password reset link.");
       return;
     }
@@ -71,10 +92,11 @@ export function ResetPasswordForm() {
 
     startTransition(async () => {
       const endpoint = forceReset ? "/api/auth/force-password-reset" : "/api/auth/reset-password";
+      const credential = credentialRef.current;
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(forceReset ? { currentPassword, password } : { accessToken: accessTokenRef.current, password }),
+        body: JSON.stringify(forceReset ? { currentPassword, password } : { ...credential, password }),
       });
       const data = (await response.json().catch(() => null)) as ResetResponse | null;
 

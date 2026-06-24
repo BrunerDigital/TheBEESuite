@@ -122,6 +122,7 @@ import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
 import { StripeConnectPanel, type StripeConnectCenter } from "@/components/stripe-connect-panel";
+import { TerminalStore } from "@/components/terminal-store";
 import { TuitionPaymentReminderSettingsPanel } from "@/components/tuition-payment-reminder-settings-panel";
 import {
   TenantControlsPanel,
@@ -138,6 +139,7 @@ import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/requ
 import type { RegistrationReviewStatus } from "@/lib/registration-packet";
 import { formatRegistrationPaymentAmount, type RegistrationPaymentStatus } from "@/lib/registration-billing";
 import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
+import type { TerminalStoreItem } from "@/lib/terminal-store";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
 
 function formatDate(value: Date | string | null | undefined) {
@@ -2419,6 +2421,7 @@ export type ClassroomDashboardData = {
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
   ageGroups: string[];
+  canManageClassroomSetup: boolean;
   demoMode?: boolean;
 };
 
@@ -2463,9 +2466,15 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
         classrooms={data.classrooms}
         staff={data.staff}
         ageGroups={data.ageGroups}
+        canManage={data.canManageClassroomSetup}
         demoMode={data.demoMode}
       />
-      <ClassroomRatioAssignmentPanel classrooms={data.classrooms} staff={data.staff} demoMode={data.demoMode} />
+      <ClassroomRatioAssignmentPanel
+        classrooms={data.classrooms}
+        staff={data.staff}
+        canManage={data.canManageClassroomSetup}
+        demoMode={data.demoMode}
+      />
     </div>
   );
 }
@@ -5194,6 +5203,40 @@ type KidCitySoftwareInvoiceData = {
 export type CorporateBillingPageData = {
   kidCitySoftwareInvoice: KidCitySoftwareInvoiceData;
 };
+
+export type TerminalStorePageData = {
+  items: TerminalStoreItem[];
+  centers: Array<{ id: string; name: string }>;
+  defaultCenterId?: string | null;
+};
+
+export function TerminalStorePage({ data }: { data: TerminalStorePageData }) {
+  const readerCount = data.items.filter((item) => item.category === "reader").length;
+  const accessoryCount = data.items.filter((item) => item.category === "accessory").length;
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
+        <Badge className="mb-4">
+          <CreditCard data-icon="inline-start" />
+          Terminal store
+        </Badge>
+        <h1 className="text-3xl font-semibold tracking-tight">Terminal Store</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+          Purchase Stripe Terminal readers and accessories through The BEE Suite. Checkout runs on The BEE Suite platform account and collects shipping before payment.
+        </p>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="Readers" value={readerCount} />
+        <StatCard label="Accessories" value={accessoryCount} />
+        <StatCard label="Store markup" value="20%" />
+        <StatCard label="Payment account" value="The BEE Suite" />
+      </div>
+
+      <TerminalStore items={data.items} centers={data.centers} defaultCenterId={data.defaultCenterId} />
+    </div>
+  );
+}
 
 export function CorporateBillingPage({ data }: { data: CorporateBillingPageData }) {
   const invoice = data.kidCitySoftwareInvoice;

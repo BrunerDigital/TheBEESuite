@@ -4,6 +4,7 @@ import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian
 import { writeAuditLog } from "@/lib/audit";
 import { isActiveStripeCheckoutPayment, jsonRecord } from "@/lib/billing-guardrails";
 import {
+  createStripeCustomer,
   createStripeCheckoutSession,
   getStripeCheckoutAmounts,
   getStripePaymentMethodConfigurationId,
@@ -21,6 +22,7 @@ import {
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -229,6 +231,40 @@ async function POSTHandler(request: NextRequest) {
     paymentMethodCategory: effectivePaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
   });
+  const billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
+  let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
+  if (!stripeCustomerId) {
+    const customer = await createStripeCustomer({
+      email: invoice.billingAccount.family.billingEmail,
+      name: invoice.billingAccount.family.name,
+      metadata: {
+        tenantId: user.tenantId,
+        billingAccountId: invoice.billingAccountId,
+        familyId: invoice.billingAccount.familyId,
+        centerId: centerId || "",
+        stripeConnectedAccountId: connectedAccountId || "",
+        environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
+      },
+      connectedAccountId,
+      tenantId: user.tenantId,
+    });
+    if (!customer.ok || !customer.id) {
+      return NextResponse.json(
+        { ok: false, configured: customer.configured, error: customer.error || "Family payment profile could not be created." },
+        { status: customer.configured ? 502 : 503 },
+      );
+    }
+    stripeCustomerId = customer.id;
+    await prisma.billingAccount.update({
+      where: { id: invoice.billingAccountId },
+      data: {
+        customFields: {
+          ...billingAccountFields,
+          ...stripeCustomerCustomFieldPatch(billingAccountFields, stripeCustomerId, connectedAccountId),
+        },
+      },
+    });
+  }
 
   const draftStripePayments = await prisma.payment.findMany({
     where: {
@@ -262,6 +298,8 @@ async function POSTHandler(request: NextRequest) {
       customFields: {
         invoiceId: invoice.id,
         invoiceAmountCents: invoice.totalCents,
+        stripeCustomerId,
+        stripeCustomerConnectedAccountId: connectedAccountId || null,
         status: "checkout_pending",
       },
     },
@@ -273,6 +311,7 @@ async function POSTHandler(request: NextRequest) {
     parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
     invoiceNumber: invoice.number,
     centerName: center?.name,
+    customerId: stripeCustomerId,
     customerEmail: invoice.billingAccount.family.billingEmail,
     successUrl: `${baseUrl}/parent-portal?payment=success&invoice=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${baseUrl}/parent-portal?payment=cancelled&invoice=${invoice.id}`,
@@ -283,6 +322,8 @@ async function POSTHandler(request: NextRequest) {
       familyId: invoice.billingAccount.familyId,
       centerId: centerId || "",
       stripeConnectedAccountId: connectedAccountId || "",
+      stripeCustomerId,
+      stripeChargeType: connectedAccountId ? "direct" : "platform",
       invoiceAmountCents: String(amounts.invoiceAmountCents),
       parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
       parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
@@ -322,6 +363,9 @@ async function POSTHandler(request: NextRequest) {
           checkoutTotalCents: amounts.checkoutTotalCents,
           applicationFeeAmountCents: amounts.applicationFeeAmountCents,
           invoiceId: invoice.id,
+          stripeCustomerId,
+          stripeCustomerConnectedAccountId: connectedAccountId || null,
+          stripeChargeType: connectedAccountId ? "direct" : "platform",
           status: "checkout_failed",
           stripeError: session.error || "stripe_checkout_failed",
         },
@@ -352,6 +396,9 @@ async function POSTHandler(request: NextRequest) {
         applicationFeeAmountCents: amounts.applicationFeeAmountCents,
         stripeCheckoutSessionId: session.id,
         stripeConnectedAccountId: connectedAccountId || null,
+        stripeCustomerId,
+        stripeCustomerConnectedAccountId: connectedAccountId || null,
+        stripeChargeType: connectedAccountId ? "direct" : "platform",
         status: "checkout_created",
       },
     },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
+import { readCenterTimeZone } from "@/lib/attendance-state";
 import { normalizePin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import {
@@ -62,7 +63,7 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findFirst({
     where: { id: centerId, status: { not: "closed" } },
-    select: { id: true, name: true, crmLocationId: true, organization: { select: { tenantId: true } } },
+    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true, organization: { select: { tenantId: true } } },
   });
   if (!center) {
     return NextResponse.json({ ok: false, error: "Kiosk center not found." }, { status: 404 });
@@ -113,10 +114,12 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const occurredAt = new Date();
+  const timeZone = readCenterTimeZone(center);
   const customFields = staffClockFields({
     customFields: staff.customFields,
     action,
     occurredAt,
+    timeZone,
     notes,
   });
   const updated = await prisma.staffProfile.update({
@@ -140,6 +143,7 @@ async function POSTHandler(request: NextRequest) {
       classroomId: staff.classroom?.id ?? null,
       previousStatus: currentState.status,
       occurredAt: occurredAt.toISOString(),
+      timeZone,
       notes: notes || null,
     },
   });
@@ -149,6 +153,7 @@ async function POSTHandler(request: NextRequest) {
     center: { id: center.id, name: center.crmLocationId ?? center.name },
     action,
     occurredAt,
+    timeZone,
     staff: serializeStaff(updated),
   }, { status: 201 });
 }

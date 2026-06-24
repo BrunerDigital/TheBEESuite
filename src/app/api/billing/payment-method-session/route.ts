@@ -6,11 +6,13 @@ import {
   createStripeCustomer,
   createStripeSetupCheckoutSession,
   getStripeProcessingRecoveryAmount,
+  readStripeConnectedAccountId,
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
+import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -175,7 +177,14 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const baseUrl = requestBaseUrl(request);
-  const tenantId = billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
+  const center = centerId
+    ? await prisma.center.findUnique({
+        where: { id: centerId },
+        select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+      })
+    : null;
+  const tenantId = center?.organization.tenantId ?? billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
+  const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
 
   if (action === "disable_autopay") {
     await prisma.billingAccount.update({
@@ -201,7 +210,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: true, status: "disabled" });
   }
 
-  const existingCustomerId = clean(currentFields.stripeCustomerId);
+  const existingCustomerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
   if (action === "portal") {
     if (!existingCustomerId) {
       return NextResponse.json(
@@ -212,6 +221,7 @@ async function POSTHandler(request: NextRequest) {
     const portal = await createStripeBillingPortalSession({
       customerId: existingCustomerId,
       returnUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "portal_return")}`,
+      connectedAccountId,
       tenantId,
     });
     if (!portal.ok || !portal.url) {
@@ -247,8 +257,10 @@ async function POSTHandler(request: NextRequest) {
         billingAccountId: billingAccount.id,
         familyId: billingAccount.familyId,
         centerId: centerId || "",
+        stripeConnectedAccountId: connectedAccountId || "",
         environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
       },
+      connectedAccountId,
     });
     if (!customer.ok || !customer.id) {
       return NextResponse.json(
@@ -271,11 +283,14 @@ async function POSTHandler(request: NextRequest) {
       billingAccountId: billingAccount.id,
       familyId: billingAccount.familyId,
       centerId: centerId || "",
+      stripeConnectedAccountId: connectedAccountId || "",
+      stripeCustomerId: customerId,
       requestedByUserId: user.id,
       enableAutopay: "true",
       preferredPaymentMethodCategory: paymentMethodCategory,
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
+    connectedAccountId,
     tenantId,
   });
   if (!setup.ok || !setup.url) {
@@ -291,8 +306,9 @@ async function POSTHandler(request: NextRequest) {
     data: {
       customFields: {
         ...currentFields,
-        stripeCustomerId: customerId,
+        ...stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId),
         stripeSetupCheckoutSessionId: setup.id || null,
+        stripeSetupConnectedAccountId: connectedAccountId || null,
         paymentMethodManagementStatus: "setup_session_created",
         paymentMethodManagementUpdatedAt,
         autopayStatus: "pending",

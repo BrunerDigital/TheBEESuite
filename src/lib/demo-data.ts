@@ -54,6 +54,7 @@ export type ModuleSlug =
   | "staff"
   | "billing-invoices"
   | "payments"
+  | "terminal-store"
   | "corporate-billing"
   | "compliance"
   | "reputation"
@@ -310,6 +311,7 @@ export const navGroups = [
     items: [
       ["Billing & invoices", "billing-invoices", BadgeDollarSign],
       ["Payments", "payments", CreditCard],
+      ["Terminal store", "terminal-store", CreditCard],
       ["Software invoice", "corporate-billing", CreditCard],
       ["Forms", "forms", FileText],
       ["Documents", "documents", FileText],
@@ -647,6 +649,18 @@ export const modules: ModuleDefinition[] = [
     metrics: ["20 invoices", "$18.6k outstanding", "$4.2k deposits", "3 failed payments"],
     features: ["Tuition plans", "Products and one-time charges", "Registration fees", "Stripe checkout integration"],
     records: ["Rivera invoice #1042 - due", "Patel deposit - paid", "Morgan subsidy - pending"],
+    sensitive: true,
+  },
+  {
+    slug: "terminal-store",
+    title: "Terminal Store",
+    eyebrow: "Hardware purchasing",
+    description:
+      "Director and executive storefront for Stripe Terminal readers, docks, hubs, cases, and mounts purchased through The BEE Suite platform account.",
+    owner: "Center director, assistant director, executive team",
+    metrics: ["20% Bee Suite markup", "Platform checkout", "Shipping collected", "Stripe receipt"],
+    features: ["Role-gated hardware catalog", "Quantity-based cart", "Stripe-hosted checkout", "Audit trail for created purchases"],
+    records: ["Terminal catalog", "Checkout session", "Purchaser metadata", "School association"],
     sensitive: true,
   },
   {

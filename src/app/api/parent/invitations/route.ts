@@ -7,15 +7,14 @@ import { sendEmail } from "@/lib/integrations";
 import {
   buildParentPortalInvitationText,
   buildParentPortalSetupUrl,
+  getParentPortalDefaultPassword,
   PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import {
-  ensureSupabaseAuthUser,
   getAppBaseUrl,
-  getParentPortalPasswordResetRedirectUrl,
-  requestSupabasePasswordReset,
+  upsertSupabaseAuthUserWithPassword,
 } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -44,7 +43,7 @@ async function POSTHandler(request: NextRequest) {
   }
   if (temporaryPassword) {
     return NextResponse.json(
-      { ok: false, error: "Parent passwords are set by the parent from the setup email." },
+      { ok: false, error: "Parent portal passwords use the configured default parent password." },
       { status: 400 },
     );
   }
@@ -102,23 +101,29 @@ async function POSTHandler(request: NextRequest) {
   }
 
   let auth:
-    | { ok: true; created?: boolean; updated?: boolean; alreadyExisted?: boolean; passwordResetSent?: boolean; emailSent?: boolean }
-    | { ok: false; error?: string; passwordResetSent?: boolean; emailSent?: boolean };
+    | { ok: true; created?: boolean; updated?: boolean; defaultPasswordSet?: boolean; emailSent?: boolean }
+    | { ok: false; error?: string; defaultPasswordSet?: boolean; emailSent?: boolean };
+  const appBaseUrl = getAppBaseUrl(request.url);
+  const defaultPassword = getParentPortalDefaultPassword();
+
+  if (defaultPassword.length < 8) {
+    return NextResponse.json({ ok: false, error: "Parent portal default password is not configured." }, { status: 500 });
+  }
 
   try {
-    const ensure = await ensureSupabaseAuthUser({ email, name: guardian.fullName });
-    if (!ensure.ok) {
-      auth = { ok: false, error: ensure.error };
-    } else {
-      const reset = await requestSupabasePasswordReset(email, getParentPortalPasswordResetRedirectUrl(request.url));
-      auth = {
-        ok: reset.ok,
-        created: ensure.created,
-        alreadyExisted: ensure.alreadyExisted,
-        passwordResetSent: reset.ok,
-        error: reset.ok ? undefined : `Password setup email returned ${reset.status}.`,
-      };
-    }
+    const upsert = await upsertSupabaseAuthUserWithPassword({
+      email,
+      name: guardian.fullName,
+      password: defaultPassword,
+      role: UserRole.PARENT_GUARDIAN,
+      source: PARENT_PORTAL_INVITE_MODE,
+    });
+    auth = {
+      ok: true,
+      created: upsert.created,
+      updated: upsert.updated,
+      defaultPasswordSet: true,
+    };
   } catch (error) {
     auth = { ok: false, error: error instanceof Error ? error.message : "Supabase auth setup failed." };
   }
@@ -134,7 +139,7 @@ async function POSTHandler(request: NextRequest) {
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
-      mustResetPassword: true,
+      mustResetPassword: false,
       sessionVersion: { increment: 1 },
     },
     create: {
@@ -144,7 +149,7 @@ async function POSTHandler(request: NextRequest) {
       name: guardian.fullName,
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
-      mustResetPassword: true,
+      mustResetPassword: false,
     },
   });
 
@@ -166,7 +171,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const portalUrl = buildParentPortalSetupUrl(getAppBaseUrl(request.url));
+  const portalUrl = buildParentPortalSetupUrl(appBaseUrl);
   const invitationText = buildParentPortalInvitationText({
     guardianName: guardian.fullName,
     centerLabel: center.crmLocationId ?? center.name,
@@ -204,10 +209,22 @@ async function POSTHandler(request: NextRequest) {
       parentUserId: parentUser.id,
       email,
       authMode: PARENT_PORTAL_INVITE_MODE,
-      resetSent: "passwordResetSent" in auth ? auth.passwordResetSent : false,
+      defaultPasswordSet: "defaultPasswordSet" in auth ? auth.defaultPasswordSet : false,
       emailCopySent: emailCopy.ok,
     },
   });
+
+  if (!emailCopy.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: emailCopy.error || "The parent portal user was linked, but the login email could not be sent. Try Send Parent Login again.",
+        auth: { ...auth, emailSent: false },
+        emailCopy,
+      },
+      { status: 502 },
+    );
+  }
 
   return NextResponse.json({
     ok: true,
@@ -217,7 +234,7 @@ async function POSTHandler(request: NextRequest) {
       email: updatedGuardian.email,
       userId: parentUser.id,
     },
-    auth,
+    auth: { ...auth, emailSent: true },
     emailCopy,
   });
 }

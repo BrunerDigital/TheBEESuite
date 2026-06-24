@@ -81,10 +81,168 @@ export function startOfServiceDay(date = new Date(), timeZone = "America/New_Yor
   return zonedDateTimeToUtc({ ...parts, hour: 0, minute: 0, second: 0 }, timeZone);
 }
 
-export function readCenterTimeZone(customFields: unknown) {
-  if (!customFields || typeof customFields !== "object" || Array.isArray(customFields)) return "America/New_York";
-  const value = (customFields as Record<string, unknown>).timeZone ?? (customFields as Record<string, unknown>).timezone;
-  return typeof value === "string" && value.trim() ? value.trim() : "America/New_York";
+export type CenterTimeZoneSource = {
+  timezone?: string | null;
+  timeZone?: string | null;
+  customFields?: unknown;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+};
+
+const FALLBACK_TIME_ZONE = "America/New_York";
+
+const stateTimeZones: Record<string, string> = {
+  AK: "America/Anchorage",
+  AL: "America/Chicago",
+  AR: "America/Chicago",
+  AZ: "America/Phoenix",
+  CA: "America/Los_Angeles",
+  CO: "America/Denver",
+  CT: "America/New_York",
+  DC: "America/New_York",
+  DE: "America/New_York",
+  FL: "America/New_York",
+  GA: "America/New_York",
+  HI: "Pacific/Honolulu",
+  IA: "America/Chicago",
+  ID: "America/Boise",
+  IL: "America/Chicago",
+  IN: "America/Indiana/Indianapolis",
+  KS: "America/Chicago",
+  KY: "America/New_York",
+  LA: "America/Chicago",
+  MA: "America/New_York",
+  MD: "America/New_York",
+  ME: "America/New_York",
+  MI: "America/Detroit",
+  MN: "America/Chicago",
+  MO: "America/Chicago",
+  MS: "America/Chicago",
+  MT: "America/Denver",
+  NC: "America/New_York",
+  ND: "America/Chicago",
+  NE: "America/Chicago",
+  NH: "America/New_York",
+  NJ: "America/New_York",
+  NM: "America/Denver",
+  NV: "America/Los_Angeles",
+  NY: "America/New_York",
+  OH: "America/New_York",
+  OK: "America/Chicago",
+  OR: "America/Los_Angeles",
+  PA: "America/New_York",
+  RI: "America/New_York",
+  SC: "America/New_York",
+  SD: "America/Chicago",
+  TN: "America/Chicago",
+  TX: "America/Chicago",
+  UT: "America/Denver",
+  VA: "America/New_York",
+  VT: "America/New_York",
+  WA: "America/Los_Angeles",
+  WI: "America/Chicago",
+  WV: "America/New_York",
+  WY: "America/Denver",
+};
+
+const floridaCentralCities = new Set([
+  "bonifay",
+  "crestview",
+  "defuniak springs",
+  "destin",
+  "fort walton beach",
+  "freeport",
+  "lynn haven",
+  "marianna",
+  "milton",
+  "niceville",
+  "panama city",
+  "panama city beach",
+  "pensacola",
+  "santa rosa beach",
+]);
+
+const indianaCentralCities = new Set([
+  "boonville",
+  "chandler",
+  "chesterton",
+  "crown point",
+  "east chicago",
+  "evansville",
+  "fort branch",
+  "gary",
+  "hammond",
+  "knox",
+  "la porte",
+  "merrillville",
+  "michigan city",
+  "mount vernon",
+  "newburgh",
+  "portage",
+  "poseyville",
+  "princeton",
+  "rensselaer",
+  "rockport",
+  "santa claus",
+  "tell city",
+  "valparaiso",
+]);
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isValidTimeZone(value: string) {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date(0));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function inferTimeZoneFromLocation(input: CenterTimeZoneSource) {
+  const state = stringValue(input.state).toUpperCase();
+  const city = stringValue(input.city).toLowerCase();
+  if (state === "FL" && floridaCentralCities.has(city)) return "America/Chicago";
+  if (state === "IN" && indianaCentralCities.has(city)) return "America/Chicago";
+  return stateTimeZones[state] ?? FALLBACK_TIME_ZONE;
+}
+
+export function readCenterTimeZone(input: unknown) {
+  const record = asRecord(input);
+  const customFields = asRecord(record.customFields ? record.customFields : input);
+  const inferred = inferTimeZoneFromLocation(record);
+  const configured = [
+    stringValue(record.timezone),
+    stringValue(record.timeZone),
+  ].find(isValidTimeZone);
+  const legacyConfigured = [
+    stringValue(customFields.timezone),
+    stringValue(customFields.timeZone),
+  ].find(isValidTimeZone);
+  if (configured && configured !== FALLBACK_TIME_ZONE) return configured;
+  if (legacyConfigured && legacyConfigured !== FALLBACK_TIME_ZONE) return legacyConfigured;
+  if (inferred !== FALLBACK_TIME_ZONE) return inferred;
+  if (configured) return configured;
+  if (legacyConfigured) return legacyConfigured;
+  return inferred;
+}
+
+export function centerServiceDayWindow(date = new Date(), center: unknown) {
+  const timeZone = readCenterTimeZone(center);
+  const start = startOfServiceDay(date, timeZone);
+  return {
+    timeZone,
+    start,
+    end: new Date(start.getTime() + 24 * 60 * 60 * 1000),
+  };
 }
 
 export function readLatePickupCutoff(customFields: unknown) {

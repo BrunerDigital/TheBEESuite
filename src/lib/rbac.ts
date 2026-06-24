@@ -18,6 +18,7 @@ const schoolAdminRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MAN
 const classroomRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "TEACHER", "READ_ONLY_AUDITOR"]);
 const billingRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR", "BILLING_ADMIN", "READ_ONLY_AUDITOR"]);
 const parentRoles = new Set(["PARENT_GUARDIAN", "AUTHORIZED_PICKUP"]);
+const terminalStoreRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]);
 
 const executiveOnlyModules = new Set<ModuleSlug>([
   "multi-location-dashboard",
@@ -128,6 +129,7 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (slug === "parent-portal") return role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
   if (slug === "teacher-portal") return role === "TEACHER";
   if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
+  if (slug === "terminal-store") return terminalStoreRoles.has(role);
   if (slug === "corporate-billing") return hasTenantWideUiAccess(subject);
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;

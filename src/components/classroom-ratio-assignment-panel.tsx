@@ -35,6 +35,7 @@ export type ClassroomAssignmentStaff = {
 type Props = {
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
+  canManage?: boolean;
   demoMode?: boolean;
 };
 
@@ -48,7 +49,7 @@ function openClassroomEditor(classroomId: string) {
   window.dispatchEvent(new CustomEvent("bee-suite:edit-classroom", { detail: { classroomId } }));
 }
 
-export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = false }: Props) {
+export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = false, demoMode = false }: Props) {
   const router = useRouter();
   const ratioRows = useMemo(
     () => classrooms.map((classroom) => ({
@@ -119,14 +120,18 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Ratio Warnings And Staff Assignment</CardTitle>
-          <CardDescription>Add classrooms before assigning teacher coverage.</CardDescription>
+          <CardDescription>
+            {canManage ? "Add classrooms before assigning teacher coverage." : "No classroom coverage records are visible for this login."}
+          </CardDescription>
         </CardHeader>
+        {canManage ? (
         <CardContent>
           <Button nativeButton={false} render={<Link href="/classroom-dashboard#classroom-editor" />}>
             <Pencil data-icon="inline-start" />
             Open classroom setup
           </Button>
         </CardContent>
+        ) : null}
       </Card>
     );
   }
@@ -135,7 +140,11 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
     <Card className="glass-panel">
       <CardHeader>
         <CardTitle>Ratio Warnings And Staff Assignment</CardTitle>
-        <CardDescription>Review rooms that need coverage and move active teachers into the selected classroom.</CardDescription>
+        <CardDescription>
+          {canManage
+            ? "Review rooms that need coverage and move active teachers into the selected classroom."
+            : "Review classroom coverage status. Staffing, assignment, and ratio changes are director-only."}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {demoMode ? (
@@ -184,14 +193,14 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
             </button>
           ))}
         </div>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]">
+        <div className={canManage ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.8fr)]" : "grid gap-4"}>
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">{selectedClassroom?.name ?? "Classroom"}</div>
                 <p className="text-xs text-muted-foreground">
                   {selectedClassroom?.ageGroup ?? "Age group"} · {selectedClassroom?.ratioRule ?? "ratio not set"}
-                  {selectedClassroom && !selectedClassroom.ratioRule ? (
+                  {canManage && selectedClassroom && !selectedClassroom.ratioRule ? (
                     <Button type="button" variant="link" className="ml-1 h-auto p-0 text-xs" onClick={() => openClassroomEditor(selectedClassroom.id)}>
                       Add ratio
                     </Button>
@@ -221,6 +230,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
             </div>
           </div>
 
+          {canManage ? (
           <div className="rounded-xl border bg-background/40 p-4">
             <div className="mb-3">
               <div className="text-sm font-medium">Assignment action</div>
@@ -267,6 +277,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, demoMode = fa
               </div>
             </div>
           </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>

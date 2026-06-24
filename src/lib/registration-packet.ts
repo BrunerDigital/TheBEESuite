@@ -624,7 +624,7 @@ export function buildEnrollmentChecklist(input: {
       status: input.parentPortalInviteStatus === "sent" ? "complete" : input.parentPortalInviteStatus === "failed" ? "blocked" : "pending",
       detail:
         input.parentPortalInviteStatus === "sent"
-          ? "Parent portal account is linked and setup email was requested."
+          ? "Parent portal account is linked and login email was requested."
           : input.parentPortalInviteStatus === "failed"
             ? "Parent portal auth/email setup needs staff follow-up."
             : "Parent portal access has not been sent yet.",

@@ -103,6 +103,7 @@ export function StripeConnectPanel({
   const [setupCenterId, setSetupCenterId] = useState<string | null>(null);
   const [setupForm, setSetupForm] = useState<StripeConnectSetupDetails | null>(null);
   const [setupErrors, setSetupErrors] = useState<Partial<Record<keyof StripeConnectSetupDetails, string>>>({});
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
 
   const setupCenter = useMemo(
     () => localCenters.find((center) => center.id === setupCenterId) ?? null,
@@ -124,6 +125,7 @@ export function StripeConnectPanel({
     setSetupCenterId(center.id);
     setSetupForm(setup.details);
     setSetupErrors({});
+    setSetupMessage(null);
     setMessage(null);
   }
 
@@ -131,6 +133,7 @@ export function StripeConnectPanel({
     setSetupCenterId(null);
     setSetupForm(null);
     setSetupErrors({});
+    setSetupMessage(null);
   }
 
   function updateSetupField(field: keyof StripeConnectSetupDetails, value: string) {
@@ -147,12 +150,13 @@ export function StripeConnectPanel({
     const validation = normalizeStripeConnectSetupInput(setupForm, setupCenter);
     if (!validation.ok) {
       setSetupErrors(validation.errors);
-      setMessage("Complete the required payout setup fields before continuing to Stripe.");
+      setSetupMessage("Complete the required payout setup fields before continuing to Stripe.");
       return;
     }
 
     setBusyCenterId(setupCenter.id);
     setMessage(null);
+    setSetupMessage(null);
     try {
       const response = await fetch("/api/billing/connect/onboard", {
         method: "POST",
@@ -160,6 +164,31 @@ export function StripeConnectPanel({
         body: JSON.stringify({ centerId: setupCenter.id, setup: validation.details }),
       });
       const json = await response.json();
+      if (response.ok && json.ok && json.saved && !json.url) {
+        const savedAt = new Date().toISOString();
+        setLocalCenters((current) => current.map((center) => {
+          if (center.id !== setupCenter.id) return center;
+          return {
+            ...center,
+            email: validation.details.payoutContactEmail || center.email,
+            phone: validation.details.payoutContactPhone || center.phone,
+            address: validation.details.addressLine1 || center.address,
+            city: validation.details.city || center.city,
+            state: validation.details.state || center.state,
+            postalCode: validation.details.postalCode || center.postalCode,
+            customFields: {
+              ...fields(center.customFields),
+              stripeConnectSetup: validation.details,
+              stripeConnectSetupUpdatedAt: savedAt,
+              stripeConnectSetupVersion: "2026-06-dashboard-v1",
+            },
+          };
+        }));
+        setMessage(json.message || "Payout setup profile saved.");
+        closeSetupDialog();
+        setBusyCenterId(null);
+        return;
+      }
       if (!response.ok || !json.ok || !json.url) {
         const serverErrors = setupErrorsFromResponse(json.fields);
         if (Object.keys(serverErrors).length) setSetupErrors(serverErrors);
@@ -167,7 +196,9 @@ export function StripeConnectPanel({
       }
       window.location.href = json.url as string;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Payout onboarding could not be started.");
+      const errorMessage = error instanceof Error ? error.message : "Payout onboarding could not be started.";
+      setSetupMessage(errorMessage);
+      setMessage(errorMessage);
       setBusyCenterId(null);
     }
   }
@@ -393,12 +424,18 @@ export function StripeConnectPanel({
                   </span>
                 </div>
 
+                {setupMessage ? (
+                  <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm leading-6 text-destructive">
+                    {setupMessage}
+                  </div>
+                ) : null}
+
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={closeSetupDialog} disabled={setupBusy}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={!stripeConfigured || setupBusy}>
-                    {setupBusy ? "Opening Stripe..." : "Save and continue"}
+                  <Button type="submit" disabled={setupBusy}>
+                    {setupBusy ? "Saving..." : stripeConfigured ? "Save and continue" : "Save setup profile"}
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </DialogFooter>
@@ -457,7 +494,7 @@ export function StripeConnectPanel({
                         type="button"
                         size="sm"
                         onClick={() => openSetupDialog(center)}
-                        disabled={busyCenterId === center.id || !stripeConfigured}
+                        disabled={busyCenterId === center.id}
                       >
                         {hasAccount ? "Continue" : "Set up"}
                         <ArrowUpRight data-icon="inline-end" />

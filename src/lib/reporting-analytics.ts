@@ -1,4 +1,5 @@
 import { EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
+import { centerServiceDayWindow, readCenterTimeZone } from "@/lib/attendance-state";
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
@@ -10,6 +11,10 @@ export type ReportCenterOption = {
   id: string;
   name: string;
   label: string;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  timezone: string;
 };
 
 export type LeadSourceReportRow = {
@@ -221,12 +226,16 @@ async function getAccessibleCenters(user: CurrentUser) {
   const centers = await prisma.center.findMany({
     where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, crmLocationId: true },
+    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
   });
   return centers.map((center) => ({
     id: center.id,
     name: center.name,
     label: centerLabel(center),
+    city: center.city,
+    state: center.state,
+    postalCode: center.postalCode,
+    timezone: readCenterTimeZone(center),
   }));
 }
 
@@ -482,7 +491,7 @@ function buildStaffHoursReports(
     customFields: unknown;
     centerId: string;
     user: { name: string; email: string; isActive: boolean };
-    center: { name: string; crmLocationId: string | null };
+    center: { name: string; crmLocationId: string | null; city?: string | null; state?: string | null; postalCode?: string | null; timezone?: string | null; customFields?: unknown };
     classroom: { name: string } | null;
   }>,
   input: {
@@ -494,7 +503,13 @@ function buildStaffHoursReports(
   return staffProfiles
     .map((staff) => {
       const clock = readStaffClockState(staff.customFields);
-      const summary = readStaffClockSummary(staff.customFields, input);
+      const staffRangeStart = centerServiceDayWindow(input.startDate, staff.center);
+      const staffRangeEnd = centerServiceDayWindow(input.endDate, staff.center);
+      const summary = readStaffClockSummary(staff.customFields, {
+        ...input,
+        startDate: staffRangeStart.start,
+        endDate: staffRangeEnd.end,
+      });
       return {
         staffId: staff.id,
         staffName: staff.user.name,
@@ -661,7 +676,7 @@ export async function buildAnalyticsReportData(
         customFields: true,
         centerId: true,
         user: { select: { name: true, email: true, isActive: true } },
-        center: { select: { name: true, crmLocationId: true } },
+        center: { select: { name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true } },
         classroom: { select: { name: true } },
       },
     }),

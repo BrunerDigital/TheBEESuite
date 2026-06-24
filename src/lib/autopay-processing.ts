@@ -21,6 +21,7 @@ import {
   stripeConnectReadinessFromFields,
   stripeConnectReadinessFromSnapshot,
 } from "@/lib/stripe-connect-readiness";
+import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
 export type AutopayRunResultStatus = "would_charge" | "processing" | "failed" | "skipped";
 
@@ -324,6 +325,17 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         continue;
       }
     }
+    const scopedStripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
+    if (!scopedStripeCustomerId) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: connectedAccountId
+          ? "Family needs a saved payment method in this school's Stripe account."
+          : "Family needs a saved Stripe customer before autopay can run.",
+      });
+      continue;
+    }
 
     const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
       tenantSlug: center.organization.tenant.slug,
@@ -363,6 +375,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           requestedPaymentMethodCategory: autopayPaymentMethodCategory,
           paymentMethodCategory: amounts.paymentMethodCategory,
           stripeConnectedAccountId: connectedAccountId || null,
+          stripeCustomerId: scopedStripeCustomerId,
+          stripeCustomerConnectedAccountId: connectedAccountId || null,
+          stripeChargeType: connectedAccountId ? "direct" : "platform",
           collectionMode: "autopay",
           status: "autopay_pending",
           autopayAttemptedAt: new Date().toISOString(),
@@ -378,7 +393,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
       invoiceNumber: invoice.number,
       centerName: center.name,
-      customerId: paymentMethod.stripeCustomerId!,
+      customerId: scopedStripeCustomerId,
       paymentMethodId: paymentMethod.stripeDefaultPaymentMethodId!,
       customerEmail: family.billingEmail,
       metadata: {
@@ -388,6 +403,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         familyId: family.id,
         centerId: center.id,
         stripeConnectedAccountId: connectedAccountId || "",
+        stripeCustomerId: scopedStripeCustomerId,
+        stripeChargeType: connectedAccountId ? "direct" : "platform",
         collectionMode: "autopay",
         invoiceAmountCents: String(amounts.invoiceAmountCents),
         parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),

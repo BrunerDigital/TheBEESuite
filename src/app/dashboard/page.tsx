@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
+import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
+import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -11,7 +13,9 @@ import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { dashboardLensesForRole } from "@/lib/rbac";
+import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
+import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +34,13 @@ export default async function DashboardPage() {
       crmLocationId: true,
       city: true,
       state: true,
+      postalCode: true,
+      timezone: true,
       licensedCapacity: true,
+      customFields: true,
     },
   });
-  const [tenantBrand, dashboardPreferenceUser] = await Promise.all([
+  const [tenantBrand, dashboardPreferenceUser, teacherDashboardProfile] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: user.tenantId },
       select: {
@@ -50,6 +57,12 @@ export default async function DashboardPage() {
       where: { id: user.id },
       select: { customFields: true },
     }),
+    user.role === UserRole.TEACHER
+      ? prisma.staffProfile.findUnique({
+          where: { userId: user.id },
+          select: { centerId: true, classroomId: true },
+        })
+      : Promise.resolve(null),
   ]);
   const dashboardWidgetConfig = normalizeDashboardWidgetPreferences({
     role: user.role,
@@ -80,6 +93,11 @@ export default async function DashboardPage() {
   const thirtyDays = new Date(today);
   thirtyDays.setDate(today.getDate() + 30);
   const trendStart = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const attendanceClassroomWhere = user.role === UserRole.TEACHER
+    ? teacherDashboardProfile?.classroomId
+      ? { id: teacherDashboardProfile.classroomId, centerId: scopedCenterFilter }
+      : { id: "__no_teacher_classroom__" }
+    : { centerId: scopedCenterFilter };
 
   const [
     activeChildren,
@@ -99,6 +117,17 @@ export default async function DashboardPage() {
     trendLeadRows,
     trendTourRows,
     trendInvoiceRows,
+    familyCount,
+    documentCount,
+    billingAccountCount,
+    guardianLoginCount,
+    attendanceRecordCount,
+    messageTemplateCount,
+    calendarEventCount,
+    fteReportCount,
+    complianceTaskCount,
+    incidentReviewCount,
+    attendanceClassroomRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -276,7 +305,124 @@ export default async function DashboardPage() {
         totalCents: true,
       },
     }),
+    prisma.family.count({ where: currentFamilyWhere }),
+    prisma.document.count({
+      where: {
+        OR: [
+          { family: { centerId: scopedCenterFilter } },
+          { child: { family: { centerId: scopedCenterFilter } } },
+        ],
+      },
+    }),
+    prisma.billingAccount.count({ where: { family: { centerId: scopedCenterFilter } } }),
+    prisma.guardian.count({ where: { family: currentFamilyWhere, userId: { not: null } } }),
+    prisma.checkInOutLog.count({ where: { centerId: scopedCenterFilter } }),
+    prisma.messageTemplate.count({ where: { centerId: scopedCenterFilter } }),
+    prisma.calendarEvent.count({ where: { centerId: scopedCenterFilter } }),
+    prisma.fteReport.count({ where: { centerId: scopedCenterFilter } }),
+    prisma.complianceTask.count({ where: { centerId: scopedCenterFilter } }),
+    prisma.incidentReport.count({ where: { classroom: { centerId: scopedCenterFilter }, adminReviewStatus: { not: "pending" } } }),
+    prisma.classroom.findMany({
+      where: attendanceClassroomWhere,
+      orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
+      take: 150,
+      select: {
+        id: true,
+        name: true,
+        centerId: true,
+        center: {
+          select: {
+            name: true,
+            crmLocationId: true,
+            city: true,
+            state: true,
+            postalCode: true,
+            timezone: true,
+            customFields: true,
+          },
+        },
+        children: {
+          where: currentEnrollmentWhere,
+          select: { id: true },
+          orderBy: { fullName: "asc" },
+        },
+      },
+    }),
   ]);
+
+  const attendanceServiceDayByCenter = new Map(
+    attendanceClassroomRows.map((classroom) => [classroom.centerId, centerServiceDayWindow(today, classroom.center)]),
+  );
+  const attendanceServiceDayValues = Array.from(attendanceServiceDayByCenter.values());
+  const attendanceChildCenterId = new Map<string, string>();
+  const attendanceChildIds = attendanceClassroomRows.flatMap((classroom) =>
+    classroom.children.map((child) => {
+      attendanceChildCenterId.set(child.id, classroom.centerId);
+      return child.id;
+    }),
+  );
+  const attendanceWindowStart = attendanceServiceDayValues.length
+    ? new Date(Math.min(...attendanceServiceDayValues.map((serviceDay) => serviceDay.start.getTime())))
+    : null;
+  const attendanceWindowEnd = attendanceServiceDayValues.length
+    ? new Date(Math.max(...attendanceServiceDayValues.map((serviceDay) => serviceDay.end.getTime())))
+    : null;
+  const [dashboardCheckLogs, dashboardAttendanceRecords] = attendanceChildIds.length && attendanceWindowStart && attendanceWindowEnd
+    ? await Promise.all([
+        prisma.checkInOutLog.findMany({
+          where: {
+            childId: { in: attendanceChildIds },
+            occurredAt: { gte: attendanceWindowStart, lt: attendanceWindowEnd },
+          },
+          orderBy: { occurredAt: "desc" },
+          select: { childId: true, centerId: true, type: true, occurredAt: true },
+        }),
+        prisma.attendanceRecord.findMany({
+          where: {
+            childId: { in: attendanceChildIds },
+            date: { gte: attendanceWindowStart, lt: attendanceWindowEnd },
+          },
+          orderBy: { date: "desc" },
+          select: { childId: true, status: true, date: true },
+        }),
+      ])
+    : [[], []] as const;
+  function isWithinAttendanceServiceDay(centerId: string | undefined, date: Date) {
+    const serviceDay = centerId ? attendanceServiceDayByCenter.get(centerId) : null;
+    return Boolean(serviceDay && date >= serviceDay.start && date < serviceDay.end);
+  }
+  const latestDashboardCheckLogByChild = latestLogMap(
+    dashboardCheckLogs.filter((log) =>
+      isWithinAttendanceServiceDay(log.centerId ?? attendanceChildCenterId.get(log.childId), log.occurredAt),
+    ),
+  );
+  const latestDashboardAttendanceRecordByChild = new Map<string, { status: string; date: Date }>();
+  for (const record of dashboardAttendanceRecords) {
+    if (!record.childId || latestDashboardAttendanceRecordByChild.has(record.childId)) continue;
+    if (!isWithinAttendanceServiceDay(attendanceChildCenterId.get(record.childId), record.date)) continue;
+    latestDashboardAttendanceRecordByChild.set(record.childId, {
+      status: record.status,
+      date: record.date,
+    });
+  }
+  const attendanceScopeLabel = user.role === UserRole.TEACHER
+    ? attendanceClassroomRows[0]
+      ? `${attendanceClassroomRows[0].center.crmLocationId ?? attendanceClassroomRows[0].center.name} - ${attendanceClassroomRows[0].name}`
+      : "Assigned classroom not set"
+    : centers.length === 1
+      ? `All classes at ${centers[0].crmLocationId ?? centers[0].name}`
+      : "All classes across visible schools";
+  const attendanceSnapshot = buildDashboardAttendanceSnapshot({
+    scopeLabel: attendanceScopeLabel,
+    classrooms: attendanceClassroomRows.map((classroom) => ({
+      id: classroom.id,
+      name: classroom.name,
+      centerName: classroom.center.crmLocationId ?? classroom.center.name,
+      children: classroom.children,
+    })),
+    latestLogByChild: latestDashboardCheckLogByChild,
+    latestRecordByChild: latestDashboardAttendanceRecordByChild,
+  });
 
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
@@ -317,6 +463,27 @@ export default async function DashboardPage() {
     revenue: bucket.revenue,
   }));
   const visibleDashboardLenses = dashboardLensesForRole(user);
+  const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
+    centerCount: centers.length,
+    classroomCount: classroomSnapshotRows.length,
+    teacherStaffCount: staffCount,
+    importedFamilyCount: familyCount,
+    importedChildCount: activeChildren,
+    documentCount,
+    billingAccountCount,
+    invoiceCount: trendInvoiceRows.length,
+    guardianLoginCount,
+    attendanceRecordCount,
+    messageTemplateCount,
+    parentMessageCount: unreadMessages + parentMessageRows.length,
+    calendarEventCount,
+    fteReportCount,
+    complianceTaskCount,
+    incidentReviewCount,
+    leadCount: newLeadCount + highIntentLeadCount,
+    dashboardConfigured: dashboardWidgetConfig.widgets.some((widget) => widget.visible),
+    payoutReady: centers.some((center) => stripeConnectReadinessFromFields(center.customFields).status === "ready"),
+  });
   const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const fteDueState = getFteDueState(today);
   const fteTrendStart = new Date(fteDueState.weekStart);
@@ -609,6 +776,7 @@ export default async function DashboardPage() {
     })),
     aiHighlights,
     analytics: dashboardAnalytics,
+    attendanceSnapshot,
     notifications: dashboardNotifications,
     asOfLabel: today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }),
     showDemoFallbackData,
@@ -628,6 +796,7 @@ export default async function DashboardPage() {
         title: "Director launch setup checklist",
         description: "Track the school-level setup work required before all BEE Suite features go live.",
         completedIds: directorChecklistCompletedIds,
+        automaticCompletedIds: directorChecklistAutomaticCompletedIds,
         graphicHref: "/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg",
       }] : []),
     ],

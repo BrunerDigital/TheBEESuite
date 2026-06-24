@@ -51,8 +51,8 @@ function pinDigits(value: string) {
 
 const setupSteps = [
   {
-    title: "Create your password",
-    body: "Sign in with the default parent password from your school. You can change it later from Forgot password.",
+    title: "Use your school login",
+    body: "Sign in with your guardian email and BusyBees as the default password. You can change it later from Profile Settings.",
   },
   {
     title: "Confirm this profile",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { AlertCircle, Copy, ExternalLink, Printer, QrCode, ShieldCheck } from "lucide-react";
 import QRCode from "qrcode";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -84,8 +85,14 @@ export function GuardianKioskCredentialCard({ credential, showToken = true }: Pr
         <div className="grid gap-3 sm:grid-cols-[auto_1fr]">
           <div className="flex min-h-[176px] w-full items-center justify-center rounded-lg border bg-white p-3 sm:w-[176px]">
             {dataUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={dataUrl} alt={`Kiosk QR code for ${credential.guardianName}`} className="size-40" />
+              <Image
+                src={dataUrl}
+                alt={`Kiosk QR code for ${credential.guardianName}`}
+                width={160}
+                height={160}
+                className="size-40"
+                unoptimized
+              />
             ) : (
               <QrCode className="size-10 text-slate-400" />
             )}

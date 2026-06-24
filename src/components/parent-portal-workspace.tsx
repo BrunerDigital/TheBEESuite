@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -11,6 +12,7 @@ import {
   CreditCard,
   FileCheck2,
   FileText,
+  KeyRound,
   MessageSquare,
   ReceiptText,
   ShieldCheck,
@@ -216,6 +218,14 @@ function formatTime(value: string | Date | null) {
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+function renderableImageSrc(value: string | null | undefined) {
+  if (!value) return null;
+  if (value.startsWith("/") || value.startsWith("https://") || value.startsWith("http://") || value.startsWith("data:image/")) {
+    return value;
+  }
+  return null;
+}
+
 function scheduleSummary(value: unknown) {
   if (!value) return "Schedule not set";
   if (typeof value === "string") return value;
@@ -271,6 +281,9 @@ export function ParentPortalWorkspace({
     ...defaultNotificationPreferences,
     ...(notificationPreferences ?? {}),
   });
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
@@ -283,6 +296,10 @@ export function ParentPortalWorkspace({
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
+  const currentGuardian = useMemo(() => {
+    if (!family) return null;
+    return family.guardians.find((guardian) => guardian.id === currentGuardianId) ?? family.guardians.find((guardian) => guardian.userId) ?? family.guardians[0] ?? null;
+  }, [family, currentGuardianId]);
 
   function showStatus(next: string) {
     setError("");
@@ -424,6 +441,27 @@ export function ParentPortalWorkspace({
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Notification preferences could not be saved.");
       showStatus("Notification preferences saved.");
+    });
+  }
+
+  function updateProfilePassword() {
+    if (!currentPassword || !newPassword) return showError("Enter your current password and a new password.");
+    if (newPassword.length < 8) return showError("New password must be at least 8 characters.");
+    if (newPassword !== confirmPassword) return showError("New passwords do not match.");
+
+    startTransition(async () => {
+      const response = await fetch("/api/profile/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, password: newPassword, confirmPassword }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return showError(json?.error || "Password could not be updated.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      showStatus("Password updated.");
+      router.refresh();
     });
   }
 
@@ -600,23 +638,23 @@ export function ParentPortalWorkspace({
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-medium">Payment Method And Autopay</div>
+                  <div className="font-medium">Payment Methods And Autopay</div>
                   <div className="text-xs text-muted-foreground">
                     {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}.`
+                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "A secure setup session is pending."
-                        : "Add a bank account or card to enable autopay."}
+                        ? "A secure setup session is pending. Saving a method lets you choose autopay, while invoices can still be paid one time below."
+                        : "Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "ach")}>
                     <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Bank" : "Set Up Bank Autopay"}
                   </Button>
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace With Card" : "Add Card"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Card" : "Set Up Card Autopay"}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -641,7 +679,7 @@ export function ParentPortalWorkspace({
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Next balance payment</div>
+                    <div className="text-xs text-muted-foreground">One-time balance payment</div>
                     <div className="font-medium">
                       {nextOpenInvoice.purposeLabel ? `${nextOpenInvoice.purposeLabel} · ` : ""}{nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
                     </div>
@@ -649,11 +687,11 @@ export function ParentPortalWorkspace({
                   <div className="flex flex-wrap gap-2">
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
                       <Building2 data-icon="inline-start" />
-                      Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
+                      Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                      Pay by Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -677,7 +715,7 @@ export function ParentPortalWorkspace({
                 <div className="flex flex-wrap gap-2">
                   <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
                     <Building2 data-icon="inline-start" />
-                    Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
+                    One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -686,7 +724,7 @@ export function ParentPortalWorkspace({
                     variant="outline"
                   >
                     <CreditCard data-icon="inline-start" />
-                    Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    One-Time Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">
@@ -713,7 +751,7 @@ export function ParentPortalWorkspace({
                 {payments.slice(0, 5).map((payment) => (
                   <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
                     <span className="text-muted-foreground">
-                      {payment.provider} · {payment.status} · {formatDate(payment.paidAt)}
+                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · Paid · {formatDate(payment.paidAt)}
                     </span>
                     <span className="font-medium">{money(payment.amountCents)}</span>
                   </div>
@@ -773,16 +811,33 @@ export function ParentPortalWorkspace({
             <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2">
-            {media.slice(0, 8).map((item) => (
-              <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={item.url} alt={item.caption || `${item.child.fullName} classroom moment`} className="aspect-video w-full object-cover" />
-                <div className="p-3">
-                  <div className="text-sm font-medium">{item.child.fullName}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
+            {media.slice(0, 8).map((item) => {
+              const imageSrc = renderableImageSrc(item.url);
+              return (
+                <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
+                  <div className="relative aspect-video w-full bg-muted/40">
+                    {imageSrc ? (
+                      <Image
+                        src={imageSrc}
+                        alt={item.caption || `${item.child.fullName} classroom moment`}
+                        fill
+                        sizes="(min-width: 640px) 50vw, 100vw"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                        Image unavailable
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-3">
+                    <div className="text-sm font-medium">{item.child.fullName}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {!media.length ? <p className="text-sm text-muted-foreground">No shared photos have been added yet.</p> : null}
           </CardContent>
         </Card>
@@ -817,6 +872,9 @@ export function ParentPortalWorkspace({
                 </div>
               </div>
             ))}
+            {!dailyReports.length ? (
+              <p className="text-sm text-muted-foreground">No daily reports have been shared recently.</p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -915,6 +973,63 @@ export function ParentPortalWorkspace({
             </div>
           ))}
           {!messages.length ? <p className="text-sm text-muted-foreground">No messages have been recorded yet.</p> : null}
+        </CardContent>
+      </Card>
+
+      <Card className="glass-panel">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <KeyRound className="text-primary" />
+            Profile Settings
+          </CardTitle>
+          <CardDescription>Parent portal login and optional password changes.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border bg-background/40 p-4">
+            <div className="text-xs text-muted-foreground">Parent login email</div>
+            <div className="mt-1 break-words font-medium">{currentGuardian?.email ?? family.guardians[0]?.email ?? "Email pending"}</div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              This is the personal guardian email on file with the school.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-1">
+              <Label htmlFor="profile-current-password">Current password</Label>
+              <Input
+                id="profile-current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                type="password"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="profile-new-password">New password</Label>
+              <Input
+                id="profile-new-password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="profile-confirm-password">Confirm password</Label>
+              <Input
+                id="profile-confirm-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+              />
+            </div>
+          </div>
+          <Button className="w-full sm:w-auto" disabled={isPending} onClick={updateProfilePassword}>
+            <KeyRound data-icon="inline-start" />
+            Update Password
+          </Button>
         </CardContent>
       </Card>
 

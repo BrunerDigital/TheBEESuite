@@ -357,9 +357,11 @@ export async function upsertSupabaseAuthUserWithPassword({
 export async function updateSupabaseAuthUserPasswordByEmail({
   email,
   password,
+  metadataSource = "password_change",
 }: {
   email: string;
   password: string;
+  metadataSource?: "forced_password_reset" | "profile_password_change" | "password_change";
 }) {
   const normalizedEmail = email.toLowerCase();
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
@@ -370,12 +372,18 @@ export async function updateSupabaseAuthUserPasswordByEmail({
     };
   }
 
+  const changedAtKey =
+    metadataSource === "forced_password_reset"
+      ? "forced_password_reset_completed_at"
+      : metadataSource === "profile_password_change"
+        ? "profile_password_changed_at"
+        : "password_changed_at";
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
     password,
     email_confirm: true,
     user_metadata: {
       ...(user.user_metadata ?? {}),
-      forced_password_reset_completed_at: new Date().toISOString(),
+      [changedAtKey]: new Date().toISOString(),
     },
   });
   if (error) throw error;

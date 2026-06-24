@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
-import { getCurrentUser, isParentGuardian } from "@/lib/auth";
+import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export default async function ParentPortalSetupPage() {
   if (!user) {
     redirect("/login?next=/parent-portal/setup");
   }
-  if (user.mustResetPassword) {
+  if (requiresPasswordResetGate(user)) {
     redirect("/reset-password?force=1&next=/parent-portal/setup");
   }
   if (!isParentGuardian(user)) {

@@ -67,7 +67,7 @@ export function LoginForm() {
           </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
             {parentSetupFlow
-              ? "Use the email your school invited, sign in with your new password, then finish parent setup for child updates, messages, and check-in access."
+              ? "Use the personal email your school has on file and the default password BusyBees, then finish parent setup for child updates, messages, and check-in access."
               : "Continue enrollment follow-up, tours, family communications, billing, and center operations with role-scoped access."}
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -95,7 +95,7 @@ export function LoginForm() {
             <CardTitle className="mt-4 text-3xl">{parentSetupFlow ? "Log in to your parent portal" : "Log in to The BEE Suite"}</CardTitle>
             <CardDescription>
               {parentSetupFlow
-                ? "Use the email from your parent portal invitation. If you just created your password, sign in here to finish setup."
+                ? "Use the email from your parent portal invitation. The default password is BusyBees unless you changed it."
                 : "Existing users can access the live workspace. New childcare brands should start with onboarding."}
             </CardDescription>
           </CardHeader>
@@ -152,7 +152,7 @@ export function LoginForm() {
                   id="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder={parentSetupFlow ? "Your parent portal password" : "Password"}
+                  placeholder={parentSetupFlow ? "BusyBees" : "Password"}
                   type="password"
                   autoComplete="current-password"
                   required
@@ -165,8 +165,8 @@ export function LoginForm() {
             </form>
             {parentSetupFlow ? (
               <div className="mt-5 rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                Invited by your school? Use the same email the invite was sent to. If you have not created a password yet, open the
-                password setup email first or use the forgot password link above.
+                Invited by your school? Use the same email the invite was sent to and the default password BusyBees. You can change
+                the password later from Profile Settings in the parent portal.
               </div>
             ) : (
               <div className="mt-5 rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">

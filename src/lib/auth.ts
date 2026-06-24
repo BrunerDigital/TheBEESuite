@@ -38,7 +38,7 @@ export type CurrentUser = {
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
-  return user.mustResetPassword && user.role !== UserRole.TEACHER;
+  return user.mustResetPassword && user.role !== UserRole.TEACHER && user.role !== UserRole.PARENT_GUARDIAN;
 }
 
 const tenantWideAccessRoles = new Set<UserRole>([

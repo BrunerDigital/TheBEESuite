@@ -144,6 +144,7 @@ export function generateStaticParams() {
   return [
     ...modules.map((module) => ({ slug: module.slug })),
     { slug: "forgot-password" },
+    { slug: "parent-portal" },
   ];
 }
 
@@ -1680,6 +1681,7 @@ async function renderLivePage(
           autopayPlaceholder: true,
           customFields: true,
           payments: {
+            where: { status: PaymentStatus.PAID },
             orderBy: [{ paidAt: "desc" }, { id: "desc" }],
             take: 10,
             select: { id: true, amountCents: true, status: true, provider: true, paidAt: true },

@@ -202,6 +202,14 @@ function localImageSrc(value: string | null | undefined) {
   return value?.startsWith("/") ? value : null;
 }
 
+function renderableImageSrc(value: string | null | undefined) {
+  if (!value) return null;
+  if (value.startsWith("/") || value.startsWith("https://") || value.startsWith("http://") || value.startsWith("data:image/")) {
+    return value;
+  }
+  return null;
+}
+
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
 }
@@ -2805,59 +2813,70 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
         <StatCard label="Restricted children" value={data.stats.restrictedChildren} />
       </div>
       <div className="grid gap-4">
-        {data.media.map((item) => (
-          <Card key={item.id} className="glass-panel overflow-hidden">
-            <CardContent className="p-0">
-              <div className="grid gap-0 lg:grid-cols-[280px_1fr_320px]">
-                <div className="bg-muted/40">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={item.url}
-                    alt={item.caption || `${item.child.fullName} classroom moment`}
-                    className="aspect-video h-full min-h-52 w-full object-cover lg:aspect-auto"
-                  />
-                </div>
-                <div className="space-y-4 p-5">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">{item.status.replaceAll("_", " ")}</Badge>
-                    <Badge variant={item.child.photoVideoPermission ? "default" : "secondary"}>
-                      {item.child.photoVideoPermission ? "Permission verified" : "Permission missing"}
-                    </Badge>
-                    <Badge variant="outline">{item.child.ageGroup}</Badge>
+        {data.media.map((item) => {
+          const imageSrc = renderableImageSrc(item.url);
+          return (
+            <Card key={item.id} className="glass-panel overflow-hidden">
+              <CardContent className="p-0">
+                <div className="grid gap-0 lg:grid-cols-[280px_1fr_320px]">
+                  <div className="relative min-h-52 bg-muted/40">
+                    {imageSrc ? (
+                      <Image
+                        src={imageSrc}
+                        alt={item.caption || `${item.child.fullName} classroom moment`}
+                        fill
+                        sizes="(min-width: 1024px) 280px, 100vw"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-full min-h-52 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                        Image unavailable
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">{item.child.fullName}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {item.child.family.name} · {item.classroom?.name ?? "No classroom"} · {item.center?.crmLocationId ?? item.center?.name ?? "No center"}
+                  <div className="space-y-4 p-5">
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="outline">{item.status.replaceAll("_", " ")}</Badge>
+                      <Badge variant={item.child.photoVideoPermission ? "default" : "secondary"}>
+                        {item.child.photoVideoPermission ? "Permission verified" : "Permission missing"}
+                      </Badge>
+                      <Badge variant="outline">{item.child.ageGroup}</Badge>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">{item.child.fullName}</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {item.child.family.name} · {item.classroom?.name ?? "No classroom"} · {item.center?.crmLocationId ?? item.center?.name ?? "No center"}
+                      </p>
+                    </div>
+                    <div className="grid gap-3 text-sm md:grid-cols-2">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Uploaded by</div>
+                        <div className="mt-1 font-medium">{item.uploadedBy?.name ?? "Unknown staff"}</div>
+                        <div className="text-xs text-muted-foreground">{item.uploadedBy?.email ?? "No email"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submitted</div>
+                        <div className="mt-1 font-medium">{formatDateTime(item.createdAt)}</div>
+                        <div className="text-xs text-muted-foreground">Taken {formatDate(item.takenAt)}</div>
+                      </div>
+                    </div>
+                    <p className="rounded-xl border bg-background/50 p-3 text-sm leading-6 text-muted-foreground">
+                      {item.caption || "No caption was added. Review the image before approving parent visibility."}
                     </p>
                   </div>
-                  <div className="grid gap-3 text-sm md:grid-cols-2">
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Uploaded by</div>
-                      <div className="mt-1 font-medium">{item.uploadedBy?.name ?? "Unknown staff"}</div>
-                      <div className="text-xs text-muted-foreground">{item.uploadedBy?.email ?? "No email"}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submitted</div>
-                      <div className="mt-1 font-medium">{formatDateTime(item.createdAt)}</div>
-                      <div className="text-xs text-muted-foreground">Taken {formatDate(item.takenAt)}</div>
-                    </div>
+                  <div className="border-t bg-background/45 p-5 lg:border-l lg:border-t-0">
+                    <div className="mb-3 text-sm font-medium">Director decision</div>
+                    <p className="mb-4 text-xs leading-5 text-muted-foreground">
+                      Approving confirms the center has verified photo/video permission for this child and shares this photo in the parent portal.
+                    </p>
+                    <MediaReviewActions mediaId={item.id} childName={item.child.fullName} />
                   </div>
-                  <p className="rounded-xl border bg-background/50 p-3 text-sm leading-6 text-muted-foreground">
-                    {item.caption || "No caption was added. Review the image before approving parent visibility."}
-                  </p>
                 </div>
-                <div className="border-t bg-background/45 p-5 lg:border-l lg:border-t-0">
-                  <div className="mb-3 text-sm font-medium">Director decision</div>
-                  <p className="mb-4 text-xs leading-5 text-muted-foreground">
-                    Approving confirms the center has verified photo/video permission for this child and shares this photo in the parent portal.
-                  </p>
-                  <MediaReviewActions mediaId={item.id} childName={item.child.fullName} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
         {!data.media.length ? (
           <Card className="glass-panel">
             <CardHeader>

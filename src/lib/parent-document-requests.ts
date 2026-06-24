@@ -74,6 +74,7 @@ export function buildParentDocumentRequestEmailText({
   actionLabel: string;
   portalUrl: string;
 }) {
+  const defaultPassword = getParentPortalDefaultPassword();
   const subjectLine = childName ? `${documentName} for ${childName}` : `${documentName} for ${familyName}`;
   return [
     `Hi ${recipientLabel || "there"},`,
@@ -83,7 +84,7 @@ export function buildParentDocumentRequestEmailText({
     "Your submission will go directly back to the school document record for director review.",
     "",
     `Open the branded parent form: ${portalUrl}`,
-    "Sign in with the guardian email where you received this message. Use the school default parent password if you have not changed it yet.",
+    `Sign in with the guardian email where you received this message. Use ${defaultPassword} as your default password if you have not changed it yet.`,
     "",
     "If you were not expecting this request, please contact the school before continuing.",
   ].join("\n");

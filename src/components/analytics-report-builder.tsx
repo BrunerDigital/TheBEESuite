@@ -32,7 +32,7 @@ function money(cents: number) {
 }
 
 function hours(minutes: number) {
-  return `${(Math.max(0, minutes) / 60).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
+  return (Math.max(0, minutes) / 60).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDate(value: string) {
@@ -229,7 +229,7 @@ export function AnalyticsReportBuilder({
             </div>
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Staff hours</div>
-              <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} logged</div>
+              <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} decimal hours</div>
             </div>
           </div>
         </CardContent>
@@ -440,9 +440,9 @@ export function AnalyticsReportBuilder({
                     <TableHead>Center</TableHead>
                     <TableHead>Classroom</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Total</TableHead>
+                    <TableHead>Total decimal</TableHead>
                     <TableHead>Closed shifts</TableHead>
-                    <TableHead>Open</TableHead>
+                    <TableHead>Open decimal</TableHead>
                     <TableHead>Last action</TableHead>
                   </TableRow>
                 </TableHeader>

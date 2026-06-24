@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, KeyRound, Pencil, Save, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, FileSpreadsheet, KeyRound, Pencil, Printer, Save, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
-import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
+import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockShift } from "@/lib/staff-kiosk";
 
 type CenterOption = { id: string; name: string };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
@@ -65,6 +65,24 @@ const certificationStatuses = [
 
 const nativeSelectClassName =
   "flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+const overtimeWeeklyThresholdMinutes = 40 * 60;
+
+type PayrollShiftRow = StaffClockShift & {
+  dateLabel: string;
+  weekLabel: string;
+  clockInLabel: string;
+  clockOutLabel: string;
+  regularMinutes: number;
+  overtimeMinutes: number;
+};
+
+type PayCodeSummaryRow = {
+  payCode: string;
+  department: string;
+  totalMinutes: number;
+  regularMinutes: number;
+  overtimeMinutes: number;
+};
 
 function toDateTimeLocal(value: Date | string) {
   const date = new Date(value);
@@ -77,6 +95,120 @@ function dateInputValue(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function addLocalDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function parseDateInput(value: string, endOfDay = false) {
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!parts) return null;
+  const [, year, month, day] = parts;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (Number.isNaN(date.getTime())) return null;
+  if (endOfDay) date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function defaultPayrollStartDate(value: string) {
+  const date = new Date(value);
+  return dateInputValue(addLocalDays(Number.isNaN(date.getTime()) ? new Date() : date, -13));
+}
+
+function defaultPayrollEndDate(value: string) {
+  const date = new Date(value);
+  return dateInputValue(Number.isNaN(date.getTime()) ? new Date() : date);
+}
+
+function formatShortDate(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Not set"
+    : new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }).format(date);
+}
+
+function formatShortTime(value: Date | string | null) {
+  if (!value) return "Open";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Open"
+    : new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function formatDateTime(value: Date | string | null) {
+  if (!value) return "No history";
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "No history"
+    : new Intl.DateTimeFormat("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(date);
+}
+
+function payrollWeekStart(date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  const day = start.getDay();
+  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+  return start;
+}
+
+function payrollWeekLabel(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Unknown week";
+  const start = payrollWeekStart(date);
+  const end = addLocalDays(start, 6);
+  return `${formatShortDate(start)} - ${formatShortDate(end)}`;
+}
+
+function buildPayrollShiftRows(shifts: StaffClockShift[]): PayrollShiftRow[] {
+  const weeklyMinutes = new Map<string, number>();
+  return [...shifts]
+    .sort((left, right) => new Date(left.clockInAt).getTime() - new Date(right.clockInAt).getTime())
+    .map((shift) => {
+      const clockIn = new Date(shift.clockInAt);
+      const weekLabel = payrollWeekLabel(clockIn);
+      const usedMinutes = weeklyMinutes.get(weekLabel) ?? 0;
+      const regularMinutes = Math.max(0, Math.min(shift.minutes, overtimeWeeklyThresholdMinutes - usedMinutes));
+      const overtimeMinutes = Math.max(0, shift.minutes - regularMinutes);
+      weeklyMinutes.set(weekLabel, usedMinutes + shift.minutes);
+      return {
+        ...shift,
+        dateLabel: formatShortDate(clockIn),
+        weekLabel,
+        clockInLabel: formatShortTime(shift.clockInAt),
+        clockOutLabel: shift.clockOutAt ? formatShortTime(shift.clockOutAt) : "Open",
+        regularMinutes,
+        overtimeMinutes,
+      };
+    });
+}
+
+function buildPayCodeSummaries(input: {
+  shifts: PayrollShiftRow[];
+  payCode: string;
+  department: string;
+}) {
+  const summary: PayCodeSummaryRow = {
+    payCode: input.payCode || "Teacher",
+    department: input.department || "Unassigned",
+    totalMinutes: 0,
+    regularMinutes: 0,
+    overtimeMinutes: 0,
+  };
+  input.shifts.forEach((shift) => {
+    summary.totalMinutes += shift.minutes;
+    summary.regularMinutes += shift.regularMinutes;
+    summary.overtimeMinutes += shift.overtimeMinutes;
+  });
+  return [summary];
 }
 
 export function StaffManagementPanel({
@@ -120,6 +252,8 @@ export function StaffManagementPanel({
   const [weeklyStatus, setWeeklyStatus] = useState("scheduled");
   const [clockStaffId, setClockStaffId] = useState(activeStaff[0]?.id ?? "");
   const [clockNotes, setClockNotes] = useState("");
+  const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt));
+  const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -148,25 +282,51 @@ export function StaffManagementPanel({
   const selectedPreviousTeacher = selectedTeacher?.user.isActive === false ? selectedTeacher : null;
   const centerNameById = useMemo(() => new Map(centers.map((center) => [center.id, center.name])), [centers]);
   const summaryNow = useMemo(() => new Date(timeClockSummaryGeneratedAt), [timeClockSummaryGeneratedAt]);
+  const payrollStart = useMemo(() => parseDateInput(payrollStartDate), [payrollStartDate]);
+  const payrollEnd = useMemo(() => parseDateInput(payrollEndDate, true), [payrollEndDate]);
+  const payrollRangeIsValid = Boolean(payrollStart && payrollEnd && payrollStart.getTime() <= payrollEnd.getTime());
+  const payrollPeriodLabel = payrollRangeIsValid && payrollStart && payrollEnd
+    ? `${formatShortDate(payrollStart)} to ${formatShortDate(payrollEnd)}`
+    : "Select a valid pay period";
   const staffHoursRows = useMemo(() => {
     return allTeacherRows
       .map((teacher) => {
         const clock = readStaffClockState(teacher.customFields);
-        const summary = readStaffClockSummary(teacher.customFields, { now: summaryNow });
+        const summary = readStaffClockSummary(teacher.customFields, {
+          now: summaryNow,
+          startDate: payrollStart,
+          endDate: payrollEnd,
+        });
+        const shiftRows = buildPayrollShiftRows(summary.shifts);
+        const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
+        const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
+        const payCodeSummaries = buildPayCodeSummaries({
+          shifts: shiftRows,
+          payCode: teacher.title || "Teacher",
+          department: teacher.classroom?.name ?? "Unassigned",
+        });
         return {
           id: teacher.id,
           name: teacher.user.name,
           email: teacher.user.email,
+          title: teacher.title || "Teacher",
           centerName: centerNameById.get(teacher.centerId) ?? "Unknown center",
           classroomName: teacher.classroom?.name ?? "Unassigned",
           active: teacher.user.isActive,
           clock,
           summary,
+          shiftRows,
+          payCodeSummaries,
+          regularMinutes,
+          overtimeMinutes,
         };
       })
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
-  }, [allTeacherRows, centerNameById, summaryNow]);
+  }, [allTeacherRows, centerNameById, payrollEnd, payrollStart, summaryNow]);
   const staffHoursTotalMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.totalMinutes, 0);
+  const staffHoursRegularMinutes = staffHoursRows.reduce((sum, row) => sum + row.regularMinutes, 0);
+  const staffHoursOvertimeMinutes = staffHoursRows.reduce((sum, row) => sum + row.overtimeMinutes, 0);
+  const staffHoursOpenMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.openShiftMinutes, 0);
   const staffClockedInCount = staffHoursRows.filter((row) => row.clock.status === "clocked_in").length;
 
   function resetTeacherForm() {
@@ -307,6 +467,10 @@ export function StaffManagementPanel({
       setClockNotes("");
       router.refresh();
     });
+  }
+
+  function printTimeCards() {
+    window.print();
   }
 
   function saveTeacher(event: FormEvent<HTMLFormElement>) {
@@ -710,53 +874,300 @@ export function StaffManagementPanel({
           </section>
 
           <section className="rounded-xl border bg-background/40 p-4">
+            <style>{`
+              @media print {
+                body:has(.staff-payroll-print-area) * {
+                  visibility: hidden !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-payroll-print-area,
+                body:has(.staff-payroll-print-area) .staff-payroll-print-area * {
+                  visibility: visible !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-payroll-print-area {
+                  position: absolute !important;
+                  inset: 0 auto auto 0 !important;
+                  width: 100% !important;
+                  min-height: 100% !important;
+                  padding: 0.25in !important;
+                  background: #ffffff !important;
+                  color: #111827 !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-payroll-print-area table {
+                  border-collapse: collapse !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card {
+                  break-after: page;
+                  page-break-after: always;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card:last-child {
+                  break-after: auto;
+                  page-break-after: auto;
+                }
+              }
+            `}</style>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-medium">Staff hours summary</div>
+                <div className="text-sm font-medium">Payroll time cards</div>
                 <p className="text-xs text-muted-foreground">
-                  Stored kiosk and director clock events for every visible teacher profile.
+                  Printable employee time cards, decimal-hour totals, pay-code summaries, and approval signatures.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{formatStaffHours(staffHoursTotalMinutes)} total</Badge>
+                <Badge variant="outline">{formatStaffDecimalHours(staffHoursTotalMinutes)} total decimal</Badge>
+                <Badge variant="outline">{formatStaffDecimalHours(staffHoursRegularMinutes)} regular</Badge>
+                <Badge variant={staffHoursOvertimeMinutes ? "default" : "outline"}>{formatStaffDecimalHours(staffHoursOvertimeMinutes)} OT</Badge>
                 <Badge variant={staffClockedInCount ? "default" : "outline"}>{staffClockedInCount} clocked in</Badge>
               </div>
             </div>
-            <div className="divide-y rounded-lg border bg-card/40">
-              {staffHoursRows.map((row) => (
-                <div key={row.id} className="grid gap-3 p-3 md:grid-cols-[minmax(0,1fr)_minmax(8rem,0.35fr)_minmax(8rem,0.35fr)_minmax(8rem,0.4fr)] md:items-center">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{row.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{row.email}</div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span>{row.centerName}</span>
-                      <span>{row.classroomName}</span>
-                      {!row.active ? <span>Previous staff</span> : null}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Status</div>
-                    <Badge className="mt-1" variant={row.clock.status === "clocked_in" ? "default" : "outline"}>
-                      {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}
-                    </Badge>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Hours stored</div>
-                    <div className="mt-1 text-sm font-medium">{formatStaffHours(row.summary.totalMinutes)}</div>
-                    <div className="text-xs text-muted-foreground">{row.summary.closedShiftCount} closed shift{row.summary.closedShiftCount === 1 ? "" : "s"}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground">Last / open</div>
-                    <div className="mt-1 text-sm font-medium">{row.clock.lastActionAt ? new Date(row.clock.lastActionAt).toLocaleString() : "No history"}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {row.summary.openShiftMinutes ? `${formatStaffHours(row.summary.openShiftMinutes)} open` : "No open shift"}
-                    </div>
-                  </div>
+
+            <div className="grid gap-3 rounded-lg border bg-card/40 p-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-end">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <FileSpreadsheet className="size-4" />
+                  {payrollPeriodLabel}
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Regular and OT columns are decimal hours. OT is calculated after 40.00 hours in each Monday-Sunday payroll week.
+                </p>
+              </div>
+              <div className="space-y-1">
+                <Label>Start</Label>
+                <Input type="date" value={payrollStartDate} onChange={(event) => setPayrollStartDate(event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>End</Label>
+                <Input type="date" value={payrollEndDate} onChange={(event) => setPayrollEndDate(event.target.value)} />
+              </div>
+              <Button type="button" variant="outline" disabled={!payrollRangeIsValid || !staffHoursRows.length} onClick={printTimeCards}>
+                <Printer data-icon="inline-start" />
+                Print time cards
+              </Button>
+            </div>
+
+            <div className="mt-4 overflow-x-auto rounded-lg border bg-card/40">
+              <table className="w-full min-w-[860px] text-sm">
+                <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Employee</th>
+                    <th className="px-3 py-2 text-left font-medium">Center / Department</th>
+                    <th className="px-3 py-2 text-left font-medium">Status</th>
+                    <th className="px-3 py-2 text-right font-medium">Total decimal</th>
+                    <th className="px-3 py-2 text-right font-medium">Regular</th>
+                    <th className="px-3 py-2 text-right font-medium">OT</th>
+                    <th className="px-3 py-2 text-right font-medium">Open</th>
+                    <th className="px-3 py-2 text-left font-medium">Last action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {staffHoursRows.map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{row.name}</div>
+                        <div className="text-xs text-muted-foreground">{row.email}</div>
+                        {!row.active ? <div className="text-xs text-muted-foreground">Previous staff</div> : null}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div>{row.centerName}</div>
+                        <div className="text-xs text-muted-foreground">{row.classroomName}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge variant={row.clock.status === "clocked_in" ? "default" : "outline"}>
+                          {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium">{formatStaffDecimalHours(row.summary.totalMinutes)}</td>
+                      <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.regularMinutes)}</td>
+                      <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.overtimeMinutes)}</td>
+                      <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.summary.openShiftMinutes)}</td>
+                      <td className="px-3 py-2">{formatDateTime(row.clock.lastActionAt)}</td>
+                    </tr>
+                  ))}
+                  {!staffHoursRows.length ? (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-4 text-sm text-muted-foreground">No staff profiles are visible in this scope.</td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="staff-payroll-print-area mt-4 max-h-[70vh] space-y-4 overflow-y-auto rounded-lg border bg-card/30 p-4 text-sm print:mt-0 print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black">
+              <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-3 print:border-black">
+                <div>
+                  <div className="text-lg font-semibold">Employee Time Card Summary</div>
+                  <div className="text-sm">Pay period: {payrollPeriodLabel}</div>
+                  <div className="text-xs text-muted-foreground print:text-black">Generated: {formatDateTime(timeClockSummaryGeneratedAt)}</div>
+                </div>
+                <div className="text-right text-xs">
+                  <div>The BEE Suite</div>
+                  <div>{centers.length} visible center{centers.length === 1 ? "" : "s"}</div>
+                  <div>Payroll hours shown as decimals</div>
+                </div>
+              </header>
+
+              <section>
+                <div className="mb-2 text-sm font-semibold">Period Summary</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-xs">
+                    <thead>
+                      <tr className="border-y bg-muted/40 print:border-black print:bg-white">
+                        <th className="px-2 py-1 text-left font-medium">Employee</th>
+                        <th className="px-2 py-1 text-left font-medium">Center</th>
+                        <th className="px-2 py-1 text-left font-medium">Department</th>
+                        <th className="px-2 py-1 text-right font-medium">Total decimal</th>
+                        <th className="px-2 py-1 text-right font-medium">Regular</th>
+                        <th className="px-2 py-1 text-right font-medium">OT</th>
+                        <th className="px-2 py-1 text-right font-medium">Open</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {staffHoursRows.map((row) => (
+                        <tr key={`${row.id}-print-summary`} className="border-b print:border-black">
+                          <td className="px-2 py-1">{row.name}</td>
+                          <td className="px-2 py-1">{row.centerName}</td>
+                          <td className="px-2 py-1">{row.classroomName}</td>
+                          <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(row.summary.totalMinutes)}</td>
+                          <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.regularMinutes)}</td>
+                          <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.overtimeMinutes)}</td>
+                          <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.summary.openShiftMinutes)}</td>
+                        </tr>
+                      ))}
+                      <tr className="border-t font-semibold print:border-black">
+                        <td className="px-2 py-1" colSpan={3}>Period total</td>
+                        <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursTotalMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursRegularMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursOvertimeMinutes)}</td>
+                        <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursOpenMinutes)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {staffHoursRows.map((row) => (
+                <article key={`${row.id}-time-card`} className="staff-time-card rounded-lg border bg-background p-4 print:rounded-none print:border-black print:bg-white print:p-3">
+                  <header className="flex flex-wrap items-start justify-between gap-3 border-b pb-3 print:border-black">
+                    <div>
+                      <h3 className="text-base font-semibold">{row.name}</h3>
+                      <div className="text-xs text-muted-foreground print:text-black">{row.email}</div>
+                      <div className="text-xs text-muted-foreground print:text-black">{row.title} - {row.classroomName}</div>
+                    </div>
+                    <div className="text-right text-xs">
+                      <div>{row.centerName}</div>
+                      <div>Pay period: {payrollPeriodLabel}</div>
+                      <div>Clock status: {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}</div>
+                    </div>
+                  </header>
+
+                  <div className="my-3 grid gap-2 sm:grid-cols-5 print:grid-cols-5">
+                    {[
+                      ["Total decimal", staffHoursRows.length ? formatStaffDecimalHours(row.summary.totalMinutes) : "0.00"],
+                      ["Regular", formatStaffDecimalHours(row.regularMinutes)],
+                      ["OT", formatStaffDecimalHours(row.overtimeMinutes)],
+                      ["Open", formatStaffDecimalHours(row.summary.openShiftMinutes)],
+                      ["Closed shifts", String(row.summary.closedShiftCount)],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-md border bg-card/40 p-2 print:border-black print:bg-white">
+                        <div className="text-[10px] uppercase text-muted-foreground print:text-black">{label}</div>
+                        <div className="mt-1 font-semibold">{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[860px] text-xs">
+                      <thead>
+                        <tr className="border-y bg-muted/40 print:border-black print:bg-white">
+                          <th className="px-2 py-1 text-left font-medium">Date</th>
+                          <th className="px-2 py-1 text-left font-medium">Week</th>
+                          <th className="px-2 py-1 text-left font-medium">Pay code</th>
+                          <th className="px-2 py-1 text-left font-medium">Department</th>
+                          <th className="px-2 py-1 text-left font-medium">Clock in</th>
+                          <th className="px-2 py-1 text-left font-medium">Clock out</th>
+                          <th className="px-2 py-1 text-left font-medium">Status</th>
+                          <th className="px-2 py-1 text-right font-medium">Regular</th>
+                          <th className="px-2 py-1 text-right font-medium">OT</th>
+                          <th className="px-2 py-1 text-right font-medium">Total decimal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {row.shiftRows.map((shift, index) => (
+                          <tr key={`${shift.clockInAt}-${shift.clockOutAt ?? "open"}-${index}`} className="border-b print:border-black">
+                            <td className="px-2 py-1">{shift.dateLabel}</td>
+                            <td className="px-2 py-1">{shift.weekLabel}</td>
+                            <td className="px-2 py-1">{row.title}</td>
+                            <td className="px-2 py-1">{row.classroomName}</td>
+                            <td className="px-2 py-1">{shift.clockInLabel}</td>
+                            <td className="px-2 py-1">{shift.clockOutLabel}</td>
+                            <td className="px-2 py-1">{shift.status === "open" ? "Open - review before payroll" : "Closed"}</td>
+                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(shift.regularMinutes)}</td>
+                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(shift.overtimeMinutes)}</td>
+                            <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(shift.minutes)}</td>
+                          </tr>
+                        ))}
+                        {!row.shiftRows.length ? (
+                          <tr>
+                            <td colSpan={10} className="px-2 py-3 text-muted-foreground print:text-black">
+                              No clocked shifts recorded in this pay period.
+                            </td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] print:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)]">
+                    <div>
+                      <div className="mb-2 text-xs font-semibold uppercase">Pay Code Summary</div>
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-y bg-muted/40 print:border-black print:bg-white">
+                            <th className="px-2 py-1 text-left font-medium">Pay code</th>
+                            <th className="px-2 py-1 text-left font-medium">Department</th>
+                            <th className="px-2 py-1 text-right font-medium">Regular</th>
+                            <th className="px-2 py-1 text-right font-medium">OT</th>
+                            <th className="px-2 py-1 text-right font-medium">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {row.payCodeSummaries.map((summary) => (
+                            <tr key={`${summary.payCode}-${summary.department}`} className="border-b print:border-black">
+                              <td className="px-2 py-1">{summary.payCode}</td>
+                              <td className="px-2 py-1">{summary.department}</td>
+                              <td className="px-2 py-1 text-right">{formatStaffDecimalHours(summary.regularMinutes)}</td>
+                              <td className="px-2 py-1 text-right">{formatStaffDecimalHours(summary.overtimeMinutes)}</td>
+                              <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(summary.totalMinutes)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="text-xs leading-5">
+                      I declare under penalty of perjury that I have reviewed the times listed on this time card and they are correct.
+                    </div>
+                  </div>
+
+                  <div className="mt-8 grid gap-6 sm:grid-cols-3 print:grid-cols-3">
+                    <div>
+                      <div className="h-8 border-b border-foreground/60 print:border-black" />
+                      <div className="mt-1 text-xs">Employee signature</div>
+                    </div>
+                    <div>
+                      <div className="h-8 border-b border-foreground/60 print:border-black" />
+                      <div className="mt-1 text-xs">Director / executive approval</div>
+                    </div>
+                    <div>
+                      <div className="h-8 border-b border-foreground/60 print:border-black" />
+                      <div className="mt-1 text-xs">Date</div>
+                    </div>
+                  </div>
+                </article>
               ))}
-              {!staffHoursRows.length ? (
-                <div className="p-4 text-sm text-muted-foreground">No staff profiles are visible in this scope.</div>
-              ) : null}
             </div>
           </section>
 

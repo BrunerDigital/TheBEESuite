@@ -223,6 +223,33 @@ export function getStripePaymentMethodConfigurationId(paymentMethodCategory: Str
   return "";
 }
 
+function stripeSetupPaymentMethodTypes(paymentMethodCategory: StripePaymentMethodCategory) {
+  if (paymentMethodCategory === "ach" || paymentMethodCategory === "link_bank") return ["us_bank_account"];
+  if (paymentMethodCategory === "card") return ["card"];
+  return [];
+}
+
+function addIndexedParams(body: URLSearchParams, key: string, values: string[]) {
+  values.forEach((value, index) => {
+    body.set(`${key}[${index}]`, value);
+  });
+}
+
+function isMissingPaymentMethodConfigurationError(json: unknown) {
+  const error = asRecord(asRecord(json).error);
+  const message = clean(error.message);
+  const param = clean(error.param);
+  return param === "payment_method_configuration" || message.includes("No such payment_method_configuration");
+}
+
+function isInvalidPaymentMethodTypeError(json: unknown) {
+  const error = asRecord(asRecord(json).error);
+  const message = clean(error.message).toLowerCase();
+  const param = clean(error.param);
+  return param.startsWith("payment_method_types") ||
+    (message.includes("payment method type provided") && message.includes("invalid"));
+}
+
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
   if (!isStripeParentProcessingRecoveryApproved()) return 0;
 
@@ -991,41 +1018,70 @@ export async function createStripeSetupCheckoutSession({
     return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
   }
 
-  const body = new URLSearchParams({
-    mode: "setup",
-    currency: "usd",
-    success_url: successUrl,
-    cancel_url: cancelUrl,
-    client_reference_id: metadata.billingAccountId || metadata.familyId || "payment-method-setup",
-  });
-  if (customerId) {
-    body.set("customer", customerId);
-  } else if (customerEmail && isEmail(customerEmail)) {
-    body.set("customer_email", customerEmail);
-  }
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(paymentMethodCategory);
-  if (paymentMethodConfigurationId) {
-    body.set("payment_method_configuration", paymentMethodConfigurationId);
+  const fallbackPaymentMethodTypes = stripeSetupPaymentMethodTypes(paymentMethodCategory);
+
+  type SetupPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
+
+  function buildBody(paymentMethodMode: SetupPaymentMethodMode) {
+    const body = new URLSearchParams({
+      mode: "setup",
+      currency: "usd",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: metadata.billingAccountId || metadata.familyId || "payment-method-setup",
+    });
+    if (customerId) {
+      body.set("customer", customerId);
+    } else if (customerEmail && isEmail(customerEmail)) {
+      body.set("customer_email", customerEmail);
+    }
+    if (paymentMethodMode === "configuration" && paymentMethodConfigurationId) {
+      body.set("payment_method_configuration", paymentMethodConfigurationId);
+    } else if (paymentMethodMode === "payment_method_types" && fallbackPaymentMethodTypes.length) {
+      addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
+    }
+    Object.entries(metadata).forEach(([key, value]) => {
+      body.set(`metadata[${key}]`, value);
+      body.set(`setup_intent_data[metadata][${key}]`, value);
+    });
+    return body;
   }
-  Object.entries(metadata).forEach(([key, value]) => {
-    body.set(`metadata[${key}]`, value);
-    body.set(`setup_intent_data[metadata][${key}]`, value);
-  });
 
-  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
-    body,
-    signal: AbortSignal.timeout(10_000),
-  });
-  const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string } } | null;
+  async function createSession(body: URLSearchParams) {
+    const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+      method: "POST",
+      headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      body,
+      signal: AbortSignal.timeout(10_000),
+    });
+    const json = await response.json().catch(() => null) as { id?: string; url?: string; error?: { message?: string; param?: string } } | null;
+    return { response, json };
+  }
 
-  if (!response.ok || !json?.url) {
+  const paymentMethodModes: SetupPaymentMethodMode[] = [
+    ...(paymentMethodConfigurationId ? ["configuration" as const] : []),
+    ...(fallbackPaymentMethodTypes.length ? ["payment_method_types" as const] : []),
+    "dynamic",
+  ];
+  let response: Response | null = null;
+  let json: { id?: string; url?: string; error?: { message?: string; param?: string } } | null = null;
+
+  for (const paymentMethodMode of paymentMethodModes) {
+    ({ response, json } = await createSession(buildBody(paymentMethodMode)));
+    if (response.ok && json?.url) break;
+    if (paymentMethodMode === "configuration" && isMissingPaymentMethodConfigurationError(json)) continue;
+    if (paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
+    break;
+  }
+
+  if (!response || !response.ok || !json?.url) {
+    const status = response?.status ?? 500;
     return {
       ok: false,
       configured: true,
       provider: "stripe",
-      error: json?.error?.message || `Stripe returned ${response.status}.`,
+      error: json?.error?.message || `Stripe returned ${status}.`,
     };
   }
 

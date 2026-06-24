@@ -109,7 +109,7 @@ test("staff hours report exports clock totals", () => {
 
   assert.match(csv, /Staff Hours And Time Clock/);
   assert.match(csv, /Lead Teacher/);
-  assert.match(csv, /8.5h/);
+  assert.match(csv, /8.50/);
 });
 
 test("report PDF export returns a PDF buffer", () => {

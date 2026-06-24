@@ -8,6 +8,7 @@ import {
   staffClockFields,
   validateNextStaffClockAction,
   formatStaffHours,
+  formatStaffDecimalHours,
 } from "@/lib/staff-kiosk";
 import { hashStaffPin } from "@/lib/kiosk";
 
@@ -53,9 +54,11 @@ test("staff kiosk clock state blocks duplicate clock actions", () => {
   assert.equal(summary.closedShiftCount, 1);
   assert.equal(summary.openShiftMinutes, 0);
   assert.equal(summary.lastShiftMinutes, 510);
+  assert.equal(summary.shifts.length, 1);
   assert.equal(summary.recentShifts[0]?.clockInAt, "2026-06-04T12:00:00.000Z");
   assert.equal(summary.recentShifts[0]?.clockOutAt, "2026-06-04T20:30:00.000Z");
   assert.equal(formatStaffHours(summary.totalMinutes), "8.5h");
+  assert.equal(formatStaffDecimalHours(summary.totalMinutes), "8.50");
 });
 
 test("staff kiosk summary includes open shifts and date range overlap", () => {

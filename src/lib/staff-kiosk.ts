@@ -28,6 +28,7 @@ export type StaffClockSummary = {
   shiftCount: number;
   openShiftStartedAt: string | null;
   lastShiftMinutes: number | null;
+  shifts: StaffClockShift[];
   recentShifts: StaffClockShift[];
 };
 
@@ -156,6 +157,7 @@ function summarizeClockEvents(
     shiftCount: scopedShifts.length,
     openShiftStartedAt: openShifts[0]?.clockInAt ?? null,
     lastShiftMinutes: newestFirst[0]?.minutes ?? null,
+    shifts: scopedShifts,
     recentShifts: newestFirst.slice(0, 12),
   };
 }
@@ -200,6 +202,14 @@ export function formatStaffHours(minutes: number) {
   const safeMinutes = Math.max(0, Math.round(minutes));
   const hours = safeMinutes / 60;
   return `${hours.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}h`;
+}
+
+export function formatStaffDecimalHours(minutes: number) {
+  const safeMinutes = Math.max(0, Math.round(minutes));
+  return (safeMinutes / 60).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 export function readStaffKioskPinHash(customFields: unknown) {

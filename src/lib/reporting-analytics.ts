@@ -2,7 +2,7 @@ import { EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client
 import { centerServiceDayWindow, readCenterTimeZone } from "@/lib/attendance-state";
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
+import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 
 export type ReportKind = "lead_funnel" | "attendance" | "billing" | "messages" | "staff_hours";
 export type ReportFormat = "csv" | "pdf";
@@ -797,9 +797,9 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
       "Classroom",
       "Role",
       "Clock status",
-      "Total hours",
-      "Closed shift hours",
-      "Open shift hours",
+      "Total decimal hours",
+      "Closed shift decimal hours",
+      "Open shift decimal hours",
       "Closed shifts",
       "Last action",
       "Open shift started",
@@ -812,9 +812,9 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
       row.classroomName,
       row.title,
       row.status === "clocked_in" ? "Clocked in" : "Clocked out",
-      formatStaffHours(row.totalMinutes),
-      formatStaffHours(row.closedShiftMinutes),
-      formatStaffHours(row.openShiftMinutes),
+      formatStaffDecimalHours(row.totalMinutes),
+      formatStaffDecimalHours(row.closedShiftMinutes),
+      formatStaffDecimalHours(row.openShiftMinutes),
       row.closedShiftCount,
       row.lastActionAt ?? "",
       row.openShiftStartedAt ?? "",

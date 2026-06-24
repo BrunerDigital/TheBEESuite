@@ -3,8 +3,8 @@ import { EnrollmentStage, UserRole } from "@prisma/client";
 import {
   forwardInquiryToGoogleSheets,
   sendInquiryNotificationEmail,
-  uniqueInquiryEmails,
 } from "@/lib/inquiry-integrations";
+import { resolveInquiryLocationNotificationEmails } from "@/lib/inquiry-notifications";
 import { recordIntegrationDeliveryAttempt } from "@/lib/integration-deliveries";
 import { selectPreferredInquiryCenter } from "@/lib/inquiry-routing";
 import { prisma } from "@/lib/prisma";
@@ -383,52 +383,53 @@ async function getIntakeCenter({
 }
 
 async function getLocationNotificationEmails(centerId: string, centerEmail?: string | null) {
-  if (centerEmail && isEmail(centerEmail)) return [centerEmail];
+  const centerRecipients = resolveInquiryLocationNotificationEmails({ centerEmail });
+  if (centerRecipients.length) return centerRecipients;
 
-  const locationUsers = await prisma.userAccessGrant.findMany({
-    where: {
-      centerId,
-      isActive: true,
-      role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
-      user: {
+  const [locationUsers, directorProfiles] = await Promise.all([
+    prisma.userAccessGrant.findMany({
+      where: {
+        centerId,
         isActive: true,
-        email: { endsWith: "@kidcityusa.com" },
-      },
-    },
-    orderBy: { createdAt: "asc" },
-    select: {
-      user: {
-        select: {
-          email: true,
-        },
-      },
-    },
-  });
-
-  if (locationUsers.length) {
-    return uniqueInquiryEmails(locationUsers.map((grant) => grant.user.email)).slice(0, 3);
-  }
-
-  const directorProfiles = await prisma.staffProfile.findMany({
-    where: {
-      centerId,
-      user: {
-        isActive: true,
-        email: { endsWith: "@kidcityusa.com" },
         role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
-      },
-    },
-    orderBy: { id: "asc" },
-    select: {
-      user: {
-        select: {
-          email: true,
+        user: {
+          isActive: true,
+          email: { endsWith: "@kidcityusa.com" },
         },
       },
-    },
-  });
+      orderBy: { createdAt: "asc" },
+      select: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    }),
+    prisma.staffProfile.findMany({
+      where: {
+        centerId,
+        user: {
+          isActive: true,
+          email: { endsWith: "@kidcityusa.com" },
+          role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
+        },
+      },
+      orderBy: { id: "asc" },
+      select: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
 
-  return uniqueInquiryEmails(directorProfiles.map((profile) => profile.user.email)).slice(0, 3);
+  return resolveInquiryLocationNotificationEmails({
+    userAccessGrantEmails: locationUsers.map((grant) => grant.user.email),
+    staffProfileEmails: directorProfiles.map((profile) => profile.user.email),
+  });
 }
 
 async function verifyTurnstileToken({

@@ -36,7 +36,7 @@ The hosted embed currently loads 94 Kid City USA open-school options from `/api/
 5. A `Note` is attached to the lead.
 6. The payload is forwarded to Google Sheets when either the direct Google Sheets API env vars or `GOOGLE_SHEETS_WEBHOOK_URL` are configured.
 7. Notification emails are sent through SendGrid when email env vars are configured.
-8. If the matched center has a `Center.email` value, that location email is added to the central notification recipient list.
+8. The matched center's `Center.email` school mailbox is added to the central notification recipient list so the inquiry reaches the specific location.
 
 The CRM lead is created first. Google Sheets and email failures are returned in the response but do not block lead creation.
 
@@ -119,7 +119,7 @@ INQUIRY_DEFAULT_CENTER_ID
 INQUIRY_TURNSTILE_SECRET_KEY
 ```
 
-`INQUIRY_NOTIFICATION_EMAILS` should be a comma-separated central recipient list. The selected location email is added automatically from the matched center profile:
+`INQUIRY_NOTIFICATION_EMAILS` should be a comma-separated central recipient list. The selected location's school mailbox is added automatically from the matched center profile:
 
 ```text
 director@example.com,marketing@example.com
@@ -194,7 +194,15 @@ INQUIRY_NOTIFICATION_EMAILS
 
 Do not put SendGrid keys in WordPress or browser JavaScript.
 
-Location-specific forwarding uses `Center.email`. For Kid City USA, those values are backfilled from the active school user assigned to each imported CRM location ID:
+Location-specific forwarding uses `Center.email`. For Kid City USA, `Center.email` should be the verified school mailbox for that location, such as `hollyhill@kidcityusa.com` or `kokomo@kidcityusa.com`. If that mailbox is missing or invalid, the inquiry route falls back to active center-scoped Kid City leadership users so no location is left without a notification target.
+
+Run this read-only audit before rollout to confirm every public school dropdown option maps to a CRM center with a notification target:
+
+```bash
+npm run kidcity:audit-director-notifications -- --rows
+```
+
+Use the backfill only when `Center.email` values need to be repopulated from assigned school users:
 
 ```bash
 npm run kidcity:backfill-center-emails

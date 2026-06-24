@@ -138,6 +138,7 @@ import type { IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
 import type { RegistrationReviewStatus } from "@/lib/registration-packet";
 import { formatRegistrationPaymentAmount, type RegistrationPaymentStatus } from "@/lib/registration-billing";
+import { formatStaffPayRate, formatStaffPayrollStatus, readStaffCompensation } from "@/lib/staff-compensation";
 import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import type { TerminalStoreItem } from "@/lib/terminal-store";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
@@ -3030,6 +3031,7 @@ export type StaffPageData = {
     classroom: { id: string; name: string } | null;
     certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
   }>;
+  canManageCompensation: boolean;
   stats: {
     total: number;
     activeUsers: number;
@@ -3095,12 +3097,14 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                 <TableHead>Background</TableHead>
                 <TableHead>Kiosk</TableHead>
                 <TableHead>Hours</TableHead>
+                {data.canManageCompensation ? <TableHead>Compensation</TableHead> : null}
                 <TableHead>Certifications</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.staff.map((staff) => {
                 const clock = staffClockBadge(staff.customFields, timeClockSummaryNow);
+                const compensation = readStaffCompensation(staff.customFields);
                 return (
                   <TableRow key={staff.id}>
                     <TableCell>
@@ -3123,6 +3127,15 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                         {clock.shifts} shift{clock.shifts === 1 ? "" : "s"}{clock.openHours ? ` · ${clock.openHours} open` : ""}
                       </div>
                     </TableCell>
+                    {data.canManageCompensation ? (
+                      <TableCell>
+                        <div className="text-sm font-medium">{formatStaffPayRate(compensation)}</div>
+                        <div className="text-xs capitalize text-muted-foreground">
+                          {formatStaffPayrollStatus(compensation.payrollStatus)}
+                          {compensation.payrollId ? ` · ${compensation.payrollId}` : ""}
+                        </div>
+                      </TableCell>
+                    ) : null}
                     <TableCell>{staff.certifications.map((cert) => `${cert.name} (${cert.status})`).join(", ") || "None"}</TableCell>
                   </TableRow>
                 );
@@ -3138,6 +3151,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           previousStaff={data.previousStaff}
           schedules={data.schedules}
           timeClockSummaryGeneratedAt={data.timeClockSummaryGeneratedAt}
+          canManageCompensation={data.canManageCompensation}
         />
       <Card className="glass-panel">
         <CardHeader>

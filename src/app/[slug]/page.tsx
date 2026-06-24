@@ -52,7 +52,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { canAccessAllCenters, canManageOperations, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -4342,6 +4342,7 @@ async function renderLivePage(
           schedules,
           staff: activeStaff,
           previousStaff,
+          canManageCompensation: canManageStaffCompensation(user),
           stats: { total, activeUsers, expiringCerts, backgroundPending, onboardingActionNeeded: staffChecklist.summary.actionNeeded },
           staffChecklist,
         }}

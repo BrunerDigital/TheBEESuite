@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
-import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { readCenterTimeZone } from "@/lib/attendance-state";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -10,6 +10,7 @@ import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard } from
 import { normalizeCampaignDraft } from "@/lib/marketing-workflows";
 import { prisma } from "@/lib/prisma";
 import { buildWeeklyStaffScheduleRequests, normalizeWeekdayIndexes } from "@/lib/staff-scheduling";
+import { hasStaffCompensationPayload, normalizeStaffCompensationPayload, staffCompensationCustomFields } from "@/lib/staff-compensation";
 import { normalizeStaffClockAction, readStaffClockState, staffClockFields, staffKioskPinFields, validateNextStaffClockAction } from "@/lib/staff-kiosk";
 import { generateTeacherLoginCredentials, isGeneratedTeacherLoginEmail, type TeacherLoginCredentials } from "@/lib/teacher-login";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
@@ -877,9 +878,17 @@ async function POSTHandler(request: NextRequest) {
     const staffName = clean(body.name);
     const rawStaffKioskPin = clean(body.staffKioskPin);
     const staffKioskPin = normalizePin(rawStaffKioskPin);
+    const hasCompensationPayload = hasStaffCompensationPayload(body);
     if (!staffName) return NextResponse.json({ ok: false, error: "Teacher name is required." }, { status: 400 });
     if (rawStaffKioskPin && !staffKioskPin) {
       return NextResponse.json({ ok: false, error: "Staff kiosk code must be exactly 4 digits." }, { status: 400 });
+    }
+    if (hasCompensationPayload && !canManageStaffCompensation(user)) {
+      return NextResponse.json({ ok: false, error: "Staff compensation is not allowed for this role." }, { status: 403 });
+    }
+    const compensationResult = hasCompensationPayload ? normalizeStaffCompensationPayload(body) : null;
+    if (compensationResult && !compensationResult.ok) {
+      return NextResponse.json({ ok: false, error: compensationResult.error }, { status: 400 });
     }
     const staffRole = UserRole.TEACHER;
     const existingProfileForEdit = id
@@ -959,7 +968,16 @@ async function POSTHandler(request: NextRequest) {
         where: { userId: staffUser.id },
         select: { id: true, customFields: true },
       });
-      const baseCustomFields = staffProfileCustomFields(existingProfile?.customFields ?? existingProfileForEdit?.customFields, submittedEmail);
+      const existingCustomFields = existingProfile?.customFields ?? existingProfileForEdit?.customFields;
+      let baseCustomFields = staffProfileCustomFields(existingCustomFields, submittedEmail);
+      if (compensationResult?.ok) {
+        baseCustomFields = staffCompensationCustomFields({
+          customFields: baseCustomFields ?? existingCustomFields,
+          compensation: compensationResult.compensation,
+          updatedAt: new Date(),
+          updatedById: user.id,
+        });
+      }
       const data = {
         userId: staffUser.id,
         centerId: scopedCenterId,
@@ -1013,6 +1031,10 @@ async function POSTHandler(request: NextRequest) {
     }
     auditMetadata.auth = auth;
     auditMetadata.staffKioskCodeSet = Boolean(staffKioskPin);
+    if (compensationResult?.ok) {
+      auditMetadata.staffCompensationUpdated = true;
+      auditMetadata.staffCompensationPayType = compensationResult.compensation.payType;
+    }
   } else if (entity === "staffAssignment") {
     const staffId = clean(body.staffId) || id;
     if (!staffId) return NextResponse.json({ ok: false, error: "Teacher profile ID is required." }, { status: 400 });

@@ -11,6 +11,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  centsToDollarInput,
+  estimatedHourlyGrossPayCents,
+  formatMoneyCents,
+  formatStaffPayRate,
+  formatStaffPayrollStatus,
+  readStaffCompensation,
+  STAFF_PAYROLL_STATUSES,
+  type StaffPayrollStatus,
+  type StaffPayType,
+} from "@/lib/staff-compensation";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
 import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockShift } from "@/lib/staff-kiosk";
 
@@ -46,6 +57,7 @@ type Props = {
   previousStaff?: TeacherRecord[];
   schedules: ScheduleRecord[];
   timeClockSummaryGeneratedAt: string;
+  canManageCompensation: boolean;
 };
 
 const backgroundStatuses = [
@@ -218,6 +230,7 @@ export function StaffManagementPanel({
   previousStaff = [],
   schedules,
   timeClockSummaryGeneratedAt,
+  canManageCompensation,
 }: Props) {
   const router = useRouter();
   const activeStaff = useMemo(() => staff.filter((teacher) => teacher.user.isActive), [staff]);
@@ -232,6 +245,15 @@ export function StaffManagementPanel({
   const [title, setTitle] = useState("Teacher");
   const [backgroundCheckStatus, setBackgroundCheckStatus] = useState("pending");
   const [staffKioskPin, setStaffKioskPin] = useState("");
+  const [staffPayType, setStaffPayType] = useState<StaffPayType>("hourly");
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [annualSalary, setAnnualSalary] = useState("");
+  const [payrollId, setPayrollId] = useState("");
+  const [payrollStatus, setPayrollStatus] = useState<StaffPayrollStatus>("active");
+  const [payCode, setPayCode] = useState("");
+  const [payDepartment, setPayDepartment] = useState("");
+  const [overtimeEligible, setOvertimeEligible] = useState(true);
+  const [payEffectiveDate, setPayEffectiveDate] = useState("");
   const [generatedLogin, setGeneratedLogin] = useState<TeacherLoginResponse | null>(null);
   const [certStaffId, setCertStaffId] = useState(activeStaff[0]?.id ?? "");
   const [certName, setCertName] = useState("");
@@ -300,10 +322,18 @@ export function StaffManagementPanel({
         const shiftRows = buildPayrollShiftRows(summary.shifts);
         const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
         const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
+        const compensation = readStaffCompensation(teacher.customFields);
+        const payrollPayCode = compensation.payCode ?? teacher.title ?? "Teacher";
+        const payrollDepartment = compensation.department ?? teacher.classroom?.name ?? "Unassigned";
         const payCodeSummaries = buildPayCodeSummaries({
           shifts: shiftRows,
-          payCode: teacher.title || "Teacher",
-          department: teacher.classroom?.name ?? "Unassigned",
+          payCode: payrollPayCode,
+          department: payrollDepartment,
+        });
+        const estimatedGrossPayCents = estimatedHourlyGrossPayCents({
+          compensation,
+          regularMinutes,
+          overtimeMinutes,
         });
         return {
           id: teacher.id,
@@ -317,8 +347,12 @@ export function StaffManagementPanel({
           summary,
           shiftRows,
           payCodeSummaries,
+          payrollPayCode,
+          payrollDepartment,
           regularMinutes,
           overtimeMinutes,
+          compensation,
+          estimatedGrossPayCents,
         };
       })
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
@@ -327,6 +361,7 @@ export function StaffManagementPanel({
   const staffHoursRegularMinutes = staffHoursRows.reduce((sum, row) => sum + row.regularMinutes, 0);
   const staffHoursOvertimeMinutes = staffHoursRows.reduce((sum, row) => sum + row.overtimeMinutes, 0);
   const staffHoursOpenMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.openShiftMinutes, 0);
+  const staffHoursEstimatedGrossCents = staffHoursRows.reduce((sum, row) => sum + (row.estimatedGrossPayCents ?? 0), 0);
   const staffClockedInCount = staffHoursRows.filter((row) => row.clock.status === "clocked_in").length;
 
   function resetTeacherForm() {
@@ -338,6 +373,15 @@ export function StaffManagementPanel({
     setTitle("Teacher");
     setBackgroundCheckStatus("pending");
     setStaffKioskPin("");
+    setStaffPayType("hourly");
+    setHourlyRate("");
+    setAnnualSalary("");
+    setPayrollId("");
+    setPayrollStatus("active");
+    setPayCode("");
+    setPayDepartment("");
+    setOvertimeEligible(true);
+    setPayEffectiveDate("");
     setGeneratedLogin(null);
   }
 
@@ -356,6 +400,16 @@ export function StaffManagementPanel({
     setTitle(teacher.title || "Teacher");
     setBackgroundCheckStatus(teacher.backgroundCheckStatus ?? "pending");
     setStaffKioskPin("");
+    const compensation = readStaffCompensation(teacher.customFields);
+    setStaffPayType(compensation.payType);
+    setHourlyRate(centsToDollarInput(compensation.hourlyRateCents));
+    setAnnualSalary(centsToDollarInput(compensation.annualSalaryCents));
+    setPayrollId(compensation.payrollId ?? "");
+    setPayrollStatus(compensation.payrollStatus);
+    setPayCode(compensation.payCode ?? "");
+    setPayDepartment(compensation.department ?? "");
+    setOvertimeEligible(compensation.overtimeEligible);
+    setPayEffectiveDate(compensation.effectiveDate ?? "");
     setGeneratedLogin(null);
   }
 
@@ -492,6 +546,19 @@ export function StaffManagementPanel({
           title,
           backgroundCheckStatus,
           staffKioskPin: staffKioskPin || undefined,
+          ...(canManageCompensation
+            ? {
+                staffPayType,
+                hourlyRate,
+                annualSalary,
+                payrollId,
+                payrollStatus,
+                payCode,
+                payDepartment,
+                overtimeEligible,
+                payEffectiveDate,
+              }
+            : {}),
         }),
       });
       const json = await response.json().catch(() => null) as {
@@ -921,6 +988,7 @@ export function StaffManagementPanel({
                 <Badge variant="outline">{formatStaffDecimalHours(staffHoursTotalMinutes)} total decimal</Badge>
                 <Badge variant="outline">{formatStaffDecimalHours(staffHoursRegularMinutes)} regular</Badge>
                 <Badge variant={staffHoursOvertimeMinutes ? "default" : "outline"}>{formatStaffDecimalHours(staffHoursOvertimeMinutes)} OT</Badge>
+                {canManageCompensation ? <Badge variant="outline">{formatMoneyCents(staffHoursEstimatedGrossCents)} hourly gross</Badge> : null}
                 <Badge variant={staffClockedInCount ? "default" : "outline"}>{staffClockedInCount} clocked in</Badge>
               </div>
             </div>
@@ -950,15 +1018,17 @@ export function StaffManagementPanel({
             </div>
 
             <div className="mt-4 overflow-x-auto rounded-lg border bg-card/40">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead className="border-b bg-muted/40 text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Employee</th>
                     <th className="px-3 py-2 text-left font-medium">Center / Department</th>
+                    {canManageCompensation ? <th className="px-3 py-2 text-left font-medium">Pay basis</th> : null}
                     <th className="px-3 py-2 text-left font-medium">Status</th>
                     <th className="px-3 py-2 text-right font-medium">Total decimal</th>
                     <th className="px-3 py-2 text-right font-medium">Regular</th>
                     <th className="px-3 py-2 text-right font-medium">OT</th>
+                    {canManageCompensation ? <th className="px-3 py-2 text-right font-medium">Hourly gross</th> : null}
                     <th className="px-3 py-2 text-right font-medium">Open</th>
                     <th className="px-3 py-2 text-left font-medium">Last action</th>
                   </tr>
@@ -975,6 +1045,15 @@ export function StaffManagementPanel({
                         <div>{row.centerName}</div>
                         <div className="text-xs text-muted-foreground">{row.classroomName}</div>
                       </td>
+                      {canManageCompensation ? (
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{formatStaffPayRate(row.compensation)}</div>
+                          <div className="text-xs capitalize text-muted-foreground">
+                            {formatStaffPayrollStatus(row.compensation.payrollStatus)}
+                            {row.compensation.payrollId ? ` - ${row.compensation.payrollId}` : ""}
+                          </div>
+                        </td>
+                      ) : null}
                       <td className="px-3 py-2">
                         <Badge variant={row.clock.status === "clocked_in" ? "default" : "outline"}>
                           {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}
@@ -983,13 +1062,14 @@ export function StaffManagementPanel({
                       <td className="px-3 py-2 text-right font-medium">{formatStaffDecimalHours(row.summary.totalMinutes)}</td>
                       <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.regularMinutes)}</td>
                       <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.overtimeMinutes)}</td>
+                      {canManageCompensation ? <td className="px-3 py-2 text-right">{formatMoneyCents(row.estimatedGrossPayCents)}</td> : null}
                       <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.summary.openShiftMinutes)}</td>
                       <td className="px-3 py-2">{formatDateTime(row.clock.lastActionAt)}</td>
                     </tr>
                   ))}
                   {!staffHoursRows.length ? (
                     <tr>
-                      <td colSpan={8} className="px-3 py-4 text-sm text-muted-foreground">No staff profiles are visible in this scope.</td>
+                      <td colSpan={canManageCompensation ? 10 : 8} className="px-3 py-4 text-sm text-muted-foreground">No staff profiles are visible in this scope.</td>
                     </tr>
                   ) : null}
                 </tbody>
@@ -1013,15 +1093,17 @@ export function StaffManagementPanel({
               <section>
                 <div className="mb-2 text-sm font-semibold">Period Summary</div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-xs">
+                  <table className="w-full min-w-[860px] text-xs">
                     <thead>
                       <tr className="border-y bg-muted/40 print:border-black print:bg-white">
                         <th className="px-2 py-1 text-left font-medium">Employee</th>
                         <th className="px-2 py-1 text-left font-medium">Center</th>
                         <th className="px-2 py-1 text-left font-medium">Department</th>
+                        {canManageCompensation ? <th className="px-2 py-1 text-left font-medium">Pay basis</th> : null}
                         <th className="px-2 py-1 text-right font-medium">Total decimal</th>
                         <th className="px-2 py-1 text-right font-medium">Regular</th>
                         <th className="px-2 py-1 text-right font-medium">OT</th>
+                        {canManageCompensation ? <th className="px-2 py-1 text-right font-medium">Hourly gross</th> : null}
                         <th className="px-2 py-1 text-right font-medium">Open</th>
                       </tr>
                     </thead>
@@ -1031,17 +1113,20 @@ export function StaffManagementPanel({
                           <td className="px-2 py-1">{row.name}</td>
                           <td className="px-2 py-1">{row.centerName}</td>
                           <td className="px-2 py-1">{row.classroomName}</td>
+                          {canManageCompensation ? <td className="px-2 py-1">{formatStaffPayRate(row.compensation)}</td> : null}
                           <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(row.summary.totalMinutes)}</td>
                           <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.regularMinutes)}</td>
                           <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.overtimeMinutes)}</td>
+                          {canManageCompensation ? <td className="px-2 py-1 text-right">{formatMoneyCents(row.estimatedGrossPayCents)}</td> : null}
                           <td className="px-2 py-1 text-right">{formatStaffDecimalHours(row.summary.openShiftMinutes)}</td>
                         </tr>
                       ))}
                       <tr className="border-t font-semibold print:border-black">
-                        <td className="px-2 py-1" colSpan={3}>Period total</td>
+                        <td className="px-2 py-1" colSpan={canManageCompensation ? 4 : 3}>Period total</td>
                         <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursTotalMinutes)}</td>
                         <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursRegularMinutes)}</td>
                         <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursOvertimeMinutes)}</td>
+                        {canManageCompensation ? <td className="px-2 py-1 text-right">{formatMoneyCents(staffHoursEstimatedGrossCents)}</td> : null}
                         <td className="px-2 py-1 text-right">{formatStaffDecimalHours(staffHoursOpenMinutes)}</td>
                       </tr>
                     </tbody>
@@ -1060,17 +1145,20 @@ export function StaffManagementPanel({
                     <div className="text-right text-xs">
                       <div>{row.centerName}</div>
                       <div>Pay period: {payrollPeriodLabel}</div>
+                      {canManageCompensation ? <div>Pay basis: {formatStaffPayRate(row.compensation)}</div> : null}
+                      {canManageCompensation && row.compensation.payrollId ? <div>Payroll ID: {row.compensation.payrollId}</div> : null}
                       <div>Clock status: {row.clock.status === "clocked_in" ? "Clocked in" : "Clocked out"}</div>
                     </div>
                   </header>
 
-                  <div className="my-3 grid gap-2 sm:grid-cols-5 print:grid-cols-5">
+                  <div className="my-3 grid gap-2 sm:grid-cols-6 print:grid-cols-6">
                     {[
                       ["Total decimal", staffHoursRows.length ? formatStaffDecimalHours(row.summary.totalMinutes) : "0.00"],
                       ["Regular", formatStaffDecimalHours(row.regularMinutes)],
                       ["OT", formatStaffDecimalHours(row.overtimeMinutes)],
                       ["Open", formatStaffDecimalHours(row.summary.openShiftMinutes)],
                       ["Closed shifts", String(row.summary.closedShiftCount)],
+                      ...(canManageCompensation ? [["Hourly gross", formatMoneyCents(row.estimatedGrossPayCents)]] : []),
                     ].map(([label, value]) => (
                       <div key={label} className="rounded-md border bg-card/40 p-2 print:border-black print:bg-white">
                         <div className="text-[10px] uppercase text-muted-foreground print:text-black">{label}</div>
@@ -1100,8 +1188,8 @@ export function StaffManagementPanel({
                           <tr key={`${shift.clockInAt}-${shift.clockOutAt ?? "open"}-${index}`} className="border-b print:border-black">
                             <td className="px-2 py-1">{shift.dateLabel}</td>
                             <td className="px-2 py-1">{shift.weekLabel}</td>
-                            <td className="px-2 py-1">{row.title}</td>
-                            <td className="px-2 py-1">{row.classroomName}</td>
+                            <td className="px-2 py-1">{row.payrollPayCode}</td>
+                            <td className="px-2 py-1">{row.payrollDepartment}</td>
                             <td className="px-2 py-1">{shift.clockInLabel}</td>
                             <td className="px-2 py-1">{shift.clockOutLabel}</td>
                             <td className="px-2 py-1">{shift.status === "open" ? "Open - review before payroll" : "Closed"}</td>
@@ -1269,6 +1357,75 @@ export function StaffManagementPanel({
                 />
               </div>
             </div>
+            {canManageCompensation ? (
+              <section className="rounded-xl border bg-background/40 p-4">
+                <div className="mb-3 text-sm font-medium">Payroll & compensation</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Pay type</Label>
+                    <select
+                      className={nativeSelectClassName}
+                      value={staffPayType}
+                      onChange={(event) => setStaffPayType(event.target.value as StaffPayType)}
+                    >
+                      <option value="hourly">Hourly</option>
+                      <option value="salary">Salary</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>{staffPayType === "salary" ? "Yearly salary" : "Hourly rate"}</Label>
+                    <Input
+                      value={staffPayType === "salary" ? annualSalary : hourlyRate}
+                      onChange={(event) => {
+                        if (staffPayType === "salary") {
+                          setAnnualSalary(event.target.value);
+                        } else {
+                          setHourlyRate(event.target.value);
+                        }
+                      }}
+                      inputMode="decimal"
+                      placeholder={staffPayType === "salary" ? "52000.00" : "18.50"}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Payroll ID</Label>
+                    <Input value={payrollId} onChange={(event) => setPayrollId(event.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Payroll status</Label>
+                    <select
+                      className={nativeSelectClassName}
+                      value={payrollStatus}
+                      onChange={(event) => setPayrollStatus(event.target.value as StaffPayrollStatus)}
+                    >
+                      {STAFF_PAYROLL_STATUSES.map((status) => (
+                        <option key={status} value={status}>{formatStaffPayrollStatus(status)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Pay code</Label>
+                    <Input value={payCode} onChange={(event) => setPayCode(event.target.value)} placeholder="Teacher" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Payroll department</Label>
+                    <Input value={payDepartment} onChange={(event) => setPayDepartment(event.target.value)} placeholder="Classroom or center" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Effective date</Label>
+                    <Input type="date" value={payEffectiveDate} onChange={(event) => setPayEffectiveDate(event.target.value)} />
+                  </div>
+                  <label className="flex items-center gap-2 self-end rounded-lg border bg-card/50 px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={overtimeEligible}
+                      onChange={(event) => setOvertimeEligible(event.target.checked)}
+                    />
+                    <span>Overtime eligible</span>
+                  </label>
+                </div>
+              </section>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" disabled={isPending || !centerId}>
                 {staffKioskPin ? <KeyRound data-icon="inline-start" /> : <Save data-icon="inline-start" />}

@@ -450,6 +450,10 @@ export function canManageOperations(user: Pick<CurrentUser, "role">) {
   return operationsWriteRoles.has(user.role);
 }
 
+export function canManageStaffCompensation(user: Pick<CurrentUser, "role">) {
+  return operationsWriteRoles.has(user.role);
+}
+
 export function canManageClassroomTasks(user: Pick<CurrentUser, "role">) {
   return teacherWriteRoles.has(user.role);
 }

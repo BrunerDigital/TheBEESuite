@@ -49,7 +49,7 @@ import {
   safePasswordResetNextPath,
 } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
-import { canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
 
 test("password reset gate does not block teacher or parent profile accounts", () => {
@@ -663,6 +663,8 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
   assert.equal(canAccessModule(director, "compliance"), true);
   assert.equal(canAccessModule(director, "calendar"), true);
   assert.equal(canAccessModule(teacher, "calendar"), false);
+  assert.equal(canManageStaffCompensation({ role: UserRole.TEACHER }), false);
+  assert.equal(canManageStaffCompensation({ role: UserRole.CENTER_DIRECTOR }), true);
 });
 
 test("executive user edits replace stale access grants with the target grant", () => {

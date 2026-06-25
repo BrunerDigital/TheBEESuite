@@ -8,6 +8,7 @@ import {
   terminalStoreOrderTotals,
   type TerminalStoreLineItem,
 } from "@/lib/terminal-store";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -17,9 +18,7 @@ function clean(value: unknown) {
 }
 
 function requestBaseUrl(request: NextRequest) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  return request.nextUrl.origin;
+  return getAppBaseUrl(request.url);
 }
 
 function lineItemsFromBody(value: unknown): TerminalStoreLineItem[] {

@@ -38,12 +38,13 @@ export const STRIPE_CONNECT_PRODUCT_DESCRIPTION_DEFAULT =
   "Childcare tuition, registration fees, deposits, and school account payouts.";
 
 export const STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS = [
+  "Core > Accounts: Read",
   "Core > Accounts: Write",
   "Connect > Account Links: Write",
 ] as const;
 
 export const STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE =
-  `Stripe rejected payout setup because the restricted key is missing required permissions. In Stripe Dashboard > API keys, edit the restricted key and enable: ${STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.join(", ")}. This Accounts v2 flow creates /v2/core/accounts, so Connect-only write access is not enough. Then try Save and continue again.`;
+  `Stripe rejected payout setup because the restricted key is missing required permissions. In Stripe Dashboard > API keys, edit the restricted key and enable: ${STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.join(", ")}. This Accounts v2 flow creates and verifies /v2/core/accounts, so Connect-only write access is not enough. Then try Save and continue again.`;
 
 const US_STATES = new Set([
   "AL",

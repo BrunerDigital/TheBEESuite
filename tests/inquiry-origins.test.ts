@@ -14,7 +14,7 @@ test("inquiry origin defaults include live website and Bee Suite domains", () =>
   assert.ok(origins.includes("https://www.kidcityusa.com"));
   assert.ok(origins.includes("https://thebeesuite.io"));
   assert.ok(origins.includes("https://www.thebeesuite.io"));
-  assert.ok(origins.includes("https://the-bee-suite-beta.vercel.app"));
+  assert.equal(origins.some((origin) => origin.endsWith(".vercel.app")), false);
   assert.equal(isAllowedInquiryOrigin("https://thebeesuite.io", env), true);
   assert.equal(
     inquiryCorsHeaders("https://thebeesuite.io", env)["Access-Control-Allow-Origin"],

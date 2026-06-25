@@ -83,6 +83,7 @@ test("Stripe Connect setup patch excludes bank account and routing fields", () =
 });
 
 test("Stripe Connect restricted key fix message names required permissions", () => {
+  assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Core > Accounts: Read"), true);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Core > Accounts: Write"), true);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Connect > Account Links: Write"), true);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("full bank-account information"), false);

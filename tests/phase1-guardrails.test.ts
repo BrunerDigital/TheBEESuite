@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
@@ -288,6 +289,23 @@ test("public parent links never expose Vercel deployment hosts", () => {
     }),
     "https://thebeesuite.io/reset-password?token_hash=hash_123&type=recovery&next=%2Fparent-portal",
   );
+});
+
+test("external payment session callbacks use the branded app base URL", () => {
+  const externalSessionRoutes = [
+    "src/app/api/billing/checkout-session/route.ts",
+    "src/app/api/billing/payment-method-session/route.ts",
+    "src/app/api/billing/payment-method-request/session/route.ts",
+    "src/app/api/billing/connect/onboard/route.ts",
+    "src/app/api/billing/connect/refresh/route.ts",
+    "src/app/api/terminal-store/checkout-session/route.ts",
+  ];
+
+  for (const route of externalSessionRoutes) {
+    const source = readFileSync(route, "utf8");
+    assert.match(source, /getAppBaseUrl\(request\.url\)/, `${route} must use the branded public app URL helper`);
+    assert.doesNotMatch(source, /request\.nextUrl\.origin/, `${route} must not leak deployment preview origins to external providers`);
+  }
 });
 
 test("parent portal invite copy uses guardian email and school default password login", () => {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   phoneMatchKey,
   twilioDeliveryStatus,
+  twilioSmsConsentAction,
   uniqueSmsRecipients,
   validateTwilioSignature,
 } from "@/lib/twilio-messaging";
@@ -51,4 +52,16 @@ test("Twilio provider statuses collapse to queue states", () => {
   assert.equal(twilioDeliveryStatus("delivered"), "delivered");
   assert.equal(twilioDeliveryStatus("undelivered"), "failed");
   assert.equal(twilioDeliveryStatus("failed"), "failed");
+});
+
+test("Twilio SMS consent keywords require exact opt-in or opt-out commands", () => {
+  assert.equal(twilioSmsConsentAction("STOP"), "opt_out");
+  assert.equal(twilioSmsConsentAction(" stop. "), "opt_out");
+  assert.equal(twilioSmsConsentAction("stopall"), "opt_out");
+  assert.equal(twilioSmsConsentAction("unsubscribe"), "opt_out");
+  assert.equal(twilioSmsConsentAction("START"), "opt_in");
+  assert.equal(twilioSmsConsentAction(" yes! "), "opt_in");
+  assert.equal(twilioSmsConsentAction("unstop"), "opt_in");
+  assert.equal(twilioSmsConsentAction("please stop by the office"), null);
+  assert.equal(twilioSmsConsentAction("stop reminders"), null);
 });

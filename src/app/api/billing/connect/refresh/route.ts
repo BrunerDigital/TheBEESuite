@@ -3,14 +3,13 @@ import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser 
 import { writeAuditLog } from "@/lib/audit";
 import { createStripeAccountLink, readStripeConnectedAccountId } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function requestBaseUrl(request: NextRequest) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
-  if (configured) return configured.replace(/\/$/, "");
-  return request.nextUrl.origin;
+  return getAppBaseUrl(request.url);
 }
 
 function jsonObject(value: unknown): Record<string, unknown> {

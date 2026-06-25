@@ -9,7 +9,6 @@ import {
   Bot,
   Building2,
   CheckCircle2,
-  Cloud,
   Code2,
   ClipboardCheck,
   CreditCard,
@@ -988,13 +987,6 @@ const projectAccountGroups: Array<{ title: string; description: string; accounts
         detail: "Source code, commits, branches, issues, and pull requests.",
         status: "Source",
         Icon: GitBranch,
-      },
-      {
-        label: "Vercel project",
-        href: "https://vercel.com/brunerdigitals-projects/the-bee-suite",
-        detail: "Production deployments, aliases, build logs, env vars, and domains.",
-        status: "Deploy",
-        Icon: Cloud,
       },
       {
         label: "Cloudflare dashboard",

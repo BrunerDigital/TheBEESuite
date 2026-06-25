@@ -10,6 +10,8 @@ Status legend:
 
 - [ ] Complete final Kokomo live-use punch list and regression smoke before wider school rollout.
 - [ ] Package the rest-of-schools implementation plan for end-of-week readiness, including rollout order, data import validation, director training, and support coverage.
+- [ ] Confirm first rollout wave order, launch owner, escalation contact, cutover window, and stop conditions for each school.
+- [ ] Create dedicated production smoke-test credentials and at least one linked parent/guardian test account for each rollout role before final role smoke.
 - [x] Kokomo has used The BEE Suite live this week, giving the team real school traffic to find and fix remaining issues before broader rollout.
 
 ## Current Production Baseline
@@ -55,8 +57,10 @@ Status legend:
 - [x] Password reset support exists through the UI/API.
 - [x] Complete forced password reset workflow for first production login.
 - [x] Add session revocation/admin logout-all-devices control.
+- [x] Add device session tracking, heartbeat, app-mode labels, and scoped device-session revocation controls.
 - [x] Add parent portal invitation/password setup workflow for linked guardians.
 - [x] Add automatic Bee Suite teacher login generation for new teacher/staff profiles.
+- [x] Add PWA install prompt and service-worker registration guidance for tablet, parent, teacher, and admin app access.
 
 ## Multi-Tenant, Franchise, And White-Label Architecture
 
@@ -76,7 +80,6 @@ Status legend:
 
 ## Executive Admin
 
-- [ ] Add bulk user/location import for executive admins.
 - [ ] Add granular permission editor for roles beyond the current role/access-grant model.
 - [ ] Add support-access approval/grant workflow if support impersonation is ever enabled.
 - [x] Agency/franchise/executive admin page exists.
@@ -85,6 +88,7 @@ Status legend:
 - [x] Access grant replacement guardrails exist.
 - [x] Audit logs exist for sensitive actions.
 - [x] Complete all executive CRUD flows with confirmation states, validation, and error recovery.
+- [x] Add bulk user/location import for executive admins.
 - [x] Add password reset email trigger from executive admin, not just password set/reset foundations.
 - [x] Add support-access request workflow with explicit audit warnings.
 
@@ -227,7 +231,6 @@ Status legend:
 
 ## Classroom Operations And Teacher Workflows
 
-- [ ] Add offline/poor-connectivity strategy for classroom tablets.
 - [x] Classroom dashboard exists.
 - [x] Teacher portal/mobile view exists.
 - [x] Teacher attendance API exists.
@@ -240,6 +243,8 @@ Status legend:
 - [x] Add classroom roster attendance board with fast check-in/check-out states.
 - [x] Add batch logging for meals/naps/diapers/activities.
 - [x] Add classroom ratio warnings and staff assignment actions.
+- [x] Add offline/poor-connectivity strategy for classroom tablets.
+- [x] Add partial teacher daily report and incident save support so incomplete classroom entries can be finished later.
 - [x] Add teacher permissions separated from director/location users.
 
 ## Parent Engagement Portal
@@ -260,6 +265,8 @@ Status legend:
 
 ## Billing, Ledger, Tuition, And Payments
 
+- [ ] Validate terminal store live pricing, fulfillment owner, shipping/tax handling, and support handoff before allowing real hardware orders.
+- [ ] Confirm tuition reminder cadence, copy, opt-out behavior, and drop-off reminder expectations with Kokomo before enabling at all schools.
 - [x] Billing/invoices page exists.
 - [x] Payments page exists.
 - [x] Billing settings page exists.
@@ -274,12 +281,18 @@ Status legend:
 - [x] Finalize payment processing recovery disclosure packet and code-level legal/accounting approval gate.
 - [x] Add real invoice generation/recurring tuition scheduler with assignment controls, daily cron route, and dashboard coverage metrics.
 - [x] Add payment method management with Stripe setup sessions, billing portal handoff, autopay status, and admin visibility.
+- [x] Add secure branded payment method request forms and expiring family-specific setup links.
+- [x] Add connected-account Stripe customer and payment-method setup flows scoped to each school's Stripe account.
+- [x] Add tuition payment reminder settings, invoice-ready notices, and past-due drop-off reminders.
 - [x] Add failed payment/retry workflow with Stripe failure capture, scheduled dunning, retry state, and billing follow-up visibility.
 - [x] Add ledger reconciliation reports comparing billing account balances to latest ledger balances.
 - [x] Add subsidy/agency payment tracking.
+- [x] Add terminal store checkout for Stripe readers/accessories with Bee Suite markup tracking.
+- [x] Add Kid City software invoice generation for active school user billing.
 
 ## Messaging, Communication, And AI Assistant
 
+- [ ] Validate daily report email delivery, sender authentication, and guardian recipient settings with real family emails before wider rollout.
 - [x] Messages page exists.
 - [x] Communications API exists.
 - [x] Lead message API exists.
@@ -291,8 +304,10 @@ Status legend:
 - [x] Complete two-way parent/director/teacher messaging UI.
 - [x] Add real SendGrid email send paths for all communication workflows.
 - [x] Add real Twilio SMS send/receive paths.
+- [x] Add Twilio inbound STOP/START consent handling that updates guardian SMS preferences and delivery/audit logs.
 - [x] Add message templates and merge fields.
 - [x] Add broadcast segmentation by classroom, center, status, and tag.
+- [x] Add daily report email delivery on child checkout with guardian recipient settings and delivery attempt logging.
 - [x] Add AI reply suggestions directly inside message composer.
 - [x] Add human-review guardrails for sensitive AI outputs in UI.
 
@@ -327,6 +342,8 @@ Status legend:
 
 ## Staff, Teachers, Scheduling, And Ratios
 
+- [ ] Validate staff compensation, payroll IDs, pay codes, overtime rules, and printable time cards with Kokomo before using reports for payroll decisions.
+- [ ] Confirm payroll provider/export handoff format before calling payroll integration complete.
 - [x] Teachers/staff page exists.
 - [x] Staff profile, schedule, certification schema exists.
 - [x] Staff counts and teacher counts are represented in dashboard/reporting.
@@ -338,7 +355,10 @@ Status legend:
 - [x] Load school-specific teacher onboarding forms/documents and final requirement labels from each school's staff credential rules.
 - [x] Add background check tracking UI.
 - [x] Add staff time clock.
+- [x] Add staff PIN kiosk clock-in/out with duplicate action guardrails and director time-card edit support.
 - [x] Add PTO/unavailability.
+- [x] Add staff compensation/payroll fields for hourly/salary, pay status, pay codes, department, overtime eligibility, and effective date.
+- [x] Add staff hours reporting and printable payroll time cards.
 - [x] Add ratio engine by age group/state rules.
 - [x] Add staff schedule/calendar views.
 
@@ -411,7 +431,10 @@ Status legend:
 
 ## Database, Security, Privacy, And Audit
 
+- [ ] Rotate any production/API secrets shared in chat or plain text before expanding beyond Kokomo.
 - [ ] Run a formal Supabase advisor/security review after each schema migration.
+- [ ] Confirm RLS/table access documentation still matches the current schema after the latest migrations.
+- [ ] Run a backup restore drill against a safe environment before the first multi-school cutover wave.
 - [x] Prisma schema covers core modules.
 - [x] Migrations exist for CRM import, kiosk/parent engagement, FTE, tenant access/branding, ProCare metadata, Supabase public API hardening, Stripe hardening, and integration delivery queues.
 - [x] Audit log schema and audit helper exist.
@@ -430,6 +453,7 @@ Status legend:
 - [ ] Add staging environment separate from production.
 - [ ] Add seed/test fixtures for every major role.
 - [ ] Add error monitoring and uptime monitoring.
+- [ ] Run `npm run pilot:check` against production data after each rollout setup pass.
 - [x] Typecheck script exists.
 - [x] Lint script exists.
 - [x] Build script exists.
@@ -437,10 +461,13 @@ Status legend:
 - [x] Guardrail tests cover several critical flows.
 - [x] Playwright/browser checks have been used manually for important UI.
 - [x] Add automated Playwright smoke tests for login, CRM, inquiry, FTE, kiosk, parent portal, and billing.
+- [x] Add pilot readiness check script for environment, database, live data, guardian PINs, classrooms, invoices, incidents, and media review queues.
 - [x] Add CI workflow that blocks deploys on typecheck/lint/test/build failure.
 
 ## Documentation And Operations
 
+- [ ] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
+- [ ] Create dedicated teacher classroom quick-start and billing/admin quick-start guides from the paper training packet.
 - [x] Architecture docs exist.
 - [x] Product docs exist.
 - [x] Deployment/go-live docs exist.
@@ -457,10 +484,12 @@ Status legend:
 - [x] Create executive/admin quick-start guide.
 - [x] Create parent onboarding guide once parent portal is production-ready.
 - [x] Create incident response/support escalation guide.
+- [x] Generate low-ink paper training packet with role setup sheets, SOP handouts, source graphics, preview screenshots, manifest, and PDF output.
 
 ## User-Facing Route Checklist
 
 - [x] `/` public landing page.
+- [x] `/app` installable app/PWA entry.
 - [x] `/login`.
 - [x] `/reset-password`.
 - [x] `/onboarding`.
@@ -495,6 +524,8 @@ Status legend:
 - [x] `/analytics`.
 - [x] `/ai-command`.
 - [x] `/parent-portal`.
+- [x] `/parent-portal/setup`.
+- [x] `/payment-method-form/[token]`.
 - [x] `/teacher-portal`.
 - [x] `/agency-admin`.
 - [x] `/white-label`.
@@ -515,9 +546,12 @@ Status legend:
 - [x] Auth: login, logout, forgot password, reset password.
 - [x] Admin: executive management.
 - [x] AI: Mr. Bee assistant.
-- [x] Billing: checkout session, Stripe webhook, Stripe Connect onboard/refresh/status.
+- [x] Billing: checkout session, Stripe webhook, Stripe Connect onboard/refresh/status, invoices, autopay, payment-method setup, payment-method requests, payment reminders, tuition assignments, corporate software invoices, and terminal store checkout.
 - [x] Communications: messages.
-- [x] Cron: FTE reminders.
+- [x] Compliance: emergency drills, licensing, medication logs, tasks, task updates, and compliance export.
+- [x] Cron: FTE reminders, tuition billing, tuition payment reminders, autopay invoices, payment dunning, document expirations, integration retries, and campaign scheduling.
+- [x] Dashboard/settings/setup: widgets, dashboard options, school setup, setup checklist, tenant controls, and device sessions.
+- [x] Documents: checklist, upload, review, request email, parent submission, and export package.
 - [x] Families: family/student intake.
 - [x] FTE: list/export, submit/update, bulk import/correction.
 - [x] Guardians: PIN management.
@@ -531,16 +565,23 @@ Status legend:
 - [x] Onboarding.
 - [x] Operations records.
 - [x] Parent: contact requests, incident acknowledgement, media review, invitations, preferences, kiosk credentials, and document submission.
+- [x] Profile: password update and profile photo upload.
 - [x] Public Kid City locations.
 - [x] Registration.
+- [x] Reports and reputation: report export, review requests, AI review responses, surveys, and survey responses.
 - [x] Teacher: attendance, daily reports, incidents, media.
 - [x] Add API-level automated tests for every route.
 - [x] Add request/response logging with PII-safe redaction.
 
 ## Highest Priority Remaining Work
 
+- [ ] Complete final Kokomo live-use punch list and regression smoke before wider school rollout.
+- [ ] Create dedicated production smoke-test credentials and linked parent/guardian test accounts for every rollout role.
+- [ ] Confirm first rollout wave order, launch owners, escalation contacts, cutover windows, and support coverage.
 - [ ] Complete full ProCare import validation with real exports from active Kid City USA locations.
 - [ ] Replace remaining demo-login fallbacks with real imported classroom/family/teacher data.
+- [ ] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
+- [ ] Validate staff payroll/time cards, terminal store ordering, tuition reminders, and daily report emails with Kokomo before enabling them across all schools.
 - [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
 - [x] Finish teacher classroom tablet workflows for daily logging.
 - [x] Complete kiosk production UX with authorization/signature/late pickup workflows.

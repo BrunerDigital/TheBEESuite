@@ -3,7 +3,6 @@ const DEFAULT_INQUIRY_ALLOWED_ORIGINS = [
   "https://www.kidcityusa.com",
   "https://thebeesuite.io",
   "https://www.thebeesuite.io",
-  "https://the-bee-suite-beta.vercel.app",
 ];
 
 type InquiryOriginEnv = Record<string, string | undefined>;

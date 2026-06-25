@@ -3,9 +3,23 @@ import type { NextRequest } from "next/server";
 import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
 
 export type TwilioDeliveryStatus = "delivered" | "failed" | "pending";
+export type TwilioSmsConsentAction = "opt_in" | "opt_out";
+
+export const TWILIO_SMS_OPT_OUT_KEYWORDS = ["stop", "stopall", "unsubscribe", "cancel", "end", "quit"] as const;
+export const TWILIO_SMS_OPT_IN_KEYWORDS = ["start", "yes", "unstop"] as const;
+
+const twilioSmsOptOutKeywords = new Set<string>(TWILIO_SMS_OPT_OUT_KEYWORDS);
+const twilioSmsOptInKeywords = new Set<string>(TWILIO_SMS_OPT_IN_KEYWORDS);
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizedSmsCommand(value: unknown) {
+  return clean(value)
+    .toLowerCase()
+    .replace(/[.!?]+$/g, "")
+    .trim();
 }
 
 export function normalizeSmsAddress(value: unknown) {
@@ -103,6 +117,13 @@ export function twilioDeliveryStatus(value: unknown): TwilioDeliveryStatus {
   if (status === "delivered" || status === "read") return "delivered";
   if (status === "failed" || status === "undelivered") return "failed";
   return "pending";
+}
+
+export function twilioSmsConsentAction(value: unknown): TwilioSmsConsentAction | null {
+  const command = normalizedSmsCommand(value);
+  if (twilioSmsOptOutKeywords.has(command)) return "opt_out";
+  if (twilioSmsOptInKeywords.has(command)) return "opt_in";
+  return null;
 }
 
 export function formDataToRecord(form: FormData) {

@@ -297,7 +297,7 @@
       "address": "204 Alexandria Blvd.",
       "city": "Oviedo",
       "state": "FL",
-      "postalCode": "",
+      "postalCode": "32765",
       "phone": "407-542-0030"
     },
     {
@@ -614,11 +614,11 @@
       "crmLocationId": "TX | Corpus Christi",
       "locationId": "TX | Corpus Christi",
       "name": "Kid City USA - Corpus Christi",
-      "address": "",
+      "address": "13122 IH 37",
       "city": "Corpus Christi",
       "state": "TX",
-      "postalCode": "77584",
-      "phone": "713-436-0580"
+      "postalCode": "78410",
+      "phone": "361-222-4124"
     },
     {
       "crmLocationId": "TX | Friendswood",

@@ -322,6 +322,7 @@ Complete this for each school before that school uses operational modules live.
 - [x] Portal two-way parent/director/teacher messaging UI exists.
 - [x] Real SendGrid email paths exist for communication workflows.
 - [x] Real Twilio SMS send/receive paths exist.
+- [x] Twilio inbound STOP/START consent handling updates guardian SMS preferences and delivery/audit records.
 - [x] Message templates and merge fields exist.
 - [x] Broadcast segmentation by classroom, center, status, and tag exists.
 - [x] AI reply suggestions are available directly inside the message composer with human-review guardrails.

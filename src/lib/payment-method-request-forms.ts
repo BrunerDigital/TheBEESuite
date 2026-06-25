@@ -204,9 +204,9 @@ export function buildPaymentMethodRequestEmailText({
       `Hi ${recipientLabel || "there"},`,
       "",
       `${centerLabel} is asking you to instantly verify a bank account for ${familyName}'s tuition payments in The BEE Suite.`,
-      "Use the secure link below to log in to your bank through Stripe Financial Connections. This verifies the account now instead of waiting for microdeposits.",
+      "Use the secure link below to log in through the bank verification handoff. This verifies the account now instead of waiting for microdeposits.",
       "You can also pay an open tuition invoice from the same form with Instant Bank Login or a debit/credit card if a payment is due today.",
-      "The BEE Suite does not receive or store your bank login, full account number, or full card details. Payment information is handled securely by Stripe.",
+      "The BEE Suite does not receive or store your bank login, full account number, or full card details. Payment information is handled by the secure payment processor.",
       "",
       `Verify your bank instantly: ${formUrl}`,
       "",
@@ -220,7 +220,7 @@ export function buildPaymentMethodRequestEmailText({
     `${centerLabel} is asking you to complete tuition payment steps for ${familyName} in The BEE Suite.`,
     "This secure form lets you pay an open invoice, verify a bank account instantly with your bank login, or use a debit/credit card.",
     "If you want autopay, you can also save a verified bank account or card from the same form.",
-    "The BEE Suite does not store your full card or bank details. Payment information is saved securely through Stripe.",
+    "The BEE Suite does not store your full card or bank details. Payment information is saved through the secure payment processor.",
     "",
     `Open your secure tuition payment form: ${formUrl}`,
     "",
@@ -234,7 +234,7 @@ export function buildPaymentMethodRequestNotificationBody(input: {
   intent?: PaymentMethodRequestIntent;
 }) {
   if (input.intent === "instant_bank_verification") {
-    return `Please verify a bank account instantly for ${input.familyName}. Open your secure Stripe bank login form: ${input.formUrl}`;
+    return `Please verify a bank account instantly for ${input.familyName}. Open your secure The BEE Suite bank verification form: ${input.formUrl}`;
   }
   return `Please complete tuition payment steps for ${input.familyName}. Open your secure The BEE Suite payment form: ${input.formUrl}`;
 }

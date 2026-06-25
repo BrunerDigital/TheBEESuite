@@ -224,8 +224,8 @@ async function POSTHandler(request: NextRequest) {
         {
           ok: false,
           error: connectedAccountId
-            ? "This family needs a saved payment method in this school's Stripe account before the selected method can be charged."
-            : "This family needs a saved Stripe customer before the selected method can be charged.",
+            ? "This family needs a saved payment method in this school's payout account before the selected method can be charged."
+            : "This family needs a saved payment customer record before the selected method can be charged.",
         },
         { status: 400 },
       );

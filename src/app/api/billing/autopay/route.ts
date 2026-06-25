@@ -86,6 +86,7 @@ async function POSTHandler(request: NextRequest) {
     invoiceId,
     requireDueDate: !processStoredMethod,
     collectionMode: processStoredMethod ? "stored_method" : "autopay",
+    cardProcessingRecoveryAccepted: processStoredMethod && body.cardProcessingRecoveryAccepted === true,
     retryFailed: body.retryFailed === true,
     requestedByUserId: user.id,
   });

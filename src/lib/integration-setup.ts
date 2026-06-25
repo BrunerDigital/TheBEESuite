@@ -186,7 +186,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     provider: "stripe",
     name: "Stripe",
     purpose: "Payments and School Payouts",
-    detail: "Powers parent checkout, webhook reconciliation, fee handling, refunds, and Stripe Connect payout onboarding.",
+    detail: "Powers parent payments, webhook reconciliation, fee handling, refunds, and payout processor onboarding.",
     envRequirements: [
       { label: "Secret key", names: ["STRIPE_SECRET_KEY"] },
       { label: "Webhook secret", names: ["STRIPE_WEBHOOK_SECRET"] },

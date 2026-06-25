@@ -47,7 +47,7 @@ test("instant bank request copy focuses parents on bank login verification", () 
 
   assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123?focus=instant-bank");
   assert.match(email, /instantly verify a bank account/i);
-  assert.match(email, /log in to your bank through Stripe Financial Connections/i);
+  assert.match(email, /log in through the bank verification handoff/i);
   assert.match(email, /instead of waiting for microdeposits/i);
   assert.match(notification, /verify a bank account instantly/i);
   assert.equal(extractFirstUrl(notification), formUrl);
@@ -98,6 +98,6 @@ test("payment method request copy links to the branded form", () => {
   assert.match(email, /pay an open invoice/i);
   assert.match(email, /verify a bank account instantly/i);
   assert.match(email, /debit\/credit card/i);
-  assert.match(email, /securely through Stripe/i);
+  assert.match(email, /secure payment processor/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });

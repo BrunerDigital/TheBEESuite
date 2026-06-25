@@ -236,7 +236,7 @@ export const notifications = [
 ];
 
 export const integrations = [
-  ["Stripe", "Connected payout, checkout, invoice, and webhook readiness", "Configure"],
+  ["Payment processor", "Connected payout, checkout, invoice, and webhook readiness", "Configure"],
   ["Twilio", "SMS reminders and emergency alert delivery", "Not connected"],
   ["SendGrid/Mailgun", "Transactional email and campaign delivery", "Not connected"],
   ["Google Calendar", "Tour, closure, and classroom event sync", "Configure"],
@@ -647,7 +647,7 @@ export const modules: ModuleDefinition[] = [
       "Family accounts, tuition plans, fees, deposits, recurring tuition, discounts, subsidy tracking, invoices, and reports.",
     owner: "Billing/admin staff, director",
     metrics: ["20 invoices", "$18.6k outstanding", "$4.2k deposits", "3 failed payments"],
-    features: ["Tuition plans", "Products and one-time charges", "Registration fees", "Stripe checkout integration"],
+    features: ["Tuition plans", "Products and one-time charges", "Registration fees", "Bee Suite-branded checkout integration"],
     records: ["Rivera invoice #1042 - due", "Patel deposit - paid", "Morgan subsidy - pending"],
     sensitive: true,
   },
@@ -656,10 +656,10 @@ export const modules: ModuleDefinition[] = [
     title: "Terminal Store",
     eyebrow: "Hardware purchasing",
     description:
-      "Director and executive storefront for Stripe Terminal readers, docks, hubs, cases, and mounts purchased through The BEE Suite platform account.",
+      "Director and executive storefront for card readers, docks, hubs, cases, and mounts purchased through The BEE Suite platform account.",
     owner: "Center director, assistant director, executive team",
-    metrics: ["20% Bee Suite markup", "Platform checkout", "Shipping collected", "Stripe receipt"],
-    features: ["Role-gated hardware catalog", "Quantity-based cart", "Stripe-hosted checkout", "Audit trail for created purchases"],
+    metrics: ["20% Bee Suite markup", "Platform checkout", "Shipping collected", "Processor receipt"],
+    features: ["Role-gated hardware catalog", "Quantity-based cart", "Bee Suite-branded hosted checkout", "Audit trail for created purchases"],
     records: ["Terminal catalog", "Checkout session", "Purchaser metadata", "School association"],
     sensitive: true,
   },
@@ -670,8 +670,8 @@ export const modules: ModuleDefinition[] = [
     description:
       "Kid City USA Enterprises monthly software invoice view for The BEE Suite access, calculated from active school users.",
     owner: "Kid City USA accounting, platform owner, brand admin",
-    metrics: ["$49 per active school user", "Monthly invoice", "Stripe hosted payment", "Audit logged"],
-    features: ["Current invoice preview", "Active school-user count", "Stripe hosted invoice link", "Corporate billing audit trail"],
+    metrics: ["$49 per active school user", "Monthly invoice", "Hosted payment", "Audit logged"],
+    features: ["Current invoice preview", "Active school-user count", "Bee Suite-branded hosted invoice link", "Corporate billing audit trail"],
     records: ["Kid City USA Enterprises monthly software access invoice"],
     sensitive: true,
   },
@@ -682,8 +682,8 @@ export const modules: ModuleDefinition[] = [
     description:
       "Payment method management, checkout readiness, failed payment follow-up, payout status, and reconciliation support.",
     owner: "Billing/admin staff, parent/guardian",
-    metrics: ["Stripe readiness", "3 failed payments", "12 saved methods", "8 autopay plans"],
-    features: ["Payment method management", "Failed payment workflow", "Stripe Connect status", "Payment audit trail"],
+    metrics: ["Payout readiness", "3 failed payments", "12 saved methods", "8 autopay plans"],
+    features: ["Payment method management", "Failed payment workflow", "Payout account status", "Payment audit trail"],
     records: ["Visa ending 4242", "ACH account", "Payout onboarding status"],
     sensitive: true,
   },

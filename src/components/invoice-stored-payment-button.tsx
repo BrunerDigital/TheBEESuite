@@ -101,7 +101,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
     const confirmed = window.confirm(
-      `Open instant bank checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? Stripe will collect and verify the bank information securely.`,
+      `Open The BEE Suite instant bank checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? The secure processor will collect and verify the bank information.`,
     );
     if (!confirmed) return;
 
@@ -130,7 +130,7 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
     if (invoice.status !== "OPEN") return setError("Invoice is not open.");
     if (invoice.totalCents <= 0) return setError("Invoice total must be greater than zero.");
     const confirmed = window.confirm(
-      `Open debit/credit card checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? Stripe will collect the card securely.`,
+      `Open The BEE Suite debit/credit card checkout for ${invoice.billingAccount.family.name} to pay ${money(invoice.totalCents)} for invoice ${invoice.number}? The secure processor will collect the card information.`,
     );
     if (!confirmed) return;
 

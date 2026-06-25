@@ -150,7 +150,7 @@ export function StripeConnectPanel({
     const validation = normalizeStripeConnectSetupInput(setupForm, setupCenter);
     if (!validation.ok) {
       setSetupErrors(validation.errors);
-      setSetupMessage("Complete the required payout setup fields before continuing to Stripe.");
+      setSetupMessage("Complete the required payout setup fields before opening the secure payout handoff.");
       return;
     }
 
@@ -265,7 +265,7 @@ export function StripeConnectPanel({
   }, [searchParams, stripeConfigured, syncStatus]);
 
   const setupBusy = Boolean(setupCenter && busyCenterId === setupCenter.id);
-  const setupDialogTitle = setupCenter ? `${setupCenter.name} payout setup` : "School payout setup";
+  const setupDialogTitle = setupCenter ? `The BEE Suite payout setup for ${setupCenter.name}` : "The BEE Suite payout setup";
 
   function setupFieldError(field: keyof StripeConnectSetupDetails) {
     const error = setupErrors[field];
@@ -360,7 +360,7 @@ export function StripeConnectPanel({
         {stripeConfigured && !webhookConfigured ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
             <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
-            Add the payment processor webhook signing secret before enabling live parent checkout. Checkout is blocked without webhook reconciliation unless the explicit override is enabled.
+            Add the payment processor webhook signing secret before enabling live parent payments. Payment handoffs are blocked without webhook reconciliation unless the explicit override is enabled.
           </div>
         ) : null}
 
@@ -373,7 +373,7 @@ export function StripeConnectPanel({
             <DialogHeader>
               <DialogTitle>{setupDialogTitle}</DialogTitle>
               <DialogDescription>
-                Save the school profile used to create the connected payout account.
+                Save the school&apos;s Bee Suite payout profile before the secure processor handoff.
               </DialogDescription>
             </DialogHeader>
             {setupForm ? (
@@ -381,9 +381,15 @@ export function StripeConnectPanel({
                 event.preventDefault();
                 void startOnboarding();
               }}>
+                <div className="flex gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-muted-foreground">
+                  <BadgeDollarSign className="mt-0.5 size-4 shrink-0 text-primary" />
+                  <span>
+                    Directors stay inside The BEE Suite until the final required verification step. The hosted handoff may show processor-required branding, disclosures, and identity prompts.
+                  </span>
+                </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {setupInput("legalBusinessName", "Legal business name", { autoComplete: "organization" })}
-                  {setupInput("displayName", "Stripe display/DBA name", { autoComplete: "organization" })}
+                  {setupInput("displayName", "Statement display / DBA name", { autoComplete: "organization" })}
                   {setupInput("payoutContactName", "Payout contact name", { autoComplete: "name" })}
                   {setupInput("payoutContactEmail", "Payout contact email", { type: "email", autoComplete: "email" })}
                   {setupInput("payoutContactPhone", "Payout contact phone", { type: "tel", autoComplete: "tel" })}
@@ -420,7 +426,7 @@ export function StripeConnectPanel({
                 <div className="flex gap-3 rounded-lg border bg-background/50 p-3 text-sm leading-6 text-muted-foreground">
                   <LockKeyhole className="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>
-                    Bank account, routing details, representative identity, tax ID, and verification documents are entered only on Stripe&apos;s secure onboarding screen.
+                    Bank account, routing details, representative identity, tax ID, and verification documents are entered only on the secure processor-hosted onboarding screen.
                   </span>
                 </div>
 
@@ -435,7 +441,7 @@ export function StripeConnectPanel({
                     Cancel
                   </Button>
                   <Button type="submit" disabled={setupBusy}>
-                    {setupBusy ? "Saving..." : stripeConfigured ? "Save and continue" : "Save setup profile"}
+                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue Secure Setup" : "Save Bee Suite Profile"}
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </DialogFooter>
@@ -450,7 +456,7 @@ export function StripeConnectPanel({
               <TableHead>School</TableHead>
               <TableHead>Location ID</TableHead>
               <TableHead>Payout contact</TableHead>
-              <TableHead>Connected account</TableHead>
+              <TableHead>Payout account</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
               <TableHead className="text-right">Action</TableHead>
@@ -472,7 +478,7 @@ export function StripeConnectPanel({
                     {readiness.requirementFields.length
                       ? readiness.requirementFields.slice(0, 4).join(", ")
                       : readiness.canAcceptParentPayments
-                        ? "Checkout enabled"
+                        ? "Parent payments enabled"
                         : readiness.blockingReason || "Awaiting payout status"}
                     {readiness.requirementFields.length > 4 ? ` +${readiness.requirementFields.length - 4} more` : ""}
                   </TableCell>
@@ -514,10 +520,10 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent checkout is blocked for a school until its connected payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated screen.
+          Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated Bee Suite screen.
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate Checkout line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
         {!parentProcessingRecoveryApproved ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">

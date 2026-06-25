@@ -197,7 +197,7 @@ export async function createTerminalStoreCheckoutSession({
 }): Promise<IntegrationSendResult & { totalCents?: number; stripeBaseSubtotalCents?: number; markupCents?: number }> {
   const apiKey = await getStripeSecretKey({ credentials: credentials ?? {} });
   if (!apiKey) {
-    return { ok: false, configured: false, provider: "stripe", error: "Stripe is not configured." };
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
 
   const totals = terminalStoreOrderTotals(items);
@@ -265,7 +265,7 @@ export async function createTerminalStoreCheckoutSession({
       ok: false,
       configured: true,
       provider: "stripe",
-      error: json?.error?.message || `Stripe returned ${response.status}.`,
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
       totalCents: totals.subtotalCents,
       stripeBaseSubtotalCents: totals.stripeBaseSubtotalCents,
       markupCents: totals.markupCents,

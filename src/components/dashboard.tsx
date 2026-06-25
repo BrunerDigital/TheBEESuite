@@ -49,6 +49,14 @@ function notificationText(item: DashboardNotification) {
   return typeof item === "string" ? item : item.text;
 }
 
+function withQueryParam(href: string, key: string, value: string | number | null | undefined) {
+  const text = String(value ?? "").trim();
+  if (!text) return href;
+  const [base, hash = ""] = href.split("#", 2);
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(text)}${hash ? `#${hash}` : ""}`;
+}
+
 export type LiveDashboardData = {
   kpis: typeof kpis;
   pipelineStages: typeof pipelineStages;
@@ -369,11 +377,18 @@ function AttendanceSegmentBar({
   );
 }
 
-function AttendanceClassroomRow({ row }: { row: DashboardAttendanceSnapshotRow }) {
+function AttendanceClassroomRow({ row, href }: { row: DashboardAttendanceSnapshotRow; href: string }) {
   return (
-    <div className="grid gap-3 rounded-lg border bg-background/45 p-3 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
+    <Link
+      href={withQueryParam(href, "classroomId", row.classroomId)}
+      className="group grid gap-3 rounded-lg border bg-background/45 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center"
+      aria-label={`Open attendance details for ${row.classroomName}`}
+    >
       <div className="min-w-0">
-        <div className="truncate text-sm font-medium">{row.classroomName}</div>
+        <div className="flex items-center gap-2">
+          <div className="truncate text-sm font-medium">{row.classroomName}</div>
+          <ArrowUpRight className="size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
+        </div>
         <div className="text-xs text-muted-foreground">{row.centerName}</div>
       </div>
       <div className="grid gap-2">
@@ -391,16 +406,18 @@ function AttendanceClassroomRow({ row }: { row: DashboardAttendanceSnapshotRow }
           <span>{row.notMarked} open</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function AttendanceSnapshotCard({
   snapshot,
   isTeacherDashboard,
+  href,
 }: {
   snapshot: DashboardAttendanceSnapshot;
   isTeacherDashboard: boolean;
+  href: string;
 }) {
   const attendanceRate = snapshot.total ? Math.round((snapshot.present / snapshot.total) * 100) : 0;
   return (
@@ -455,7 +472,7 @@ function AttendanceSnapshotCard({
         {snapshot.rows.length ? (
           <div className="grid gap-3">
             {snapshot.rows.map((row) => (
-              <AttendanceClassroomRow key={row.classroomId} row={row} />
+              <AttendanceClassroomRow key={row.classroomId} row={row} href={href} />
             ))}
           </div>
         ) : (
@@ -664,18 +681,30 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             </div>
             {topKpiRows.length ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {topKpiRows.map(({ kpi, Icon }) => {
+              {topKpiRows.map(({ kpi, Icon, widgetId }) => {
+                const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
                 return (
-                  <Card key={kpi.label} className="glass-panel">
-                    <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-                      <CardDescription>{kpi.label}</CardDescription>
-                      <Icon className="text-primary" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-3xl font-semibold">{kpi.value}</div>
-                      <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-                    </CardContent>
-                  </Card>
+                  <Link
+                    key={kpi.label}
+                    href={href}
+                    className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Open ${kpi.label}`}
+                  >
+                    <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+                      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+                        <CardDescription>{kpi.label}</CardDescription>
+                        <Icon className="text-primary" />
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-3xl font-semibold">{kpi.value}</div>
+                        <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
+                        <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                          Open view
+                          <ArrowUpRight className="size-3" />
+                        </span>
+                      </CardContent>
+                    </Card>
+                  </Link>
                 );
               })}
             </div>
@@ -736,7 +765,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ) : null}
 
       {showAttendanceSnapshotCard && attendanceSnapshot ? (
-        <AttendanceSnapshotCard snapshot={attendanceSnapshot} isTeacherDashboard={isTeacherDashboard} />
+        <AttendanceSnapshotCard snapshot={attendanceSnapshot} isTeacherDashboard={isTeacherDashboard} href={attendanceHref} />
       ) : null}
 
       <DashboardSnapshotControls
@@ -778,18 +807,30 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
             <div className="grid gap-6">
               {lowerKpiRows.length ? (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {lowerKpiRows.map(({ kpi, Icon }) => {
+                {lowerKpiRows.map(({ kpi, Icon, widgetId }) => {
+                  const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
                   return (
-                    <Card key={kpi.label} className="glass-panel">
-                      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-                        <CardDescription>{kpi.label}</CardDescription>
-                        <Icon className="text-primary" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-semibold">{kpi.value}</div>
-                        <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-                      </CardContent>
-                    </Card>
+                    <Link
+                      key={kpi.label}
+                      href={href}
+                      className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open ${kpi.label}`}
+                    >
+                      <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+                        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+                          <CardDescription>{kpi.label}</CardDescription>
+                          <Icon className="text-primary" />
+                        </CardHeader>
+                        <CardContent>
+                          <div className="text-2xl font-semibold">{kpi.value}</div>
+                          <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
+                          <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+                            Open view
+                            <ArrowUpRight className="size-3" />
+                          </span>
+                        </CardContent>
+                      </Card>
+                    </Link>
                   );
                 })}
               </div>
@@ -870,13 +911,22 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   </CardHeader>
                   <CardContent className="grid gap-3 sm:grid-cols-2">
                     {dashboardPipeline.slice(0, 8).map((stage) => (
-                      <div key={stage.name} className="rounded-xl border bg-background/50 p-3">
+                      <Link
+                        key={stage.name}
+                        href={withQueryParam("/crm-leads", "q", stage.name)}
+                        className="group rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`Open CRM leads for ${stage.name}`}
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium">{stage.name}</span>
                           <Badge>{stage.count}</Badge>
                         </div>
                         <p className="mt-2 text-xs text-muted-foreground">Projected value {stage.value}</p>
-                      </div>
+                        <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                          Open matching leads
+                          <ArrowUpRight className="size-3" />
+                        </span>
+                      </Link>
                     ))}
                   </CardContent>
                 </Card>
@@ -889,9 +939,17 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     {dashboardLeads.map((lead) => (
-                      <div key={lead.family} className="grid gap-3 rounded-xl border bg-background/50 p-3 sm:grid-cols-[1fr_auto]">
+                      <Link
+                        key={lead.family}
+                        href={withQueryParam("/crm-leads", "q", lead.family)}
+                        className="group grid gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[1fr_auto]"
+                        aria-label={`Open CRM lead for ${lead.family}`}
+                      >
                         <div>
-                          <div className="font-medium">{lead.family}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">{lead.family}</div>
+                            <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                          </div>
                           <p className="text-sm text-muted-foreground">{lead.child} · {lead.source} · start {lead.desiredStart}</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {lead.tags.map((tag) => (
@@ -903,7 +961,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           <div className="text-2xl font-semibold">{lead.score}</div>
                           <p className="text-xs text-muted-foreground">{lead.stage}</p>
                         </div>
-                      </div>
+                      </Link>
                     ))}
                     {!dashboardLeads.length ? (
                       <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
@@ -924,14 +982,26 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   <CardDescription>Notifications, reminders, and review items</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3">
-                  {actionQueue.slice(0, 8).map((item, index) => (
-                    <div key={notificationText(item)} className="flex items-start gap-3 rounded-xl border bg-background/50 p-3">
-                      <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                        {index + 1}
-                      </span>
-                      <p className="text-sm leading-5">{notificationText(item)}</p>
-                    </div>
-                  ))}
+                  {actionQueue.slice(0, 8).map((item, index) => {
+                    const href = typeof item === "string"
+                      ? "/notifications"
+                      : item.widgetId
+                        ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
+                        : "/notifications";
+                    return (
+                      <Link
+                        key={notificationText(item)}
+                        href={withQueryParam(href, "q", notificationText(item))}
+                        className="group flex items-start gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                          {index + 1}
+                        </span>
+                        <p className="min-w-0 flex-1 text-sm leading-5">{notificationText(item)}</p>
+                        <ArrowUpRight className="mt-1 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                      </Link>
+                    );
+                  })}
                   {!actionQueue.length ? (
                     <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
                       No dashboard action items are visible for this login yet.
@@ -950,7 +1020,12 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   {parentMessages.map((message) => (
-                    <div key={message.subject} className="flex gap-3">
+                    <Link
+                      key={message.subject}
+                      href={withQueryParam("/messages", "q", message.from)}
+                      className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={`Open message from ${message.from}`}
+                    >
                       <Avatar className="size-9">
                         <AvatarFallback>{message.from.slice(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
@@ -961,7 +1036,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         </div>
                         <p className="truncate text-xs text-muted-foreground">{message.preview}</p>
                       </div>
-                    </div>
+                      <ArrowUpRight className="mt-2 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                    </Link>
                   ))}
                   {!parentMessages.length ? (
                     <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
@@ -1018,8 +1094,16 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   );
                 }) : null}
                 {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && showExecutiveRollup ? dashboardCenters.map((center) => (
-                  <div key={center.name} className="rounded-xl border bg-background/50 p-4">
-                    <div className="font-medium">{center.name}</div>
+                  <Link
+                    key={center.name}
+                    href={withQueryParam("/multi-location-dashboard", "q", center.name)}
+                    className="group rounded-xl border bg-background/50 p-4 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Open multi-location view for ${center.name}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium">{center.name}</div>
+                      <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                    </div>
                     <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>
                     <Separator className="my-4" />
                     <div className="grid grid-cols-3 gap-3 text-center text-sm">
@@ -1027,7 +1111,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                       <div><b>{center.staff}</b><span className="block text-xs text-muted-foreground">Teachers</span></div>
                       <div><b>{center.compliance}%</b><span className="block text-xs text-muted-foreground">Docs</span></div>
                     </div>
-                  </div>
+                  </Link>
                 )) : null}
                 {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && !visibleConfiguredWidgets.length && (!showExecutiveRollup || !dashboardCenters.length) ? (
                   <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
@@ -1087,13 +1171,21 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </div>
               <div className="flex flex-col justify-center gap-3">
                 {openSeatsByAgeGroup.map((item, index) => (
-                  <div key={item.label} className="flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3">
+                  <Link
+                    key={item.label}
+                    href={withQueryParam("/center-dashboard", "q", item.label)}
+                    className="group flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={`Open center capacity for ${item.label}`}
+                  >
                     <span className="flex items-center gap-2 text-sm font-medium">
                       <span className="size-3 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
                       {item.label}
                     </span>
-                    <Badge variant="secondary">{item.value} open</Badge>
-                  </div>
+                    <span className="flex items-center gap-2">
+                      <Badge variant="secondary">{item.value} open</Badge>
+                      <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                    </span>
+                  </Link>
                 ))}
               </div>
             </div>

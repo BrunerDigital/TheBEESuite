@@ -368,7 +368,7 @@ export function ParentPortalWorkspace({
 
   function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (checkoutBlocked) {
-      return showError(checkoutReadiness.blockingReason || "Parent checkout is not ready for this school yet.");
+      return showError(checkoutReadiness.blockingReason || "Parent payments are not ready for this school yet.");
     }
     const invoice = invoices.find((item) => item.id === invoiceId);
     const recoveryAmount = paymentMethodCategory === "card"

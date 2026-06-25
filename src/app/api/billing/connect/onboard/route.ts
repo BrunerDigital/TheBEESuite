@@ -41,7 +41,7 @@ function stripeConnectFailureMessage(error: string | undefined, fallback: string
     return STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE;
   }
   if (/invalid api key|expired api key|no api key/i.test(message)) {
-    return "Stripe rejected the payout setup because the configured API key is invalid. Update the live Stripe key, then try again.";
+    return "The payment processor rejected the payout setup because the configured API key is invalid. Update the live processor key, then try again.";
   }
   return message || fallback;
 }
@@ -100,7 +100,7 @@ async function POSTHandler(request: NextRequest) {
   const setup = normalizeStripeConnectSetupInput(setupInput, center);
   if (!setup.ok) {
     return NextResponse.json(
-      { ok: false, error: "Complete the required payout setup fields before continuing to Stripe.", fields: setup.errors },
+      { ok: false, error: "Complete the required payout setup fields before opening the secure payout handoff.", fields: setup.errors },
       { status: 400 },
     );
   }
@@ -147,7 +147,7 @@ async function POSTHandler(request: NextRequest) {
       configured: false,
       stripeConfigured: false,
       centerId: center.id,
-      message: "Payout setup profile was saved. Add Stripe keys before creating the onboarding link.",
+      message: "Payout setup profile was saved. Add payment processor keys before creating the onboarding link.",
     });
   }
 

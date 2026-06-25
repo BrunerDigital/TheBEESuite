@@ -305,18 +305,25 @@ export async function ensureSupabaseAuthUser({
   };
 }
 
+export async function supabaseAuthUserExistsByEmail(email: string) {
+  const { user } = await findSupabaseAuthUserByEmail(email.toLowerCase());
+  return Boolean(user);
+}
+
 export async function upsertSupabaseAuthUserWithPassword({
   email,
   name,
   password,
   role,
   source = "bee_suite_executive_admin",
+  updateExistingPassword = true,
 }: {
   email: string;
   name?: string;
   password: string;
   role?: string;
   source?: string;
+  updateExistingPassword?: boolean;
 }) {
   const normalizedEmail = email.toLowerCase();
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
@@ -327,6 +334,9 @@ export async function upsertSupabaseAuthUserWithPassword({
   const appMetadata = role ? { bee_suite_role: role } : undefined;
 
   if (user) {
+    if (!updateExistingPassword) {
+      return { ok: true, created: false, updated: false, alreadyExisted: true };
+    }
     const { error } = await supabase.auth.admin.updateUserById(user.id, {
       password,
       email_confirm: true,

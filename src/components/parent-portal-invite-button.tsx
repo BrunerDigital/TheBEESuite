@@ -36,7 +36,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       setStatusMessage(
         json?.auth?.defaultPasswordSet
           ? "Parent portal access was created and the login email was sent. The parent signs in with their guardian email and the default parent password, then finishes the parent setup screen."
-          : "Parent portal access was created. The parent signs in with their guardian email, then finishes the parent setup screen.",
+          : "Parent portal access was linked and the login email was sent. The parent signs in with their guardian email and their existing password, or the default parent password if they have not changed it.",
       );
     });
   }

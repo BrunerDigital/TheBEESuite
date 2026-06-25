@@ -124,7 +124,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment information submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              Stripe is saving the payment method to this family profile. The school will see the updated autopay status shortly.
+              The secure payment processor is saving the payment method to this family profile. The school will see the updated autopay status shortly.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -133,7 +133,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              Stripe is processing the payment. The school will see it on the family ledger after Stripe confirms the payment.
+              The secure payment processor is confirming the payment. The school will see it on the family ledger after confirmation.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -169,7 +169,7 @@ export function PaymentMethodRequestForm({
             <Building2 className="size-4" />
             <AlertTitle>Instant bank verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
-              Select Verify Bank Instantly to log in through Stripe Financial Connections and verify your bank account now.
+              Select Verify Bank Instantly to use the secure bank-login handoff and verify your bank account now.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -227,9 +227,9 @@ export function PaymentMethodRequestForm({
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
             <div>
-              <div className="text-sm font-medium">Secure Stripe payment profile</div>
+              <div className="text-sm font-medium">The BEE Suite payment profile</div>
               <p className="mt-1 text-sm leading-6 text-zinc-300">
-                The BEE Suite never stores full card or bank account numbers. Stripe securely saves the payment method and links it to this family for tuition payments and autopay.
+                The BEE Suite never stores full card or bank account numbers. The secure payment processor saves the payment method and links it to this family for tuition payments and autopay.
               </p>
               <p className="mt-2 text-xs text-zinc-400">
                 Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.

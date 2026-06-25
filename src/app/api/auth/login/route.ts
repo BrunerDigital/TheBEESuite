@@ -11,6 +11,8 @@ import {
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
+import { resolvePostLoginPath } from "@/lib/login-routing";
+import { ensureParentPortalDefaultLoginForEmail } from "@/lib/parent-portal-logins";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -44,7 +46,11 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const verified = await verifySupabasePassword(email, password);
+  let verified = await verifySupabasePassword(email, password);
+  if (!verified) {
+    const parentLogin = await ensureParentPortalDefaultLoginForEmail({ email, password });
+    verified = parentLogin.ok;
+  }
   if (!verified) {
     return NextResponse.json(
       { ok: false, error: "Invalid email or password." },
@@ -72,8 +78,9 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
+  const nextPath = resolvePostLoginPath({ role: user.role, requestedNext: body.next });
   const userAgent = cleanUserAgent(request.headers.get("user-agent"));
-  const appMode = normalizeDeviceAppMode(body.appMode, body.next);
+  const appMode = normalizeDeviceAppMode(body.appMode, nextPath);
   const deviceType = inferDeviceType(userAgent);
   const label = cleanDeviceLabel(body.deviceLabel) || buildDeviceSessionLabel({ appMode, deviceType, userAgent });
   const deviceSession = await prisma.deviceSession.create({
@@ -110,6 +117,7 @@ async function POSTHandler(request: NextRequest) {
       role: user.role,
     },
     requiresPasswordReset: requiresPasswordResetGate(user),
+    nextPath,
   });
   response.cookies.set(SESSION_COOKIE, createSessionToken({ ...user, deviceSessionId: deviceSession?.id }), sessionCookieOptions());
   return response;

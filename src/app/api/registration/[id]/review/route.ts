@@ -437,13 +437,15 @@ async function createParentPortalInvite(input: {
 
   try {
     const appBaseUrl = getAppBaseUrl(input.requestUrl);
-    await upsertSupabaseAuthUserWithPassword({
+    const authUser = await upsertSupabaseAuthUserWithPassword({
       email,
       name: input.guardian.fullName,
       password: defaultPassword,
       role: UserRole.PARENT_GUARDIAN,
       source: PARENT_PORTAL_INVITE_MODE,
+      updateExistingPassword: false,
     });
+    const defaultPasswordSet = !("alreadyExisted" in authUser && authUser.alreadyExisted);
 
     const parentUser = await prisma.user.upsert({
       where: { email },
@@ -490,7 +492,7 @@ async function createParentPortalInvite(input: {
       "",
       `Your registration application for ${input.center.crmLocationId ?? input.center.name} was approved for the next enrollment steps.`,
       `Use ${email} as your login email.`,
-      `Use ${defaultPassword} as your default password.`,
+      `Use ${defaultPassword} as your default password if you have not changed it yet.`,
       "Your approved child records and school connections are already linked in the portal.",
       `Confirm your family portal information and check-in PIN: ${portalUrl}`,
       "You do not have to choose a new password, but you can set one any time from Profile settings after you sign in.",
@@ -529,7 +531,7 @@ async function createParentPortalInvite(input: {
         parentUserId: parentUser.id,
         email,
         authMode: PARENT_PORTAL_INVITE_MODE,
-        defaultPasswordSet: true,
+        defaultPasswordSet,
         emailCopySent: emailCopy.ok,
       },
     });
@@ -540,11 +542,11 @@ async function createParentPortalInvite(input: {
         error: emailCopy.error || "The parent portal user was linked, but the login email could not be sent.",
         emailSent: false,
         passwordResetSent: false,
-        defaultPasswordSet: true,
+        defaultPasswordSet,
       };
     }
 
-    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet: true, parentUserId: parentUser.id };
+    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet, parentUserId: parentUser.id };
   } catch (error) {
     return {
       ok: false,

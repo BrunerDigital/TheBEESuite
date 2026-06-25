@@ -52,12 +52,22 @@ import {
 import { canAccessModule } from "../src/lib/rbac";
 import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
+import { resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
 
 test("password reset gate does not block teacher or parent profile accounts", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
   assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), false);
   assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
+});
+
+test("web app login routes parent accounts into the parent portal", () => {
+  assert.equal(safeLoginNextPath("/parent-portal#billing"), "/parent-portal#billing");
+  assert.equal(safeLoginNextPath("/login?next=/parent-portal"), "/dashboard");
+  assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/dashboard" }), "/parent-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal#billing" }), "/parent-portal#billing");
+  assert.equal(resolvePostLoginPath({ role: UserRole.AUTHORIZED_PICKUP, requestedNext: "/billing-invoices" }), "/parent-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
 });
 
 test("billing guard applies a checkout payment only once per invoice", () => {
@@ -333,7 +343,7 @@ test("parent portal invite copy uses guardian email and school default password 
     assert.equal(getParentPortalDefaultPassword(), "BusyBees");
     assert.equal(portalUrl, "https://thebeesuite.io/parent-portal");
     assert.match(text, /Use taylor@example\.com as your login email\./);
-    assert.match(text, /Use BusyBees as your default password\./);
+    assert.match(text, /Use BusyBees as your default password if you have not changed it yet\./);
     assert.match(text, /Sign in here: https:\/\/thebeesuite\.io\/parent-portal/);
     assert.match(text, /You do not have to choose a new password/);
     assert.match(text, /Profile settings/);

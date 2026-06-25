@@ -123,7 +123,7 @@ function readStoredStripeCustomerId(customFields: unknown) {
 }
 
 export async function saveKidCitySoftwareStripeCustomerId(db: PrismaLike, customerId: string) {
-  if (!customerId.startsWith("cus_")) throw new Error("A valid Stripe customer ID is required.");
+  if (!customerId.startsWith("cus_")) throw new Error("A valid payment customer ID is required.");
   const ownerGroup = await getKidCityBillingOwnerGroup(db);
   if (!ownerGroup) throw new Error("Kid City owner group was not found for corporate billing.");
   await db.ownerGroup.update({

@@ -117,12 +117,14 @@ async function POSTHandler(request: NextRequest) {
       password: defaultPassword,
       role: UserRole.PARENT_GUARDIAN,
       source: PARENT_PORTAL_INVITE_MODE,
+      updateExistingPassword: false,
     });
+    const preservedExistingPassword = "alreadyExisted" in upsert && upsert.alreadyExisted;
     auth = {
       ok: true,
       created: upsert.created,
       updated: upsert.updated,
-      defaultPasswordSet: true,
+      defaultPasswordSet: !preservedExistingPassword,
     };
   } catch (error) {
     auth = { ok: false, error: error instanceof Error ? error.message : "Supabase auth setup failed." };

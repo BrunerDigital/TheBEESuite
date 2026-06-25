@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,6 +106,8 @@ type Props = {
   initialCenterId?: string;
   searchQuery?: string;
 };
+
+type DirectorPaymentMethod = "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
 
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
@@ -267,6 +270,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
+  const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
+  const [cardRecoveryAccepted, setCardRecoveryAccepted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const filteredFamilies = useMemo(
@@ -346,6 +351,41 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     return window.confirm(`You are about to ${action} for ${billingContextDescription(childName)}. Continue?`);
   }
 
+  function paymentMethodLabel(method: DirectorPaymentMethod) {
+    if (method === "autopay") return "Run autopay";
+    if (method === "saved_method") return "Charge saved method";
+    if (method === "card_checkout") return "Open card terminal";
+    if (method === "instant_bank_checkout") return "Instant bank checkout";
+    return "ACH bank checkout";
+  }
+
+  function paymentRouteSummary(method: DirectorPaymentMethod) {
+    if (method === "autopay") return "The BEE Suite submits an off-session processor charge using the family autopay method on the selected invoice.";
+    if (method === "saved_method") return "The BEE Suite submits an off-session processor charge using the saved family payment method.";
+    if (method === "card_checkout") return "The BEE Suite opens a secure card-entry handoff for phone payments.";
+    if (method === "instant_bank_checkout") return "The BEE Suite opens a secure instant bank verification handoff.";
+    return "The BEE Suite opens a secure ACH bank-account collection handoff.";
+  }
+
+  function openPaymentReview(method: DirectorPaymentMethod) {
+    if (!selectedFamily || !selectedBillingAccount) {
+      return setErrorMessage("Choose a family with a billing account before processing a payment.");
+    }
+    if (method === "autopay" && !effectivePaymentTarget.startsWith("invoice:")) {
+      return setErrorMessage("Choose an open invoice before running autopay.");
+    }
+    if (directorPaymentAmountCents <= 0) {
+      return setErrorMessage("Enter or choose a payment amount greater than zero.");
+    }
+    if (!selectedCheckoutReadiness?.canAcceptParentPayments) {
+      return setErrorMessage(selectedCheckoutReadiness?.blockingReason || "Parent payments are not ready for this school.");
+    }
+    setStatusMessage("");
+    setErrorMessage("");
+    setCardRecoveryAccepted(false);
+    setPaymentReviewMethod(method);
+  }
+
   function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
@@ -384,7 +424,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     });
   }
 
-  function processParentPayment(method: "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout") {
+  function processParentPayment(method: DirectorPaymentMethod) {
     if (!selectedFamily || !selectedBillingAccount) {
       return setErrorMessage("Choose a family with a billing account before processing a payment.");
     }
@@ -395,28 +435,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       return setErrorMessage("Enter or choose a payment amount greater than zero.");
     }
     if (!selectedCheckoutReadiness?.canAcceptParentPayments) {
-      return setErrorMessage(selectedCheckoutReadiness?.blockingReason || "Parent checkout is not ready for this school.");
+      return setErrorMessage(selectedCheckoutReadiness?.blockingReason || "Parent payments are not ready for this school.");
     }
 
     const invoiceId = effectivePaymentTarget.startsWith("invoice:") ? selectedPaymentInvoice?.id ?? "" : "";
-    const methodLabel = method === "autopay"
-      ? "run autopay"
-      : method === "saved_method"
-        ? "charge the selected saved method"
-        : method === "card_checkout"
-          ? "open the Stripe card terminal"
-          : method === "instant_bank_checkout"
-            ? "open instant bank checkout"
-            : "open ACH bank checkout";
-    const confirmed = window.confirm(
-      `You are about to ${methodLabel} for ${selectedFamily.name} (${directorPaymentTargetLabel}) for ${money(directorPaymentAmountCents)}. Continue?`,
-    );
-    if (!confirmed) return;
-
-    const processingRecoveryAccepted = method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card"
-      ? window.confirm("This will charge the saved card and may include the approved card processing recovery. Continue?")
-      : false;
-    if (method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card" && !processingRecoveryAccepted) return;
+    const processingRecoveryAccepted = method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
+    if (processingRecoveryAccepted && !cardRecoveryAccepted) {
+      return setErrorMessage("Confirm the approved card processing recovery disclosure before charging a saved card.");
+    }
+    setPaymentReviewMethod(null);
 
     startTransition(async () => {
       setStatusMessage("");
@@ -433,6 +460,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             retryFailed: true,
             limit: 1,
             processStoredMethod: method === "saved_method",
+            cardProcessingRecoveryAccepted: processingRecoveryAccepted,
           }),
         });
         const json = await response.json().catch(() => null) as {
@@ -802,7 +830,77 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     });
   }
 
+  const paymentReviewRequiresCardRecovery =
+    paymentReviewMethod === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
+
   return (
+    <>
+    <Dialog open={Boolean(paymentReviewMethod)} onOpenChange={(open) => {
+      if (!open && !isPending) {
+        setPaymentReviewMethod(null);
+        setCardRecoveryAccepted(false);
+      }
+    }}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{paymentReviewMethod ? paymentMethodLabel(paymentReviewMethod) : "Review payment"}</DialogTitle>
+          <DialogDescription>
+            Confirm the family, target, Bee Suite payment route, and fee disclosure before submitting the payment.
+          </DialogDescription>
+        </DialogHeader>
+        {paymentReviewMethod ? (
+          <div className="grid gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <SummaryMetric label="Family" value={selectedFamily?.name ?? "Not selected"} detail={selectedFamily?.billingEmail ?? "No billing email"} />
+              <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} detail={stripeAccountLabel(selectedCheckoutReadiness?.accountId)} />
+              <SummaryMetric label="Payment target" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
+              <SummaryMetric label="Amount to submit" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
+            </div>
+            <div className="rounded-lg border bg-background/45 p-3">
+              <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">The BEE Suite route</div>
+              <div className="mt-2 text-sm font-medium">{paymentRouteSummary(paymentReviewMethod)}</div>
+              <div className="mt-1 text-xs leading-5 text-muted-foreground">
+                Hosted handoffs and saved-method charges are created server-side with invoice, family, center, payment, payout-account, and collection-mode metadata for webhook reconciliation.
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <ContextBadge label="Readiness" value={selectedCheckoutReadiness?.label ?? "Unknown"} variant={selectedCheckoutReadiness?.canAcceptParentPayments ? "default" : "destructive"} />
+              <ContextBadge label="Saved method" value={selectedPaymentMethod?.paymentMethodLabel ?? "None"} />
+              <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />
+            </div>
+            {paymentReviewRequiresCardRecovery ? (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm leading-5">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={cardRecoveryAccepted}
+                  onChange={(event) => setCardRecoveryAccepted(event.target.checked)}
+                />
+                <span>
+                  I confirm this saved-card charge may include the approved card processing recovery and should be recorded before charging this family.
+                </span>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="outline" disabled={isPending} onClick={() => {
+            setPaymentReviewMethod(null);
+            setCardRecoveryAccepted(false);
+          }}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={isPending || !paymentReviewMethod || (paymentReviewRequiresCardRecovery && !cardRecoveryAccepted)}
+            onClick={() => paymentReviewMethod && processParentPayment(paymentReviewMethod)}
+          >
+            {paymentReviewMethod ? paymentMethodLabel(paymentReviewMethod) : "Submit payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <Card id="billing-workbench" className="glass-panel scroll-mt-28">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -891,7 +989,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         {selectedCheckoutReadiness?.canAcceptParentPayments ? (
           <Alert className="border-emerald-500/30 bg-emerald-500/10">
             <CheckCircle2 className="size-4 text-emerald-600" />
-            <AlertTitle>Parent checkout connected</AlertTitle>
+            <AlertTitle>Parent payments connected</AlertTitle>
             <AlertDescription>
               Invoices for {selectedCenter ? centerLabel(selectedCenter) : "this school"} route through{" "}
               {stripeAccountLabel(selectedCheckoutReadiness.accountId)}.
@@ -900,7 +998,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         ) : selectedCheckoutReadiness ? (
           <Alert variant="destructive">
             <AlertCircle className="size-4" />
-            <AlertTitle>Parent checkout blocked</AlertTitle>
+            <AlertTitle>Parent payments blocked</AlertTitle>
             <AlertDescription>
               {selectedCheckoutReadiness.blockingReason || "Finish payout setup before parents can pay invoices for this school."}
             </AlertDescription>
@@ -912,7 +1010,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div>
               <div className="text-sm font-medium">Family payment profile</div>
               <p className="text-xs text-muted-foreground">
-                Add or update the family&apos;s saved payment method, enable autopay, or open Stripe&apos;s secure payment method manager.
+                Add or update the family&apos;s saved payment method, enable autopay, or open The BEE Suite secure payment method manager.
               </p>
             </div>
             <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">{selectedAutopayStatus}</Badge>
@@ -922,7 +1020,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               <div className="text-xs text-muted-foreground">Saved method</div>
               <div className="mt-1 text-sm font-medium">
                 {selectedPaymentMethod?.hasSavedPaymentMethod
-                  ? selectedPaymentMethod.paymentMethodLabel ?? "Saved securely with Stripe"
+                  ? selectedPaymentMethod.paymentMethodLabel ?? "Saved securely"
                   : selectedPaymentMethod?.autopayStatus === "pending"
                     ? "Setup pending"
                     : "No saved payment method"}
@@ -953,7 +1051,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               <div>
                 <div className="text-sm font-medium">Director payment terminal</div>
                 <p className="text-xs text-muted-foreground">
-                  Choose total balance, an open invoice, or a custom amount, then charge a saved method or open Stripe&apos;s secure phone card terminal.
+                  Choose total balance, an open invoice, or a custom amount, then charge a saved method or open The BEE Suite secure phone card terminal.
                 </p>
               </div>
               <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
@@ -996,7 +1094,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 disabled={isPending || !selectedPaymentMethod?.hasSavedPaymentMethod || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => processParentPayment("saved_method")}
+                onClick={() => openPaymentReview("saved_method")}
               >
                 <CreditCard data-icon="inline-start" />
                 Charge Selected Method
@@ -1004,7 +1102,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               {effectivePaymentTarget.startsWith("invoice:") ? (
                 <Button
                   disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                  onClick={() => processParentPayment("autopay")}
+                  onClick={() => openPaymentReview("autopay")}
                   variant="outline"
                 >
                   <Play data-icon="inline-start" />
@@ -1013,14 +1111,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               ) : null}
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => processParentPayment("card_checkout")}
+                onClick={() => openPaymentReview("card_checkout")}
               >
                 <CreditCard data-icon="inline-start" />
                 Open Card Terminal
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => processParentPayment("instant_bank_checkout")}
+                onClick={() => openPaymentReview("instant_bank_checkout")}
                 variant="outline"
               >
                 <Building2 data-icon="inline-start" />
@@ -1028,7 +1126,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
-                onClick={() => processParentPayment("ach_checkout")}
+                onClick={() => openPaymentReview("ach_checkout")}
                 variant="outline"
               >
                 <Building2 data-icon="inline-start" />
@@ -1036,7 +1134,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </Button>
             </div>
             <div className="mt-2 text-xs text-muted-foreground">
-              Use Open Card Terminal when a parent gives card details by phone. Bee Suite sends the director to Stripe&apos;s secure card entry page, so card numbers are never typed into or stored by Bee Suite.
+              Use Open Card Terminal when a parent gives card details by phone. The BEE Suite sends the director to a secure processor card-entry page, so card numbers are never typed into or stored by The BEE Suite.
             </div>
           </div>
           <div className="mt-4 rounded-lg border bg-background/40 p-3">
@@ -1047,7 +1145,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   Parent payment and bank verification links
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Email a secure Stripe-backed form. Use the bank verification email when ACH is pending and the parent needs to log in to their bank now.
+                  Email a Bee Suite-branded secure form. Use the bank verification email when ACH is pending and the parent needs to log in to their bank now.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1427,6 +1525,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         </Tabs>
       </CardContent>
     </Card>
+    </>
   );
 }
 

@@ -66,6 +66,7 @@ type ProcessAutopayInput = {
   retryFailed?: boolean;
   requireDueDate?: boolean;
   collectionMode?: "autopay" | "stored_method";
+  cardProcessingRecoveryAccepted?: boolean;
   requestedByUserId?: string | null;
 };
 
@@ -271,11 +272,13 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     const autopayPaymentMethodCategory = paymentMethodAutopayCategory(paymentMethod);
-    const billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
+    let billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
     const cardRecoveryRequiresAcceptance =
       autopayPaymentMethodCategory === "card" &&
       getStripeProcessingRecoveryAmount(invoice.totalCents, "card") > 0;
-    if (cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt)) {
+    const oneTimeCardRecoveryAccepted =
+      collectionMode === "stored_method" && input.cardProcessingRecoveryAccepted === true;
+    if (cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && !oneTimeCardRecoveryAccepted) {
       results.push({
         ...baseResult,
         status: "skipped",
@@ -283,6 +286,10 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       });
       continue;
     }
+    const cardRecoveryAcceptedAt =
+      cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && oneTimeCardRecoveryAccepted
+        ? new Date().toISOString()
+        : null;
 
     const tenantId = center.organization.tenantId;
     const config = await tenantStripeConfig(tenantId, configCache);
@@ -352,8 +359,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         ...baseResult,
         status: "skipped",
         reason: connectedAccountId
-          ? "Family needs a saved payment method in this school's Stripe account."
-          : `Family needs a saved Stripe customer before ${collectionLabel} can run.`,
+          ? "Family needs a saved payment method in this school's payout account."
+          : `Family needs a saved payment customer record before ${collectionLabel} can run.`,
       });
       continue;
     }
@@ -372,6 +379,19 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     if (dryRun) {
       results.push({ ...baseResult, status: "would_charge", reason: null });
       continue;
+    }
+
+    if (cardRecoveryAcceptedAt) {
+      billingAccountFields = {
+        ...billingAccountFields,
+        cardProcessingRecoveryAcceptedAt: cardRecoveryAcceptedAt,
+        cardProcessingRecoveryAcceptedByUserId: input.requestedByUserId || null,
+        cardProcessingRecoveryAcceptedSource: "director_stored_method_charge",
+      };
+      await prisma.billingAccount.update({
+        where: { id: invoice.billingAccountId },
+        data: { customFields: jsonInput(billingAccountFields) },
+      });
     }
 
     const payment = await prisma.payment.create({
@@ -400,6 +420,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           stripeCustomerConnectedAccountId: connectedAccountId || null,
           stripeChargeType: connectedAccountId ? "direct" : "platform",
           collectionMode,
+          cardProcessingRecoveryAcceptedAt: clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) || null,
+          cardProcessingRecoveryAcceptedByUserId: clean(billingAccountFields.cardProcessingRecoveryAcceptedByUserId) || input.requestedByUserId || null,
           status: `${statusPrefix}_pending`,
           attemptedAt: new Date().toISOString(),
           requestedByUserId: input.requestedByUserId || null,
@@ -436,6 +458,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         paymentMethodCategory: amounts.paymentMethodCategory,
         checkoutTotalCents: String(amounts.checkoutTotalCents),
         applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
+        cardProcessingRecoveryAcceptedAt: clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) || "",
+        cardProcessingRecoveryAcceptedByUserId: clean(billingAccountFields.cardProcessingRecoveryAcceptedByUserId) || input.requestedByUserId || "",
         environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
       },
       connectedAccountId,

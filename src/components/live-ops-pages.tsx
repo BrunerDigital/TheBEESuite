@@ -1041,9 +1041,9 @@ const projectAccountGroups: Array<{ title: string; description: string; accounts
         Icon: Database,
       },
       {
-        label: "Stripe dashboard",
+        label: "Payment processor dashboard",
         href: "https://dashboard.stripe.com/",
-        detail: "Checkout, Connect accounts, webhooks, customers, invoices, and payments.",
+        detail: "Hosted handoffs, payout accounts, webhooks, customers, invoices, and payments.",
         status: "Payments",
         Icon: CreditCard,
       },
@@ -5477,7 +5477,7 @@ export function TerminalStorePage({ data }: { data: TerminalStorePageData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Terminal Store</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Purchase Stripe Terminal readers and accessories through The BEE Suite. Checkout runs on The BEE Suite platform account and collects shipping before payment.
+          Purchase card readers and accessories through The BEE Suite. Secure checkout runs on The BEE Suite platform account and collects shipping before payment.
         </p>
       </section>
 

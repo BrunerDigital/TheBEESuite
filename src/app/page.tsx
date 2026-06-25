@@ -82,7 +82,7 @@ const setupCards = [
   ["Branding layers", "Tenant, brand, owner group, and center customizations can override the right surfaces.", Sparkles],
   ["Inquiry form", "Copyable embed codes tied to the correct center or multi-location account.", ClipboardCheck],
   ["Online registration", "Public registration packets create application-stage leads and director review tasks.", FileCheck2],
-  ["Payouts", "School payout readiness is captured before live parent checkout is enabled.", CreditCard],
+  ["Payouts", "School payout readiness is captured before live parent payments are enabled.", CreditCard],
   ["Reports", "FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.", BarChart3],
 ];
 

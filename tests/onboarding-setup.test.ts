@@ -52,5 +52,5 @@ test("director launch checklist opens payout bank setup in billing settings", ()
   assert.ok(payoutTask);
   assert.equal(payoutTask.href, "/billing-settings");
   assert.match(payoutTask.description, /Directors and executives/i);
-  assert.match(payoutTask.description, /Stripe Connect payout onboarding/i);
+  assert.match(payoutTask.description, /payout processor onboarding/i);
 });

@@ -32,7 +32,7 @@ export function buildParentPortalInvitationText({
     "",
     `Your parent portal for ${centerLabel} is ready.`,
     `Use ${email} as your login email.`,
-    `Use ${defaultPassword} as your default password.`,
+    `Use ${defaultPassword} as your default password if you have not changed it yet.`,
     "Your child records and classroom connections from the school are already linked in the portal.",
     "The setup screen will ask you to confirm your contact details, create your check-in PIN, and see how to add the portal to your phone home screen.",
     `Sign in here: ${portalUrl}`,

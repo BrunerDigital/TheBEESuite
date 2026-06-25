@@ -131,8 +131,8 @@ export const schoolOnboardingSetupSections = [
     label: "External accounts and integrations",
     owner: "Owner, director, or admin",
     href: "/integrations",
-    description: "Connect or verify Stripe Connect, SendGrid/email sender, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider readiness.",
-    placeholder: "Stripe payout owner\nSendGrid sender/domain\nTwilio phone/sender\nGoogle Calendar/Sheets access\nStorage/signature provider",
+    description: "Connect or verify payout processor, SendGrid/email sender, Twilio/SMS, Google Sheets/Calendar, storage, and signature provider readiness.",
+    placeholder: "Payout owner\nSendGrid sender/domain\nTwilio phone/sender\nGoogle Calendar/Sheets access\nStorage/signature provider",
   },
   {
     field: "launchSmokeTestSetup",

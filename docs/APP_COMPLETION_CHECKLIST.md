@@ -1,13 +1,20 @@
 # The BEE Suite App Completion Checklist
 
-Last updated: June 9, 2026
+Last updated: June 25, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
 - `[ ]` Still needs work before it should be considered complete production coverage.
 
+## Current Rollout Focus
+
+- [ ] Complete final Kokomo live-use punch list and regression smoke before wider school rollout.
+- [ ] Package the rest-of-schools implementation plan for end-of-week readiness, including rollout order, data import validation, director training, and support coverage.
+- [x] Kokomo has used The BEE Suite live this week, giving the team real school traffic to find and fix remaining issues before broader rollout.
+
 ## Current Production Baseline
 
+- [ ] Complete a fresh production smoke test for every role after each major deployment.
 - [x] Next.js App Router SaaS app deployed on Vercel.
 - [x] Production domain connected at `thebeesuite.io`.
 - [x] GitHub main branch deployment flow active.
@@ -18,25 +25,26 @@ Status legend:
 - [x] Location-level users are scoped to assigned center data for CRM leads and FTE reports.
 - [x] The app name and author metadata have been corrected to `The BEE Suite` and `BrunerDigital`.
 - [x] Production Prisma connection usage is limited to reduce Supabase connection exhaustion during live school traffic.
-- [ ] Complete a fresh production smoke test for every role after each major deployment.
 - [x] Create a formal release checklist before every live-school rollout.
 
 ## Public Website And Landing Page
 
+- [ ] Add final production copy pass for public SaaS launch.
+- [ ] Add full testimonials section with real approved customer quotes.
+- [ ] Add generated or real in-school product usage imagery.
+- [ ] Add conversion tracking, analytics, and ad pixels when marketing launches.
 - [x] Public landing page exists.
 - [x] Landing page is positioned for childcare centers and preschool operators broadly, not only Kid City USA.
 - [x] Hero visual style has been upgraded toward the dark, premium BEE Suite direction.
 - [x] Sections include platform explanation, operational value, and feature previews.
 - [x] Pricing/payment revenue visual materials exist in docs.
 - [x] Social/media marketing asset package exists in docs.
-- [ ] Add final production copy pass for public SaaS launch.
-- [ ] Add full testimonials section with real approved customer quotes.
-- [ ] Add generated or real in-school product usage imagery.
 - [x] Add final responsive QA across common mobile/tablet/desktop sizes.
-- [ ] Add conversion tracking, analytics, and ad pixels when marketing launches.
 
 ## Authentication And Account Access
 
+- [ ] Add MFA option for executive/admin users.
+- [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 - [x] Login page exists.
 - [x] Forgot password/reset password routes exist.
 - [x] Supabase Auth integration exists.
@@ -46,14 +54,16 @@ Status legend:
 - [x] Executive users including `brenden@kidcityusa.com`, `marie@kidcityusa.com`, `audrey@kidcityusa.com`, and `kayleen@kidcityusa.com` were added previously.
 - [x] Password reset support exists through the UI/API.
 - [x] Complete forced password reset workflow for first production login.
-- [ ] Add MFA option for executive/admin users.
 - [x] Add session revocation/admin logout-all-devices control.
 - [x] Add parent portal invitation/password setup workflow for linked guardians.
 - [x] Add automatic Bee Suite teacher login generation for new teacher/staff profiles.
-- [ ] Add full user invite email workflow for staff/executive accounts instead of only admin-created accounts.
 
 ## Multi-Tenant, Franchise, And White-Label Architecture
 
+- [ ] Add actual logo/favicon upload storage and preview flows.
+- [ ] Add custom domain DNS validation, activation, and deployment binding.
+- [ ] Add separate approval/grant flow if support impersonation is ever enabled.
+- [ ] Add complete owner-group management views for franchisees who own multiple locations inside a larger brand.
 - [x] Schema includes tenants, brands, organizations, owner groups, centers, classrooms, users, access grants, brand assets, and brand customizations.
 - [x] Supports single-location, multi-location, franchise, owner-group, and corporate-level separation.
 - [x] White-label settings module exists.
@@ -63,27 +73,24 @@ Status legend:
 - [x] Add tenant controls UI for branding fields, parent portal labels, legal/footer settings, asset references, feature flags, DNS verification requests, and support-access audit requests.
 - [x] Add tenant-level feature flags in the UI.
 - [x] Add self-service custom domain DNS verification request UI with generated TXT record values.
-- [ ] Add actual logo/favicon upload storage and preview flows.
-- [ ] Add custom domain DNS validation, activation, and deployment binding.
-- [ ] Add separate approval/grant flow if support impersonation is ever enabled.
-- [ ] Add complete owner-group management views for franchisees who own multiple locations inside a larger brand.
 
 ## Executive Admin
 
+- [ ] Add bulk user/location import for executive admins.
+- [ ] Add granular permission editor for roles beyond the current role/access-grant model.
+- [ ] Add support-access approval/grant workflow if support impersonation is ever enabled.
 - [x] Agency/franchise/executive admin page exists.
 - [x] Executive admin API exists.
 - [x] Corporate users can create/archive locations and manage users through UI foundations.
 - [x] Access grant replacement guardrails exist.
 - [x] Audit logs exist for sensitive actions.
 - [x] Complete all executive CRUD flows with confirmation states, validation, and error recovery.
-- [ ] Add bulk user/location import for executive admins.
 - [x] Add password reset email trigger from executive admin, not just password set/reset foundations.
-- [ ] Add granular permission editor for roles beyond the current role/access-grant model.
 - [x] Add support-access request workflow with explicit audit warnings.
-- [ ] Add support-access approval/grant workflow if support impersonation is ever enabled.
 
 ## Dashboards
 
+- [ ] Replace remaining demo-login classroom/parent fallbacks with real imported school data.
 - [x] Main dashboard page exists.
 - [x] Director school setup command center exists for full-feature launch configuration.
 - [x] Multi-location dashboard exists.
@@ -93,7 +100,6 @@ Status legend:
 - [x] Parent portal view exists.
 - [x] Executive-level Kid City USA views can show CRM/FTE/reporting data.
 - [x] Demo-login-only data exists for classroom and parent engagement sections.
-- [ ] Replace remaining demo-login classroom/parent fallbacks with real imported school data.
 - [x] Add configurable dashboard widgets per role.
 - [x] Add saved filters and date ranges.
 - [x] Add export/share actions for dashboard snapshots.
@@ -166,6 +172,7 @@ Status legend:
 
 ## FTE Reporting
 
+- [ ] Add final Google Sheet two-way reconciliation rules.
 - [x] FTE report schema and migration exist.
 - [x] Director FTE submission form exists.
 - [x] Executive FTE review/correction/approval exists.
@@ -181,10 +188,11 @@ Status legend:
 - [x] Add full historical FTE trend filters by region/state/owner group.
 - [x] Add executive manual edit table for inline corrections.
 - [x] Add email/SMS reminders for missing FTE reports at Friday 8:00 AM ET and Friday 5:00 PM ET.
-- [ ] Add final Google Sheet two-way reconciliation rules.
 
 ## ProCare Import And Cutover
 
+- [ ] Run final import mapping against real exports from each live Kid City USA location.
+- [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
 - [x] ProCare import page/panel exists.
 - [x] ProCare import API exists.
 - [x] Import supports unencrypted ProCare CSV exports.
@@ -192,8 +200,6 @@ Status legend:
 - [x] ProCare field coverage documentation exists.
 - [x] Import can populate families, guardians, children, classrooms, staff, invoices, balances, and attendance/check log foundations.
 - [x] ProCare staff import creates generated teacher logins and center-scoped teacher access for new staff.
-- [ ] Run final import mapping against real exports from each live Kid City USA location.
-- [ ] Confirm every ProCare field used by the schools is mapped or intentionally excluded.
 - [x] Add import preview/diff UI before committing records.
 - [x] Add rollback/export backup for imports.
 - [x] Add duplicate matching controls for families/children/guardians.
@@ -221,6 +227,7 @@ Status legend:
 
 ## Classroom Operations And Teacher Workflows
 
+- [ ] Add offline/poor-connectivity strategy for classroom tablets.
 - [x] Classroom dashboard exists.
 - [x] Teacher portal/mobile view exists.
 - [x] Teacher attendance API exists.
@@ -233,11 +240,11 @@ Status legend:
 - [x] Add classroom roster attendance board with fast check-in/check-out states.
 - [x] Add batch logging for meals/naps/diapers/activities.
 - [x] Add classroom ratio warnings and staff assignment actions.
-- [ ] Add offline/poor-connectivity strategy for classroom tablets.
 - [x] Add teacher permissions separated from director/location users.
 
 ## Parent Engagement Portal
 
+- [ ] Add push notifications/native app strategy.
 - [x] Parent portal page exists.
 - [x] Parent portal workspace component exists.
 - [x] Parent contact request API exists.
@@ -250,7 +257,6 @@ Status legend:
 - [x] Add parent notification preferences.
 - [x] Add parent document submission/review workflow foundation.
 - [x] Add parent emergency contact/update request submission and director review queue foundation.
-- [ ] Add push notifications/native app strategy.
 
 ## Billing, Ledger, Tuition, And Payments
 
@@ -376,6 +382,7 @@ Status legend:
 
 ## Notifications
 
+- [ ] Add push/native app delivery channel provider beyond in-app notifications.
 - [x] Notification center page exists.
 - [x] Notification dropdown exists in app shell.
 - [x] Notification summary API exists.
@@ -385,7 +392,6 @@ Status legend:
 - [x] Add parent notification preferences.
 - [x] Add full notification preferences by role/user beyond parent portal.
 - [x] Add email/SMS delivery channels through SendGrid/Twilio with role/user preference filtering.
-- [ ] Add push/native app delivery channel provider beyond in-app notifications.
 - [x] Add notification dedupe/retention policy.
 
 ## Integrations
@@ -405,6 +411,7 @@ Status legend:
 
 ## Database, Security, Privacy, And Audit
 
+- [ ] Run a formal Supabase advisor/security review after each schema migration.
 - [x] Prisma schema covers core modules.
 - [x] Migrations exist for CRM import, kiosk/parent engagement, FTE, tenant access/branding, ProCare metadata, Supabase public API hardening, Stripe hardening, and integration delivery queues.
 - [x] Audit log schema and audit helper exist.
@@ -412,7 +419,6 @@ Status legend:
 - [x] Supabase public API hardening migration exists.
 - [x] Guardrail helper files exist for access grants, attendance, billing, dates, documents, notifications, operations, portal, readiness, kiosk, FTE, and storage.
 - [x] Existing tests cover many guardrails.
-- [ ] Run a formal Supabase advisor/security review after each schema migration.
 - [x] Add RLS policy documentation for every exposed table.
 - [x] Add encryption-at-rest/field-level encryption plan for medical/custody/payment-sensitive fields.
 - [x] Add data retention/deletion policy.
@@ -421,6 +427,9 @@ Status legend:
 
 ## Testing And Quality Assurance
 
+- [ ] Add staging environment separate from production.
+- [ ] Add seed/test fixtures for every major role.
+- [ ] Add error monitoring and uptime monitoring.
 - [x] Typecheck script exists.
 - [x] Lint script exists.
 - [x] Build script exists.
@@ -429,9 +438,6 @@ Status legend:
 - [x] Playwright/browser checks have been used manually for important UI.
 - [x] Add automated Playwright smoke tests for login, CRM, inquiry, FTE, kiosk, parent portal, and billing.
 - [x] Add CI workflow that blocks deploys on typecheck/lint/test/build failure.
-- [ ] Add staging environment separate from production.
-- [ ] Add seed/test fixtures for every major role.
-- [ ] Add error monitoring and uptime monitoring.
 
 ## Documentation And Operations
 
@@ -505,6 +511,7 @@ Status legend:
 
 ## API Route Checklist
 
+- [ ] Add rate limiting to all public and sensitive mutation routes.
 - [x] Auth: login, logout, forgot password, reset password.
 - [x] Admin: executive management.
 - [x] AI: Mr. Bee assistant.
@@ -528,7 +535,6 @@ Status legend:
 - [x] Registration.
 - [x] Teacher: attendance, daily reports, incidents, media.
 - [x] Add API-level automated tests for every route.
-- [ ] Add rate limiting to all public and sensitive mutation routes.
 - [x] Add request/response logging with PII-safe redaction.
 
 ## Highest Priority Remaining Work

@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The BEE Suite Paper Training Pack</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #fff8ec;
+      --paper-2: #fffcf5;
+      --card: #ffffff;
+      --ink: #17202a;
+      --muted: #586270;
+      --soft: #eef2f4;
+      --line: #d8cdb6;
+      --gold: #f5b51b;
+      --gold-2: #ffe6a6;
+      --teal: #0f8b8d;
+      --green: #2f855a;
+      --rose: #b42318;
+      --navy: #223244;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #ece7da; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
+    body { padding: 24px 0; }
+    code { font-family: "Geist Mono", "SFMono-Regular", Consolas, monospace; font-size: 7.5pt; color: #475569; overflow-wrap: anywhere; }
+    .sheet {
+      position: relative;
+      width: 8.5in;
+      min-height: 11in;
+      margin: 0 auto 24px;
+      padding: 0.42in 0.48in 0.46in;
+      overflow: hidden;
+      break-after: page;
+      background:
+        linear-gradient(180deg, rgba(245,181,27,0.12), rgba(255,255,255,0) 1.8in),
+        radial-gradient(circle at 93% 8%, rgba(15,139,141,0.12), transparent 1.8in),
+        var(--paper);
+      box-shadow: 0 18px 60px rgba(23,32,42,0.18);
+    }
+    .sheet::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 0.15in;
+      background: linear-gradient(90deg, var(--gold), var(--teal), var(--green));
+      opacity: 0.85;
+    }
+    .brand-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 0.28in;
+      padding-bottom: 0.14in;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-lockup { display: flex; align-items: center; gap: 10px; }
+    .brand-lockup img { width: 0.42in; height: 0.42in; object-fit: contain; }
+    .brand-lockup strong { display: block; font-size: 12pt; letter-spacing: 0; }
+    .brand-lockup span { display: block; margin-top: 2px; color: var(--muted); font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.12em; }
+    .doc-label {
+      border: 1px solid rgba(245,181,27,0.9);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255,230,166,0.55);
+      color: #5b4103;
+      font-size: 8pt;
+      font-weight: 700;
+    }
+    .kicker {
+      margin: 0 0 0.1in;
+      color: var(--teal);
+      font-size: 8.5pt;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      max-width: 7.2in;
+      font-size: 26pt;
+      line-height: 1.03;
+      letter-spacing: 0;
+      color: var(--ink);
+    }
+    h2 { margin: 0; font-size: 12pt; line-height: 1.2; letter-spacing: 0; }
+    h3 { margin: 0; font-size: 10.5pt; line-height: 1.18; letter-spacing: 0; }
+    p { margin: 0; color: var(--muted); font-size: 9pt; line-height: 1.42; }
+    .lead { margin-top: 0.16in; color: #334155; font-size: 13pt; line-height: 1.42; }
+    .lead.small { font-size: 10pt; max-width: 7.1in; }
+    .sheet-footer {
+      position: absolute;
+      left: 0.48in;
+      right: 0.48in;
+      bottom: 0.28in;
+      color: #64748b;
+      font-size: 7.4pt;
+      line-height: 1.3;
+    }
+    .cover-grid { display: grid; grid-template-columns: 1fr 2.35in; gap: 0.28in; align-items: stretch; margin-top: 0.3in; }
+    .cover-card, .note-box, .info-panel, .warning-panel, .asset-card, .step-flow article, .layer-list article, .three-cards article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.82);
+      box-shadow: 0 8px 20px rgba(23,32,42,0.06);
+    }
+    .cover-card { padding: 0.22in; }
+    .big-mark {
+      display: grid;
+      place-items: center;
+      width: 0.88in;
+      height: 0.76in;
+      margin-bottom: 0.16in;
+      clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%);
+      background: linear-gradient(135deg, #ffd95d, var(--gold));
+      color: #111827;
+      font-size: 26pt;
+      font-weight: 900;
+    }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 0.22in; }
+    .pill-row span {
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid #d8cdb6;
+      background: #fffdf7;
+      color: #334155;
+      font-size: 8.5pt;
+      font-weight: 700;
+    }
+    .summary-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.12in;
+      margin-top: 0.35in;
+    }
+    .summary-strip div {
+      border-top: 4px solid var(--gold);
+      padding: 0.14in;
+      background: #fff;
+      border-radius: 8px;
+    }
+    .summary-strip b { display: block; font-size: 24pt; line-height: 1; color: var(--navy); }
+    .summary-strip span { display: block; margin-top: 5px; color: var(--muted); font-size: 8pt; line-height: 1.25; }
+    .note-box { margin-top: 0.28in; padding: 0.16in; }
+    .note-box strong, .module-band strong, .sop-meta strong, .escalate strong { display: block; color: var(--ink); font-size: 9pt; text-transform: uppercase; letter-spacing: 0.08em; }
+    .asset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.12in; margin-top: 0.22in; }
+    .asset-card { display: grid; grid-template-columns: 1.08in 1fr; gap: 0.12in; min-height: 1in; padding: 0.1in; }
+    .asset-thumb { display: grid; place-items: center; overflow: hidden; min-height: 0.76in; border-radius: 6px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .asset-thumb img { width: 100%; height: 0.82in; object-fit: contain; display: block; }
+    .asset-card p { margin-top: 4px; font-size: 7.7pt; }
+    .file-badge { font-size: 14pt; font-weight: 800; color: var(--teal); }
+    .role-table, .signoff-table { width: 100%; border-collapse: collapse; margin-top: 0.22in; background: #fff; border-radius: 8px; overflow: hidden; }
+    th, td { border: 1px solid #e2d8c4; padding: 0.1in; text-align: left; vertical-align: top; font-size: 8.7pt; line-height: 1.35; }
+    th { background: #fff0c2; color: #3b2a05; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.08em; }
+    .three-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.14in; margin-top: 0.24in; }
+    .three-cards article { padding: 0.14in; }
+    .three-cards p { margin-top: 6px; }
+    .step-flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.14in; margin-top: 0.28in; }
+    .step-flow article { min-height: 1.34in; padding: 0.15in; position: relative; }
+    .step-flow span {
+      display: grid;
+      place-items: center;
+      width: 0.32in;
+      height: 0.32in;
+      margin-bottom: 0.08in;
+      border-radius: 8px;
+      background: var(--gold);
+      color: #111827;
+      font-weight: 900;
+      font-size: 10pt;
+    }
+    .step-flow p, .layer-list p { margin-top: 6px; }
+    .layer-list { display: grid; gap: 0.12in; margin-top: 0.25in; }
+    .layer-list article {
+      display: grid;
+      grid-template-columns: 1.35in 1fr;
+      gap: 0.16in;
+      align-items: center;
+      padding: 0.14in;
+      border-left: 5px solid var(--teal);
+    }
+    .module-band {
+      display: grid;
+      grid-template-columns: 1.35in 1fr;
+      gap: 0.15in;
+      align-items: start;
+      margin-top: 0.18in;
+      padding: 0.13in 0.15in;
+      border-radius: 8px;
+      background: #fff0c2;
+      border: 1px solid #e5c75b;
+    }
+    .module-band span { color: #3b2a05; font-size: 8.8pt; line-height: 1.4; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.16in; margin-top: 0.2in; align-items: start; }
+    .info-panel { padding: 0.16in; }
+    .warning-panel { margin-top: 0.16in; padding: 0.16in; border-left: 5px solid var(--rose); }
+    ul { list-style: none; margin: 0.1in 0 0; padding: 0; }
+    li {
+      position: relative;
+      margin-top: 0.06in;
+      padding-left: 0.17in;
+      color: #3b4654;
+      font-size: 8.4pt;
+      line-height: 1.35;
+    }
+    li::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0.42em;
+      width: 0.07in;
+      height: 0.07in;
+      border-radius: 99px;
+      background: var(--teal);
+    }
+    .sop-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.14in; margin-top: 0.18in; }
+    .sop-meta div {
+      min-height: 0.72in;
+      padding: 0.13in;
+      border-radius: 8px;
+      border: 1px solid #d8cdb6;
+      background: #fff;
+    }
+    .sop-meta span { display: block; margin-top: 6px; color: var(--muted); font-size: 8.4pt; line-height: 1.35; }
+    .escalate { margin-top: 0.16in; padding-top: 0.14in; border-top: 1px solid #e2d8c4; }
+    .escalate p { margin-top: 6px; color: var(--rose); font-weight: 700; }
+    .signoff-table td { height: 0.55in; }
+    @page { size: Letter; margin: 0; }
+    @media print {
+      body { padding: 0; background: white; }
+      .sheet { margin: 0; box-shadow: none; break-after: page; }
+      .sheet:last-child { break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Cover</div>
+  </header>
+    <p class="kicker">Generated 2026-06-25</p>
+    <h1>Paper-ready guides for every BEE Suite role</h1>
+    <div class="cover-grid">
+      <div>
+        <p class="lead">A light-background print packet that gathers the existing product graphics and turns the web app workflows into paper SOPs, role setup sheets, and daily training references.</p>
+        <div class="pill-row">
+          <span>Light print theme</span>
+          <span>Role-based setup</span>
+          <span>SOPs</span>
+          <span>Source assets collected</span>
+        </div>
+      </div>
+      <div class="cover-card">
+        <div class="big-mark">B</div>
+        <h2>Designed for paper</h2>
+        <p>Uses the brand mark, honey accent, teal/green support colors, thin lines, and mostly white/cream space to avoid heavy dark-blue or dark-gray ink coverage.</p>
+      </div>
+    </div>
+    <div class="summary-strip">
+      <div><b>24</b><span>source graphics gathered</span></div>
+      <div><b>5</b><span>light explainer rebuilds</span></div>
+      <div><b>7</b><span>role setup sheets</span></div>
+      <div><b>13</b><span>SOP handouts</span></div>
+    </div>
+    <div class="note-box">
+      <strong>Included file set</strong>
+      <p>Final PDF, source HTML, collected image/PDF assets, preview screenshots, and a machine-readable manifest.</p>
+    </div>
+    <footer class="sheet-footer">Print single-sided for handouts or double-sided as a training binder.</footer>
+  </section>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Source graphics</div>
+  </header>
+    
+    <h1>Collected printable graphics 1 of 3</h1>
+    <p class="lead small">These are the existing graphics and print-ready files copied into this packet's <code>source-graphics</code> folder. The new pages that follow rebuild the training content in a lighter print theme.</p>
+    <div class="asset-grid"><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/childcare-operating-system.png" alt="Childcare Operating System" /></div>
+        <div>
+          <h3>Childcare Operating System</h3>
+          <p>Opening product overview and sales/training explanation.</p>
+          <code>public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_01-childcare-operating-system_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/inquiry-to-enrolled-family.png" alt="Inquiry To Enrolled Family" /></div>
+        <div>
+          <h3>Inquiry To Enrolled Family</h3>
+          <p>Enrollment CRM, website form routing, and family handoff.</p>
+          <code>public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/permission-safe-data-model.png" alt="Permission-Safe Data Model" /></div>
+        <div>
+          <h3>Permission-Safe Data Model</h3>
+          <p>Role training, trust review, and privacy explanation.</p>
+          <code>public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_03-permission-safe-data-model_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/school-go-live-setup-path.png" alt="School Go-Live Setup Path" /></div>
+        <div>
+          <h3>School Go-Live Setup Path</h3>
+          <p>Director onboarding and launch planning.</p>
+          <code>public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_04-school-go-live-setup-path_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/daily-operating-loop.png" alt="Daily Operating Loop" /></div>
+        <div>
+          <h3>Daily Operating Loop</h3>
+          <p>Daily school rhythm training for directors, teachers, and parents.</p>
+          <code>public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_05-daily-operating-loop_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/user-dashboard-views.png" alt="User Dashboard Views" /></div>
+        <div>
+          <h3>User Dashboard Views</h3>
+          <p>Role dashboard expectation setting.</p>
+          <code>docs/USER_DASHBOARD_VIEWS_GRAPHIC_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/payments-architecture.png" alt="Payments Architecture" /></div>
+        <div>
+          <h3>Payments Architecture</h3>
+          <p>Billing, Stripe Connect, payout readiness, and payment support.</p>
+          <code>docs/BEE_SUITE_PAYMENTS_ARCHITECTURE_VISUAL_2026-06-08.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/director-roadmap.svg" alt="Kid City Director Setup Roadmap" /></div>
+        <div>
+          <h3>Kid City Director Setup Roadmap</h3>
+          <p>Director implementation and school setup.</p>
+          <code>public/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg</code>
+        </div>
+      </article></div>
+    <footer class="sheet-footer">Dark originals are preserved for reference; use the light rebuilds for low-ink classroom/office printing.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Source graphics</div>
+  </header>
+    
+    <h1>Collected printable graphics 2 of 3</h1>
+    <p class="lead small">These are the existing graphics and print-ready files copied into this packet's <code>source-graphics</code> folder. The new pages that follow rebuild the training content in a lighter print theme.</p>
+    <div class="asset-grid"><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/teacher-roadmap.svg" alt="Kid City Teacher Profile Setup Roadmap" /></div>
+        <div>
+          <h3>Kid City Teacher Profile Setup Roadmap</h3>
+          <p>Teacher profile, classroom assignment, and launch sign-off.</p>
+          <code>public/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/pricing-model-options.png" alt="Pricing Model Options" /></div>
+        <div>
+          <h3>Pricing Model Options</h3>
+          <p>Operator pricing and revenue model explanation.</p>
+          <code>docs/assets/pricing/01-pricing-model-options.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/charge-flow-maps.png" alt="Charge Flow Maps" /></div>
+        <div>
+          <h3>Charge Flow Maps</h3>
+          <p>Fee, tuition, and charge flow explanation.</p>
+          <code>docs/assets/pricing/02-charge-flow-maps.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/revenue-stack-and-plans.png" alt="Revenue Stack And Plans" /></div>
+        <div>
+          <h3>Revenue Stack And Plans</h3>
+          <p>Executive billing strategy discussion.</p>
+          <code>docs/assets/pricing/03-revenue-stack-and-plans.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/payment-revenue-1.png" alt="Payment Revenue Visual 1" /></div>
+        <div>
+          <h3>Payment Revenue Visual 1</h3>
+          <p>Payment processing revenue meeting reference.</p>
+          <code>docs/assets/payment-revenue/01-payment-revenue-1.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/payment-revenue-2.png" alt="Payment Revenue Visual 2" /></div>
+        <div>
+          <h3>Payment Revenue Visual 2</h3>
+          <p>Payment processing revenue meeting reference.</p>
+          <code>docs/assets/payment-revenue/02-payment-revenue-2.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/payment-revenue-3.png" alt="Payment Revenue Visual 3" /></div>
+        <div>
+          <h3>Payment Revenue Visual 3</h3>
+          <p>Payment processing revenue meeting reference.</p>
+          <code>docs/assets/payment-revenue/03-payment-revenue-3.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/payment-revenue-4.png" alt="Payment Revenue Visual 4" /></div>
+        <div>
+          <h3>Payment Revenue Visual 4</h3>
+          <p>Payment processing revenue meeting reference.</p>
+          <code>docs/assets/payment-revenue/04-payment-revenue-4.png</code>
+        </div>
+      </article></div>
+    <footer class="sheet-footer">Dark originals are preserved for reference; use the light rebuilds for low-ink classroom/office printing.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Source graphics</div>
+  </header>
+    
+    <h1>Collected printable graphics 3 of 3</h1>
+    <p class="lead small">These are the existing graphics and print-ready files copied into this packet's <code>source-graphics</code> folder. The new pages that follow rebuild the training content in a lighter print theme.</p>
+    <div class="asset-grid"><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/marketing-real-school-days.png" alt="Real School Days Campaign Graphic" /></div>
+        <div>
+          <h3>Real School Days Campaign Graphic</h3>
+          <p>Brand story and handout cover reference.</p>
+          <code>outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/real-school-days.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/marketing-role-safe-operations.png" alt="Role-Safe Operations Campaign Graphic" /></div>
+        <div>
+          <h3>Role-Safe Operations Campaign Graphic</h3>
+          <p>Access model and trust reference.</p>
+          <code>outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/role-safe-operations.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/marketing-helpful-drafts.png" alt="Helpful Drafts, Human Decisions" /></div>
+        <div>
+          <h3>Helpful Drafts, Human Decisions</h3>
+          <p>AI guardrails and training reference.</p>
+          <code>outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/helpful-drafts-human-decisions.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/usage-lobby-check-in.png" alt="Lobby Check-In Usage Scene" /></div>
+        <div>
+          <h3>Lobby Check-In Usage Scene</h3>
+          <p>Kiosk and parent pickup training reference.</p>
+          <code>public/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/usage-classroom-daily-updates.png" alt="Classroom Daily Updates Usage Scene" /></div>
+        <div>
+          <h3>Classroom Daily Updates Usage Scene</h3>
+          <p>Teacher daily reports and classroom tablet training.</p>
+          <code>public/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><img src="source-graphics/usage-director-operations.png" alt="Director Operations Usage Scene" /></div>
+        <div>
+          <h3>Director Operations Usage Scene</h3>
+          <p>Director command-center training reference.</p>
+          <code>public/brand/the-bee-suite/usage/bee-suite-director-operations.png</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><div class="file-badge">PDF</div></div>
+        <div>
+          <h3>Payment Revenue Meeting Visuals PDF</h3>
+          <p>Existing printable payment packet.</p>
+          <code>docs/assets/payment-revenue/payment-revenue-meeting-visuals.pdf</code>
+        </div>
+      </article><article class="asset-card">
+        <div class="asset-thumb"><div class="file-badge">PDF</div></div>
+        <div>
+          <h3>App Completion Checklist Print PDF</h3>
+          <p>Existing print-ready build completion checklist.</p>
+          <code>docs/APP_COMPLETION_CHECKLIST_PRINT.pdf</code>
+        </div>
+      </article></div>
+    <footer class="sheet-footer">Dark originals are preserved for reference; use the light rebuilds for low-ink classroom/office printing.</footer>
+  </section>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role map</div>
+  </header>
+    
+    <h1>What each user type needs to learn</h1>
+    <p class="lead small">Use this as the first page in any printed binder. It sets training expectations before handing out role-specific sheets.</p>
+    <table class="role-table">
+      <thead><tr><th>#</th><th>User type</th><th>Training focus</th></tr></thead>
+      <tbody><tr><td>1</td><td>Executive / brand admin</td><td>Scope, locations, users, rollups, reports, payments, integrations</td></tr><tr><td>2</td><td>Director / assistant director</td><td>School setup, CRM, families, staff, classrooms, compliance, daily operations</td></tr><tr><td>3</td><td>Teacher</td><td>Roster, attendance, daily reports, photos, incidents, parent-facing notes</td></tr><tr><td>4</td><td>Parent / guardian</td><td>Portal setup, messages, invoices, documents, daily reports, acknowledgments</td></tr><tr><td>5</td><td>Billing admin</td><td>Invoices, balances, payment methods, Stripe readiness, billing communication</td></tr><tr><td>6</td><td>Authorized pickup</td><td>Limited kiosk check-in/check-out for approved children</td></tr><tr><td>7</td><td>Auditor / support</td><td>Read-only evidence review, issue capture, data safety escalation</td></tr></tbody>
+    </table>
+    <div class="three-cards">
+      <article><h3>First 30 minutes</h3><p>Login, role/scope check, navigation, dashboard, and where to ask for help.</p></article>
+      <article><h3>First live day</h3><p>Daily workflow, notifications, records that must be checked, and escalation triggers.</p></article>
+      <article><h3>First week</h3><p>Reports, cleanup, exception handling, support tickets, and role-specific sign-off.</p></article>
+    </div>
+    <footer class="sheet-footer">Every workflow remains tenant-, center-, classroom-, family-, or child-scoped.</footer>
+  </section>
+  <section class="sheet explainer-cover">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Graphic 1</div>
+  </header>
+    <p class="kicker">Light print rebuild of the existing product explainer graphic</p>
+    <h1>The Childcare Operating System In One View</h1>
+    <p class="lead small">The BEE Suite connects enrollment, operations, classrooms, parent communication, billing, compliance, and executive visibility around one center record.</p>
+      <div class="layer-list"><article><h3>Enrollment</h3><p>Website inquiries, CRM leads, tours, waitlist, registration packets</p></article><article><h3>Operations</h3><p>Classrooms, attendance, daily reports, incidents, staffing, FTE</p></article><article><h3>Families</h3><p>Guardians, children, authorized pickups, messages, documents</p></article><article><h3>Business</h3><p>Tuition, invoices, payments, deposits, balances, exports</p></article><article><h3>Platform</h3><p>White-label brand, role access, integrations, audit logs, AI drafts</p></article></div>
+    <footer class="sheet-footer">Use this page to explain the full product before opening individual modules.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Graphic 2</div>
+  </header>
+    <p class="kicker">Light print rebuild of the existing product explainer graphic</p>
+    <h1>From Website Inquiry To Enrolled Family</h1>
+    <p class="lead small">A prospective parent enters through a form or registration packet, gets routed to the right school, and becomes an operational family record.</p>
+      <div class="step-flow"><article><span>1</span><h3>Website inquiry</h3><p>Parent selects a location and submits interest.</p></article><article><span>2</span><h3>School CRM</h3><p>The lead lands in the correct school pipeline.</p></article><article><span>3</span><h3>Tour and nurture</h3><p>Staff schedule tours, reminders, and follow-up.</p></article><article><span>4</span><h3>Enrollment decision</h3><p>Family is enrolled, waitlisted, or closed out.</p></article><article><span>5</span><h3>Family setup</h3><p>Guardians, children, PINs, documents, and billing are created.</p></article><article><span>6</span><h3>School operations</h3><p>The record powers classrooms, attendance, invoices, and reports.</p></article></div>
+    <footer class="sheet-footer">Use this page for enrollment teams, directors, and website inquiry support.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Graphic 3</div>
+  </header>
+    <p class="kicker">Light print rebuild of the existing product explainer graphic</p>
+    <h1>Permission-Safe Data Model</h1>
+    <p class="lead small">Each role sees the right scope: executives see rollups, directors run schools, teachers manage classrooms, and parents see their own family.</p>
+      <div class="layer-list"><article><h3>Platform / brand</h3><p>Platform owner, brand admin, regional manager</p></article><article><h3>School</h3><p>Center director, assistant director, billing admin, auditor</p></article><article><h3>Classroom</h3><p>Teacher roster, attendance, daily reports, incident submissions</p></article><article><h3>Family</h3><p>Parent/guardian portal, own children, own invoices, own messages</p></article><article><h3>Pickup</h3><p>Authorized pickup check-in/out only for approved children</p></article></div>
+    <footer class="sheet-footer">Use this page whenever privacy, role access, or support access is discussed.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Graphic 4</div>
+  </header>
+    <p class="kicker">Light print rebuild of the existing product explainer graphic</p>
+    <h1>School Go-Live Setup Path</h1>
+    <p class="lead small">A center should not go live until the local settings, people, records, payments, and role smoke tests are complete.</p>
+      <div class="step-flow"><article><span>1</span><h3>School profile</h3><p>Confirm location ID, contacts, hours, timezone, and approver.</p></article><article><span>2</span><h3>Classrooms</h3><p>Add rooms, capacities, age groups, ratios, and teacher assignments.</p></article><article><span>3</span><h3>Staff</h3><p>Create users, roles, schedules, documents, and kiosk codes.</p></article><article><span>4</span><h3>Families</h3><p>Import or add families, children, guardians, pickups, and documents.</p></article><article><span>5</span><h3>Billing</h3><p>Set tuition, fees, balances, disclosures, and payout readiness.</p></article><article><span>6</span><h3>Smoke test</h3><p>Validate executive, director, teacher, parent, billing, and kiosk flows.</p></article></div>
+    <footer class="sheet-footer">Use this page as the printed rollout checklist for each school.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Graphic 5</div>
+  </header>
+    <p class="kicker">Light print rebuild of the existing product explainer graphic</p>
+    <h1>The Daily Operating Loop</h1>
+    <p class="lead small">The app follows the rhythm of a childcare center: morning command check, drop-off, classroom logs, parent communication, billing, and closeout.</p>
+      <div class="step-flow"><article><span>1</span><h3>Morning</h3><p>Review tours, messages, staffing, ratios, incidents, and reminders.</p></article><article><span>2</span><h3>Drop-off</h3><p>Use kiosk/PIN, verify pickups, track attendance, and watch ratios.</p></article><article><span>3</span><h3>Classroom day</h3><p>Teachers record care logs, photos, supplies, and incidents.</p></article><article><span>4</span><h3>Family loop</h3><p>Parents see reports, messages, invoices, documents, and acknowledgments.</p></article><article><span>5</span><h3>Closeout</h3><p>Leaders review billing, compliance, FTE, exports, and follow-up tasks.</p></article></div>
+    <footer class="sheet-footer">Use this page to connect every role to the school day workflow.</footer>
+  </section>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Executive / Brand Admin setup sheet</h1>
+    <p class="lead small">Runs the multi-location business and controls platform-wide setup.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Dashboard, Multi-location, Agency admin, CRM, FTE, Billing, Reports, Integrations, Audit logs</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How tenant, brand, owner group, center, and classroom scopes work.</li><li>How to add or archive centers and assign location users.</li><li>How to review FTE, CRM, billing readiness, compliance, and exports.</li><li>How to confirm inquiry embeds and active school routing.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Review dashboard rollups and missing-school alerts.</li><li>Check new inquiries, tours, FTE submissions, and payment readiness.</li><li>Approve sensitive setup changes through audit-aware workflows.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Never rely on user role alone; confirm access scope.</li><li>Do not enable parent payments until payout and disclosure readiness are approved.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Center Director / Assistant Director setup sheet</h1>
+    <p class="lead small">Runs school-level setup, families, staff, classrooms, compliance, and daily operations.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>School setup, Center dashboard, CRM, Families, Classrooms, Attendance, Documents, Compliance, Messages</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How to complete the school profile, classrooms, staff, tuition, documents, and parent portal readiness.</li><li>How to manage leads, tours, waitlist, registration, and manual inquiries.</li><li>How to review teacher daily reports, media, incidents, medication logs, and parent acknowledgments.</li><li>How to reset PINs, review authorized pickups, and troubleshoot kiosk flow.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Start with dashboard notifications and today view.</li><li>Review new leads, tours, missing documents, incidents, messages, and billing exceptions.</li><li>Close the day with attendance, reports, FTE reminders, and unresolved tasks.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Do not invite parents until family links, custody restrictions, and guardian emails are correct.</li><li>Do not let teachers use the wrong classroom assignment.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Teacher setup sheet</h1>
+    <p class="lead small">Manages assigned classroom attendance, care logs, notes, photos, and incident submissions.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Teacher portal, Classroom, Attendance, Daily reports, Incidents, Messages, Documents</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How to confirm the correct classroom roster before recording anything.</li><li>How to mark attendance, add meals, naps, bottles, diapers, activities, supplies, and notes.</li><li>How photo review works and when media permissions block sharing.</li><li>How to submit objective incident reports for director review.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Confirm roster and restrictions at the start of the day.</li><li>Record logs throughout the day instead of reconstructing them after pickup.</li><li>Review daily reports before sending parent-facing notes.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Stop if a child appears in the wrong room or a restriction looks wrong.</li><li>AI wording help is draft-only; teachers still verify facts.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Parent / Guardian setup sheet</h1>
+    <p class="lead small">Uses the family portal for their own children, messages, documents, incidents, and payments.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Parent portal, Messages, Documents, Notifications, Billing, Check-in</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How to set up login from the invitation email.</li><li>Where to see daily reports, photos, invoices, balances, documents, and announcements.</li><li>How to submit documents, acknowledge incidents, and request contact or pickup changes.</li><li>How PIN or QR check-in works when enabled by the school.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Check child updates, messages, documents, and invoice reminders.</li><li>Use school-approved contact requests for record changes.</li><li>Contact the director if a child, invoice, or pickup person looks wrong.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Parent accounts should only show their own family.</li><li>Payment buttons depend on school payout readiness and may stay disabled until approved.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Billing Admin setup sheet</h1>
+    <p class="lead small">Handles family accounts, invoices, balances, payment methods, checkout readiness, and billing messages.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Billing &amp; invoices, Payments, Billing settings, Messages, Reports</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How tuition plans, fees, discounts, deposits, subsidies, balances, and invoice cadence are configured.</li><li>How Stripe Connect payout readiness controls parent checkout.</li><li>How to review failed payments, payment method requests, and billing reminders.</li><li>How to export billing reports without exposing unrelated child/family data.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Check overdue invoices, failed payments, upcoming due dates, and unresolved payment method requests.</li><li>Send billing messages through approved templates.</li><li>Document exceptions before changing balances or credits.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Do not turn on live tuition checkout until payout onboarding and disclosures are approved.</li><li>Treat billing screenshots as sensitive data.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Authorized Pickup / Kiosk setup sheet</h1>
+    <p class="lead small">Uses limited check-in/check-out actions for approved children only.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Kiosk check-in, Parent portal limited view, Notifications, Help</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>How authorized pickup status is reviewed by the school.</li><li>How to use PIN or QR check-in/check-out on the lobby device.</li><li>What to do when the child, guardian, or pickup list is incorrect.</li><li>Why pickup access is intentionally limited.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Use the center-specific kiosk page.</li><li>Verify the correct child before completing check-in or pickup.</li><li>Ask the director to resolve failed PIN, wrong child, or missing authorization issues.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Never bypass a missing authorization record.</li><li>Do not use another person's PIN or account.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Role setup</div>
+  </header>
+    
+    <h1>Read-Only Auditor / Support setup sheet</h1>
+    <p class="lead small">Reviews scoped records, reports, and evidence without changing operational data.</p>
+    <div class="module-band"><strong>Primary modules</strong><span>Dashboards, FTE, Family/child views, Documents, Compliance, Analytics, Audit logs</span></div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Learn before go-live</h2><ul><li>Which school, tenant, brand, and time period are in scope.</li><li>How to review reports, compliance records, documents, incidents, and audit logs.</li><li>How to capture support context without exposing unnecessary sensitive data.</li><li>When to escalate a possible data exposure or cross-location visibility issue.</li></ul></article>
+      <article class="info-panel"><h2>Daily habit</h2><ul><li>Use read-only views and exports only for approved purposes.</li><li>Capture school, user, URL, timestamp, expected result, and actual result for issues.</li><li>Escalate P0/P1 issues immediately.</li></ul></article>
+    </div>
+    <div class="warning-panel"><h2>Do not skip</h2><ul><li>Do not edit production records from support review context.</li><li>Do not paste secrets or sensitive child/family data into tickets.</li></ul></div>
+    <footer class="sheet-footer">Use this sheet with the role smoke test before allowing live operational use.</footer>
+  </section>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 1</div>
+  </header>
+    
+    <h1>SOP: Login And Password Reset</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A user cannot access the app, sees the wrong role, or needs first-login help.</span></div>
+      <div><strong>Owner</strong><span>Director for school users, executive/admin for tenant-wide users.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm the user is using the correct login email or generated username.</li><li>Confirm the account is active and assigned to the correct role.</li><li>Confirm the user has the intended center, classroom, family, or tenant scope.</li><li>Use password reset or setup flow instead of sharing passwords in plain text.</li><li>Ask the user to sign out and back in after role or scope changes.</li><li>If the wrong data appears, stop and escalate as a data safety issue.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Correct role visible in header/account area.</li><li>Navigation matches role.</li><li>User sees only expected school, classroom, or family records.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate immediately if one user can see another center, child, family, billing account, or custody/medical detail.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 2</div>
+  </header>
+    
+    <h1>SOP: New School Go-Live Setup</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A new center is moving from setup to live school operations.</span></div>
+      <div><strong>Owner</strong><span>Executive admin and center director.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Create/confirm the active school and CRM Location ID.</li><li>Complete school profile: address, contacts, hours, timezone, approver, and go-live date.</li><li>Load classrooms, age groups, capacities, ratio rules, and teacher assignments.</li><li>Load staff accounts, schedules, credentials, and staff kiosk codes.</li><li>Import or manually add families, children, guardians, pickups, documents, and balances.</li><li>Configure tuition, fees, billing cadence, payment readiness, integrations, and parent portal access.</li><li>Run role smoke tests for executive, director, teacher, parent, billing, and kiosk.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>No unresolved duplicate imports.</li><li>Payout readiness reviewed before checkout.</li><li>Director signs off on family, staff, classroom, and billing accuracy.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate if location routing, user scope, Stripe status, or required child/staff records are unclear.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 3</div>
+  </header>
+    
+    <h1>SOP: Inquiry Routing And New Leads</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A parent inquiry, website embed, registration packet, or manual lead needs to reach the correct school.</span></div>
+      <div><strong>Owner</strong><span>Director or enrollment admin; executive/admin for embed setup.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm the selected location ID matches the intended school.</li><li>Submit or enter the inquiry with parent, child, program interest, desired start, and source.</li><li>Confirm the lead appears in the school CRM.</li><li>Assign owner, stage, next task, tour status, and follow-up date.</li><li>Confirm notifications and Google Sheet backup if enabled.</li><li>Use Mr. Bee only for draft follow-up; review before sending.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Lead belongs to correct center.</li><li>Another center user cannot see the lead.</li><li>Stage does not move unless family actually progressed.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate if form submissions are missing, routed to wrong location, or visible across centers.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 4</div>
+  </header>
+    
+    <h1>SOP: Tour And Enrollment Follow-Up</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A lead is ready for tour, application, waitlist, or enrollment decision.</span></div>
+      <div><strong>Owner</strong><span>Director, assistant director, or enrollment admin.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Review child age, desired start date, schedule, classroom fit, and source.</li><li>Schedule the tour and confirm the family receives the details.</li><li>Record tour outcome and next step in the CRM.</li><li>Move the lead only to the accurate stage: application, waitlist, deposit, enrolled, or closed/lost.</li><li>Create follow-up tasks for missing documents, deposits, start date, or capacity review.</li><li>Before enrollment, confirm child profile, guardian links, documents, classroom, and billing setup.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Pipeline stage matches real status.</li><li>Waitlist/capacity decision is documented.</li><li>Family handoff is not hidden in email or text threads.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate if capacity, custody, medical, or payment readiness is uncertain.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 5</div>
+  </header>
+    
+    <h1>SOP: Family, Child, And Document Records</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A family is added, imported, corrected, or prepared for parent portal access.</span></div>
+      <div><strong>Owner</strong><span>Director, assistant director, or authorized admin.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm family name, billing contact, guardians, phone/email, emergency contacts, and authorized pickups.</li><li>Confirm each child has classroom, schedule, enrollment status, DOB, restrictions, allergies, medications, and permissions.</li><li>Upload or request missing family, child, staff, enrollment, and compliance documents.</li><li>Review document expiration dates and mark reviewed only after authorized verification.</li><li>Use contact/pickup change requests for parent-submitted changes.</li><li>Keep restricted notes visible only to appropriate roles.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Guardian emails are correct before invite.</li><li>Child is linked to the right family and classroom.</li><li>Custody/media/medical restrictions are accurate.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate if documents conflict with operating records or sensitive restrictions are unclear.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 6</div>
+  </header>
+    
+    <h1>SOP: Parent Portal Invitation</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A school is ready to invite a guardian to the family portal.</span></div>
+      <div><strong>Owner</strong><span>Director or authorized admin.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm the family profile exists and each child is linked to the correct family and classroom.</li><li>Confirm the guardian email, phone, custody status, and family link.</li><li>Set or confirm the guardian PIN if lobby check-in is active.</li><li>Open Parent Portal Access and send the invitation.</li><li>Ask the parent to set their password and sign in to the parent portal.</li><li>Confirm they see only their family, children, invoices, documents, messages, reports, and acknowledgments.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Portal account maps to the correct guardian.</li><li>No unrelated child, invoice, or message is visible.</li><li>Payment actions match Stripe readiness.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate any parent seeing no family or the wrong family.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 7</div>
+  </header>
+    
+    <h1>SOP: Kiosk Check-In, Pickup, And PIN Reset</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A parent/guardian or authorized pickup is checking a child in/out or reports PIN trouble.</span></div>
+      <div><strong>Owner</strong><span>Director, assistant director, or front desk lead.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Open the center-specific kiosk page on the lobby device.</li><li>Search for the child/family and verify the matched record.</li><li>Confirm the adult is a guardian or authorized pickup for that child.</li><li>Use PIN/QR check-in or check-out as configured by the school.</li><li>If PIN fails, reset it from the guardian/family workflow after identity verification.</li><li>Confirm the attendance log updates the correct center and classroom.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Child and adult match the authorized record.</li><li>Attendance status updates once.</li><li>No cross-location families appear in search.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate failed kiosk, wrong family search results, or authorization mismatches.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 8</div>
+  </header>
+    
+    <h1>SOP: Teacher Daily Reports And Photos</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>Teachers need to record classroom care and share parent updates.</span></div>
+      <div><strong>Owner</strong><span>Teacher for entries; director for review and corrections.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm the assigned classroom and roster before entering logs.</li><li>Record meals, bottles, naps, diaper/potty, activities, mood, supplies, and notes during the day.</li><li>Use selected child, present children, or all visible only when that target is correct.</li><li>Review parent-facing notes before sending.</li><li>Upload photos only when permission allows and route them for director media review.</li><li>Resolve offline queue messages before re-entering actions.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Report target is correct.</li><li>Media restrictions are respected.</li><li>Queued actions sync before duplicate entries are made.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate wrong roster, missing child, media restriction conflict, or unsynced offline queue.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 9</div>
+  </header>
+    
+    <h1>SOP: Incidents, Medication Logs, And Compliance Tasks</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A classroom or director needs to document a safety, health, drill, licensing, or compliance workflow.</span></div>
+      <div><strong>Owner</strong><span>Teacher submits facts; director reviews, follows up, and exports when needed.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm child, classroom, date/time, staff involved, and incident/medication/compliance type.</li><li>Write objective facts and action taken. Avoid legal, medical, custody, or compliance conclusions.</li><li>Submit for director review and parent acknowledgment if required.</li><li>Attach supporting photos/documents only when appropriate and permission-safe.</li><li>Update compliance tasks, drill logs, medication records, or export package as needed.</li><li>Track follow-up until reviewed/closed.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Facts are complete and objective.</li><li>Director review status is visible.</li><li>Parent acknowledgment is tracked when required.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate urgent medical, custody, data exposure, or licensing-sensitive questions immediately.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 10</div>
+  </header>
+    
+    <h1>SOP: Billing, Invoices, And Payments</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A family balance, invoice, payment method, checkout, payout, or failed payment needs attention.</span></div>
+      <div><strong>Owner</strong><span>Billing admin, director, or executive/admin depending on scope.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm family account, billing contact, tuition plan, fees, discounts, subsidies, and opening balance.</li><li>Review invoice cadence, due dates, late fee rules, and disclosures before sending invoices.</li><li>Confirm Stripe Connect payout onboarding before live parent checkout.</li><li>Use payment method request flow when a family needs to add/update a method.</li><li>Review failed payment/dunning messages before sending.</li><li>Export reports before large billing corrections.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Checkout remains blocked if payout is not ready.</li><li>Invoice belongs to correct family and center.</li><li>Processing recovery settings match approval status.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate production payment, payout, refund, dispute, or data visibility problems as high severity.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 11</div>
+  </header>
+    
+    <h1>SOP: FTE Reporting</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>Weekly school FTE submission, executive review, correction, or missing report follow-up.</span></div>
+      <div><strong>Owner</strong><span>Director submits; executive/admin reviews.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Director opens FTE Reports and enters the current week data before cutoff.</li><li>Review full-time, part-time, age group, enrollment, and notes before submitting.</li><li>Executive reviews submitted and missing schools.</li><li>Correct mistakes through the approved correction flow or executive review.</li><li>Export CSV/PDF reports for offline backup when needed.</li><li>Follow missing-report escalation timing.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Submission is tied to correct school/week.</li><li>Totals match school record.</li><li>Missing report alerts are resolved.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate if a school cannot submit or a report appears under the wrong center.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 12</div>
+  </header>
+    
+    <h1>SOP: Messages, Notifications, And AI Drafts</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>Staff need to communicate with parents, classrooms, leads, or internal teams.</span></div>
+      <div><strong>Owner</strong><span>Director, teacher, billing admin, or executive/admin by scope.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Confirm audience: family, classroom, center, lead stage, billing group, or staff group.</li><li>Choose approved template or write the message.</li><li>Use AI/Mr. Bee only for draft copy, summary, or wording help.</li><li>Review all sensitive content before sending.</li><li>Confirm channel: portal, email, SMS, push, or announcement.</li><li>Check delivery/read status and follow-up tasks.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>Audience is scoped correctly.</li><li>Sensitive decisions remain human-reviewed.</li><li>Urgent messages use approved school policy.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate any message sent to the wrong audience or containing sensitive data.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+<section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">SOP 13</div>
+  </header>
+    
+    <h1>SOP: Support Escalation And Data Safety</h1>
+    <div class="sop-meta">
+      <div><strong>Use when</strong><span>A user reports a live issue, wrong data, broken workflow, or security concern.</span></div>
+      <div><strong>Owner</strong><span>Support lead, executive/admin, or developer depending on severity.</span></div>
+    </div>
+    <div class="two-col">
+      <article class="info-panel"><h2>Steps</h2><ul><li>Capture school/location, user email, role, URL, timestamp/timezone, steps, expected result, actual result, and screenshot if safe.</li><li>Classify severity: P0 data exposure/system down, P1 critical workflow broken, P2 workaround exists, P3 cosmetic/future.</li><li>Check account role/scope, center assignment, record ownership, health endpoint, readiness endpoint, and recent deployment/logs.</li><li>Avoid moving data manually across centers unless location and tenant are confirmed.</li><li>Use rollback, disablement, or workaround only when appropriate.</li><li>Document resolution and follow-up.</li></ul></article>
+      <article class="info-panel">
+        <h2>Quality check</h2><ul><li>No secrets in screenshots/tickets.</li><li>Minimum sensitive data shared.</li><li>P0/P1 issues confirmed with production smoke test after fix.</li></ul>
+        <div class="escalate"><strong>Escalate</strong><p>Escalate immediately for cross-location visibility, child/medical/custody/billing exposure, payment defects, or system-wide login failure.</p></div>
+      </article>
+    </div>
+    <footer class="sheet-footer">Sensitive child, family, custody, medical, billing, and compliance decisions require authorized human review.</footer>
+  </section>
+  <section class="sheet">
+    <header class="brand-header">
+    <div class="brand-lockup">
+      <img src="source-graphics/bee-suite-app-icon-dark.png" alt="" />
+      <div>
+        <strong>The BEE Suite</strong>
+        <span>Printable Training Packet</span>
+      </div>
+    </div>
+    <div class="doc-label">Sign-off</div>
+  </header>
+    
+    <h1>Training sign-off</h1>
+    <p class="lead small">Use this final page after the role sheets and SOPs have been reviewed with each live-school team.</p>
+    <table class="signoff-table">
+      <thead><tr><th>Role / group</th><th>Name</th><th>Date</th><th>Notes</th></tr></thead>
+      <tbody><tr><td>Executive / Brand Admin</td><td></td><td></td><td></td></tr><tr><td>Center Director / Assistant Director</td><td></td><td></td><td></td></tr><tr><td>Teacher</td><td></td><td></td><td></td></tr><tr><td>Parent / Guardian</td><td></td><td></td><td></td></tr><tr><td>Billing Admin</td><td></td><td></td><td></td></tr><tr><td>Authorized Pickup / Kiosk</td><td></td><td></td><td></td></tr><tr><td>Read-Only Auditor / Support</td><td></td><td></td><td></td></tr></tbody>
+    </table>
+    <div class="note-box"><strong>Launch reminder</strong><p>Do not treat printed SOPs as permission to bypass app guardrails. The live app remains the source of truth for current permissions, records, payment readiness, and compliance workflow status.</p></div>
+    <footer class="sheet-footer">Keep signed copies with the school launch packet.</footer>
+  </section>
+</body>
+</html>

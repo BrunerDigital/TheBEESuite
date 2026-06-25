@@ -1,0 +1,219 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2100" viewBox="0 0 1600 2100" role="img" aria-labelledby="title desc">
+  <title id="title">Kid City USA Director Setup Roadmap for The BEE Suite</title>
+  <desc id="desc">A one-page implementation roadmap showing the steps directors complete to configure their school for all BEE Suite features.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fffaf0"/>
+      <stop offset="0.58" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#fff4d6"/>
+    </linearGradient>
+    <linearGradient id="header" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.74" stop-color="#0b111d"/>
+      <stop offset="1" stop-color="#2b2107"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#ffd86b"/>
+      <stop offset="1" stop-color="#f5b51b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#101827" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .bg { fill: url(#page); }
+      .dark { fill: #101827; }
+      .ink { fill: #172033; }
+      .muted { fill: #5f6b7a; }
+      .soft { fill: #fffdf8; }
+      .gold { fill: url(#gold); }
+      .teal { fill: #52b69a; }
+      .blue { fill: #4ea1d3; }
+      .rose { fill: #d86b73; }
+      .purple { fill: #8c75d9; }
+      .border { stroke: #e1d6bc; stroke-width: 2; }
+      .line { stroke: #f5b51b; stroke-width: 6; stroke-linecap: round; }
+      .tiny { font: 500 26px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .label { font: 700 30px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .body { font: 500 24px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .title { font: 800 68px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .subtitle { font: 500 30px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .phase { font: 800 34px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+      .num { font: 800 34px Arial, Helvetica, sans-serif; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="2100"/>
+  <path d="M0 0h1600v420H0z" fill="url(#header)"/>
+  <g opacity="0.16">
+    <path d="M86 70h52l26 45-26 45H86l-26-45z" fill="#f5b51b"/>
+    <path d="M204 70h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+    <path d="M1450 240h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+    <path d="M1334 240h52l26 45-26 45h-52l-26-45z" fill="#f5b51b"/>
+  </g>
+
+  <g transform="translate(86 78)">
+    <rect x="0" y="0" width="66" height="66" rx="16" fill="#f5b51b"/>
+    <text x="96" y="30" fill="#ffd86b" class="label">The BEE Suite</text>
+    <text x="96" y="60" fill="#d1d7e0" class="tiny">Kid City USA school launch roadmap</text>
+  </g>
+
+  <text x="86" y="225" fill="#fffaf0" class="title">Director setup path</text>
+  <text x="86" y="282" fill="#d1d7e0" class="subtitle">Complete these steps before parents, teachers, billing, kiosk, compliance, and reporting go fully live.</text>
+  <g transform="translate(86 322)">
+    <rect x="0" y="0" width="308" height="54" rx="12" fill="#f5b51b"/>
+    <text x="24" y="36" fill="#101827" class="label">Login: school email</text>
+    <rect x="328" y="0" width="292" height="54" rx="12" fill="#fffaf0" opacity="0.12" stroke="#f5b51b"/>
+    <text x="352" y="36" fill="#fffaf0" class="label">Password: BusyBees</text>
+    <rect x="640" y="0" width="510" height="54" rx="12" fill="#fffaf0" opacity="0.12" stroke="#f5b51b"/>
+    <text x="664" y="36" fill="#fffaf0" class="label">School links bank account for tuition payouts</text>
+  </g>
+
+  <g transform="translate(80 500)">
+    <path class="line" d="M90 80 H1420"/>
+    <path class="line" d="M1420 80 V1650"/>
+    <path class="line" d="M1420 1650 H90"/>
+    <path class="line" d="M90 1650 V80"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <g transform="translate(100 480)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">1</text>
+      <text x="92" y="50" class="phase ink">School profile</text>
+      <text x="92" y="86" class="body muted">Confirm contacts, hours, timezone,</text>
+      <text x="92" y="116" class="body muted">licensed capacity, and launch owner.</text>
+      <text x="28" y="172" class="label ink">Where: School setup</text>
+      <text x="28" y="210" class="body muted">Save director setup input first.</text>
+    </g>
+
+    <g transform="translate(585 480)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="teal" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">2</text>
+      <text x="92" y="50" class="phase ink">Rooms and ratios</text>
+      <text x="92" y="86" class="body muted">Add classrooms, age groups, room</text>
+      <text x="92" y="116" class="body muted">capacity, and ratio rules.</text>
+      <text x="28" y="172" class="label ink">Where: Classroom</text>
+      <text x="28" y="210" class="body muted">Resolve ratio warnings before launch.</text>
+    </g>
+
+    <g transform="translate(1070 480)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="blue" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">3</text>
+      <text x="92" y="50" class="phase ink">Teachers and staff</text>
+      <text x="92" y="86" class="body muted">Add users, classroom assignments,</text>
+      <text x="92" y="116" class="body muted">schedules, and required forms.</text>
+      <text x="28" y="172" class="label ink">Where: Teachers</text>
+      <text x="28" y="210" class="body muted">Teacher portal depends on this.</text>
+    </g>
+
+    <g transform="translate(1070 790)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="purple" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">4</text>
+      <text x="92" y="50" class="phase ink">ProCare import</text>
+      <text x="92" y="86" class="body muted">Import families, guardians, children,</text>
+      <text x="92" y="116" class="body muted">contacts, schedules, and classrooms.</text>
+      <text x="28" y="172" class="label ink">Where: Family detail</text>
+      <text x="28" y="210" class="body muted">Resolve duplicate matches first.</text>
+    </g>
+
+    <g transform="translate(585 790)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="rose" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">5</text>
+      <text x="92" y="50" class="phase ink">Documents</text>
+      <text x="92" y="86" class="body muted">Complete family, child, and staff</text>
+      <text x="92" y="116" class="body muted">document checklists.</text>
+      <text x="28" y="172" class="label ink">Where: Documents</text>
+      <text x="28" y="210" class="body muted">Review expirations and signatures.</text>
+    </g>
+
+    <g transform="translate(100 790)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">6</text>
+      <text x="92" y="50" class="phase ink">Tuition setup</text>
+      <text x="92" y="86" class="body muted">Enter rates, fees, deposits, subsidy</text>
+      <text x="92" y="116" class="body muted">rules, discounts, and balances.</text>
+      <text x="28" y="172" class="label ink">Where: Billing settings</text>
+      <text x="28" y="210" class="body muted">Confirm fee disclosures.</text>
+    </g>
+
+    <g transform="translate(100 1100)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="teal" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">7</text>
+      <text x="92" y="50" class="phase ink">Payout account</text>
+      <text x="92" y="86" class="body muted">Connect the school's bank account</text>
+      <text x="92" y="116" class="body muted">for tuition payouts.</text>
+      <text x="28" y="172" class="label ink">Where: Payments</text>
+      <text x="28" y="210" class="body muted">Charges and payouts must be ready.</text>
+    </g>
+
+    <g transform="translate(585 1100)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="blue" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">8</text>
+      <text x="92" y="50" class="phase ink">Parent portal</text>
+      <text x="92" y="86" class="body muted">Invite verified guardians and confirm</text>
+      <text x="92" y="116" class="body muted">family, custody, and child visibility.</text>
+      <text x="28" y="172" class="label ink">Where: Parent portal</text>
+      <text x="28" y="210" class="body muted">Invite billing contacts first.</text>
+    </g>
+
+    <g transform="translate(1070 1100)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="purple" cx="52" cy="52" r="28"/>
+      <text x="42" y="64" class="num dark">9</text>
+      <text x="92" y="50" class="phase ink">Kiosk and tablets</text>
+      <text x="92" y="86" class="body muted">Test attendance, QR/PIN check-in,</text>
+      <text x="92" y="116" class="body muted">staff check-in, and daily logs.</text>
+      <text x="28" y="172" class="label ink">Where: Attendance</text>
+      <text x="28" y="210" class="body muted">Verify authorized pickup lists.</text>
+    </g>
+
+    <g transform="translate(1070 1410)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="rose" cx="52" cy="52" r="28"/>
+      <text x="32" y="64" class="num dark">10</text>
+      <text x="92" y="50" class="phase ink">Messages and calendar</text>
+      <text x="92" y="86" class="body muted">Set templates, segments, notification</text>
+      <text x="92" y="116" class="body muted">channels, closures, and events.</text>
+      <text x="28" y="172" class="label ink">Where: Messages + Calendar</text>
+      <text x="28" y="210" class="body muted">Review every AI draft before sending.</text>
+    </g>
+
+    <g transform="translate(585 1410)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="gold" cx="52" cy="52" r="28"/>
+      <text x="32" y="64" class="num dark">11</text>
+      <text x="92" y="50" class="phase ink">Compliance and FTE</text>
+      <text x="92" y="86" class="body muted">Configure licensing, drill logs, meds,</text>
+      <text x="92" y="116" class="body muted">incidents, tasks, and reports.</text>
+      <text x="28" y="172" class="label ink">Where: Compliance + FTE</text>
+      <text x="28" y="210" class="body muted">FTE is due Friday by noon.</text>
+    </g>
+
+    <g transform="translate(100 1410)">
+      <rect class="soft border" width="430" height="250" rx="18"/>
+      <circle class="teal" cx="52" cy="52" r="28"/>
+      <text x="32" y="64" class="num dark">12</text>
+      <text x="92" y="50" class="phase ink">Smoke test</text>
+      <text x="92" y="86" class="body muted">Test director, teacher, parent, kiosk,</text>
+      <text x="92" y="116" class="body muted">billing, documents, and reports.</text>
+      <text x="28" y="172" class="label ink">Where: Dashboard</text>
+      <text x="28" y="210" class="body muted">Launch only after sign-off.</text>
+    </g>
+  </g>
+
+  <g transform="translate(100 1788)" filter="url(#shadow)">
+    <rect width="1500" height="205" rx="20" fill="#101827"/>
+    <text x="34" y="56" fill="#ffd86b" class="phase">Director-provided data The BEE Suite cannot infer</text>
+    <text x="34" y="104" fill="#fffaf0" class="body">Unencrypted ProCare export • final room capacities and ratios • staff credentials • tuition rules • school bank account details</text>
+    <text x="34" y="144" fill="#fffaf0" class="body">missing guardian contacts • custody/pickup corrections • state licensing details • final launch date and director sign-off</text>
+    <text x="34" y="184" fill="#d1d7e0" class="tiny">Kid City USA Enterprises pays monthly software fees. Each school links its own bank account only for tuition payouts.</text>
+  </g>
+</svg>

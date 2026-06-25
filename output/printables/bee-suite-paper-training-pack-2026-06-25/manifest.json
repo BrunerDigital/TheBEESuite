@@ -1,0 +1,212 @@
+{
+  "title": "The BEE Suite Paper Training Pack",
+  "createdAt": "2026-06-25",
+  "purpose": "Light-background printable packet for role setup, SOP training, and source graphic collection.",
+  "html": "output/printables/bee-suite-paper-training-pack-2026-06-25/bee-suite-paper-training-pack-2026-06-25.html",
+  "pdf": "output/pdf/bee-suite-paper-training-pack-2026-06-25.pdf",
+  "previewDirectory": "output/printables/bee-suite-paper-training-pack-2026-06-25/preview",
+  "sourceGraphicsDirectory": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics",
+  "counts": {
+    "sourceGraphics": 24,
+    "lightProductExplainers": 5,
+    "roleSetupSheets": 7,
+    "sopSheets": 13
+  },
+  "copied": [
+    {
+      "id": "bee-suite-app-icon-dark",
+      "title": "The BEE Suite App Icon",
+      "source": "public/brand/the-bee-suite/app-icon-dark.png",
+      "use": "Packet logo.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/bee-suite-app-icon-dark.png"
+    },
+    {
+      "id": "bee-suite-app-icon-yellow",
+      "title": "The BEE Suite Yellow App Icon",
+      "source": "public/brand/the-bee-suite/app-icon-yellow.png",
+      "use": "Alternate packet mark.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/bee-suite-app-icon-yellow.png"
+    },
+    {
+      "id": "kid-city-logo-horizontal",
+      "title": "Kid City USA Horizontal Logo",
+      "source": "public/brand/kid-city-usa/logo-horizontal.png",
+      "use": "Customer-specific appendix reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/kid-city-logo-horizontal.png"
+    },
+    {
+      "id": "childcare-operating-system",
+      "title": "Childcare Operating System",
+      "source": "public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_01-childcare-operating-system_2026-06-08.png",
+      "use": "Opening product overview and sales/training explanation.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/childcare-operating-system.png"
+    },
+    {
+      "id": "inquiry-to-enrolled-family",
+      "title": "Inquiry To Enrolled Family",
+      "source": "public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png",
+      "use": "Enrollment CRM, website form routing, and family handoff.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/inquiry-to-enrolled-family.png"
+    },
+    {
+      "id": "permission-safe-data-model",
+      "title": "Permission-Safe Data Model",
+      "source": "public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_03-permission-safe-data-model_2026-06-08.png",
+      "use": "Role training, trust review, and privacy explanation.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/permission-safe-data-model.png"
+    },
+    {
+      "id": "school-go-live-setup-path",
+      "title": "School Go-Live Setup Path",
+      "source": "public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_04-school-go-live-setup-path_2026-06-08.png",
+      "use": "Director onboarding and launch planning.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/school-go-live-setup-path.png"
+    },
+    {
+      "id": "daily-operating-loop",
+      "title": "Daily Operating Loop",
+      "source": "public/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_05-daily-operating-loop_2026-06-08.png",
+      "use": "Daily school rhythm training for directors, teachers, and parents.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/daily-operating-loop.png"
+    },
+    {
+      "id": "user-dashboard-views",
+      "title": "User Dashboard Views",
+      "source": "docs/USER_DASHBOARD_VIEWS_GRAPHIC_2026-06-08.png",
+      "use": "Role dashboard expectation setting.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/user-dashboard-views.png"
+    },
+    {
+      "id": "payments-architecture",
+      "title": "Payments Architecture",
+      "source": "docs/BEE_SUITE_PAYMENTS_ARCHITECTURE_VISUAL_2026-06-08.png",
+      "use": "Billing, Stripe Connect, payout readiness, and payment support.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payments-architecture.png"
+    },
+    {
+      "id": "director-roadmap",
+      "title": "Kid City Director Setup Roadmap",
+      "source": "public/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg",
+      "use": "Director implementation and school setup.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/director-roadmap.svg"
+    },
+    {
+      "id": "teacher-roadmap",
+      "title": "Kid City Teacher Profile Setup Roadmap",
+      "source": "public/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
+      "use": "Teacher profile, classroom assignment, and launch sign-off.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/teacher-roadmap.svg"
+    },
+    {
+      "id": "pricing-model-options",
+      "title": "Pricing Model Options",
+      "source": "docs/assets/pricing/01-pricing-model-options.png",
+      "use": "Operator pricing and revenue model explanation.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/pricing-model-options.png"
+    },
+    {
+      "id": "charge-flow-maps",
+      "title": "Charge Flow Maps",
+      "source": "docs/assets/pricing/02-charge-flow-maps.png",
+      "use": "Fee, tuition, and charge flow explanation.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/charge-flow-maps.png"
+    },
+    {
+      "id": "revenue-stack-and-plans",
+      "title": "Revenue Stack And Plans",
+      "source": "docs/assets/pricing/03-revenue-stack-and-plans.png",
+      "use": "Executive billing strategy discussion.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/revenue-stack-and-plans.png"
+    },
+    {
+      "id": "payment-revenue-1",
+      "title": "Payment Revenue Visual 1",
+      "source": "docs/assets/payment-revenue/01-payment-revenue-1.png",
+      "use": "Payment processing revenue meeting reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payment-revenue-1.png"
+    },
+    {
+      "id": "payment-revenue-2",
+      "title": "Payment Revenue Visual 2",
+      "source": "docs/assets/payment-revenue/02-payment-revenue-2.png",
+      "use": "Payment processing revenue meeting reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payment-revenue-2.png"
+    },
+    {
+      "id": "payment-revenue-3",
+      "title": "Payment Revenue Visual 3",
+      "source": "docs/assets/payment-revenue/03-payment-revenue-3.png",
+      "use": "Payment processing revenue meeting reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payment-revenue-3.png"
+    },
+    {
+      "id": "payment-revenue-4",
+      "title": "Payment Revenue Visual 4",
+      "source": "docs/assets/payment-revenue/04-payment-revenue-4.png",
+      "use": "Payment processing revenue meeting reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payment-revenue-4.png"
+    },
+    {
+      "id": "marketing-real-school-days",
+      "title": "Real School Days Campaign Graphic",
+      "source": "outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/real-school-days.png",
+      "use": "Brand story and handout cover reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/marketing-real-school-days.png"
+    },
+    {
+      "id": "marketing-role-safe-operations",
+      "title": "Role-Safe Operations Campaign Graphic",
+      "source": "outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/role-safe-operations.png",
+      "use": "Access model and trust reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/marketing-role-safe-operations.png"
+    },
+    {
+      "id": "marketing-helpful-drafts",
+      "title": "Helpful Drafts, Human Decisions",
+      "source": "outputs/marketing/the-bee-suite-creative-pack-2026-06-16/exports/helpful-drafts-human-decisions.png",
+      "use": "AI guardrails and training reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/marketing-helpful-drafts.png"
+    },
+    {
+      "id": "usage-lobby-check-in",
+      "title": "Lobby Check-In Usage Scene",
+      "source": "public/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
+      "use": "Kiosk and parent pickup training reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/usage-lobby-check-in.png"
+    },
+    {
+      "id": "usage-classroom-daily-updates",
+      "title": "Classroom Daily Updates Usage Scene",
+      "source": "public/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
+      "use": "Teacher daily reports and classroom tablet training.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/usage-classroom-daily-updates.png"
+    },
+    {
+      "id": "usage-director-operations",
+      "title": "Director Operations Usage Scene",
+      "source": "public/brand/the-bee-suite/usage/bee-suite-director-operations.png",
+      "use": "Director command-center training reference.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/usage-director-operations.png"
+    },
+    {
+      "id": "payment-revenue-pdf",
+      "title": "Payment Revenue Meeting Visuals PDF",
+      "source": "docs/assets/payment-revenue/payment-revenue-meeting-visuals.pdf",
+      "use": "Existing printable payment packet.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/payment-revenue-pdf.pdf"
+    },
+    {
+      "id": "completion-checklist-pdf",
+      "title": "App Completion Checklist Print PDF",
+      "source": "docs/APP_COMPLETION_CHECKLIST_PRINT.pdf",
+      "use": "Existing print-ready build completion checklist.",
+      "copiedTo": "output/printables/bee-suite-paper-training-pack-2026-06-25/source-graphics/completion-checklist-pdf.pdf"
+    }
+  ],
+  "missing": [],
+  "printNotes": [
+    "Use the generated PDF for the low-ink paper packet.",
+    "Dark original graphics are copied for reference, but the training pages are rebuilt with a light print theme.",
+    "Sensitive child, family, custody, medical, billing, and compliance workflows remain human-reviewed."
+  ]
+}

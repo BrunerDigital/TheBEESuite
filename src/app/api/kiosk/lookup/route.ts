@@ -4,7 +4,7 @@ import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
-import { buildKioskTuitionBalanceWarning } from "@/lib/kiosk-billing-reminders";
+import { buildKioskTuitionBalanceSummary, buildKioskTuitionBalanceWarning } from "@/lib/kiosk-billing-reminders";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -160,6 +160,11 @@ async function POSTHandler(request: NextRequest) {
     balanceCents: guardian.family.billingAccount?.balanceCents,
     nextOpenInvoice: guardian.family.billingAccount?.invoices[0] ?? null,
   });
+  const billingSummary = buildKioskTuitionBalanceSummary({
+    balanceCents: guardian.family.billingAccount?.balanceCents,
+    nextOpenInvoice: guardian.family.billingAccount?.invoices[0] ?? null,
+    paymentUrl: "/parent-portal#billing",
+  });
   const warnings = [
     ...(guardian.family.custodyNotes
       ? [{
@@ -175,6 +180,7 @@ async function POSTHandler(request: NextRequest) {
     center: { id: center.id, name: center.name, crmLocationId: center.crmLocationId },
     guardian: { id: guardian.id, fullName: guardian.fullName, relation: guardian.relation },
     family: { id: guardian.family.id, name: guardian.family.name },
+    billing: billingSummary,
     verification: { method: verificationMethod },
     warnings,
     children: visibleChildren.map((child) => {

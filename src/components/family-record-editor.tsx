@@ -830,7 +830,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     });
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedBillingAccount) {
       setStatusMessage("");
       setErrorMessage("Create a billing account before saving a family payment method.");
@@ -1133,7 +1133,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     ? selectedPaymentMethod?.hasSavedPaymentMethod
                       ? `${selectedPaymentMethod.paymentMethodLabel ?? "Payment method saved securely"}${selectedPaymentMethod.lastUpdatedAt ? ` on ${formatDate(selectedPaymentMethod.lastUpdatedAt)}` : ""}.`
                       : selectedPaymentMethod?.autopayStatus === "pending"
-                        ? "A secure setup session is pending."
+                        ? "Bank verification is pending. Use Instant Bank Login to verify through the parent's bank now."
                         : "No bank account or card is saved for autopay."
                     : "No billing account is linked to this family yet."}
                 </p>
@@ -1146,9 +1146,9 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "ach")}>
+              <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace With Bank" : "Add Bank Account"}
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Verify Bank Instantly" : "Instant Bank Login"}
               </Button>
               <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
                 <CreditCard data-icon="inline-start" />

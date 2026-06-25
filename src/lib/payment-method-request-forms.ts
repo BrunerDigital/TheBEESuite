@@ -4,6 +4,7 @@ export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
 export const PAYMENT_METHOD_REQUEST_TOKEN_TTL_DAYS = 14;
 export const PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE = "payment_method_form";
 export const PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE = "payment_method_request_email";
+export type PaymentMethodRequestIntent = "payment_steps" | "instant_bank_verification";
 
 export type PaymentMethodRequestTokenPayload = {
   v: typeof PAYMENT_METHOD_REQUEST_TOKEN_VERSION;
@@ -175,6 +176,12 @@ export function buildPaymentMethodRequestFormUrl(appBaseUrl: string, token: stri
   return `${appBaseUrl.replace(/\/+$/, "")}/payment-method-form/${encodeURIComponent(token)}`;
 }
 
+export function buildPaymentMethodRequestFocusedFormUrl(appBaseUrl: string, token: string, intent: PaymentMethodRequestIntent) {
+  const formUrl = buildPaymentMethodRequestFormUrl(appBaseUrl, token);
+  if (intent !== "instant_bank_verification") return formUrl;
+  return `${formUrl}?focus=instant-bank`;
+}
+
 export function extractFirstUrl(value: string) {
   return value.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
 }
@@ -184,20 +191,38 @@ export function buildPaymentMethodRequestEmailText({
   familyName,
   centerLabel,
   formUrl,
+  intent = "payment_steps",
 }: {
   recipientLabel: string;
   familyName: string;
   centerLabel: string;
   formUrl: string;
+  intent?: PaymentMethodRequestIntent;
 }) {
+  if (intent === "instant_bank_verification") {
+    return [
+      `Hi ${recipientLabel || "there"},`,
+      "",
+      `${centerLabel} is asking you to instantly verify a bank account for ${familyName}'s tuition payments in The BEE Suite.`,
+      "Use the secure link below to log in to your bank through Stripe Financial Connections. This verifies the account now instead of waiting for microdeposits.",
+      "You can also pay an open tuition invoice from the same form with Instant Bank Login or a debit/credit card if a payment is due today.",
+      "The BEE Suite does not receive or store your bank login, full account number, or full card details. Payment information is handled securely by Stripe.",
+      "",
+      `Verify your bank instantly: ${formUrl}`,
+      "",
+      "If you were not expecting this request, please contact the school before continuing.",
+    ].join("\n");
+  }
+
   return [
     `Hi ${recipientLabel || "there"},`,
     "",
-    `${centerLabel} is asking you to save payment information for ${familyName} in The BEE Suite.`,
-    "This secure form lets you choose a bank account or debit/credit card for tuition payments and autopay.",
+    `${centerLabel} is asking you to complete tuition payment steps for ${familyName} in The BEE Suite.`,
+    "This secure form lets you pay an open invoice, verify a bank account instantly with your bank login, or use a debit/credit card.",
+    "If you want autopay, you can also save a verified bank account or card from the same form.",
     "The BEE Suite does not store your full card or bank details. Payment information is saved securely through Stripe.",
     "",
-    `Open your payment setup form: ${formUrl}`,
+    `Open your secure tuition payment form: ${formUrl}`,
     "",
     "If you were not expecting this request, please contact the school before continuing.",
   ].join("\n");
@@ -206,6 +231,10 @@ export function buildPaymentMethodRequestEmailText({
 export function buildPaymentMethodRequestNotificationBody(input: {
   familyName: string;
   formUrl: string;
+  intent?: PaymentMethodRequestIntent;
 }) {
-  return `Please save payment information for ${input.familyName}. Open your secure The BEE Suite form: ${input.formUrl}`;
+  if (input.intent === "instant_bank_verification") {
+    return `Please verify a bank account instantly for ${input.familyName}. Open your secure Stripe bank login form: ${input.formUrl}`;
+  }
+  return `Please complete tuition payment steps for ${input.familyName}. Open your secure The BEE Suite payment form: ${input.formUrl}`;
 }

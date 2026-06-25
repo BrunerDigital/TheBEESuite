@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Clock, KeyRound, LogIn, LogOut, QrCode, ShieldCheck, UserRound } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, CreditCard, KeyRound, LogIn, LogOut, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,16 @@ type KioskChild = {
 type LookupResult = {
   guardian: { id: string; fullName: string; relation: string };
   family: { id: string; name: string };
+  billing?: {
+    balanceCents: number;
+    amountDueCents: number;
+    nextInvoiceNumber: string | null;
+    nextInvoiceTotalCents: number;
+    nextInvoiceDueDate: string | Date | null;
+    paymentUrl: string;
+    paymentLabel: string;
+    message: string;
+  } | null;
   verification?: { method: VerificationMethod };
   warnings?: Array<{ type: string; message: string }>;
   children: KioskChild[];
@@ -71,6 +81,15 @@ function actionLabel(type?: string) {
 function clockLabel(value?: string | null) {
   if (!value) return "No staff clock event today";
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function money(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function shortDate(value?: string | Date | null) {
+  if (!value) return "No due date";
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
 export function KioskCheckIn({ center, initialMode = "family" }: Props) {
@@ -594,6 +613,37 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
               ) : lookup ? (
                 <>
                   <div className="grid gap-3 md:grid-cols-2">
+                    {lookup.billing ? (
+                      <div className="md:col-span-2 rounded-2xl border border-primary/30 bg-primary/10 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2 text-sm font-medium">
+                              <CreditCard className="size-4 text-primary" />
+                              The BEE Suite tuition balance
+                            </div>
+                            <div className="mt-2 text-2xl font-semibold">{money(lookup.billing.amountDueCents)}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {lookup.billing.nextInvoiceNumber
+                                ? `${lookup.billing.nextInvoiceNumber} · due ${shortDate(lookup.billing.nextInvoiceDueDate)}`
+                                : "Current family balance"}
+                            </div>
+                          </div>
+                          <Button
+                            className="h-12 w-full text-base sm:w-auto"
+                            onClick={() => {
+                              markActivity();
+                              window.open(lookup.billing?.paymentUrl || "/parent-portal#billing", "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            <CreditCard data-icon="inline-start" />
+                            {lookup.billing.paymentLabel}
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          Use the parent portal to pay, view ledger history, update payment information, set up Instant Bank/ACH, or save a card.
+                        </p>
+                      </div>
+                    ) : null}
                     {lookup.warnings?.map((warning) => {
                       const protectedPickup = warning.type === "protected_pickup_note";
                       return (

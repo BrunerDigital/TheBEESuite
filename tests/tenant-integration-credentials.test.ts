@@ -181,6 +181,46 @@ test("Stripe checkout can require instant bank verification", async () => {
   }
 });
 
+test("Stripe checkout can be constrained to card-only entry", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalCardConfiguration = process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
+  delete process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_card_terminal", url: "https://checkout.stripe.test/card-terminal" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1", collectionMode: "director_card_terminal" },
+      paymentMethodCategory: "card",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_types%5B0%5D=card/);
+    assert.match(body, /metadata%5BcollectionMode%5D=director_card_terminal/);
+    assert.doesNotMatch(body, /payment_method_configuration/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCardConfiguration) {
+      process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID = originalCardConfiguration;
+    } else {
+      delete process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
+    }
+  }
+});
+
 test("Stripe setup checkout retries without stale payment method configuration", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";
@@ -281,6 +321,37 @@ test("Stripe setup checkout falls back to dynamic methods when ACH is disabled",
     assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
     assert.doesNotMatch(bodies[2], /payment_method_configuration/);
     assert.doesNotMatch(bodies[2], /payment_method_types/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe setup checkout can require instant bank verification", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+
+  globalThis.fetch = (async (_input, init) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_setup_instant", url: "https://checkout.stripe.test/setup-instant" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeSetupCheckoutSession({
+      customerId: "cus_bank",
+      paymentMethodCategory: "link_bank",
+      bankAccountVerificationMethod: "instant",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { billingAccountId: "ba_1", familyId: "family_1" },
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
+    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bfinancial_connections%5D%5Bpermissions%5D%5B0%5D=payment_method/);
   } finally {
     globalThis.fetch = originalFetch;
   }

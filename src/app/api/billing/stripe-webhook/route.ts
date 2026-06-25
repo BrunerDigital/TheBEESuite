@@ -31,6 +31,7 @@ type StripeCheckoutSessionCompleted = {
     setupFlow?: string;
     tenantId?: string;
     billingAccountId?: string;
+    paymentScope?: string;
     invoiceId?: string;
     paymentId?: string;
     familyId?: string;
@@ -44,6 +45,10 @@ type StripeCheckoutSessionCompleted = {
     checkoutTotalCents?: string;
     applicationFeeAmountCents?: string;
     collectionMode?: string;
+    requestedPaymentMethodCategory?: string;
+    paymentMethodCategory?: string;
+    bankAccountVerificationMethod?: string;
+    description?: string;
     orderReference?: string;
     purchaserUserId?: string;
     itemSummary?: string;
@@ -55,6 +60,8 @@ type StripeCheckoutSessionCompleted = {
 type StripeMetadata = {
   source?: string;
   tenantId?: string;
+  billingAccountId?: string;
+  paymentScope?: string;
   invoiceId?: string;
   paymentId?: string;
   familyId?: string;
@@ -67,6 +74,10 @@ type StripeMetadata = {
   checkoutTotalCents?: string;
   applicationFeeAmountCents?: string;
   collectionMode?: string;
+  requestedPaymentMethodCategory?: string;
+  paymentMethodCategory?: string;
+  bankAccountVerificationMethod?: string;
+  description?: string;
   orderReference?: string;
   purchaserUserId?: string;
   itemSummary?: string;
@@ -308,6 +319,142 @@ function centsFromJson(value: unknown) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function metadataCents(value: unknown) {
+  const parsed = Number.parseInt(clean(value), 10);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function familyPaymentDescription(metadata: StripeMetadata, fallback: string) {
+  return clean(metadata.description) || fallback;
+}
+
+async function handleFamilyBalancePaymentSucceeded(
+  event: StripeWebhookEvent,
+  input: {
+    metadata: StripeMetadata;
+    paymentId: string;
+    externalId: string;
+    stripePaymentIntentId?: string | null;
+    stripePaymentStatus?: string | null;
+    stripeAmountTotalCents?: number | null;
+    auditAction: string;
+    descriptionFallback: string;
+  },
+) {
+  let applied = false;
+  let ignoredReason: string | null = null;
+  let billingAccountId = clean(input.metadata.billingAccountId);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const currentPayment = await tx.payment.findUnique({
+        where: { id: input.paymentId },
+        select: {
+          status: true,
+          billingAccountId: true,
+          amountCents: true,
+          customFields: true,
+        },
+      });
+      if (!currentPayment) {
+        ignoredReason = "payment_not_found";
+        return;
+      }
+      billingAccountId = currentPayment.billingAccountId;
+      if (currentPayment.status === PaymentStatus.PAID) {
+        ignoredReason = "payment_already_applied";
+        return;
+      }
+      if (currentPayment.status !== PaymentStatus.DRAFT) {
+        ignoredReason = "payment_not_chargeable";
+        return;
+      }
+
+      const paidAt = new Date();
+      const currentFields = jsonObject(currentPayment.customFields);
+      const stripePaymentIntentId = input.stripePaymentIntentId || clean(currentFields.stripePaymentIntentId) || null;
+      const payment = await tx.payment.update({
+        where: { id: input.paymentId },
+        data: {
+          status: PaymentStatus.PAID,
+          paidAt,
+          externalIdPlaceholder: input.externalId,
+          customFields: {
+            ...currentFields,
+            paymentScope: "family_balance",
+            stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : currentFields.stripeCheckoutSessionId || null,
+            stripePaymentIntentId,
+            stripeEventId: event.id,
+            stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+            stripePaymentStatus: input.stripePaymentStatus || null,
+            stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
+            invoiceAmountCents: metadataCents(input.metadata.invoiceAmountCents) || null,
+            parentSurchargeAmountCents: metadataCents(input.metadata.parentSurchargeAmountCents),
+            parentProcessingRecoveryAmountCents: metadataCents(input.metadata.parentProcessingRecoveryAmountCents || input.metadata.parentSurchargeAmountCents),
+            beeSuitePaymentOperationsFeeAmountCents: metadataCents(input.metadata.beeSuitePaymentOperationsFeeAmountCents),
+            checkoutTotalCents: metadataCents(input.metadata.checkoutTotalCents) || input.stripeAmountTotalCents || null,
+            applicationFeeAmountCents: metadataCents(input.metadata.applicationFeeAmountCents),
+            requestedPaymentMethodCategory: clean(input.metadata.requestedPaymentMethodCategory) || null,
+            paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
+            bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
+            status: "paid",
+          },
+        },
+      });
+      const updatedAccount = await tx.billingAccount.update({
+        where: { id: payment.billingAccountId },
+        data: { balanceCents: { decrement: payment.amountCents } },
+      });
+      await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: payment.billingAccountId,
+          paymentId: payment.id,
+          type: "payment",
+          description: familyPaymentDescription(input.metadata, input.descriptionFallback),
+          amountCents: -payment.amountCents,
+          balanceAfterCents: updatedAccount.balanceCents,
+          sourceSystem: "stripe",
+          externalId: stripePaymentIntentId || input.externalId,
+          metadata: {
+            stripeEventId: event.id,
+            stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : null,
+            stripePaymentIntentId,
+            stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
+            paymentScope: "family_balance",
+            collectionMode: clean(input.metadata.collectionMode) || null,
+            requestedPaymentMethodCategory: clean(input.metadata.requestedPaymentMethodCategory) || null,
+            paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
+            bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
+            parentSurchargeAmountCents: metadataCents(input.metadata.parentSurchargeAmountCents),
+            parentProcessingRecoveryAmountCents: metadataCents(input.metadata.parentProcessingRecoveryAmountCents || input.metadata.parentSurchargeAmountCents),
+            beeSuitePaymentOperationsFeeAmountCents: metadataCents(input.metadata.beeSuitePaymentOperationsFeeAmountCents),
+            applicationFeeAmountCents: metadataCents(input.metadata.applicationFeeAmountCents),
+          },
+        },
+      });
+      applied = true;
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    throw error;
+  }
+
+  if (!applied) {
+    if (billingAccountId && ignoredReason !== "payment_not_found") {
+      await writeBillingAccountSystemAudit(billingAccountId, event.id, input.externalId, "billing.family_payment.ignored");
+    }
+    return NextResponse.json({ ok: true, ignored: true, reason: ignoredReason || "not_applied" });
+  }
+
+  if (billingAccountId) {
+    await writeBillingAccountSystemAudit(billingAccountId, event.id, input.externalId, input.auditAction);
+  }
+  return NextResponse.json({ ok: true });
+}
+
 async function applyRegistrationPaymentCompletion(
   tx: Prisma.TransactionClient,
   input: {
@@ -529,6 +676,8 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
 
   if (session.metadata?.invoiceId) {
     await writeSystemAudit(session.metadata.invoiceId, event.id, session.id, "billing.checkout.expired");
+  } else if (session.metadata?.paymentScope === "family_balance" && session.metadata.billingAccountId) {
+    await writeBillingAccountSystemAudit(session.metadata.billingAccountId, event.id, session.id, "billing.family_payment.checkout_expired");
   }
   return NextResponse.json({ ok: true });
 }
@@ -605,6 +754,98 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   return NextResponse.json({ ok: true });
 }
 
+async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  const metadata = jsonObject(session.metadata) as StripeMetadata;
+  const paymentId = clean(metadata.paymentId);
+  const billingAccountId = clean(metadata.billingAccountId);
+  if (!paymentId) {
+    return NextResponse.json({ ok: false, error: "Missing family payment metadata." }, { status: 400 });
+  }
+
+  if (event.type === "checkout.session.async_payment_failed") {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await recordStripeWebhookEvent(tx, event);
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: PaymentStatus.FAILED,
+            externalIdPlaceholder: session.id,
+            customFields: {
+              ...jsonObject(currentPayment?.customFields),
+              paymentScope: "family_balance",
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent || null,
+              stripeEventId: event.id,
+              stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+              stripePaymentStatus: session.payment_status || null,
+              stripeAmountTotalCents: session.amount_total ?? null,
+              failedAt: new Date().toISOString(),
+              status: "checkout_failed",
+            },
+          },
+        });
+      });
+    } catch (error) {
+      if (isDuplicateWebhookEvent(error)) {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      throw error;
+    }
+    if (billingAccountId) {
+      await writeBillingAccountSystemAudit(billingAccountId, event.id, session.id, "billing.family_payment.checkout_failed");
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (event.type === "checkout.session.completed" && session.payment_status !== "paid") {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await recordStripeWebhookEvent(tx, event, "pending");
+        const currentPayment = await tx.payment.findUnique({ where: { id: paymentId }, select: { customFields: true } });
+        await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            status: PaymentStatus.DRAFT,
+            externalIdPlaceholder: session.id,
+            customFields: {
+              ...jsonObject(currentPayment?.customFields),
+              paymentScope: "family_balance",
+              stripeCheckoutSessionId: session.id,
+              stripePaymentIntentId: session.payment_intent || null,
+              stripeEventId: event.id,
+              stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
+              stripePaymentStatus: session.payment_status || null,
+              stripeAmountTotalCents: session.amount_total ?? null,
+              status: "checkout_pending",
+            },
+          },
+        });
+      });
+    } catch (error) {
+      if (isDuplicateWebhookEvent(error)) {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      throw error;
+    }
+    return NextResponse.json({ ok: true, pending: true });
+  }
+
+  return handleFamilyBalancePaymentSucceeded(event, {
+    metadata,
+    paymentId,
+    externalId: session.id,
+    stripePaymentIntentId: clean(session.payment_intent) || null,
+    stripePaymentStatus: session.payment_status || null,
+    stripeAmountTotalCents: session.amount_total ?? null,
+    auditAction: event.type === "checkout.session.async_payment_succeeded"
+      ? "billing.family_payment.checkout_async_succeeded"
+      : "billing.family_payment.checkout_completed",
+    descriptionFallback: "Parent payment",
+  });
+}
+
 async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentIntent: StripePaymentIntentObject) {
   const metadata = metadataOf(paymentIntent);
   if (!metadata.paymentId) {
@@ -615,7 +856,9 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
     ? "autopay_failed"
     : collectionMode === "stored_method"
       ? "stored_method_failed"
-      : "payment_intent_failed";
+      : collectionMode === "director_saved_method"
+        ? "director_saved_method_failed"
+        : "payment_intent_failed";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -656,8 +899,12 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
         ? "billing.autopay.failed"
         : collectionMode === "stored_method"
           ? "billing.stored_method.failed"
+          : collectionMode === "director_saved_method"
+            ? "billing.family_payment.payment_intent_failed"
           : "billing.payment_intent.failed",
     );
+  } else if (clean(metadata.paymentScope) === "family_balance" && metadata.billingAccountId) {
+    await writeBillingAccountSystemAudit(metadata.billingAccountId, event.id, paymentIntent.id, "billing.family_payment.payment_intent_failed");
   }
   return NextResponse.json({ ok: true });
 }
@@ -666,6 +913,18 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
   const metadata = metadataOf(paymentIntent);
   const invoiceId = metadata.invoiceId;
   const paymentId = metadata.paymentId;
+  if (!invoiceId && paymentId && clean(metadata.paymentScope) === "family_balance") {
+    return handleFamilyBalancePaymentSucceeded(event, {
+      metadata,
+      paymentId,
+      externalId: paymentIntent.id,
+      stripePaymentIntentId: paymentIntent.id,
+      stripePaymentStatus: paymentIntent.status || null,
+      stripeAmountTotalCents: paymentIntent.amount ?? null,
+      auditAction: "billing.family_payment.payment_intent_succeeded",
+      descriptionFallback: clean(metadata.collectionMode) === "director_saved_method" ? "Director saved method payment" : "Parent payment",
+    });
+  }
   if (!invoiceId || !paymentId) {
     return NextResponse.json({ ok: true, ignored: true, reason: "Missing invoice/payment metadata." });
   }
@@ -993,6 +1252,44 @@ async function writeSystemAudit(invoiceId: string, stripeEventId: string, sessio
   });
 }
 
+async function writeBillingAccountSystemAudit(billingAccountId: string, stripeEventId: string, sessionId: string, action: string) {
+  const account = await prisma.billingAccount.findUnique({
+    where: { id: billingAccountId },
+    select: {
+      family: { select: { centerId: true } },
+    },
+  });
+
+  const center = account?.family.centerId
+    ? await prisma.center.findUnique({
+        where: { id: account.family.centerId },
+        select: {
+          id: true,
+          organization: { select: { tenantId: true } },
+        },
+      })
+    : null;
+  const tenant = center?.organization.tenantId
+    ? { id: center.organization.tenantId }
+    : await prisma.tenant.findFirst({ select: { id: true }, orderBy: { createdAt: "asc" } });
+
+  if (!tenant) return;
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId: tenant.id,
+      centerId: center?.id ?? null,
+      action,
+      resource: "BillingAccount",
+      resourceId: billingAccountId,
+      metadata: {
+        stripeEventId,
+        stripeSessionId: sessionId,
+      },
+    },
+  });
+}
+
 async function POSTHandler(request: NextRequest) {
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature");
@@ -1054,6 +1351,10 @@ async function POSTHandler(request: NextRequest) {
 
   if (event.type === "checkout.session.expired") {
     return handleCheckoutExpired(event, session);
+  }
+
+  if (!invoiceId && paymentId && session.metadata?.paymentScope === "family_balance") {
+    return handleFamilyBalanceCheckoutEvent(event, session);
   }
 
   if (!invoiceId || !paymentId) {

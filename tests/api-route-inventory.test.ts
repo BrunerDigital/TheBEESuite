@@ -23,6 +23,8 @@ test("API route smoke inventory covers every route file and exported method", ()
   assert.ok(methodChecks.includes("GET /api/health"));
   assert.ok(methodChecks.includes("POST /api/communications/messages"));
   assert.ok(methodChecks.includes("POST /api/billing/autopay"));
+  assert.ok(methodChecks.includes("POST /api/billing/family-payment"));
+  assert.ok(methodChecks.includes("POST /api/billing/payment-method-request/checkout"));
   assert.ok(methodChecks.includes("GET /api/cron/autopay-invoices"));
   assert.ok(methodChecks.includes("POST /api/billing/stripe-webhook"));
   assert.ok(methodChecks.includes("POST /api/twilio/inbound"));

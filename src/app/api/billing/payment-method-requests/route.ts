@@ -7,11 +7,13 @@ import { sendEmail } from "@/lib/integrations";
 import { notificationExpiresAt } from "@/lib/notification-policy";
 import {
   buildPaymentMethodRequestEmailText,
+  buildPaymentMethodRequestFocusedFormUrl,
   buildPaymentMethodRequestFormUrl,
   buildPaymentMethodRequestNotificationBody,
   createPaymentMethodRequestToken,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
+  type PaymentMethodRequestIntent,
   paymentMethodRequestRecipientOptions,
   uniquePaymentRequestEmails,
 } from "@/lib/payment-method-request-forms";
@@ -29,6 +31,10 @@ function stringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+function paymentRequestIntent(value: unknown): PaymentMethodRequestIntent {
+  return clean(value) === "instant_bank_verification" ? "instant_bank_verification" : "payment_steps";
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -41,6 +47,7 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const familyId = clean(body.familyId);
   const requestedEmails = uniquePaymentRequestEmails(stringArray(body.emails));
+  const intent = paymentRequestIntent(body.intent);
   if (!familyId) {
     return NextResponse.json({ ok: false, error: "Family ID is required." }, { status: 400 });
   }
@@ -108,7 +115,9 @@ async function POSTHandler(request: NextRequest) {
 
   const appBaseUrl = getAppBaseUrl(request.url);
   const centerLabel = center.crmLocationId ?? center.name;
-  const subject = `${centerLabel}: save tuition payment information`;
+  const subject = intent === "instant_bank_verification"
+    ? `${centerLabel}: verify your bank account for tuition`
+    : `${centerLabel}: complete tuition payment steps`;
   const results: Array<{ email: string; ok: boolean; configured: boolean; error?: string; notified: number; formUrl: string }> = [];
   let emailsSent = 0;
   let notificationsCreated = 0;
@@ -122,12 +131,15 @@ async function POSTHandler(request: NextRequest) {
       tenantId: center.organization.tenantId,
       email,
     });
-    const formUrl = buildPaymentMethodRequestFormUrl(appBaseUrl, token);
+    const formUrl = intent === "instant_bank_verification"
+      ? buildPaymentMethodRequestFocusedFormUrl(appBaseUrl, token, intent)
+      : buildPaymentMethodRequestFormUrl(appBaseUrl, token);
     const text = buildPaymentMethodRequestEmailText({
       recipientLabel: recipient.label,
       familyName: family.name,
       centerLabel,
       formUrl,
+      intent,
     });
     const emailResult = await sendEmail({
       to: [email],
@@ -136,7 +148,7 @@ async function POSTHandler(request: NextRequest) {
       replyTo: center.email,
       fromName: `${centerLabel} via The BEE Suite`,
       categories: [PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE],
-      customArgs: { familyId: family.id, centerId: center.id, purpose: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE },
+      customArgs: { familyId: family.id, centerId: center.id, purpose: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE, intent },
       tenantId: center.organization.tenantId,
     });
     await recordEmailDeliveryAttempt({
@@ -149,7 +161,7 @@ async function POSTHandler(request: NextRequest) {
       replyTo: center.email,
       fromName: `${centerLabel} via The BEE Suite`,
       result: emailResult,
-      metadata: { familyId: family.id, formUrl },
+      metadata: { familyId: family.id, formUrl, intent },
     });
     if (emailResult.ok) emailsSent += 1;
 
@@ -158,8 +170,8 @@ async function POSTHandler(request: NextRequest) {
       const created = await prisma.notification.createMany({
         data: uniqueUserIds.map((userId) => ({
           userId,
-          title: "Save tuition payment information",
-          body: buildPaymentMethodRequestNotificationBody({ familyName: family.name, formUrl }),
+          title: intent === "instant_bank_verification" ? "Verify tuition bank account" : "Save tuition payment information",
+          body: buildPaymentMethodRequestNotificationBody({ familyName: family.name, formUrl, intent }),
           type: PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
           priority: "normal",
           expiresAt: notificationExpiresAt(new Date(), 30),
@@ -188,6 +200,7 @@ async function POSTHandler(request: NextRequest) {
       requestedEmails,
       emailsSent,
       notificationsCreated,
+      intent,
       failedEmails: results.filter((result) => !result.ok).map((result) => result.email),
     },
   });

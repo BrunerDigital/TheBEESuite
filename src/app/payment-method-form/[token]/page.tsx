@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PaymentStatus } from "@prisma/client";
 import { AlertCircle } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { PaymentMethodRequestForm } from "@/components/payment-method-request-form";
@@ -59,7 +60,18 @@ export default async function PaymentMethodFormPage({
         centerId: true,
         name: true,
         billingEmail: true,
-        billingAccount: { select: { customFields: true, autopayPlaceholder: true } },
+        billingAccount: {
+          select: {
+            customFields: true,
+            autopayPlaceholder: true,
+            invoices: {
+              where: { status: PaymentStatus.OPEN },
+              orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+              take: 5,
+              select: { id: true, number: true, status: true, dueDate: true, totalCents: true },
+            },
+          },
+        },
         guardians: {
           select: { id: true, fullName: true, email: true, userId: true },
           orderBy: { fullName: "asc" },
@@ -116,6 +128,8 @@ export default async function PaymentMethodFormPage({
   const centerLabel = center.crmLocationId ?? center.name;
   const childNames = family.children.map((child) => child.fullName).join(", ");
   const paymentMethodStatus = firstQueryValue(search.paymentMethod) ?? null;
+  const paymentStatus = firstQueryValue(search.payment) ?? null;
+  const focus = firstQueryValue(search.focus) === "instant-bank" ? "instant-bank" : null;
 
   return (
     <main className="min-h-screen bg-[#090b10] px-4 py-8 text-white">
@@ -154,6 +168,15 @@ export default async function PaymentMethodFormPage({
           savedPaymentMethodLabel={paymentMethod.paymentMethodLabel}
           autopayStatus={paymentMethod.autopayStatus}
           paymentMethodStatus={paymentMethodStatus}
+          paymentStatus={paymentStatus}
+          focus={focus}
+          openInvoices={(family.billingAccount?.invoices ?? []).map((invoice) => ({
+            id: invoice.id,
+            number: invoice.number,
+            status: invoice.status,
+            dueDate: invoice.dueDate,
+            totalCents: invoice.totalCents,
+          }))}
         />
       </div>
     </main>

@@ -2627,6 +2627,12 @@ async function renderLivePage(
               balanceCents: true,
               autopayPlaceholder: true,
               customFields: true,
+              invoices: {
+                where: { status: PaymentStatus.OPEN },
+                orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+                take: 20,
+                select: { id: true, number: true, status: true, dueDate: true, totalCents: true },
+              },
             },
           },
           children: {
@@ -2739,6 +2745,13 @@ async function renderLivePage(
                       autopayPlaceholder: family.billingAccount.autopayPlaceholder,
                       customFields: family.billingAccount.customFields,
                     }),
+                    openInvoices: family.billingAccount.invoices.map((invoice) => ({
+                      id: invoice.id,
+                      number: invoice.number,
+                      status: invoice.status,
+                      dueDate: invoice.dueDate,
+                      totalCents: invoice.totalCents,
+                    })),
                   }
                 : null,
               children: family.children.map((child) => ({

@@ -300,6 +300,8 @@ test("public parent links never expose Vercel deployment hosts", () => {
 test("external payment session callbacks use the branded app base URL", () => {
   const externalSessionRoutes = [
     "src/app/api/billing/checkout-session/route.ts",
+    "src/app/api/billing/family-payment/route.ts",
+    "src/app/api/billing/payment-method-request/checkout/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
     "src/app/api/billing/payment-method-request/session/route.ts",
     "src/app/api/billing/connect/onboard/route.ts",

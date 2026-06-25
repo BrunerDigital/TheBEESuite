@@ -569,6 +569,7 @@ export async function createStripeCheckoutSession({
   connectedAccountId,
   applicationFeeAmountCents = 0,
   paymentMethodConfigurationId,
+  paymentMethodCategory = "default",
   bankAccountVerificationMethod,
   idempotencyKey,
   tenantId,
@@ -587,6 +588,7 @@ export async function createStripeCheckoutSession({
   connectedAccountId?: string | null;
   applicationFeeAmountCents?: number;
   paymentMethodConfigurationId?: string | null;
+  paymentMethodCategory?: StripePaymentMethodCategory;
   bankAccountVerificationMethod?: StripeBankAccountVerificationMethod | null;
   onBehalfOfConnectedAccount?: boolean;
   idempotencyKey?: string | null;
@@ -625,6 +627,11 @@ export async function createStripeCheckoutSession({
 
   if (paymentMethodConfigurationId) {
     body.set("payment_method_configuration", paymentMethodConfigurationId);
+  } else {
+    const fallbackPaymentMethodTypes = stripeSetupPaymentMethodTypes(paymentMethodCategory);
+    if (fallbackPaymentMethodTypes.length) {
+      addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
+    }
   }
   if (bankAccountVerificationMethod === "instant") {
     body.set("payment_method_options[us_bank_account][verification_method]", "instant");
@@ -1005,6 +1012,7 @@ export async function createStripeSetupCheckoutSession({
   customerId,
   customerEmail,
   paymentMethodCategory = "default",
+  bankAccountVerificationMethod,
   successUrl,
   cancelUrl,
   metadata,
@@ -1015,6 +1023,7 @@ export async function createStripeSetupCheckoutSession({
   customerId?: string | null;
   customerEmail?: string | null;
   paymentMethodCategory?: StripePaymentMethodCategory;
+  bankAccountVerificationMethod?: StripeBankAccountVerificationMethod | null;
   successUrl: string;
   cancelUrl: string;
   metadata: Record<string, string>;
@@ -1049,6 +1058,10 @@ export async function createStripeSetupCheckoutSession({
       body.set("payment_method_configuration", paymentMethodConfigurationId);
     } else if (paymentMethodMode === "payment_method_types" && fallbackPaymentMethodTypes.length) {
       addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
+    }
+    if (bankAccountVerificationMethod === "instant") {
+      body.set("payment_method_options[us_bank_account][verification_method]", "instant");
+      body.set("payment_method_options[us_bank_account][financial_connections][permissions][0]", "payment_method");
     }
     Object.entries(metadata).forEach(([key, value]) => {
       body.set(`metadata[${key}]`, value);

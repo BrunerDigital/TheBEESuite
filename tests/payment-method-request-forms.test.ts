@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildPaymentMethodRequestEmailText,
+  buildPaymentMethodRequestFocusedFormUrl,
   buildPaymentMethodRequestFormUrl,
   buildPaymentMethodRequestNotificationBody,
   createPaymentMethodRequestToken,
@@ -27,6 +28,29 @@ test("payment method request tokens validate family, center, tenant, and email",
   assert.equal(result.ok ? result.payload.centerId : "", "center_1");
   assert.equal(result.ok ? result.payload.tenantId : "", "tenant_1");
   assert.equal(result.ok ? result.payload.email : "", "parent@example.com");
+});
+
+test("instant bank request copy focuses parents on bank login verification", () => {
+  const formUrl = buildPaymentMethodRequestFocusedFormUrl("https://thebeesuite.io/", "token_123", "instant_bank_verification");
+  const email = buildPaymentMethodRequestEmailText({
+    recipientLabel: "Alex Parent",
+    familyName: "Johnson Family",
+    centerLabel: "Sarasota",
+    formUrl,
+    intent: "instant_bank_verification",
+  });
+  const notification = buildPaymentMethodRequestNotificationBody({
+    familyName: "Johnson Family",
+    formUrl,
+    intent: "instant_bank_verification",
+  });
+
+  assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123?focus=instant-bank");
+  assert.match(email, /instantly verify a bank account/i);
+  assert.match(email, /log in to your bank through Stripe Financial Connections/i);
+  assert.match(email, /instead of waiting for microdeposits/i);
+  assert.match(notification, /verify a bank account instantly/i);
+  assert.equal(extractFirstUrl(notification), formUrl);
 });
 
 test("payment method request tokens expire", () => {
@@ -71,6 +95,9 @@ test("payment method request copy links to the branded form", () => {
   const notification = buildPaymentMethodRequestNotificationBody({ familyName: "Johnson Family", formUrl });
 
   assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123");
+  assert.match(email, /pay an open invoice/i);
+  assert.match(email, /verify a bank account instantly/i);
+  assert.match(email, /debit\/credit card/i);
   assert.match(email, /securely through Stripe/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });

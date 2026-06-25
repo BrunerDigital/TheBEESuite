@@ -69,6 +69,7 @@ async function POSTHandler(request: NextRequest) {
   const familyId = clean(body.familyId);
   const action = actionFrom(body.action);
   const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
+  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "instant" : null;
   const processingRecoveryAccepted = body.processingRecoveryAccepted === true ||
     clean(body.processingRecoveryAccepted).toLowerCase() === "true";
   const returnPath = safeReturnPath(body.returnPath, isParentGuardian(user) ? "/parent-portal" : "/family-detail");
@@ -274,6 +275,7 @@ async function POSTHandler(request: NextRequest) {
     customerId,
     customerEmail: billingAccount.family.billingEmail,
     paymentMethodCategory,
+    bankAccountVerificationMethod,
     successUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "success")}`,
     cancelUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "cancelled")}`,
     metadata: {
@@ -287,6 +289,7 @@ async function POSTHandler(request: NextRequest) {
       requestedByUserId: user.id,
       enableAutopay: "true",
       preferredPaymentMethodCategory: paymentMethodCategory,
+      bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     connectedAccountId,

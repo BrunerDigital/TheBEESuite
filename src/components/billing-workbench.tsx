@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, ReceiptText, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, Play, ReceiptText, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +44,13 @@ export type BillingWorkbenchFamily = {
       paymentMethodLabel: string | null;
       lastUpdatedAt: string | null;
     };
+    openInvoices?: Array<{
+      id: string;
+      number: string;
+      status: string;
+      dueDate: Date | string;
+      totalCents: number;
+    }>;
   } | null;
   children: Array<{
     id: string;
@@ -137,6 +144,11 @@ function normalizeBillingDayForCadence(value: string | number | null | undefined
 
 function money(cents: number) {
   return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function dollarsToCents(value: string) {
+  const amount = Number.parseFloat(value.replace(/[$,]/g, ""));
+  return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
 }
 
 function centerLabel(center: BillingWorkbenchCenter) {
@@ -238,6 +250,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [agencyCoverageEnd, setAgencyCoverageEnd] = useState("");
   const [agencyChildId, setAgencyChildId] = useState("none");
   const [agencyNotes, setAgencyNotes] = useState("");
+  const [paymentTarget, setPaymentTarget] = useState("balance");
+  const [paymentAmountDollars, setPaymentAmountDollars] = useState("");
+  const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [assignmentChildId, setAssignmentChildId] = useState("");
   const [assignmentEnabled, setAssignmentEnabled] = useState("true");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
@@ -296,6 +311,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     [families, planAgeGroup, selectedCenter, tuitionPlans],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
+  const openInvoices = selectedBillingAccount?.openInvoices ?? [];
+  const selectedPaymentInvoiceId = paymentTarget.startsWith("invoice:") ? paymentTarget.slice("invoice:".length) : "";
+  const selectedPaymentInvoice = selectedPaymentInvoiceId
+    ? openInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) ?? null
+    : null;
+  const effectivePaymentTarget = selectedPaymentInvoiceId && !selectedPaymentInvoice ? "balance" : paymentTarget;
+  const directorPaymentAmountCents = effectivePaymentTarget === "custom"
+    ? dollarsToCents(paymentAmountDollars)
+    : effectivePaymentTarget.startsWith("invoice:")
+      ? selectedPaymentInvoice?.totalCents ?? 0
+      : familyBalanceCents;
+  const directorPaymentTargetLabel = effectivePaymentTarget === "custom"
+    ? "custom amount"
+    : effectivePaymentTarget.startsWith("invoice:")
+      ? `invoice ${selectedPaymentInvoice?.number ?? ""}`.trim()
+      : "total balance";
   const selectedFamilyProfileHref = familyProfileHref(selectedFamily);
   const selectedChildSummary = selectedChildren.length
     ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
@@ -315,7 +346,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     return window.confirm(`You are about to ${action} for ${billingContextDescription(childName)}. Continue?`);
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     if (action === "setup" && paymentMethodCategory === "card") {
@@ -353,6 +384,125 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     });
   }
 
+  function processParentPayment(method: "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout") {
+    if (!selectedFamily || !selectedBillingAccount) {
+      return setErrorMessage("Choose a family with a billing account before processing a payment.");
+    }
+    if (method === "autopay" && !effectivePaymentTarget.startsWith("invoice:")) {
+      return setErrorMessage("Choose an open invoice before running autopay.");
+    }
+    if (directorPaymentAmountCents <= 0) {
+      return setErrorMessage("Enter or choose a payment amount greater than zero.");
+    }
+    if (!selectedCheckoutReadiness?.canAcceptParentPayments) {
+      return setErrorMessage(selectedCheckoutReadiness?.blockingReason || "Parent checkout is not ready for this school.");
+    }
+
+    const invoiceId = effectivePaymentTarget.startsWith("invoice:") ? selectedPaymentInvoice?.id ?? "" : "";
+    const methodLabel = method === "autopay"
+      ? "run autopay"
+      : method === "saved_method"
+        ? "charge the selected saved method"
+        : method === "card_checkout"
+          ? "open the Stripe card terminal"
+          : method === "instant_bank_checkout"
+            ? "open instant bank checkout"
+            : "open ACH bank checkout";
+    const confirmed = window.confirm(
+      `You are about to ${methodLabel} for ${selectedFamily.name} (${directorPaymentTargetLabel}) for ${money(directorPaymentAmountCents)}. Continue?`,
+    );
+    if (!confirmed) return;
+
+    const processingRecoveryAccepted = method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card"
+      ? window.confirm("This will charge the saved card and may include the approved card processing recovery. Continue?")
+      : false;
+    if (method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card" && !processingRecoveryAccepted) return;
+
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+
+      if (invoiceId && (method === "autopay" || method === "saved_method")) {
+        const response = await fetch("/api/billing/autopay", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoiceId,
+            dryRun: false,
+            mode: "charge",
+            retryFailed: true,
+            limit: 1,
+            processStoredMethod: method === "saved_method",
+          }),
+        });
+        const json = await response.json().catch(() => null) as {
+          ok?: boolean;
+          error?: string;
+          processing?: number;
+          failed?: number;
+          skipped?: number;
+          results?: Array<{ status: string; reason?: string | null; stripePaymentIntentId?: string | null }>;
+        } | null;
+        const first = json?.results?.[0];
+        if (!response.ok || !json?.ok || first?.status === "failed" || first?.status === "skipped") {
+          setErrorMessage(json?.error || first?.reason || "Saved payment method could not be charged.");
+          return;
+        }
+        setStatusMessage(`${method === "autopay" ? "Autopay" : "Saved payment method charge"} submitted for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`);
+        router.refresh();
+        return;
+      }
+
+      if (invoiceId) {
+        const response = await fetch("/api/billing/checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invoiceId,
+            paymentMethodCategory: method === "card_checkout" ? "card" : method === "instant_bank_checkout" ? "link_bank" : "ach",
+            collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
+            source: "director_dashboard",
+            returnPath: "/billing-invoices",
+          }),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+        if (!response.ok || !json?.url) {
+          setErrorMessage(json?.error || "Payment checkout could not be opened.");
+          return;
+        }
+        window.location.href = json.url;
+        return;
+      }
+
+      const response = await fetch("/api/billing/family-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billingAccountId: selectedBillingAccount.id,
+          familyId: selectedFamily.id,
+          amountCents: directorPaymentAmountCents,
+          method,
+          description: paymentDescription,
+          collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
+          source: "director_dashboard",
+          processingRecoveryAccepted,
+          returnPath: "/billing-invoices",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string; status?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Payment could not be processed.");
+        return;
+      }
+      if (json?.url) {
+        window.location.href = json.url;
+        return;
+      }
+      setStatusMessage("Saved payment method charge submitted for the selected family balance.");
+      router.refresh();
+    });
+  }
+
   function togglePaymentRequestEmail(email: string) {
     setPaymentRequestEmailSelections((current) => {
       const currentForFamily = current[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails;
@@ -363,7 +513,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     });
   }
 
-  function sendPaymentMethodRequest() {
+  function sendPaymentMethodRequest(intent: "payment_steps" | "instant_bank_verification" = "payment_steps") {
     if (!selectedFamily) return setErrorMessage("Choose a family before sending a payment form.");
     if (!selectedPaymentRequestEmails.length) return setErrorMessage("Choose at least one family email to receive the payment form.");
     startTransition(async () => {
@@ -375,6 +525,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         body: JSON.stringify({
           familyId: selectedFamily.id,
           emails: selectedPaymentRequestEmails,
+          intent,
         }),
       });
       const json = await response.json().catch(() => null) as {
@@ -388,8 +539,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         return;
       }
       const failed = json?.results?.filter((result) => !result.ok) ?? [];
+      const label = intent === "instant_bank_verification" ? "instant bank verification email" : "tuition payment link email";
       setStatusMessage(
-        `${json?.emailsSent ?? 0} payment setup email${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} profile notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
+        `${json?.emailsSent ?? 0} ${label}${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} profile notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
       );
     });
   }
@@ -780,9 +932,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "ach")}>
+              <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
-                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Replace Bank" : "Add Bank"}
+                {selectedPaymentMethod?.hasSavedPaymentMethod ? "Verify Bank Instantly" : "Instant Bank Login"}
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedFamily} onClick={() => manageFamilyPaymentMethod("setup", "card")} variant="outline">
                 <CreditCard data-icon="inline-start" />
@@ -797,20 +949,117 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             </div>
           </div>
           <div className="mt-4 rounded-lg border bg-background/40 p-3">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">Director payment terminal</div>
+                <p className="text-xs text-muted-foreground">
+                  Choose total balance, an open invoice, or a custom amount, then charge a saved method or open Stripe&apos;s secure phone card terminal.
+                </p>
+              </div>
+              <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
+            </div>
+            <div className="grid gap-3 md:grid-cols-6">
+              <div className="space-y-1 md:col-span-2">
+                <Label>Payment target</Label>
+                <Select value={effectivePaymentTarget} onValueChange={(value) => value && setPaymentTarget(value)}>
+                  <SelectTrigger><SelectValue placeholder="Choose target" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="balance">Total balance · {money(familyBalanceCents)}</SelectItem>
+                    {openInvoices.map((invoice) => (
+                      <SelectItem key={invoice.id} value={`invoice:${invoice.id}`}>
+                        {invoice.number} · {money(invoice.totalCents)} · due {formatShortDate(invoice.dueDate)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom amount</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Custom amount</Label>
+                <Input
+                  disabled={effectivePaymentTarget !== "custom"}
+                  inputMode="decimal"
+                  value={paymentAmountDollars}
+                  onChange={(event) => setPaymentAmountDollars(event.target.value)}
+                  placeholder="250.00"
+                />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>Description</Label>
+                <Input value={paymentDescription} onChange={(event) => setPaymentDescription(event.target.value)} placeholder="Tuition payment" />
+              </div>
+              <div className="rounded-lg border bg-background/50 p-3">
+                <div className="text-xs text-muted-foreground">Charging</div>
+                <div className="text-sm font-medium">{directorPaymentTargetLabel}</div>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                disabled={isPending || !selectedPaymentMethod?.hasSavedPaymentMethod || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                onClick={() => processParentPayment("saved_method")}
+              >
+                <CreditCard data-icon="inline-start" />
+                Charge Selected Method
+              </Button>
+              {effectivePaymentTarget.startsWith("invoice:") ? (
+                <Button
+                  disabled={isPending || selectedAutopayStatus !== "enabled" || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                  onClick={() => processParentPayment("autopay")}
+                  variant="outline"
+                >
+                  <Play data-icon="inline-start" />
+                  Run Autopay
+                </Button>
+              ) : null}
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                onClick={() => processParentPayment("card_checkout")}
+              >
+                <CreditCard data-icon="inline-start" />
+                Open Card Terminal
+              </Button>
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                onClick={() => processParentPayment("instant_bank_checkout")}
+                variant="outline"
+              >
+                <Building2 data-icon="inline-start" />
+                Instant Bank
+              </Button>
+              <Button
+                disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
+                onClick={() => processParentPayment("ach_checkout")}
+                variant="outline"
+              >
+                <Building2 data-icon="inline-start" />
+                ACH Bank Checkout
+              </Button>
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Use Open Card Terminal when a parent gives card details by phone. Bee Suite sends the director to Stripe&apos;s secure card entry page, so card numbers are never typed into or stored by Bee Suite.
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border bg-background/40 p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="size-4 text-muted-foreground" />
-                  Branded payment setup form
+                  Parent payment and bank verification links
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Send a secure The BEE Suite form by email and profile notification to selected family contacts.
+                  Email a secure Stripe-backed form. Use the bank verification email when ACH is pending and the parent needs to log in to their bank now.
                 </p>
               </div>
-              <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={sendPaymentMethodRequest}>
-                <Send data-icon="inline-start" />
-                Send Form
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>
+                  <Building2 data-icon="inline-start" />
+                  Send Instant Bank Verification
+                </Button>
+                <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("payment_steps")} variant="outline">
+                  <Send data-icon="inline-start" />
+                  Send Payment Link
+                </Button>
+              </div>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {selectedPaymentRequestEmailOptions.map((option) => {
@@ -835,7 +1084,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               })}
               {!selectedPaymentRequestEmailOptions.length ? (
                 <div className="rounded-lg border bg-background/50 p-3 text-sm text-muted-foreground">
-                  Add a parent or billing email to this family before sending the payment setup form.
+                  Add a parent or billing email to this family before sending the tuition payment link.
                 </div>
               ) : null}
             </div>

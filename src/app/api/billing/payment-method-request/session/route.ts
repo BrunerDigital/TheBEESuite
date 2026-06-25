@@ -34,7 +34,7 @@ function requestBaseUrl(request: NextRequest) {
 
 function paymentMethodCategoryFrom(value: unknown): StripePaymentMethodCategory {
   const normalized = clean(value).toLowerCase();
-  if (normalized === "ach" || normalized === "card") return normalized;
+  if (normalized === "ach" || normalized === "card" || normalized === "link_bank") return normalized;
   return "ach";
 }
 
@@ -59,6 +59,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const paymentMethodCategory = paymentMethodCategoryFrom(body.paymentMethodCategory);
+  const bankAccountVerificationMethod = paymentMethodCategory === "link_bank" ? "instant" : null;
   const processingRecoveryAccepted = body.processingRecoveryAccepted === true ||
     clean(body.processingRecoveryAccepted).toLowerCase() === "true";
   if (
@@ -155,6 +156,7 @@ async function POSTHandler(request: NextRequest) {
     customerId,
     customerEmail: payload.email,
     paymentMethodCategory,
+    bankAccountVerificationMethod,
     successUrl: `${baseUrl}${formPath}?paymentMethod=success`,
     cancelUrl: `${baseUrl}${formPath}?paymentMethod=cancelled`,
     metadata: {
@@ -169,6 +171,7 @@ async function POSTHandler(request: NextRequest) {
       recipientEmail: payload.email,
       enableAutopay: "true",
       preferredPaymentMethodCategory: paymentMethodCategory,
+      bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
     connectedAccountId,

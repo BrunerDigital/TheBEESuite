@@ -401,7 +401,7 @@ export function ParentPortalWorkspace({
     payInvoice(nextOpenInvoice.id, paymentMethodCategory);
   }
 
-  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
+  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!family) return showError("A family profile is required before saving payment methods.");
     if (action !== "setup" && !billingAccount) return showError("Save a payment method before managing autopay settings.");
     if (action === "setup" && paymentMethodCategory === "card") {
@@ -553,10 +553,42 @@ export function ParentPortalWorkspace({
         <Card className="glass-panel"><CardHeader><CardDescription>Need acknowledgment</CardDescription><CardTitle>{unacknowledged.length}</CardTitle></CardHeader></Card>
       </div>
 
+      <section id="billing" className="scroll-mt-28 rounded-2xl border bg-card/85 p-4 shadow-2xl shadow-black/15 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <Badge className="mb-3" variant={balanceCents > 0 ? "default" : "outline"}>
+              The BEE Suite billing
+            </Badge>
+            <h2 className="text-2xl font-semibold tracking-tight">Tuition balance {money(balanceCents)}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Pay tuition, verify a bank account instantly, save a card, manage autopay, and review ledger history from this parent portal.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {nextOpenInvoice ? (
+              <>
+                <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")}>
+                  <Building2 data-icon="inline-start" />
+                  Pay With Instant Bank
+                </Button>
+                <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
+                  <CreditCard data-icon="inline-start" />
+                  Pay With Card
+                </Button>
+              </>
+            ) : null}
+            <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant={nextOpenInvoice ? "outline" : "default"}>
+              <Building2 data-icon="inline-start" />
+              Verify Bank / ACH
+            </Button>
+          </div>
+        </div>
+      </section>
+
       <ParentKioskCredentialPanel initialCredentials={kioskCredentials} />
 
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card id="billing" className="glass-panel scroll-mt-28">
+        <Card id="children" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Children</CardTitle>
             <CardDescription>Enrollment, classroom, schedule, and permission snapshot.</CardDescription>
@@ -588,7 +620,7 @@ export function ParentPortalWorkspace({
           </CardContent>
         </Card>
 
-        <Card className="glass-panel">
+        <Card className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Announcements</CardTitle>
             <CardDescription>Center updates visible to this family.</CardDescription>
@@ -651,14 +683,14 @@ export function ParentPortalWorkspace({
                     {paymentMethodManagement?.hasSavedPaymentMethod
                       ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "A secure setup session is pending. Saving a method lets you choose autopay, while invoices can still be paid one time below."
+                        ? "Bank verification is pending. Use Instant Bank Login to verify through your bank now, or pay today by Instant Bank or Debit/Credit Card below."
                         : "Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "ach")}>
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")}>
                     <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Bank" : "Set Up Bank Autopay"}
+                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
                   </Button>
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
                     <CreditCard data-icon="inline-start" />

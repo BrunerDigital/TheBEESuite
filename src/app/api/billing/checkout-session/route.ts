@@ -42,6 +42,22 @@ function requestBaseUrl(request: NextRequest) {
   return getAppBaseUrl(request.url);
 }
 
+function safeReturnPath(value: unknown, fallback: string) {
+  const path = clean(value);
+  if (!path || !path.startsWith("/") || path.startsWith("//")) return fallback;
+  return path;
+}
+
+function appendQuery(path: string, key: string, value: string) {
+  return appendRawQuery(path, key, encodeURIComponent(value));
+}
+
+function appendRawQuery(path: string, key: string, rawValue: string) {
+  const [base, hash = ""] = path.split("#", 2);
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}${encodeURIComponent(key)}=${rawValue}${hash ? `#${hash}` : ""}`;
+}
+
 async function canAccessInvoice(input: {
   userId: string;
   isParentGuardian: boolean;
@@ -87,20 +103,25 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
 
-  if (!canManageBilling(user) && !isParentGuardian(user)) {
+  const userCanManageBilling = canManageBilling(user);
+  const userIsParentGuardian = isParentGuardian(user);
+  if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
   }
 
   const body = await request.json();
   const invoiceId = clean(body.invoiceId);
   const requestedPaymentMethodCategory = paymentMethodCategory(body.paymentMethodCategory || body.paymentMethod);
+  const bankAccountVerificationMethod = requestedPaymentMethodCategory === "link_bank" ? "instant" : null;
+  const defaultReturnPath = userIsParentGuardian && !userCanManageBilling ? "/parent-portal" : "/billing-invoices";
+  const returnPath = safeReturnPath(body.returnPath, defaultReturnPath);
   if (!invoiceId) {
     return NextResponse.json({ ok: false, error: "Invoice ID is required." }, { status: 400 });
   }
 
   const access = await canAccessInvoice({
     userId: user.id,
-    isParentGuardian: isParentGuardian(user),
+    isParentGuardian: userIsParentGuardian,
     roleScoped: canAccessAllCenters(user),
     centerIds: user.centerIds,
     invoiceId,
@@ -226,6 +247,12 @@ async function POSTHandler(request: NextRequest) {
     brandName: center?.organization.brand?.name,
   });
   const baseUrl = requestBaseUrl(request);
+  const successPath = appendRawQuery(
+    appendQuery(appendQuery(returnPath, "payment", "success"), "invoice", invoice.id),
+    "session_id",
+    "{CHECKOUT_SESSION_ID}",
+  );
+  const cancelPath = appendQuery(appendQuery(returnPath, "payment", "cancelled"), "invoice", invoice.id);
   const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
     paymentMethodCategory: effectivePaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
@@ -299,6 +326,7 @@ async function POSTHandler(request: NextRequest) {
         invoiceAmountCents: invoice.totalCents,
         stripeCustomerId,
         stripeCustomerConnectedAccountId: connectedAccountId || null,
+        bankAccountVerificationMethod,
         status: "checkout_pending",
       },
     },
@@ -312,8 +340,8 @@ async function POSTHandler(request: NextRequest) {
     centerName: center?.name,
     customerId: stripeCustomerId,
     customerEmail: invoice.billingAccount.family.billingEmail,
-    successUrl: `${baseUrl}/parent-portal?payment=success&invoice=${invoice.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: `${baseUrl}/parent-portal?payment=cancelled&invoice=${invoice.id}`,
+    successUrl: `${baseUrl}${successPath}`,
+    cancelUrl: `${baseUrl}${cancelPath}`,
     metadata: {
       tenantId: user.tenantId,
       invoiceId: invoice.id,
@@ -330,6 +358,7 @@ async function POSTHandler(request: NextRequest) {
       beeSuitePaymentOperationsFeeWaived: String(waiveBeeSuitePaymentOperationsFee),
       requestedPaymentMethodCategory,
       paymentMethodCategory: amounts.paymentMethodCategory,
+      bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       paymentMethodConfigurationMissing: String(usesSpecificFeePolicy && !paymentMethodConfigurationId),
       checkoutTotalCents: String(amounts.checkoutTotalCents),
       applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
@@ -339,6 +368,7 @@ async function POSTHandler(request: NextRequest) {
     connectedAccountId,
     applicationFeeAmountCents: amounts.applicationFeeAmountCents,
     paymentMethodConfigurationId,
+    bankAccountVerificationMethod,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
     idempotencyKey: `checkout:${payment.id}`,
     tenantId: user.tenantId,
@@ -364,6 +394,7 @@ async function POSTHandler(request: NextRequest) {
           invoiceId: invoice.id,
           stripeCustomerId,
           stripeCustomerConnectedAccountId: connectedAccountId || null,
+          bankAccountVerificationMethod,
           stripeChargeType: connectedAccountId ? "direct" : "platform",
           status: "checkout_failed",
           stripeError: session.error || "stripe_checkout_failed",
@@ -397,6 +428,7 @@ async function POSTHandler(request: NextRequest) {
         stripeConnectedAccountId: connectedAccountId || null,
         stripeCustomerId,
         stripeCustomerConnectedAccountId: connectedAccountId || null,
+        bankAccountVerificationMethod,
         stripeChargeType: connectedAccountId ? "direct" : "platform",
         status: "checkout_created",
       },

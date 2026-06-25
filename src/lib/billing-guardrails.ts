@@ -23,7 +23,10 @@ export function isActiveStripeAutopayPayment(payment: {
   const fields = jsonRecord(payment.customFields);
   return fields.status === "autopay_pending" ||
     fields.status === "autopay_processing" ||
-    fields.status === "autopay_succeeded_pending_webhook";
+    fields.status === "autopay_succeeded_pending_webhook" ||
+    fields.status === "stored_method_pending" ||
+    fields.status === "stored_method_processing" ||
+    fields.status === "stored_method_succeeded_pending_webhook";
 }
 
 export function checkoutApplicationGuard(input: {

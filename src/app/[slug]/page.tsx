@@ -1072,8 +1072,9 @@ async function renderLivePage(
         include: {
           child: {
             select: {
+              id: true,
               fullName: true,
-              family: { select: { name: true, centerId: true } },
+              family: { select: { id: true, name: true, centerId: true } },
             },
           },
         },
@@ -1111,6 +1112,8 @@ async function renderLivePage(
           }),
           enrollmentChecklists: enrollmentRows.map((enrollment) => ({
             id: enrollment.id,
+            childId: enrollment.child.id,
+            familyId: enrollment.child.family.id,
             stage: enrollment.stage,
             desiredStartDate: enrollment.desiredStartDate,
             childName: enrollment.child.fullName,
@@ -1124,7 +1127,29 @@ async function renderLivePage(
   }
 
   if (slug === "tours") {
-    const tourWhere: Prisma.TourWhereInput = { centerId: scopedCenterIds };
+    const requestedTourSearch = firstSearchParam(searchParams.q) || "";
+    const tourWhere: Prisma.TourWhereInput = {
+      centerId: scopedCenterIds,
+      ...(requestedTourSearch
+        ? {
+            OR: [
+              { notes: { contains: requestedTourSearch, mode: "insensitive" } },
+              {
+                lead: {
+                  is: {
+                    OR: [
+                      { familyName: { contains: requestedTourSearch, mode: "insensitive" } },
+                      { childName: { contains: requestedTourSearch, mode: "insensitive" } },
+                      { email: { contains: requestedTourSearch, mode: "insensitive" } },
+                      { phone: { contains: requestedTourSearch, mode: "insensitive" } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
     const [tours, upcoming, todayTours, completed] = await Promise.all([
       prisma.tour.findMany({
         where: tourWhere,
@@ -1428,6 +1453,7 @@ async function renderLivePage(
   }
 
   if (slug === "family-detail") {
+    const requestedFamilyId = firstSearchParam(searchParams.familyId) || "";
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
     const currentChildWhere = currentlyEnrolledChildWhere();
     const graduatedChildWhere = notCurrentlyEnrolledChildWhere();
@@ -1460,6 +1486,11 @@ async function renderLivePage(
         },
       },
       documents: { where: { childId: null }, orderBy: [{ expiresAt: "asc" }, { createdAt: "desc" }] },
+      notesList: {
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        include: { user: { select: { name: true, email: true } } },
+      },
       _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
     } satisfies Prisma.FamilyInclude;
     const [families, allFamilies, total, withCustodyNotes, children, guardians, graduated, graduatedFamilies, intakeCenters, requestNotes] = await Promise.all([
@@ -1496,6 +1527,18 @@ async function renderLivePage(
         },
       }),
     ]);
+    const requestedFamily = requestedFamilyId && !allFamilies.some((family) => family.id === requestedFamilyId)
+      ? await prisma.family.findFirst({
+          where: { AND: [familyWhere, { id: requestedFamilyId }] },
+          include: familyInclude,
+        })
+      : null;
+    const allFamiliesWithRequested = requestedFamily
+      ? [requestedFamily, ...allFamilies.filter((family) => family.id !== requestedFamily.id)]
+      : allFamilies;
+    const familiesWithRequested = requestedFamily && requestedFamily.children.some((child) => isCurrentlyEnrolledChildRecord(child))
+      ? [requestedFamily, ...families.filter((family) => family.id !== requestedFamily.id)]
+      : families;
     const guardianChangeRequests = requestNotes.flatMap((note) => {
       const parsed = parseGuardianChangeRequestNote(note.body);
       if (!parsed || !note.family) return [];
@@ -1514,6 +1557,7 @@ async function renderLivePage(
     function serializeFamilyForClient(family: (typeof allFamilies)[number], options: { currentChildrenOnly: boolean }) {
       return {
         ...family,
+        centerName: family.centerId ? centerNameById.get(family.centerId) ?? null : null,
         children: options.currentChildrenOnly
           ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
           : family.children,
@@ -1552,11 +1596,11 @@ async function renderLivePage(
         }),
       };
     }
-    const familiesForClient = families.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: true }));
-    const allFamiliesForClient = allFamilies.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: false }));
+    const familiesForClient = familiesWithRequested.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: true }));
+    const allFamiliesForClient = allFamiliesWithRequested.map((family) => serializeFamilyForClient(family, { currentChildrenOnly: false }));
     const familyAgeGroups = mergeAgeGroupOptions(
       centers.map((center) => dashboardOptionsFromCustomFields(center.customFields).ageGroups),
-      allFamilies.flatMap((family) => family.children.map((child) => child.ageGroup)),
+      allFamiliesWithRequested.flatMap((family) => family.children.map((child) => child.ageGroup)),
       intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
     );
 
@@ -1844,6 +1888,10 @@ async function renderLivePage(
         paymentMethodCategory: "card",
         waiveBeeSuitePaymentOperationsFee,
       });
+      const instantBankAmounts = getStripeCheckoutAmounts(invoice.totalCents, {
+        paymentMethodCategory: "link_bank",
+        waiveBeeSuitePaymentOperationsFee,
+      });
       return {
         id: invoice.id,
         number: invoice.number,
@@ -1857,6 +1905,12 @@ async function renderLivePage(
             parentProcessingRecoveryAmountCents: achAmounts.parentProcessingRecoveryAmountCents,
             applicationFeeAmountCents: achAmounts.applicationFeeAmountCents,
             paymentMethodConfigurationReady: Boolean(getStripePaymentMethodConfigurationId("ach")),
+          },
+          instantBank: {
+            checkoutTotalCents: instantBankAmounts.checkoutTotalCents,
+            parentProcessingRecoveryAmountCents: instantBankAmounts.parentProcessingRecoveryAmountCents,
+            applicationFeeAmountCents: instantBankAmounts.applicationFeeAmountCents,
+            paymentMethodConfigurationReady: Boolean(getStripePaymentMethodConfigurationId("link_bank")),
           },
           card: {
             checkoutTotalCents: cardAmounts.checkoutTotalCents,
@@ -2502,8 +2556,11 @@ async function renderLivePage(
         include: {
           billingAccount: {
             select: {
+              id: true,
               balanceCents: true,
-              family: { select: { name: true, billingEmail: true, centerId: true } },
+              autopayPlaceholder: true,
+              customFields: true,
+              family: { select: { id: true, name: true, billingEmail: true, centerId: true } },
             },
           },
           _count: { select: { items: true } },
@@ -2518,7 +2575,7 @@ async function renderLivePage(
         include: {
           billingAccount: {
             select: {
-              family: { select: { name: true, billingEmail: true, centerId: true } },
+              family: { select: { id: true, name: true, billingEmail: true, centerId: true } },
             },
           },
         },
@@ -2559,6 +2616,7 @@ async function renderLivePage(
           centerId: true,
           name: true,
           billingEmail: true,
+          updatedAt: true,
           guardians: {
             select: { id: true, fullName: true, email: true, userId: true },
             orderBy: { fullName: "asc" },
@@ -2657,10 +2715,18 @@ async function renderLivePage(
         cronSchedule: "Daily at 13:15 UTC",
       },
     );
+    const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
+    const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
+    const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
 
     return (
       <BillingInvoicesPage
         data={{
+          initialSelection: {
+            familyId: requestedBillingFamilyId,
+            centerId: requestedBillingCenterId,
+            searchQuery: requestedBillingSearch,
+          },
           workbench: {
             families: billingFamilies.map((family) => ({
               ...family,
@@ -2698,7 +2764,23 @@ async function renderLivePage(
             products: billingProducts,
             tuitionPlans,
           },
-          invoices,
+          invoices: invoices.map((invoice) => ({
+            id: invoice.id,
+            number: invoice.number,
+            status: invoice.status,
+            dueDate: invoice.dueDate,
+            totalCents: invoice.totalCents,
+            billingAccount: {
+              id: invoice.billingAccount.id,
+              balanceCents: invoice.billingAccount.balanceCents,
+              paymentMethodManagement: paymentMethodManagementSummary({
+                autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
+                customFields: invoice.billingAccount.customFields,
+              }),
+              family: invoice.billingAccount.family,
+            },
+            _count: invoice._count,
+          })),
           ledgerEntries,
           stats: { total, open, paid, outstandingCents: openRows.reduce((sum, invoice) => sum + invoice.totalCents, 0) },
           arReport,
@@ -2727,7 +2809,7 @@ async function renderLivePage(
         include: {
           billingAccount: {
             select: {
-              family: { select: { name: true, billingEmail: true, centerId: true } },
+              family: { select: { id: true, name: true, billingEmail: true, centerId: true } },
             },
           },
         },
@@ -4035,7 +4117,7 @@ async function renderLivePage(
         orderBy: { date: "desc" },
         take: 100,
         include: {
-          child: { select: { fullName: true, ageGroup: true } },
+          child: { select: { id: true, fullName: true, ageGroup: true, family: { select: { id: true, name: true } } } },
           classroom: {
             select: {
               name: true,
@@ -4188,7 +4270,7 @@ async function renderLivePage(
               preferredName: true,
               ageGroup: true,
               photoVideoPermission: true,
-              family: { select: { name: true, centerId: true } },
+              family: { select: { id: true, name: true, centerId: true } },
             },
           },
           classroom: {

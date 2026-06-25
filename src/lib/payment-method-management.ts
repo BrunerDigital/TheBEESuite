@@ -78,6 +78,16 @@ export function paymentMethodAutopayCategory(summary: Pick<PaymentMethodManageme
   return "default" as const;
 }
 
+export function canChargeSavedPaymentMethod(summary: Pick<PaymentMethodManagementSummary, "hasStripeCustomer" | "hasSavedPaymentMethod">) {
+  return summary.hasStripeCustomer && summary.hasSavedPaymentMethod;
+}
+
+export function canRunAutopay(
+  summary: Pick<PaymentMethodManagementSummary, "autopayStatus" | "hasStripeCustomer" | "hasSavedPaymentMethod">,
+) {
+  return summary.autopayStatus === "enabled" && canChargeSavedPaymentMethod(summary);
+}
+
 export function canCreatePaymentMethodManagementSession(input: {
   isLinkedGuardian: boolean;
   hasCenterAccess: boolean;

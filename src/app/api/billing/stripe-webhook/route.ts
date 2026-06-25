@@ -610,6 +610,12 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   if (!metadata.paymentId) {
     return NextResponse.json({ ok: true, ignored: true, reason: "Missing payment metadata." });
   }
+  const collectionMode = clean(metadata.collectionMode);
+  const failedStatus = collectionMode === "autopay"
+    ? "autopay_failed"
+    : collectionMode === "stored_method"
+      ? "stored_method_failed"
+      : "payment_intent_failed";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -628,7 +634,8 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
             stripePaymentIntentStatus: paymentIntent.status || null,
             stripeFailureMessage: paymentIntent.last_payment_error?.message || null,
             failedAt: new Date().toISOString(),
-            status: "payment_intent_failed",
+            collectionMode: collectionMode || null,
+            status: failedStatus,
           },
         },
       });
@@ -641,7 +648,16 @@ async function handlePaymentIntentFailed(event: StripeWebhookEvent, paymentInten
   }
 
   if (metadata.invoiceId) {
-    await writeSystemAudit(metadata.invoiceId, event.id, paymentIntent.id, "billing.payment_intent.failed");
+    await writeSystemAudit(
+      metadata.invoiceId,
+      event.id,
+      paymentIntent.id,
+      collectionMode === "autopay"
+        ? "billing.autopay.failed"
+        : collectionMode === "stored_method"
+          ? "billing.stored_method.failed"
+          : "billing.payment_intent.failed",
+    );
   }
   return NextResponse.json({ ok: true });
 }
@@ -656,6 +672,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
 
   const collectionMode = clean(metadata.collectionMode);
   const isAutopay = collectionMode === "autopay";
+  const isStoredMethod = collectionMode === "stored_method";
   let applied = false;
   let ignoredReason: string | null = null;
 
@@ -767,7 +784,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
           invoiceId,
           paymentId: payment.id,
           type: "payment",
-          description: isAutopay ? "Autopay payment" : "Parent payment",
+          description: isAutopay ? "Autopay payment" : isStoredMethod ? "Saved method payment" : "Parent payment",
           amountCents: -payment.amountCents,
           balanceAfterCents: updatedAccount.balanceCents,
           sourceSystem: "stripe",
@@ -801,12 +818,22 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
 
   if (!applied) {
     if (ignoredReason !== "invoice_not_found" && ignoredReason !== "payment_not_found") {
-      await writeSystemAudit(invoiceId, event.id, paymentIntent.id, isAutopay ? "billing.autopay.ignored" : "billing.payment_intent.ignored");
+      await writeSystemAudit(
+        invoiceId,
+        event.id,
+        paymentIntent.id,
+        isAutopay ? "billing.autopay.ignored" : isStoredMethod ? "billing.stored_method.ignored" : "billing.payment_intent.ignored",
+      );
     }
     return NextResponse.json({ ok: true, ignored: true, reason: ignoredReason || "not_applied" });
   }
 
-  await writeSystemAudit(invoiceId, event.id, paymentIntent.id, isAutopay ? "billing.autopay.completed" : "billing.payment_intent.succeeded");
+  await writeSystemAudit(
+    invoiceId,
+    event.id,
+    paymentIntent.id,
+    isAutopay ? "billing.autopay.completed" : isStoredMethod ? "billing.stored_method.completed" : "billing.payment_intent.succeeded",
+  );
   return NextResponse.json({ ok: true });
 }
 

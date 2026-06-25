@@ -149,6 +149,38 @@ test("Stripe checkout creates direct connected-account sessions for school custo
   }
 });
 
+test("Stripe checkout can require instant bank verification", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_instant_bank", url: "https://checkout.stripe.test/instant-bank" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      bankAccountVerificationMethod: "instant",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
+    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bfinancial_connections%5D%5Bpermissions%5D%5B0%5D=payment_method/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe setup checkout retries without stale payment method configuration", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";

@@ -14,7 +14,12 @@ import {
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
 } from "@/lib/integrations";
-import { paymentMethodAutopayCategory, paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import {
+  canChargeSavedPaymentMethod,
+  canRunAutopay,
+  paymentMethodAutopayCategory,
+  paymentMethodManagementSummary,
+} from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import {
   stripeConnectCustomFieldPatch,
@@ -59,6 +64,8 @@ type ProcessAutopayInput = {
   centerIds?: string[];
   invoiceId?: string | null;
   retryFailed?: boolean;
+  requireDueDate?: boolean;
+  collectionMode?: "autopay" | "stored_method";
   requestedByUserId?: string | null;
 };
 
@@ -99,9 +106,10 @@ function isAutopayFailureForInvoice(payment: {
   provider: string;
   customFields?: unknown;
 }) {
+  const status = paymentStatusText(payment);
   return payment.provider === "stripe" &&
     payment.status === PaymentStatus.FAILED &&
-    paymentStatusText(payment).startsWith("autopay_");
+    (status.startsWith("autopay_") || status.startsWith("stored_method_"));
 }
 
 async function tenantStripeConfig(tenantId: string, cache: Map<string, TenantStripeConfig>) {
@@ -119,6 +127,10 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   const dryRun = input.dryRun !== false;
   const asOf = safeDate(input.asOf);
   const limit = safeLimit(input.limit);
+  const collectionMode = input.collectionMode === "stored_method" ? "stored_method" : "autopay";
+  const statusPrefix = collectionMode === "stored_method" ? "stored_method" : "autopay";
+  const collectionLabel = collectionMode === "stored_method" ? "saved-method payment" : "autopay";
+  const requireDueDate = input.requireDueDate !== false;
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
   const requireActiveConnectedAccount = process.env.STRIPE_REQUIRE_ACTIVE_CONNECTED_ACCOUNT !== "false";
   const requireWebhook = process.env.STRIPE_REQUIRE_WEBHOOK_FOR_AUTOPAY !== "false";
@@ -127,8 +139,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
   const invoiceWhere: Prisma.InvoiceWhereInput = {
     status: PaymentStatus.OPEN,
     totalCents: { gt: 0 },
-    dueDate: { lte: asOf },
   };
+  if (requireDueDate) invoiceWhere.dueDate = { lte: asOf };
   if (input.invoiceId) invoiceWhere.id = input.invoiceId;
   if (centerIds.length) {
     invoiceWhere.billingAccount = { family: { is: { centerId: { in: centerIds } } } };
@@ -233,7 +245,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       continue;
     }
     if (!input.retryFailed && attempts.some(isAutopayFailureForInvoice)) {
-      results.push({ ...baseResult, status: "skipped", reason: "Autopay already failed for this invoice; parent follow-up is in dunning." });
+      results.push({ ...baseResult, status: "skipped", reason: `${collectionLabel} already failed for this invoice; parent follow-up is in dunning.` });
       continue;
     }
     if (!center) {
@@ -245,8 +257,17 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       autopayPlaceholder: invoice.billingAccount.autopayPlaceholder,
       customFields: invoice.billingAccount.customFields,
     });
-    if (paymentMethod.autopayStatus !== "enabled" || !paymentMethod.hasStripeCustomer || !paymentMethod.hasSavedPaymentMethod) {
-      results.push({ ...baseResult, status: "skipped", reason: "Autopay is not enabled with a saved payment method." });
+    const canChargeSavedMethod = collectionMode === "stored_method"
+      ? canChargeSavedPaymentMethod(paymentMethod)
+      : canRunAutopay(paymentMethod);
+    if (!canChargeSavedMethod) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: collectionMode === "stored_method"
+          ? "Family does not have a selected payment method saved in Stripe."
+          : "Autopay is not enabled with a saved payment method.",
+      });
       continue;
     }
     const autopayPaymentMethodCategory = paymentMethodAutopayCategory(paymentMethod);
@@ -258,7 +279,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       results.push({
         ...baseResult,
         status: "skipped",
-        reason: "Card autopay needs the card processing recovery disclosure accepted before charging.",
+        reason: "Card payments using a saved method need the card processing recovery disclosure accepted before charging.",
       });
       continue;
     }
@@ -332,7 +353,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         status: "skipped",
         reason: connectedAccountId
           ? "Family needs a saved payment method in this school's Stripe account."
-          : "Family needs a saved Stripe customer before autopay can run.",
+          : `Family needs a saved Stripe customer before ${collectionLabel} can run.`,
       });
       continue;
     }
@@ -378,9 +399,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           stripeCustomerId: scopedStripeCustomerId,
           stripeCustomerConnectedAccountId: connectedAccountId || null,
           stripeChargeType: connectedAccountId ? "direct" : "platform",
-          collectionMode: "autopay",
-          status: "autopay_pending",
-          autopayAttemptedAt: new Date().toISOString(),
+          collectionMode,
+          status: `${statusPrefix}_pending`,
+          attemptedAt: new Date().toISOString(),
           requestedByUserId: input.requestedByUserId || null,
           environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
         }),
@@ -405,7 +426,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         stripeConnectedAccountId: connectedAccountId || "",
         stripeCustomerId: scopedStripeCustomerId,
         stripeChargeType: connectedAccountId ? "direct" : "platform",
-        collectionMode: "autopay",
+        collectionMode,
         invoiceAmountCents: String(amounts.invoiceAmountCents),
         parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
         parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
@@ -420,7 +441,8 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       connectedAccountId,
       applicationFeeAmountCents: amounts.applicationFeeAmountCents,
       onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
-      idempotencyKey: `autopay:${payment.id}`,
+      idempotencyKey: `${collectionMode}:${payment.id}`,
+      descriptionLabel: collectionLabel,
       tenantId,
     });
 
@@ -430,28 +452,36 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       where: { id: payment.id },
       data: {
         status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
-        externalIdPlaceholder: intent.paymentIntent?.id || intent.error || "autopay_payment_intent_failed",
+        externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,
         customFields: jsonInput({
           ...jsonRecord(payment.customFields),
           stripePaymentIntentId: intent.paymentIntent?.id || null,
           stripePaymentIntentStatus: intentStatus,
-          stripeError: intent.ok ? null : intent.error || "autopay_payment_intent_failed",
+          stripeError: intent.ok ? null : intent.error || `${statusPrefix}_payment_intent_failed`,
           failedAt: accepted ? null : new Date().toISOString(),
           status: accepted
             ? intentStatus === "succeeded"
-              ? "autopay_succeeded_pending_webhook"
-              : "autopay_processing"
-            : "autopay_failed",
+              ? `${statusPrefix}_succeeded_pending_webhook`
+              : `${statusPrefix}_processing`
+            : `${statusPrefix}_failed`,
         }),
       },
     });
+
+    const auditAction = accepted
+      ? collectionMode === "stored_method"
+        ? "billing.stored_method.payment_intent_created"
+        : "billing.autopay.payment_intent_created"
+      : collectionMode === "stored_method"
+        ? "billing.stored_method.failed"
+        : "billing.autopay.failed";
 
     await prisma.auditLog.create({
       data: {
         tenantId,
         centerId: center.id,
         userId: input.requestedByUserId || null,
-        action: accepted ? "billing.autopay.payment_intent_created" : "billing.autopay.failed",
+        action: auditAction,
         resource: "Invoice",
         resourceId: invoice.id,
         metadata: jsonInput({
@@ -468,7 +498,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     results.push({
       ...baseResult,
       status: accepted ? "processing" : "failed",
-      reason: accepted ? "Awaiting signed Stripe webhook reconciliation." : intent.error || "Autopay could not be submitted.",
+      reason: accepted ? "Awaiting signed Stripe webhook reconciliation." : intent.error || `${collectionLabel} could not be submitted.`,
       paymentId: payment.id,
       stripePaymentIntentId: intent.paymentIntent?.id || null,
     });

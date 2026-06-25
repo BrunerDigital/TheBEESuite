@@ -40,8 +40,13 @@ async function POSTHandler(request: NextRequest) {
   const body = jsonObject(await request.json().catch(() => ({})));
   const centerId = clean(body.centerId);
   const invoiceId = clean(body.invoiceId);
+  const processStoredMethod = body.processStoredMethod === true;
   const chargeMode = body.dryRun === false || clean(body.mode).toLowerCase() === "charge";
   let centerIds: string[] | undefined;
+
+  if (processStoredMethod && !invoiceId) {
+    return NextResponse.json({ ok: false, error: "Invoice ID is required to charge a stored payment method." }, { status: 400 });
+  }
 
   if (centerId) {
     if (!canAccessCenter(user, centerId)) {
@@ -79,6 +84,8 @@ async function POSTHandler(request: NextRequest) {
     limit: parseLimit(body.limit),
     centerIds,
     invoiceId,
+    requireDueDate: !processStoredMethod,
+    collectionMode: processStoredMethod ? "stored_method" : "autopay",
     retryFailed: body.retryFailed === true,
     requestedByUserId: user.id,
   });

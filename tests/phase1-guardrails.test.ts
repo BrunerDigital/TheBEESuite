@@ -109,7 +109,7 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
   }), false);
 });
 
-test("active Stripe autopay detection only blocks draft autopay attempts", () => {
+test("active Stripe autopay detection blocks draft off-session attempts", () => {
   assert.equal(isActiveStripeAutopayPayment({
     status: PaymentStatus.DRAFT,
     provider: "stripe",
@@ -120,6 +120,12 @@ test("active Stripe autopay detection only blocks draft autopay attempts", () =>
     status: PaymentStatus.DRAFT,
     provider: "stripe",
     customFields: { status: "autopay_succeeded_pending_webhook" },
+  }), true);
+
+  assert.equal(isActiveStripeAutopayPayment({
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    customFields: { status: "stored_method_processing" },
   }), true);
 
   assert.equal(isActiveStripeAutopayPayment({

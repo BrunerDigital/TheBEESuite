@@ -59,6 +59,12 @@ type Invoice = {
       applicationFeeAmountCents: number;
       paymentMethodConfigurationReady: boolean;
     };
+    instantBank: {
+      checkoutTotalCents: number;
+      parentProcessingRecoveryAmountCents: number;
+      applicationFeeAmountCents: number;
+      paymentMethodConfigurationReady: boolean;
+    };
     card: {
       checkoutTotalCents: number;
       parentProcessingRecoveryAmountCents: number;
@@ -360,17 +366,19 @@ export function ParentPortalWorkspace({
     });
   }
 
-  function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card") {
+  function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (checkoutBlocked) {
       return showError(checkoutReadiness.blockingReason || "Parent checkout is not ready for this school yet.");
     }
     const invoice = invoices.find((item) => item.id === invoiceId);
     const recoveryAmount = paymentMethodCategory === "card"
       ? invoice?.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice?.totalCents ?? 0)
-      : invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0);
+      : paymentMethodCategory === "link_bank"
+        ? invoice?.checkoutOptions?.instantBank.parentProcessingRecoveryAmountCents ?? invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0)
+        : invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0);
     if (recoveryAmount > 0) {
       const accepted = window.confirm(
-        `${paymentMethodCategory === "card" ? "Debit/credit card" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
+        `${paymentMethodCategory === "card" ? "Debit/credit card" : paymentMethodCategory === "link_bank" ? "Instant bank" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
       );
       if (!accepted) return;
     }
@@ -388,7 +396,7 @@ export function ParentPortalWorkspace({
     });
   }
 
-  function payBalance(paymentMethodCategory: "ach" | "card") {
+  function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
     payInvoice(nextOpenInvoice.id, paymentMethodCategory);
   }
@@ -679,19 +687,23 @@ export function ParentPortalWorkspace({
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">One-time balance payment</div>
+                    <div className="text-xs text-muted-foreground">Pay today</div>
                     <div className="font-medium">
                       {nextOpenInvoice.purposeLabel ? `${nextOpenInvoice.purposeLabel} · ` : ""}{nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")}>
+                      <Building2 data-icon="inline-start" />
+                      Instant Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
+                    </Button>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
                       <CreditCard data-icon="inline-start" />
-                      Pay by Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -713,7 +725,11 @@ export function ParentPortalWorkspace({
                 <Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge>
                 <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
                 <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")}>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "link_bank")}>
+                    <Building2 data-icon="inline-start" />
+                    Instant Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN"} onClick={() => payInvoice(invoice.id, "ach")} variant="outline">
                     <Building2 data-icon="inline-start" />
                     One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
                   </Button>
@@ -724,7 +740,7 @@ export function ParentPortalWorkspace({
                     variant="outline"
                   >
                     <CreditCard data-icon="inline-start" />
-                    One-Time Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                   </Button>
                 </div>
                 <div className="basis-full text-xs text-muted-foreground sm:text-right">

@@ -38,6 +38,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
@@ -109,6 +110,10 @@ import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
+import {
+  InvoiceStoredPaymentButton,
+  type InvoiceStoredPaymentActionData,
+} from "@/components/invoice-stored-payment-button";
 import { KidCitySoftwareInvoiceButton } from "@/components/kidcity-software-invoice-button";
 import { LicensingConfigurationPanel, type LicensingConfigurationCenter } from "@/components/licensing-configuration-panel";
 import { MediaReviewActions } from "@/components/media-review-actions";
@@ -212,6 +217,33 @@ function renderableImageSrc(value: string | null | undefined) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+}
+
+function searchHref(path: string, query: string, hash = "") {
+  const trimmed = query.trim();
+  return trimmed ? `${path}?q=${encodeURIComponent(trimmed)}${hash}` : `${path}${hash}`;
+}
+
+function crmLeadSearchHref(query: string) {
+  return searchHref("/crm-leads", query);
+}
+
+function familySearchHref(query: string) {
+  return searchHref("/family-detail", query, "#family-editor");
+}
+
+function familyRecordHref(family: { id?: string | null }, child?: { id?: string | null } | null, fallbackQuery = "") {
+  if (!family.id) return familySearchHref(fallbackQuery);
+  const params = new URLSearchParams({ familyId: family.id });
+  if (child?.id) params.set("childId", child.id);
+  return `/family-detail?${params.toString()}#family-editor`;
+}
+
+function billingRecordHref(family: { id?: string | null; centerId?: string | null }, fallbackQuery = "") {
+  if (!family.id) return searchHref("/billing-invoices", fallbackQuery, "#billing-workbench");
+  const params = new URLSearchParams({ familyId: family.id });
+  if (family.centerId) params.set("centerId", family.centerId);
+  return `/billing-invoices?${params.toString()}#billing-workbench`;
 }
 
 function StatCard({
@@ -1639,15 +1671,30 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
                 <TableHead>Stage</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.recentLeads.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell className="font-medium">{lead.familyName}</TableCell>
+                <TableRow key={lead.id} className="group">
+                  <TableCell className="font-medium">
+                    <Link
+                      href={crmLeadSearchHref(lead.familyName)}
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {lead.familyName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
+                  </TableCell>
                   <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
                   <TableCell><Badge>{lead.score}</Badge></TableCell>
                   <TableCell>{formatDate(lead.createdAt)}</TableCell>
+                  <TableCell>
+                    <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      CRM
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1703,6 +1750,8 @@ export type EnrollmentPipelineData = {
   }>;
   enrollmentChecklists: Array<{
     id: string;
+    childId: string;
+    familyId: string;
     stage: string;
     desiredStartDate: Date | string | null;
     childName: string;
@@ -1827,13 +1876,20 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                 <TableHead>Complete</TableHead>
                 <TableHead>Pending</TableHead>
                 <TableHead>Start</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.enrollmentChecklists.map((enrollment) => (
-                <TableRow key={enrollment.id}>
+                <TableRow key={enrollment.id} className="group">
                   <TableCell>
-                    <div className="font-medium">{enrollment.childName}</div>
+                    <Link
+                      href={familyRecordHref({ id: enrollment.familyId }, { id: enrollment.childId }, enrollment.familyName)}
+                      className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {enrollment.childName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
                     <div className="text-xs text-muted-foreground">{enrollment.familyName}{enrollment.centerName ? ` · ${enrollment.centerName}` : ""}</div>
                   </TableCell>
                   <TableCell>{enrollment.stage.replaceAll("_", " ")}</TableCell>
@@ -1848,11 +1904,17 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                     {enrollment.summary.blocked ? <div className="text-xs text-destructive">{enrollment.summary.blocked} blocked</div> : null}
                   </TableCell>
                   <TableCell>{formatDate(enrollment.desiredStartDate)}</TableCell>
+                  <TableCell>
+                    <Link href={familyRecordHref({ id: enrollment.familyId }, { id: enrollment.childId }, enrollment.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      Profile
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.enrollmentChecklists.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No approved enrollment checklists have been created in this scope yet.
                   </TableCell>
                 </TableRow>
@@ -1875,19 +1937,32 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                 <TableHead>Stage</TableHead>
                 <TableHead>Score</TableHead>
                 <TableHead>Created</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.recentLeads.map((lead) => (
-                <TableRow key={lead.id}>
+                <TableRow key={lead.id} className="group">
                   <TableCell>
-                    <div className="font-medium">{lead.familyName}</div>
+                    <Link
+                      href={crmLeadSearchHref(lead.familyName)}
+                      className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {lead.familyName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
                     <div className="text-xs text-muted-foreground">{lead.email ?? lead.phone ?? "No contact info"}</div>
                   </TableCell>
                   <TableCell>{lead.center.crmLocationId ?? lead.center.name}</TableCell>
                   <TableCell>{lead.stage.replaceAll("_", " ")}</TableCell>
                   <TableCell><Badge>{lead.score}</Badge></TableCell>
                   <TableCell>{formatDate(lead.createdAt)}</TableCell>
+                  <TableCell>
+                    <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      CRM
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -1946,24 +2021,43 @@ export function ToursPage({ data }: { data: ToursPageData }) {
                 <TableHead>Center</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Notes</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.tours.map((tour) => (
-                <TableRow key={tour.id}>
+                <TableRow key={tour.id} className="group">
                   <TableCell>{formatDateTime(tour.startsAt)}</TableCell>
                   <TableCell>
-                    <div className="font-medium">{tour.lead?.familyName ?? "Unlinked tour"}</div>
+                    {tour.lead?.familyName ? (
+                      <Link
+                        href={crmLeadSearchHref(tour.lead.familyName)}
+                        className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {tour.lead.familyName}
+                        <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                      </Link>
+                    ) : (
+                      <div className="font-medium">Unlinked tour</div>
+                    )}
                     <div className="text-xs text-muted-foreground">{tour.lead?.email ?? tour.lead?.phone ?? ""}</div>
                   </TableCell>
                   <TableCell>{tour.center.crmLocationId ?? tour.center.name}</TableCell>
                   <TableCell><Badge variant={tour.status === "completed" ? "secondary" : "default"}>{tour.status}</Badge></TableCell>
                   <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{tour.notes ?? ""}</TableCell>
+                  <TableCell>
+                    {tour.lead?.familyName ? (
+                      <Link href={crmLeadSearchHref(tour.lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <ArrowRight data-icon="inline-start" />
+                        CRM
+                      </Link>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.tours.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No tours are scheduled for this scope yet.
                   </TableCell>
                 </TableRow>
@@ -2029,21 +2123,36 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
                 <TableHead>Program</TableHead>
                 <TableHead>Center</TableHead>
                 <TableHead>Score</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.leadWaitlist.map((lead) => (
-                <TableRow key={lead.id}>
-                  <TableCell className="font-medium">{lead.familyName}</TableCell>
+                <TableRow key={lead.id} className="group">
+                  <TableCell className="font-medium">
+                    <Link
+                      href={crmLeadSearchHref(lead.familyName)}
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {lead.familyName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
+                  </TableCell>
                   <TableCell>{lead.childName ?? "Not set"}</TableCell>
                   <TableCell>{lead.programInterest ?? "Not set"}</TableCell>
                   <TableCell>{lead.center.crmLocationId ?? lead.center.name}</TableCell>
                   <TableCell><Badge>{lead.score}</Badge></TableCell>
+                  <TableCell>
+                    <Link href={crmLeadSearchHref(lead.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      CRM
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.leadWaitlist.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No CRM leads are currently waitlisted in this scope.
                   </TableCell>
                 </TableRow>
@@ -2066,21 +2175,36 @@ export function WaitlistPage({ data }: { data: WaitlistPageData }) {
                 <TableHead>Age group</TableHead>
                 <TableHead>Desired start</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.entries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell className="font-medium">{entry.familyName}</TableCell>
+                <TableRow key={entry.id} className="group">
+                  <TableCell className="font-medium">
+                    <Link
+                      href={familySearchHref(entry.familyName)}
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {entry.familyName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
+                  </TableCell>
                   <TableCell>{entry.childName}</TableCell>
                   <TableCell>{entry.ageGroup}</TableCell>
                   <TableCell>{formatDate(entry.desiredStartDate)}</TableCell>
                   <TableCell><Badge variant="outline">{entry.status}</Badge></TableCell>
+                  <TableCell>
+                    <Link href={familySearchHref(entry.familyName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      Profile
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.entries.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No standalone waitlist entries have been imported yet.
                   </TableCell>
                 </TableRow>
@@ -2688,7 +2812,7 @@ export type DailyReportsPageData = {
     teacherNote: string | null;
     suppliesNeeded: string | null;
     sentAt: Date | string | null;
-    child: { fullName: string; ageGroup: string };
+    child: { id?: string; fullName: string; ageGroup: string; family?: { id?: string | null; name?: string | null } | null };
     classroom: { name: string; center: { name: string; crmLocationId: string | null } } | null;
     _count: { meals: number; naps: number; diapers: number; activities: number };
   }>;
@@ -2736,17 +2860,32 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
                 <TableHead>Logged Items</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Note</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.reports.map((report) => (
-                <TableRow key={report.id}>
+                <TableRow key={report.id} className="group">
                   <TableCell>{formatDate(report.date)}</TableCell>
-                  <TableCell className="font-medium">{report.child.fullName}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link
+                      href={familyRecordHref({ id: report.child.family?.id }, { id: report.child.id }, report.child.family?.name ?? report.child.fullName)}
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {report.child.fullName}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
+                  </TableCell>
                   <TableCell>{report.classroom?.name ?? "No classroom"}</TableCell>
                   <TableCell>{report._count.meals} meals · {report._count.naps} naps · {report._count.activities} activities</TableCell>
                   <TableCell><Badge variant={report.sentAt ? "default" : "outline"}>{report.sentAt ? "sent" : "draft"}</Badge></TableCell>
                   <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{report.suppliesNeeded ?? report.teacherNote ?? report.mood ?? ""}</TableCell>
+                  <TableCell>
+                    <Link href={familyRecordHref({ id: report.child.family?.id }, { id: report.child.id }, report.child.family?.name ?? report.child.fullName)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      Profile
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2772,7 +2911,7 @@ export type ParentMediaReviewPageData = {
       preferredName: string | null;
       ageGroup: string;
       photoVideoPermission: boolean;
-      family: { name: string; centerId: string | null };
+      family: { id?: string | null; name: string; centerId: string | null };
     };
     classroom: { name: string } | null;
     uploadedBy: { name: string; email: string; role: string } | null;
@@ -2837,7 +2976,15 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
                       <Badge variant="outline">{item.child.ageGroup}</Badge>
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold">{item.child.fullName}</h2>
+                      <h2 className="text-xl font-semibold">
+                        <Link
+                          href={familyRecordHref(item.child.family, { id: item.child.id }, item.child.family.name)}
+                          className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {item.child.fullName}
+                          <ArrowRight className="size-4" aria-hidden="true" />
+                        </Link>
+                      </h2>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {item.child.family.name} · {item.classroom?.name ?? "No classroom"} · {item.center?.crmLocationId ?? item.center?.name ?? "No center"}
                       </p>
@@ -2864,6 +3011,10 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
                       Approving confirms the center has verified photo/video permission for this child and shares this photo in the parent portal.
                     </p>
                     <MediaReviewActions mediaId={item.id} childName={item.child.fullName} />
+                    <Link href={familyRecordHref(item.child.family, { id: item.child.id }, item.child.family.name)} className={buttonVariants({ variant: "outline", size: "sm", className: "mt-3 w-full" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      Open child profile
+                    </Link>
                   </div>
                 </div>
               </CardContent>
@@ -4486,6 +4637,11 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
 }
 
 export type BillingInvoicesPageData = {
+  initialSelection?: {
+    familyId?: string;
+    centerId?: string;
+    searchQuery?: string;
+  };
   workbench: {
     families: BillingWorkbenchFamily[];
     centers: BillingWorkbenchCenter[];
@@ -4498,7 +4654,12 @@ export type BillingInvoicesPageData = {
     status: string;
     dueDate: Date | string;
     totalCents: number;
-    billingAccount: { balanceCents: number; family: { name: string; billingEmail: string | null; centerId: string | null } };
+    billingAccount: {
+      id: string;
+      balanceCents: number;
+      family: { id: string; name: string; billingEmail: string | null; centerId: string | null };
+      paymentMethodManagement: InvoiceStoredPaymentActionData["billingAccount"]["paymentMethodManagement"];
+    };
     _count: { items: number };
   }>;
   ledgerEntries: Array<{
@@ -4508,7 +4669,7 @@ export type BillingInvoicesPageData = {
     amountCents: number;
     balanceAfterCents: number | null;
     effectiveAt: Date | string;
-    billingAccount: { family: { name: string; billingEmail: string | null; centerId: string | null } };
+    billingAccount: { family: { id: string; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
     total: number;
@@ -4561,6 +4722,16 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
+  function billingFamilyHref(family: { id: string; centerId: string | null }) {
+    const params = new URLSearchParams({ familyId: family.id });
+    if (family.centerId) params.set("centerId", family.centerId);
+    return `/billing-invoices?${params.toString()}#billing-workbench`;
+  }
+
+  function familyProfileHref(family: { id: string }) {
+    return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -4661,10 +4832,14 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       <BillingWorkbench
+        key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
         families={data.workbench.families}
         centers={data.workbench.centers}
         products={data.workbench.products}
         tuitionPlans={data.workbench.tuitionPlans}
+        initialFamilyId={data.initialSelection?.familyId}
+        initialCenterId={data.initialSelection?.centerId}
+        searchQuery={data.initialSelection?.searchQuery}
       />
       <Card className="glass-panel">
         <CardHeader>
@@ -4681,17 +4856,43 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
                 <TableHead>Due</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Items</TableHead>
+                <TableHead>Payment Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.invoices.map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="font-medium">{invoice.number}</TableCell>
-                  <TableCell>{invoice.billingAccount.family.name}</TableCell>
+                <TableRow key={invoice.id} className="group">
+                  <TableCell className="font-medium">
+                    <Link
+                      href={billingFamilyHref(invoice.billingAccount.family)}
+                      className="inline-flex items-center gap-1 underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {invoice.number}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Link
+                      href={familyProfileHref(invoice.billingAccount.family)}
+                      className="font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {invoice.billingAccount.family.name}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">{invoice.billingAccount.family.billingEmail ?? "No billing email"}</div>
+                  </TableCell>
                   <TableCell><Badge variant={invoice.status === "OPEN" ? "outline" : "default"}>{invoice.status}</Badge></TableCell>
                   <TableCell>{formatDate(invoice.dueDate)}</TableCell>
                   <TableCell>{money(invoice.totalCents)}</TableCell>
                   <TableCell>{invoice._count.items}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={familyProfileHref(invoice.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <ArrowRight data-icon="inline-start" />
+                        Family
+                      </Link>
+                      <InvoiceStoredPaymentButton invoice={invoice} />
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -4717,13 +4918,29 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
             </TableHeader>
             <TableBody>
               {data.ledgerEntries.map((entry) => (
-                <TableRow key={entry.id}>
+                <TableRow key={entry.id} className="group">
                   <TableCell>{formatDate(entry.effectiveAt)}</TableCell>
-                  <TableCell>{entry.billingAccount.family.name}</TableCell>
+                  <TableCell>
+                    <Link
+                      href={familyProfileHref(entry.billingAccount.family)}
+                      className="font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {entry.billingAccount.family.name}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">{entry.billingAccount.family.billingEmail ?? "No billing email"}</div>
+                  </TableCell>
                   <TableCell><Badge variant="outline">{entry.type}</Badge></TableCell>
                   <TableCell>{entry.description}</TableCell>
                   <TableCell>{money(entry.amountCents)}</TableCell>
-                  <TableCell>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</span>
+                      <Link href={billingFamilyHref(entry.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <ArrowRight data-icon="inline-start" />
+                        Account
+                      </Link>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.ledgerEntries.length ? (
@@ -4753,7 +4970,7 @@ export type PaymentsPageData = {
     dunningLastAttemptAt: Date | string | null;
     failureMessage: string | null;
     invoiceNumber: string | null;
-    billingAccount: { family: { name: string; billingEmail: string | null; centerId: string | null } };
+    billingAccount: { family: { id?: string | null; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
     total: number;
@@ -4829,13 +5046,20 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                 <TableHead>Dunning</TableHead>
                 <TableHead>Failure / Next step</TableHead>
                 <TableHead>External ID</TableHead>
+                <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.payments.map((payment) => (
-                <TableRow key={payment.id}>
+                <TableRow key={payment.id} className="group">
                   <TableCell>
-                    <div className="font-medium">{payment.billingAccount.family.name}</div>
+                    <Link
+                      href={familyRecordHref(payment.billingAccount.family, null, payment.billingAccount.family.name)}
+                      className="inline-flex items-center gap-1 font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {payment.billingAccount.family.name}
+                      <ArrowRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
                     <div className="text-xs text-muted-foreground">{payment.billingAccount.family.billingEmail ?? "No billing email"}</div>
                   </TableCell>
                   <TableCell>{payment.provider}</TableCell>
@@ -4866,11 +5090,17 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                     ) : null}
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>
+                  <TableCell>
+                    <Link href={billingRecordHref(payment.billingAccount.family, payment.billingAccount.family.name)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                      <ArrowRight data-icon="inline-start" />
+                      Billing
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.payments.length ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
+                  <TableCell colSpan={9} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  ArrowRight,
   Bell,
   Camera,
   CheckCheck,
@@ -88,6 +89,15 @@ type NotificationSummary = {
     readAt: string | null;
     createdAt: string;
   }>;
+};
+
+type GlobalSearchResult = {
+  id: string;
+  type: string;
+  label: string;
+  detail: string;
+  href: string;
+  badge?: string;
 };
 
 function notificationBodyUrl(body: string) {
@@ -390,6 +400,17 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResponse, setSearchResponse] = useState<{ query: string; results: GlobalSearchResult[]; error: string }>({
+    query: "",
+    results: [],
+    error: "",
+  });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchUserEmail = currentUser?.email ?? "";
+  const trimmedSearchQuery = searchQuery.trim();
+  const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
+  const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
+  const searchPending = trimmedSearchQuery.length >= 2 && searchResponse.query !== trimmedSearchQuery;
   const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
@@ -420,6 +441,32 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     if (storedTheme === "light") document.documentElement.classList.remove("dark");
   }, []);
 
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!searchUserEmail || query.length < 2) {
+      return;
+    }
+
+    const handle = window.setTimeout(() => {
+      fetch(`/api/global-search?q=${encodeURIComponent(query)}`)
+        .then((response) => response.json())
+        .then((json: { ok?: boolean; results?: GlobalSearchResult[]; error?: string }) => {
+          if (!json?.ok) {
+            setSearchResponse({ query, results: [], error: json?.error || "Search is unavailable." });
+            return;
+          }
+          setSearchResponse({ query, results: json.results ?? [], error: "" });
+        })
+        .catch(() => {
+          setSearchResponse({ query, results: [], error: "Search is unavailable." });
+        });
+    }, 180);
+
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [searchQuery, searchUserEmail]);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -429,7 +476,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   function submitGlobalSearch() {
     const query = searchQuery.trim();
     if (!query) return;
-    router.push(`/${searchDestination}?q=${encodeURIComponent(query)}`);
+    const firstResult = query.length >= 2 ? activeSearchResults[0] : undefined;
+    setSearchOpen(false);
+    router.push(firstResult?.href ?? `/${searchDestination}?q=${encodeURIComponent(query)}`);
   }
 
   function toggleTheme() {
@@ -464,14 +513,64 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               <div className="relative w-full max-w-2xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  aria-autocomplete="list"
+                  aria-controls="global-search-results"
+                  aria-expanded={searchOpen && searchQuery.trim().length >= 2}
                   className="h-11 rounded-xl border-border/70 bg-card/70 pl-10"
                   placeholder={searchPlaceholder}
+                  role="combobox"
                   value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onBlur={() => {
+                    window.setTimeout(() => setSearchOpen(false), 120);
+                  }}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setSearchOpen(true);
+                  }}
+                  onFocus={() => setSearchOpen(true)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter") submitGlobalSearch();
                   }}
                 />
+                {searchOpen && searchQuery.trim().length >= 2 ? (
+                  <div
+                    id="global-search-results"
+                    className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl shadow-black/15"
+                    role="listbox"
+                  >
+                    <div className="border-b px-3 py-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Search records
+                    </div>
+                    {searchPending ? (
+                      <div className="px-3 py-4 text-sm text-muted-foreground">Searching families, billing, leads, and child records...</div>
+                    ) : activeSearchError ? (
+                      <div className="px-3 py-4 text-sm text-destructive">{activeSearchError}</div>
+                    ) : activeSearchResults.length ? (
+                      <div className="max-h-[28rem] overflow-auto p-2">
+                        {activeSearchResults.map((result) => (
+                          <Link
+                            key={result.id}
+                            href={result.href}
+                            className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            role="option"
+                            onClick={() => setSearchOpen(false)}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">{result.label}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                            </span>
+                            {result.badge ? <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">{result.badge}</Badge> : null}
+                            <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-muted-foreground">
+                        No matching records. Press Enter to search {searchDestination.replaceAll("-", " ")}.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">

@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
+import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
+import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +57,8 @@ type ChildRecord = {
   feedingNotes?: string | null;
   pottyNotes?: string | null;
   developmentalNotes?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
   allergies: AllergyRecord[];
   medicalNotes: MedicalNoteRecord[];
   documents: DocumentRecord[];
@@ -98,6 +102,15 @@ type DocumentRecord = {
   status: string;
   expiresAt: Date | string | null;
   restricted: boolean;
+  createdAt?: Date | string | null;
+};
+
+type FamilyNoteRecord = {
+  id: string;
+  body: string;
+  restricted: boolean;
+  createdAt: Date | string;
+  user?: { name: string | null; email: string | null } | null;
 };
 
 type PaymentMethodManagementRecord = {
@@ -115,17 +128,21 @@ type PaymentMethodManagementRecord = {
 export type EditableFamilyRecord = {
   id: string;
   centerId: string | null;
+  centerName?: string | null;
   name: string;
   billingEmail: string | null;
   address?: string | null;
   notes?: string | null;
   custodyNotes: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
   customFields?: unknown;
   guardians: GuardianRecord[];
   children: ChildRecord[];
   pickups: AuthorizedPickupRecord[];
   emergencyContacts: EmergencyContactRecord[];
   documents: DocumentRecord[];
+  notesList?: FamilyNoteRecord[];
   billingAccount?: {
     id: string;
     balanceCents: number;
@@ -138,11 +155,24 @@ type Props = {
   families: EditableFamilyRecord[];
   centers: CenterOption[];
   ageGroups?: string[];
+  initialFamilyId?: string;
+  initialChildId?: string;
+  searchQuery?: string;
 };
 
 const enrollmentStatuses = ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break", "withdrawn", "graduated", "inactive"];
 const communicationMethods = ["email", "phone", "sms"];
 const documentStatuses = ["REQUESTED", "SUBMITTED", "APPROVED", "REJECTED", "EXPIRED"];
+const profileSectionLinks = [
+  ["Overview", "family-overview"],
+  ["Guardians", "family-guardians"],
+  ["Pickups", "family-contacts"],
+  ["Children", "family-children"],
+  ["Billing", "family-billing"],
+  ["Documents", "family-documents"],
+  ["Notes", "family-notes"],
+  ["Activity", "family-activity"],
+] as const;
 
 function toDateInput(value: Date | string | null | undefined) {
   if (!value) return "";
@@ -170,11 +200,149 @@ function formatDate(value: string | Date | null | undefined) {
   }).format(date);
 }
 
+function formatActivityDate(value: string | Date | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
-export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups }: Props) {
+type FamilyActivityItem = {
+  id: string;
+  title: string;
+  detail: string;
+  date: string | Date | null | undefined;
+};
+
+function buildFamilyActivity(family: EditableFamilyRecord | null, paymentMethod: PaymentMethodManagementRecord | null) {
+  if (!family) return [];
+  const items: FamilyActivityItem[] = [
+    {
+      id: `family-updated-${family.id}`,
+      title: "Family profile updated",
+      detail: `${family.name} family-level data`,
+      date: family.updatedAt ?? family.createdAt,
+    },
+    {
+      id: `family-created-${family.id}`,
+      title: "Family profile created",
+      detail: family.centerName ?? "School not set",
+      date: family.createdAt,
+    },
+  ];
+
+  for (const child of family.children) {
+    items.push({
+      id: `child-updated-${child.id}`,
+      title: "Child profile updated",
+      detail: `${child.fullName} · ${child.enrollmentStatus.replaceAll("_", " ")}`,
+      date: child.updatedAt ?? child.createdAt,
+    });
+  }
+
+  for (const document of family.documents) {
+    items.push({
+      id: `family-document-${document.id}`,
+      title: "Family document record",
+      detail: `${document.name} · ${document.status.toLowerCase()}`,
+      date: document.createdAt,
+    });
+  }
+
+  for (const child of family.children) {
+    for (const document of child.documents) {
+      items.push({
+        id: `child-document-${document.id}`,
+        title: "Child document record",
+        detail: `${child.fullName} · ${document.name} · ${document.status.toLowerCase()}`,
+        date: document.createdAt,
+      });
+    }
+  }
+
+  for (const note of family.notesList ?? []) {
+    items.push({
+      id: `note-${note.id}`,
+      title: note.restricted ? "Restricted family note" : "Family note",
+      detail: `${note.user?.name ?? note.user?.email ?? "Staff"} · ${note.body.slice(0, 96)}`,
+      date: note.createdAt,
+    });
+  }
+
+  if (paymentMethod?.lastUpdatedAt) {
+    items.push({
+      id: `payment-method-${family.id}`,
+      title: "Payment method updated",
+      detail: paymentMethod.paymentMethodLabel ?? "Saved payment method",
+      date: paymentMethod.lastUpdatedAt,
+    });
+  }
+
+  return items
+    .filter((item) => item.date)
+    .sort((left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime())
+    .slice(0, 10);
+}
+
+function familySearchText(family: EditableFamilyRecord) {
+  return [
+    family.name,
+    family.billingEmail,
+    family.address,
+    family.centerName,
+    family.guardians.map((guardian) => [guardian.fullName, guardian.email, guardian.phone, guardian.relation].filter(Boolean).join(" ")).join(" "),
+    family.children.map((child) => [child.fullName, child.preferredName, child.ageGroup, child.enrollmentStatus].filter(Boolean).join(" ")).join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function pickInitialFamily(families: EditableFamilyRecord[], initialFamilyId?: string, searchQuery?: string) {
+  const byId = initialFamilyId ? families.find((family) => family.id === initialFamilyId) : null;
+  if (byId) return byId;
+  const query = searchQuery?.trim().toLowerCase();
+  if (query) {
+    const bySearch = families.find((family) => familySearchText(family).includes(query));
+    if (bySearch) return bySearch;
+  }
+  return families[0] ?? null;
+}
+
+function pickInitialChild(family: EditableFamilyRecord | null, initialChildId?: string, searchQuery?: string) {
+  if (!family) return null;
+  const byId = initialChildId ? family.children.find((child) => child.id === initialChildId) : null;
+  if (byId) return byId;
+  const query = searchQuery?.trim().toLowerCase();
+  if (query) {
+    const bySearch = family.children.find((child) =>
+      [child.fullName, child.preferredName, child.ageGroup, child.enrollmentStatus].filter(Boolean).join(" ").toLowerCase().includes(query),
+    );
+    if (bySearch) return bySearch;
+  }
+  return family.children[0] ?? null;
+}
+
+function familyProfileHref(family: EditableFamilyRecord | null | undefined) {
+  if (!family) return "/family-detail";
+  return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+}
+
+function familyBillingHref(family: EditableFamilyRecord | null | undefined) {
+  if (!family) return "/billing-invoices#billing-workbench";
+  const params = new URLSearchParams({ familyId: family.id });
+  if (family.centerId) params.set("centerId", family.centerId);
+  return `/billing-invoices?${params.toString()}#billing-workbench`;
+}
+
+export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups, initialFamilyId, initialChildId, searchQuery }: Props) {
   const router = useRouter();
   const availableAgeGroups = useMemo(
     () => mergeAgeGroupOptions(
@@ -184,10 +352,18 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     ),
     [centers, configuredAgeGroups, families],
   );
-  const [selectedFamilyId, setSelectedFamilyId] = useState(families[0]?.id ?? "");
+  const initialFamily = useMemo(
+    () => pickInitialFamily(families, initialFamilyId, searchQuery),
+    [families, initialFamilyId, searchQuery],
+  );
+  const [selectedFamilyId, setSelectedFamilyId] = useState(initialFamily?.id ?? "");
   const selectedFamily = useMemo(
     () => families.find((family) => family.id === selectedFamilyId) ?? families[0] ?? null,
     [families, selectedFamilyId],
+  );
+  const initialChild = useMemo(
+    () => pickInitialChild(selectedFamily, initialChildId, searchQuery),
+    [initialChildId, searchQuery, selectedFamily],
   );
 
   const [familyCenterId, setFamilyCenterId] = useState(selectedFamily?.centerId ?? centers[0]?.id ?? "");
@@ -225,24 +401,24 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [emergencyContactPhone, setEmergencyContactPhone] = useState(selectedEmergencyContact?.phone ?? "");
   const [emergencyContactRelation, setEmergencyContactRelation] = useState(selectedEmergencyContact?.relation ?? "");
 
-  const [selectedChildId, setSelectedChildId] = useState(selectedFamily?.children[0]?.id ?? "");
+  const [selectedChildId, setSelectedChildId] = useState(initialChild?.id ?? "");
   const selectedChild = selectedChildId
     ? selectedFamily?.children.find((child) => child.id === selectedChildId) ?? null
     : null;
-  const [childName, setChildName] = useState(selectedChild?.fullName ?? "");
-  const [preferredName, setPreferredName] = useState(selectedChild?.preferredName ?? "");
-  const [dateOfBirth, setDateOfBirth] = useState(toDateInput(selectedChild?.dateOfBirth));
-  const [ageGroup, setAgeGroup] = useState(selectedChild?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [enrollmentStatus, setEnrollmentStatus] = useState(selectedChild?.enrollmentStatus ?? "enrolled");
-  const [startDate, setStartDate] = useState(toDateInput(selectedChild?.startDate));
-  const [classroomId, setClassroomId] = useState(selectedChild?.classroomId ?? "none");
-  const [childScheduleNotes, setChildScheduleNotes] = useState(scheduleNotes(selectedChild?.schedule));
-  const [napNotes, setNapNotes] = useState(selectedChild?.napNotes ?? "");
-  const [feedingNotes, setFeedingNotes] = useState(selectedChild?.feedingNotes ?? "");
-  const [pottyNotes, setPottyNotes] = useState(selectedChild?.pottyNotes ?? "");
-  const [developmentalNotes, setDevelopmentalNotes] = useState(selectedChild?.developmentalNotes ?? "");
-  const [photoVideoPermission, setPhotoVideoPermission] = useState(Boolean(selectedChild?.photoVideoPermission));
-  const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(selectedChild?.fieldTripPermission));
+  const [childName, setChildName] = useState(initialChild?.fullName ?? "");
+  const [preferredName, setPreferredName] = useState(initialChild?.preferredName ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(toDateInput(initialChild?.dateOfBirth));
+  const [ageGroup, setAgeGroup] = useState(initialChild?.ageGroup ?? defaultAgeGroupOptions[0]);
+  const [enrollmentStatus, setEnrollmentStatus] = useState(initialChild?.enrollmentStatus ?? "enrolled");
+  const [startDate, setStartDate] = useState(toDateInput(initialChild?.startDate));
+  const [classroomId, setClassroomId] = useState(initialChild?.classroomId ?? "none");
+  const [childScheduleNotes, setChildScheduleNotes] = useState(scheduleNotes(initialChild?.schedule));
+  const [napNotes, setNapNotes] = useState(initialChild?.napNotes ?? "");
+  const [feedingNotes, setFeedingNotes] = useState(initialChild?.feedingNotes ?? "");
+  const [pottyNotes, setPottyNotes] = useState(initialChild?.pottyNotes ?? "");
+  const [developmentalNotes, setDevelopmentalNotes] = useState(initialChild?.developmentalNotes ?? "");
+  const [photoVideoPermission, setPhotoVideoPermission] = useState(Boolean(initialChild?.photoVideoPermission));
+  const [fieldTripPermission, setFieldTripPermission] = useState(Boolean(initialChild?.fieldTripPermission));
 
   const [selectedAllergyId, setSelectedAllergyId] = useState(selectedChild?.allergies[0]?.id ?? "");
   const selectedAllergy = selectedAllergyId
@@ -335,10 +511,21 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     : childDuplicateCandidates[0]?.candidateId || "";
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
   const selectedPaymentMethod = selectedBillingAccount?.paymentMethodManagement ?? null;
+  const activityItems = useMemo(
+    () => buildFamilyActivity(selectedFamily, selectedPaymentMethod),
+    [selectedFamily, selectedPaymentMethod],
+  );
   const selectedAutopayStatus = selectedPaymentMethod?.autopayStatus ?? (selectedBillingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const documentRecordCount =
     (selectedFamily?.documents.length ?? 0) +
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
+  const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
+  const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
+  const selectedGuardianLabel = selectedGuardian?.fullName ?? (guardianName.trim() ? `${guardianName.trim()} (new parent)` : "No parent selected");
+  const editingTargetLabel = selectedFamily
+    ? `${selectedFamily.name} / ${selectedChild?.fullName ?? "family account"}`
+    : "No family selected";
+  const selectedFamilyUpdatedAt = formatDate(selectedFamily?.updatedAt ?? selectedFamily?.createdAt);
 
   function loadGuardian(guardian: GuardianRecord | null) {
     setSelectedGuardianId(guardian?.id ?? "");
@@ -649,6 +836,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
       setErrorMessage("Create a billing account before saving a family payment method.");
       return;
     }
+    if (action !== "portal") {
+      const confirmed = window.confirm(
+        `You are editing the billing payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}. Continue?`,
+      );
+      if (!confirmed) return;
+    }
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -772,7 +965,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   }
 
   return (
-    <Card className="glass-panel">
+    <Card id="family-editor" className="glass-panel scroll-mt-28">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -801,6 +994,37 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </Alert>
         ) : null}
 
+        <EntityHeader
+          sticky
+          eyebrow="Currently editing family data"
+          title={selectedFamily?.name ?? "Choose a family"}
+          subtitle={`You are editing: ${editingTargetLabel}`}
+          initials={initialsFromName(selectedFamily?.name)}
+          status={<ContextBadge label="School" value={selectedCenterLabel} />}
+          actions={
+            selectedFamily ? (
+              <>
+                <a href={familyBillingHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  <CreditCard data-icon="inline-start" />
+                  Open billing
+                </a>
+                <Link href={familyProfileHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  <ArrowUpRight data-icon="inline-start" />
+                  View full profile
+                </Link>
+              </>
+            ) : null
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <SummaryMetric label="Record type" value="Family account" detail={`Updated ${selectedFamilyUpdatedAt}`} />
+            <SummaryMetric label="Selected child" value={selectedChildLabel} detail={selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"} />
+            <SummaryMetric label="Selected parent" value={selectedGuardianLabel} detail={selectedGuardian?.isBillingContact ? "Billing contact" : selectedGuardian?.relation ?? "Guardian"} />
+            <SummaryMetric label="Billing account" value={selectedBillingAccount ? money(selectedBillingAccount.balanceCents) : "Not linked"} detail={`Autopay ${selectedAutopayStatus}`} />
+            <SummaryMetric label="Records" value={`${selectedFamily?.children.length ?? 0} children`} detail={`${documentRecordCount} docs, ${selectedFamily?.guardians.length ?? 0} contacts`} />
+          </div>
+        </EntityHeader>
+
         <div className="space-y-1">
           <Label>Family</Label>
           <Select value={selectedFamily?.id ?? ""} onValueChange={(value) => value && loadFamily(value)}>
@@ -813,7 +1037,22 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </Select>
         </div>
 
-        <section className="space-y-3">
+        <nav
+          aria-label="Family profile sections"
+          className="sticky top-20 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-xl border bg-background/85 p-2 shadow-lg shadow-black/5 backdrop-blur-xl"
+        >
+          {profileSectionLinks.map(([label, target]) => (
+            <a
+              key={target}
+              href={`#${target}`}
+              className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground transition hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <section id="family-overview" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Family account</div>
           {hasCustodyWarning({ custodyNotes }) ? (
             <Alert variant="destructive">
@@ -852,7 +1091,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Label>Restricted custody note (staff only)</Label>
               <Input value={custodyNotes} onChange={(event) => setCustodyNotes(event.target.value)} />
             </div>
-            <div className="space-y-1 md:col-span-3">
+            <div id="family-notes" className="scroll-mt-36 space-y-1 md:col-span-3">
               <Label>Internal family notes</Label>
               <Textarea value={familyNotes} onChange={(event) => setFamilyNotes(event.target.value)} />
             </div>
@@ -885,7 +1124,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               </p>
             )}
           </div>
-          <div className="rounded-xl border bg-background/40 p-4">
+          <div id="family-billing" className="scroll-mt-36 rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">Family payment method</div>
@@ -991,7 +1230,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           )}
         </section>
 
-        <section className="space-y-3">
+        <section id="family-guardians" className="scroll-mt-36 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-sm font-medium">Parent / guardian contacts</div>
             <Badge variant="outline">
@@ -1116,7 +1355,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </div>
         </section>
 
-        <section className="space-y-3">
+        <section id="family-contacts" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Authorized pickups and emergency contacts</div>
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border bg-background/40 p-4">
@@ -1260,7 +1499,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           </div>
         </section>
 
-        <section className="space-y-3">
+        <section id="family-children" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Child profile</div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
@@ -1383,7 +1622,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             <Save data-icon="inline-start" />
             {selectedChild ? "Save child" : "Add child"}
           </Button>
-          <div className="rounded-xl border bg-background/40 p-4">
+          <div id="family-documents" className="scroll-mt-36 rounded-xl border bg-background/40 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">Child duplicate matching</div>
@@ -1663,6 +1902,61 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 <Trash2 data-icon="inline-start" />
                 Remove document
               </Button>
+            </div>
+          </div>
+        </section>
+
+        <section id="family-activity" className="scroll-mt-36 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Notes and activity</div>
+              <p className="text-xs text-muted-foreground">
+                Persistent family notes and recent record timestamps for the selected profile.
+              </p>
+            </div>
+            <Badge variant="outline">
+              {(selectedFamily?.notesList?.length ?? 0) + activityItems.length} item{(selectedFamily?.notesList?.length ?? 0) + activityItems.length === 1 ? "" : "s"}
+            </Badge>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 text-sm font-medium">Recent persistent notes</div>
+              {selectedFamily?.notesList?.length ? (
+                <div className="space-y-3">
+                  {selectedFamily.notesList.slice(0, 5).map((note) => (
+                    <div key={note.id} className="rounded-lg border bg-card/45 p-3 text-sm">
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">{note.user?.name ?? note.user?.email ?? "Staff note"}</span>
+                        <Badge variant={note.restricted ? "secondary" : "outline"}>{note.restricted ? "Restricted" : "General"}</Badge>
+                      </div>
+                      <p className="leading-6 text-muted-foreground">{note.body}</p>
+                      <div className="mt-2 text-xs text-muted-foreground">{formatActivityDate(note.createdAt)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                  No persistent family notes have been created yet. Saved internal notes still appear in the family overview.
+                </p>
+              )}
+            </div>
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 text-sm font-medium">Recent activity</div>
+              {activityItems.length ? (
+                <div className="space-y-3">
+                  {activityItems.map((item) => (
+                    <div key={item.id} className="grid gap-1 rounded-lg border bg-card/45 p-3 text-sm">
+                      <div className="font-medium">{item.title}</div>
+                      <div className="text-muted-foreground">{item.detail}</div>
+                      <div className="text-xs text-muted-foreground">{formatActivityDate(item.date)}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-lg border bg-card/50 p-3 text-sm text-muted-foreground">
+                  Activity appears after profile, document, billing, or note records have timestamps.
+                </p>
+              )}
             </div>
           </div>
         </section>

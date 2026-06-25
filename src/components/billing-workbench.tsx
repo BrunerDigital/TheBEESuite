@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, ReceiptText, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, ReceiptText, Rows3, Send } from "lucide-react";
+import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +22,7 @@ export type BillingWorkbenchFamily = {
   centerId: string | null;
   name: string;
   billingEmail: string | null;
+  updatedAt?: Date | string | null;
   guardians: Array<{
     id: string;
     fullName: string;
@@ -91,6 +94,9 @@ type Props = {
   centers: BillingWorkbenchCenter[];
   products: BillingWorkbenchProduct[];
   tuitionPlans: BillingWorkbenchTuitionPlan[];
+  initialFamilyId?: string;
+  initialCenterId?: string;
+  searchQuery?: string;
 };
 
 function todayDate() {
@@ -168,10 +174,49 @@ function paymentRequestEmailOptions(family: BillingWorkbenchFamily | null) {
   return options.sort((a, b) => a.label.localeCompare(b.label));
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans }: Props) {
+function billingFamilySearchText(family: BillingWorkbenchFamily) {
+  return [
+    family.name,
+    family.billingEmail,
+    family.guardians.map((guardian) => [guardian.fullName, guardian.email].filter(Boolean).join(" ")).join(" "),
+    family.children.map((child) => [child.fullName, child.ageGroup, child.enrollmentStatus, child.tuitionAssignment?.tuitionPlanName].filter(Boolean).join(" ")).join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function pickInitialBillingFamily(families: BillingWorkbenchFamily[], initialFamilyId?: string, searchQuery?: string) {
+  const byId = initialFamilyId ? families.find((family) => family.id === initialFamilyId) : null;
+  if (byId) return byId;
+  const query = searchQuery?.trim().toLowerCase();
+  if (query) {
+    const bySearch = families.find((family) => billingFamilySearchText(family).includes(query));
+    if (bySearch) return bySearch;
+  }
+  return families[0] ?? null;
+}
+
+function familyProfileHref(family: BillingWorkbenchFamily | null | undefined) {
+  if (!family) return "/family-detail";
+  return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+}
+
+function formatShortDate(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, searchQuery }: Props) {
   const router = useRouter();
-  const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
-  const [familyId, setFamilyId] = useState("");
+  const initialFamily = useMemo(
+    () => pickInitialBillingFamily(families, initialFamilyId, searchQuery),
+    [families, initialFamilyId, searchQuery],
+  );
+  const initialCenter = initialCenterId && centers.some((center) => center.id === initialCenterId)
+    ? initialCenterId
+    : initialFamily?.centerId ?? centers[0]?.id ?? "";
+  const [centerId, setCenterId] = useState(initialCenter);
+  const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(tuitionPlans[0]?.id ?? "");
   const [productId, setProductId] = useState(products[0]?.id ?? "");
@@ -251,9 +296,28 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     [families, planAgeGroup, selectedCenter, tuitionPlans],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
+  const selectedFamilyProfileHref = familyProfileHref(selectedFamily);
+  const selectedChildSummary = selectedChildren.length
+    ? `${selectedChildren.length} child${selectedChildren.length === 1 ? "" : "ren"}`
+    : "No children";
+  const selectedBillingAccountLabel = selectedBillingAccount?.id ? `${selectedBillingAccount.id.slice(0, 8)}...` : "No account";
+
+  function billingContextDescription(childName?: string) {
+    return [
+      selectedFamily?.name ?? "selected family",
+      selectedCenter ? centerLabel(selectedCenter) : "selected school",
+      childName,
+    ].filter(Boolean).join(" / ");
+  }
+
+  function confirmBillingAction(action: string, childName?: string) {
+    if (!selectedFamily) return false;
+    return window.confirm(`You are about to ${action} for ${billingContextDescription(childName)}. Continue?`);
+  }
 
   function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
+    if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     if (action === "setup" && paymentMethodCategory === "card") {
       const accepted = window.confirm(
         "Card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
@@ -405,6 +469,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
 
   function submitSingle() {
     if (!selectedFamily) return setErrorMessage("Choose a family before creating an invoice.");
+    const childName = selectedChildren.find((child) => child.id === childId)?.fullName;
+    if (!confirmBillingAction("create an invoice", childName)) return;
     submit({
       mode: "single",
       familyId: selectedFamily.id,
@@ -419,6 +485,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
     if (!selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId) {
       return setErrorMessage("Choose a family, child, and tuition plan before charging tuition.");
     }
+    if (!confirmBillingAction("charge recurring tuition now", selectedAssignmentChild.fullName)) return;
     submit({
       mode: "single",
       familyId: selectedFamily.id,
@@ -432,6 +499,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   }
 
   function submitBatch() {
+    const confirmed = window.confirm(
+      `You are about to run batch billing for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus}). Continue?`,
+    );
+    if (!confirmed) return;
     submit({
       mode: "batch",
       centerId,
@@ -446,6 +517,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
 
   function submitAdjustment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting an adjustment.");
+    if (!confirmBillingAction(`post a ${adjustmentType} adjustment`)) return;
     submit({
       mode: "adjustment",
       familyId: selectedFamily.id,
@@ -457,6 +529,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
 
   function submitAgencyPayment() {
     if (!selectedFamily) return setErrorMessage("Choose a family before posting an agency payment.");
+    const childName = selectedChildren.find((child) => child.id === agencyChildId)?.fullName;
+    if (!confirmBillingAction("post an agency payment", childName)) return;
     submit({
       mode: "agencyPayment",
       familyId: selectedFamily.id,
@@ -498,6 +572,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
 
   function submitAssignment() {
     if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving recurring tuition.");
+    if (!confirmBillingAction("save recurring tuition", selectedAssignmentChild.fullName)) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -576,7 +651,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
   }
 
   return (
-    <Card className="glass-panel">
+    <Card id="billing-workbench" className="glass-panel scroll-mt-28">
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -604,6 +679,31 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans }: 
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
+
+        <EntityHeader
+          sticky
+          eyebrow="Currently editing billing data"
+          title={selectedFamily?.name ?? "Choose a family"}
+          subtitle={`Billing account context: ${billingContextDescription()}`}
+          initials={initialsFromName(selectedFamily?.name)}
+          status={<ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />}
+          actions={
+            selectedFamily ? (
+              <Link href={selectedFamilyProfileHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <ArrowUpRight data-icon="inline-start" />
+                Open family
+              </Link>
+            ) : null
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
+            <SummaryMetric label="Billing account" value={selectedBillingAccountLabel} detail={`Updated ${formatShortDate(selectedFamily?.updatedAt)}`} />
+            <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
+            <SummaryMetric label="Family contacts" value={`${selectedPaymentRequestEmailOptions.length} billing emails`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
+            <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
+          </div>
+        </EntityHeader>
 
         <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <div className="space-y-1">

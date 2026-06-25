@@ -27,6 +27,7 @@ const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSIO
 const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "requirements"];
 
 export type StripePaymentMethodCategory = "default" | "ach" | "card" | "link_bank";
+export type StripeBankAccountVerificationMethod = "automatic" | "instant";
 
 export type StripeCheckoutFeePolicy = {
   paymentMethodCategory?: StripePaymentMethodCategory;
@@ -568,6 +569,7 @@ export async function createStripeCheckoutSession({
   connectedAccountId,
   applicationFeeAmountCents = 0,
   paymentMethodConfigurationId,
+  bankAccountVerificationMethod,
   idempotencyKey,
   tenantId,
   credentials,
@@ -585,6 +587,7 @@ export async function createStripeCheckoutSession({
   connectedAccountId?: string | null;
   applicationFeeAmountCents?: number;
   paymentMethodConfigurationId?: string | null;
+  bankAccountVerificationMethod?: StripeBankAccountVerificationMethod | null;
   onBehalfOfConnectedAccount?: boolean;
   idempotencyKey?: string | null;
   tenantId?: string | null;
@@ -622,6 +625,10 @@ export async function createStripeCheckoutSession({
 
   if (paymentMethodConfigurationId) {
     body.set("payment_method_configuration", paymentMethodConfigurationId);
+  }
+  if (bankAccountVerificationMethod === "instant") {
+    body.set("payment_method_options[us_bank_account][verification_method]", "instant");
+    body.set("payment_method_options[us_bank_account][financial_connections][permissions][0]", "payment_method");
   }
 
   if (connectedAccountId) {
@@ -672,6 +679,7 @@ export async function createStripeOffSessionPaymentIntent({
   connectedAccountId,
   applicationFeeAmountCents = 0,
   idempotencyKey,
+  descriptionLabel,
   tenantId,
   credentials,
 }: {
@@ -688,6 +696,7 @@ export async function createStripeOffSessionPaymentIntent({
   applicationFeeAmountCents?: number;
   onBehalfOfConnectedAccount?: boolean;
   idempotencyKey?: string | null;
+  descriptionLabel?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { paymentIntent?: StripePaymentIntentSnapshot }> {
@@ -699,13 +708,13 @@ export async function createStripeOffSessionPaymentIntent({
     return { ok: false, configured: true, provider: "stripe", error: "Payment amount must be greater than zero." };
   }
   if (!clean(customerId).startsWith("cus_")) {
-    return { ok: false, configured: true, provider: "stripe", error: "A Stripe customer is required for autopay." };
+    return { ok: false, configured: true, provider: "stripe", error: "A Stripe customer is required for saved-method payment." };
   }
   if (!clean(paymentMethodId)) {
-    return { ok: false, configured: true, provider: "stripe", error: "A saved Stripe payment method is required for autopay." };
+    return { ok: false, configured: true, provider: "stripe", error: "A saved Stripe payment method is required." };
   }
 
-  const description = `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber} autopay`;
+  const description = `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber} ${clean(descriptionLabel) || "saved-method payment"}`;
   const body = new URLSearchParams({
     amount: String(amountCents),
     currency: "usd",

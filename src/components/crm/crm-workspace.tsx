@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Bot,
@@ -439,9 +440,12 @@ function subscribeCrmSavedViews(callback: () => void) {
 }
 
 export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
+  const searchParams = useSearchParams();
+  const routeQuery = searchParams.get("q") ?? "";
   const [leads, setLeads] = useState(initialLeads);
   const [selectedCenter, setSelectedCenter] = useState("all");
-  const [query, setQuery] = useState("");
+  const [queryState, setQueryState] = useState({ routeQuery, value: routeQuery });
+  const query = queryState.routeQuery === routeQuery ? queryState.value : routeQuery;
   const [stageFilter, setStageFilter] = useState<EnrollmentStage | "all">("all");
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>("all");
   const [createdRange, setCreatedRange] = useState<CreatedRangeFilter>("all");
@@ -616,7 +620,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   }
 
   function applySavedView(view: CrmSavedView) {
-    setQuery(view.query);
+    setQueryState({ routeQuery, value: view.query });
     setSelectedCenter(view.center === "all" || centers.some((center) => center.id === view.center) ? view.center : "all");
     setStageFilter(view.stage);
     setScoreFilter(view.score);
@@ -1161,7 +1165,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   <Input
                     className="pl-10"
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => setQueryState({ routeQuery, value: event.target.value })}
                     placeholder="Search parent, child, email, phone, program, or school..."
                   />
                 </div>

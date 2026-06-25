@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  canChargeSavedPaymentMethod,
   canCreatePaymentMethodManagementSession,
+  canRunAutopay,
   paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
 } from "../src/lib/payment-method-management";
@@ -64,6 +66,23 @@ test("payment method summary treats setup sessions as pending", () => {
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
   assert.equal(paymentMethodAutopayCategory(summary), "default");
+});
+
+test("saved payment method charge eligibility is separate from autopay enablement", () => {
+  const pendingAutopayWithSavedMethod = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_123",
+      stripePaymentMethodType: "us_bank_account",
+      stripePaymentMethodLast4: "6789",
+      autopayStatus: "pending",
+    },
+  });
+
+  assert.equal(pendingAutopayWithSavedMethod.autopayStatus, "pending");
+  assert.equal(canChargeSavedPaymentMethod(pendingAutopayWithSavedMethod), true);
+  assert.equal(canRunAutopay(pendingAutopayWithSavedMethod), false);
 });
 
 test("payment method management requires linked guardian or center billing access", () => {

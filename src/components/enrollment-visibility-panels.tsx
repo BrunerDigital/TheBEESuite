@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Eye, EyeOff, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { ArrowUpRight, CreditCard, Eye, EyeOff, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/family-record-editor";
@@ -100,14 +102,24 @@ export function FamilyProfilesEnrollmentPanel({
   graduatedChildren: number;
   ageGroups?: string[];
 }) {
-  const [showGraduated, setShowGraduated] = useState(false);
-  const visibleFamilies = showGraduated ? allFamilies : currentFamilies;
+  const searchParams = useSearchParams();
+  const requestedFamilyId = searchParams.get("familyId") ?? "";
+  const requestedChildId = searchParams.get("childId") ?? "";
+  const requestedSearchQuery = searchParams.get("q") ?? "";
+  const requestedFamilyIsGraduated = Boolean(
+    requestedFamilyId &&
+    !currentFamilies.some((family) => family.id === requestedFamilyId) &&
+    allFamilies.some((family) => family.id === requestedFamilyId),
+  );
+  const [showGraduated, setShowGraduated] = useState(requestedFamilyIsGraduated);
+  const effectiveShowGraduated = showGraduated || requestedFamilyIsGraduated;
+  const visibleFamilies = effectiveShowGraduated ? allFamilies : currentFamilies;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);
 
   return (
     <div className="flex flex-col gap-6">
       <EnrollmentVisibilityToggle
-        showGraduated={showGraduated}
+        showGraduated={effectiveShowGraduated}
         setShowGraduated={setShowGraduated}
         hiddenCount={graduatedChildren}
         noun="student record"
@@ -116,10 +128,13 @@ export function FamilyProfilesEnrollmentPanel({
 
       {visibleFamilies.length ? (
         <FamilyRecordEditor
-          key={showGraduated ? "all-families" : "current-families"}
+          key={`${effectiveShowGraduated ? "all-families" : "current-families"}-${requestedFamilyId}-${requestedChildId}-${requestedSearchQuery}`}
           families={visibleFamilies}
           centers={centers}
           ageGroups={ageGroups}
+          initialFamilyId={requestedFamilyId}
+          initialChildId={requestedChildId}
+          searchQuery={requestedSearchQuery}
         />
       ) : (
         <Card className="glass-panel">
@@ -137,19 +152,26 @@ export function FamilyProfilesEnrollmentPanel({
         <CardContent>
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Family</TableHead>
-                <TableHead>Guardians</TableHead>
-                <TableHead>Children</TableHead>
-                <TableHead>Records</TableHead>
-                <TableHead>Restricted</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleFamilies.map((family) => (
-                <TableRow key={family.id}>
+                <TableRow>
+                  <TableHead>Family</TableHead>
+                  <TableHead>Guardians</TableHead>
+                  <TableHead>Children</TableHead>
+                  <TableHead>Records</TableHead>
+                  <TableHead>Restricted</TableHead>
+                  <TableHead>Open</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleFamilies.map((family) => (
+                <TableRow key={family.id} className="group">
                   <TableCell>
-                    <div className="font-medium">{family.name}</div>
+                    <Link
+                      href={`/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`}
+                      className="inline-flex max-w-full items-center gap-1 font-medium text-foreground underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="truncate">{family.name}</span>
+                      <ArrowUpRight className="size-3 opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
+                    </Link>
                     <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
                   </TableCell>
                   <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
@@ -166,11 +188,23 @@ export function FamilyProfilesEnrollmentPanel({
                       </div>
                     ) : "Standard"}
                   </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <ArrowUpRight data-icon="inline-start" />
+                        Profile
+                      </Link>
+                      <Link href={`/billing-invoices?familyId=${encodeURIComponent(family.id)}${family.centerId ? `&centerId=${encodeURIComponent(family.centerId)}` : ""}#billing-workbench`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <CreditCard data-icon="inline-start" />
+                        Billing
+                      </Link>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
               {!visibleFamilies.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No families match this view.
                   </TableCell>
                 </TableRow>

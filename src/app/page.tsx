@@ -208,6 +208,20 @@ const explainerGraphics = [
     width: 1600,
     height: 1001,
   },
+  {
+    title: "Director dashboard guide",
+    body: "Gives directors a one-page operating guide for dashboard review, family records, tuition payments, parent follow-up, forms, and common billing FAQs.",
+    src: "/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png",
+    width: 1600,
+    height: 3000,
+  },
+  {
+    title: "Parent portal guide",
+    body: "Shows parents how to set up their portal, see balances, pay by card or verified bank, manage payment info, complete forms, and use kiosk check-in/out.",
+    src: "/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png",
+    width: 1600,
+    height: 3000,
+  },
 ];
 
 const schoolScenes = [

@@ -27,12 +27,27 @@ import {
   dailyReportEmailRecipientGuardianIdsFromPayload,
   DAILY_REPORT_EMAIL_RECIPIENT_GUARDIAN_IDS_KEY,
 } from "@/lib/daily-report-email-settings";
+import {
+  disableParentPortalLoginForGuardian,
+  ensureParentPortalLoginForGuardian,
+  parentPortalAccessFields,
+} from "@/lib/parent-portal-logins";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off"].includes(normalized)) return false;
+  }
+  return undefined;
 }
 
 function jsonObject(value: unknown) {
@@ -496,6 +511,17 @@ async function POSTHandler(request: NextRequest) {
     const access = await assertFamilyAccess(user, familyId);
     if (!access.ok) return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
     centerId = access.centerId;
+    const existing = id
+      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true, customFields: true, userId: true } })
+      : null;
+    if (id) {
+      const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
+    }
+    const parentPortalLoginEnabledProvided = Object.prototype.hasOwnProperty.call(body, "parentPortalLoginEnabled");
+    const parentPortalLoginEnabled = parentPortalLoginEnabledProvided
+      ? optionalBoolean(body.parentPortalLoginEnabled) !== false
+      : true;
     const data = {
       familyId,
       fullName: clean(body.name),
@@ -505,15 +531,17 @@ async function POSTHandler(request: NextRequest) {
       relation: clean(body.relation) || clean(body.status) || "Guardian",
       preferredCommunication: clean(body.preferredCommunication) || null,
       isBillingContact: Boolean(body.isBillingContact),
+      ...((parentPortalLoginEnabledProvided || !id)
+        ? {
+            customFields: parentPortalAccessFields({
+              customFields: existing?.customFields,
+              enabled: parentPortalLoginEnabled,
+              actorEmail: user.email,
+            }),
+          }
+        : {}),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
-    const existing = id
-      ? await prisma.guardian.findUnique({ where: { id }, select: { familyId: true, checkInPinHash: true } })
-      : null;
-    if (id) {
-      const guard = scopedUpdateGuard({ entity: "Guardian", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
-      if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
-    }
     const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
@@ -522,6 +550,49 @@ async function POSTHandler(request: NextRequest) {
       ? await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData })
       : guardian;
     auditMetadata.defaultGuardianPinSet = Boolean(defaultPinData);
+    auditMetadata.parentPortalLoginEnabled = parentPortalLoginEnabled;
+    if (parentPortalLoginEnabled) {
+      try {
+        const parentPortal = await ensureParentPortalLoginForGuardian({
+          guardianId: guardian.id,
+          linkedBy: user.email,
+        });
+        auditMetadata.parentPortalLogin = parentPortal.ok
+          ? {
+              status: "linked",
+              parentUserId: parentPortal.userId,
+              linkedGuardianIds: parentPortal.linkedGuardianIds,
+              created: parentPortal.created,
+              reactivated: parentPortal.reactivated,
+              defaultPasswordSet: parentPortal.defaultPasswordSet,
+            }
+          : {
+              status: "skipped",
+              reason: parentPortal.reason,
+            };
+      } catch (error) {
+        auditMetadata.parentPortalLogin = {
+          status: "failed",
+          error: error instanceof Error ? error.message : "Parent portal login could not be created.",
+        };
+      }
+    } else {
+      const disabledPortal = await disableParentPortalLoginForGuardian({
+        guardianId: guardian.id,
+        actorEmail: user.email,
+        previousUserId: existing?.userId,
+      });
+      auditMetadata.parentPortalLogin = disabledPortal.ok
+        ? {
+            status: "disabled",
+            unlinkedUserId: disabledPortal.unlinkedUserId,
+            deactivatedUser: disabledPortal.deactivatedUser,
+          }
+        : {
+            status: "failed",
+            reason: disabledPortal.reason,
+          };
+    }
   } else if (entity === "guardianMerge") {
     const primaryGuardianId = clean(body.primaryGuardianId) || clean(body.guardianId);
     const duplicateGuardianId = clean(body.duplicateGuardianId) || clean(body.relatedId);

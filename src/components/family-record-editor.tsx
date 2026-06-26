@@ -39,6 +39,7 @@ type GuardianRecord = {
   qrToken?: string | null;
   kioskPath?: string | null;
   centerName?: string | null;
+  customFields?: unknown;
 };
 
 type ChildRecord = {
@@ -186,6 +187,32 @@ function scheduleNotes(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const notes = (value as { notes?: unknown }).notes;
   return typeof notes === "string" ? notes : "";
+}
+
+function recordValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function parentPortalLoginEnabledForGuardian(guardian: GuardianRecord | null | undefined) {
+  if (!guardian) return true;
+  const parentPortal = recordValue(recordValue(guardian.customFields).parentPortal);
+  if (parentPortal.accessDisabled === true || parentPortal.loginEnabled === false) return false;
+  if (guardian.userId) return true;
+  return parentPortal.accessDisabled !== true && parentPortal.loginEnabled !== false;
+}
+
+function parentPortalStatusText(json: {
+  parentPortalLoginEnabled?: boolean;
+  parentPortalLogin?: { status?: string; reason?: string };
+} | null) {
+  if (!json) return "";
+  if (json.parentPortalLogin?.status === "failed") return " Parent portal login needs staff follow-up.";
+  if (json.parentPortalLoginEnabled === false) return " Parent portal login disabled for this guardian.";
+  if (json.parentPortalLogin?.status === "linked") return " Parent portal login is ready.";
+  if (json.parentPortalLogin?.status === "disabled") return " Parent portal login disabled for this guardian.";
+  if (json.parentPortalLogin?.reason === "guardian_email_invalid") return " Add a valid personal email before parent portal login can be created.";
+  if (json.parentPortalLogin?.reason === "parent_portal_disabled") return " Parent portal login disabled for this guardian.";
+  return "";
 }
 
 function formatDate(value: string | Date | null | undefined) {
@@ -383,6 +410,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   const [guardianRelation, setGuardianRelation] = useState(selectedGuardian?.relation ?? "Parent/Guardian");
   const [preferredCommunication, setPreferredCommunication] = useState(selectedGuardian?.preferredCommunication ?? "email");
   const [isBillingContact, setIsBillingContact] = useState(Boolean(selectedGuardian?.isBillingContact));
+  const [parentPortalLoginEnabled, setParentPortalLoginEnabled] = useState(parentPortalLoginEnabledForGuardian(selectedGuardian));
 
   const [selectedPickupId, setSelectedPickupId] = useState(selectedFamily?.pickups[0]?.id ?? "");
   const selectedPickup = selectedPickupId
@@ -536,6 +564,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     setGuardianRelation(guardian?.relation ?? "Parent/Guardian");
     setPreferredCommunication(guardian?.preferredCommunication ?? "email");
     setIsBillingContact(Boolean(guardian?.isBillingContact));
+    setParentPortalLoginEnabled(parentPortalLoginEnabledForGuardian(guardian));
     setDuplicateGuardianId("");
   }
 
@@ -655,12 +684,17 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        mode?: string;
+        parentPortalLoginEnabled?: boolean;
+        parentPortalLogin?: { status?: string; reason?: string };
+      } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || `${successLabel} could not be saved.`);
         return;
       }
-      setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.`);
+      setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
       router.refresh();
     });
   }
@@ -1287,6 +1321,13 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <input type="checkbox" checked={isBillingContact} onChange={(event) => setIsBillingContact(event.target.checked)} />
               Billing contact
             </label>
+            <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
+              <input type="checkbox" checked={parentPortalLoginEnabled} onChange={(event) => setParentPortalLoginEnabled(event.target.checked)} />
+              Parent portal login
+            </label>
+            {selectedGuardian?.userId && parentPortalLoginEnabled ? (
+              <Badge variant="secondary" className="w-fit self-center">Portal linked</Badge>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -1302,6 +1343,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 relation: guardianRelation,
                 preferredCommunication,
                 isBillingContact,
+                parentPortalLoginEnabled,
               }, "Parent/guardian contact")}
             >
               <Save data-icon="inline-start" />

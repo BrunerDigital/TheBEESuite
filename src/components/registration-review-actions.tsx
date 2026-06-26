@@ -72,7 +72,7 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus }
               onChange={(event) => setInviteParent(event.target.checked)}
               type="checkbox"
             />
-            Send parent portal setup on approval
+            Create parent portal logins on approval
           </label>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={isPending} onClick={() => review("APPROVED")}>

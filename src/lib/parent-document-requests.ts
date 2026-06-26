@@ -1,12 +1,15 @@
-import { UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import type { CurrentUser } from "@/lib/auth";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { isEmail, sendEmail } from "@/lib/integrations";
 import { notificationExpiresAt } from "@/lib/notification-policy";
-import { buildParentPortalUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
+import { buildParentPortalUrl, getParentPortalDefaultPassword } from "@/lib/parent-portal-invitations";
+import {
+  ensureParentPortalLoginForGuardian,
+  parentPortalAccessDisabled,
+} from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
-import { upsertSupabaseAuthUserWithPassword, getAppBaseUrl } from "@/lib/supabase-auth";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const PARENT_DOCUMENT_REQUEST_EMAIL_PURPOSE = "parent_document_request_email";
 
@@ -15,6 +18,7 @@ type GuardianRecipient = {
   fullName: string;
   email: string | null;
   userId: string | null;
+  customFields?: unknown;
 };
 
 type ParentDocumentRequestRecipient = {
@@ -38,6 +42,7 @@ export function parentDocumentRequestRecipientOptions(guardians: GuardianRecipie
   const recipients = new Map<string, ParentDocumentRequestRecipient>();
 
   for (const guardian of guardians) {
+    if (parentPortalAccessDisabled(guardian.customFields)) continue;
     const email = normalizeEmail(guardian.email);
     if (!isEmail(email)) continue;
     const current = recipients.get(email);
@@ -93,74 +98,29 @@ export function buildParentDocumentRequestEmailText({
 async function ensureParentPortalLoginForRecipient({
   recipient,
   guardians,
-  center,
 }: {
   recipient: ParentDocumentRequestRecipient;
   guardians: GuardianRecipient[];
-  center: {
-    organizationId: string;
-    organization: { tenantId: string };
-  };
 }) {
   const matchingGuardians = guardians.filter((guardian) => normalizeEmail(guardian.email) === recipient.email);
   const primaryGuardian = matchingGuardians[0];
-  const existingUser = await prisma.user.findUnique({
-    where: { email: recipient.email },
-    select: { id: true, tenantId: true, role: true, isActive: true },
+  if (!primaryGuardian) {
+    return { ok: false as const, error: "No linkable parent guardian was found for this recipient." };
+  }
+  const login = await ensureParentPortalLoginForGuardian({
+    guardianId: primaryGuardian.id,
+    linkedReason: "parent_document_request",
   });
-
-  if (existingUser && existingUser.tenantId !== center.organization.tenantId) {
-    return { ok: false as const, error: "A parent email is already assigned outside this tenant." };
-  }
-  if (existingUser && existingUser.role !== UserRole.PARENT_GUARDIAN) {
-    return { ok: false as const, error: "A parent email is already assigned to a non-parent user." };
+  if (!login.ok) {
+    return { ok: false as const, error: login.reason };
   }
 
-  let parentUserId = existingUser?.id ?? "";
-  let created = false;
-  let reactivated = false;
-  if (!existingUser) {
-    const defaultPassword = getParentPortalDefaultPassword();
-    if (defaultPassword.length < 8) {
-      return { ok: false as const, error: "Parent portal default password is not configured." };
-    }
-    await upsertSupabaseAuthUserWithPassword({
-      email: recipient.email,
-      name: primaryGuardian?.fullName ?? recipient.label,
-      password: defaultPassword,
-      role: UserRole.PARENT_GUARDIAN,
-      source: PARENT_PORTAL_INVITE_MODE,
-    });
-    const parentUser = await prisma.user.create({
-      data: {
-        tenantId: center.organization.tenantId,
-        organizationId: center.organizationId,
-        email: recipient.email,
-        name: primaryGuardian?.fullName ?? recipient.label,
-        role: UserRole.PARENT_GUARDIAN,
-        isActive: true,
-        mustResetPassword: false,
-      },
-      select: { id: true },
-    });
-    parentUserId = parentUser.id;
-    created = true;
-  } else if (!existingUser.isActive) {
-    await prisma.user.update({
-      where: { id: existingUser.id },
-      data: { isActive: true, mustResetPassword: false },
-    });
-    reactivated = true;
-  }
-
-  if (parentUserId && matchingGuardians.length) {
-    await prisma.guardian.updateMany({
-      where: { id: { in: matchingGuardians.map((guardian) => guardian.id) } },
-      data: { userId: parentUserId },
-    });
-  }
-
-  return { ok: true as const, userId: parentUserId, created, reactivated };
+  return {
+    ok: true as const,
+    userId: login.userId,
+    created: login.created,
+    reactivated: login.reactivated,
+  };
 }
 
 export async function sendParentDocumentRequestEmailForDocument({
@@ -187,7 +147,7 @@ export async function sendParentDocumentRequestEmailForDocument({
               id: true,
               name: true,
               centerId: true,
-              guardians: { select: { id: true, fullName: true, email: true, userId: true }, orderBy: { fullName: "asc" } },
+              guardians: { select: { id: true, fullName: true, email: true, userId: true, customFields: true }, orderBy: { fullName: "asc" } },
             },
           },
         },
@@ -197,7 +157,7 @@ export async function sendParentDocumentRequestEmailForDocument({
           id: true,
           name: true,
           centerId: true,
-          guardians: { select: { id: true, fullName: true, email: true, userId: true }, orderBy: { fullName: "asc" } },
+          guardians: { select: { id: true, fullName: true, email: true, userId: true, customFields: true }, orderBy: { fullName: "asc" } },
         },
       },
     },
@@ -244,7 +204,6 @@ export async function sendParentDocumentRequestEmailForDocument({
     const login = await ensureParentPortalLoginForRecipient({
       recipient,
       guardians: family.guardians,
-      center,
     });
     if (!login.ok) {
       results.push({ email: recipient.email, ok: false, configured: true, error: login.error });

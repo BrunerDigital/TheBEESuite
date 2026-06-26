@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
+import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { buildParentPortalSetupUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
+import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import {
   asRecord,
@@ -25,7 +26,7 @@ import {
   registrationLedgerExternalId,
   type RegistrationPaymentStatus,
 } from "@/lib/registration-billing";
-import { getAppBaseUrl, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -437,51 +438,22 @@ async function createParentPortalInvite(input: {
 
   try {
     const appBaseUrl = getAppBaseUrl(input.requestUrl);
-    const authUser = await upsertSupabaseAuthUserWithPassword({
-      email,
-      name: input.guardian.fullName,
-      password: defaultPassword,
-      role: UserRole.PARENT_GUARDIAN,
-      source: PARENT_PORTAL_INVITE_MODE,
-      updateExistingPassword: false,
+    const parentPortal = await ensureParentPortalLoginForGuardian({
+      guardianId: input.guardian.id,
+      linkedBy: input.user.email,
+      linkedReason: "registration_approval",
+      registrationApproval: true,
     });
-    const defaultPasswordSet = !("alreadyExisted" in authUser && authUser.alreadyExisted);
-
-    const parentUser = await prisma.user.upsert({
-      where: { email },
-      update: {
-        name: input.guardian.fullName,
-        role: UserRole.PARENT_GUARDIAN,
-        isActive: true,
-        organizationId: input.center.organizationId,
-        mustResetPassword: false,
-        sessionVersion: { increment: 1 },
-      },
-      create: {
-        tenantId: input.center.organization.tenantId,
-        organizationId: input.center.organizationId,
-        email,
-        name: input.guardian.fullName,
-        role: UserRole.PARENT_GUARDIAN,
-        isActive: true,
-        mustResetPassword: false,
-      },
-    });
-
-    await prisma.guardian.update({
-      where: { id: input.guardian.id },
-      data: {
-        userId: parentUser.id,
-        customFields: customFields(input.guardian.customFields, {
-          parentPortal: {
-            linkedAt: new Date().toISOString(),
-            linkedBy: input.user.email,
-            inviteMode: PARENT_PORTAL_INVITE_MODE,
-            registrationApproval: true,
-          },
-        }),
-      },
-    });
+    if (!parentPortal.ok) {
+      return {
+        ok: false,
+        error: parentPortal.reason,
+        emailSent: false,
+        passwordResetSent: false,
+        defaultPasswordSet: false,
+      };
+    }
+    const defaultPasswordSet = parentPortal.defaultPasswordSet;
 
     const portalUrl = buildParentPortalSetupUrl(appBaseUrl);
     const paymentLine = input.registrationPayment?.required
@@ -528,7 +500,8 @@ async function createParentPortalInvite(input: {
       resourceId: input.guardian.id,
       metadata: {
         familyId: input.family.id,
-        parentUserId: parentUser.id,
+        parentUserId: parentPortal.userId,
+        linkedGuardianIds: parentPortal.linkedGuardianIds,
         email,
         authMode: PARENT_PORTAL_INVITE_MODE,
         defaultPasswordSet,
@@ -546,7 +519,7 @@ async function createParentPortalInvite(input: {
       };
     }
 
-    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet, parentUserId: parentUser.id };
+    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet, parentUserId: parentPortal.userId };
   } catch (error) {
     return {
       ok: false,
@@ -832,7 +805,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
           cellPhoneCarrier: input.cellPhoneCarrier,
           driverLicense: input.driverLicense,
           socialSecurityNumberProvidedOnPacket: Boolean(input.socialSecurityNumber),
-          parentPortalInvite: input.isBillingContact ? { status: inviteParent ? "pending" : "not_requested" } : undefined,
+          parentPortalInvite: { status: inviteParent ? "pending" : "not_requested" },
         }),
       };
       const guardian = existing
@@ -860,7 +833,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       socialSecurityNumber: packet.primaryGuardianSocialSecurityNumber,
       isBillingContact: true,
     });
-    await upsertGuardian({
+    const secondaryGuardian = await upsertGuardian({
       fullName: packet.secondaryGuardianName,
       email: packet.secondaryGuardianEmail,
       phone: packet.secondaryGuardianPhone,
@@ -874,6 +847,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       socialSecurityNumber: packet.secondaryGuardianSocialSecurityNumber,
       isBillingContact: false,
     });
+    const savedGuardians = [primaryGuardian, secondaryGuardian].filter((guardian): guardian is NonNullable<typeof guardian> => Boolean(guardian));
 
     const childMatch = await tx.child.findFirst({
       where: {
@@ -1090,7 +1064,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       applicationReviewed: true,
       familyProfileReady: true,
       childProfileReady: true,
-      guardianCount: primaryGuardian ? 1 : 0,
+      guardianCount: savedGuardians.length,
       parentPortalInviteStatus: inviteParent ? "pending" : "not_ready",
       documentRequestCount: uploadRequestCount,
       signatureRequestCount,
@@ -1146,7 +1120,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       applicationReviewed: true,
       familyProfileReady: true,
       childProfileReady: true,
-      guardianCount: primaryGuardian ? 1 : 0,
+      guardianCount: savedGuardians.length,
       parentPortalInviteStatus: inviteParent ? "pending" : "not_ready",
       documentRequestCount: uploadRequestCount,
       signatureRequestCount,
@@ -1236,6 +1210,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       family,
       child,
       primaryGuardian,
+      guardians: savedGuardians,
       enrollment,
       uploadRequestCount,
       signatureRequestCount,
@@ -1244,31 +1219,52 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     };
   });
 
-  let parentInvite:
-    | Awaited<ReturnType<typeof createParentPortalInvite>>
-    | { ok: false; error: string; emailSent: false; passwordResetSent: false; defaultPasswordSet: false } = {
+  let parentInvite: {
+    ok: boolean;
+    error?: string;
+    emailSent: boolean;
+    passwordResetSent: boolean;
+    defaultPasswordSet: boolean;
+    invitedCount?: number;
+    failedCount?: number;
+    results?: Array<Awaited<ReturnType<typeof createParentPortalInvite>>>;
+  } = {
       ok: false,
       error: "Parent portal invite was not requested.",
       emailSent: false,
       passwordResetSent: false,
       defaultPasswordSet: false,
     };
-  if (inviteParent && approval.primaryGuardian) {
-    parentInvite = await createParentPortalInvite({
-      requestUrl: request.url,
-      user,
-      center,
-      family: approval.family,
-      guardian: approval.primaryGuardian,
-      registrationPayment: approval.registrationPayment,
-    });
+  if (inviteParent && approval.guardians.length) {
+    const results = [];
+    for (const guardian of approval.guardians) {
+      results.push(await createParentPortalInvite({
+        requestUrl: request.url,
+        user,
+        center,
+        family: approval.family,
+        guardian,
+        registrationPayment: approval.registrationPayment,
+      }));
+    }
+    const successes = results.filter((result) => result.ok);
+    parentInvite = {
+      ok: successes.length > 0,
+      error: successes.length ? undefined : results.find((result) => !result.ok)?.error ?? "Parent portal invites failed.",
+      emailSent: successes.some((result) => result.emailSent),
+      passwordResetSent: false,
+      defaultPasswordSet: successes.some((result) => result.defaultPasswordSet),
+      invitedCount: successes.length,
+      failedCount: results.length - successes.length,
+      results,
+    };
   }
 
   const checklist = buildEnrollmentChecklist({
     applicationReviewed: true,
     familyProfileReady: true,
     childProfileReady: true,
-    guardianCount: approval.primaryGuardian ? 1 : 0,
+    guardianCount: approval.guardians.length,
     parentPortalInviteStatus: parentInvite.ok ? "sent" : inviteParent ? "failed" : "not_ready",
     documentRequestCount: approval.uploadRequestCount,
     signatureRequestCount: approval.signatureRequestCount,

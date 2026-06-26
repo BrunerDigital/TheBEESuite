@@ -818,9 +818,9 @@ export function StaffManagementPanel({
         <CardHeader>
           <CardTitle>
             <UserRoundCog data-icon="inline-start" />
-            Teacher Profile Editor
+            Classroom Assignment Tool
           </CardTitle>
-          <CardDescription>Add teachers or update their classroom assignment, contact info, and background-check status.</CardDescription>
+          <CardDescription>Assign active teachers to classrooms and update the contact details needed for classroom coverage.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {statusMessage ? (

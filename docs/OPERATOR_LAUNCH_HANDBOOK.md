@@ -33,6 +33,9 @@ This is the central operator-facing index for launching and supporting The BEE S
 
 - `docs/SCHOOL_DIRECTOR_QUICK_START.md` - director/location user workflow.
 - `docs/EXECUTIVE_ADMIN_QUICK_START.md` - executive/corporate admin workflow.
+- `docs/sops/DIRECTOR_SOP.md` - sendable director SOP for daily operations, billing, parent portal launch, documents, communications, and escalation.
+- `docs/sops/TEACHER_SOP.md` - sendable teacher SOP for classroom attendance, daily reports, media, incidents, messages, kiosk, and offline queue workflows.
+- `docs/sops/PARENT_PORTAL_SOP.md` - sendable parent SOP for login, family dashboard, invoices, ACH/card payment, documents, messages, and troubleshooting.
 
 ## Launch Order For A New School
 

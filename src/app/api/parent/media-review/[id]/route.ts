@@ -3,6 +3,7 @@ import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUs
 import { writeAuditLog } from "@/lib/audit";
 import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { prisma } from "@/lib/prisma";
+import { buildParentPhotoNotifications } from "@/lib/teacher-media";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -38,7 +39,19 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
     include: {
       child: {
         include: {
-          family: { select: { centerId: true, name: true } },
+          family: {
+            select: {
+              centerId: true,
+              name: true,
+              guardians: {
+                select: {
+                  userId: true,
+                  customFields: true,
+                  user: { select: { isActive: true } },
+                },
+              },
+            },
+          },
         },
       },
       classroom: { select: { id: true, centerId: true, name: true } },
@@ -84,6 +97,21 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
       },
     });
   });
+
+  if (action === "approve") {
+    const parentNotifications = buildParentPhotoNotifications({
+      mediaId: media.id,
+      childName: media.child.fullName,
+      caption: media.caption,
+      guardians: media.child.family.guardians,
+    });
+    if (parentNotifications.length) {
+      await prisma.notification.createMany({
+        data: parentNotifications,
+        skipDuplicates: true,
+      });
+    }
+  }
 
   if (media.uploadedBy?.id && media.uploadedBy.id !== user.id) {
     await prisma.notification.create({

@@ -49,8 +49,22 @@ type StripeCheckoutSessionCompleted = {
     paymentMethodCategory?: string;
     bankAccountVerificationMethod?: string;
     description?: string;
+    checkoutPurpose?: string;
+    receiptKind?: string;
+    chargeSource?: string;
+    sourceId?: string;
+    productId?: string;
+    productName?: string;
+    productType?: string;
+    productCatalog?: string;
+    productColor?: string;
+    productSize?: string;
+    productPurchaseOption?: string;
+    quantity?: string;
+    purchaseId?: string;
     orderReference?: string;
     purchaserUserId?: string;
+    currentGuardianId?: string;
     itemSummary?: string;
     stripeBaseSubtotalCents?: string;
     beeSuiteMarkupCents?: string;
@@ -78,8 +92,22 @@ type StripeMetadata = {
   paymentMethodCategory?: string;
   bankAccountVerificationMethod?: string;
   description?: string;
+  checkoutPurpose?: string;
+  receiptKind?: string;
+  chargeSource?: string;
+  sourceId?: string;
+  productId?: string;
+  productName?: string;
+  productType?: string;
+  productCatalog?: string;
+  productColor?: string;
+  productSize?: string;
+  productPurchaseOption?: string;
+  quantity?: string;
+  purchaseId?: string;
   orderReference?: string;
   purchaserUserId?: string;
+  currentGuardianId?: string;
   itemSummary?: string;
   stripeBaseSubtotalCents?: string;
   beeSuiteMarkupCents?: string;
@@ -328,6 +356,27 @@ function familyPaymentDescription(metadata: StripeMetadata, fallback: string) {
   return clean(metadata.description) || fallback;
 }
 
+function productPaymentMetadata(metadata: StripeMetadata) {
+  return {
+    checkoutPurpose: clean(metadata.checkoutPurpose) || null,
+    receiptKind: clean(metadata.receiptKind) || null,
+    chargeSource: clean(metadata.chargeSource) || null,
+    sourceId: clean(metadata.sourceId) || null,
+    productId: clean(metadata.productId) || null,
+    productName: clean(metadata.productName) || null,
+    productType: clean(metadata.productType) || null,
+    productCatalog: clean(metadata.productCatalog) || null,
+    productColor: clean(metadata.productColor) || null,
+    productSize: clean(metadata.productSize) || null,
+    productPurchaseOption: clean(metadata.productPurchaseOption) || null,
+    quantity: clean(metadata.quantity) || null,
+    itemSummary: clean(metadata.itemSummary) || null,
+    purchaseId: clean(metadata.purchaseId) || null,
+    purchaserUserId: clean(metadata.purchaserUserId) || null,
+    currentGuardianId: clean(metadata.currentGuardianId) || null,
+  };
+}
+
 async function handleFamilyBalancePaymentSucceeded(
   event: StripeWebhookEvent,
   input: {
@@ -398,6 +447,7 @@ async function handleFamilyBalancePaymentSucceeded(
             requestedPaymentMethodCategory: clean(input.metadata.requestedPaymentMethodCategory) || null,
             paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
             bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
+            ...productPaymentMetadata(input.metadata),
             status: "paid",
           },
         },
@@ -426,6 +476,7 @@ async function handleFamilyBalancePaymentSucceeded(
             requestedPaymentMethodCategory: clean(input.metadata.requestedPaymentMethodCategory) || null,
             paymentMethodCategory: clean(input.metadata.paymentMethodCategory) || null,
             bankAccountVerificationMethod: clean(input.metadata.bankAccountVerificationMethod) || null,
+            ...productPaymentMetadata(input.metadata),
             parentSurchargeAmountCents: metadataCents(input.metadata.parentSurchargeAmountCents),
             parentProcessingRecoveryAmountCents: metadataCents(input.metadata.parentProcessingRecoveryAmountCents || input.metadata.parentSurchargeAmountCents),
             beeSuitePaymentOperationsFeeAmountCents: metadataCents(input.metadata.beeSuitePaymentOperationsFeeAmountCents),
@@ -1523,6 +1574,7 @@ async function POSTHandler(request: NextRequest) {
             beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             checkoutTotalCents: Number(session.metadata?.checkoutTotalCents || session.amount_total || 0) || null,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
+            ...productPaymentMetadata(session.metadata ?? {}),
             status: "paid",
           },
         },
@@ -1537,7 +1589,7 @@ async function POSTHandler(request: NextRequest) {
           invoiceId,
           paymentId: payment.id,
           type: "payment",
-          description: "Parent payment",
+          description: familyPaymentDescription(session.metadata ?? {}, "Parent payment"),
           amountCents: -payment.amountCents,
           balanceAfterCents: updatedAccount.balanceCents,
           sourceSystem: "stripe",
@@ -1549,6 +1601,7 @@ async function POSTHandler(request: NextRequest) {
             parentProcessingRecoveryAmountCents: Number(session.metadata?.parentProcessingRecoveryAmountCents || session.metadata?.parentSurchargeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(session.metadata?.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
             applicationFeeAmountCents: Number(session.metadata?.applicationFeeAmountCents || 0) || 0,
+            ...productPaymentMetadata(session.metadata ?? {}),
           },
         },
       });

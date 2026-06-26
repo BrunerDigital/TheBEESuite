@@ -1099,7 +1099,16 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
               </Badge>
               <Badge variant="outline">Private storage</Badge>
             </div>
-            <Input type="file" accept="image/*" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
+            <div className="space-y-1">
+              <Label htmlFor="teacher-child-photo">Take or upload photo</Label>
+              <Input
+                id="teacher-child-photo"
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
+              />
+            </div>
             <Textarea value={photoCaption} onChange={(event) => setPhotoCaption(event.target.value)} placeholder="Caption for parents" />
             <Button disabled={isPending || !selectedChild || !photo} className="w-full" onClick={submitPhoto}>
               <Camera data-icon="inline-start" />

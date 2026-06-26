@@ -63,3 +63,49 @@ test("SendGrid email helper sends private personalizations and captures provider
     else process.env.SENDGRID_FROM_EMAIL = originalFrom;
   }
 });
+
+test("SendGrid email helper falls back to platform credentials when tenant key is rejected", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SENDGRID_API_KEY;
+  const originalFrom = process.env.SENDGRID_FROM_EMAIL;
+  const authorizations: string[] = [];
+  const fromEmails: string[] = [];
+
+  process.env.SENDGRID_API_KEY = "SG.platform";
+  process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
+    const payload = JSON.parse(String(init?.body)) as { from?: { email?: string } };
+    fromEmails.push(payload.from?.email ?? "");
+    if (authorizations.length === 1) {
+      return new Response(JSON.stringify({ errors: [{ message: "unauthorized" }] }), { status: 401 });
+    }
+    return new Response(null, {
+      status: 202,
+      headers: { "x-message-id": "platform-fallback-message" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await sendEmail({
+      to: ["parent@example.com"],
+      subject: "Payment setup",
+      text: "Please set up payment.",
+      credentials: {
+        SENDGRID_API_KEY: "SG.tenant-stale",
+        SENDGRID_FROM_EMAIL: "stale@example.com",
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.id, "platform-fallback-message");
+    assert.deepEqual(authorizations, ["Bearer SG.tenant-stale", "Bearer SG.platform"]);
+    assert.deepEqual(fromEmails, ["stale@example.com", "noreply@thebeesuite.io"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY;
+    else process.env.SENDGRID_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL;
+    else process.env.SENDGRID_FROM_EMAIL = originalFrom;
+  }
+});

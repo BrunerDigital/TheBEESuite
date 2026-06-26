@@ -104,6 +104,7 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import { invoicePurposeLabel } from "@/lib/product-billing";
 import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
@@ -112,6 +113,7 @@ import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
+import { STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES, studentUniformProductOptions } from "@/lib/uniform-products";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
   asRecord,
@@ -1716,7 +1718,7 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter] = await Promise.all([
+    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -1819,6 +1821,11 @@ async function renderLivePage(
             },
           })
         : Promise.resolve(null),
+      prisma.product.findMany({
+        where: { type: { in: [...STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES] } },
+        orderBy: [{ name: "asc" }],
+        select: { id: true, name: true, type: true, amountCents: true },
+      }),
     ]);
 
     const [signedDocuments, signedMedia] = await Promise.all([
@@ -1876,10 +1883,7 @@ async function renderLivePage(
     });
     const invoicesWithCheckout = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
-      const purposeLabel = cleanText(invoiceFields.kind) === "registration_fee_deposit"
-        || cleanText(invoiceFields.checkoutPurpose) === "registration_fee_deposit"
-        ? "Registration fee/deposit"
-        : null;
+      const purposeLabel = invoicePurposeLabel(invoiceFields);
       const achAmounts = getStripeCheckoutAmounts(invoice.totalCents, {
         paymentMethodCategory: "ach",
         waiveBeeSuitePaymentOperationsFee,
@@ -1954,6 +1958,7 @@ async function renderLivePage(
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}
+        uniformProducts={studentUniformProductOptions(uniformProducts)}
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={kioskCredentials}
         notificationPreferences={notificationPreferences}

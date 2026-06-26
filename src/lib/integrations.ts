@@ -486,6 +486,7 @@ export async function sendEmail({
   customArgs,
   disableClickTracking = false,
   tenantId,
+  credentials,
   attachments,
 }: {
   to: string[];
@@ -497,55 +498,77 @@ export async function sendEmail({
   customArgs?: Record<string, string | number | boolean | null | undefined>;
   disableClickTracking?: boolean;
   tenantId?: string | null;
+  credentials?: Record<string, string>;
   attachments?: EmailAttachment[];
 }): Promise<IntegrationSendResult> {
-  const tenantCredentials = await getTenantIntegrationCredentialMap(tenantId, "sendgrid");
-  const apiKey = credentialEnvValue(tenantCredentials, "SENDGRID_API_KEY");
-  const from = credentialEnvValue(tenantCredentials, "SENDGRID_FROM_EMAIL");
+  const tenantCredentials = credentials ?? await getTenantIntegrationCredentialMap(tenantId, "sendgrid");
+  const tenantApiKey = clean(tenantCredentials.SENDGRID_API_KEY);
+  const tenantFrom = clean(tenantCredentials.SENDGRID_FROM_EMAIL);
+  const platformApiKey = clean(process.env.SENDGRID_API_KEY);
+  const platformFrom = clean(process.env.SENDGRID_FROM_EMAIL);
+  const apiKey = tenantApiKey || platformApiKey;
+  const from = tenantFrom || platformFrom;
   const recipients = uniqueEmails(to);
 
   if (!apiKey || !from || !recipients.length) {
     return { ok: false, configured: false, provider: "sendgrid", error: "SendGrid is not configured." };
   }
 
-  let response: Response;
-  try {
-    response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+  function body(fromValue: string) {
+    return JSON.stringify({
+      personalizations: recipients.map((email) => ({
+        to: [{ email }],
+        custom_args: customArgs
+          ? Object.fromEntries(
+              Object.entries(customArgs)
+                .filter(([, value]) => value !== null && value !== undefined)
+                .map(([key, value]) => [key, String(value)]),
+            )
+          : undefined,
+      })),
+      from: { email: fromValue, name: fromName },
+      reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
+      subject,
+      categories: categories?.slice(0, 10),
+      tracking_settings: disableClickTracking
+        ? { click_tracking: { enable: false, enable_text: false } }
+        : undefined,
+      content: [{ type: "text/plain", value: text }],
+      attachments: attachments?.length
+        ? attachments.map((attachment) => ({
+            content: attachment.content,
+            filename: attachment.filename,
+            type: attachment.type || "application/octet-stream",
+            disposition: attachment.disposition || "attachment",
+          }))
+        : undefined,
+    });
+  }
+
+  async function sendWith(apiKeyValue: string, fromValue: string) {
+    return fetch("https://api.sendgrid.com/v3/mail/send", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKeyValue}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        personalizations: recipients.map((email) => ({
-          to: [{ email }],
-          custom_args: customArgs
-            ? Object.fromEntries(
-                Object.entries(customArgs)
-                  .filter(([, value]) => value !== null && value !== undefined)
-                  .map(([key, value]) => [key, String(value)]),
-              )
-            : undefined,
-        })),
-        from: { email: from, name: fromName },
-        reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
-        subject,
-        categories: categories?.slice(0, 10),
-        tracking_settings: disableClickTracking
-          ? { click_tracking: { enable: false, enable_text: false } }
-          : undefined,
-        content: [{ type: "text/plain", value: text }],
-        attachments: attachments?.length
-          ? attachments.map((attachment) => ({
-              content: attachment.content,
-              filename: attachment.filename,
-              type: attachment.type || "application/octet-stream",
-              disposition: attachment.disposition || "attachment",
-            }))
-          : undefined,
-      }),
+      body: body(fromValue),
       signal: AbortSignal.timeout(10_000),
     });
+  }
+
+  let response: Response;
+  try {
+    response = await sendWith(apiKey, from);
+    const canRetryWithPlatformCredentials =
+      (response.status === 401 || response.status === 403)
+      && Boolean(tenantApiKey)
+      && Boolean(platformApiKey)
+      && tenantApiKey !== platformApiKey
+      && Boolean(platformFrom);
+    if (canRetryWithPlatformCredentials) {
+      response = await sendWith(platformApiKey, platformFrom);
+    }
   } catch (error) {
     return {
       ok: false,

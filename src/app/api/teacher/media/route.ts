@@ -8,7 +8,7 @@ import { centerScopedAccessGuard } from "@/lib/operations-guardrails";
 import { validateDailyReportMediaLink, validateMediaUploadInput } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { createChildMediaSignedUrl, uploadChildMediaBuffer } from "@/lib/supabase-storage";
-import { resolveTeacherMediaShareState } from "@/lib/teacher-media";
+import { buildParentPhotoNotifications, resolveTeacherMediaShareState } from "@/lib/teacher-media";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -68,7 +68,19 @@ async function POSTHandler(request: NextRequest) {
     where: { id: childId },
     include: {
       classroom: { select: { id: true, centerId: true } },
-      family: { select: { centerId: true, custodyNotes: true } },
+      family: {
+        select: {
+          centerId: true,
+          custodyNotes: true,
+          guardians: {
+            select: {
+              userId: true,
+              customFields: true,
+              user: { select: { isActive: true } },
+            },
+          },
+        },
+      },
     },
   });
   if (!child) {
@@ -139,6 +151,21 @@ async function POSTHandler(request: NextRequest) {
     include: { child: { select: { fullName: true } } },
   });
   const responseMedia = storageKey ? { ...media, url: await createChildMediaSignedUrl(storageKey).catch(() => media.url) } : media;
+
+  if (shareState.sharedWithParents) {
+    const parentNotifications = buildParentPhotoNotifications({
+      mediaId: media.id,
+      childName: child.fullName,
+      caption: media.caption,
+      guardians: child.family.guardians,
+    });
+    if (parentNotifications.length) {
+      await prisma.notification.createMany({
+        data: parentNotifications,
+        skipDuplicates: true,
+      });
+    }
+  }
 
   if (sharedWithParents && !child.photoVideoPermission && centerId) {
     const directors = await getCenterLeadershipUsers({

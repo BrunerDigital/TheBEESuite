@@ -15,6 +15,7 @@ import {
   KeyRound,
   MessageSquare,
   ReceiptText,
+  ShoppingBag,
   ShieldCheck,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -91,6 +92,18 @@ type LedgerEntry = {
   amountCents: number;
   balanceAfterCents: number | null;
   effectiveAt: string | Date;
+};
+
+type UniformProductOption = {
+  id: string;
+  productId: string;
+  name: string;
+  type: string;
+  amountCents: number;
+  color: "Black" | "Yellow";
+  size: string;
+  purchaseOption: "single" | "bundle_5";
+  shirtCount: number;
 };
 
 type DailyReport = {
@@ -171,6 +184,7 @@ type Props = {
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null; storageKey?: string | null; downloadUrl?: string | null }>;
   media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
+  uniformProducts?: UniformProductOption[];
   currentGuardianId?: string | null;
   kioskCredentials?: GuardianKioskCredential[];
   notificationPreferences?: Partial<NotificationPreferences> | null;
@@ -268,6 +282,7 @@ export function ParentPortalWorkspace({
   documents,
   media = [],
   announcements = [],
+  uniformProducts = [],
   currentGuardianId = null,
   kioskCredentials = [],
   notificationPreferences,
@@ -290,6 +305,9 @@ export function ParentPortalWorkspace({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [uniformColor, setUniformColor] = useState<"Black" | "Yellow">(uniformProducts[0]?.color ?? "Black");
+  const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
+  const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
@@ -306,6 +324,27 @@ export function ParentPortalWorkspace({
     if (!family) return null;
     return family.guardians.find((guardian) => guardian.id === currentGuardianId) ?? family.guardians.find((guardian) => guardian.userId) ?? family.guardians[0] ?? null;
   }, [family, currentGuardianId]);
+  const uniformColors = useMemo(
+    () => Array.from(new Set(uniformProducts.map((product) => product.color))),
+    [uniformProducts],
+  );
+  const uniformSizes = useMemo(
+    () => Array.from(new Set(uniformProducts.filter((product) => product.color === uniformColor).map((product) => product.size))),
+    [uniformColor, uniformProducts],
+  );
+  const uniformPurchaseOptions = useMemo(
+    () => uniformProducts.filter((product) => product.color === uniformColor && product.size === uniformSize),
+    [uniformColor, uniformProducts, uniformSize],
+  );
+  const selectedUniformProduct = useMemo(
+    () => uniformProducts.find((product) =>
+      product.color === uniformColor
+      && product.size === uniformSize
+      && product.purchaseOption === uniformPurchaseOption,
+    ) ?? null,
+    [uniformColor, uniformProducts, uniformPurchaseOption, uniformSize],
+  );
+  const uniformOrderTotalCents = selectedUniformProduct?.amountCents ?? 0;
 
   function showStatus(next: string) {
     setError("");
@@ -399,6 +438,81 @@ export function ParentPortalWorkspace({
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
     payInvoice(nextOpenInvoice.id, paymentMethodCategory);
+  }
+
+  function selectUniformColor(color: "Black" | "Yellow") {
+    setUniformColor(color);
+    const firstSize = uniformProducts.find((product) => product.color === color && product.purchaseOption === uniformPurchaseOption)?.size
+      ?? uniformProducts.find((product) => product.color === color)?.size;
+    if (firstSize) setUniformSize(firstSize);
+  }
+
+  function selectUniformPurchaseOption(purchaseOption: "single" | "bundle_5") {
+    setUniformPurchaseOption(purchaseOption);
+    const matchingSize = uniformProducts.find((product) =>
+      product.color === uniformColor
+      && product.size === uniformSize
+      && product.purchaseOption === purchaseOption,
+    )?.size;
+    if (matchingSize) return;
+    const firstSize = uniformProducts.find((product) =>
+      product.color === uniformColor
+      && product.purchaseOption === purchaseOption,
+    )?.size;
+    if (firstSize) setUniformSize(firstSize);
+  }
+
+  function buyUniform(paymentMethodCategory: "ach" | "card" | "link_bank") {
+    if (checkoutBlocked) {
+      return showError(checkoutReadiness.blockingReason || "Parent payments are not ready for this school yet.");
+    }
+    if (!selectedUniformProduct) {
+      return showError("Choose an available uniform shirt color and size.");
+    }
+    const recoveryAmount = paymentMethodCategory === "card"
+      ? estimatedCardRecovery(uniformOrderTotalCents)
+      : estimatedAchRecovery(uniformOrderTotalCents);
+    if (recoveryAmount > 0) {
+      const accepted = window.confirm(
+        `${paymentMethodCategory === "card" ? "Debit/credit card" : paymentMethodCategory === "link_bank" ? "Instant bank" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
+      );
+      if (!accepted) return;
+    }
+    startTransition(async () => {
+      const purchaseResponse = await fetch("/api/parent/products/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: selectedUniformProduct.productId,
+          purchaseOption: selectedUniformProduct.purchaseOption,
+          quantity: selectedUniformProduct.shirtCount,
+        }),
+      });
+      const purchaseJson = await purchaseResponse.json().catch(() => null) as {
+        error?: string;
+        invoice?: { id: string; totalCents: number };
+      } | null;
+      if (!purchaseResponse.ok || !purchaseJson?.invoice?.id) {
+        return showError(purchaseJson?.error || "Uniform shirt purchase could not be started.");
+      }
+
+      const checkoutResponse = await fetch("/api/billing/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: purchaseJson.invoice.id,
+          paymentMethodCategory,
+          returnPath: "/parent-portal",
+        }),
+      });
+      const checkoutJson = await checkoutResponse.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!checkoutResponse.ok || !checkoutJson?.url) {
+        showStatus("Uniform shirt invoice was added to your family ledger. Checkout can be completed from the open invoices list.");
+        router.refresh();
+        return;
+      }
+      window.location.href = checkoutJson.url;
+    });
   }
 
   function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
@@ -559,9 +673,9 @@ export function ParentPortalWorkspace({
             <Badge className="mb-3" variant={balanceCents > 0 ? "default" : "outline"}>
               The BEE Suite billing
             </Badge>
-            <h2 className="text-2xl font-semibold tracking-tight">Tuition balance {money(balanceCents)}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">Family balance {money(balanceCents)}</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Pay tuition, verify a bank account instantly, save a card, manage autopay, and review ledger history from this parent portal.
+              Pay tuition and product invoices, verify a bank account instantly, save a card, manage autopay, and review ledger history from this parent portal.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -744,6 +858,89 @@ export function ParentPortalWorkspace({
                     {openInvoices.length} open invoices are listed below for separate checkout and receipt tracking.
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+            {uniformProducts.length ? (
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 font-medium">
+                      <ShoppingBag className="size-4 text-primary" />
+                      Student Uniform Shirt
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Choose a shirt color, size, and purchase option. Uniform purchases are added to your family ledger with separate product checkout and receipt details.
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs text-muted-foreground">Order total</div>
+                    <div className="text-lg font-semibold">{money(uniformOrderTotalCents)}</div>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr]">
+                  <div className="space-y-2">
+                    <Label>Color</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {uniformColors.map((color) => (
+                        <Button
+                          key={color}
+                          disabled={isPending}
+                          onClick={() => selectUniformColor(color)}
+                          size="sm"
+                          type="button"
+                          variant={uniformColor === color ? "default" : "outline"}
+                        >
+                          <span className={`size-3 rounded-full border ${color === "Black" ? "bg-black" : "bg-yellow-300"}`} />
+                          {color}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Size</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {uniformSizes.map((size) => (
+                        <Button
+                          key={size}
+                          disabled={isPending}
+                          onClick={() => setUniformSize(size)}
+                          size="sm"
+                          type="button"
+                          variant={uniformSize === size ? "default" : "outline"}
+                        >
+                          {size}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Option</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {uniformPurchaseOptions.map((product) => (
+                        <Button
+                          key={product.purchaseOption}
+                          disabled={isPending}
+                          onClick={() => selectUniformPurchaseOption(product.purchaseOption)}
+                          size="sm"
+                          type="button"
+                          variant={uniformPurchaseOption === product.purchaseOption ? "default" : "outline"}
+                        >
+                          {product.shirtCount === 5 ? "5 shirts" : "1 shirt"} {money(product.amountCents)}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("link_bank")}>
+                    <Building2 data-icon="inline-start" />
+                    Buy With Instant Bank
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("card")} variant="outline">
+                    <CreditCard data-icon="inline-start" />
+                    Buy With Card
+                  </Button>
+                </div>
               </div>
             ) : null}
             {invoices.map((invoice) => (

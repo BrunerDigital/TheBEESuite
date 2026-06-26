@@ -20,6 +20,7 @@ import {
   PAYMENT_PROCESSING_RECOVERY_VERSION,
 } from "@/lib/payment-disclosures";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
+import { invoiceProductCheckoutBranding, invoiceProductStripeMetadata } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
@@ -84,6 +85,13 @@ async function canAccessInvoice(input: {
               guardians: { select: { userId: true } },
             },
           },
+        },
+      },
+      items: {
+        select: {
+          description: true,
+          amountCents: true,
+          productId: true,
         },
       },
     },
@@ -269,6 +277,14 @@ async function POSTHandler(request: NextRequest) {
     waiveBeeSuitePaymentOperationsFee,
   });
   const billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
+  const productCheckoutBranding = invoiceProductCheckoutBranding({
+    invoiceNumber: invoice.number,
+    familyName: invoice.billingAccount.family.name,
+    customFields: invoice.customFields,
+    items: invoice.items,
+  });
+  const productCheckoutMetadata = invoiceProductStripeMetadata(invoice.customFields);
+  const paymentDescription = productCheckoutBranding?.paymentDescription;
   let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
   if (!stripeCustomerId) {
     const customer = await createStripeCustomer({
@@ -340,6 +356,8 @@ async function POSTHandler(request: NextRequest) {
         bankAccountVerificationMethod,
         collectionMode,
         source,
+        ...productCheckoutMetadata,
+        description: paymentDescription || null,
         status: "checkout_pending",
       },
     },
@@ -377,6 +395,8 @@ async function POSTHandler(request: NextRequest) {
       paymentMethodConfigurationMissing: String(usesSpecificFeePolicy && !paymentMethodConfigurationId),
       checkoutTotalCents: String(amounts.checkoutTotalCents),
       applicationFeeAmountCents: String(amounts.applicationFeeAmountCents),
+      ...productCheckoutMetadata,
+      description: paymentDescription || "",
       feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
     },
@@ -387,6 +407,7 @@ async function POSTHandler(request: NextRequest) {
     bankAccountVerificationMethod,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
     idempotencyKey: `checkout:${payment.id}`,
+    checkoutBranding: productCheckoutBranding,
     tenantId: user.tenantId,
   });
 
@@ -413,6 +434,8 @@ async function POSTHandler(request: NextRequest) {
           bankAccountVerificationMethod,
           collectionMode,
           source,
+          ...productCheckoutMetadata,
+          description: paymentDescription || null,
           stripeChargeType: connectedAccountId ? "direct" : "platform",
           status: "checkout_failed",
           stripeError: session.error || "stripe_checkout_failed",
@@ -449,6 +472,8 @@ async function POSTHandler(request: NextRequest) {
         bankAccountVerificationMethod,
         collectionMode,
         source,
+        ...productCheckoutMetadata,
+        description: paymentDescription || null,
         stripeChargeType: connectedAccountId ? "direct" : "platform",
         status: "checkout_created",
       },
@@ -476,6 +501,8 @@ async function POSTHandler(request: NextRequest) {
       applicationFeeAmountCents: amounts.applicationFeeAmountCents,
       collectionMode,
       source,
+      ...productCheckoutMetadata,
+      description: paymentDescription || null,
     },
   });
 

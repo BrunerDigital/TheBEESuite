@@ -184,6 +184,7 @@ export const notificationPreferenceTypes = [
   { type: "billing", label: "Billing and tuition" },
   { type: "documents", label: "Documents and signatures" },
   { type: "incidents", label: "Incidents and health" },
+  { type: "photos", label: "Photos and classroom moments" },
   { type: "classroom", label: "Classroom activity" },
   { type: "enrollment", label: "Enrollment and leads" },
   { type: "fte_reports", label: "FTE reports" },

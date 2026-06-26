@@ -13,6 +13,7 @@ import {
   normalizeRecurringBillingPeriod,
   parseCurrencyCents,
 } from "@/lib/billing-workflows";
+import { productInvoiceFieldsForProduct } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -28,6 +29,7 @@ type ChargeResolution = {
   productId?: string | null;
   ageGroup?: string | null;
   cadence?: string | null;
+  customFields?: Record<string, unknown>;
 };
 
 function clean(value: unknown) {
@@ -107,6 +109,7 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
         description: clean(body.description) || product.name,
         amountCents: product.amountCents,
         productId: product.id,
+        customFields: productInvoiceFieldsForProduct(product),
       },
     };
   }
@@ -181,6 +184,8 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
         mode: "single",
         chargeSource: charge.chargeSource,
         sourceId: charge.sourceId,
+        ...(charge.customFields ?? {}),
+        ...(charge.chargeSource === "product" ? { itemSummary: itemDescription } : {}),
         billingPeriod,
         centerId: familyAccess.centerId,
         childId: child?.id ?? null,
@@ -308,6 +313,7 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
           batchTarget,
           chargeSource: charge.chargeSource,
           sourceId: charge.sourceId,
+          ...(charge.customFields ?? {}),
           billingPeriod,
           centerId: centerAccess.center.id,
           ageGroup: isAll(ageGroup) ? null : ageGroup,

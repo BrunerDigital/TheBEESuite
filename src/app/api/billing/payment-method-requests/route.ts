@@ -208,13 +208,17 @@ async function POSTHandler(request: NextRequest) {
   });
 
   const allFailed = results.length > 0 && emailsSent === 0;
+  const firstFailure = results.find((result) => !result.ok);
+  const failureReason = firstFailure?.error
+    ? `Payment setup emails could not be sent: ${firstFailure.error}`
+    : "Payment setup emails could not be sent.";
   return NextResponse.json(
     {
       ok: !allFailed,
       emailsSent,
       notificationsCreated,
       results,
-      error: allFailed ? "Payment setup emails could not be sent." : undefined,
+      error: allFailed ? failureReason : undefined,
     },
     { status: allFailed ? 502 : 200 },
   );

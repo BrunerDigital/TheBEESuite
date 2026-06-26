@@ -563,7 +563,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         results?: Array<{ email: string; ok: boolean; error?: string }>;
       } | null;
       if (!response.ok) {
-        setErrorMessage(json?.error || "Payment form could not be sent.");
+        const firstFailure = json?.results?.find((result) => !result.ok);
+        setErrorMessage(json?.error || firstFailure?.error || "Payment form could not be sent.");
         return;
       }
       const failed = json?.results?.filter((result) => !result.ok) ?? [];

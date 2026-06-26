@@ -20,6 +20,7 @@ export const notificationPreferenceChannelDefaults: Record<string, NotificationP
   billing: { emailEnabled: true, smsEnabled: false, pushEnabled: true },
   documents: { emailEnabled: true, smsEnabled: false, pushEnabled: true },
   incidents: { emailEnabled: true, smsEnabled: true, pushEnabled: true },
+  photos: { emailEnabled: true, smsEnabled: false, pushEnabled: true },
   classroom: { emailEnabled: false, smsEnabled: false, pushEnabled: true },
   enrollment: { emailEnabled: true, smsEnabled: false, pushEnabled: true },
   fte_reports: { emailEnabled: true, smsEnabled: true, pushEnabled: true },

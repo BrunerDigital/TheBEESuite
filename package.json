@@ -48,7 +48,8 @@
     "supabase:migrate-child-media": "tsx -r tsconfig-paths/register scripts/migrate-inline-child-media-to-storage.ts",
     "school:prepare-payout": "tsx -r tsconfig-paths/register scripts/prepare-school-payout-onboarding.ts",
     "kidcity:prepare-school-payouts": "tsx -r tsconfig-paths/register scripts/prepare-kidcity-school-payouts.ts",
-    "kidcity:prepare-kokomo-payout": "tsx -r tsconfig-paths/register scripts/prepare-kokomo-payout-onboarding.ts"
+    "kidcity:prepare-kokomo-payout": "tsx -r tsconfig-paths/register scripts/prepare-kokomo-payout-onboarding.ts",
+    "billing:ensure-uniform-products": "tsx -r tsconfig-paths/register scripts/ensure-student-uniform-products.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

@@ -24,8 +24,8 @@ function firstQueryValue(value: string | string[] | undefined) {
 
 function InvalidLink({ message }: { message: string }) {
   return (
-    <main className="min-h-screen bg-[#090b10] px-4 py-8 text-white">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-2xl flex-col justify-center gap-5">
+    <main className="min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-2xl flex-col justify-center gap-5 sm:min-h-[calc(100dvh-4rem)]">
         <BrandLogo size="md" priority />
         <Alert variant="destructive" className="bg-red-950/40">
           <AlertCircle className="size-4" />
@@ -132,17 +132,17 @@ export default async function PaymentMethodFormPage({
   const focus = firstQueryValue(search.focus) === "instant-bank" ? "instant-bank" : null;
 
   return (
-    <main className="min-h-screen bg-[#090b10] px-4 py-8 text-white">
-      <div className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-5xl gap-6 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+    <main className="min-h-dvh bg-[#090b10] px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(2rem+env(safe-area-inset-top))] text-white sm:pb-[calc(2rem+env(safe-area-inset-bottom))]">
+      <div className="mx-auto grid min-h-[calc(100dvh-8rem)] w-full max-w-5xl gap-6 sm:min-h-[calc(100dvh-4rem)] lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
         <section className="space-y-5">
           <BrandLogo branding={branding} size="lg" priority />
           <div>
             <Badge className="mb-3 border-amber-300/30 bg-amber-300/10 text-amber-100" variant="outline">
-              Secure tuition payments
+              The BEE Suite secure tuition flow
             </Badge>
-            <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family payment profile</h1>
+            <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family payment profile in The BEE Suite</h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-300">
-              Save a bank account or debit/credit card for tuition payments connected to {family.name}. This profile is linked to your family account for future weekly tuition billing.
+              Save a bank account or debit/credit card for tuition payments connected to {family.name}. The BEE Suite keeps the school-facing experience branded here and opens a secure processor handoff only when payment details must be collected.
             </p>
           </div>
           <Card className="border-white/10 bg-white/[0.04] text-white">

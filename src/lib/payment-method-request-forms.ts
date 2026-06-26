@@ -176,6 +176,17 @@ export function buildPaymentMethodRequestFormUrl(appBaseUrl: string, token: stri
   return `${appBaseUrl.replace(/\/+$/, "")}/payment-method-form/${encodeURIComponent(token)}`;
 }
 
+export function buildPublicPaymentBrandAssetUrl(appBaseUrl: string, assetPath?: string | null) {
+  const path = clean(assetPath);
+  if (!path) return null;
+  try {
+    const url = new URL(path, `${appBaseUrl.replace(/\/+$/, "")}/`);
+    return url.protocol === "https:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildPaymentMethodRequestFocusedFormUrl(appBaseUrl: string, token: string, intent: PaymentMethodRequestIntent) {
   const formUrl = buildPaymentMethodRequestFormUrl(appBaseUrl, token);
   if (intent !== "instant_bank_verification") return formUrl;
@@ -184,6 +195,45 @@ export function buildPaymentMethodRequestFocusedFormUrl(appBaseUrl: string, toke
 
 export function extractFirstUrl(value: string) {
   return value.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
+}
+
+export function paymentMethodRequestBrandSender(centerLabel: string) {
+  return `${clean(centerLabel) || "Your school"} via The BEE Suite`;
+}
+
+export function buildPaymentMethodRequestEmailSubject(input: {
+  centerLabel: string;
+  intent?: PaymentMethodRequestIntent;
+}) {
+  const sender = paymentMethodRequestBrandSender(input.centerLabel);
+  if (input.intent === "instant_bank_verification") {
+    return `${sender}: secure bank verification requested`;
+  }
+  return `${sender}: secure tuition payment steps`;
+}
+
+export function buildPaymentMethodRequestCheckoutBranding(input: {
+  centerLabel: string;
+  familyName: string;
+  intent?: PaymentMethodRequestIntent;
+  logoUrl?: string | null;
+  iconUrl?: string | null;
+}) {
+  const sender = paymentMethodRequestBrandSender(input.centerLabel);
+  const familyName = clean(input.familyName) || "your family";
+  const instantBank = input.intent === "instant_bank_verification";
+  return {
+    displayName: sender,
+    logoUrl: input.logoUrl ?? null,
+    iconUrl: input.iconUrl ?? null,
+    submitMessage: instantBank
+      ? `${sender} uses this secure processor step for bank verification. The BEE Suite does not store your bank login or full account number.`
+      : `${sender} uses this secure processor step for tuition payments. The BEE Suite does not store full card or bank details.`,
+    afterSubmitMessage: `You will return to The BEE Suite after this secure step is complete.`,
+    productDescription: `The BEE Suite tuition payment for ${familyName}.`,
+    paymentDescription: `The BEE Suite tuition payment for ${familyName}.`,
+    setupDescription: `The BEE Suite payment profile setup for ${familyName}.`,
+  };
 }
 
 export function buildPaymentMethodRequestEmailText({
@@ -203,12 +253,12 @@ export function buildPaymentMethodRequestEmailText({
     return [
       `Hi ${recipientLabel || "there"},`,
       "",
-      `${centerLabel} is asking you to instantly verify a bank account for ${familyName}'s tuition payments in The BEE Suite.`,
-      "Use the secure link below to log in through the bank verification handoff. This verifies the account now instead of waiting for microdeposits.",
-      "You can also pay an open tuition invoice from the same form with Instant Bank Login or a debit/credit card if a payment is due today.",
-      "The BEE Suite does not receive or store your bank login, full account number, or full card details. Payment information is handled by the secure payment processor.",
+      `${paymentMethodRequestBrandSender(centerLabel)} is asking you to verify a bank account for ${familyName}'s tuition payments.`,
+      "Start from the branded The BEE Suite link below. The form will open a secure bank-login step so the account can be verified now instead of waiting for microdeposits.",
+      "You can also pay an open tuition invoice from the same The BEE Suite form with Instant Bank Login or a debit/credit card if a payment is due today.",
+      "The BEE Suite and your school do not receive or store your bank login, full account number, or full card details. Stripe may appear only as the regulated payment processor during the secure handoff.",
       "",
-      `Verify your bank instantly: ${formUrl}`,
+      `Open The BEE Suite bank verification form: ${formUrl}`,
       "",
       "If you were not expecting this request, please contact the school before continuing.",
     ].join("\n");
@@ -217,12 +267,12 @@ export function buildPaymentMethodRequestEmailText({
   return [
     `Hi ${recipientLabel || "there"},`,
     "",
-    `${centerLabel} is asking you to complete tuition payment steps for ${familyName} in The BEE Suite.`,
-    "This secure form lets you pay an open invoice, verify a bank account instantly with your bank login, or use a debit/credit card.",
-    "If you want autopay, you can also save a verified bank account or card from the same form.",
-    "The BEE Suite does not store your full card or bank details. Payment information is saved through the secure payment processor.",
+    `${paymentMethodRequestBrandSender(centerLabel)} is asking you to complete tuition payment steps for ${familyName}.`,
+    "Start from the branded The BEE Suite link below to pay an open invoice, verify a bank account instantly with your bank login, or use a debit/credit card.",
+    "If you want autopay, you can also save a verified bank account or card from the same The BEE Suite form.",
+    "The BEE Suite and your school do not store your full card or bank details. Stripe may appear only as the regulated payment processor during the secure handoff.",
     "",
-    `Open your secure tuition payment form: ${formUrl}`,
+    `Open The BEE Suite tuition payment form: ${formUrl}`,
     "",
     "If you were not expecting this request, please contact the school before continuing.",
   ].join("\n");
@@ -234,7 +284,7 @@ export function buildPaymentMethodRequestNotificationBody(input: {
   intent?: PaymentMethodRequestIntent;
 }) {
   if (input.intent === "instant_bank_verification") {
-    return `Please verify a bank account instantly for ${input.familyName}. Open your secure The BEE Suite bank verification form: ${input.formUrl}`;
+    return `Please verify a bank account instantly for ${input.familyName}. Open the branded The BEE Suite bank verification form: ${input.formUrl}`;
   }
-  return `Please complete tuition payment steps for ${input.familyName}. Open your secure The BEE Suite payment form: ${input.formUrl}`;
+  return `Please complete tuition payment steps for ${input.familyName}. Open the branded The BEE Suite payment form: ${input.formUrl}`;
 }

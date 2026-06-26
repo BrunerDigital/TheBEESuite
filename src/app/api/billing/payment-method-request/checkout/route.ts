@@ -18,12 +18,15 @@ import {
   PAYMENT_PROCESSING_RECOVERY_VERSION,
 } from "@/lib/payment-disclosures";
 import {
+  buildPaymentMethodRequestCheckoutBranding,
+  buildPublicPaymentBrandAssetUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
@@ -305,6 +308,17 @@ async function POSTHandler(request: NextRequest) {
 
   const baseUrl = getAppBaseUrl(request.url);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
+  const centerLabel = center.crmLocationId ?? center.name;
+  const branding = resolveWorkspaceBranding({
+    tenantName: center.organization.tenant.name,
+    tenantSlug: center.organization.tenant.slug,
+    brandName: center.organization.brand?.name,
+    brandSlug: center.organization.brand?.slug,
+    organizationName: center.name,
+    email: payload.email,
+  });
+  const logoUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.logoSrc);
+  const iconUrl = buildPublicPaymentBrandAssetUrl(baseUrl, branding.markSrc);
   const successPath = appendRawQuery(
     appendQuery(appendQuery(formPath, "payment", "success"), "invoice", invoice.id),
     "session_id",
@@ -353,6 +367,13 @@ async function POSTHandler(request: NextRequest) {
     bankAccountVerificationMethod,
     onBehalfOfConnectedAccount: process.env.STRIPE_CHECKOUT_ON_BEHALF_OF === "true",
     idempotencyKey: `payment-request-checkout:${payment.id}`,
+    checkoutBranding: buildPaymentMethodRequestCheckoutBranding({
+      centerLabel,
+      familyName: family.name,
+      intent: bankAccountVerificationMethod === "instant" ? "instant_bank_verification" : "payment_steps",
+      logoUrl,
+      iconUrl,
+    }),
     tenantId: payload.tenantId,
   });
 

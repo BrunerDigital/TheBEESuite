@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildPaymentMethodRequestCheckoutBranding,
   buildPaymentMethodRequestEmailText,
+  buildPaymentMethodRequestEmailSubject,
   buildPaymentMethodRequestFocusedFormUrl,
   buildPaymentMethodRequestFormUrl,
   buildPaymentMethodRequestNotificationBody,
+  buildPublicPaymentBrandAssetUrl,
   createPaymentMethodRequestToken,
   extractFirstUrl,
+  paymentMethodRequestBrandSender,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "../src/lib/payment-method-request-forms";
@@ -46,10 +50,17 @@ test("instant bank request copy focuses parents on bank login verification", () 
   });
 
   assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123?focus=instant-bank");
-  assert.match(email, /instantly verify a bank account/i);
-  assert.match(email, /log in through the bank verification handoff/i);
+  assert.equal(paymentMethodRequestBrandSender("Sarasota"), "Sarasota via The BEE Suite");
+  assert.equal(
+    buildPaymentMethodRequestEmailSubject({ centerLabel: "Sarasota", intent: "instant_bank_verification" }),
+    "Sarasota via The BEE Suite: secure bank verification requested",
+  );
+  assert.match(email, /Sarasota via The BEE Suite is asking/i);
+  assert.match(email, /verify a bank account/i);
+  assert.match(email, /branded The BEE Suite link/i);
   assert.match(email, /instead of waiting for microdeposits/i);
-  assert.match(notification, /verify a bank account instantly/i);
+  assert.match(email, /Stripe may appear only as the regulated payment processor/i);
+  assert.match(notification, /branded The BEE Suite bank verification form/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });
 
@@ -95,9 +106,35 @@ test("payment method request copy links to the branded form", () => {
   const notification = buildPaymentMethodRequestNotificationBody({ familyName: "Johnson Family", formUrl });
 
   assert.equal(formUrl, "https://thebeesuite.io/payment-method-form/token_123");
+  assert.equal(
+    buildPaymentMethodRequestEmailSubject({ centerLabel: "Sarasota" }),
+    "Sarasota via The BEE Suite: secure tuition payment steps",
+  );
   assert.match(email, /pay an open invoice/i);
   assert.match(email, /verify a bank account instantly/i);
   assert.match(email, /debit\/credit card/i);
-  assert.match(email, /secure payment processor/i);
+  assert.match(email, /branded The BEE Suite link/i);
+  assert.match(email, /Stripe may appear only as the regulated payment processor/i);
+  assert.match(notification, /branded The BEE Suite payment form/i);
   assert.equal(extractFirstUrl(notification), formUrl);
+});
+
+test("payment method request checkout branding uses public Bee Suite assets and school copy", () => {
+  const logoUrl = buildPublicPaymentBrandAssetUrl("https://thebeesuite.io/", "/brand/the-bee-suite/app-icon-dark.png");
+  const localLogoUrl = buildPublicPaymentBrandAssetUrl("http://localhost:3000", "/brand/the-bee-suite/app-icon-dark.png");
+  const branding = buildPaymentMethodRequestCheckoutBranding({
+    centerLabel: "Sarasota",
+    familyName: "Johnson Family",
+    intent: "instant_bank_verification",
+    logoUrl,
+    iconUrl: "https://thebeesuite.io/brand/the-bee-suite/favicon-dark.png",
+  });
+
+  assert.equal(logoUrl, "https://thebeesuite.io/brand/the-bee-suite/app-icon-dark.png");
+  assert.equal(localLogoUrl, null);
+  assert.equal(branding.displayName, "Sarasota via The BEE Suite");
+  assert.equal(branding.logoUrl, logoUrl);
+  assert.match(branding.submitMessage ?? "", /The BEE Suite does not store your bank login/i);
+  assert.match(branding.afterSubmitMessage ?? "", /return to The BEE Suite/i);
+  assert.match(branding.setupDescription ?? "", /payment profile setup for Johnson Family/i);
 });

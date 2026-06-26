@@ -1142,10 +1142,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="size-4 text-muted-foreground" />
-                  Parent payment and bank verification links
+                  Branded parent payment and bank verification links
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Email a Bee Suite-branded secure form. Use the bank verification email when ACH is pending and the parent needs to log in to their bank now.
+                  Email a secure form branded for The BEE Suite. Parents start in the school-branded portal; Stripe appears only during the secure processor handoff when required.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">

@@ -7,12 +7,14 @@ import { sendEmail } from "@/lib/integrations";
 import { notificationExpiresAt } from "@/lib/notification-policy";
 import {
   buildPaymentMethodRequestEmailText,
+  buildPaymentMethodRequestEmailSubject,
   buildPaymentMethodRequestFocusedFormUrl,
   buildPaymentMethodRequestFormUrl,
   buildPaymentMethodRequestNotificationBody,
   createPaymentMethodRequestToken,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
+  paymentMethodRequestBrandSender,
   type PaymentMethodRequestIntent,
   paymentMethodRequestRecipientOptions,
   uniquePaymentRequestEmails,
@@ -115,9 +117,8 @@ async function POSTHandler(request: NextRequest) {
 
   const appBaseUrl = getAppBaseUrl(request.url);
   const centerLabel = center.crmLocationId ?? center.name;
-  const subject = intent === "instant_bank_verification"
-    ? `${centerLabel}: verify your bank account for tuition`
-    : `${centerLabel}: complete tuition payment steps`;
+  const subject = buildPaymentMethodRequestEmailSubject({ centerLabel, intent });
+  const fromName = paymentMethodRequestBrandSender(centerLabel);
   const results: Array<{ email: string; ok: boolean; configured: boolean; error?: string; notified: number; formUrl: string }> = [];
   let emailsSent = 0;
   let notificationsCreated = 0;
@@ -146,7 +147,7 @@ async function POSTHandler(request: NextRequest) {
       subject,
       text,
       replyTo: center.email,
-      fromName: `${centerLabel} via The BEE Suite`,
+      fromName,
       categories: [PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE],
       customArgs: { familyId: family.id, centerId: center.id, purpose: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE, intent },
       tenantId: center.organization.tenantId,
@@ -159,7 +160,7 @@ async function POSTHandler(request: NextRequest) {
       subject,
       text,
       replyTo: center.email,
-      fromName: `${centerLabel} via The BEE Suite`,
+      fromName,
       result: emailResult,
       metadata: { familyId: family.id, formUrl, intent },
     });

@@ -5,17 +5,24 @@ import {
   createStripeCheckoutSession,
   createStripeCustomer,
   createStripeSetupCheckoutSession,
+  getStripePaymentMethodConfigurationId,
   getStripeSecretKey,
 } from "@/lib/integrations";
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
 const originalStripeAchPaymentMethodConfigurationId = process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID;
+const originalStripeCardPaymentMethodConfigurationId = process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
+const originalStripeLinkBankPaymentMethodConfigurationId = process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
 
 afterEach(() => {
   if (originalStripeSecret === undefined) delete process.env.STRIPE_SECRET_KEY;
   else process.env.STRIPE_SECRET_KEY = originalStripeSecret;
   if (originalStripeAchPaymentMethodConfigurationId === undefined) delete process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID;
   else process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = originalStripeAchPaymentMethodConfigurationId;
+  if (originalStripeCardPaymentMethodConfigurationId === undefined) delete process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
+  else process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID = originalStripeCardPaymentMethodConfigurationId;
+  if (originalStripeLinkBankPaymentMethodConfigurationId === undefined) delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
+  else process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID = originalStripeLinkBankPaymentMethodConfigurationId;
 });
 
 test("Google Sheets runtime config prefers tenant credentials over platform env vars", () => {
@@ -50,6 +57,17 @@ test("Stripe helpers prefer tenant credentials over platform env vars", async ()
   });
 
   assert.equal(secret, "sk_tenant");
+});
+
+test("Stripe instant bank configuration falls back to ACH configuration", () => {
+  process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_bank";
+  delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
+
+  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "pmc_bank");
+
+  process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_instant_bank";
+
+  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "pmc_instant_bank");
 });
 
 test("Stripe customer creation uses the tenant secret key when provided", async () => {
@@ -181,6 +199,42 @@ test("Stripe checkout can require instant bank verification", async () => {
   }
 });
 
+test("Stripe checkout uses ACH configuration for instant bank login when no dedicated link bank configuration exists", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_bank";
+  delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_link_bank", url: "https://checkout.stripe.test/link-bank" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      paymentMethodCategory: "link_bank",
+      paymentMethodConfigurationId: getStripePaymentMethodConfigurationId("link_bank"),
+      bankAccountVerificationMethod: "instant",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_configuration=pmc_bank/);
+    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe checkout can be constrained to card-only entry", async () => {
   const originalFetch = globalThis.fetch;
   const originalCardConfiguration = process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
@@ -207,6 +261,13 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
       metadata: { invoiceId: "inv_1", paymentId: "pay_1", collectionMode: "director_card_terminal" },
       paymentMethodCategory: "card",
       idempotencyKey: "checkout:pay_1",
+      checkoutBranding: {
+        displayName: "Sarasota via The BEE Suite",
+        logoUrl: "https://thebeesuite.io/brand/the-bee-suite/app-icon-dark.png",
+        submitMessage: "The BEE Suite secure tuition payment",
+        productDescription: "The BEE Suite tuition payment for Johnson Family.",
+        paymentDescription: "The BEE Suite tuition payment for Johnson Family.",
+      },
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
@@ -214,6 +275,11 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
     assert.equal(idempotencyKey, "checkout:pay_1:payment_method_types");
     assert.match(body, /payment_method_types%5B0%5D=card/);
     assert.match(body, /metadata%5BcollectionMode%5D=director_card_terminal/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Blogo%5D%5Btype%5D=url/);
+    assert.match(body, /custom_text%5Bsubmit%5D%5Bmessage%5D=The\+BEE\+Suite\+secure\+tuition\+payment/);
+    assert.match(body, /payment_intent_data%5Bdescription%5D=The\+BEE\+Suite\+tuition\+payment\+for\+Johnson\+Family/);
+    assert.match(body, /line_items%5B0%5D%5Bprice_data%5D%5Bproduct_data%5D%5Bdescription%5D=The\+BEE\+Suite\+tuition\+payment\+for\+Johnson\+Family/);
     assert.doesNotMatch(body, /payment_method_configuration/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -403,12 +469,22 @@ test("Stripe setup checkout can require instant bank verification", async () => 
       successUrl: "https://app.test/success",
       cancelUrl: "https://app.test/cancel",
       metadata: { billingAccountId: "ba_1", familyId: "family_1" },
+      checkoutBranding: {
+        displayName: "Sarasota via The BEE Suite",
+        iconUrl: "https://thebeesuite.io/brand/the-bee-suite/favicon-dark.png",
+        submitMessage: "The BEE Suite secure bank verification",
+        setupDescription: "The BEE Suite payment profile setup for Johnson Family.",
+      },
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
     assert.equal(result.ok, true);
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bfinancial_connections%5D%5Bpermissions%5D%5B0%5D=payment_method/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bicon%5D%5Btype%5D=url/);
+    assert.match(body, /custom_text%5Bsubmit%5D%5Bmessage%5D=The\+BEE\+Suite\+secure\+bank\+verification/);
+    assert.match(body, /setup_intent_data%5Bdescription%5D=The\+BEE\+Suite\+payment\+profile\+setup\+for\+Johnson\+Family/);
   } finally {
     globalThis.fetch = originalFetch;
   }

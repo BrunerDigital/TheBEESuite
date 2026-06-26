@@ -34,6 +34,17 @@ export type StripeCheckoutFeePolicy = {
   waiveBeeSuitePaymentOperationsFee?: boolean;
 };
 
+export type StripeCheckoutBranding = {
+  displayName?: string | null;
+  logoUrl?: string | null;
+  iconUrl?: string | null;
+  submitMessage?: string | null;
+  afterSubmitMessage?: string | null;
+  productDescription?: string | null;
+  paymentDescription?: string | null;
+  setupDescription?: string | null;
+};
+
 export type StripeSetupIntentSnapshot = {
   id: string;
   customerId?: string | null;
@@ -220,7 +231,10 @@ export function getStripeCardProcessingRecoveryFixedCents() {
 export function getStripePaymentMethodConfigurationId(paymentMethodCategory: StripePaymentMethodCategory) {
   if (paymentMethodCategory === "ach") return clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
   if (paymentMethodCategory === "card") return clean(process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID);
-  if (paymentMethodCategory === "link_bank") return clean(process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID);
+  if (paymentMethodCategory === "link_bank") {
+    return clean(process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID) ||
+      clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
+  }
   return "";
 }
 
@@ -234,6 +248,48 @@ function checkoutSessionIdempotencyKey(baseKey: string | null | undefined, payme
   const key = clean(baseKey);
   if (!key) return null;
   return `${key}:${paymentMethodMode}`;
+}
+
+function stripeCheckoutText(value: unknown, maxLength: number) {
+  const text = clean(value).replace(/\s+/g, " ");
+  return text.length > maxLength ? `${text.slice(0, Math.max(0, maxLength - 1)).trim()}...` : text;
+}
+
+function stripeCheckoutHttpsUrl(value: unknown) {
+  const rawUrl = clean(value);
+  if (!rawUrl) return "";
+  try {
+    const url = new URL(rawUrl);
+    return url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function addStripeCheckoutBrandingParams(body: URLSearchParams, branding?: StripeCheckoutBranding | null) {
+  if (!branding) return;
+
+  const displayName = stripeCheckoutText(branding.displayName, 80);
+  if (displayName) {
+    body.set("branding_settings[display_name]", displayName);
+    body.set("branding_settings[font_family]", "source_sans_pro");
+  }
+
+  const logoUrl = stripeCheckoutHttpsUrl(branding.logoUrl);
+  const iconUrl = stripeCheckoutHttpsUrl(branding.iconUrl);
+  if (logoUrl) {
+    body.set("branding_settings[logo][type]", "url");
+    body.set("branding_settings[logo][url]", logoUrl);
+  } else if (iconUrl) {
+    body.set("branding_settings[icon][type]", "url");
+    body.set("branding_settings[icon][url]", iconUrl);
+  }
+
+  const submitMessage = stripeCheckoutText(branding.submitMessage, 255);
+  if (submitMessage) body.set("custom_text[submit][message]", submitMessage);
+
+  const afterSubmitMessage = stripeCheckoutText(branding.afterSubmitMessage, 255);
+  if (afterSubmitMessage) body.set("custom_text[after_submit][message]", afterSubmitMessage);
 }
 
 function addIndexedParams(body: URLSearchParams, key: string, values: string[]) {
@@ -578,6 +634,7 @@ export async function createStripeCheckoutSession({
   paymentMethodCategory = "default",
   bankAccountVerificationMethod,
   idempotencyKey,
+  checkoutBranding,
   tenantId,
   credentials,
 }: {
@@ -598,6 +655,7 @@ export async function createStripeCheckoutSession({
   bankAccountVerificationMethod?: StripeBankAccountVerificationMethod | null;
   onBehalfOfConnectedAccount?: boolean;
   idempotencyKey?: string | null;
+  checkoutBranding?: StripeCheckoutBranding | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -620,6 +678,10 @@ export async function createStripeCheckoutSession({
       "line_items[0][price_data][product_data][name]": `${centerName ? `${centerName} ` : ""}invoice ${invoiceNumber}`,
       client_reference_id: metadata.invoiceId || invoiceNumber,
     });
+    const productDescription = stripeCheckoutText(checkoutBranding?.productDescription, 255);
+    if (productDescription) {
+      body.set("line_items[0][price_data][product_data][description]", productDescription);
+    }
 
     if (parentSurchargeAmountCents > 0) {
       body.set("line_items[1][quantity]", "1");
@@ -649,11 +711,16 @@ export async function createStripeCheckoutSession({
     if (connectedAccountId && applicationFeeAmountCents > 0) {
       body.set("payment_intent_data[application_fee_amount]", String(Math.min(applicationFeeAmountCents, amountCents)));
     }
+    const paymentDescription = stripeCheckoutText(checkoutBranding?.paymentDescription, 255);
+    if (paymentDescription) {
+      body.set("payment_intent_data[description]", paymentDescription);
+    }
 
     Object.entries(metadata).forEach(([key, value]) => {
       body.set(`metadata[${key}]`, value);
       body.set(`payment_intent_data[metadata][${key}]`, value);
     });
+    addStripeCheckoutBrandingParams(body, checkoutBranding);
 
     return body;
   }
@@ -1045,6 +1112,7 @@ export async function createStripeSetupCheckoutSession({
   cancelUrl,
   metadata,
   connectedAccountId,
+  checkoutBranding,
   tenantId,
   credentials,
 }: {
@@ -1056,6 +1124,7 @@ export async function createStripeSetupCheckoutSession({
   cancelUrl: string;
   metadata: Record<string, string>;
   connectedAccountId?: string | null;
+  checkoutBranding?: StripeCheckoutBranding | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult> {
@@ -1091,10 +1160,15 @@ export async function createStripeSetupCheckoutSession({
       body.set("payment_method_options[us_bank_account][verification_method]", "instant");
       body.set("payment_method_options[us_bank_account][financial_connections][permissions][0]", "payment_method");
     }
+    const setupDescription = stripeCheckoutText(checkoutBranding?.setupDescription, 255);
+    if (setupDescription) {
+      body.set("setup_intent_data[description]", setupDescription);
+    }
     Object.entries(metadata).forEach(([key, value]) => {
       body.set(`metadata[${key}]`, value);
       body.set(`setup_intent_data[metadata][${key}]`, value);
     });
+    addStripeCheckoutBrandingParams(body, checkoutBranding);
     return body;
   }
 

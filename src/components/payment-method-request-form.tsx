@@ -108,9 +108,9 @@ export function PaymentMethodRequestForm({
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Save Tuition Payment Information</CardTitle>
+            <CardTitle>The BEE Suite Tuition Payment Profile</CardTitle>
             <CardDescription className="text-zinc-300">
-              {centerLabel} requested payment setup for {familyName}.
+              {centerLabel} requested this branded secure payment setup for {familyName}.
             </CardDescription>
           </div>
           <Badge variant={autopayStatus === "enabled" ? "default" : "outline"} className="capitalize">
@@ -124,7 +124,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment information submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The secure payment processor is saving the payment method to this family profile. The school will see the updated autopay status shortly.
+              The BEE Suite is saving the verified payment method to this family profile through the secure processor. The school will see the updated autopay status shortly.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -133,7 +133,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The secure payment processor is confirming the payment. The school will see it on the family ledger after confirmation.
+              The BEE Suite received the secure payment confirmation. The school will see it on the family ledger after reconciliation.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -160,7 +160,7 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              Use Instant Bank Login to verify through your bank now, or use Debit/Credit Card to make today&apos;s payment.
+              Use The BEE Suite Instant Bank Login option to verify through your bank now, or use Debit/Credit Card to make today&apos;s payment.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -169,7 +169,7 @@ export function PaymentMethodRequestForm({
             <Building2 className="size-4" />
             <AlertTitle>Instant bank verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
-              Select Verify Bank Instantly to use the secure bank-login handoff and verify your bank account now.
+              Select Verify Bank Instantly to start The BEE Suite secure bank-login handoff and verify your bank account now.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -205,14 +205,16 @@ export function PaymentMethodRequestForm({
                 {money(nextOpenInvoice.totalCents)}
               </Badge>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 grid grid-cols-2 gap-2">
               <Button className="h-11" disabled={isPending} onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
                 <Building2 data-icon="inline-start" />
-                Pay With Instant Bank Login
+                <span className="sm:hidden">Bank Login</span>
+                <span className="hidden sm:inline">Pay With Instant Bank Login</span>
               </Button>
               <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "card")}>
                 <CreditCard data-icon="inline-start" />
-                Pay With Debit/Credit Card
+                <span className="sm:hidden">Debit/Credit</span>
+                <span className="hidden sm:inline">Pay With Debit/Credit Card</span>
               </Button>
             </div>
             {openInvoices.length > 1 ? (
@@ -229,7 +231,7 @@ export function PaymentMethodRequestForm({
             <div>
               <div className="text-sm font-medium">The BEE Suite payment profile</div>
               <p className="mt-1 text-sm leading-6 text-zinc-300">
-                The BEE Suite never stores full card or bank account numbers. The secure payment processor saves the payment method and links it to this family for tuition payments and autopay.
+                The BEE Suite keeps the school-facing tuition profile branded to your family. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
               </p>
               <p className="mt-2 text-xs text-zinc-400">
                 Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.

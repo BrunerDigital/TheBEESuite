@@ -361,10 +361,10 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
       ]
     : [
         { label: "Family", href: "/parent-portal", Icon: Home },
-        { label: "Billing", href: "/parent-portal#billing", Icon: CreditCard },
+        { label: "Reports", href: "/parent-portal#daily-reports", Icon: ClipboardList },
+        { label: "Activity", href: "/parent-portal#activities", Icon: Sparkles },
         { label: "Photos", href: "/parent-portal#photos", Icon: Camera },
-        { label: "Docs", href: "/parent-portal#documents", Icon: FileText },
-        { label: "Messages", href: "/parent-portal#messages", Icon: MessageSquare },
+        { label: "Billing", href: "/parent-portal#billing", Icon: CreditCard },
       ];
   const items = isTeacherUser(currentUser) ? teacherItems : isParentFacingUser(currentUser) ? parentItems : [];
   if (!items.length) return null;

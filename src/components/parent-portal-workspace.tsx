@@ -8,7 +8,9 @@ import {
   BellRing,
   Building2,
   CalendarDays,
+  Camera,
   CheckCircle2,
+  ClipboardList,
   CreditCard,
   FileCheck2,
   FileText,
@@ -17,6 +19,7 @@ import {
   ReceiptText,
   ShoppingBag,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -345,6 +348,19 @@ export function ParentPortalWorkspace({
     [uniformColor, uniformProducts, uniformPurchaseOption, uniformSize],
   );
   const uniformOrderTotalCents = selectedUniformProduct?.amountCents ?? 0;
+  const latestReport = dailyReports[0] ?? null;
+  const activityHighlights = useMemo(
+    () => dailyReports
+      .flatMap((report) =>
+        (report.activities ?? []).map((activity) => ({
+          ...activity,
+          childName: report.child.fullName,
+          date: report.date,
+        })),
+      )
+      .slice(0, 8),
+    [dailyReports],
+  );
 
   function showStatus(next: string) {
     setError("");
@@ -631,7 +647,7 @@ export function ParentPortalWorkspace({
         </Badge>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{family.name}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Daily reports, invoices, messages, documents, and director-reviewed update requests for your family.
+          Daily reports, classroom activities, photos, messages, documents, and family account details.
         </p>
       </section>
 
@@ -661,40 +677,199 @@ export function ParentPortalWorkspace({
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="glass-panel"><CardHeader><CardDescription>Current balance</CardDescription><CardTitle>{money(balanceCents)}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Open invoices</CardDescription><CardTitle>{openInvoices.length}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Reports</CardDescription><CardTitle>{dailyReports.length}</CardTitle></CardHeader></Card>
-        <Card className="glass-panel"><CardHeader><CardDescription>Need acknowledgment</CardDescription><CardTitle>{unacknowledged.length}</CardTitle></CardHeader></Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardDescription>Latest report</CardDescription>
+            <CardTitle>{latestReport ? formatDate(latestReport.date) : "None yet"}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardDescription>Shared photos</CardDescription>
+            <CardTitle>{media.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardDescription>Recent activities</CardDescription>
+            <CardTitle>{activityHighlights.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardDescription>Need acknowledgment</CardDescription>
+            <CardTitle>{unacknowledged.length}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      <section id="billing" className="scroll-mt-28 rounded-2xl border bg-card/85 p-4 shadow-2xl shadow-black/15 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <section id="daily-updates" className="scroll-mt-28 rounded-2xl border bg-card/90 p-4 shadow-2xl shadow-black/15 sm:p-6">
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <Badge className="mb-3" variant={balanceCents > 0 ? "default" : "outline"}>
-              The BEE Suite billing
+            <Badge className="mb-3">
+              <Sparkles data-icon="inline-start" />
+              Today at school
             </Badge>
-            <h2 className="text-2xl font-semibold tracking-tight">Family balance {money(balanceCents)}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              Pay tuition and product invoices, verify a bank account instantly, save a card, manage autopay, and review ledger history from this parent portal.
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Daily Reports, Activities, and Photos</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              Recent teacher notes, classroom activities, and photo moments for this family.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {nextOpenInvoice ? (
-              <>
-                <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")}>
-                  <Building2 data-icon="inline-start" />
-                  Pay With Instant Bank
-                </Button>
-                <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
-                  <CreditCard data-icon="inline-start" />
-                  Pay With Card
-                </Button>
-              </>
-            ) : null}
-            <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant={nextOpenInvoice ? "outline" : "default"}>
-              <Building2 data-icon="inline-start" />
-              Verify Bank / ACH
-            </Button>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <a
+              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted sm:flex-none"
+              href="#daily-reports"
+            >
+              <ClipboardList data-icon="inline-start" />
+              Reports
+            </a>
+            <a
+              className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted sm:flex-none"
+              href="#photos"
+            >
+              <Camera data-icon="inline-start" />
+              Photos
+            </a>
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <Card id="daily-reports" className="glass-panel scroll-mt-28">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="size-5 text-primary" />
+                Daily Reports
+              </CardTitle>
+              <CardDescription>Recent teacher notes and care details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {dailyReports.slice(0, 5).map((report, index) => (
+                <div
+                  key={report.id}
+                  className={`rounded-xl border p-4 ${index === 0 ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{report.child.fullName}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
+                    </div>
+                    {index === 0 ? <Badge>Latest</Badge> : null}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
+                  {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
+                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                    {report.meals?.map((meal) => (
+                      <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
+                    ))}
+                    {report.naps?.map((nap) => (
+                      <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
+                    ))}
+                    {report.diapers?.map((diaper) => (
+                      <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
+                    ))}
+                    {report.activities?.slice(0, 4).map((activity) => (
+                      <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!dailyReports.length ? (
+                <p className="text-sm text-muted-foreground">No daily reports have been shared recently.</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4">
+            <Card id="photos" className="glass-panel scroll-mt-28">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="size-5 text-primary" />
+                  Photos and Moments
+                </CardTitle>
+                <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {media.slice(0, 1).map((item) => {
+                  const imageSrc = renderableImageSrc(item.url);
+                  return (
+                    <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
+                      <div className="relative aspect-[4/3] w-full bg-muted/40">
+                        {imageSrc ? (
+                          <Image
+                            src={imageSrc}
+                            alt={item.caption || `${item.child.fullName} classroom moment`}
+                            fill
+                            sizes="(min-width: 1280px) 35vw, 100vw"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                            Image unavailable
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <div className="text-sm font-medium">{item.child.fullName}</div>
+                        <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {media.slice(1, 5).map((item) => {
+                    const imageSrc = renderableImageSrc(item.url);
+                    return (
+                      <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
+                        <div className="relative aspect-video w-full bg-muted/40">
+                          {imageSrc ? (
+                            <Image
+                              src={imageSrc}
+                              alt={item.caption || `${item.child.fullName} classroom moment`}
+                              fill
+                              sizes="(min-width: 640px) 25vw, 50vw"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                              Image unavailable
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-3">
+                          <div className="text-sm font-medium">{item.child.fullName}</div>
+                          <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {!media.length ? <p className="text-sm text-muted-foreground">No shared photos have been added yet.</p> : null}
+              </CardContent>
+            </Card>
+
+            <Card id="activities" className="glass-panel scroll-mt-28">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="size-5 text-primary" />
+                  Daily Activities
+                </CardTitle>
+                <CardDescription>Classroom activity highlights from recent reports.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {activityHighlights.map((activity) => (
+                  <div key={`${activity.id}-${activity.childName}`} className="rounded-xl border bg-background/40 p-3">
+                    <div className="text-sm font-medium">{activity.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{activity.childName} · {formatDate(activity.date)}</div>
+                    {activity.notes ? <p className="mt-2 text-sm text-muted-foreground">{activity.notes}</p> : null}
+                  </div>
+                ))}
+                {!activityHighlights.length ? (
+                  <p className="text-sm text-muted-foreground">No classroom activities have been shared recently.</p>
+                ) : null}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
@@ -755,7 +930,7 @@ export function ParentPortalWorkspace({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="glass-panel">
+        <Card id="billing" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Billing</CardTitle>
             <CardDescription>
@@ -1049,80 +1224,7 @@ export function ParentPortalWorkspace({
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <Card id="photos" className="glass-panel scroll-mt-28">
-          <CardHeader>
-            <CardTitle>Photos and Moments</CardTitle>
-            <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2">
-            {media.slice(0, 8).map((item) => {
-              const imageSrc = renderableImageSrc(item.url);
-              return (
-                <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
-                  <div className="relative aspect-video w-full bg-muted/40">
-                    {imageSrc ? (
-                      <Image
-                        src={imageSrc}
-                        alt={item.caption || `${item.child.fullName} classroom moment`}
-                        fill
-                        sizes="(min-width: 640px) 50vw, 100vw"
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                        Image unavailable
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-3">
-                    <div className="text-sm font-medium">{item.child.fullName}</div>
-                    <p className="mt-1 text-xs text-muted-foreground">{item.caption || formatDate(item.createdAt)}</p>
-                  </div>
-                </div>
-              );
-            })}
-            {!media.length ? <p className="text-sm text-muted-foreground">No shared photos have been added yet.</p> : null}
-          </CardContent>
-        </Card>
-
-        <Card id="daily-reports" className="glass-panel scroll-mt-28">
-          <CardHeader>
-            <CardTitle>Daily Reports</CardTitle>
-            <CardDescription>Recent teacher notes and care details</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {dailyReports.map((report) => (
-              <div key={report.id} className="rounded-xl border bg-background/40 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium">{report.child.fullName}</div>
-                  <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
-                {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
-                <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                  {report.meals?.map((meal) => (
-                    <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
-                  ))}
-                  {report.naps?.map((nap) => (
-                    <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
-                  ))}
-                  {report.diapers?.map((diaper) => (
-                    <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
-                  ))}
-                  {report.activities?.map((activity) => (
-                    <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
-                  ))}
-                </div>
-              </div>
-            ))}
-            {!dailyReports.length ? (
-              <p className="text-sm text-muted-foreground">No daily reports have been shared recently.</p>
-            ) : null}
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-4">
         <Card id="documents" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Documents and Requests</CardTitle>

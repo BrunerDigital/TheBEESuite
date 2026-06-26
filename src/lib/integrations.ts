@@ -230,6 +230,12 @@ function stripeSetupPaymentMethodTypes(paymentMethodCategory: StripePaymentMetho
   return [];
 }
 
+function checkoutSessionIdempotencyKey(baseKey: string | null | undefined, paymentMethodMode: string) {
+  const key = clean(baseKey);
+  if (!key) return null;
+  return `${key}:${paymentMethodMode}`;
+}
+
 function addIndexedParams(body: URLSearchParams, key: string, values: string[]) {
   values.forEach((value, index) => {
     body.set(`${key}[${index}]`, value);
@@ -652,12 +658,13 @@ export async function createStripeCheckoutSession({
     return body;
   }
 
-  async function createSession(body: URLSearchParams) {
+  async function createSession(body: URLSearchParams, paymentMethodMode: CheckoutPaymentMethodMode) {
+    const scopedIdempotencyKey = checkoutSessionIdempotencyKey(idempotencyKey, paymentMethodMode);
     const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
       headers: {
         ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
-        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+        ...(scopedIdempotencyKey ? { "Idempotency-Key": scopedIdempotencyKey } : {}),
       },
       body,
       signal: AbortSignal.timeout(10_000),
@@ -675,7 +682,7 @@ export async function createStripeCheckoutSession({
   let json: { id?: string; url?: string; error?: { message?: string; param?: string } } | null = null;
 
   for (const paymentMethodMode of paymentMethodModes) {
-    ({ response, json } = await createSession(buildBody(paymentMethodMode)));
+    ({ response, json } = await createSession(buildBody(paymentMethodMode), paymentMethodMode));
     if (response.ok && json?.url) break;
     if (paymentMethodMode === "configuration" && isMissingPaymentMethodConfigurationError(json)) continue;
     break;

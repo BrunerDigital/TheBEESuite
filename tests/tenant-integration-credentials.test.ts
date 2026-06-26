@@ -186,9 +186,11 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
   const originalCardConfiguration = process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
   delete process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID;
   let body = "";
+  let idempotencyKey = "";
 
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     body = String(init?.body ?? "");
+    idempotencyKey = String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? "");
     return new Response(JSON.stringify({ id: "cs_card_terminal", url: "https://checkout.stripe.test/card-terminal" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -204,10 +206,12 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
       cancelUrl: "https://app.test/cancel",
       metadata: { invoiceId: "inv_1", paymentId: "pay_1", collectionMode: "director_card_terminal" },
       paymentMethodCategory: "card",
+      idempotencyKey: "checkout:pay_1",
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
     assert.equal(result.ok, true);
+    assert.equal(idempotencyKey, "checkout:pay_1:payment_method_types");
     assert.match(body, /payment_method_types%5B0%5D=card/);
     assert.match(body, /metadata%5BcollectionMode%5D=director_card_terminal/);
     assert.doesNotMatch(body, /payment_method_configuration/);
@@ -226,10 +230,12 @@ test("Stripe checkout retries without stale payment method configuration", async
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";
   let calls = 0;
   const bodies: string[] = [];
+  const idempotencyKeys: string[] = [];
 
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     calls += 1;
     bodies.push(String(init?.body ?? ""));
+    idempotencyKeys.push(String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? ""));
     if (calls === 1) {
       return new Response(JSON.stringify({
         error: {
@@ -257,11 +263,13 @@ test("Stripe checkout retries without stale payment method configuration", async
       metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
       paymentMethodCategory: "ach",
       paymentMethodConfigurationId: "pmc_stale",
+      idempotencyKey: "checkout:pay_1",
       credentials: { STRIPE_SECRET_KEY: "sk_platform" },
     });
 
     assert.equal(result.ok, true);
     assert.equal(calls, 2);
+    assert.deepEqual(idempotencyKeys, ["checkout:pay_1:configuration", "checkout:pay_1:payment_method_types"]);
     assert.match(bodies[0], /payment_method_configuration=pmc_stale/);
     assert.doesNotMatch(bodies[1], /payment_method_configuration/);
     assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);

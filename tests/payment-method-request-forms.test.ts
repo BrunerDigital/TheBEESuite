@@ -10,6 +10,7 @@ import {
   buildPublicPaymentBrandAssetUrl,
   createPaymentMethodRequestToken,
   extractFirstUrl,
+  getPaymentMethodRequestAppBaseUrl,
   paymentMethodRequestBrandSender,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
@@ -117,6 +118,46 @@ test("payment method request copy links to the branded form", () => {
   assert.match(email, /Stripe may appear only as the regulated payment processor/i);
   assert.match(notification, /branded The BEE Suite payment form/i);
   assert.equal(extractFirstUrl(notification), formUrl);
+});
+
+test("payment method request app URL keeps emailed links on the secure Bee Suite host", () => {
+  const savedEnv = {
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    APP_URL: process.env.APP_URL,
+    VERCEL_URL: process.env.VERCEL_URL,
+  };
+
+  try {
+    process.env.NEXT_PUBLIC_APP_URL = "https://bad-cert.example.com";
+    delete process.env.APP_URL;
+    delete process.env.VERCEL_URL;
+
+    assert.equal(
+      getPaymentMethodRequestAppBaseUrl("https://bad-cert.example.com/api/billing/payment-method-requests"),
+      "https://thebeesuite.io",
+    );
+
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    process.env.VERCEL_URL = "the-bee-suite-preview-brunerdigitals-projects.vercel.app";
+
+    assert.equal(
+      getPaymentMethodRequestAppBaseUrl("https://the-bee-suite-preview-brunerdigitals-projects.vercel.app/api/billing/payment-method-requests"),
+      "https://thebeesuite.io",
+    );
+
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
+    delete process.env.VERCEL_URL;
+
+    assert.equal(
+      getPaymentMethodRequestAppBaseUrl("http://localhost:3000/api/billing/payment-method-requests"),
+      "http://localhost:3000",
+    );
+  } finally {
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test("payment method request checkout branding uses public Bee Suite assets and school copy", () => {

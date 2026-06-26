@@ -20,6 +20,7 @@ import {
 import {
   buildPaymentMethodRequestCheckoutBranding,
   buildPublicPaymentBrandAssetUrl,
+  getPaymentMethodRequestAppBaseUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
@@ -29,7 +30,6 @@ import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -306,7 +306,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const baseUrl = getAppBaseUrl(request.url);
+  const baseUrl = getPaymentMethodRequestAppBaseUrl(request.url);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
   const centerLabel = center.crmLocationId ?? center.name;
   const branding = resolveWorkspaceBranding({

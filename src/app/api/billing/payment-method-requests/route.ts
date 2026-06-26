@@ -12,6 +12,7 @@ import {
   buildPaymentMethodRequestFormUrl,
   buildPaymentMethodRequestNotificationBody,
   createPaymentMethodRequestToken,
+  getPaymentMethodRequestAppBaseUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
   paymentMethodRequestBrandSender,
@@ -20,7 +21,6 @@ import {
   uniquePaymentRequestEmails,
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -115,7 +115,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const appBaseUrl = getAppBaseUrl(request.url);
+  const appBaseUrl = getPaymentMethodRequestAppBaseUrl(request.url);
   const centerLabel = center.crmLocationId ?? center.name;
   const subject = buildPaymentMethodRequestEmailSubject({ centerLabel, intent });
   const fromName = paymentMethodRequestBrandSender(centerLabel);
@@ -148,6 +148,7 @@ async function POSTHandler(request: NextRequest) {
       text,
       replyTo: center.email,
       fromName,
+      disableClickTracking: true,
       categories: [PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE],
       customArgs: { familyId: family.id, centerId: center.id, purpose: PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE, intent },
       tenantId: center.organization.tenantId,

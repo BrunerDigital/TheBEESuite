@@ -318,10 +318,18 @@ test("external payment session callbacks use the branded app base URL", () => {
     "src/app/api/billing/connect/refresh/route.ts",
     "src/app/api/terminal-store/checkout-session/route.ts",
   ];
+  const securePaymentRequestRoutes = new Set([
+    "src/app/api/billing/payment-method-request/checkout/route.ts",
+    "src/app/api/billing/payment-method-request/session/route.ts",
+  ]);
 
   for (const route of externalSessionRoutes) {
     const source = readFileSync(route, "utf8");
-    assert.match(source, /getAppBaseUrl\(request\.url\)/, `${route} must use the branded public app URL helper`);
+    if (securePaymentRequestRoutes.has(route)) {
+      assert.match(source, /getPaymentMethodRequestAppBaseUrl\(request\.url\)/, `${route} must use the secure payment request app URL helper`);
+    } else {
+      assert.match(source, /getAppBaseUrl\(request\.url\)/, `${route} must use the branded public app URL helper`);
+    }
     assert.doesNotMatch(source, /request\.nextUrl\.origin/, `${route} must not leak deployment preview origins to external providers`);
   }
 });

@@ -484,6 +484,7 @@ export async function sendEmail({
   fromName = "The BEE Suite",
   categories,
   customArgs,
+  disableClickTracking = false,
   tenantId,
   attachments,
 }: {
@@ -494,6 +495,7 @@ export async function sendEmail({
   fromName?: string;
   categories?: string[];
   customArgs?: Record<string, string | number | boolean | null | undefined>;
+  disableClickTracking?: boolean;
   tenantId?: string | null;
   attachments?: EmailAttachment[];
 }): Promise<IntegrationSendResult> {
@@ -529,6 +531,9 @@ export async function sendEmail({
         reply_to: replyTo && isEmail(replyTo) ? { email: replyTo } : undefined,
         subject,
         categories: categories?.slice(0, 10),
+        tracking_settings: disableClickTracking
+          ? { click_tracking: { enable: false, enable_text: false } }
+          : undefined,
         content: [{ type: "text/plain", value: text }],
         attachments: attachments?.length
           ? attachments.map((attachment) => ({

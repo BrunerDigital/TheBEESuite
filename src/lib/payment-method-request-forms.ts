@@ -1,4 +1,5 @@
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { CANONICAL_APP_BASE_URL, getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
 export const PAYMENT_METHOD_REQUEST_TOKEN_TTL_DAYS = 14;
@@ -174,6 +175,20 @@ export function validatePaymentMethodRequestToken(token: unknown, now = new Date
 
 export function buildPaymentMethodRequestFormUrl(appBaseUrl: string, token: string) {
   return `${appBaseUrl.replace(/\/+$/, "")}/payment-method-form/${encodeURIComponent(token)}`;
+}
+
+function isLocalPaymentRequestHost(value: string) {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+export function getPaymentMethodRequestAppBaseUrl(requestUrl?: string) {
+  const appBaseUrl = getAppBaseUrl(requestUrl);
+  return isLocalPaymentRequestHost(appBaseUrl) ? appBaseUrl : CANONICAL_APP_BASE_URL;
 }
 
 export function buildPublicPaymentBrandAssetUrl(appBaseUrl: string, assetPath?: string | null) {

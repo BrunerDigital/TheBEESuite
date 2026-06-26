@@ -16,6 +16,8 @@ import {
   FileText,
   KeyRound,
   MessageSquare,
+  Minus,
+  Plus,
   ReceiptText,
   ShoppingBag,
   ShieldCheck,
@@ -236,6 +238,13 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+const MAX_UNIFORM_PURCHASE_QUANTITY = 12;
+
+function clampUniformQuantity(value: number) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_UNIFORM_PURCHASE_QUANTITY, Math.max(1, Math.round(value)));
+}
+
 function formatTime(value: string | Date | null) {
   if (!value) return "Not set";
   return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -311,6 +320,7 @@ export function ParentPortalWorkspace({
   const [uniformColor, setUniformColor] = useState<"Black" | "Yellow">(uniformProducts[0]?.color ?? "Black");
   const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
+  const [uniformQuantity, setUniformQuantity] = useState(1);
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
@@ -347,7 +357,12 @@ export function ParentPortalWorkspace({
     ) ?? null,
     [uniformColor, uniformProducts, uniformPurchaseOption, uniformSize],
   );
-  const uniformOrderTotalCents = selectedUniformProduct?.amountCents ?? 0;
+  const uniformSelectedShirtCount = selectedUniformProduct
+    ? selectedUniformProduct.shirtCount * uniformQuantity
+    : 0;
+  const uniformOrderTotalCents = selectedUniformProduct?.amountCents
+    ? selectedUniformProduct.amountCents * uniformQuantity
+    : 0;
   const latestReport = dailyReports[0] ?? null;
   const activityHighlights = useMemo(
     () => dailyReports
@@ -465,6 +480,7 @@ export function ParentPortalWorkspace({
 
   function selectUniformPurchaseOption(purchaseOption: "single" | "bundle_5") {
     setUniformPurchaseOption(purchaseOption);
+    setUniformQuantity(1);
     const matchingSize = uniformProducts.find((product) =>
       product.color === uniformColor
       && product.size === uniformSize
@@ -501,7 +517,7 @@ export function ParentPortalWorkspace({
         body: JSON.stringify({
           productId: selectedUniformProduct.productId,
           purchaseOption: selectedUniformProduct.purchaseOption,
-          quantity: selectedUniformProduct.shirtCount,
+          quantity: uniformQuantity,
         }),
       });
       const purchaseJson = await purchaseResponse.json().catch(() => null) as {
@@ -1050,9 +1066,14 @@ export function ParentPortalWorkspace({
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground">Order total</div>
                     <div className="text-lg font-semibold">{money(uniformOrderTotalCents)}</div>
+                    {selectedUniformProduct ? (
+                      <div className="text-xs text-muted-foreground">
+                        {uniformSelectedShirtCount} shirt{uniformSelectedShirtCount === 1 ? "" : "s"} selected
+                      </div>
+                    ) : null}
                   </div>
                 </div>
-                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr]">
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1.2fr_1fr_1fr]">
                   <div className="space-y-2">
                     <Label>Color</Label>
                     <div className="flex flex-wrap gap-2">
@@ -1100,9 +1121,50 @@ export function ParentPortalWorkspace({
                           type="button"
                           variant={uniformPurchaseOption === product.purchaseOption ? "default" : "outline"}
                         >
-                          {product.shirtCount === 5 ? "5 shirts" : "1 shirt"} {money(product.amountCents)}
+                          {product.shirtCount === 5 ? "5-pack" : "Individual"} {money(product.amountCents)}
                         </Button>
                       ))}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="uniformQuantity">Quantity</Label>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        aria-label="Decrease quantity"
+                        disabled={isPending || uniformQuantity <= 1}
+                        onClick={() => setUniformQuantity((current) => clampUniformQuantity(current - 1))}
+                        size="icon-sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Minus className="size-3.5" />
+                      </Button>
+                      <Input
+                        className="h-7 w-20 text-center text-sm"
+                        disabled={isPending}
+                        id="uniformQuantity"
+                        inputMode="numeric"
+                        max={MAX_UNIFORM_PURCHASE_QUANTITY}
+                        min={1}
+                        onChange={(event) => setUniformQuantity(clampUniformQuantity(Number.parseInt(event.target.value, 10)))}
+                        type="number"
+                        value={uniformQuantity}
+                      />
+                      <Button
+                        aria-label="Increase quantity"
+                        disabled={isPending || uniformQuantity >= MAX_UNIFORM_PURCHASE_QUANTITY}
+                        onClick={() => setUniformQuantity((current) => clampUniformQuantity(current + 1))}
+                        size="icon-sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        <Plus className="size-3.5" />
+                      </Button>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {selectedUniformProduct?.purchaseOption === "bundle_5"
+                        ? `${uniformQuantity} pack${uniformQuantity === 1 ? "" : "s"} · ${uniformSelectedShirtCount} shirts total`
+                        : `${uniformQuantity} shirt${uniformQuantity === 1 ? "" : "s"} at ${money(selectedUniformProduct?.amountCents ?? 0)} each`}
                     </div>
                   </div>
                 </div>

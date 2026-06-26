@@ -18,10 +18,14 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function positiveInt(value: unknown, fallback = 1) {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.max(1, Math.round(value));
+export function normalizeProductPurchaseQuantity(value: unknown, fallback = 1, max = 12) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.min(max, Math.max(1, Math.round(value)));
   const parsed = Number.parseInt(clean(value), 10);
-  return Number.isFinite(parsed) ? Math.max(1, parsed) : fallback;
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(1, parsed)) : fallback;
+}
+
+function positiveInt(value: unknown, fallback = 1) {
+  return normalizeProductPurchaseQuantity(value, fallback, Number.MAX_SAFE_INTEGER);
 }
 
 function itemSummaryFromItems(items: InvoiceItemLike[]) {
@@ -32,15 +36,26 @@ function itemSummaryFromItems(items: InvoiceItemLike[]) {
 }
 
 export function productItemSummary(product: ProductLike, quantity = 1) {
+  const normalizedQuantity = positiveInt(quantity);
+  return normalizedQuantity > 1 ? `${product.name} x ${normalizedQuantity}` : product.name;
+}
+
+export function productPurchaseTotals(product: ProductLike, quantity = 1) {
   const variant = studentUniformShirtVariantFromProduct(product);
-  if (variant?.purchaseOption === "bundle_5") return product.name;
-  return quantity > 1 ? `${product.name} x ${quantity}` : product.name;
+  const selectedQuantity = normalizeProductPurchaseQuantity(quantity);
+  const receiptQuantity = variant?.purchaseOption === "bundle_5"
+    ? variant.shirtCount * selectedQuantity
+    : selectedQuantity;
+  return {
+    selectedQuantity,
+    receiptQuantity,
+    totalCents: product.amountCents * selectedQuantity,
+  };
 }
 
 export function productInvoiceFieldsForProduct(product: ProductLike, quantity = 1): Record<string, unknown> {
   const variant = studentUniformShirtVariantFromProduct(product);
-  const normalizedQuantity = positiveInt(quantity);
-  const receiptQuantity = variant?.purchaseOption === "bundle_5" ? variant.shirtCount : normalizedQuantity;
+  const totals = productPurchaseTotals(product, quantity);
   return {
     checkoutPurpose: "product_purchase",
     receiptKind: "product",
@@ -53,8 +68,8 @@ export function productInvoiceFieldsForProduct(product: ProductLike, quantity = 
     productColor: variant?.color ?? null,
     productSize: variant?.size ?? null,
     productPurchaseOption: variant?.purchaseOption ?? null,
-    quantity: receiptQuantity,
-    itemSummary: productItemSummary(product, normalizedQuantity),
+    quantity: totals.receiptQuantity,
+    itemSummary: productItemSummary(product, totals.selectedQuantity),
   };
 }
 

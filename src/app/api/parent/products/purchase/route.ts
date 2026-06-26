@@ -5,7 +5,12 @@ import { writeAuditLog } from "@/lib/audit";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { normalizeBillingPeriod } from "@/lib/billing-workflows";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
-import { productInvoiceFieldsForProduct, productItemSummary } from "@/lib/product-billing";
+import {
+  normalizeProductPurchaseQuantity,
+  productInvoiceFieldsForProduct,
+  productItemSummary,
+  productPurchaseTotals,
+} from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { studentUniformShirtVariantFromProduct } from "@/lib/uniform-products";
@@ -14,12 +19,6 @@ export const runtime = "nodejs";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function quantityFromBody(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.min(12, Math.max(1, Math.round(value)));
-  const parsed = Number.parseInt(clean(value), 10);
-  return Number.isFinite(parsed) ? Math.min(12, Math.max(1, parsed)) : 1;
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -33,7 +32,7 @@ async function POSTHandler(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const productId = clean(body.productId);
-  const requestedQuantity = quantityFromBody(body.quantity);
+  const requestedQuantity = normalizeProductPurchaseQuantity(body.quantity);
   if (!productId) {
     return NextResponse.json({ ok: false, error: "Product is required." }, { status: 400 });
   }
@@ -79,9 +78,8 @@ async function POSTHandler(request: NextRequest) {
   const dueDate = new Date();
   const purchaseId = randomUUID();
   const billingPeriod = normalizeBillingPeriod(null, dueDate);
-  const chargeMultiplier = variant.purchaseOption === "bundle_5" ? 1 : requestedQuantity;
-  const shirtQuantity = variant.purchaseOption === "bundle_5" ? variant.shirtCount : requestedQuantity;
-  const description = productItemSummary(product, chargeMultiplier);
+  const totals = productPurchaseTotals(product, requestedQuantity);
+  const description = productItemSummary(product, totals.selectedQuantity);
   const result = await prisma.$transaction((tx) =>
     createBillingInvoiceForFamily(tx, {
       familyId: family.id,
@@ -89,7 +87,7 @@ async function POSTHandler(request: NextRequest) {
       description,
       items: [{
         description,
-        amountCents: product.amountCents * chargeMultiplier,
+        amountCents: totals.totalCents,
         productId: product.id,
       }],
       customFields: {
@@ -102,7 +100,7 @@ async function POSTHandler(request: NextRequest) {
         purchaserUserId: user.id,
         currentGuardianId: family.guardians[0]?.id ?? null,
         dedupeKey: `parent-product:${purchaseId}`,
-        ...productInvoiceFieldsForProduct(product, shirtQuantity),
+        ...productInvoiceFieldsForProduct(product, totals.selectedQuantity),
       },
     }),
   );
@@ -120,7 +118,8 @@ async function POSTHandler(request: NextRequest) {
       productColor: variant.color,
       productSize: variant.size,
       productPurchaseOption: variant.purchaseOption,
-      quantity: shirtQuantity,
+      selectedQuantity: totals.selectedQuantity,
+      quantity: totals.receiptQuantity,
       amountCents: result.invoice.totalCents,
     },
   });
@@ -134,7 +133,9 @@ async function POSTHandler(request: NextRequest) {
       color: variant.color,
       size: variant.size,
       productPurchaseOption: variant.purchaseOption,
-      quantity: shirtQuantity,
+      selectedQuantity: totals.selectedQuantity,
+      quantity: totals.receiptQuantity,
+      totalCents: totals.totalCents,
     },
   }, { status: 201 });
 }

@@ -14,6 +14,7 @@ import {
   invoiceProductStripeMetadata,
   invoicePurposeLabel,
   productInvoiceFieldsForProduct,
+  productPurchaseTotals,
 } from "@/lib/product-billing";
 
 test("student uniform shirt catalog creates every color and size variant", () => {
@@ -62,14 +63,17 @@ test("product billing metadata labels checkout and receipts as product purchases
     type: STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE,
     amountCents: 1800,
   };
-  const fields = productInvoiceFieldsForProduct(product, 2);
+  const fields = productInvoiceFieldsForProduct(product, 8);
+  const totals = productPurchaseTotals(product, 8);
 
+  assert.deepEqual(totals, { selectedQuantity: 8, receiptQuantity: 8, totalCents: 14400 });
   assert.equal(fields.checkoutPurpose, "product_purchase");
   assert.equal(fields.productColor, "Black");
   assert.equal(fields.productSize, "2T");
   assert.equal(fields.productPurchaseOption, "single");
-  assert.equal(fields.itemSummary, "Student Uniform Shirt - Black - 2T x 2");
-  assert.equal(invoicePurposeLabel(fields), "Student Uniform Shirt - Black - 2T x 2");
+  assert.equal(fields.quantity, 8);
+  assert.equal(fields.itemSummary, "Student Uniform Shirt - Black - 2T x 8");
+  assert.equal(invoicePurposeLabel(fields), "Student Uniform Shirt - Black - 2T x 8");
 
   const branding = invoiceProductCheckoutBranding({
     invoiceNumber: "INV-1",
@@ -77,7 +81,7 @@ test("product billing metadata labels checkout and receipts as product purchases
     customFields: fields,
     items: [{ description: "fallback" }],
   });
-  assert.equal(branding?.paymentDescription, "Student Uniform Shirt - Black - 2T x 2 for Bailey Family");
+  assert.equal(branding?.paymentDescription, "Student Uniform Shirt - Black - 2T x 8 for Bailey Family");
 
   assert.deepEqual(invoiceProductStripeMetadata({ ...fields, purchaseId: "purchase_1" }), {
     checkoutPurpose: "product_purchase",
@@ -91,9 +95,9 @@ test("product billing metadata labels checkout and receipts as product purchases
     productColor: "Black",
     productSize: "2T",
     productPurchaseOption: "single",
-    itemSummary: "Student Uniform Shirt - Black - 2T x 2",
+    itemSummary: "Student Uniform Shirt - Black - 2T x 8",
     purchaseId: "purchase_1",
-    quantity: "2",
+    quantity: "8",
   });
 });
 
@@ -104,12 +108,14 @@ test("uniform shirt 5-pack metadata preserves bundle pricing and quantity", () =
     type: STUDENT_UNIFORM_SHIRT_BUNDLE_PRODUCT_TYPE,
     amountCents: 8000,
   };
-  const fields = productInvoiceFieldsForProduct(product);
+  const fields = productInvoiceFieldsForProduct(product, 2);
+  const totals = productPurchaseTotals(product, 2);
 
+  assert.deepEqual(totals, { selectedQuantity: 2, receiptQuantity: 10, totalCents: 16000 });
   assert.equal(fields.productPurchaseOption, "bundle_5");
-  assert.equal(fields.quantity, 5);
-  assert.equal(fields.itemSummary, "Student Uniform Shirt 5-Pack - Black - 2T");
-  assert.equal(invoicePurposeLabel(fields), "Student Uniform Shirt 5-Pack - Black - 2T");
-  assert.equal(invoiceProductStripeMetadata(fields).quantity, "5");
+  assert.equal(fields.quantity, 10);
+  assert.equal(fields.itemSummary, "Student Uniform Shirt 5-Pack - Black - 2T x 2");
+  assert.equal(invoicePurposeLabel(fields), "Student Uniform Shirt 5-Pack - Black - 2T x 2");
+  assert.equal(invoiceProductStripeMetadata(fields).quantity, "10");
   assert.equal(invoiceProductStripeMetadata(fields).productPurchaseOption, "bundle_5");
 });

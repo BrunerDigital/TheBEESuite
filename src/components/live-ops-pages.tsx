@@ -4970,6 +4970,7 @@ export type PaymentsPageData = {
     dunningLastAttemptAt: Date | string | null;
     failureMessage: string | null;
     invoiceNumber: string | null;
+    paymentReferenceLabel: string;
     billingAccount: { family: { id?: string | null; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
@@ -5081,9 +5082,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                         ? `Next reminder: ${formatDateTime(payment.dunningNextAttemptAt)}`
                         : payment.dunningStatus === "maxed"
                           ? "Manual office follow-up needed"
-                          : payment.invoiceNumber
-                            ? `Invoice ${payment.invoiceNumber}`
-                            : "Invoice not linked"}
+                          : payment.paymentReferenceLabel}
                     </div>
                     {payment.dunningLastAttemptAt ? (
                       <div className="mt-1">Last reminder: {formatDateTime(payment.dunningLastAttemptAt)}</div>

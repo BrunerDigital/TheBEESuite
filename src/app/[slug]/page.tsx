@@ -2898,6 +2898,11 @@ async function renderLivePage(
         dunningLastAttemptAt: dunning.lastAttemptAt,
         failureMessage: dunning.failureMessage,
         invoiceNumber: invoice?.number ?? null,
+        paymentReferenceLabel: invoice?.number
+          ? `Invoice ${invoice.number}`
+          : fields.paymentScope === "family_balance"
+            ? "Family balance payment"
+            : "No linked invoice",
       };
     });
     const dunningReady = payments.filter((payment) => payment.dunningStatus === "ready").length;

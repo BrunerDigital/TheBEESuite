@@ -52,7 +52,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
-import { canAccessAllCenters, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -4049,7 +4049,13 @@ async function renderLivePage(
 
   if (slug === "classroom-dashboard") {
     const classroomWhere: Prisma.ClassroomWhereInput = { centerId: scopedCenterIds };
-    const [classrooms, classroomStaff] = await Promise.all([
+    const liveChildWhere: Prisma.ChildWhereInput = {
+      AND: [
+        currentlyEnrolledChildWhere(),
+        { classroom: { is: classroomWhere } },
+      ],
+    };
+    const [classrooms, classroomStaff, liveChildren] = await Promise.all([
       prisma.classroom.findMany({
         where: classroomWhere,
         orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
@@ -4077,6 +4083,29 @@ async function renderLivePage(
           title: true,
           user: { select: { name: true, email: true, isActive: true } },
           classroom: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.child.findMany({
+        where: liveChildWhere,
+        orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
+        take: 500,
+        select: {
+          id: true,
+          fullName: true,
+          ageGroup: true,
+          classroomId: true,
+          classroom: { select: { id: true, name: true, centerId: true } },
+          liveLocation: {
+            select: {
+              currentClassroomId: true,
+              areaName: true,
+              status: true,
+              movedAt: true,
+              reason: true,
+              currentClassroom: { select: { id: true, name: true } },
+              movedBy: { select: { name: true } },
+            },
+          },
         },
       }),
     ]);
@@ -4112,8 +4141,51 @@ async function renderLivePage(
                 }),
               })),
           staff: demoMode ? [] : classroomStaff,
+          liveTrackerClassrooms: (demoMode ? executiveClassroomDemoRows : classrooms.map((classroom) => ({
+            id: classroom.id,
+            centerId: classroom.centerId,
+            name: classroom.name,
+            ageGroup: classroom.ageGroup,
+            capacity: classroom.capacity,
+            center: { name: classroom.center.name, crmLocationId: classroom.center.crmLocationId },
+            _count: classroom._count,
+            ratioRule: resolveClassroomRatioRule({
+              ratioRule: classroom.ratioRule,
+              ageGroup: classroom.ageGroup,
+              state: classroom.center.state,
+              licensingRatioRules: readCenterLicensingConfiguration(classroom.center.customFields, {
+                centerState: classroom.center.state,
+                licensedCapacity: classroom.center.licensedCapacity,
+              }).ratioRules.value,
+            }),
+          }))).map((classroom) => ({
+            id: classroom.id,
+            centerId: classroom.centerId,
+            centerName: classroom.center.crmLocationId ?? classroom.center.name,
+            name: classroom.name,
+            ageGroup: classroom.ageGroup,
+            capacity: classroom.capacity,
+            ratioRule: classroom.ratioRule,
+            assignedStaff: classroom._count.staff,
+          })),
+          liveTrackerChildren: demoMode ? [] : liveChildren.map((child) => ({
+            id: child.id,
+            fullName: child.fullName,
+            ageGroup: child.ageGroup,
+            centerId: child.classroom?.centerId ?? null,
+            assignedClassroomId: child.classroomId,
+            assignedClassroomName: child.classroom?.name ?? null,
+            currentClassroomId: child.liveLocation?.currentClassroomId ?? child.classroomId,
+            currentClassroomName: child.liveLocation?.currentClassroom?.name ?? child.classroom?.name ?? null,
+            areaName: child.liveLocation?.areaName ?? null,
+            status: child.liveLocation?.status ?? "in_classroom",
+            movedAt: child.liveLocation?.movedAt?.toISOString() ?? null,
+            movedByName: child.liveLocation?.movedBy?.name ?? null,
+            reason: child.liveLocation?.reason ?? null,
+          })),
           ageGroups: classroomAgeGroups,
           canManageClassroomSetup: canManageOperations(user),
+          canMoveChildren: canManageClassroomTasks(user),
           demoMode,
         }}
       />

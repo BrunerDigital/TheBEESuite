@@ -63,6 +63,11 @@ import {
   type ClassroomAssignmentStaff,
 } from "@/components/classroom-ratio-assignment-panel";
 import { ClassroomSetupPanel } from "@/components/classroom-setup-panel";
+import {
+  ChildLocationTrackerPanel,
+  type ChildLocationTrackerChild,
+  type ChildLocationTrackerClassroom,
+} from "@/components/child-location-tracker-panel";
 import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
@@ -2545,13 +2550,17 @@ export type ClassroomDashboardData = {
   centers: Array<{ id: string; name: string }>;
   classrooms: ClassroomAssignmentClassroom[];
   staff: ClassroomAssignmentStaff[];
+  liveTrackerClassrooms: ChildLocationTrackerClassroom[];
+  liveTrackerChildren: ChildLocationTrackerChild[];
   ageGroups: string[];
   canManageClassroomSetup: boolean;
+  canMoveChildren: boolean;
   demoMode?: boolean;
 };
 
 export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData }) {
   const children = data.classrooms.reduce((sum, classroom) => sum + classroom._count.children, 0);
+  const currentChildrenInRooms = data.liveTrackerChildren.filter((child) => !child.areaName).length;
   const capacity = data.classrooms.reduce((sum, classroom) => sum + classroom.capacity, 0);
   const staff = data.classrooms.reduce((sum, classroom) => sum + classroom._count.staff, 0);
   const ratioRows = data.classrooms.map((classroom) => ({
@@ -2583,9 +2592,16 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Classrooms" value={data.classrooms.length} />
         <StatCard label="Children assigned" value={children} />
-        <StatCard label="Licensed seats shown" value={capacity} />
+        <StatCard label="Children in rooms now" value={currentChildrenInRooms} />
         <StatCard label="Ratio warnings" value={ratioWarningCount} detail={`${staff} teachers assigned`} />
       </div>
+      <ChildLocationTrackerPanel
+        classrooms={data.liveTrackerClassrooms}
+        children={data.liveTrackerChildren}
+        canMove={data.canMoveChildren && !data.demoMode}
+        title="Real-Time Child Tracker"
+        description="Drag children into their current room or school area for combinations, playground time, coverage moves, and transitions. Enrolled classroom and billing assignment do not change."
+      />
       <ClassroomSetupPanel
         centers={data.centers}
         classrooms={data.classrooms}

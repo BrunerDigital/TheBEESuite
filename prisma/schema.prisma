@@ -60,25 +60,25 @@ model Tenant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  brands                Brand[]
-  organizations         Organization[]
-  users                 User[]
-  auditLogs             AuditLog[]
-  integrations          Integration[]
-  integrationCredentials IntegrationCredential[]
-  integrationDeliveries IntegrationDelivery[]
-  calendarEvents        CalendarEvent[]
-  campaigns             Campaign[]
-  automations           Automation[]
-  reviews               Review[]
-  surveys               Survey[]
-  messageTemplates      MessageTemplate[]
+  brands                  Brand[]
+  organizations           Organization[]
+  users                   User[]
+  auditLogs               AuditLog[]
+  integrations            Integration[]
+  integrationCredentials  IntegrationCredential[]
+  integrationDeliveries   IntegrationDelivery[]
+  calendarEvents          CalendarEvent[]
+  campaigns               Campaign[]
+  automations             Automation[]
+  reviews                 Review[]
+  surveys                 Survey[]
+  messageTemplates        MessageTemplate[]
   notificationPreferences NotificationPreference[]
-  ownerGroups           OwnerGroup[]
-  accessGrants          UserAccessGrant[]
-  brandAssets           BrandAsset[]
-  brandCustomizations   BrandCustomization[]
-  deviceSessions        DeviceSession[]
+  ownerGroups             OwnerGroup[]
+  accessGrants            UserAccessGrant[]
+  brandAssets             BrandAsset[]
+  brandCustomizations     BrandCustomization[]
+  deviceSessions          DeviceSession[]
 }
 
 model Brand {
@@ -141,29 +141,31 @@ model Center {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  organization          Organization          @relation(fields: [organizationId], references: [id])
-  ownerGroup            OwnerGroup?           @relation(fields: [ownerGroupId], references: [id])
-  classrooms            Classroom[]
-  leads                 Lead[]
-  tours                 Tour[]
-  staff                 StaffProfile[]
-  schedules             StaffSchedule[]
-  announcements         Announcement[]
-  auditLogs             AuditLog[]
-  checkLogs             CheckInOutLog[]
-  procareImports        ProcareImportBatch[]
-  fteReports            FteReport[]
-  accessGrants          UserAccessGrant[]
-  brandAssets           BrandAsset[]
-  customizations        BrandCustomization[]
-  integrationDeliveries IntegrationDelivery[]
-  messageTemplates      MessageTemplate[]
-  calendarEvents        CalendarEvent[]
-  reviews               Review[]
-  surveys               Survey[]
-  surveyResponses       SurveyResponse[]
-  emergencyDrillLogs    EmergencyDrillLog[]
-  complianceTasks       ComplianceTask[]
+  organization             Organization              @relation(fields: [organizationId], references: [id])
+  ownerGroup               OwnerGroup?               @relation(fields: [ownerGroupId], references: [id])
+  classrooms               Classroom[]
+  leads                    Lead[]
+  tours                    Tour[]
+  staff                    StaffProfile[]
+  schedules                StaffSchedule[]
+  announcements            Announcement[]
+  auditLogs                AuditLog[]
+  checkLogs                CheckInOutLog[]
+  childLiveLocations       ChildLiveLocation[]
+  childLocationTransitions ChildLocationTransition[]
+  procareImports           ProcareImportBatch[]
+  fteReports               FteReport[]
+  accessGrants             UserAccessGrant[]
+  brandAssets              BrandAsset[]
+  customizations           BrandCustomization[]
+  integrationDeliveries    IntegrationDelivery[]
+  messageTemplates         MessageTemplate[]
+  calendarEvents           CalendarEvent[]
+  reviews                  Review[]
+  surveys                  Survey[]
+  surveyResponses          SurveyResponse[]
+  emergencyDrillLogs       EmergencyDrillLog[]
+  complianceTasks          ComplianceTask[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -214,14 +216,17 @@ model Classroom {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  center       Center             @relation(fields: [centerId], references: [id])
-  children     Child[]
-  staff        StaffProfile[]
-  dailyReports DailyReport[]
-  incidents    IncidentReport[]
-  attendance   AttendanceRecord[]
-  checkLogs    CheckInOutLog[]
-  media        ChildMedia[]
+  center                       Center                    @relation(fields: [centerId], references: [id])
+  children                     Child[]
+  staff                        StaffProfile[]
+  dailyReports                 DailyReport[]
+  incidents                    IncidentReport[]
+  attendance                   AttendanceRecord[]
+  checkLogs                    CheckInOutLog[]
+  media                        ChildMedia[]
+  currentChildLocations        ChildLiveLocation[]       @relation("CurrentChildClassroom")
+  childLocationTransitionsFrom ChildLocationTransition[] @relation("ChildLocationFromClassroom")
+  childLocationTransitionsTo   ChildLocationTransition[] @relation("ChildLocationToClassroom")
 
   @@index([centerId, sourceSystem, externalId])
 }
@@ -240,28 +245,30 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  tenant         Tenant               @relation(fields: [tenantId], references: [id])
-  organization   Organization?        @relation(fields: [organizationId], references: [id])
-  staffProfile   StaffProfile?
-  guardians      Guardian[]
-  notes          Note[]
-  messages       Message[]            @relation("MessageSender")
-  assignedMessages Message[]          @relation("MessageAssignee")
-  createdMessageTemplates MessageTemplate[] @relation("MessageTemplateCreator")
-  auditLogs      AuditLog[]
-  notifications  Notification[]
-  notificationPreferences NotificationPreference[]
-  medicationLogs MedicationLog[]
-  createdEmergencyDrillLogs EmergencyDrillLog[] @relation("EmergencyDrillCreatedBy")
-  assignedComplianceTasks ComplianceTask[] @relation("ComplianceTaskAssignee")
-  createdComplianceTasks ComplianceTask[] @relation("ComplianceTaskCreator")
-  createdCalendarEvents CalendarEvent[] @relation("CalendarEventCreatedBy")
-  uploadedMedia  ChildMedia[]
-  procareImports ProcareImportBatch[]
-  fteReports     FteReport[]          @relation("FteSubmittedBy")
-  accessGrants   UserAccessGrant[]
-  deviceSessions DeviceSession[]      @relation("UserDeviceSessions")
-  revokedDeviceSessions DeviceSession[] @relation("DeviceSessionRevokedBy")
+  tenant                    Tenant                    @relation(fields: [tenantId], references: [id])
+  organization              Organization?             @relation(fields: [organizationId], references: [id])
+  staffProfile              StaffProfile?
+  guardians                 Guardian[]
+  notes                     Note[]
+  messages                  Message[]                 @relation("MessageSender")
+  assignedMessages          Message[]                 @relation("MessageAssignee")
+  createdMessageTemplates   MessageTemplate[]         @relation("MessageTemplateCreator")
+  movedChildLocations       ChildLiveLocation[]       @relation("ChildLocationMovedBy")
+  childLocationTransitions  ChildLocationTransition[] @relation("ChildLocationTransitionMovedBy")
+  auditLogs                 AuditLog[]
+  notifications             Notification[]
+  notificationPreferences   NotificationPreference[]
+  medicationLogs            MedicationLog[]
+  createdEmergencyDrillLogs EmergencyDrillLog[]       @relation("EmergencyDrillCreatedBy")
+  assignedComplianceTasks   ComplianceTask[]          @relation("ComplianceTaskAssignee")
+  createdComplianceTasks    ComplianceTask[]          @relation("ComplianceTaskCreator")
+  createdCalendarEvents     CalendarEvent[]           @relation("CalendarEventCreatedBy")
+  uploadedMedia             ChildMedia[]
+  procareImports            ProcareImportBatch[]
+  fteReports                FteReport[]               @relation("FteSubmittedBy")
+  accessGrants              UserAccessGrant[]
+  deviceSessions            DeviceSession[]           @relation("UserDeviceSessions")
+  revokedDeviceSessions     DeviceSession[]           @relation("DeviceSessionRevokedBy")
 }
 
 model UserAccessGrant {
@@ -479,20 +486,68 @@ model Child {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  family       Family             @relation(fields: [familyId], references: [id])
-  classroom    Classroom?         @relation(fields: [classroomId], references: [id])
-  medicalNotes ChildMedicalNote[]
-  allergies    Allergy[]
-  enrollments  Enrollment[]
-  attendance   AttendanceRecord[]
-  checkLogs    CheckInOutLog[]
-  dailyReports DailyReport[]
-  incidents    IncidentReport[]
-  documents    Document[]
-  media        ChildMedia[]
-  medicationLogs MedicationLog[]
+  family              Family                    @relation(fields: [familyId], references: [id])
+  classroom           Classroom?                @relation(fields: [classroomId], references: [id])
+  medicalNotes        ChildMedicalNote[]
+  allergies           Allergy[]
+  enrollments         Enrollment[]
+  attendance          AttendanceRecord[]
+  checkLogs           CheckInOutLog[]
+  dailyReports        DailyReport[]
+  incidents           IncidentReport[]
+  documents           Document[]
+  media               ChildMedia[]
+  medicationLogs      MedicationLog[]
+  liveLocation        ChildLiveLocation?
+  locationTransitions ChildLocationTransition[]
 
   @@index([sourceSystem, externalId])
+}
+
+model ChildLiveLocation {
+  id                 String   @id @default(cuid())
+  childId            String   @unique
+  centerId           String?
+  currentClassroomId String?
+  areaName           String?
+  status             String   @default("in_classroom")
+  reason             String?
+  movedAt            DateTime @default(now())
+  movedById          String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  child            Child      @relation(fields: [childId], references: [id])
+  center           Center?    @relation(fields: [centerId], references: [id])
+  currentClassroom Classroom? @relation("CurrentChildClassroom", fields: [currentClassroomId], references: [id])
+  movedBy          User?      @relation("ChildLocationMovedBy", fields: [movedById], references: [id])
+
+  @@index([centerId, currentClassroomId])
+  @@index([movedAt])
+}
+
+model ChildLocationTransition {
+  id              String   @id @default(cuid())
+  childId         String
+  centerId        String?
+  fromClassroomId String?
+  toClassroomId   String?
+  fromAreaName    String?
+  toAreaName      String?
+  reason          String?
+  movedById       String?
+  movedAt         DateTime @default(now())
+  createdAt       DateTime @default(now())
+
+  child         Child      @relation(fields: [childId], references: [id])
+  center        Center?    @relation(fields: [centerId], references: [id])
+  fromClassroom Classroom? @relation("ChildLocationFromClassroom", fields: [fromClassroomId], references: [id])
+  toClassroom   Classroom? @relation("ChildLocationToClassroom", fields: [toClassroomId], references: [id])
+  movedBy       User?      @relation("ChildLocationTransitionMovedBy", fields: [movedById], references: [id])
+
+  @@index([childId, movedAt])
+  @@index([centerId, movedAt])
+  @@index([toClassroomId, movedAt])
 }
 
 model AuthorizedPickup {
@@ -715,9 +770,9 @@ model MessageTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant    Tenant  @relation(fields: [tenantId], references: [id])
-  center    Center? @relation(fields: [centerId], references: [id])
-  createdBy User?   @relation("MessageTemplateCreator", fields: [createdById], references: [id])
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  center    Center?   @relation(fields: [centerId], references: [id])
+  createdBy User?     @relation("MessageTemplateCreator", fields: [createdById], references: [id])
   messages  Message[]
 
   @@unique([tenantId, centerId, name])
@@ -754,7 +809,7 @@ model Campaign {
   updatedAt   DateTime  @updatedAt
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
-  brand Brand? @relation(fields: [brandId], references: [id])
+  brand  Brand?  @relation(fields: [brandId], references: [id])
 
   @@index([tenantId, status, scheduledAt])
   @@index([brandId, status, scheduledAt])
@@ -772,8 +827,8 @@ model Automation {
   status    String
 
   tenant Tenant?         @relation(fields: [tenantId], references: [id])
-  brand Brand?          @relation(fields: [brandId], references: [id])
-  runs  AutomationRun[]
+  brand  Brand?          @relation(fields: [brandId], references: [id])
+  runs   AutomationRun[]
 
   @@index([tenantId, status])
 }
@@ -973,18 +1028,18 @@ model IncidentReport {
 }
 
 model EmergencyDrillLog {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   centerId        String
   drillType       String
   conductedAt     DateTime
   durationMinutes Int?
   participants    String?
-  outcome         String   @default("completed")
+  outcome         String    @default("completed")
   notes           String?
   nextDueAt       DateTime?
   createdById     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   center    Center @relation(fields: [centerId], references: [id])
   createdBy User?  @relation("EmergencyDrillCreatedBy", fields: [createdById], references: [id])
@@ -1077,30 +1132,30 @@ model StaffSchedule {
 }
 
 model CalendarEvent {
-  id                 String    @id @default(cuid())
-  tenantId           String
-  centerId           String?
-  title              String
-  eventType          String    @default("event")
-  startsAt           DateTime
-  endsAt             DateTime?
-  allDay             Boolean   @default(false)
-  timeZone           String    @default("America/New_York")
-  status             String    @default("scheduled")
-  visibility         String    @default("staff")
-  recurrenceRule     String?
-  recurrenceEndAt    DateTime?
-  closureReason      String?
-  source             String    @default("manual")
-  googleCalendarId   String?
-  googleEventId      String?
-  googleSyncStatus   String    @default("not_synced")
-  googleSyncedAt     DateTime?
-  lastGooglePayload  Json?
-  notes              String?
-  createdById        String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  tenantId          String
+  centerId          String?
+  title             String
+  eventType         String    @default("event")
+  startsAt          DateTime
+  endsAt            DateTime?
+  allDay            Boolean   @default(false)
+  timeZone          String    @default("America/New_York")
+  status            String    @default("scheduled")
+  visibility        String    @default("staff")
+  recurrenceRule    String?
+  recurrenceEndAt   DateTime?
+  closureReason     String?
+  source            String    @default("manual")
+  googleCalendarId  String?
+  googleEventId     String?
+  googleSyncStatus  String    @default("not_synced")
+  googleSyncedAt    DateTime?
+  lastGooglePayload Json?
+  notes             String?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   tenant    Tenant  @relation(fields: [tenantId], references: [id])
   center    Center? @relation(fields: [centerId], references: [id])
@@ -1316,17 +1371,17 @@ model Notification {
 }
 
 model NotificationPreference {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   tenantId     String
   userId       String?
   role         UserRole?
   type         String
-  emailEnabled Boolean  @default(true)
-  smsEnabled   Boolean  @default(false)
-  pushEnabled  Boolean  @default(true)
+  emailEnabled Boolean   @default(true)
+  smsEnabled   Boolean   @default(false)
+  pushEnabled  Boolean   @default(true)
   quietHours   Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   user   User?  @relation(fields: [userId], references: [id])
@@ -1411,12 +1466,12 @@ model IntegrationDelivery {
   lead    Lead?    @relation(fields: [leadId], references: [id])
   message Message? @relation(fields: [messageId], references: [id])
 
+  @@unique([provider, providerMessageId])
   @@index([status, nextAttemptAt])
   @@index([tenantId, provider, createdAt])
   @@index([centerId, createdAt])
   @@index([leadId])
   @@index([messageId])
-  @@unique([provider, providerMessageId])
 }
 
 model StripeWebhookEvent {

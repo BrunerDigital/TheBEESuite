@@ -54,14 +54,18 @@ test("instant bank request copy focuses parents on bank login verification", () 
   assert.equal(paymentMethodRequestBrandSender("Sarasota"), "Sarasota via The BEE Suite");
   assert.equal(
     buildPaymentMethodRequestEmailSubject({ centerLabel: "Sarasota", intent: "instant_bank_verification" }),
-    "Sarasota via The BEE Suite: secure bank verification requested",
+    "Sarasota via The BEE Suite: secure ACH autopay verification requested",
   );
   assert.match(email, /Sarasota via The BEE Suite is asking/i);
-  assert.match(email, /verify a bank account/i);
+  assert.match(email, /complete ACH verification through The BEE Suite/i);
+  assert.match(email, /enabled for autopay/i);
+  assert.match(email, /logging into your bank through the secure portal/i);
   assert.match(email, /branded The BEE Suite link/i);
   assert.match(email, /instead of waiting for microdeposits/i);
   assert.match(email, /Stripe may appear only as the regulated payment processor/i);
-  assert.match(notification, /branded The BEE Suite bank verification form/i);
+  assert.match(notification, /complete ACH verification/i);
+  assert.match(notification, /enable autopay/i);
+  assert.match(notification, /secure bank-login portal/i);
   assert.equal(extractFirstUrl(notification), formUrl);
 });
 
@@ -175,6 +179,8 @@ test("payment method request checkout branding uses public Bee Suite assets and 
   assert.equal(localLogoUrl, null);
   assert.equal(branding.displayName, "Sarasota via The BEE Suite");
   assert.equal(branding.logoUrl, logoUrl);
+  assert.match(branding.submitMessage ?? "", /complete ACH verification through The BEE Suite/i);
+  assert.match(branding.submitMessage ?? "", /enable autopay/i);
   assert.match(branding.submitMessage ?? "", /The BEE Suite does not store your bank login/i);
   assert.match(branding.afterSubmitMessage ?? "", /return to The BEE Suite/i);
   assert.match(branding.setupDescription ?? "", /payment profile setup for Johnson Family/i);

@@ -160,16 +160,16 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              Use The BEE Suite Instant Bank Login option to verify through your bank now, or use Debit/Credit Card to make today&apos;s payment.
+              To enable ACH autopay, use The BEE Suite Instant Bank Login to verify your account through your bank now. You can still use Debit/Credit Card to make today&apos;s payment.
             </AlertDescription>
           </Alert>
         ) : null}
         {focus === "instant-bank" ? (
           <Alert className="border-sky-300/40 bg-sky-300/10 text-sky-50">
             <Building2 className="size-4" />
-            <AlertTitle>Instant bank verification requested</AlertTitle>
+            <AlertTitle>ACH autopay verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
-              Select Verify Bank Instantly to start The BEE Suite secure bank-login handoff and verify your bank account now.
+              To complete ACH verification through The BEE Suite and enable autopay, select Verify Bank Instantly. You will log into your bank through the secure portal; The BEE Suite does not store your bank login.
             </AlertDescription>
           </Alert>
         ) : null}

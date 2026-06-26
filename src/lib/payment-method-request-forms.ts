@@ -222,7 +222,7 @@ export function buildPaymentMethodRequestEmailSubject(input: {
 }) {
   const sender = paymentMethodRequestBrandSender(input.centerLabel);
   if (input.intent === "instant_bank_verification") {
-    return `${sender}: secure bank verification requested`;
+    return `${sender}: secure ACH autopay verification requested`;
   }
   return `${sender}: secure tuition payment steps`;
 }
@@ -242,7 +242,7 @@ export function buildPaymentMethodRequestCheckoutBranding(input: {
     logoUrl: input.logoUrl ?? null,
     iconUrl: input.iconUrl ?? null,
     submitMessage: instantBank
-      ? `${sender} uses this secure processor step for bank verification. The BEE Suite does not store your bank login or full account number.`
+      ? `To complete ACH verification through The BEE Suite and enable autopay, verify your account through this secure bank-login portal. The BEE Suite does not store your bank login or full account number.`
       : `${sender} uses this secure processor step for tuition payments. The BEE Suite does not store full card or bank details.`,
     afterSubmitMessage: `You will return to The BEE Suite after this secure step is complete.`,
     productDescription: `The BEE Suite tuition payment for ${familyName}.`,
@@ -268,12 +268,12 @@ export function buildPaymentMethodRequestEmailText({
     return [
       `Hi ${recipientLabel || "there"},`,
       "",
-      `${paymentMethodRequestBrandSender(centerLabel)} is asking you to verify a bank account for ${familyName}'s tuition payments.`,
-      "Start from the branded The BEE Suite link below. The form will open a secure bank-login step so the account can be verified now instead of waiting for microdeposits.",
+      `${paymentMethodRequestBrandSender(centerLabel)} is asking you to complete ACH verification through The BEE Suite so ${familyName}'s account can be enabled for autopay.`,
+      "Please verify your account by logging into your bank through the secure portal from the branded The BEE Suite link below. This confirms the ACH account now instead of waiting for microdeposits.",
       "You can also pay an open tuition invoice from the same The BEE Suite form with Instant Bank Login or a debit/credit card if a payment is due today.",
       "The BEE Suite and your school do not receive or store your bank login, full account number, or full card details. Stripe may appear only as the regulated payment processor during the secure handoff.",
       "",
-      `Open The BEE Suite bank verification form: ${formUrl}`,
+      `Complete ACH verification in The BEE Suite: ${formUrl}`,
       "",
       "If you were not expecting this request, please contact the school before continuing.",
     ].join("\n");
@@ -299,7 +299,7 @@ export function buildPaymentMethodRequestNotificationBody(input: {
   intent?: PaymentMethodRequestIntent;
 }) {
   if (input.intent === "instant_bank_verification") {
-    return `Please verify a bank account instantly for ${input.familyName}. Open the branded The BEE Suite bank verification form: ${input.formUrl}`;
+    return `To complete ACH verification for ${input.familyName} and enable autopay, verify your account through the branded The BEE Suite secure bank-login portal: ${input.formUrl}`;
   }
   return `Please complete tuition payment steps for ${input.familyName}. Open the branded The BEE Suite payment form: ${input.formUrl}`;
 }

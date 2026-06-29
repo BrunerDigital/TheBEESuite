@@ -53,6 +53,7 @@ import { canAccessModule } from "../src/lib/rbac";
 import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
 import { resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
+import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
 test("password reset gate does not block teacher or parent profile accounts", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
@@ -570,6 +571,47 @@ test("parent portal guards require family-scoped messages and guardian acknowled
     ok: false,
     status: 403,
     error: "You do not have access to this family.",
+  });
+});
+
+test("message visibility keeps direct staff threads participant-scoped", () => {
+  assert.deepEqual(buildVisibleMessageWhere({
+    userId: "teacher_1",
+    familyScopeWhere: { id: "__no_teacher_classroom__" },
+    allCenters: false,
+    teacherMessageScope: true,
+  }), {
+    OR: [
+      { family: { is: { id: "__no_teacher_classroom__" } } },
+      {
+        familyId: null,
+        threadKey: { startsWith: "staff:" },
+        OR: [{ senderId: "teacher_1" }, { assignedToId: "teacher_1" }],
+      },
+    ],
+  });
+
+  assert.deepEqual(buildVisibleMessageWhere({
+    userId: "director_1",
+    familyScopeWhere: { centerId: { in: ["center_1"] } },
+    allCenters: false,
+    teacherMessageScope: false,
+  }), {
+    OR: [
+      { family: { is: { centerId: { in: ["center_1"] } } } },
+      {
+        familyId: null,
+        OR: [
+          { threadKey: null },
+          { NOT: { threadKey: { startsWith: "staff:" } } },
+        ],
+      },
+      {
+        familyId: null,
+        threadKey: { startsWith: "staff:" },
+        OR: [{ senderId: "director_1" }, { assignedToId: "director_1" }],
+      },
+    ],
   });
 });
 

@@ -97,6 +97,7 @@ import {
 } from "@/lib/billing-workflows";
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
+import { buildVisibleMessageWhere } from "@/lib/message-visibility";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
 import { roleLabel } from "@/lib/notification-preferences";
@@ -2150,16 +2151,12 @@ async function renderLivePage(
       : allCenters
         ? { children: { some: currentlyEnrolledChildWhere() } }
         : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } };
-    const messageWhere: Prisma.MessageWhereInput = teacherMessageScope
-      ? {
-          OR: [
-            { family: { is: familyScopeWhere } },
-            { familyId: null, OR: [{ senderId: user.id }, { assignedToId: user.id }] },
-          ],
-        }
-      : allCenters
-        ? {}
-        : { OR: [{ family: { is: familyScopeWhere } }, { familyId: null }] };
+    const messageWhere = buildVisibleMessageWhere({
+      userId: user.id,
+      familyScopeWhere,
+      allCenters,
+      teacherMessageScope,
+    });
     const classroomWhere: Prisma.ClassroomWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({

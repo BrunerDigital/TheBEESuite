@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
+import { messageAttachmentKind, type StoredMessageAttachment } from "@/lib/message-attachments";
 import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
@@ -19,13 +21,171 @@ import {
 } from "@/lib/notification-delivery";
 import type { NotificationPreferenceRecord } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
+import { contentTypeForDocumentFile, uploadMessageAttachmentBuffer } from "@/lib/supabase-storage";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
+const maxMessageAttachments = 5;
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseBoolean(value: unknown, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off"].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
+function parseJsonField(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+type MessageTargetMode = "family" | "broadcast" | "staff";
+
+type MessageRequestInput = {
+  familyId: string | null;
+  targetMode: MessageTargetMode;
+  broadcastSegment: unknown;
+  templateId: string | null;
+  assignedToId: string | null;
+  replyToMessageId: string | null;
+  subject: string;
+  message: string;
+  channel: string;
+  priority: string;
+  sendEmailCopy: boolean;
+  sendSmsCopy: boolean;
+  sendPushCopy: boolean;
+  files: File[];
+};
+
+function normalizeTargetMode(value: unknown): MessageTargetMode {
+  const target = clean(value);
+  if (target === "broadcast" || target === "staff") return target;
+  return "family";
+}
+
+function uploadedMessageFiles(values: unknown[]) {
+  return values.filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+async function readMessageRequest(request: NextRequest): Promise<MessageRequestInput> {
+  const contentType = request.headers.get("content-type") || "";
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    return {
+      familyId: clean(formData.get("familyId")) || null,
+      targetMode: normalizeTargetMode(formData.get("targetMode")),
+      broadcastSegment: parseJsonField(formData.get("broadcastSegment")),
+      templateId: clean(formData.get("templateId")) || null,
+      assignedToId: clean(formData.get("assignedToId")) || null,
+      replyToMessageId: clean(formData.get("replyToMessageId")) || null,
+      subject: clean(formData.get("subject")),
+      message: clean(formData.get("message")),
+      channel: clean(formData.get("channel")) || "portal",
+      priority: clean(formData.get("priority")) || "normal",
+      sendEmailCopy: parseBoolean(formData.get("sendEmailCopy")),
+      sendSmsCopy: parseBoolean(formData.get("sendSmsCopy")),
+      sendPushCopy: formData.has("sendPushCopy") ? parseBoolean(formData.get("sendPushCopy")) : true,
+      files: uploadedMessageFiles([
+        ...formData.getAll("attachments"),
+        ...formData.getAll("attachment"),
+        ...formData.getAll("files"),
+      ]),
+    };
+  }
+
+  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+  return {
+    familyId: clean(body.familyId) || null,
+    targetMode: normalizeTargetMode(body.targetMode),
+    broadcastSegment: body.broadcastSegment,
+    templateId: clean(body.templateId) || null,
+    assignedToId: clean(body.assignedToId) || null,
+    replyToMessageId: clean(body.replyToMessageId) || null,
+    subject: clean(body.subject),
+    message: clean(body.message),
+    channel: clean(body.channel) || "portal",
+    priority: clean(body.priority) || "normal",
+    sendEmailCopy: parseBoolean(body.sendEmailCopy),
+    sendSmsCopy: parseBoolean(body.sendSmsCopy),
+    sendPushCopy: body.sendPushCopy === undefined ? true : parseBoolean(body.sendPushCopy),
+    files: [],
+  };
+}
+
+function messageMetadata(
+  metadata: Record<string, unknown>,
+  attachments: StoredMessageAttachment[],
+): Prisma.InputJsonValue {
+  const next = attachments.length
+    ? { ...metadata, attachmentCount: attachments.length, attachments }
+    : metadata;
+  return next as Prisma.InputJsonValue;
+}
+
+async function uploadMessageAttachments({
+  files,
+  user,
+  centerId,
+  familyId,
+  threadKey,
+}: {
+  files: File[];
+  user: { id: string; tenantId: string };
+  centerId?: string | null;
+  familyId?: string | null;
+  threadKey?: string | null;
+}) {
+  if (!files.length) return [];
+  if (files.length > maxMessageAttachments) {
+    throw new Error(`Attach up to ${maxMessageAttachments} files per message.`);
+  }
+
+  const uploadedAt = new Date().toISOString();
+  const attachments: StoredMessageAttachment[] = [];
+  for (const file of files) {
+    const contentType = contentTypeForDocumentFile(file);
+    const upload = await uploadMessageAttachmentBuffer({
+      bytes: Buffer.from(await file.arrayBuffer()),
+      contentType,
+      originalName: file.name,
+      tenantId: user.tenantId,
+      centerId,
+      familyId,
+      threadKey,
+      uploadedById: user.id,
+    });
+    attachments.push({
+      id: randomUUID(),
+      filename: file.name || "attachment",
+      contentType,
+      size: file.size,
+      bucket: upload.bucket,
+      storageKey: upload.storageKey,
+      url: upload.recordUrl,
+      kind: messageAttachmentKind(contentType),
+      uploadedAt,
+      uploadedById: user.id,
+    });
+  }
+  return attachments;
+}
+
+function staffThreadKey(senderId: string, recipientId: string) {
+  return `staff:${[senderId, recipientId].sort().join(":")}`;
 }
 
 type MessageFamilyForDelivery = {
@@ -195,26 +355,177 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
 
-  const body = await request.json();
-  const familyId = clean(body.familyId) || null;
-  const targetMode = clean(body.targetMode) === "broadcast" ? "broadcast" : "family";
-  const broadcastSegment = normalizeMessageBroadcastSegment(body.broadcastSegment);
-  const templateId = clean(body.templateId) || null;
-  const assignedToId = clean(body.assignedToId) || null;
-  const replyToMessageId = clean(body.replyToMessageId) || null;
-  let subject = clean(body.subject) || "Portal message";
-  let message = clean(body.message);
-  const channel = clean(body.channel) || "portal";
-  const priority = clean(body.priority) || "normal";
-  const sendEmailCopy = Boolean(body.sendEmailCopy);
-  const sendSmsCopy = Boolean(body.sendSmsCopy);
-  const sendPushCopy = body.sendPushCopy === undefined ? true : Boolean(body.sendPushCopy);
+  const input = await readMessageRequest(request);
+  const familyId = input.familyId;
+  const targetMode = input.targetMode;
+  const broadcastSegment = normalizeMessageBroadcastSegment(input.broadcastSegment);
+  const templateId = input.templateId;
+  const assignedToId = input.assignedToId;
+  const replyToMessageId = input.replyToMessageId;
+  let subject = input.subject || "Portal message";
+  let message = input.message;
+  const channel = input.channel;
+  const priority = input.priority;
+  const sendEmailCopy = input.sendEmailCopy;
+  const sendSmsCopy = input.sendSmsCopy;
+  const sendPushCopy = input.sendPushCopy;
   const senderIsParent = isParentGuardian(user);
   const senderCanManageOperations = canManageOperations(user);
   const senderCanManageClassroom = canManageClassroomTasks(user);
 
+  if (!message && !input.files.length) {
+    return NextResponse.json({ ok: false, error: "Message or attachment is required." }, { status: 400 });
+  }
+  if (input.files.length > maxMessageAttachments) {
+    return NextResponse.json({ ok: false, error: `Attach up to ${maxMessageAttachments} files per message.` }, { status: 400 });
+  }
   if (!message) {
-    return NextResponse.json({ ok: false, error: "Message is required." }, { status: 400 });
+    message = "Attached file(s)";
+  }
+
+  if (targetMode === "staff") {
+    if (senderIsParent) {
+      return NextResponse.json({ ok: false, error: "Staff messages are not available from parent accounts." }, { status: 403 });
+    }
+    if (!assignedToId) {
+      return NextResponse.json({ ok: false, error: "Choose a staff recipient before sending." }, { status: 400 });
+    }
+    if (assignedToId === user.id) {
+      return NextResponse.json({ ok: false, error: "Choose a different staff recipient." }, { status: 400 });
+    }
+
+    const recipient = await prisma.user.findFirst({
+      where: {
+        id: assignedToId,
+        tenantId: user.tenantId,
+        isActive: true,
+        role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.TEACHER] },
+        ...(canAccessAllCenters(user)
+          ? {}
+          : {
+              OR: [
+                { staffProfile: { centerId: { in: user.centerIds } } },
+                { accessGrants: { some: { isActive: true, centerId: { in: user.centerIds } } } },
+              ],
+            }),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        staffProfile: { select: { centerId: true } },
+        accessGrants: {
+          where: { isActive: true },
+          select: { centerId: true },
+        },
+      },
+    });
+    if (!recipient) {
+      return NextResponse.json({ ok: false, error: "Staff recipient is not available in your school scope." }, { status: 400 });
+    }
+
+    const recipientIsTeacher = recipient.role === UserRole.TEACHER;
+    const recipientIsDirector = recipient.role === UserRole.CENTER_DIRECTOR || recipient.role === UserRole.ASSISTANT_DIRECTOR;
+    const senderIsTeacher = user.role === UserRole.TEACHER;
+    const senderCanMessageTeacher = senderCanManageOperations && recipientIsTeacher;
+    const senderCanMessageDirector = senderIsTeacher && recipientIsDirector;
+    if (!senderCanMessageTeacher && !senderCanMessageDirector) {
+      return NextResponse.json({ ok: false, error: "Direct staff messages are limited to director and teacher conversations." }, { status: 403 });
+    }
+
+    const threadKey = staffThreadKey(user.id, recipient.id);
+    if (replyToMessageId) {
+      const replyTarget = await prisma.message.findFirst({
+        where: { id: replyToMessageId, threadKey },
+        select: { id: true },
+      });
+      if (!replyTarget) {
+        return NextResponse.json({ ok: false, error: "Reply target message is not available for this staff thread." }, { status: 400 });
+      }
+    }
+
+    let attachments: StoredMessageAttachment[] = [];
+    try {
+      attachments = await uploadMessageAttachments({
+        files: input.files,
+        user,
+        centerId: recipient.staffProfile?.centerId ?? user.primaryCenterId,
+        threadKey,
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+        { status: 502 },
+      );
+    }
+
+    const created = await prisma.message.create({
+      data: {
+        familyId: null,
+        senderId: user.id,
+        assignedToId: recipient.id,
+        replyToMessageId,
+        threadKey,
+        subject,
+        body: message,
+        channel: "staff",
+        priority,
+        sentiment: priority === "high" ? "needs_review" : "neutral",
+        metadata: messageMetadata({
+          deliveryChannels: {
+            portal: true,
+            email: false,
+            sms: false,
+            push: sendPushCopy,
+          },
+          staffThread: {
+            participantIds: [user.id, recipient.id],
+            senderRole: user.role,
+            recipientRole: recipient.role,
+          },
+        }, attachments),
+      },
+    });
+
+    const notification = sendPushCopy
+      ? await prisma.notification.create({
+          data: {
+            userId: recipient.id,
+            title: `New staff message: ${subject}`,
+            body: `${user.name}: ${message}`,
+            type: "message",
+            priority,
+          },
+        })
+      : null;
+
+    await writeAuditLog(user, {
+      centerId: recipient.staffProfile?.centerId ?? user.primaryCenterId,
+      action: "message.staff.created",
+      resource: "Message",
+      resourceId: created.id,
+      metadata: {
+        recipientId: recipient.id,
+        recipientRole: recipient.role,
+        channel: "staff",
+        priority,
+        attachmentCount: attachments.length,
+        pushCopyRequested: sendPushCopy,
+        pushCopyQueued: notification ? 1 : 0,
+      },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      message: created,
+      push: {
+        attempted: sendPushCopy ? 1 : 0,
+        queued: notification ? 1 : 0,
+        provider: "in_app_notification",
+        configured: Boolean(process.env.PUSH_PROVIDER_KEY),
+      },
+    }, { status: 201 });
   }
 
   const messageGuard = canCreateFamilyMessage({
@@ -295,6 +606,20 @@ async function POSTHandler(request: NextRequest) {
       select: { id: true, name: true, email: true, phone: true },
     });
     const centerById = new Map(centerRows.map((center) => [center.id, center]));
+    let broadcastAttachments: StoredMessageAttachment[] = [];
+    try {
+      broadcastAttachments = await uploadMessageAttachments({
+        files: input.files,
+        user,
+        centerId: user.primaryCenterId,
+        threadKey: "broadcast",
+      });
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+        { status: 502 },
+      );
+    }
 
     let selectedTemplate: { subject: string; body: string } | null = null;
     if (templateId && !templateId.startsWith("default-")) {
@@ -311,8 +636,8 @@ async function POSTHandler(request: NextRequest) {
       selectedTemplate = defaultMessageTemplates.find((item) => item.id === templateId) ?? null;
     }
     if (selectedTemplate) {
-      subject = clean(body.subject) || selectedTemplate.subject;
-      message = clean(body.message) || selectedTemplate.body;
+      subject = input.subject || selectedTemplate.subject;
+      message = input.message || selectedTemplate.body;
     }
 
     if (assignedToId) {
@@ -378,7 +703,7 @@ async function POSTHandler(request: NextRequest) {
           channel: "broadcast",
           priority,
           sentiment: priority === "high" ? "needs_review" : "neutral",
-          metadata: {
+          metadata: messageMetadata({
             deliveryChannels: {
               portal: true,
               email: sendEmailCopy,
@@ -391,7 +716,7 @@ async function POSTHandler(request: NextRequest) {
               summary: broadcastSegmentSummary(broadcastSegment),
               recipientCount: targetFamilies.length,
             },
-          },
+          }, broadcastAttachments),
         },
       });
       createdMessages.push(created);
@@ -458,6 +783,7 @@ async function POSTHandler(request: NextRequest) {
         pushCopyQueued: pushNotifications.length,
         assignedToId,
         templateId,
+        attachmentCount: broadcastAttachments.length,
       },
     });
 
@@ -544,14 +870,14 @@ async function POSTHandler(request: NextRequest) {
       select: { subject: true, body: true },
     });
     if (template) {
-      subject = clean(body.subject) || template.subject;
-      message = clean(body.message) || template.body;
+      subject = input.subject || template.subject;
+      message = input.message || template.body;
     }
   } else if (templateId) {
     const template = defaultMessageTemplates.find((item) => item.id === templateId);
     if (template) {
-      subject = clean(body.subject) || template.subject;
-      message = clean(body.message) || template.body;
+      subject = input.subject || template.subject;
+      message = input.message || template.body;
     }
   }
 
@@ -596,6 +922,22 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
+  let attachments: StoredMessageAttachment[] = [];
+  try {
+    attachments = await uploadMessageAttachments({
+      files: input.files,
+      user,
+      centerId: family?.centerId ?? user.primaryCenterId,
+      familyId,
+      threadKey: familyId ? `family:${familyId}` : `internal:${user.primaryCenterId ?? user.tenantId}`,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Attachment could not be uploaded." },
+      { status: 502 },
+    );
+  }
+
   const created = await prisma.message.create({
     data: {
       familyId,
@@ -609,7 +951,7 @@ async function POSTHandler(request: NextRequest) {
       channel,
       priority,
       sentiment: priority === "high" ? "needs_review" : "neutral",
-      metadata: {
+      metadata: messageMetadata({
         deliveryChannels: {
           portal: true,
           email: sendEmailCopy,
@@ -617,7 +959,7 @@ async function POSTHandler(request: NextRequest) {
           push: sendPushCopy,
         },
         templateId,
-      },
+      }, attachments),
     },
   });
 
@@ -739,6 +1081,7 @@ async function POSTHandler(request: NextRequest) {
       pushCopyQueued: pushNotifications.filter(Boolean).length,
       assignedToId,
       templateId,
+      attachmentCount: attachments.length,
     },
   });
 

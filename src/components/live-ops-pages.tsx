@@ -147,6 +147,7 @@ import type { IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
 import type { RegistrationReviewStatus } from "@/lib/registration-packet";
 import { formatRegistrationPaymentAmount, type RegistrationPaymentStatus } from "@/lib/registration-billing";
+import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { formatStaffPayRate, formatStaffPayrollStatus, readStaffCompensation } from "@/lib/staff-compensation";
 import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import type { TerminalStoreItem } from "@/lib/terminal-store";
@@ -2238,6 +2239,7 @@ export type MessagesPageData = {
     family: { name: string; billingEmail: string | null; centerId: string | null } | null;
     sender: { name: string; email: string } | null;
     assignedTo?: { name: string; email: string } | null;
+    attachments?: MessageAttachmentView[];
   }>;
   threads: Array<{
     key: string;
@@ -2255,6 +2257,7 @@ export type MessagesPageData = {
       priority: string;
       createdAt: Date | string;
       sender: { name: string; email: string } | null;
+      attachments?: MessageAttachmentView[];
     }>;
   }>;
   stats: {
@@ -2277,6 +2280,35 @@ export type MessagesPageData = {
   canManageRoleDefaults: boolean;
   demoMode?: boolean;
 };
+
+function formatAttachmentSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB`;
+}
+
+function MessageAttachmentLinks({ attachments }: { attachments?: MessageAttachmentView[] }) {
+  if (!attachments?.length) return null;
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {attachments.map((attachment) => (
+        <a
+          key={attachment.id}
+          className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background/60 px-2.5 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
+          href={attachment.downloadUrl ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          aria-disabled={!attachment.downloadUrl}
+        >
+          {attachment.kind === "image" ? <ImageIcon className="size-3.5 shrink-0 text-primary" /> : <FileText className="size-3.5 shrink-0 text-primary" />}
+          <span className="truncate">{attachment.filename}</span>
+          <span className="shrink-0 text-muted-foreground">{formatAttachmentSize(attachment.size)}</span>
+        </a>
+      ))}
+    </div>
+  );
+}
 
 export function MessagesPage({ data }: { data: MessagesPageData }) {
   return (
@@ -2304,6 +2336,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         mergeFields={data.mergeFields}
         staffOptions={data.staffOptions}
         segmentOptions={data.segmentOptions}
+        currentRole={data.currentRole}
       />
       <NotificationPreferencesPanel
         types={data.notificationPreferenceTypes}
@@ -2344,6 +2377,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                     </div>
                     <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
                     <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
+                    <MessageAttachmentLinks attachments={message.attachments} />
                   </div>
                 ))}
               </div>
@@ -2381,6 +2415,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                       {message.assignedTo ? ` · assigned to ${message.assignedTo.name}` : ""}
                     </div>
                     <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{message.body}</div>
+                    <MessageAttachmentLinks attachments={message.attachments} />
                   </TableCell>
                   <TableCell>{message.channel}</TableCell>
                   <TableCell>
@@ -2561,7 +2596,6 @@ export type ClassroomDashboardData = {
 export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData }) {
   const children = data.classrooms.reduce((sum, classroom) => sum + classroom._count.children, 0);
   const currentChildrenInRooms = data.liveTrackerChildren.filter((child) => !child.areaName).length;
-  const capacity = data.classrooms.reduce((sum, classroom) => sum + classroom.capacity, 0);
   const staff = data.classrooms.reduce((sum, classroom) => sum + classroom._count.staff, 0);
   const ratioRows = data.classrooms.map((classroom) => ({
     classroom,
@@ -2597,7 +2631,7 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
       </div>
       <ChildLocationTrackerPanel
         classrooms={data.liveTrackerClassrooms}
-        children={data.liveTrackerChildren}
+        trackedChildren={data.liveTrackerChildren}
         canMove={data.canMoveChildren && !data.demoMode}
         title="Real-Time Child Tracker"
         description="Drag children into their current room or school area for combinations, playground time, coverage moves, and transitions. Enrolled classroom and billing assignment do not change."

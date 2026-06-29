@@ -17,11 +17,13 @@ import {
   KeyRound,
   MessageSquare,
   Minus,
+  Paperclip,
   Plus,
   ReceiptText,
   ShoppingBag,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +38,7 @@ import {
   PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
   paymentProcessingRecoverySummary,
 } from "@/lib/payment-disclosures";
+import type { MessageAttachmentView } from "@/lib/message-attachments";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 
 type Child = {
@@ -185,7 +188,7 @@ type Props = {
   ledgerEntries?: LedgerEntry[];
   dailyReports: DailyReport[];
   incidents: Incident[];
-  messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date }>;
+  messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date; attachments?: MessageAttachmentView[] }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null; storageKey?: string | null; downloadUrl?: string | null }>;
   media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
@@ -236,6 +239,12 @@ function formatDate(value: string | Date | null) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB`;
 }
 
 const MAX_UNIFORM_PURCHASE_QUANTITY = 12;
@@ -305,6 +314,8 @@ export function ParentPortalWorkspace({
   const [error, setError] = useState("");
   const [subject, setSubject] = useState("Question for the center");
   const [message, setMessage] = useState("");
+  const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
+  const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
   const [requestDetails, setRequestDetails] = useState("");
   const [documentNotes, setDocumentNotes] = useState<Record<string, string>>({});
   const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
@@ -387,23 +398,58 @@ export function ParentPortalWorkspace({
     setError(next);
   }
 
+  function addMessageAttachments(files: FileList | null) {
+    const selected = Array.from(files ?? []).filter((file) => file.size > 0);
+    if (!selected.length) return;
+    setMessageAttachments((current) => {
+      const next = [...current, ...selected].slice(0, 5);
+      if (current.length + selected.length > 5) {
+        showError("Attach up to 5 files per message.");
+      }
+      return next;
+    });
+  }
+
+  function removeMessageAttachment(index: number) {
+    setMessageAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function buildMessageFormData(familyId: string) {
+    const formData = new FormData();
+    formData.append("familyId", familyId);
+    formData.append("subject", subject);
+    formData.append("message", message);
+    formData.append("priority", "normal");
+    formData.append("sendEmailCopy", "true");
+    formData.append("sendPushCopy", "true");
+    for (const file of messageAttachments) {
+      formData.append("attachments", file);
+    }
+    return formData;
+  }
+
   function sendMessage() {
     if (!family) return;
     startTransition(async () => {
+      const body = {
+        familyId: family.id,
+        subject,
+        message,
+        priority: "normal",
+        sendEmailCopy: true,
+        sendPushCopy: true,
+      };
       const response = await fetch("/api/communications/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          familyId: family.id,
-          subject,
-          message,
-          priority: "normal",
-          sendEmailCopy: true,
-        }),
+        ...(messageAttachments.length
+          ? { body: buildMessageFormData(family.id) }
+          : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
       });
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Message could not be sent.");
       setMessage("");
+      setMessageAttachments([]);
+      setMessageAttachmentInputKey((current) => current + 1);
       showStatus("Message sent to the center and recorded in the family timeline.");
     });
   }
@@ -1278,7 +1324,34 @@ export function ParentPortalWorkspace({
               <Label htmlFor="portal-message">Message</Label>
               <Textarea id="portal-message" value={message} onChange={(event) => setMessage(event.target.value)} />
             </div>
-            <Button className="w-full sm:w-auto" disabled={isPending || !message.trim()} onClick={sendMessage}>
+            <div className="space-y-2 rounded-lg border bg-background/40 p-3">
+              <Label htmlFor="portal-message-attachments" className="flex items-center gap-2">
+                <Paperclip className="size-4" />
+                Attach photos or files
+              </Label>
+              <Input
+                key={messageAttachmentInputKey}
+                id="portal-message-attachments"
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                onChange={(event) => addMessageAttachments(event.target.files)}
+              />
+              {messageAttachments.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {messageAttachments.map((file, index) => (
+                    <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-2 py-1 text-xs">
+                      <span className="truncate">{file.name || "attachment"}</span>
+                      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
+                      <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeMessageAttachment(index)} title="Remove attachment">
+                        <X className="size-3" />
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <Button className="w-full sm:w-auto" disabled={isPending || (!message.trim() && !messageAttachments.length)} onClick={sendMessage}>
               <MessageSquare data-icon="inline-start" />
               Send Message
             </Button>
@@ -1379,6 +1452,23 @@ export function ParentPortalWorkspace({
                 <div className="text-xs text-muted-foreground">{formatDate(item.createdAt)}</div>
               </div>
               <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
+              {item.attachments?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {item.attachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      className="inline-flex max-w-full items-center gap-2 rounded-md border bg-background/60 px-2 py-1.5 text-xs font-medium text-foreground transition hover:bg-accent"
+                      href={attachment.downloadUrl ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {attachment.kind === "image" ? <Camera className="size-3.5 shrink-0 text-primary" /> : <FileText className="size-3.5 shrink-0 text-primary" />}
+                      <span className="truncate">{attachment.filename}</span>
+                      <span className="shrink-0 text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ))}
           {!messages.length ? <p className="text-sm text-muted-foreground">No messages have been recorded yet.</p> : null}

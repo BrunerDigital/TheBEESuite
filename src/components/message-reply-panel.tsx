@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Bot, CheckCircle2, Send, Sparkles } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +42,7 @@ export type MessageStaffOption = {
   id: string;
   name: string;
   email: string;
+  role?: string;
 };
 
 export type MessageSegmentOptions = {
@@ -90,17 +91,19 @@ export function MessageReplyPanel({
   mergeFields,
   staffOptions,
   segmentOptions,
+  currentRole,
 }: {
   familyOptions: MessageFamilyOption[];
   templates: MessageTemplateOption[];
   mergeFields: MessageMergeFieldOption[];
   staffOptions: MessageStaffOption[];
   segmentOptions: MessageSegmentOptions;
+  currentRole: string;
 }) {
   const router = useRouter();
   const templateOptions = templates.length ? templates : [];
   const [familyId, setFamilyId] = useState(familyOptions[0]?.id ?? "");
-  const [targetMode, setTargetMode] = useState<"family" | "broadcast">("family");
+  const [targetMode, setTargetMode] = useState<"family" | "broadcast" | "staff">(familyOptions[0]?.id ? "family" : "staff");
   const [segmentCenterIds, setSegmentCenterIds] = useState<string[]>([]);
   const [segmentClassroomIds, setSegmentClassroomIds] = useState<string[]>([]);
   const [segmentStatuses, setSegmentStatuses] = useState<string[]>([]);
@@ -117,13 +120,29 @@ export function MessageReplyPanel({
   const [sendEmailCopy, setSendEmailCopy] = useState(true);
   const [sendSmsCopy, setSendSmsCopy] = useState(false);
   const [sendPushCopy, setSendPushCopy] = useState(true);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+  const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const canUseBroadcast = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"].includes(currentRole);
+  const canUseStaffTarget = currentRole === "TEACHER" || canUseBroadcast;
+  const staffRecipientOptions = useMemo(() => {
+    if (!canUseStaffTarget) return [];
+    const directorRoles = new Set(["CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"]);
+    return staffOptions.filter((staff) => {
+      if (currentRole === "TEACHER") return directorRoles.has(staff.role ?? "");
+      return staff.role === "TEACHER";
+    });
+  }, [canUseStaffTarget, currentRole, staffOptions]);
 
   const selectedFamily = useMemo(
     () => familyOptions.find((family) => family.id === familyId) ?? null,
     [familyId, familyOptions],
+  );
+  const selectedStaffRecipient = useMemo(
+    () => staffRecipientOptions.find((staff) => staff.id === assignedToId) ?? null,
+    [assignedToId, staffRecipientOptions],
   );
   const selectedSegment = useMemo(() => ({
     centerIds: segmentCenterIds,
@@ -150,6 +169,12 @@ export function MessageReplyPanel({
   const smsRecipientCount = targetMode === "broadcast" ? broadcastSmsRecipientCount : selectedFamilySmsRecipientCount;
   const canSendSmsCopy = smsRecipientCount > 0;
 
+  function formatFileSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toLocaleString("en-US", { maximumFractionDigits: 1 })} MB`;
+  }
+
   function applyTemplate(nextTemplateId: string) {
     const template = templateOptions.find((item) => item.id === nextTemplateId) ?? templateOptions[0];
     if (!template) return;
@@ -164,6 +189,52 @@ export function MessageReplyPanel({
 
   function toggleSelection(value: string, values: string[], setValues: (next: string[]) => void) {
     setValues(values.includes(value) ? values.filter((item) => item !== value) : [...values, value]);
+  }
+
+  function addAttachments(files: FileList | null) {
+    const selected = Array.from(files ?? []).filter((file) => file.size > 0);
+    if (!selected.length) return;
+    setAttachmentFiles((current) => {
+      const next = [...current, ...selected].slice(0, 5);
+      if (current.length + selected.length > 5) {
+        setErrorMessage("Attach up to 5 files per message.");
+      }
+      return next;
+    });
+  }
+
+  function removeAttachment(index: number) {
+    setAttachmentFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function buildMessageRequestBody(shouldSendSmsCopy: boolean) {
+    return {
+      familyId: targetMode === "family" ? familyId : null,
+      targetMode,
+      broadcastSegment: targetMode === "broadcast" ? selectedSegment : null,
+      subject,
+      message,
+      priority,
+      templateId,
+      assignedToId: assignedToId === "unassigned" ? null : assignedToId,
+      channel: targetMode === "broadcast" ? "broadcast" : targetMode === "staff" ? "staff" : "portal_reply",
+      sendEmailCopy: targetMode === "staff" ? false : sendEmailCopy,
+      sendSmsCopy: targetMode === "staff" ? false : shouldSendSmsCopy,
+      sendPushCopy,
+    };
+  }
+
+  function buildMessageFormData(shouldSendSmsCopy: boolean) {
+    const requestBody = buildMessageRequestBody(shouldSendSmsCopy);
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(requestBody)) {
+      if (value === null || value === undefined) continue;
+      formData.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+    }
+    for (const file of attachmentFiles) {
+      formData.append("attachments", file);
+    }
+    return formData;
   }
 
   function requestSuggestions() {
@@ -195,28 +266,17 @@ export function MessageReplyPanel({
   }
 
   function submit() {
-    if ((targetMode === "family" && !familyId) || !message.trim()) return;
+    if ((targetMode === "family" && !familyId) || (targetMode === "staff" && !selectedStaffRecipient) || (!message.trim() && !attachmentFiles.length)) return;
     const shouldSendSmsCopy = sendSmsCopy && canSendSmsCopy;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      const requestBody = buildMessageRequestBody(shouldSendSmsCopy);
       const response = await fetch("/api/communications/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          familyId: targetMode === "family" ? familyId : null,
-          targetMode,
-          broadcastSegment: targetMode === "broadcast" ? selectedSegment : null,
-          subject,
-          message,
-          priority,
-          templateId,
-          assignedToId: assignedToId === "unassigned" ? null : assignedToId,
-          channel: targetMode === "broadcast" ? "broadcast" : "portal_reply",
-          sendEmailCopy,
-          sendSmsCopy: shouldSendSmsCopy,
-          sendPushCopy,
-        }),
+        ...(attachmentFiles.length
+          ? { body: buildMessageFormData(shouldSendSmsCopy) }
+          : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(requestBody) }),
       });
       const json = await response.json().catch(() => null) as { error?: string; recipientCount?: number; messageCount?: number; sms?: { attempted: number; sent: number; error?: string | null }; push?: { attempted: number } } | null;
       if (!response.ok) {
@@ -229,10 +289,14 @@ export function MessageReplyPanel({
           : ` ${json?.sms?.error ?? "No SMS copy was sent."}`
         : "";
       const pushDetail = sendPushCopy ? ` ${json?.push?.attempted ?? 0} push/in-app notifications queued.` : "";
-      setStatusMessage(targetMode === "broadcast"
+      setStatusMessage(targetMode === "staff"
+        ? `Message sent to ${selectedStaffRecipient?.name ?? "the staff member"}.${pushDetail}`
+        : targetMode === "broadcast"
         ? `Broadcast sent to ${json?.recipientCount ?? targetFamilyCount} families.${smsDetail}${pushDetail}`
         : `Message sent to ${selectedFamily?.name ?? "the family"}.${smsDetail}${pushDetail}`);
       setMessage("");
+      setAttachmentFiles([]);
+      setAttachmentInputKey((current) => current + 1);
       setSuggestions([]);
       setGuardrailNote("");
       router.refresh();
@@ -240,14 +304,16 @@ export function MessageReplyPanel({
   }
 
   const canSubmit = targetMode === "broadcast"
-    ? targetFamilyCount > 0 && Boolean(message.trim())
-    : Boolean(familyId && message.trim());
+    ? targetFamilyCount > 0 && Boolean(message.trim() || attachmentFiles.length)
+    : targetMode === "staff"
+      ? Boolean(selectedStaffRecipient && (message.trim() || attachmentFiles.length))
+      : Boolean(familyId && (message.trim() || attachmentFiles.length));
 
   return (
     <Card className="glass-panel">
       <CardHeader>
         <CardTitle>Message Composer</CardTitle>
-        <CardDescription>Office, classroom, and broadcast messages are stored on each family timeline.</CardDescription>
+        <CardDescription>Family, classroom, broadcast, and director/teacher messages are stored in scoped threads.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {statusMessage ? (
@@ -264,19 +330,22 @@ export function MessageReplyPanel({
             <AlertDescription>{errorMessage}</AlertDescription>
           </Alert>
         ) : null}
-        {familyOptions.length ? (
+        {familyOptions.length || staffRecipientOptions.length ? (
           <>
             <div className="grid gap-3 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.8fr)]">
               <div className="space-y-1">
                 <Label>Target</Label>
-                <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "broadcast" ? "broadcast" : "family")}>
+                <Select value={targetMode} onValueChange={(value) => setTargetMode(value === "broadcast" ? "broadcast" : value === "staff" ? "staff" : "family")}>
                   <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="family">Single family</SelectItem>
-                    <SelectItem value="broadcast">Broadcast segment</SelectItem>
+                    {familyOptions.length ? <SelectItem value="family">Single family</SelectItem> : null}
+                    {canUseBroadcast ? <SelectItem value="broadcast">Broadcast segment</SelectItem> : null}
+                    {staffRecipientOptions.length ? <SelectItem value="staff">Staff member</SelectItem> : null}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-muted-foreground">{targetFamilyCount} recipient family{targetFamilyCount === 1 ? "" : "ies"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {targetMode === "staff" ? "Director/teacher thread" : `${targetFamilyCount} recipient family${targetFamilyCount === 1 ? "" : "ies"}`}
+                </div>
               </div>
               {targetMode === "family" ? (
                 <div className="space-y-1">
@@ -293,12 +362,28 @@ export function MessageReplyPanel({
                   </Select>
                   <div className="text-xs text-muted-foreground">{selectedFamily?.billingEmail ?? "No billing email on file"}</div>
                 </div>
-              ) : (
+              ) : targetMode === "broadcast" ? (
                 <div className="space-y-1">
                   <Label>Broadcast recipients</Label>
                   <div className="rounded-md border bg-background/40 px-3 py-2 text-sm">
                     {targetFamilyCount} matching families
                   </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Staff recipient</Label>
+                  <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Choose staff" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Choose staff</SelectItem>
+                      {staffRecipientOptions.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>
+                          {staff.name}{staff.role ? ` - ${staff.role.replaceAll("_", " ").toLowerCase()}` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground">{selectedStaffRecipient?.email ?? "In-app staff thread"}</div>
                 </div>
               )}
               <div className="space-y-1">
@@ -323,18 +408,25 @@ export function MessageReplyPanel({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label>Assigned staff</Label>
-                <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {staffOptions.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {targetMode !== "staff" ? (
+                <div className="space-y-1">
+                  <Label>Assigned staff</Label>
+                  <Select value={assignedToId} onValueChange={(value) => value && setAssignedToId(value)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                      {staffOptions.map((staff) => (
+                        <SelectItem key={staff.id} value={staff.id}>{staff.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label>Delivery</Label>
+                  <div className="rounded-md border bg-background/40 px-3 py-2 text-sm">In-app staff thread</div>
+                </div>
+              )}
             </div>
             {targetMode === "broadcast" ? (
               <div className="grid gap-3 md:grid-cols-4">
@@ -351,6 +443,33 @@ export function MessageReplyPanel({
             <div className="space-y-1">
               <Label>Message</Label>
               <Textarea value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-28" />
+            </div>
+            <div className="space-y-2 rounded-lg border bg-background/40 p-3">
+              <Label htmlFor="message-attachments" className="flex items-center gap-2">
+                <Paperclip className="size-4" />
+                Attach photos or files
+              </Label>
+              <Input
+                key={attachmentInputKey}
+                id="message-attachments"
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                onChange={(event) => addAttachments(event.target.files)}
+              />
+              {attachmentFiles.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {attachmentFiles.map((file, index) => (
+                    <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-md border bg-card px-2 py-1 text-xs">
+                      <span className="truncate">{file.name || "attachment"}</span>
+                      <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
+                      <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeAttachment(index)} title="Remove attachment">
+                        <X className="size-3" />
+                      </Button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-2">
               {mergeFields.map((field) => (
@@ -376,7 +495,7 @@ export function MessageReplyPanel({
                   </Select>
                 </div>
                 <div className="flex items-end">
-                  <Button type="button" variant="outline" disabled={isSuggesting || (targetMode === "family" && !familyId)} onClick={requestSuggestions}>
+                  <Button type="button" variant="outline" disabled={isSuggesting || targetMode === "staff" || (targetMode === "family" && !familyId)} onClick={requestSuggestions}>
                     <Sparkles data-icon="inline-start" />
                     {isSuggesting ? "Drafting" : "Suggest replies"}
                   </Button>
@@ -405,25 +524,29 @@ export function MessageReplyPanel({
               ) : null}
               {guardrailNote ? <div className="mt-3 text-xs leading-5 text-muted-foreground">{guardrailNote}</div> : null}
             </div>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                className="size-4 rounded border-input"
-                checked={sendEmailCopy}
-                onChange={(event) => setSendEmailCopy(event.target.checked)}
-              />
-              Email a copy to family contacts
-            </label>
-            <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                className="size-4 rounded border-input"
-                checked={sendSmsCopy && canSendSmsCopy}
-                disabled={!canSendSmsCopy}
-                onChange={(event) => setSendSmsCopy(event.target.checked)}
-              />
-              Text a copy to SMS-preferred guardians ({smsRecipientCount})
-            </label>
+            {targetMode !== "staff" ? (
+              <>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-input"
+                    checked={sendEmailCopy}
+                    onChange={(event) => setSendEmailCopy(event.target.checked)}
+                  />
+                  Email a copy to family contacts
+                </label>
+                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-input"
+                    checked={sendSmsCopy && canSendSmsCopy}
+                    disabled={!canSendSmsCopy}
+                    onChange={(event) => setSendSmsCopy(event.target.checked)}
+                  />
+                  Text a copy to SMS-preferred guardians ({smsRecipientCount})
+                </label>
+              </>
+            ) : null}
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"

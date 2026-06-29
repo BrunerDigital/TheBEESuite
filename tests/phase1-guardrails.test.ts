@@ -53,6 +53,7 @@ import { canAccessModule } from "../src/lib/rbac";
 import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
 import { resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
+import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
 test("password reset gate does not block teacher or parent profile accounts", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
@@ -68,6 +69,15 @@ test("web app login routes parent accounts into the parent portal", () => {
   assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal#billing" }), "/parent-portal#billing");
   assert.equal(resolvePostLoginPath({ role: UserRole.AUTHORIZED_PICKUP, requestedNext: "/billing-invoices" }), "/parent-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
+});
+
+test("web app login routes teacher accounts into teacher-safe workflows", () => {
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/teacher-portal#teacher-attendance" }), "/teacher-portal#teacher-attendance");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/daily-reports" }), "/daily-reports");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/teacher-portal" }), "/classroom-dashboard");
+  assert.equal(resolvePostLoginPath({ role: UserRole.BILLING_ADMIN, requestedNext: "/teacher-portal" }), "/dashboard");
 });
 
 test("billing guard applies a checkout payment only once per invoice", () => {
@@ -561,6 +571,47 @@ test("parent portal guards require family-scoped messages and guardian acknowled
     ok: false,
     status: 403,
     error: "You do not have access to this family.",
+  });
+});
+
+test("message visibility keeps direct staff threads participant-scoped", () => {
+  assert.deepEqual(buildVisibleMessageWhere({
+    userId: "teacher_1",
+    familyScopeWhere: { id: "__no_teacher_classroom__" },
+    allCenters: false,
+    teacherMessageScope: true,
+  }), {
+    OR: [
+      { family: { is: { id: "__no_teacher_classroom__" } } },
+      {
+        familyId: null,
+        threadKey: { startsWith: "staff:" },
+        OR: [{ senderId: "teacher_1" }, { assignedToId: "teacher_1" }],
+      },
+    ],
+  });
+
+  assert.deepEqual(buildVisibleMessageWhere({
+    userId: "director_1",
+    familyScopeWhere: { centerId: { in: ["center_1"] } },
+    allCenters: false,
+    teacherMessageScope: false,
+  }), {
+    OR: [
+      { family: { is: { centerId: { in: ["center_1"] } } } },
+      {
+        familyId: null,
+        OR: [
+          { threadKey: null },
+          { NOT: { threadKey: { startsWith: "staff:" } } },
+        ],
+      },
+      {
+        familyId: null,
+        threadKey: { startsWith: "staff:" },
+        OR: [{ senderId: "director_1" }, { assignedToId: "director_1" }],
+      },
+    ],
   });
 });
 

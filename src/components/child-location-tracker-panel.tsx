@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRightLeft, CheckCircle2, MapPin, Move, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,12 +47,17 @@ type MoveTarget =
 
 type Props = {
   classrooms: ChildLocationTrackerClassroom[];
-  children: ChildLocationTrackerChild[];
+  trackedChildren: ChildLocationTrackerChild[];
   canMove?: boolean;
   compact?: boolean;
   title?: string;
   description?: string;
 };
+
+type LocalMove = Pick<
+  ChildLocationTrackerChild,
+  "currentClassroomId" | "currentClassroomName" | "areaName" | "status" | "movedAt" | "movedByName" | "reason"
+>;
 
 function formatTime(value: string | Date | null) {
   if (!value) return "";
@@ -88,15 +93,15 @@ function childCardTone(child: ChildLocationTrackerChild) {
 
 export function ChildLocationTrackerPanel({
   classrooms,
-  children,
+  trackedChildren,
   canMove = false,
   compact = false,
   title = "Live Child Location Tracker",
   description = "Move children between current classrooms or school areas without changing their enrolled classroom.",
 }: Props) {
   const router = useRouter();
-  const [rows, setRows] = useState(children);
-  const [selectedChildId, setSelectedChildId] = useState(children[0]?.id ?? "");
+  const [localMoves, setLocalMoves] = useState<Record<string, LocalMove>>({});
+  const [selectedChildId, setSelectedChildId] = useState(trackedChildren[0]?.id ?? "");
   const [draggedChildId, setDraggedChildId] = useState("");
   const [reason, setReason] = useState("Combination / coverage");
   const [customAreaName, setCustomAreaName] = useState("");
@@ -104,12 +109,14 @@ export function ChildLocationTrackerPanel({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  useEffect(() => {
-    setRows(children);
-    setSelectedChildId((current) => current || children[0]?.id || "");
-  }, [children]);
-
-  const selectedChild = rows.find((child) => child.id === selectedChildId) ?? rows[0] ?? null;
+  const rows = useMemo(() => trackedChildren.map((child) => ({
+    ...child,
+    ...(localMoves[child.id] ?? {}),
+  })), [localMoves, trackedChildren]);
+  const effectiveSelectedChildId = rows.some((child) => child.id === selectedChildId)
+    ? selectedChildId
+    : rows[0]?.id ?? "";
+  const selectedChild = rows.find((child) => child.id === effectiveSelectedChildId) ?? null;
   const areaNames = useMemo(() => {
     const values = new Set<string>([...childLocationAreaOptions]);
     for (const child of rows) {
@@ -152,10 +159,9 @@ export function ChildLocationTrackerPanel({
     const targetClassroom = target.type === "classroom"
       ? classrooms.find((classroom) => classroom.id === target.classroomId) ?? null
       : null;
-    setRows((current) => current.map((child) => {
-      if (child.id !== childId) return child;
-      return {
-        ...child,
+    setLocalMoves((current) => ({
+      ...current,
+      [childId]: {
         currentClassroomId: targetClassroom?.id ?? null,
         currentClassroomName: targetClassroom?.name ?? null,
         areaName: target.type === "area" ? target.areaName : null,
@@ -163,7 +169,7 @@ export function ChildLocationTrackerPanel({
         movedAt: new Date().toISOString(),
         movedByName,
         reason,
-      };
+      },
     }));
   }
 
@@ -198,7 +204,7 @@ export function ChildLocationTrackerPanel({
     });
   }
 
-  function handleDrop(event: React.DragEvent<HTMLElement>, target: MoveTarget) {
+  function handleDrop(event: DragEvent<HTMLElement>, target: MoveTarget) {
     event.preventDefault();
     const childId = event.dataTransfer.getData("text/plain") || draggedChildId;
     moveChild(childId, target);
@@ -215,7 +221,7 @@ export function ChildLocationTrackerPanel({
         key={child.id}
         type="button"
         draggable={canMove}
-        className={`w-full rounded-lg border p-2 text-left text-sm transition hover:bg-background/80 ${selectedChildId === child.id ? "border-foreground/60" : ""} ${childCardTone(child)}`}
+        className={`w-full rounded-lg border p-2 text-left text-sm transition hover:bg-background/80 ${effectiveSelectedChildId === child.id ? "border-foreground/60" : ""} ${childCardTone(child)}`}
         onClick={() => setSelectedChildId(child.id)}
         onDragStart={(event) => {
           setDraggedChildId(child.id);

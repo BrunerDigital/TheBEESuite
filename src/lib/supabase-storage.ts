@@ -4,12 +4,15 @@ import { cleanSupabaseUrl } from "@/lib/supabase-auth";
 
 export const CHILD_MEDIA_BUCKET = process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
+export const MESSAGE_ATTACHMENT_BUCKET = process.env.SUPABASE_MESSAGE_ATTACHMENT_BUCKET || DOCUMENT_BUCKET;
 export const PROFILE_PHOTO_BUCKET = process.env.SUPABASE_PROFILE_PHOTO_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const CHILD_MEDIA_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS || 60 * 60 * 2);
 export const DOCUMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_DOCUMENT_SIGNED_URL_SECONDS || 60 * 60);
+export const MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS || 60 * 60 * 2);
 export const PROFILE_PHOTO_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_PROFILE_PHOTO_SIGNED_URL_SECONDS || 60 * 60 * 12);
 export const CHILD_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
 export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const MESSAGE_ATTACHMENT_MAX_BYTES = DOCUMENT_MAX_BYTES;
 export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 type StorageClient = SupabaseClient;
@@ -320,6 +323,94 @@ export async function createDocumentSignedUrl(storageKey: string, expiresIn = DO
   const client = getSupabaseStorageClient();
   const { data, error } = await client.storage.from(DOCUMENT_BUCKET).createSignedUrl(storageKey, expiresIn);
   if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed document URL.");
+  return data.signedUrl;
+}
+
+export function buildMessageAttachmentPath({
+  tenantId,
+  centerId,
+  familyId,
+  threadKey,
+  uploadedById,
+  originalName,
+  contentType,
+}: {
+  tenantId: string;
+  centerId?: string | null;
+  familyId?: string | null;
+  threadKey?: string | null;
+  uploadedById: string;
+  originalName?: string;
+  contentType: string;
+}) {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const ext = extensionFor(contentType, originalName);
+  return [
+    "message-attachments",
+    safePathPart(tenantId),
+    safePathPart(centerId || "center"),
+    safePathPart(familyId || threadKey || "internal"),
+    safePathPart(uploadedById),
+    String(year),
+    month,
+    `${randomUUID()}.${ext}`,
+  ].join("/");
+}
+
+export async function uploadMessageAttachmentBuffer({
+  bytes,
+  contentType,
+  originalName,
+  tenantId,
+  centerId,
+  familyId,
+  threadKey,
+  uploadedById,
+}: {
+  bytes: Buffer;
+  contentType: string;
+  originalName?: string;
+  tenantId: string;
+  centerId?: string | null;
+  familyId?: string | null;
+  threadKey?: string | null;
+  uploadedById: string;
+}) {
+  assertDocumentContentType(contentType);
+  if (bytes.byteLength > MESSAGE_ATTACHMENT_MAX_BYTES) throw new Error("Attachment must be 20MB or smaller.");
+
+  const client = getSupabaseStorageClient();
+  const storageKey = buildMessageAttachmentPath({
+    tenantId,
+    centerId,
+    familyId,
+    threadKey,
+    uploadedById,
+    originalName,
+    contentType,
+  });
+  const { error: uploadError } = await client.storage.from(MESSAGE_ATTACHMENT_BUCKET).upload(storageKey, bytes, {
+    cacheControl: "3600",
+    contentType,
+    upsert: false,
+  });
+  if (uploadError) throw new Error(uploadError.message);
+
+  const signedUrl = await createMessageAttachmentSignedUrl(storageKey);
+  return {
+    bucket: MESSAGE_ATTACHMENT_BUCKET,
+    storageKey,
+    recordUrl: `supabase://${MESSAGE_ATTACHMENT_BUCKET}/${storageKey}`,
+    signedUrl,
+  };
+}
+
+export async function createMessageAttachmentSignedUrl(storageKey: string, expiresIn = MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS) {
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.from(MESSAGE_ATTACHMENT_BUCKET).createSignedUrl(storageKey, expiresIn);
+  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create signed attachment URL.");
   return data.signedUrl;
 }
 

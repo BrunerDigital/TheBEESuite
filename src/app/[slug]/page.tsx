@@ -96,6 +96,8 @@ import {
   utcBillingWeekday,
 } from "@/lib/billing-workflows";
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
+import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
+import { buildVisibleMessageWhere } from "@/lib/message-visibility";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
 import { roleLabel } from "@/lib/notification-preferences";
@@ -1780,7 +1782,7 @@ async function renderLivePage(
         where: { familyId },
         orderBy: { createdAt: "desc" },
         take: 20,
-        select: { id: true, subject: true, body: true, createdAt: true },
+        select: { id: true, subject: true, body: true, createdAt: true, metadata: true },
       }),
       prisma.document.findMany({
         where: { OR: [{ familyId }, { childId: { in: childIds.length ? childIds : ["__none__"] } }] },
@@ -1828,9 +1830,13 @@ async function renderLivePage(
       }),
     ]);
 
-    const [signedDocuments, signedMedia] = await Promise.all([
+    const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
       signDocumentRecords(documents),
       signChildMediaRecords(media),
+      Promise.all(messages.map(async (message) => ({
+        ...message,
+        attachments: await signMessageAttachmentsFromMetadata(message.metadata),
+      }))),
     ]);
     const parentPortalCenterName = family?.centerId
       ? centers.find((center) => center.id === family.centerId)
@@ -1954,7 +1960,7 @@ async function renderLivePage(
         ledgerEntries={billingAccount?.ledgerEntries ?? []}
         dailyReports={dailyReports}
         incidents={incidents}
-        messages={messages}
+        messages={signedMessages}
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}
@@ -2145,11 +2151,12 @@ async function renderLivePage(
       : allCenters
         ? { children: { some: currentlyEnrolledChildWhere() } }
         : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } };
-    const messageWhere: Prisma.MessageWhereInput = teacherMessageScope
-      ? { family: { is: familyScopeWhere } }
-      : allCenters
-        ? {}
-        : { OR: [{ family: { is: familyScopeWhere } }, { familyId: null }] };
+    const messageWhere = buildVisibleMessageWhere({
+      userId: user.id,
+      familyScopeWhere,
+      allCenters,
+      teacherMessageScope,
+    });
     const classroomWhere: Prisma.ClassroomWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
@@ -2228,7 +2235,7 @@ async function renderLivePage(
         },
         orderBy: { name: "asc" },
         take: 250,
-        select: { id: true, name: true, email: true },
+        select: { id: true, name: true, email: true, role: true },
       }),
       prisma.classroom.findMany({
         where: classroomWhere,
@@ -2283,8 +2290,12 @@ async function renderLivePage(
       orderBy: [{ userId: "desc" }, { role: "asc" }, { type: "asc" }],
     });
 
+    const signedMessages = await Promise.all(messages.map(async (message) => ({
+      ...message,
+      attachments: await signMessageAttachmentsFromMetadata(message.metadata),
+    })));
     const demoMode = showDemoFallbackData && messages.length === 0;
-    const visibleMessages = demoMode ? executiveParentMessageDemoRows : messages;
+    const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     const familyOptions = families.map((family) => ({
       id: family.id,
@@ -2328,9 +2339,10 @@ async function renderLivePage(
         priority: string;
         createdAt: Date | string;
         sender: { name: string; email: string } | null;
+        attachments?: Awaited<ReturnType<typeof signMessageAttachmentsFromMetadata>>;
       }>;
     };
-    const threadMap = messages.reduce((map, message) => {
+    const threadMap = signedMessages.reduce((map, message) => {
         const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
         const existing = map.get(key) ?? {
           key,
@@ -2356,6 +2368,7 @@ async function renderLivePage(
           priority: message.priority,
           createdAt: message.createdAt,
           sender: message.sender,
+          attachments: message.attachments,
         });
         return map;
       }, new Map<string, MessageThread>());
@@ -5054,7 +5067,13 @@ export default async function SlugPage({
 }) {
   const { slug } = await params;
   const resolvedSearchParams = searchParams ? await searchParams : {};
+  return renderAuthenticatedModulePage(slug, resolvedSearchParams);
+}
 
+export async function renderAuthenticatedModulePage(
+  slug: string,
+  resolvedSearchParams: Record<string, string | string[] | undefined> = {},
+) {
   if (slug === "forgot-password" || slug === "onboarding") {
     return <AuthLikePage type={slug} nextPath={safeAuthNextPath(resolvedSearchParams.next)} />;
   }
@@ -5065,6 +5084,10 @@ export default async function SlugPage({
   }
   if (requiresPasswordResetGate(user)) {
     redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
+  }
+
+  if (slug === "teacher-portal" && !canAccessModule(user, slug)) {
+    redirect(canAccessModule(user, "classroom-dashboard") ? "/classroom-dashboard" : "/dashboard");
   }
 
   if (!canAccessModule(user, slug)) {

@@ -70,6 +70,13 @@ test("web app login routes parent accounts into the parent portal", () => {
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
 });
 
+test("web app login routes teacher accounts into teacher-safe workflows", () => {
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/teacher-portal#teacher-attendance" }), "/teacher-portal#teacher-attendance");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/daily-reports" }), "/daily-reports");
+  assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal");
+});
+
 test("billing guard applies a checkout payment only once per invoice", () => {
   assert.deepEqual(checkoutApplicationGuard({
     invoiceStatus: PaymentStatus.OPEN,

@@ -75,6 +75,8 @@ test("web app login routes teacher accounts into teacher-safe workflows", () => 
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/teacher-portal#teacher-attendance" }), "/teacher-portal#teacher-attendance");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/daily-reports" }), "/daily-reports");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal");
+  assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/teacher-portal" }), "/classroom-dashboard");
+  assert.equal(resolvePostLoginPath({ role: UserRole.BILLING_ADMIN, requestedNext: "/teacher-portal" }), "/dashboard");
 });
 
 test("billing guard applies a checkout payment only once per invoice", () => {

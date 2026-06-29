@@ -5089,6 +5089,10 @@ export async function renderAuthenticatedModulePage(
     redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
   }
 
+  if (slug === "teacher-portal" && !canAccessModule(user, slug)) {
+    redirect(canAccessModule(user, "classroom-dashboard") ? "/classroom-dashboard" : "/dashboard");
+  }
+
   if (!canAccessModule(user, slug)) {
     notFound();
   }

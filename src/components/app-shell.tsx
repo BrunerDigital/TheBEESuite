@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -285,8 +285,9 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
                       href={href}
                       onClick={close}
                       className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        active && "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm",
+                        "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        active &&
+                          "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
                       )}
                     >
                       <Icon data-icon="inline-start" />
@@ -406,6 +407,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     error: "",
   });
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const searchUserEmail = currentUser?.email ?? "";
   const trimmedSearchQuery = searchQuery.trim();
   const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
@@ -467,6 +470,22 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     };
   }, [searchQuery, searchUserEmail]);
 
+
+  useEffect(() => {
+    function handleSearchShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isTyping = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isTyping) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        setSearchOpen(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, []);
+
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
@@ -478,6 +497,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     if (!query) return;
     const firstResult = query.length >= 2 ? activeSearchResults[0] : undefined;
     setSearchOpen(false);
+    setMobileSearchOpen(false);
     router.push(firstResult?.href ?? `/${searchDestination}?q=${encodeURIComponent(query)}`);
   }
 
@@ -490,6 +510,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
 
   return (
     <div className="min-h-screen">
+      <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
+        Skip to workspace content
+      </a>
       <aside className={cn("fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl", hasRoleBottomNav ? "xl:block" : "lg:block")}>
         <SidebarNav currentUser={currentUser} />
       </aside>
@@ -513,10 +536,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               <div className="relative w-full max-w-2xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   aria-autocomplete="list"
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
-                  className="h-11 rounded-xl border-border/70 bg-card/70 pl-10"
+                  className="h-11 rounded-xl border-border/70 bg-card/70 pl-10 pr-16"
                   placeholder={searchPlaceholder}
                   role="combobox"
                   value={searchQuery}
@@ -532,6 +556,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                     if (event.key === "Enter") submitGlobalSearch();
                   }}
                 />
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border bg-background/80 px-2 py-1 text-[0.65rem] font-medium text-muted-foreground lg:block">/</kbd>
                 {searchOpen && searchQuery.trim().length >= 2 ? (
                   <div
                     id="global-search-results"
@@ -574,6 +599,41 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+                <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search workspace" className="md:hidden" />}>
+                  <Search />
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Search workspace</DialogTitle>
+                    <DialogDescription>Find families, child records, billing items, tasks, and messages for your role.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-3">
+                    <Input autoFocus placeholder={searchPlaceholder} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitGlobalSearch(); }} />
+                    {trimmedSearchQuery.length < 2 ? (
+                      <p className="text-sm text-muted-foreground">Type at least two characters to search scoped workspace records.</p>
+                    ) : searchPending ? (
+                      <p className="text-sm text-muted-foreground">Searching...</p>
+                    ) : activeSearchError ? (
+                      <p className="text-sm text-destructive">{activeSearchError}</p>
+                    ) : activeSearchResults.length ? (
+                      <div className="max-h-80 overflow-auto rounded-xl border p-2">
+                        {activeSearchResults.slice(0, 6).map((result) => (
+                          <Link key={result.id} href={result.href} onClick={() => setMobileSearchOpen(false)} className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10">
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">{result.label}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                            </span>
+                            <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                          </Link>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No matching records. Press Enter to search {searchDestination.replaceAll("-", " ")}.</p>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 sm:inline-flex">
                 <Sparkles data-icon="inline-start" />
                 AI suggestions require review
@@ -637,7 +697,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main className={cn("min-h-[calc(100vh-4rem)] p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
+        <main id="workspace-main" className={cn("min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>

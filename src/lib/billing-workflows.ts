@@ -50,6 +50,49 @@ export function agencyPaymentDescription(input: {
   return [agency, child].filter(Boolean).join(" - ") + coverage;
 }
 
+
+export function normalizeSubsidyVoucher(input: {
+  agencyName?: unknown;
+  authorizationNumber?: unknown;
+  voucherAmountDollars?: unknown;
+  copayAmountDollars?: unknown;
+  familyResponsibilityDollars?: unknown;
+  coverageStart?: unknown;
+  coverageEnd?: unknown;
+  childName?: unknown;
+}) {
+  const metadata = normalizeAgencyPaymentMetadata(input);
+  const voucherAmountCents = parseCurrencyCents(input.voucherAmountDollars);
+  const copayAmountCents = parseCurrencyCents(input.copayAmountDollars ?? input.familyResponsibilityDollars);
+  return {
+    ...metadata,
+    childName: clean(input.childName).slice(0, 160),
+    voucherAmountCents,
+    copayAmountCents,
+    familyResponsibilityCents: copayAmountCents,
+    subsidyReady: Boolean(metadata.agencyName && metadata.authorizationNumber && voucherAmountCents > 0),
+  };
+}
+
+export function subsidyVoucherLedgerLines(input: ReturnType<typeof normalizeSubsidyVoucher>) {
+  const lines = [];
+  if (input.voucherAmountCents > 0) {
+    lines.push({
+      type: "agency_voucher_credit" as const,
+      amountCents: input.voucherAmountCents,
+      description: agencyPaymentDescription(input),
+    });
+  }
+  if (input.copayAmountCents > 0) {
+    lines.push({
+      type: "family_copay_due" as const,
+      amountCents: input.copayAmountCents,
+      description: `Family copay due${input.childName ? ` - ${input.childName}` : ""}`,
+    });
+  }
+  return lines;
+}
+
 export function normalizeBillingPeriod(value: unknown, fallbackDate: Date) {
   const normalized = clean(value);
   if (/^\d{4}-\d{2}$/.test(normalized)) return normalized;

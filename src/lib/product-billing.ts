@@ -1,6 +1,10 @@
 import type { StripeCheckoutBranding } from "@/lib/integrations";
 import {
+  STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS,
   STUDENT_UNIFORM_SHIRT_CATALOG,
+  STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS,
+  STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE,
   studentUniformShirtVariantFromProduct,
   type ProductLike,
 } from "@/lib/uniform-products";
@@ -36,12 +40,39 @@ function itemSummaryFromItems(items: InvoiceItemLike[]) {
 }
 
 export function productItemSummary(product: ProductLike, quantity = 1) {
-  const normalizedQuantity = positiveInt(quantity);
-  return normalizedQuantity > 1 ? `${product.name} x ${normalizedQuantity}` : product.name;
+  const count = positiveInt(quantity);
+  return count > 1 ? `${product.name} x ${count}` : product.name;
 }
 
-export function productPurchaseTotals(product: ProductLike, quantity = 1) {
+export function uniformShirtBundleDiscountTotals(quantity: unknown = 1, input?: {
+  singlePriceCents?: number;
+  bundlePriceCents?: number;
+  bundleCount?: number;
+}) {
+  const selectedQuantity = normalizeProductPurchaseQuantity(quantity, 1, 100);
+  const singlePriceCents = input?.singlePriceCents ?? STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS;
+  const bundlePriceCents = input?.bundlePriceCents ?? STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS;
+  const bundleCount = input?.bundleCount ?? STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT;
+  const bundleQuantity = Math.floor(selectedQuantity / bundleCount);
+  const singleQuantity = selectedQuantity % bundleCount;
+  const totalCents = (bundleQuantity * bundlePriceCents) + (singleQuantity * singlePriceCents);
+  const undiscountedCents = selectedQuantity * singlePriceCents;
+  return {
+    selectedQuantity,
+    receiptQuantity: selectedQuantity,
+    bundleQuantity,
+    singleQuantity,
+    totalCents,
+    undiscountedCents,
+    discountCents: Math.max(undiscountedCents - totalCents, 0),
+  };
+}
+
+export function productPurchaseTotals(product: ProductLike, quantity: unknown = 1) {
   const variant = studentUniformShirtVariantFromProduct(product);
+  if (variant?.purchaseOption === "single") {
+    return uniformShirtBundleDiscountTotals(quantity, { singlePriceCents: product.amountCents });
+  }
   const selectedQuantity = normalizeProductPurchaseQuantity(quantity);
   const receiptQuantity = variant?.purchaseOption === "bundle_5"
     ? variant.shirtCount * selectedQuantity
@@ -49,11 +80,15 @@ export function productPurchaseTotals(product: ProductLike, quantity = 1) {
   return {
     selectedQuantity,
     receiptQuantity,
+    bundleQuantity: variant?.purchaseOption === "bundle_5" ? selectedQuantity : 0,
+    singleQuantity: variant?.purchaseOption === "bundle_5" ? 0 : selectedQuantity,
     totalCents: product.amountCents * selectedQuantity,
+    undiscountedCents: product.amountCents * selectedQuantity,
+    discountCents: 0,
   };
 }
 
-export function productInvoiceFieldsForProduct(product: ProductLike, quantity = 1): Record<string, unknown> {
+export function productInvoiceFieldsForProduct(product: ProductLike, quantity: unknown = 1): Record<string, unknown> {
   const variant = studentUniformShirtVariantFromProduct(product);
   const totals = productPurchaseTotals(product, quantity);
   return {
@@ -63,12 +98,16 @@ export function productInvoiceFieldsForProduct(product: ProductLike, quantity = 
     sourceId: product.id,
     productId: product.id,
     productName: product.name,
-    productType: product.type,
+    productType: variant?.purchaseOption === "single" ? STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE : product.type,
     productCatalog: variant ? STUDENT_UNIFORM_SHIRT_CATALOG : null,
     productColor: variant?.color ?? null,
     productSize: variant?.size ?? null,
     productPurchaseOption: variant?.purchaseOption ?? null,
     quantity: totals.receiptQuantity,
+    selectedQuantity: totals.selectedQuantity,
+    bundleQuantity: totals.bundleQuantity,
+    singleQuantity: totals.singleQuantity,
+    discountCents: totals.discountCents,
     itemSummary: productItemSummary(product, totals.selectedQuantity),
   };
 }

@@ -719,6 +719,14 @@ async function POSTHandler(request: NextRequest) {
       const guard = classroomFamilyGuard(centerId, classroom.centerId);
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
+    const existingChild = id ? await prisma.child.findUnique({ where: { id }, select: { familyId: true, customFields: true } }) : null;
+    const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    const existingCustomFields = jsonObject(existingChild?.customFields);
+    const customFields = ["full_time", "part_time"].includes(careScheduleType)
+      ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
+      : Object.keys(existingCustomFields).length
+        ? existingCustomFields as Prisma.InputJsonObject
+        : undefined;
     const data = {
       familyId,
       classroomId,
@@ -735,11 +743,11 @@ async function POSTHandler(request: NextRequest) {
       feedingNotes: clean(body.feedingNotes) || null,
       pottyNotes: clean(body.pottyNotes) || null,
       developmentalNotes: clean(body.body) || null,
+      customFields,
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
     if (id) {
-      const existing = await prisma.child.findUnique({ where: { id }, select: { familyId: true } });
-      const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existing?.familyId, scopeLabel: "family" });
+      const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existingChild?.familyId, scopeLabel: "family" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
     result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });

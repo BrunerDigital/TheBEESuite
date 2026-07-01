@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agencyPaymentDescription,
+  normalizeSubsidyVoucher,
+  subsidyVoucherLedgerLines,
   billingDedupeKey,
   defaultRecurringBillingPeriod,
   isoWeekBillingPeriod,
@@ -141,4 +143,25 @@ test("recurring tuition eligibility waits for start period and billing day", () 
     billingDay: 1,
     currentDay: 15,
   }), false);
+});
+
+
+test("subsidy voucher helper separates agency credit from family copay", () => {
+  const voucher = normalizeSubsidyVoucher({
+    agencyName: " Early Learning Coalition ",
+    authorizationNumber: " AUTH-9 ",
+    voucherAmountDollars: "$180.00",
+    copayAmountDollars: "25",
+    coverageStart: "2026-06-01",
+    coverageEnd: "2026-06-07",
+    childName: "Avery Bee",
+  });
+
+  assert.equal(voucher.subsidyReady, true);
+  assert.equal(voucher.voucherAmountCents, 18000);
+  assert.equal(voucher.copayAmountCents, 2500);
+  assert.deepEqual(subsidyVoucherLedgerLines(voucher), [
+    { type: "agency_voucher_credit", amountCents: 18000, description: "Early Learning Coalition - Avery Bee (2026-06-01 to 2026-06-07)" },
+    { type: "family_copay_due", amountCents: 2500, description: "Family copay due - Avery Bee" },
+  ]);
 });

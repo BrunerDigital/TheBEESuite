@@ -479,6 +479,12 @@ function childScheduleClassification(input: { schedule: unknown; customFields: u
     ...stringArrayField(customFields.days),
     ...stringArrayField(customFields.scheduleDays),
   ];
+  const explicit = String(customFields.careScheduleType || customFields.fteScheduleType || customFields.fullTimePartTime || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_");
+  if (["full_time", "fulltime", "full"].includes(explicit)) return "full_time" as const;
+  if (["part_time", "parttime", "part"].includes(explicit)) return "part_time" as const;
+
   if (days.length >= 5) return "full_time" as const;
   if (days.length > 0 && days.length <= 3) return "part_time" as const;
 

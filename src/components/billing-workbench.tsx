@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
+import { STUDENT_UNIFORM_SHIRT_BASE_NAME, STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE, STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT } from "@/lib/uniform-products";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 
 export type BillingWorkbenchFamily = {
@@ -234,7 +235,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
   const [tuitionPlanId, setTuitionPlanId] = useState(tuitionPlans[0]?.id ?? "");
-  const [productId, setProductId] = useState(products[0]?.id ?? "");
+  const uniformShirtProduct = products.find((product) => product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE) ?? null;
+  const [productId, setProductId] = useState(uniformShirtProduct?.id ?? products[0]?.id ?? "");
+  const [productQuantity, setProductQuantity] = useState("1");
   const [childId, setChildId] = useState("none");
   const [description, setDescription] = useState("");
   const [amountDollars, setAmountDollars] = useState("");
@@ -580,6 +583,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       chargeSource,
       tuitionPlanId: chargeSource === "tuitionPlan" ? tuitionPlanId : undefined,
       productId: chargeSource === "product" ? productId : undefined,
+      quantity: chargeSource === "product" ? productQuantity : undefined,
       description,
       amountDollars: chargeSource === "custom" ? amountDollars : undefined,
     };
@@ -1269,6 +1273,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               setTuitionPlanId={handleTuitionPlanChange}
               productId={productId}
               setProductId={setProductId}
+              productQuantity={productQuantity}
+              setProductQuantity={setProductQuantity}
               products={products}
               tuitionPlans={tuitionPlans}
               amountDollars={amountDollars}
@@ -1306,6 +1312,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               setTuitionPlanId={handleTuitionPlanChange}
               productId={productId}
               setProductId={setProductId}
+              productQuantity={productQuantity}
+              setProductQuantity={setProductQuantity}
               products={products}
               tuitionPlans={tuitionPlans}
               amountDollars={amountDollars}
@@ -1538,6 +1546,8 @@ function ChargeFields({
   productId,
   setProductId,
   products,
+  productQuantity,
+  setProductQuantity,
   tuitionPlans,
   amountDollars,
   setAmountDollars,
@@ -1551,12 +1561,19 @@ function ChargeFields({
   productId: string;
   setProductId: (value: string) => void;
   products: BillingWorkbenchProduct[];
+  productQuantity: string;
+  setProductQuantity: (value: string) => void;
   tuitionPlans: BillingWorkbenchTuitionPlan[];
   amountDollars: string;
   setAmountDollars: (value: string) => void;
   selectedPlan: BillingWorkbenchTuitionPlan | null;
   selectedProduct: BillingWorkbenchProduct | null;
 }) {
+  const uniformProduct = selectedProduct?.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE ? selectedProduct : null;
+  const uniformQuantity = Math.max(1, Number.parseInt(productQuantity, 10) || 1);
+  const uniformBundles = Math.floor(uniformQuantity / STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT);
+  const uniformSingles = uniformQuantity % STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT;
+  const uniformTotalCents = uniformBundles * STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS + uniformSingles * (uniformProduct?.amountCents ?? STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS);
   return (
     <div className="grid gap-3 md:grid-cols-3">
       <div className="space-y-1">
@@ -1565,7 +1582,7 @@ function ChargeFields({
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="tuitionPlan">Tuition plan</SelectItem>
-            <SelectItem value="product">Product / fee</SelectItem>
+            <SelectItem value="product">Uniform shirt / product</SelectItem>
             <SelectItem value="custom">Custom charge</SelectItem>
           </SelectContent>
         </Select>
@@ -1594,12 +1611,23 @@ function ChargeFields({
             <SelectContent>
               {products.map((product) => (
                 <SelectItem key={product.id} value={product.id}>
-                  {product.name} · {product.type} · {money(product.amountCents)}
+                  {product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE ? STUDENT_UNIFORM_SHIRT_BASE_NAME : product.name} · {product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE ? "director quick invoice" : product.type} · {money(product.amountCents)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           {selectedProduct ? <div className="text-xs text-muted-foreground">Selected amount {money(selectedProduct.amountCents)}</div> : null}
+        </div>
+      ) : null}
+      {chargeSource === "product" ? (
+        <div className="space-y-1">
+          <Label>Quantity</Label>
+          <Input inputMode="numeric" min={1} value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} placeholder="1" />
+          {uniformProduct ? (
+            <div className="text-xs text-muted-foreground">
+              Director quick invoice: {uniformQuantity} shirt{uniformQuantity === 1 ? "" : "s"} = {money(uniformTotalCents)} ({uniformBundles ? `${uniformBundles} five-pack${uniformBundles === 1 ? "" : "s"} at ${money(STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS)}` : "no five-pack"}{uniformSingles ? ` + ${uniformSingles} single${uniformSingles === 1 ? "" : "s"}` : ""}). Parents still choose size/color in the portal store.
+            </div>
+          ) : null}
         </div>
       ) : null}
       {chargeSource === "custom" ? (

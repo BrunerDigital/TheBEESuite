@@ -15,6 +15,7 @@ import {
   invoicePurposeLabel,
   productInvoiceFieldsForProduct,
   productPurchaseTotals,
+  uniformShirtBundleDiscountTotals,
 } from "@/lib/product-billing";
 
 test("student uniform shirt catalog creates every color and size variant", () => {
@@ -66,7 +67,7 @@ test("product billing metadata labels checkout and receipts as product purchases
   const fields = productInvoiceFieldsForProduct(product, 8);
   const totals = productPurchaseTotals(product, 8);
 
-  assert.deepEqual(totals, { selectedQuantity: 8, receiptQuantity: 8, totalCents: 14400 });
+  assert.deepEqual(totals, { selectedQuantity: 8, receiptQuantity: 8, bundleQuantity: 1, singleQuantity: 3, totalCents: 13400, undiscountedCents: 14400, discountCents: 1000 });
   assert.equal(fields.checkoutPurpose, "product_purchase");
   assert.equal(fields.productColor, "Black");
   assert.equal(fields.productSize, "2T");
@@ -111,11 +112,24 @@ test("uniform shirt 5-pack metadata preserves bundle pricing and quantity", () =
   const fields = productInvoiceFieldsForProduct(product, 2);
   const totals = productPurchaseTotals(product, 2);
 
-  assert.deepEqual(totals, { selectedQuantity: 2, receiptQuantity: 10, totalCents: 16000 });
+  assert.deepEqual(totals, { selectedQuantity: 2, receiptQuantity: 10, bundleQuantity: 2, singleQuantity: 0, totalCents: 16000, undiscountedCents: 16000, discountCents: 0 });
   assert.equal(fields.productPurchaseOption, "bundle_5");
   assert.equal(fields.quantity, 10);
   assert.equal(fields.itemSummary, "Student Uniform Shirt 5-Pack - Black - 2T x 2");
   assert.equal(invoicePurposeLabel(fields), "Student Uniform Shirt 5-Pack - Black - 2T x 2");
   assert.equal(invoiceProductStripeMetadata(fields).quantity, "10");
   assert.equal(invoiceProductStripeMetadata(fields).productPurchaseOption, "bundle_5");
+});
+
+
+test("director uniform shirt invoices apply the five for eighty bundle discount", () => {
+  assert.deepEqual(uniformShirtBundleDiscountTotals(12), {
+    selectedQuantity: 12,
+    receiptQuantity: 12,
+    bundleQuantity: 2,
+    singleQuantity: 2,
+    totalCents: 19600,
+    undiscountedCents: 21600,
+    discountCents: 2000,
+  });
 });

@@ -13,7 +13,7 @@ import {
   normalizeRecurringBillingPeriod,
   parseCurrencyCents,
 } from "@/lib/billing-workflows";
-import { productInvoiceFieldsForProduct } from "@/lib/product-billing";
+import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -107,9 +107,9 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
         chargeSource: "product",
         sourceId: product.id,
         description: clean(body.description) || product.name,
-        amountCents: product.amountCents,
+        amountCents: productPurchaseTotals(product, clean(body.quantity) || undefined).totalCents,
         productId: product.id,
-        customFields: productInvoiceFieldsForProduct(product),
+        customFields: productInvoiceFieldsForProduct(product, clean(body.quantity) || undefined),
       },
     };
   }

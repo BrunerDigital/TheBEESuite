@@ -8,7 +8,11 @@ test("SendGrid email helper sends private personalizations and captures provider
   const originalFrom = process.env.SENDGRID_FROM_EMAIL;
   type SendGridPayload = {
     personalizations: Array<{ to: Array<{ email: string }>; custom_args: Record<string, string> }>;
-    tracking_settings?: { click_tracking?: { enable: boolean; enable_text: boolean } };
+    tracking_settings?: {
+      click_tracking?: { enable: boolean; enable_text?: boolean };
+      open_tracking?: { enable: boolean };
+      subscription_tracking?: { enable: boolean };
+    };
     attachments?: Array<{ content: string; filename: string; type: string; disposition: string }>;
   };
   const capture: { payload?: SendGridPayload } = {};
@@ -48,7 +52,11 @@ test("SendGrid email helper sends private personalizations and captures provider
       [{ email: "director@example.com" }],
     ]);
     assert.deepEqual(personalizations[0].custom_args, { messageId: "msg_1", count: "2" });
-    assert.deepEqual(capture.payload?.tracking_settings?.click_tracking, { enable: false, enable_text: false });
+    assert.deepEqual(capture.payload?.tracking_settings, {
+      click_tracking: { enable: false, enable_text: false },
+      open_tracking: { enable: false },
+      subscription_tracking: { enable: false },
+    });
     assert.deepEqual(capture.payload?.attachments, [{
       content: Buffer.from("PDF placeholder").toString("base64"),
       filename: "tour-packet.pdf",

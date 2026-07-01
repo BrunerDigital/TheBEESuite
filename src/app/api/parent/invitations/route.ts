@@ -185,6 +185,7 @@ async function POSTHandler(request: NextRequest) {
     subject: "Your The BEE Suite parent portal is ready",
     text: invitationText,
     fromName: "The BEE Suite",
+    disableClickTracking: true,
     categories: ["parent_invitation_email"],
     customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
     tenantId: user.tenantId,

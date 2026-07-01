@@ -477,6 +477,7 @@ async function createParentPortalInvite(input: {
       subject: "Kid City USA registration next steps",
       text,
       fromName: "Kid City USA",
+      disableClickTracking: true,
       categories: ["parent_invitation_email"],
       customArgs: { guardianId: input.guardian.id, familyId: input.family.id, centerId: input.center.id },
       tenantId: input.user.tenantId,

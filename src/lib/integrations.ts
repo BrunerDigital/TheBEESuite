@@ -476,6 +476,12 @@ export function uniqueEmails(values: string[]) {
     });
 }
 
+const transactionalTrackingSettings = {
+  click_tracking: { enable: false, enable_text: false },
+  open_tracking: { enable: false },
+  subscription_tracking: { enable: false },
+};
+
 export async function sendEmail({
   to,
   subject,
@@ -531,7 +537,7 @@ export async function sendEmail({
       subject,
       categories: categories?.slice(0, 10),
       tracking_settings: disableClickTracking
-        ? { click_tracking: { enable: false, enable_text: false } }
+        ? transactionalTrackingSettings
         : undefined,
       content: [{ type: "text/plain", value: text }],
       attachments: attachments?.length

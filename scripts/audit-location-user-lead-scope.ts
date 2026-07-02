@@ -62,6 +62,7 @@ async function main() {
       isActive: true,
       email: { endsWith: "@kidcityusa.com" },
       role: { in: locationUserRoles },
+      accessGrants: { some: { isActive: true, centerId: { not: null } } },
     },
     orderBy: { email: "asc" },
     select: {

@@ -173,6 +173,28 @@ const resourceCards = [
 ];
 
 const explainerGraphics = [
+
+  {
+    title: "Getting started platform map",
+    body: "Shows the current launch order across Vercel, Supabase, Stripe, messaging, Google/webhooks, OpenAI, Procare migration, school setup, and user training.",
+    src: "/brand/the-bee-suite/explainers/bee-suite-getting-started-platform-map-2026-07-01.svg",
+    width: 1600,
+    height: 1000,
+  },
+  {
+    title: "School launch swimlane",
+    body: "Breaks go-live into role-by-role steps for owners, directors, teachers, parents, billing/compliance users, and support so every handoff is explicit.",
+    src: "/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg",
+    width: 1600,
+    height: 1000,
+  },
+  {
+    title: "Daily user quick start",
+    body: "A role-card graphic for the first actions directors, teachers, parents, billing users, executives, and support teams should take in the current app.",
+    src: "/brand/the-bee-suite/explainers/bee-suite-daily-user-quick-start-2026-07-01.svg",
+    width: 1600,
+    height: 1000,
+  },
   {
     title: "Childcare operating system",
     body: "Shows how enrollment, operations, families, billing, reporting, and platform controls connect around one shared school record.",

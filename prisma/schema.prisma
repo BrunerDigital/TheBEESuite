@@ -1408,6 +1408,20 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id])
 }
 
+model PaymentMethodRequestLink {
+  code      String   @id
+  token     String
+  tenantId  String
+  centerId  String
+  familyId  String
+  email     String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([familyId, email])
+}
+
 model Integration {
   id                String    @id @default(cuid())
   tenantId          String

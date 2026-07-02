@@ -1,5 +1,6 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { CANONICAL_APP_BASE_URL, getAppBaseUrl } from "@/lib/supabase-auth";
+import { prisma } from "@/lib/prisma";
 
 export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
 export const PAYMENT_METHOD_REQUEST_TOKEN_TTL_DAYS = 14;
@@ -175,6 +176,45 @@ export function validatePaymentMethodRequestToken(token: unknown, now = new Date
 
 export function buildPaymentMethodRequestFormUrl(appBaseUrl: string, token: string) {
   return `${appBaseUrl.replace(/\/+$/, "")}/payment-method-form/${encodeURIComponent(token)}`;
+}
+
+export function buildPaymentMethodRequestShortFormUrl(appBaseUrl: string, code: string) {
+  return `${appBaseUrl.replace(/\/+$/, "")}/payment-method-form/r/${encodeURIComponent(code)}`;
+}
+
+export function createPaymentMethodRequestShortCode() {
+  return base64Url(randomBytes(18));
+}
+
+export async function storePaymentMethodRequestShortLink(input: {
+  code?: string;
+  token: string;
+  tenantId: string;
+  centerId: string;
+  familyId: string;
+  email: string;
+  expiresAt: Date;
+}) {
+  const code = input.code || createPaymentMethodRequestShortCode();
+  await prisma.$executeRaw`
+    insert into "PaymentMethodRequestLink" ("code", "token", "tenantId", "centerId", "familyId", "email", "expiresAt")
+    values (${code}, ${input.token}, ${input.tenantId}, ${input.centerId}, ${input.familyId}, ${normalizePaymentRequestEmail(input.email)}, ${input.expiresAt})
+  `;
+  return code;
+}
+
+export async function resolvePaymentMethodRequestShortLink(code: unknown, now = new Date()) {
+  const normalized = clean(code);
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(normalized)) return null;
+  const rows = await prisma.$queryRaw<Array<{ token: string; expiresAt: Date }>>`
+    select "token", "expiresAt"
+    from "PaymentMethodRequestLink"
+    where "code" = ${normalized}
+    limit 1
+  `;
+  const link = rows[0];
+  if (!link || new Date(link.expiresAt).getTime() < now.getTime()) return null;
+  return link.token;
 }
 
 function isLocalPaymentRequestHost(value: string) {

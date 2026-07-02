@@ -2,6 +2,8 @@
 
 Childcare & Preschool CRM/Operations Platform
 
+Last refreshed: July 1, 2026
+
 The BEE Suite is a white-label childcare CRM and operations command center for leads, tours, enrollment, families, children, classrooms, staff workflows, billing, parent communication, compliance-ready documentation, reporting, and human-reviewed AI assistance.
 
 ## Built
@@ -11,7 +13,7 @@ The BEE Suite is a white-label childcare CRM and operations command center for l
 - Executive dashboard plus route-driven surfaces for all 40 requested pages.
 - PostgreSQL-compatible schema and realistic seed script.
 - Mock integration structure for Stripe, Twilio, SendGrid/Mailgun, Google Calendar, Google Business Profile, Meta Lead Ads, OpenAI, Zapier/webhooks, signatures, and cloud storage.
-- Documentation for architecture, deployment, Supabase, Prisma, go-live, AI guardrails, privacy, and roadmap.
+- Documentation for architecture, deployment, Supabase, Prisma, go-live, AI guardrails, privacy, role SOPs, and current getting-started graphics.
 
 ## File Tree
 
@@ -79,6 +81,8 @@ Auth and setup: `/login`, `/forgot-password`, `/onboarding`
 
 `/onboarding` creates a gated trial workspace with a tenant, brand, organization, owner group, primary center profile, brand-admin user, explicit access grant, setup integrations, audit log, brand customization records, asset placeholders, and center-linked inquiry form embed. The owner sets their own password through Supabase Auth recovery/setup email; live payments stay gated until payout onboarding is complete and reviewed.
 
+Current onboarding graphics: `docs/GETTING_STARTED_GRAPHICS_AND_PLATFORM_REFRESH_2026-07-01.md` and the public landing page graphics gallery.
+
 Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classroom-dashboard`, `/crm-leads`, `/family-detail`, `/child-profile`, `/enrollment-pipeline`, `/waitlist`, `/tours`, `/calendar`, `/messages`, `/announcements`, `/campaigns`, `/automations`, `/forms`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/staff`, `/billing-invoices`, `/payments`, `/compliance`, `/reputation`, `/analytics`, `/ai-command`, `/parent-portal`, `/teacher-portal`, `/agency-admin`, `/white-label`, `/team-permissions`, `/integrations`, `/billing-settings`, `/notifications`, `/audit-logs`, and `/help`.
 
 Executive users manage live locations, owner groups, scoped users, temporary passwords, and archived/reactivated centers from `/agency-admin`. See `docs/EXECUTIVE_ADMIN.md` for the operational workflow.
@@ -115,7 +119,7 @@ Production-ready foundation: app shell, responsive UI, shadcn component system, 
 
 Connected/live foundation: custom auth session flow, server-side role and center scoping, CRM lead creation/editing, Kid City inquiry routing, SendGrid notifications, Google Sheets inquiry backup, Stripe Connect setup flow, parent Checkout session creation, webhook reconciliation, reporting snapshots, and audit logging.
 
-Gated next phase: live Stripe key activation and school payout onboarding, SMS/push, calendar sync, review sync, lead ad sync, e-signatures, expanded document/media storage, QR/PIN check-in rollout, and licensing exports.
+Gated next phase: per-school live Stripe activation and payout onboarding approvals, expanded SMS/push and calendar/review/lead-ad sync rollout, e-signature provider activation, advanced media retention, QR/PIN kiosk scale-out, and jurisdiction-specific licensing exports.
 
 ## Security and Privacy Notes
 
@@ -127,9 +131,9 @@ AI is labeled as suggestions only. Human review is required for sensitive output
 
 ## Next Priorities
 
-1. Connect authentication and server-side RBAC.
-2. Wire Prisma reads/writes into the route surfaces.
-3. Build real enrollment pipeline drag-and-drop.
-4. Implement parent/teacher mobile workflows as dedicated experiences.
-5. Complete Stripe test-mode checkout/payout validation before enabling live tuition payments.
+1. Finish per-school production smoke tests and support handoff for the current role dashboards.
+2. Complete Stripe test-mode and live connected-account validation before enabling each school for parent payments.
+3. Expand real-time SMS/push/calendar/review/lead-ad integrations behind tenant approvals.
+4. Harden media retention, e-signature packets, licensing exports, and advanced compliance reporting.
+5. Continue replacing legacy/static product notes with current role-specific launch graphics and SOPs.
 

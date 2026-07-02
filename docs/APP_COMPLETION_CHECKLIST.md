@@ -466,8 +466,8 @@ Status legend:
 
 ## Documentation And Operations
 
-- [ ] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
-- [ ] Create dedicated teacher classroom quick-start and billing/admin quick-start guides from the paper training packet.
+- [x] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
+- [x] Create dedicated teacher classroom quick-start and billing/admin quick-start guides from the paper training packet.
 - [x] Architecture docs exist.
 - [x] Product docs exist.
 - [x] Deployment/go-live docs exist.
@@ -580,7 +580,7 @@ Status legend:
 - [ ] Confirm first rollout wave order, launch owners, escalation contacts, cutover windows, and support coverage.
 - [ ] Complete full ProCare import validation with real exports from active Kid City USA locations.
 - [ ] Replace remaining demo-login fallbacks with real imported classroom/family/teacher data.
-- [ ] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
+- [x] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
 - [ ] Validate staff payroll/time cards, terminal store ordering, tuition reminders, and daily report emails with Kokomo before enabling them across all schools.
 - [x] Finish parent portal account access, balances, tuition payment UI, daily report details, photo viewing, documents, and messages.
 - [x] Finish teacher classroom tablet workflows for daily logging.

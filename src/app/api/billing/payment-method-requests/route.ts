@@ -10,8 +10,10 @@ import {
   buildPaymentMethodRequestEmailSubject,
   buildPaymentMethodRequestFocusedFormUrl,
   buildPaymentMethodRequestFormUrl,
+  buildPaymentMethodRequestShortFormUrl,
   buildPaymentMethodRequestNotificationBody,
   createPaymentMethodRequestToken,
+  storePaymentMethodRequestShortLink,
   getPaymentMethodRequestAppBaseUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   PAYMENT_METHOD_REQUEST_NOTIFICATION_TYPE,
@@ -132,9 +134,24 @@ async function POSTHandler(request: NextRequest) {
       tenantId: center.organization.tenantId,
       email,
     });
-    const formUrl = intent === "instant_bank_verification"
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    let formUrl = intent === "instant_bank_verification"
       ? buildPaymentMethodRequestFocusedFormUrl(appBaseUrl, token, intent)
       : buildPaymentMethodRequestFormUrl(appBaseUrl, token);
+    try {
+      const shortCode = await storePaymentMethodRequestShortLink({
+        token,
+        tenantId: center.organization.tenantId,
+        centerId: center.id,
+        familyId: family.id,
+        email,
+        expiresAt,
+      });
+      const shortFormUrl = buildPaymentMethodRequestShortFormUrl(appBaseUrl, shortCode);
+      formUrl = intent === "instant_bank_verification" ? `${shortFormUrl}?focus=instant-bank` : shortFormUrl;
+    } catch {
+      // Keep email sending available even before the short-link migration has been applied.
+    }
     const text = buildPaymentMethodRequestEmailText({
       recipientLabel: recipient.label,
       familyName: family.name,

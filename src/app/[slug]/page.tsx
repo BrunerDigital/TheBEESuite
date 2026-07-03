@@ -85,6 +85,11 @@ import {
 } from "@/lib/integrations";
 import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
+import {
+  activeStripeCheckoutPaymentSummary,
+  isActiveStripeCheckoutPayment,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import {
@@ -1735,10 +1740,30 @@ async function renderLivePage(
           autopayPlaceholder: true,
           customFields: true,
           payments: {
-            where: { status: PaymentStatus.PAID },
+            where: {
+              OR: [
+                { status: PaymentStatus.PAID },
+                {
+                  provider: "stripe",
+                  status: PaymentStatus.DRAFT,
+                  OR: [
+                    { customFields: { path: ["status"], equals: "checkout_created" } },
+                    { customFields: { path: ["status"], equals: "checkout_pending" } },
+                  ],
+                },
+              ],
+            },
             orderBy: [{ paidAt: "desc" }, { id: "desc" }],
-            take: 10,
-            select: { id: true, amountCents: true, status: true, provider: true, paidAt: true },
+            take: 20,
+            select: {
+              id: true,
+              amountCents: true,
+              status: true,
+              provider: true,
+              paidAt: true,
+              externalIdPlaceholder: true,
+              customFields: true,
+            },
           },
           ledgerEntries: {
             orderBy: { effectiveAt: "desc" },
@@ -1893,6 +1918,14 @@ async function renderLivePage(
       brandSlug: familyCenter?.organization.brand?.slug,
       brandName: familyCenter?.organization.brand?.name,
     });
+    const pendingPaymentByInvoiceId = new Map<string, ReturnType<typeof activeStripeCheckoutPaymentSummary>>();
+    for (const payment of billingAccount?.payments ?? []) {
+      if (!isActiveStripeCheckoutPayment(payment)) continue;
+      const fields = jsonRecord(payment.customFields);
+      const invoiceId = stringField(fields.invoiceId);
+      if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;
+      pendingPaymentByInvoiceId.set(invoiceId, activeStripeCheckoutPaymentSummary(payment));
+    }
     const invoicesWithCheckout = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
       const purposeLabel = invoicePurposeLabel(invoiceFields);
@@ -1915,6 +1948,7 @@ async function renderLivePage(
         dueDate: invoice.dueDate,
         totalCents: invoice.totalCents,
         purposeLabel,
+        pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
         checkoutOptions: {
           ach: {
             checkoutTotalCents: achAmounts.checkoutTotalCents,

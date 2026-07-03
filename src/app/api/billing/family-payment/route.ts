@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
-import { isActiveStripeCheckoutPayment, jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeCheckoutPaymentMessage,
+  activeStripeCheckoutPaymentSummary,
+  isActiveStripeCheckoutPayment,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import {
   createStripeCheckoutSession,
   createStripeCustomer,
@@ -27,6 +32,7 @@ import {
 } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
@@ -479,21 +485,30 @@ async function POSTHandler(request: NextRequest) {
       provider: "stripe",
       status: PaymentStatus.DRAFT,
     },
-    select: { id: true, customFields: true, provider: true, status: true },
+    select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
   });
   const activeFamilyPayment = draftStripePayments.find((item) => {
     const fields = jsonRecord(item.customFields);
     return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";
   });
   if (activeFamilyPayment) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "A balance checkout session is already pending for this family. Complete or expire it before creating another balance checkout.",
-        paymentId: activeFamilyPayment.id,
-      },
-      { status: 409 },
-    );
+    const blocker = await resolveStripeCheckoutDraftBlocker({
+      payment: activeFamilyPayment,
+      connectedAccountId,
+      tenantId: user.tenantId,
+      scope: "family_balance",
+    });
+    if (blocker.blocked) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: blocker.message || activeStripeCheckoutPaymentMessage(activeFamilyPayment, "family_balance"),
+          paymentId: activeFamilyPayment.id,
+          pendingPayment: blocker.pendingPayment || activeStripeCheckoutPaymentSummary(activeFamilyPayment),
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const payment = await prisma.payment.create({

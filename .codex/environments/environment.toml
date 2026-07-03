@@ -3,4 +3,7 @@ version = 1
 name = "The BEE Suite"
 
 [setup]
-script = ""
+script = '''
+
+
+'''

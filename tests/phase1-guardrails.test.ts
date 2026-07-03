@@ -3,7 +3,14 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { PaymentStatus, UserRole } from "@prisma/client";
 import { startOfServiceDay, validateNextCheckAction, validateSelectedChildren } from "../src/lib/attendance-state";
-import { checkoutApplicationGuard, isActiveStripeAutopayPayment, isActiveStripeCheckoutPayment } from "../src/lib/billing-guardrails";
+import {
+  activeStripeCheckoutPaymentMessage,
+  activeStripeCheckoutPaymentSummary,
+  checkoutApplicationGuard,
+  isActiveStripeAutopayPayment,
+  isActiveStripeCheckoutPayment,
+} from "../src/lib/billing-guardrails";
+import { stripeCheckoutDraftClearReason } from "../src/lib/stripe-checkout-drafts";
 import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -127,6 +134,78 @@ test("active Stripe checkout detection only blocks draft checkout sessions", () 
     provider: "stripe_mock",
     customFields: { status: "checkout_created" },
   }), false);
+});
+
+test("active Stripe checkout summary identifies ACH processing state", () => {
+  const payment = {
+    id: "pay_1",
+    amountCents: 25500,
+    status: PaymentStatus.DRAFT,
+    provider: "stripe",
+    externalIdPlaceholder: "cs_live_123",
+    customFields: {
+      status: "checkout_created",
+      paymentMethodCategory: "ach",
+      stripePaymentIntentId: "pi_123",
+      stripePaymentIntentStatus: "processing",
+    },
+  };
+
+  assert.deepEqual(activeStripeCheckoutPaymentSummary(payment), {
+    id: "pay_1",
+    amountCents: 25500,
+    status: "checkout_created",
+    paymentMethodCategory: "ach",
+    requestedPaymentMethodCategory: null,
+    bankAccountVerificationMethod: null,
+    stripeCheckoutSessionId: "cs_live_123",
+    stripePaymentIntentId: "pi_123",
+    stripePaymentIntentStatus: "processing",
+    stripePaymentStatus: null,
+  });
+  assert.match(activeStripeCheckoutPaymentMessage(payment), /bank payment is already processing/i);
+});
+
+test("Stripe checkout draft clear rules preserve real processing payments", () => {
+  const now = new Date("2026-07-02T21:00:00.000Z");
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_expired",
+    status: "expired",
+    paymentStatus: "unpaid",
+  }, now), "expired");
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_open_old",
+    status: "open",
+    paymentStatus: "unpaid",
+    createdAt: "2026-07-02T20:00:00.000Z",
+    paymentIntentId: null,
+  }, now), "stale_open");
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_open_recent",
+    status: "open",
+    paymentStatus: "unpaid",
+    createdAt: "2026-07-02T20:45:00.000Z",
+    paymentIntentId: null,
+  }, now), null);
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_processing",
+    status: "complete",
+    paymentStatus: "unpaid",
+    paymentIntentId: "pi_processing",
+    paymentIntentStatus: "processing",
+  }, now), null);
+
+  assert.equal(stripeCheckoutDraftClearReason({
+    id: "cs_failed",
+    status: "complete",
+    paymentStatus: "unpaid",
+    paymentIntentId: "pi_failed",
+    paymentIntentStatus: "requires_payment_method",
+  }, now), "failed_intent");
 });
 
 test("active Stripe autopay detection blocks draft off-session attempts", () => {

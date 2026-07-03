@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus } from "@prisma/client";
 import { canAccessAllCenters, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { isActiveStripeCheckoutPayment, jsonRecord } from "@/lib/billing-guardrails";
+import {
+  activeStripeCheckoutPaymentMessage,
+  activeStripeCheckoutPaymentSummary,
+  isActiveStripeCheckoutPayment,
+  jsonRecord,
+} from "@/lib/billing-guardrails";
 import {
   createStripeCustomer,
   createStripeCheckoutSession,
@@ -22,6 +27,7 @@ import {
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { invoiceProductCheckoutBranding, invoiceProductStripeMetadata } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
+import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
@@ -325,20 +331,29 @@ async function POSTHandler(request: NextRequest) {
       provider: "stripe",
       status: PaymentStatus.DRAFT,
     },
-    select: { id: true, status: true, provider: true, customFields: true },
+    select: { id: true, amountCents: true, status: true, provider: true, externalIdPlaceholder: true, customFields: true },
   });
   const activePayment = draftStripePayments.find((item) =>
     isActiveStripeCheckoutPayment(item) && jsonRecord(item.customFields).invoiceId === invoice.id,
   );
   if (activePayment) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "A checkout session is already pending for this invoice. Complete or expire it before creating another payment session.",
-        paymentId: activePayment.id,
-      },
-      { status: 409 },
-    );
+    const blocker = await resolveStripeCheckoutDraftBlocker({
+      payment: activePayment,
+      connectedAccountId,
+      tenantId: user.tenantId,
+      scope: "invoice",
+    });
+    if (blocker.blocked) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: blocker.message || activeStripeCheckoutPaymentMessage(activePayment, "invoice"),
+          paymentId: activePayment.id,
+          pendingPayment: blocker.pendingPayment || activeStripeCheckoutPaymentSummary(activePayment),
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const payment = await prisma.payment.create({

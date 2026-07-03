@@ -344,6 +344,72 @@ test("Stripe checkout retries without stale payment method configuration", async
   }
 });
 
+test("Stripe checkout falls back to dynamic methods when ACH is disabled", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";
+  let calls = 0;
+  const bodies: string[] = [];
+  const idempotencyKeys: string[] = [];
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    calls += 1;
+    bodies.push(String(init?.body ?? ""));
+    idempotencyKeys.push(String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? ""));
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        error: {
+          message: "No such payment_method_configuration: pmc_stale",
+          param: "payment_method_configuration",
+        },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (calls === 2) {
+      return new Response(JSON.stringify({
+        error: {
+          message: "The payment method type provided: us_bank_account is invalid.",
+          param: "payment_method_types[0]",
+        },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ id: "cs_payment_dynamic", url: "https://checkout.stripe.test/payment-dynamic" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      paymentMethodCategory: "ach",
+      paymentMethodConfigurationId: "pmc_stale",
+      idempotencyKey: "checkout:pay_1",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.url, "https://checkout.stripe.test/payment-dynamic");
+    assert.equal(calls, 3);
+    assert.deepEqual(idempotencyKeys, ["checkout:pay_1:configuration", "checkout:pay_1:payment_method_types", "checkout:pay_1:dynamic"]);
+    assert.match(bodies[0], /payment_method_configuration=pmc_stale/);
+    assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
+    assert.doesNotMatch(bodies[2], /payment_method_configuration/);
+    assert.doesNotMatch(bodies[2], /payment_method_types/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe setup checkout retries without stale payment method configuration", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";

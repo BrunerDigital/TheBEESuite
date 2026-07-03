@@ -70,6 +70,18 @@ export type StripePaymentIntentSnapshot = {
   raw?: unknown;
 };
 
+export type StripeCheckoutSessionSnapshot = {
+  id: string;
+  status?: string | null;
+  paymentStatus?: string | null;
+  paymentIntentId?: string | null;
+  paymentIntentStatus?: string | null;
+  amountTotalCents?: number | null;
+  createdAt?: string | null;
+  expiresAt?: string | null;
+  raw?: unknown;
+};
+
 export type StripeConnectedAccountSnapshot = {
   id: string;
   displayName?: string | null;
@@ -777,7 +789,7 @@ export async function createStripeCheckoutSession({
   const paymentMethodModes: CheckoutPaymentMethodMode[] = [
     ...(paymentMethodConfigurationId ? ["configuration" as const] : []),
     ...(fallbackPaymentMethodTypes.length ? ["payment_method_types" as const] : []),
-    ...(!paymentMethodConfigurationId && !fallbackPaymentMethodTypes.length ? ["dynamic" as const] : []),
+    "dynamic",
   ];
   let response: Response | null = null;
   let json: { id?: string; url?: string; error?: { message?: string; param?: string } } | null = null;
@@ -786,6 +798,7 @@ export async function createStripeCheckoutSession({
     ({ response, json } = await createSession(buildBody(paymentMethodMode), paymentMethodMode));
     if (response.ok && json?.url) break;
     if (paymentMethodMode === "configuration" && isMissingPaymentMethodConfigurationError(json)) continue;
+    if (paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
     break;
   }
 
@@ -800,6 +813,119 @@ export async function createStripeCheckoutSession({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
+}
+
+function unixTimeToIso(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000).toISOString() : null;
+}
+
+function stripePaymentIntentId(value: unknown) {
+  if (typeof value === "string") return clean(value) || null;
+  const record = asRecord(value);
+  return clean(record.id) || null;
+}
+
+function stripePaymentIntentStatus(value: unknown) {
+  return typeof value === "object" && value ? clean(asRecord(value).status) || null : null;
+}
+
+function stripeCheckoutSessionSnapshot(json: Record<string, unknown>): StripeCheckoutSessionSnapshot {
+  return {
+    id: clean(json.id),
+    status: clean(json.status) || null,
+    paymentStatus: clean(json.payment_status) || null,
+    paymentIntentId: stripePaymentIntentId(json.payment_intent),
+    paymentIntentStatus: stripePaymentIntentStatus(json.payment_intent),
+    amountTotalCents: typeof json.amount_total === "number" ? json.amount_total : null,
+    createdAt: unixTimeToIso(json.created),
+    expiresAt: unixTimeToIso(json.expires_at),
+    raw: json,
+  };
+}
+
+export async function retrieveStripeCheckoutSession({
+  sessionId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+}: {
+  sessionId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<{
+  ok: boolean;
+  configured: boolean;
+  provider: "stripe";
+  session?: StripeCheckoutSessionSnapshot;
+  error?: string;
+}> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const cleanSessionId = clean(sessionId);
+  if (!cleanSessionId.startsWith("cs_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Checkout session id is invalid." };
+  }
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(cleanSessionId)}?expand[]=payment_intent`, {
+    method: "GET",
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !json) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", session: stripeCheckoutSessionSnapshot(json) };
+}
+
+export async function expireStripeCheckoutSession({
+  sessionId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+}: {
+  sessionId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<{
+  ok: boolean;
+  configured: boolean;
+  provider: "stripe";
+  session?: StripeCheckoutSessionSnapshot;
+  error?: string;
+}> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const cleanSessionId = clean(sessionId);
+  if (!cleanSessionId.startsWith("cs_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Checkout session id is invalid." };
+  }
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(cleanSessionId)}/expire`, {
+    method: "POST",
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    body: new URLSearchParams(),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !json) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", session: stripeCheckoutSessionSnapshot(json) };
 }
 
 export async function createStripeOffSessionPaymentIntent({

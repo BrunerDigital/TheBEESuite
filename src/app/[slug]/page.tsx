@@ -4309,11 +4309,20 @@ async function renderLivePage(
     const attendanceWhere: Prisma.AttendanceRecordWhereInput = allCenters
       ? {}
       : { classroom: { is: { centerId: scopedCenterIds } } };
+    const attendanceClassroomWhere: Prisma.ClassroomWhereInput = allCenters
+      ? {}
+      : { centerId: scopedCenterIds };
+    const attendanceLiveChildWhere: Prisma.ChildWhereInput = {
+      AND: [
+        currentlyEnrolledChildWhere(),
+        allCenters ? {} : { classroom: { is: attendanceClassroomWhere } },
+      ],
+    };
     const checkLogWhere: Prisma.CheckInOutLogWhereInput = {
       occurredAt: { gte: attendanceDay.start, lt: attendanceDay.end },
       ...(allCenters ? {} : { centerId: scopedCenterIds }),
     };
-    const [records, total, present, absent, checkLogs] = await Promise.all([
+    const [records, total, present, absent, checkLogs, classrooms, liveChildren] = await Promise.all([
       prisma.attendanceRecord.findMany({
         where: attendanceWhere,
         orderBy: { date: "desc" },
@@ -4340,6 +4349,42 @@ async function renderLivePage(
           guardian: { select: { fullName: true, email: true } },
           classroom: { select: { name: true } },
           center: { select: { name: true, crmLocationId: true } },
+        },
+      }),
+      prisma.classroom.findMany({
+        where: attendanceClassroomWhere,
+        orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { name: "asc" }],
+        take: 150,
+        include: {
+          center: { select: { name: true, crmLocationId: true, state: true, licensedCapacity: true, customFields: true } },
+          _count: {
+            select: {
+              staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
+            },
+          },
+        },
+      }),
+      prisma.child.findMany({
+        where: attendanceLiveChildWhere,
+        orderBy: [{ classroom: { name: "asc" } }, { fullName: "asc" }],
+        take: 500,
+        select: {
+          id: true,
+          fullName: true,
+          ageGroup: true,
+          classroomId: true,
+          classroom: { select: { id: true, name: true, centerId: true } },
+          liveLocation: {
+            select: {
+              currentClassroomId: true,
+              areaName: true,
+              status: true,
+              movedAt: true,
+              reason: true,
+              currentClassroom: { select: { id: true, name: true } },
+              movedBy: { select: { name: true } },
+            },
+          },
         },
       }),
     ]);
@@ -4376,6 +4421,40 @@ async function renderLivePage(
         data={{
           records,
           stats: { total, present, absent, other: Math.max(total - present - absent, 0) },
+          liveTrackerClassrooms: classrooms.map((classroom) => ({
+            id: classroom.id,
+            centerId: classroom.centerId,
+            centerName: classroom.center.crmLocationId ?? classroom.center.name,
+            name: classroom.name,
+            ageGroup: classroom.ageGroup,
+            capacity: classroom.capacity,
+            ratioRule: resolveClassroomRatioRule({
+              ratioRule: classroom.ratioRule,
+              ageGroup: classroom.ageGroup,
+              state: classroom.center.state,
+              licensingRatioRules: readCenterLicensingConfiguration(classroom.center.customFields, {
+                centerState: classroom.center.state,
+                licensedCapacity: classroom.center.licensedCapacity,
+              }).ratioRules.value,
+            }),
+            assignedStaff: classroom._count.staff,
+          })),
+          liveTrackerChildren: liveChildren.map((child) => ({
+            id: child.id,
+            fullName: child.fullName,
+            ageGroup: child.ageGroup,
+            centerId: child.classroom?.centerId ?? null,
+            assignedClassroomId: child.classroomId,
+            assignedClassroomName: child.classroom?.name ?? null,
+            currentClassroomId: child.liveLocation?.currentClassroomId ?? child.classroomId,
+            currentClassroomName: child.liveLocation?.currentClassroom?.name ?? child.classroom?.name ?? null,
+            areaName: child.liveLocation?.areaName ?? null,
+            status: child.liveLocation?.status ?? "in_classroom",
+            movedAt: child.liveLocation?.movedAt?.toISOString() ?? null,
+            movedByName: child.liveLocation?.movedBy?.name ?? null,
+            reason: child.liveLocation?.reason ?? null,
+          })),
+          canMoveChildren: canManageClassroomTasks(user),
           reconciliation: {
             serviceDate: startOfDay.toISOString(),
             checkIns: checkLogs.filter((log) => log.type === "check_in").length,

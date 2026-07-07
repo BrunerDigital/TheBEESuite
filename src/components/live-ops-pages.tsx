@@ -2691,6 +2691,9 @@ export type AttendancePageData = {
     absent: number;
     other: number;
   };
+  liveTrackerClassrooms: ChildLocationTrackerClassroom[];
+  liveTrackerChildren: ChildLocationTrackerChild[];
+  canMoveChildren: boolean;
   reconciliation: {
     serviceDate: Date | string;
     checkIns: number;
@@ -2739,6 +2742,13 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         <StatCard label="Absent" value={data.stats.absent} />
         <StatCard label="Other" value={data.stats.other} />
       </div>
+      <ChildLocationTrackerPanel
+        classrooms={data.liveTrackerClassrooms}
+        trackedChildren={data.liveTrackerChildren}
+        canMove={data.canMoveChildren}
+        title="Schoolwide Attendance Rooms"
+        description="Drag checked-in or enrolled children into their current room or school area for class combinations, playground time, temporary coverage, and subs. Assigned classroom stays unchanged."
+      />
       <Card className="glass-panel">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

@@ -127,23 +127,12 @@ function currentWeeklyPeriod(date = new Date()) {
   return `${value.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-function normalizeCadence(value: string | null | undefined) {
-  return value?.toLowerCase().startsWith("week") ? "weekly" : "monthly";
-}
-
 function currentPeriodForCadence(cadence: string) {
   return cadence === "weekly" ? currentWeeklyPeriod() : currentBillingPeriod();
 }
 
 function periodMatchesCadence(value: string, cadence: string) {
   return cadence === "weekly" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
-}
-
-function normalizeBillingDayForCadence(value: string | number | null | undefined, cadence: string) {
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed)) return cadence === "weekly" ? "5" : "1";
-  const max = cadence === "weekly" ? 7 : 28;
-  return String(Math.min(Math.max(parsed, 1), max));
 }
 
 function money(cents: number) {
@@ -262,13 +251,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [assignmentChildId, setAssignmentChildId] = useState("");
   const [assignmentEnabled, setAssignmentEnabled] = useState("true");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
-  const [assignmentBillingDay, setAssignmentBillingDay] = useState("");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [planEditorId, setPlanEditorId] = useState(tuitionPlans[0]?.id ?? "new");
   const [planName, setPlanName] = useState(tuitionPlans[0]?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planCadence, setPlanCadence] = useState(normalizeCadence(tuitionPlans[0]?.cadence));
   const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -296,9 +283,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
   const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
-  const selectedAssignmentPlan = tuitionPlans.find((plan) => plan.id === effectiveAssignmentPlanId) ?? null;
-  const effectiveAssignmentCadence = normalizeCadence(selectedAssignmentPlan?.cadence || selectedAssignment?.cadence);
-  const effectiveAssignmentBillingDay = normalizeBillingDayForCadence(assignmentBillingDay || selectedAssignment?.billingDay, effectiveAssignmentCadence);
+  const effectiveAssignmentCadence = "weekly";
+  const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
   const selectedBillingAccount = selectedFamily?.billingAccount ?? null;
@@ -738,21 +724,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     const assignment = child?.tuitionAssignment;
     setAssignmentChildId(value);
     setAssignmentTuitionPlanId(assignment?.tuitionPlanId || tuitionPlans[0]?.id || "");
-    const plan = tuitionPlans.find((item) => item.id === (assignment?.tuitionPlanId || tuitionPlans[0]?.id || ""));
-    const cadence = normalizeCadence(plan?.cadence || assignment?.cadence);
-    setAssignmentBillingDay(normalizeBillingDayForCadence(assignment?.billingDay, cadence));
-    setAssignmentStartPeriod(assignment?.startsPeriod || currentPeriodForCadence(cadence));
+    setAssignmentStartPeriod(
+      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
+        ? assignment.startsPeriod
+        : currentPeriodForCadence("weekly"),
+    );
     setAssignmentDescription(assignment?.description || assignment?.tuitionPlanName || "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
   }
 
   function handleAssignmentPlanChange(value: string | null) {
     if (!value) return;
-    const plan = tuitionPlans.find((item) => item.id === value);
-    const cadence = normalizeCadence(plan?.cadence);
     setAssignmentTuitionPlanId(value);
-    setAssignmentBillingDay((current) => normalizeBillingDayForCadence(current, cadence));
-    setAssignmentStartPeriod((current) => periodMatchesCadence(current, cadence) ? current : currentPeriodForCadence(cadence));
+    setAssignmentStartPeriod((current) => periodMatchesCadence(current, "weekly") ? current : currentPeriodForCadence("weekly"));
   }
 
   function submitAssignment() {
@@ -779,7 +763,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         setErrorMessage(json?.error || "Recurring tuition could not be saved.");
         return;
       }
-      setStatusMessage(`Recurring tuition ${assignmentEnabled === "true" ? "enabled" : "disabled"} for ${selectedAssignmentChild.fullName}.`);
+      setStatusMessage(
+        assignmentEnabled === "true"
+          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Friday autobill is scheduled for the following week.`
+          : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
+      );
     });
   }
 
@@ -789,7 +777,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     if (value === "new") {
       setPlanName("");
       setPlanAgeGroup(ageGroups[0] ?? defaultAgeGroupOptions[0]);
-      setPlanCadence("weekly");
       setPlanAmountDollars("");
       return;
     }
@@ -797,7 +784,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
-    setPlanCadence(normalizeCadence(plan.cadence));
     setPlanAmountDollars(String(plan.amountCents / 100));
   }
 
@@ -816,7 +802,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
           id: planEditorId === "new" ? undefined : planEditorId,
           name: planName,
           ageGroup: planAgeGroup,
-          cadence: planCadence,
+          cadence: "weekly",
           amountDollars: planAmountDollars,
         }),
       });
@@ -825,7 +811,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         setErrorMessage(json?.error || "Tuition plan could not be saved.");
         return;
       }
-      setStatusMessage(`Tuition plan ${planEditorId === "new" ? "created" : "updated"}.`);
+      setStatusMessage(`Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`);
       if (json?.record?.id) {
         setPlanEditorId(json.record.id);
         setTuitionPlanId(json.record.id);
@@ -1199,7 +1185,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div>
               <div className="text-sm font-medium">Tuition rate setup</div>
               <p className="text-xs text-muted-foreground">
-                School users can add or edit weekly/monthly rates here, then assign them to children for scheduled billing or charge a family manually.
+                School users can add or edit weekly rates here. Assigned tuition autobills every Friday for the following week when the family has a saved payment method.
               </p>
             </div>
             <Badge variant="outline">School-managed rates</Badge>
@@ -1240,13 +1226,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             </div>
             <div className="space-y-1">
               <Label>Cadence</Label>
-              <Select value={planCadence} onValueChange={(value) => value && setPlanCadence(value)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input value="Weekly" readOnly />
             </div>
             <div className="flex items-end">
               <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">
@@ -1404,37 +1384,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label>{effectiveAssignmentCadence === "weekly" ? "Bill weekday" : "Bill day"}</Label>
-                {effectiveAssignmentCadence === "weekly" ? (
-                  <Select value={effectiveAssignmentBillingDay} onValueChange={(value) => value && setAssignmentBillingDay(value)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Monday</SelectItem>
-                      <SelectItem value="2">Tuesday</SelectItem>
-                      <SelectItem value="3">Wednesday</SelectItem>
-                      <SelectItem value="4">Thursday</SelectItem>
-                      <SelectItem value="5">Friday</SelectItem>
-                      <SelectItem value="6">Saturday</SelectItem>
-                      <SelectItem value="7">Sunday</SelectItem>
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input
-                    inputMode="numeric"
-                    min={1}
-                    max={28}
-                    type="number"
-                    value={effectiveAssignmentBillingDay}
-                    onChange={(event) => setAssignmentBillingDay(event.target.value)}
-                  />
-                )}
+                <Label>Autobill weekday</Label>
+                <Input value="Friday" readOnly />
               </div>
               <div className="space-y-1">
-                <Label>{effectiveAssignmentCadence === "weekly" ? "Start week" : "Start period"}</Label>
+                <Label>Start week</Label>
                 <Input
                   value={effectiveAssignmentStartPeriod}
                   onChange={(event) => setAssignmentStartPeriod(event.target.value)}
-                  placeholder={effectiveAssignmentCadence === "weekly" ? "2026-W23" : "2026-06"}
+                  placeholder="2026-W23"
                 />
               </div>
             </div>
@@ -1450,7 +1408,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Weekly tuition bills on the selected weekday for the following week and is due before Monday drop-off. Charge now posts the selected rate immediately to the family balance and parent portal.
+              Tuition assignments create a Friday invoice for the following week and the daily autopay run charges families with saved methods as soon as the invoice is due. Charge now posts the selected rate immediately to the family balance and parent portal.
             </p>
           </TabsContent>
 

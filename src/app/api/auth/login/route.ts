@@ -11,7 +11,7 @@ import {
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
-import { resolvePostLoginPath } from "@/lib/login-routing";
+import { resolvePortalPostLoginPath } from "@/lib/login-routing";
 import { ensureParentPortalDefaultLoginForEmail } from "@/lib/parent-portal-logins";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -78,7 +78,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const nextPath = resolvePostLoginPath({ role: user.role, requestedNext: body.next });
+  const nextPath = resolvePortalPostLoginPath({ role: user.role, requestedNext: body.next, portal: body.loginPortal });
   const userAgent = cleanUserAgent(request.headers.get("user-agent"));
   const appMode = normalizeDeviceAppMode(body.appMode, nextPath);
   const deviceType = inferDeviceType(userAgent);

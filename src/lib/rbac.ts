@@ -78,15 +78,12 @@ const billingModules = new Set<ModuleSlug>([
 const parentGuardianModules = new Set<ModuleSlug>([
   "parent-portal",
   "messages",
-  "documents",
   "notifications",
-  "help",
 ]);
 
 const authorizedPickupModules = new Set<ModuleSlug>([
   "parent-portal",
   "notifications",
-  "help",
 ]);
 
 const readOnlyAuditorModules = new Set<ModuleSlug>([
@@ -121,19 +118,18 @@ function hasTenantWideUiAccess(subject: AccessSubject) {
 export function canAccessModule(subject: AccessSubject, slug: string) {
   const role = getRole(subject);
   if (!role) return false;
-  if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "login" || slug === "forgot-password" || slug === "onboarding") return true;
   if (slug === "parent-portal" && isExecutiveRole(role)) return true;
-  if (slug === "parent-portal") return role === "PARENT_GUARDIAN" || role === "AUTHORIZED_PICKUP";
+  if (role === "AUTHORIZED_PICKUP") return authorizedPickupModules.has(slug as ModuleSlug);
+  if (role === "PARENT_GUARDIAN") return parentGuardianModules.has(slug as ModuleSlug);
+  if (parentRoles.has(role)) return false;
+  if (slug === "dashboard" || slug === "notifications" || slug === "help") return true;
   if (slug === "teacher-portal") return role === "TEACHER";
   if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
   if (slug === "terminal-store") return terminalStoreRoles.has(role);
   if (slug === "corporate-billing") return hasTenantWideUiAccess(subject);
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;
-  if (role === "AUTHORIZED_PICKUP") return authorizedPickupModules.has(slug as ModuleSlug);
-  if (role === "PARENT_GUARDIAN") return parentGuardianModules.has(slug as ModuleSlug);
-  if (parentRoles.has(role)) return false;
   if (enrollmentModules.has(slug as ModuleSlug) && enrollmentRoles.has(role)) return true;
   if (schoolAdminModules.has(slug as ModuleSlug) && schoolAdminRoles.has(role)) return true;
   if (classroomModules.has(slug as ModuleSlug) && classroomRoles.has(role)) return true;

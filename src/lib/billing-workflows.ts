@@ -2,6 +2,9 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export const WEEKLY_TUITION_AUTOBILL_CADENCE = "weekly" as const;
+export const WEEKLY_TUITION_AUTOBILL_DAY = 5;
+
 export function parseCurrencyCents(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100);
   const normalized = clean(value).replace(/[$,\s]/g, "");
@@ -159,7 +162,7 @@ export function normalizeBillingDay(value: unknown) {
 
 export function normalizeWeeklyBillingDay(value: unknown) {
   const parsed = typeof value === "number" ? value : Number.parseInt(clean(value), 10);
-  if (!Number.isFinite(parsed)) return 5;
+  if (!Number.isFinite(parsed)) return WEEKLY_TUITION_AUTOBILL_DAY;
   return Math.min(Math.max(parsed, 1), 7);
 }
 
@@ -183,7 +186,7 @@ export function recurringDueDateForPeriod(period: string, billingDay: number, ca
   const weekOneMonday = new Date(fourthOfJanuary);
   weekOneMonday.setUTCDate(fourthOfJanuary.getUTCDate() - (fourthOfJanuary.getUTCDay() || 7) + 1);
   const dueDate = new Date(weekOneMonday);
-  dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7));
+  dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7) + normalizeWeeklyBillingDay(billingDay) - 1);
   return dueDate;
 }
 

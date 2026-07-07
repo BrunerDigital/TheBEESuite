@@ -6,7 +6,7 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
   buildParentPortalInvitationText,
-  buildParentPortalSetupUrl,
+  buildParentLoginSetupUrl,
   getParentPortalDefaultPassword,
   PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
@@ -173,7 +173,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const portalUrl = buildParentPortalSetupUrl(appBaseUrl);
+  const portalUrl = buildParentLoginSetupUrl(appBaseUrl);
   const invitationText = buildParentPortalInvitationText({
     guardianName: guardian.fullName,
     centerLabel: center.crmLocationId ?? center.name,

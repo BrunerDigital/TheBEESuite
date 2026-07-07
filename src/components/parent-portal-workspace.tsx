@@ -244,6 +244,8 @@ const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
   allowPlatformOnlyPayments: false,
 };
 
+const parentPortalDocumentsEnabled = process.env.NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED === "1";
+
 function requiresDocumentSignature(document: { storageKey?: string | null }) {
   return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
 }
@@ -783,7 +785,7 @@ export function ParentPortalWorkspace({
         </Badge>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{family.name}</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Daily reports, classroom activities, photos, messages, documents, and family account details.
+          Daily reports, classroom activities, photos, messages, billing, and family account details.
         </p>
       </section>
 
@@ -1406,7 +1408,7 @@ export function ParentPortalWorkspace({
         <Card id="messages" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Message the Center</CardTitle>
-            <CardDescription>Messages are logged and routed to center leadership.</CardDescription>
+            <CardDescription>Send a note to your school office.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-1">
@@ -1453,6 +1455,7 @@ export function ParentPortalWorkspace({
       </div>
 
       <div className="grid gap-4">
+        {parentPortalDocumentsEnabled ? (
         <Card id="documents" className="glass-panel scroll-mt-28">
           <CardHeader>
             <CardTitle>Documents and Requests</CardTitle>
@@ -1530,6 +1533,7 @@ export function ParentPortalWorkspace({
             </div>
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       <Card className="glass-panel">

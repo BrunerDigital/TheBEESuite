@@ -377,6 +377,73 @@ function productPaymentMetadata(metadata: StripeMetadata) {
   };
 }
 
+async function applyBalancePaymentToOpenInvoices(
+  tx: Prisma.TransactionClient,
+  input: {
+    billingAccountId: string;
+    paymentId: string;
+    amountCents: number;
+    paidAt: Date;
+    stripeEventId: string;
+    stripePaymentIntentId?: string | null;
+    stripeCheckoutSessionId?: string | null;
+    preferredInvoiceId?: string | null;
+  },
+) {
+  let remainingCents = input.amountCents;
+  if (remainingCents <= 0) return [];
+
+  const invoices = await tx.invoice.findMany({
+    where: {
+      billingAccountId: input.billingAccountId,
+      status: PaymentStatus.OPEN,
+      totalCents: { gt: 0 },
+    },
+    orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      totalCents: true,
+      customFields: true,
+    },
+  });
+
+  const preferredInvoiceId = clean(input.preferredInvoiceId);
+  const orderedInvoices = preferredInvoiceId
+    ? [
+        ...invoices.filter((invoice) => invoice.id === preferredInvoiceId),
+        ...invoices.filter((invoice) => invoice.id !== preferredInvoiceId),
+      ]
+    : invoices;
+  const paidAt = input.paidAt.toISOString();
+  const appliedInvoiceIds: string[] = [];
+
+  for (const invoice of orderedInvoices) {
+    if (remainingCents < invoice.totalCents) break;
+    const invoiceFields = jsonObject(invoice.customFields);
+    const claim = await tx.invoice.updateMany({
+      where: { id: invoice.id, status: PaymentStatus.OPEN },
+      data: {
+        status: PaymentStatus.PAID,
+        customFields: {
+          ...invoiceFields,
+          status: "paid",
+          paidAt,
+          paymentId: input.paymentId,
+          paidByBalancePayment: true,
+          stripeEventId: input.stripeEventId,
+          stripePaymentIntentId: input.stripePaymentIntentId || null,
+          stripeCheckoutSessionId: input.stripeCheckoutSessionId || null,
+        } as Prisma.InputJsonObject,
+      },
+    });
+    if (claim.count !== 1) continue;
+    remainingCents -= invoice.totalCents;
+    appliedInvoiceIds.push(invoice.id);
+  }
+
+  return appliedInvoiceIds;
+}
+
 async function handleFamilyBalancePaymentSucceeded(
   event: StripeWebhookEvent,
   input: {
@@ -484,6 +551,30 @@ async function handleFamilyBalancePaymentSucceeded(
           },
         },
       });
+      const appliedInvoiceIds = await applyBalancePaymentToOpenInvoices(tx, {
+        billingAccountId: payment.billingAccountId,
+        paymentId: payment.id,
+        amountCents: payment.amountCents,
+        paidAt,
+        stripeEventId: event.id,
+        stripePaymentIntentId,
+        stripeCheckoutSessionId: event.type.startsWith("checkout.session.") ? input.externalId : null,
+        preferredInvoiceId: clean(input.metadata.invoiceId) || null,
+      });
+      if (appliedInvoiceIds.length) {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            customFields: {
+              ...jsonObject(payment.customFields),
+              appliedInvoiceIds,
+              appliedInvoiceCount: appliedInvoiceIds.length,
+              invoiceApplicationStatus: "applied_to_open_invoices",
+              status: "paid",
+            } as Prisma.InputJsonObject,
+          },
+        });
+      }
       applied = true;
     });
   } catch (error) {

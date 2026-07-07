@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function ParentPortalSetupPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) {
-    redirect("/login?next=/parent-portal/setup");
+    redirect("/parents/setup");
   }
   if (requiresPasswordResetGate(user)) {
     redirect("/reset-password?force=1&next=/parent-portal/setup");

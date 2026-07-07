@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
 
 type ResetResponse = {
   ok?: boolean;
@@ -17,12 +18,12 @@ type ResetResponse = {
 };
 
 function safeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "";
-  return value;
+  return safeLoginNextPath(value, "");
 }
 
 export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string }) {
   const next = safeNextPath(initialNext);
+  const parentPortalFlow = next === "/parent-portal" || next.startsWith("/parent-portal/");
   const parentSetupFlow = next === "/parent-portal/setup";
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
@@ -57,16 +58,18 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">
-            {parentSetupFlow ? "Reset your parent portal password." : "Get back into your school workspace."}
+            {parentPortalFlow ? "Reset your parent portal password." : "Get back into your school workspace."}
           </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            {parentSetupFlow
-              ? "We will send a secure recovery link for the email your school invited. After updating your password, finish parent setup."
+            {parentPortalFlow
+              ? parentSetupFlow
+                ? "We will send a secure recovery link for the email your school invited. After updating your password, finish parent setup."
+                : "We will send a secure recovery link for the parent or guardian email your school has on file."
               : "We’ll send a secure Supabase Auth recovery link so your Kid City USA or BEE Suite account can set a fresh password."}
           </p>
         </div>
         <p className="text-sm text-slate-300">
-          {parentSetupFlow
+          {parentPortalFlow
             ? "Reset links should only be used by the parent or guardian who owns this account."
             : "Reset links should only be used by the account owner and expire through Supabase Auth."}
         </p>
@@ -80,7 +83,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
             </Link>
             <CardTitle className="mt-4 text-3xl">Reset your password</CardTitle>
             <CardDescription>
-              {parentSetupFlow
+              {parentPortalFlow
                 ? "Enter the email from your parent portal invitation. For privacy, we show the same confirmation either way."
                 : "Enter the email tied to your school user account. For privacy, we show the same confirmation either way."}
             </CardDescription>
@@ -107,7 +110,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                   id="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder={parentSetupFlow ? "parent@example.com" : "school@kidcityusa.com"}
+                  placeholder={parentPortalFlow ? "parent@example.com" : "school@kidcityusa.com"}
                   type="email"
                   autoComplete="email"
                   required
@@ -118,7 +121,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
               </Button>
             </form>
             <Link
-              href={parentSetupFlow ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+              href={next ? loginHrefForNextPath(next) : "/directors"}
               className="mt-5 inline-flex items-center text-sm font-semibold text-slate-950 hover:underline"
             >
               <ArrowLeft className="mr-1 size-3.5" />

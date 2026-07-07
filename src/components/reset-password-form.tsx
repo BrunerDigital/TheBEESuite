@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
 
 type ResetResponse = {
   ok?: boolean;
@@ -48,8 +49,7 @@ function removeRecoveryCredentialFromUrl() {
 }
 
 function safeNextPath(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value.startsWith("/login")) return "/dashboard";
-  return value;
+  return safeLoginNextPath(value, "/dashboard");
 }
 
 export function ResetPasswordForm() {
@@ -57,6 +57,7 @@ export function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const forceReset = searchParams.get("force") === "1";
   const next = safeNextPath(searchParams.get("next"));
+  const parentPortalFlow = next === "/parent-portal" || next.startsWith("/parent-portal/");
   const parentSetupFlow = next === "/parent-portal/setup";
   const credentialRef = useRef<ResetCredential>({});
   const [currentPassword, setCurrentPassword] = useState("");
@@ -105,8 +106,8 @@ export function ResetPasswordForm() {
         return;
       }
 
-      setMessage(data?.message ?? (parentSetupFlow ? "Password updated. Sign in to finish parent setup." : "Password updated. You can now sign in."));
-      const loginNext = `/login?reset=complete&next=${encodeURIComponent(next)}`;
+      setMessage(data?.message ?? (parentPortalFlow ? "Password updated. Sign in to open your parent portal." : "Password updated. You can now sign in."));
+      const loginNext = `${loginHrefForNextPath(next)}&reset=complete`;
       setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
     });
   }
@@ -117,20 +118,22 @@ export function ResetPasswordForm() {
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">
-            {parentSetupFlow ? "Create your parent portal password." : "Create a new secure password."}
+            {parentPortalFlow ? "Create your parent portal password." : "Create a new secure password."}
           </h1>
           <p className="mt-5 text-base leading-7 text-slate-300">
-            {parentSetupFlow
+            {parentPortalFlow
               ? forceReset
                 ? "Choose a private password before opening your family portal."
-                : "This secure link lets you create the password for the email your school invited. After saving it, sign in and finish parent setup."
+                : parentSetupFlow
+                  ? "This secure link lets you create the password for the email your school invited. After saving it, sign in and finish parent setup."
+                  : "This secure link lets you create a password for the parent or guardian email your school has on file."
               : forceReset
                 ? "Passwords must be updated before workspace access is allowed."
                 : "This screen only works from a valid Supabase recovery link. After updating, sign in again with your email."}
           </p>
         </div>
         <p className="text-sm text-slate-300">
-          {parentSetupFlow
+          {parentPortalFlow
             ? "Your family portal keeps child updates, messages, documents, billing, and check-in access in one place."
             : "Human review remains required for sensitive child, billing, and compliance workflows."}
         </p>
@@ -142,9 +145,9 @@ export function ResetPasswordForm() {
             <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
               <LockKeyhole />
             </div>
-            <CardTitle className="mt-4 text-3xl">{parentSetupFlow ? "Set your parent portal password" : "Set a new password"}</CardTitle>
+            <CardTitle className="mt-4 text-3xl">{parentPortalFlow ? "Set your parent portal password" : "Set a new password"}</CardTitle>
             <CardDescription>
-              {parentSetupFlow
+              {parentPortalFlow
                 ? "Use at least 8 characters. You will use this with the email from your invite."
                 : forceReset
                   ? "Enter your password, then choose something only you know."
@@ -209,12 +212,12 @@ export function ResetPasswordForm() {
               </Button>
             </form>
             {forceReset ? (
-              <Link href={`/login?reset=required&next=${encodeURIComponent(next)}`} className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+              <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
                 Back to login
               </Link>
             ) : (
               <Link
-                href={parentSetupFlow ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password"}
+                href={parentPortalFlow ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password"}
                 className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline"
               >
                 Request a fresh reset link

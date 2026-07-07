@@ -235,7 +235,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
     },
   });
   const baseUrl = getAppBaseUrl(requestUrl);
-  const loginUrl = `${baseUrl}/login`;
+  const loginUrl = `${baseUrl}/directors`;
   const resetRedirectUrl = getPasswordResetRedirectUrl(requestUrl);
 
   if (existingUser) {

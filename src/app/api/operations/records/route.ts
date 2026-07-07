@@ -1610,7 +1610,7 @@ async function POSTHandler(request: NextRequest) {
     const data = {
       name: clean(body.name),
       ageGroup: clean(body.ageGroup) || "Preschool",
-      cadence: clean(body.cadence) || "monthly",
+      cadence: "weekly",
       amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
     };
     if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Plan name and amount are required." }, { status: 400 });

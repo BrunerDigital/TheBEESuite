@@ -32,6 +32,7 @@ import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import {
   buildParentPortalInvitationText,
+  buildParentLoginSetupUrl,
   buildParentPortalUrl,
   getParentPortalDefaultPassword,
   PARENT_PORTAL_PATH,
@@ -59,7 +60,8 @@ import {
 import { canAccessModule } from "../src/lib/rbac";
 import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
-import { resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
+import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
+import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
 import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
 test("password reset gate does not block teacher or parent profile accounts", () => {
@@ -72,19 +74,38 @@ test("password reset gate does not block teacher or parent profile accounts", ()
 test("web app login routes parent accounts into the parent portal", () => {
   assert.equal(safeLoginNextPath("/parent-portal#billing"), "/parent-portal#billing");
   assert.equal(safeLoginNextPath("/login?next=/parent-portal"), "/dashboard");
+  assert.equal(safeLoginNextPath("/parents"), "/dashboard");
+  assert.equal(safeLoginNextPath("/parents/setup", "/parent-portal"), "/parent-portal");
+  assert.equal(loginHrefForNextPath("/parent-portal#billing"), "/parents?next=%2Fparent-portal%23billing");
+  assert.equal(loginHrefForNextPath("/parent-portal/setup"), "/parents?next=%2Fparent-portal%2Fsetup");
   assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/dashboard" }), "/parent-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal#billing" }), "/parent-portal#billing");
   assert.equal(resolvePostLoginPath({ role: UserRole.AUTHORIZED_PICKUP, requestedNext: "/billing-invoices" }), "/parent-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
+  assert.equal(resolvePortalPostLoginPath({ portal: "parents", role: UserRole.PARENT_GUARDIAN, requestedNext: "/parent-portal" }), "/parent-portal");
+  assert.equal(resolvePortalPostLoginPath({ portal: "parents", role: UserRole.CENTER_DIRECTOR, requestedNext: "/parent-portal" }), "/dashboard");
+});
+
+test("parent app store metadata starts at the parent-only login entry", () => {
+  const manifest = buildStoreAppManifest(storeApps.parent);
+  assert.equal(storeApps.parent.bundleId, "com.brunerdigital.thebeesuite.parent");
+  assert.equal(storeApps.parent.sku, "BEE-SUITE-PARENT-IOS");
+  assert.equal(manifest.name, "BEE Suite Parent Portal");
+  assert.equal(manifest.start_url, "/parents");
+  assert.equal(manifest.shortcuts?.[0]?.url, "/parent-portal");
 });
 
 test("web app login routes teacher accounts into teacher-safe workflows", () => {
+  assert.equal(loginHrefForNextPath("/teacher-portal"), "/teachers?next=%2Fteacher-portal");
+  assert.equal(loginHrefForNextPath("/dashboard"), "/directors?next=%2Fdashboard");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/teacher-portal#teacher-attendance" }), "/teacher-portal#teacher-attendance");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/daily-reports" }), "/daily-reports");
   assert.equal(resolvePostLoginPath({ role: UserRole.TEACHER, requestedNext: "/school-setup" }), "/teacher-portal");
   assert.equal(resolvePostLoginPath({ role: UserRole.CENTER_DIRECTOR, requestedNext: "/teacher-portal" }), "/classroom-dashboard");
   assert.equal(resolvePostLoginPath({ role: UserRole.BILLING_ADMIN, requestedNext: "/teacher-portal" }), "/dashboard");
+  assert.equal(resolvePortalPostLoginPath({ portal: "teachers", role: UserRole.TEACHER, requestedNext: "/dashboard" }), "/teacher-portal");
+  assert.equal(resolvePortalPostLoginPath({ portal: "executives", role: UserRole.CENTER_DIRECTOR, requestedNext: "/dashboard" }), "/dashboard");
 });
 
 test("billing guard applies a checkout payment only once per invoice", () => {
@@ -429,7 +450,7 @@ test("parent portal invite copy uses guardian email and school default password 
   try {
     delete process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
     delete process.env.PARENT_DEFAULT_PASSWORD;
-    const portalUrl = buildParentPortalUrl("https://thebeesuite.io/");
+    const portalUrl = buildParentLoginSetupUrl("https://thebeesuite.io/");
     const text = buildParentPortalInvitationText({
       guardianName: "Taylor Parent",
       centerLabel: "Kid City Kokomo",
@@ -438,10 +459,12 @@ test("parent portal invite copy uses guardian email and school default password 
     });
 
     assert.equal(getParentPortalDefaultPassword(), "BusyBees");
-    assert.equal(portalUrl, "https://thebeesuite.io/parent-portal");
-    assert.match(text, /Use taylor@example\.com as your login email\./);
-    assert.match(text, /Use BusyBees as your default password if you have not changed it yet\./);
-    assert.match(text, /Sign in here: https:\/\/thebeesuite\.io\/parent-portal/);
+    assert.equal(portalUrl, "https://thebeesuite.io/parents/setup");
+    assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
+    assert.match(text, /Use these steps:/);
+    assert.match(text, /- Go to: https:\/\/thebeesuite\.io\/parents\/setup/);
+    assert.match(text, /- Login email: taylor@example\.com/);
+    assert.match(text, /- Default password: BusyBees/);
     assert.match(text, /You do not have to choose a new password/);
     assert.match(text, /Profile settings/);
     assert.match(text, /child records and classroom connections/);
@@ -524,6 +547,16 @@ test("director launch setup checklist auto-completes from app evidence", () => {
     }).filter((id) => id === "parent-portal"),
     ["parent-portal"],
   );
+});
+
+test("parent portal navigation excludes shared dashboard help and documents", () => {
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "parent-portal"), true);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "messages"), true);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "dashboard"), false);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "documents"), false);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "help"), false);
+  assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "parent-portal"), true);
+  assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "help"), false);
 });
 
 test("login rate limit blocks repeated attempts for the same key", () => {

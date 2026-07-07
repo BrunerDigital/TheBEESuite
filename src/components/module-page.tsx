@@ -329,7 +329,7 @@ export function AuthLikePage({ type, nextPath = "" }: { type: "login" | "forgot-
               </div>
             </>
           ) : null}
-          <Button nativeButton={false} render={<Link href={isLogin ? "/login" : "/onboarding"} />}>
+          <Button nativeButton={false} render={<Link href={isLogin ? "/directors" : "/onboarding"} />}>
             {isLogin ? "Enter workspace" : "Continue onboarding"}
           </Button>
           <p className="text-center text-xs leading-5 text-muted-foreground">

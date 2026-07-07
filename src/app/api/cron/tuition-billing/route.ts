@@ -89,7 +89,7 @@ async function GETHandler(request: NextRequest) {
 
   const dueChildren = candidateChildren.flatMap((entry) => {
     const plan = plansById.get(entry.planId);
-    const cadence = normalizeBillingCadence(plan?.cadence ?? entry.fields.tuitionPlanCadence);
+    const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
     const billingDay = normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);

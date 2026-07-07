@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createStripeConnectedAccount, retrieveStripeConnectedAccount } from "../src/lib/integrations";
+import {
+  createStripeConnectedAccount,
+  retrieveStripeConnectedAccount,
+  setStripeConnectedAccountDailyPayouts,
+} from "../src/lib/integrations";
 import {
   STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE,
   STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS,
@@ -141,6 +145,45 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     assert.deepEqual(payload.include, ["configuration.merchant", "configuration.recipient", "requirements"]);
     assert.equal(JSON.stringify(payload).includes("external_account"), false);
     assert.equal(JSON.stringify(payload).includes("requirements_collector"), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe connected account payout schedule is set to daily automatic payouts", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let body = "";
+  let stripeAccount = "";
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(url);
+    body = String(init?.body);
+    stripeAccount = String((init?.headers as Record<string, string> | undefined)?.["Stripe-Account"] ?? "");
+    return new Response(JSON.stringify({
+      object: "balance_settings",
+      payments: {
+        payouts: { schedule: { interval: "daily" } },
+        settlement_timing: { delay_days: 2 },
+      },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await setStripeConnectedAccountDailyPayouts({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const params = new URLSearchParams(body);
+
+    assert.equal(result.ok, true);
+    assert.equal(requestedUrl, "https://api.stripe.com/v1/balance_settings");
+    assert.equal(stripeAccount, "acct_123");
+    assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
+    assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
   } finally {
     globalThis.fetch = originalFetch;
   }

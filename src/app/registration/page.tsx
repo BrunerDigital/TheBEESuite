@@ -45,7 +45,7 @@ export default async function OnlineRegistrationPage() {
             <BrandIcon className="size-6 rounded-md" />
             The BEE Suite
           </Button>
-          <Button nativeButton={false} render={<Link href="/login" />}>
+          <Button nativeButton={false} render={<Link href="/parents" />}>
             Parent login
           </Button>
         </div>

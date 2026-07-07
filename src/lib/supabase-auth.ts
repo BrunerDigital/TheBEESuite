@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createClient, type User } from "@supabase/supabase-js";
 import {
-  buildParentPortalSetupUrl,
+  buildParentLoginSetupUrl,
   PARENT_PORTAL_SETUP_PATH,
 } from "@/lib/parent-portal-invitations";
 
@@ -159,7 +159,7 @@ export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: stri
 export { PARENT_PORTAL_SETUP_PATH };
 
 export function getParentPortalSetupUrl(requestUrl?: string) {
-  return buildParentPortalSetupUrl(getAppBaseUrl(requestUrl));
+  return buildParentLoginSetupUrl(getAppBaseUrl(requestUrl));
 }
 
 export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {

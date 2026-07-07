@@ -7,6 +7,7 @@ import {
   createStripeConnectedAccount,
   getStripeSecretKey,
   readStripeConnectedAccountId,
+  setStripeConnectedAccountDailyPayouts,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
@@ -111,6 +112,9 @@ async function POSTHandler(request: NextRequest) {
     ...(stripeConnectSetupCustomFieldPatch(setup.details) as Prisma.JsonObject),
     stripeConnectSetupUpdatedAt: now,
     stripeConnectSetupVersion: "2026-06-dashboard-v1",
+    stripeFundsFlow: "connected_account_direct_charge_application_fee",
+    stripePayoutCollectionMode: "stripe_automatic",
+    stripePayoutSchedulePreference: "fastest_available",
   };
   let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;
@@ -205,6 +209,23 @@ async function POSTHandler(request: NextRequest) {
       },
     });
   }
+
+  const payoutSchedule = await setStripeConnectedAccountDailyPayouts({ accountId, tenantId: user.tenantId });
+  currentFields = {
+    ...currentFields,
+    stripeConnectAccountId: accountId,
+    stripePayoutScheduleInterval: payoutSchedule.ok ? "daily" : "default",
+    stripePayoutDelayPolicy: payoutSchedule.ok ? "lowest_available" : "unchanged",
+    stripePayoutScheduleStatus: payoutSchedule.ok ? "daily_automatic_configured" : "schedule_update_failed",
+    stripePayoutScheduleLastSyncedAt: new Date().toISOString(),
+    ...(payoutSchedule.ok
+      ? { stripePayoutScheduleLastError: null }
+      : { stripePayoutScheduleLastError: clean(payoutSchedule.error).slice(0, 240) || "Daily automatic payout schedule could not be configured." }),
+  };
+  await prisma.center.update({
+    where: { id: center.id },
+    data: { customFields: currentFields },
+  });
 
   const baseUrl = requestBaseUrl(request);
   const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;

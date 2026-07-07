@@ -12,6 +12,7 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
+import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
-  if (!user) redirect("/login?next=/dashboard");
+  if (!user) redirect(loginHrefForNextPath("/dashboard"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
 
   const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };

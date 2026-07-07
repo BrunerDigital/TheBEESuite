@@ -33,7 +33,7 @@ test("parent portal invite links land on setup instead of registration", () => {
   delete process.env.VERCEL_URL;
 
   assert.equal(PARENT_PORTAL_SETUP_PATH, "/parent-portal/setup");
-  assert.equal(getParentPortalSetupUrl("https://preview.example.com/request"), "https://thebeesuite.io/parent-portal/setup");
+  assert.equal(getParentPortalSetupUrl("https://preview.example.com/request"), "https://thebeesuite.io/parents/setup");
   assert.equal(
     getParentPortalPasswordResetRedirectUrl("https://preview.example.com/request"),
     "https://thebeesuite.io/reset-password?next=%2Fparent-portal%2Fsetup",
@@ -46,7 +46,7 @@ test("parent portal invite links fall back to request origin", () => {
   delete process.env.AUTH_PASSWORD_RESET_REDIRECT_URL;
   delete process.env.VERCEL_URL;
 
-  assert.equal(getParentPortalSetupUrl("https://pilot.thebeesuite.io/api/parent/invitations"), "https://pilot.thebeesuite.io/parent-portal/setup");
+  assert.equal(getParentPortalSetupUrl("https://pilot.thebeesuite.io/api/parent/invitations"), "https://pilot.thebeesuite.io/parents/setup");
   assert.equal(
     getPasswordResetRedirectUrl("https://pilot.thebeesuite.io/api/auth/forgot-password", PARENT_PORTAL_SETUP_PATH),
     "https://pilot.thebeesuite.io/reset-password?next=%2Fparent-portal%2Fsetup",

@@ -5,7 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { buildParentPortalSetupUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
+import { buildParentLoginSetupUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
 import {
@@ -455,7 +455,7 @@ async function createParentPortalInvite(input: {
     }
     const defaultPasswordSet = parentPortal.defaultPasswordSet;
 
-    const portalUrl = buildParentPortalSetupUrl(appBaseUrl);
+    const portalUrl = buildParentLoginSetupUrl(appBaseUrl);
     const paymentLine = input.registrationPayment?.required
       ? `A registration fee/deposit invoice for ${formatRegistrationPaymentAmount(input.registrationPayment.totalCents)} is ready in the parent portal for secure checkout.`
       : "";

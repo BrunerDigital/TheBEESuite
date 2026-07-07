@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
 import { isDemoAccountEmail } from "@/lib/demo-accounts";
+import { loginHrefForNextPath } from "@/lib/login-routing";
 import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
@@ -407,7 +408,7 @@ async function resolveAccessGrantCenterIds(
 
 export async function requireCurrentUser() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(loginHrefForNextPath("/dashboard"));
   return user;
 }
 

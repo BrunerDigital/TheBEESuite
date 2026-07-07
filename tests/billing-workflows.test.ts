@@ -78,7 +78,8 @@ test("billing workflow helpers normalize weekly recurring periods and weekdays",
   assert.equal(normalizeRecurringBillingDay("9", "weekly"), 7);
   assert.equal(normalizeRecurringBillingDay("31", "monthly"), 28);
   assert.equal(utcBillingWeekday(new Date("2026-06-04T12:00:00.000Z")), 4);
-  assert.equal(recurringDueDateForPeriod("2026-W26", 5, "weekly").toISOString(), "2026-06-22T12:00:00.000Z");
+  assert.equal(recurringDueDateForPeriod("2026-W26", 1, "weekly").toISOString(), "2026-06-22T12:00:00.000Z");
+  assert.equal(recurringDueDateForPeriod("2026-W26", 5, "weekly").toISOString(), "2026-06-26T12:00:00.000Z");
   assert.equal(recurringDueDateForPeriod("2026-06", 15, "monthly").toISOString(), "2026-06-15T12:00:00.000Z");
 });
 

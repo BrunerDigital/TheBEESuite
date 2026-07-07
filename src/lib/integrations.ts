@@ -1690,6 +1690,49 @@ export async function createStripeAccountLink({
   return { ok: true, configured: true, provider: "stripe", id: accountId, url: json.url };
 }
 
+export async function setStripeConnectedAccountDailyPayouts({
+  accountId,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { balanceSettings?: Record<string, unknown> }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+
+  const connectedAccountId = clean(accountId);
+  if (!connectedAccountId.startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
+  }
+
+  const body = new URLSearchParams({
+    "payments[payouts][schedule][interval]": "daily",
+    "payments[settlement_timing][delay_days_override]": "",
+  });
+  const response = await fetch("https://api.stripe.com/v1/balance_settings", {
+    method: "POST",
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+
+  if (!response.ok || !json) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: connectedAccountId, balanceSettings: json };
+}
+
 export async function retrieveStripeConnectedAccount(
   accountId: string,
   input: TenantCredentialRuntimeInput = {},

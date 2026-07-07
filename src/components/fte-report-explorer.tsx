@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState, useTransition } from "react";
-import { AlertCircle, BarChart3, CheckCircle2, FilterX, Save, Search } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, FilterX, MapPin, Save, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import type { FteReportRow } from "@/components/fte-report-form";
+import { aggregateFteWeeks, fteDateKey, latestFteReportsByCenter, latestFteReportsByCenterWeek } from "@/lib/fte-report-rollups";
 
 const ALL = "all";
 
@@ -49,9 +50,7 @@ type InlineCorrectionState = {
 };
 
 function dateKey(value: string | null | undefined) {
-  if (!value) return "";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return fteDateKey(value);
 }
 
 function formatDate(value: string | null | undefined) {
@@ -124,15 +123,30 @@ export function FteReportExplorer({ centers, reports }: Props) {
     statuses: uniqueSorted(reports.map((report) => report.status)),
   }), [centers, reports]);
 
-  const filteredReports = useMemo(() => {
+  const locationFilteredCenters = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return centers.filter((center) => {
+      if (centerId !== ALL && center.id !== centerId) return false;
+      if (state !== ALL && stateLabel(center) !== state) return false;
+      if (ownerGroup !== ALL && ownerLabel(center) !== ownerGroup) return false;
+      if (!normalizedQuery) return true;
+      return [
+        center.name,
+        center.crmLocationId ?? "",
+        centerLabel(center),
+        ownerLabel(center),
+        stateLabel(center),
+      ].join(" ").toLowerCase().includes(normalizedQuery);
+    });
+  }, [centerId, centers, ownerGroup, query, state]);
+
+  const locationFilteredReports = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return reports.filter((report) => {
       const center = centerMap.get(report.centerId);
       if (centerId !== ALL && report.centerId !== centerId) return false;
       if (state !== ALL && stateLabel(center) !== state) return false;
       if (ownerGroup !== ALL && ownerLabel(center) !== ownerGroup) return false;
-      if (weekStart !== ALL && dateKey(report.weekStart) !== weekStart) return false;
-      if (status !== ALL && report.status !== status) return false;
       if (!normalizedQuery) return true;
       return [
         report.centerName,
@@ -143,40 +157,42 @@ export function FteReportExplorer({ centers, reports }: Props) {
         report.notes ?? "",
       ].join(" ").toLowerCase().includes(normalizedQuery);
     });
-  }, [centerId, centerMap, ownerGroup, query, reports, state, status, weekStart]);
+  }, [centerId, centerMap, ownerGroup, query, reports, state]);
 
-  const filteredCenterIds = new Set(filteredReports.map((report) => report.centerId));
-  const totalFte = filteredReports.reduce((sum, report) => sum + report.fteCount, 0);
-  const totalEnrollment = filteredReports.reduce((sum, report) => sum + report.enrolledCount, 0);
-  const latestWeek = options.weeks[0] ?? "";
-  const currentFilteredReports = latestWeek
-    ? filteredReports.filter((report) => dateKey(report.weekStart) === latestWeek)
+  const filteredReports = useMemo(() => locationFilteredReports.filter((report) => {
+    if (weekStart !== ALL && dateKey(report.weekStart) !== weekStart) return false;
+    if (status !== ALL && report.status !== status) return false;
+    return true;
+  }), [locationFilteredReports, status, weekStart]);
+
+  const latestFilteredReports = useMemo(() => latestFteReportsByCenter(filteredReports), [filteredReports]);
+  const rollupReports = useMemo(() => latestFteReportsByCenterWeek(filteredReports), [filteredReports]);
+  const locationLatestReports = useMemo(() => latestFteReportsByCenter(locationFilteredReports), [locationFilteredReports]);
+  const locationRollupReports = useMemo(() => latestFteReportsByCenterWeek(locationFilteredReports), [locationFilteredReports]);
+  const filteredWeeks = useMemo(() => uniqueSorted(filteredReports.map((report) => dateKey(report.weekStart))).reverse(), [filteredReports]);
+  const selectedWeekKey = weekStart !== ALL ? weekStart : filteredWeeks[0] ?? "";
+  const selectedWeekReports = selectedWeekKey
+    ? rollupReports.filter((report) => dateKey(report.weekStart) === selectedWeekKey)
     : [];
+  const filteredCenterIds = new Set(filteredReports.map((report) => report.centerId));
+  const totalFte = latestFilteredReports.reduce((sum, report) => sum + report.fteCount, 0);
+  const totalEnrollment = latestFilteredReports.reduce((sum, report) => sum + report.enrolledCount, 0);
+  const selectedWeekFte = selectedWeekReports.reduce((sum, report) => sum + report.fteCount, 0);
+  const locationFilteredCenterCount = locationFilteredCenters.length;
 
   const trendWeeks = useMemo(() => {
-    const grouped = new Map<string, FteReportRow[]>();
-    for (const report of filteredReports) {
-      const key = dateKey(report.weekStart);
-      if (!key) continue;
-      const rows = grouped.get(key) ?? [];
-      rows.push(report);
-      grouped.set(key, rows);
-    }
-    return Array.from(grouped.entries())
-      .sort(([left], [right]) => left.localeCompare(right))
-      .slice(-8)
-      .map(([week, rows]) => ({
-        week,
-        fte: rows.reduce((sum, report) => sum + report.fteCount, 0),
-        enrolled: rows.reduce((sum, report) => sum + report.enrolledCount, 0),
-        centers: new Set(rows.map((report) => report.centerId)).size,
-      }));
-  }, [filteredReports]);
+    return aggregateFteWeeks(filteredReports, locationFilteredCenterCount).map((week) => ({
+      week: week.weekStart,
+      fte: week.fteTotal,
+      enrolled: week.enrolledTotal,
+      centers: week.submittedCenters,
+    }));
+  }, [filteredReports, locationFilteredCenterCount]);
   const maxTrendFte = Math.max(...trendWeeks.map((week) => week.fte), 1);
 
   const groupedByState = useMemo(() => {
     const grouped = new Map<string, { reports: number; fte: number; centers: Set<string> }>();
-    for (const report of filteredReports) {
+    for (const report of latestFilteredReports) {
       const key = stateLabel(centerMap.get(report.centerId));
       const row = grouped.get(key) ?? { reports: 0, fte: 0, centers: new Set<string>() };
       row.reports += 1;
@@ -185,11 +201,11 @@ export function FteReportExplorer({ centers, reports }: Props) {
       grouped.set(key, row);
     }
     return Array.from(grouped.entries()).sort(([left], [right]) => left.localeCompare(right));
-  }, [centerMap, filteredReports]);
+  }, [centerMap, latestFilteredReports]);
 
   const groupedByOwner = useMemo(() => {
     const grouped = new Map<string, { reports: number; fte: number; centers: Set<string> }>();
-    for (const report of filteredReports) {
+    for (const report of latestFilteredReports) {
       const key = ownerLabel(centerMap.get(report.centerId));
       const row = grouped.get(key) ?? { reports: 0, fte: 0, centers: new Set<string>() };
       row.reports += 1;
@@ -198,7 +214,24 @@ export function FteReportExplorer({ centers, reports }: Props) {
       grouped.set(key, row);
     }
     return Array.from(grouped.entries()).sort(([left], [right]) => left.localeCompare(right));
-  }, [centerMap, filteredReports]);
+  }, [centerMap, latestFilteredReports]);
+
+  const selectedWeekReportsByCenter = useMemo(() => {
+    const rows = selectedWeekKey
+      ? locationRollupReports.filter((report) => dateKey(report.weekStart) === selectedWeekKey)
+      : [];
+    return new Map(rows.map((report) => [report.centerId, report]));
+  }, [locationRollupReports, selectedWeekKey]);
+
+  const latestReportsByCenter = useMemo(() => new Map(locationLatestReports.map((report) => [report.centerId, report])), [locationLatestReports]);
+
+  const schoolRows = useMemo(() => locationFilteredCenters.map((center) => ({
+    center,
+    selectedWeekReport: selectedWeekReportsByCenter.get(center.id) ?? null,
+    latestReport: latestReportsByCenter.get(center.id) ?? null,
+  })), [latestReportsByCenter, locationFilteredCenters, selectedWeekReportsByCenter]);
+
+  const selectedCenterRow = centerId !== ALL ? schoolRows.find((row) => row.center.id === centerId) ?? null : null;
 
   function resetFilters() {
     setCenterId(ALL);
@@ -335,14 +368,42 @@ export function FteReportExplorer({ centers, reports }: Props) {
             <div className="text-lg font-semibold">{filteredCenterIds.size.toLocaleString()}</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-3">
-            <div className="text-xs text-muted-foreground">Filtered FTE</div>
+            <div className="text-xs text-muted-foreground">Latest filtered FTE</div>
             <div className="text-lg font-semibold">{totalFte.toLocaleString()}</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-3">
-            <div className="text-xs text-muted-foreground">Current filtered week</div>
-            <div className="text-lg font-semibold">{currentFilteredReports.reduce((sum, report) => sum + report.fteCount, 0).toLocaleString()}</div>
+            <div className="text-xs text-muted-foreground">Selected/latest week FTE</div>
+            <div className="text-lg font-semibold">{selectedWeekFte.toLocaleString()}</div>
           </div>
         </div>
+
+        {selectedCenterRow ? (
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <MapPin data-icon="inline-start" />
+                  Selected school
+                </div>
+                <div className="mt-1 text-lg font-semibold">{centerLabel(selectedCenterRow.center)}</div>
+                <div className="text-xs text-muted-foreground">
+                  {selectedWeekKey ? `Viewing week ${selectedWeekKey}` : "No weekly reports are available for this filter set"}
+                </div>
+              </div>
+              <Button variant="outline" onClick={() => setCenterId(ALL)}>
+                <FilterX data-icon="inline-start" />
+                Clear school
+              </Button>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <MetricPill label="Selected week FTE" value={selectedCenterRow.selectedWeekReport?.fteCount.toLocaleString() ?? "Due"} />
+              <MetricPill label="Latest FTE" value={selectedCenterRow.latestReport?.fteCount.toLocaleString() ?? "None"} />
+              <MetricPill label="Enrollment" value={selectedCenterRow.latestReport?.enrolledCount.toLocaleString() ?? "None"} />
+              <MetricPill label="Full-time" value={selectedCenterRow.latestReport?.fullTimeCount.toLocaleString() ?? "None"} />
+              <MetricPill label="Part-time" value={selectedCenterRow.latestReport?.partTimeCount.toLocaleString() ?? "None"} />
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-xl border p-4">
@@ -351,7 +412,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                 <div className="text-sm font-semibold">Filtered trend</div>
                 <div className="text-xs text-muted-foreground">Last 8 weeks in the current filter set</div>
               </div>
-              <Badge variant="outline">{totalEnrollment.toLocaleString()} enrolled rows</Badge>
+              <Badge variant="outline">{totalEnrollment.toLocaleString()} latest enrollment</Badge>
             </div>
             <div className="flex min-h-48 items-end gap-3 overflow-x-auto border-b pb-4">
               {trendWeeks.map((week) => (
@@ -376,6 +437,58 @@ export function FteReportExplorer({ centers, reports }: Props) {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
             <SummaryTable title="By state/region" rows={groupedByState} />
             <SummaryTable title="By owner group" rows={groupedByOwner} />
+          </div>
+        </div>
+
+        <div className="rounded-xl border">
+          <div className="flex flex-col gap-2 border-b p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-semibold">School navigator</div>
+              <div className="text-xs text-muted-foreground">
+                {selectedWeekKey ? `Selected week ${selectedWeekKey}` : "No matching weekly reports yet"}
+              </div>
+            </div>
+            <Badge variant="outline">{schoolRows.length.toLocaleString()} schools</Badge>
+          </div>
+          <div className="max-h-80 overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>School</TableHead>
+                  <TableHead>Selected week</TableHead>
+                  <TableHead>Latest FTE</TableHead>
+                  <TableHead>Enrollment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Open</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schoolRows.map((row) => (
+                  <TableRow key={row.center.id} className={row.center.id === centerId ? "bg-muted/35" : undefined}>
+                    <TableCell className="font-medium">{centerLabel(row.center)}</TableCell>
+                    <TableCell>{row.selectedWeekReport?.fteCount.toLocaleString() ?? "Due"}</TableCell>
+                    <TableCell>{row.latestReport?.fteCount.toLocaleString() ?? "None"}</TableCell>
+                    <TableCell>{row.latestReport?.enrolledCount.toLocaleString() ?? "None"}</TableCell>
+                    <TableCell>
+                      <Badge variant={row.selectedWeekReport ? "secondary" : "outline"}>
+                        {row.selectedWeekReport?.status.replaceAll("_", " ") ?? "Due"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant={row.center.id === centerId ? "secondary" : "outline"} size="sm" onClick={() => setCenterId(row.center.id)}>
+                        <ArrowRight data-icon="inline-start" />
+                        View
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!schoolRows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">No schools match these filters.</TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
           </div>
         </div>
 
@@ -497,6 +610,15 @@ function InlineNumberField({ label, value, onChange }: { label: string; value: s
     <div className="space-y-1">
       <Label>{label}</Label>
       <Input value={value} onChange={(event) => onChange(event.target.value)} inputMode="decimal" />
+    </div>
+  );
+}
+
+function MetricPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border bg-background/60 p-3">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
     </div>
   );
 }

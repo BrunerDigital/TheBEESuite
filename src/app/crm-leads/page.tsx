@@ -2,13 +2,14 @@ import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
 import { canViewCrmLeads, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
+import { loginHrefForNextPath } from "@/lib/login-routing";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function CrmLeadsPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
-  if (!user) redirect("/login?next=/crm-leads");
+  if (!user) redirect(loginHrefForNextPath("/crm-leads"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/crm-leads");
   if (!canViewCrmLeads(user)) notFound();
 

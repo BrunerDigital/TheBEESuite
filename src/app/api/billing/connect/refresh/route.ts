@@ -27,7 +27,7 @@ async function GETHandler(request: NextRequest) {
   const baseUrl = requestBaseUrl(request);
   const user = await getCurrentUser();
   if (!user) {
-    const loginUrl = new URL("/login", baseUrl);
+    const loginUrl = new URL("/directors", baseUrl);
     loginUrl.searchParams.set("next", "/billing-settings");
     return NextResponse.redirect(loginUrl);
   }

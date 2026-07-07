@@ -215,7 +215,7 @@ export function OnboardingFlow() {
       <header className="border-b border-white/10 bg-slate-950/90">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <BrandLogo href="/" size="sm" compact priority />
-          <Button className="ml-auto border-white/20 bg-white/5 text-white hover:bg-white/10" variant="outline" nativeButton={false} render={<Link href="/login" />}>
+          <Button className="ml-auto border-white/20 bg-white/5 text-white hover:bg-white/10" variant="outline" nativeButton={false} render={<Link href="/directors" />}>
             Log in
           </Button>
         </div>
@@ -312,7 +312,7 @@ export function OnboardingFlow() {
                   ))}
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Button nativeButton={false} render={<Link href={workspace?.loginUrl || "/login"} />}>
+                  <Button nativeButton={false} render={<Link href={workspace?.loginUrl || "/directors"} />}>
                     Open login
                     <ArrowRight data-icon="inline-end" />
                   </Button>

@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
+import { storeApps } from "@/lib/app-store-apps";
 
 const appIcon = "/brand/the-bee-suite/app-icon-yellow.png";
+const { parent, teacher, director, executive } = storeApps;
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -51,15 +53,29 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         name: "Parent Portal",
         short_name: "Parents",
-        description: "Open family dashboard, photos, messages, documents, and tuition.",
-        url: "/parent-portal",
+        description: parent.description,
+        url: parent.loginPath,
         icons: [{ src: appIcon, sizes: "1024x1024", type: "image/png" }],
       },
       {
         name: "Teacher Portal",
         short_name: "Teachers",
-        description: "Open classroom attendance, reports, notes, photos, and messages.",
-        url: "/teacher-portal",
+        description: teacher.description,
+        url: teacher.loginPath,
+        icons: [{ src: appIcon, sizes: "1024x1024", type: "image/png" }],
+      },
+      {
+        name: "Director Portal",
+        short_name: "Directors",
+        description: director.description,
+        url: director.loginPath,
+        icons: [{ src: appIcon, sizes: "1024x1024", type: "image/png" }],
+      },
+      {
+        name: "Executive Portal",
+        short_name: "Executives",
+        description: executive.description,
+        url: executive.loginPath,
         icons: [{ src: appIcon, sizes: "1024x1024", type: "image/png" }],
       },
     ],

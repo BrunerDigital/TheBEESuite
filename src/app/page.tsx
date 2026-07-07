@@ -545,7 +545,7 @@ export default function LandingPage() {
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2 lg:ml-4">
             <Link
-              href="/login"
+              href="/directors"
               className={cn(
                 buttonVariants({ variant: "outline" }),
                 "h-10 border-white/15 bg-white/[0.03] px-3 text-white hover:bg-white/10 sm:px-4",
@@ -599,7 +599,7 @@ export default function LandingPage() {
                 variant="outline"
                 className="h-12 border-white/15 bg-transparent px-5 text-sm text-white hover:bg-white/10"
                 nativeButton={false}
-                render={<Link href="/login" />}
+                render={<Link href="/directors" />}
               >
                 Log in
               </Button>
@@ -777,15 +777,15 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.82fr_1fr] lg:items-start">
           <div>
             <SectionHeading
-              title="Web-based now, ready for iOS and Android packaging."
-              body="The product stays a secure web app, but each role has a different device reality. Parents need fast phone flows, teachers need classroom tablet flows, and leaders need desktop command surfaces. The native app path should wrap the same role-safe web experience after the installable web version is finalized."
+              title="Web-based now, split for role-specific app packaging."
+              body="The product stays one secure platform, but App Store entries should be role-specific. Parents need a focused phone app, teachers need classroom tablet flows, directors need school operations, and executives need multi-location controls without unrelated login copy."
             />
             <GlassPanel className="mt-8 p-5">
               <div className="text-sm font-semibold text-amber-300">Native app path</div>
               <div className="mt-4 space-y-4 text-sm leading-6 text-zinc-300">
-                <p>1. Use the installable app launcher for kiosk, parent, teacher, and admin workflows.</p>
-                <p>2. Package iOS with the Apple developer account, bundle ID, icons, screenshots, privacy labels, and push notification decisions.</p>
-                <p>3. Package Android with the Play Console account, package name, signing strategy, store assets, and data safety answers.</p>
+                <p>1. Submit the parent app first with /parents as the native launch URL.</p>
+                <p>2. Keep teacher, director, and executive apps on their own role-specific login entries.</p>
+                <p>3. Package each app with its own bundle ID, screenshots, privacy answers, and review notes.</p>
               </div>
               <Button className="mt-5 h-10 px-4" nativeButton={false} render={<Link href="/app" />}>
                 Open app launcher
@@ -969,7 +969,7 @@ export default function LandingPage() {
               Request workspace
               <ArrowRight data-icon="inline-end" />
             </Button>
-            <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/login" />}>
+            <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/directors" />}>
               Log in
             </Button>
             <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/registration" />}>

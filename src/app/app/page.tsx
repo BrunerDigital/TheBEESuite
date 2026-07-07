@@ -45,7 +45,7 @@ const roleOptions: Array<{
   {
     title: "Parents",
     eyebrow: "Family phone app",
-    href: "/parent-portal",
+    href: "/parents",
     description:
       "Families log in to see child dashboard details, classroom photos, messages, documents, balances, and tuition payment options.",
     icon: UsersRound,
@@ -54,20 +54,29 @@ const roleOptions: Array<{
   {
     title: "Teachers",
     eyebrow: "Classroom tablet",
-    href: "/teacher-portal",
+    href: "/teachers",
     description:
       "Teachers log in to their assigned classroom to take attendance, upload photos, fill out daily reports, message families, and clock in.",
     icon: GraduationCap,
     items: ["Classroom roster", "Reports and incidents", "Family photo updates"],
   },
   {
-    title: "Admin",
-    eyebrow: "Full web workspace",
-    href: "/dashboard",
+    title: "Directors",
+    eyebrow: "School workspace",
+    href: "/directors",
     description:
-      "Directors and leaders can continue into the full operations workspace for enrollment, billing, compliance, reporting, and setup.",
+      "Directors continue into the school operations workspace for enrollment, billing, compliance, reporting, staffing, and setup.",
     icon: Building2,
     items: ["Enrollment and leads", "Billing readiness", "Operations reports"],
+  },
+  {
+    title: "Executives",
+    eyebrow: "Corporate office",
+    href: "/executives",
+    description:
+      "Corporate users continue into the executive workspace for multi-location visibility, FTE review, account setup, and controls.",
+    icon: ShieldCheck,
+    items: ["Multi-location view", "FTE review", "Platform controls"],
   },
 ];
 
@@ -112,7 +121,7 @@ function WorkflowSignalGrid({ className = "" }: { className?: string }) {
 function NativePackagingNote({ className = "" }: { className?: string }) {
   return (
     <div className={`rounded-lg border border-amber-300/25 bg-amber-300/10 p-4 text-sm leading-6 text-amber-100 ${className}`}>
-      For App Store and Play Store listings, the next step is native packaging with Apple and Google developer accounts. This installable version works now from the live web app and is the right base for those wrappers.
+      App Store listings are split by role. The first iOS submission should wrap the parent login at /parents, then route signed-in guardians into the existing parent portal.
     </div>
   );
 }
@@ -126,11 +135,11 @@ export default function AppLauncherPage() {
           <header className="flex flex-wrap items-center justify-between gap-3 py-2">
             <BrandLogo href="/" size="md" priority />
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="h-10 border-white/15 bg-white/[0.04] px-4 text-white hover:bg-white/10" nativeButton={false} render={<Link href="/login" />}>
+              <Button variant="outline" className="h-10 border-white/15 bg-white/[0.04] px-4 text-white hover:bg-white/10" nativeButton={false} render={<Link href="/directors" />}>
                 Log in
               </Button>
-              <Button className="h-10 px-4" nativeButton={false} render={<Link href="/dashboard" />}>
-                Dashboard
+              <Button className="h-10 px-4" nativeButton={false} render={<Link href="/executives" />}>
+                Executive login
               </Button>
             </div>
           </header>

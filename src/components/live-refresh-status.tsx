@@ -4,6 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { RefreshCw, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { loginHrefForNextPath } from "@/lib/login-routing";
 import { cn } from "@/lib/utils";
 
 type SyncState = "idle" | "offline" | "signed-out" | "syncing";
@@ -59,7 +60,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
         if (cancelled) return;
         if (response.status === 401) {
           setState("signed-out");
-          router.push(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+          router.push(loginHrefForNextPath(pathname || "/dashboard", role));
           router.refresh();
           return;
         }
@@ -93,7 +94,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [intervalMs, pathname, router]);
+  }, [intervalMs, pathname, role, router]);
 
   const offline = state === "offline" || state === "signed-out";
   const Icon = offline ? WifiOff : RefreshCw;

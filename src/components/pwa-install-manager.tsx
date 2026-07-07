@@ -12,7 +12,54 @@ type BeforeInstallPromptEvent = Event & {
 
 type DeviceKind = "ios" | "fire" | "android" | "desktop";
 
-const dismissedKey = "bee-suite-install-prompt-dismissed:v1";
+type InstallContext = {
+  key: string;
+  appName: string;
+  body: string;
+};
+
+function installContextFromPathname(pathname: string): InstallContext | null {
+  if (pathname === "/app") {
+    return {
+      key: "launcher",
+      appName: "The BEE Suite",
+      body: "Add the app to this device so kiosk, parent, teacher, and admin workflows open like a local app.",
+    };
+  }
+  if (pathname === "/parents" || pathname.startsWith("/parents/")) {
+    return {
+      key: "parents",
+      appName: "BEE Suite Parent Portal",
+      body: "Add the parent portal to this phone so child updates, messages, documents, and tuition open from one icon.",
+    };
+  }
+  if (pathname === "/teachers" || pathname.startsWith("/teachers/")) {
+    return {
+      key: "teachers",
+      appName: "BEE Suite Teacher",
+      body: "Add the teacher portal to this classroom device for attendance, reports, messages, and media.",
+    };
+  }
+  if (pathname === "/directors" || pathname.startsWith("/directors/")) {
+    return {
+      key: "directors",
+      appName: "BEE Suite Director",
+      body: "Add the director workspace to this device for school operations, billing, staffing, and parent support.",
+    };
+  }
+  if (pathname === "/executives" || pathname.startsWith("/executives/")) {
+    return {
+      key: "executives",
+      appName: "BEE Suite Executive",
+      body: "Add the executive workspace to this device for multi-location reporting, setup, and controls.",
+    };
+  }
+  return null;
+}
+
+function dismissedKey(context: InstallContext) {
+  return `bee-suite-install-prompt-dismissed:${context.key}:v1`;
+}
 
 function readStandaloneMode() {
   const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean };
@@ -28,11 +75,11 @@ function readDeviceKind(): DeviceKind {
   return "desktop";
 }
 
-function installCopy(deviceKind: DeviceKind, canPrompt: boolean) {
+function installCopy(deviceKind: DeviceKind, canPrompt: boolean, context: InstallContext) {
   if (canPrompt) {
     return {
-      title: "Install The BEE Suite",
-      body: "Add the app to this device so kiosk, parent, teacher, and admin workflows open like a local app.",
+      title: `Install ${context.appName}`,
+      body: context.body,
       button: "Install app",
       Icon: Download,
     };
@@ -41,7 +88,7 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean) {
   if (deviceKind === "ios") {
     return {
       title: "Add to Home Screen",
-      body: "On iPad or iPhone, open this page in Safari, tap Share, then choose Add to Home Screen.",
+      body: `On iPhone or iPad, open this page in Safari, tap Share, then choose Add to Home Screen for ${context.appName}.`,
       button: "Show steps",
       Icon: Share2,
     };
@@ -50,7 +97,7 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean) {
   if (deviceKind === "fire") {
     return {
       title: "Install on this Fire tablet",
-      body: "Amazon Silk does not always open the install prompt from a page button. Use the tablet browser menu to add the app to the home screen.",
+      body: `Amazon Silk does not always open the install prompt from a page button. Use the tablet browser menu to add ${context.appName} to the home screen.`,
       button: "Show steps",
       Icon: ListChecks,
     };
@@ -59,23 +106,23 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean) {
   if (deviceKind === "android") {
     return {
       title: "Install on this tablet",
-      body: "Use the browser menu in Chrome or Silk, then choose Install app or Add to Home screen.",
+      body: `Use the browser menu in Chrome or Silk, then choose Install app or Add to Home screen for ${context.appName}.`,
       button: "Show steps",
       Icon: Download,
     };
   }
 
   return {
-    title: "Install The BEE Suite",
-    body: "Use your browser install icon or menu to keep The BEE Suite available from this device.",
+    title: `Install ${context.appName}`,
+    body: `Use your browser install icon or menu to keep ${context.appName} available from this device.`,
     button: "Show steps",
     Icon: Download,
   };
 }
 
-function installSteps(deviceKind: DeviceKind) {
+function installSteps(deviceKind: DeviceKind, context: InstallContext) {
   if (deviceKind === "ios") {
-    return ["Open this page in Safari.", "Tap Share.", "Choose Add to Home Screen.", "Confirm the BEE Suite icon."];
+    return ["Open this page in Safari.", "Tap Share.", "Choose Add to Home Screen.", `Confirm the ${context.appName} icon.`];
   }
 
   if (deviceKind === "fire") {
@@ -83,31 +130,31 @@ function installSteps(deviceKind: DeviceKind) {
       "Open this page in the Silk browser.",
       "Tap the browser menu in the top right.",
       "Choose Add to Home screen or Install app.",
-      "Confirm The BEE Suite, then open it from the tablet home screen.",
+      `Confirm ${context.appName}, then open it from the tablet home screen.`,
     ];
   }
 
   if (deviceKind === "android") {
-    return ["Open this page in Chrome or Silk.", "Tap the browser menu.", "Choose Install app or Add to Home screen.", "Confirm The BEE Suite."];
+    return ["Open this page in Chrome or Silk.", "Tap the browser menu.", "Choose Install app or Add to Home screen.", `Confirm ${context.appName}.`];
   }
 
-  return ["Open this page in Chrome or Edge.", "Use the browser install icon or menu.", "Confirm The BEE Suite.", "Open BEE Suite from your apps or dock."];
+  return ["Open this page in Chrome or Edge.", "Use the browser install icon or menu.", `Confirm ${context.appName}.`, `Open ${context.appName} from your apps or dock.`];
 }
 
-function readDismissed() {
+function readDismissed(key: string) {
   try {
-    return window.localStorage.getItem(dismissedKey) === "1";
+    return window.localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
 
-function writeDismissed(value: boolean) {
+function writeDismissed(key: string, value: boolean) {
   try {
     if (value) {
-      window.localStorage.setItem(dismissedKey, "1");
+      window.localStorage.setItem(key, "1");
     } else {
-      window.localStorage.removeItem(dismissedKey);
+      window.localStorage.removeItem(key);
     }
   } catch {
     // Storage can be disabled on shared tablets; the banner still works without persistence.
@@ -116,6 +163,8 @@ function writeDismissed(value: boolean) {
 
 export function PwaInstallManager() {
   const pathname = usePathname();
+  const installContext = installContextFromPathname(pathname);
+  const storageKey = installContext ? dismissedKey(installContext) : "";
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [deviceKind, setDeviceKind] = useState<DeviceKind>("desktop");
   const [isStandalone, setIsStandalone] = useState(false);
@@ -135,7 +184,7 @@ export function PwaInstallManager() {
     const syncBrowserState = window.setTimeout(() => {
       setDeviceKind(readDeviceKind());
       setIsStandalone(readStandaloneMode());
-      setIsDismissed(readDismissed());
+      setIsDismissed(storageKey ? readDismissed(storageKey) : true);
       setIsReady(true);
     }, 0);
 
@@ -157,7 +206,7 @@ export function PwaInstallManager() {
       media.removeEventListener("change", handleDisplayModeChange);
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [storageKey]);
 
   async function handleInstall() {
     if (showManualSteps) {
@@ -177,7 +226,7 @@ export function PwaInstallManager() {
       const choice = await installPrompt.userChoice.catch(() => null);
 
       if (choice?.outcome === "accepted") {
-        writeDismissed(true);
+        writeDismissed(storageKey, true);
         setIsDismissed(true);
         return;
       }
@@ -194,14 +243,14 @@ export function PwaInstallManager() {
   }
 
   function dismiss() {
-    writeDismissed(true);
+    writeDismissed(storageKey, true);
     setIsDismissed(true);
   }
 
-  if (!isReady || pathname !== "/app" || isStandalone || isDismissed || (!installPrompt && deviceKind === "desktop")) return null;
+  if (!isReady || !installContext || isStandalone || isDismissed || (!installPrompt && deviceKind === "desktop")) return null;
 
-  const copy = installCopy(deviceKind, Boolean(installPrompt));
-  const steps = showManualSteps ? installSteps(deviceKind) : [];
+  const copy = installCopy(deviceKind, Boolean(installPrompt), installContext);
+  const steps = showManualSteps ? installSteps(deviceKind, installContext) : [];
   const primaryButtonLabel = showManualSteps ? "Done" : isPrompting ? "Opening..." : copy.button;
 
   return (

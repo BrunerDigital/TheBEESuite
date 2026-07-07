@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
-import { defaultRecurringBillingPeriod, normalizeBillingCadence, normalizeRecurringBillingDay } from "@/lib/billing-workflows";
+import {
+  defaultRecurringBillingPeriod,
+  WEEKLY_TUITION_AUTOBILL_CADENCE,
+  WEEKLY_TUITION_AUTOBILL_DAY,
+} from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -56,6 +60,7 @@ async function POSTHandler(request: NextRequest) {
   const existingFields = jsonObject(access.child.customFields);
   const description = clean(body.description);
   const tuitionPlanId = clean(body.tuitionPlanId);
+  const updatedBy = user.email || user.id;
 
   if (!enabled) {
     const updated = await prisma.child.update({
@@ -65,7 +70,7 @@ async function POSTHandler(request: NextRequest) {
           ...existingFields,
           tuitionBillingEnabled: false,
           tuitionBillingUpdatedAt: new Date().toISOString(),
-          tuitionBillingUpdatedBy: user.email,
+          tuitionBillingUpdatedBy: updatedBy,
         } as Prisma.InputJsonObject,
       },
       select: { id: true, fullName: true, customFields: true },
@@ -86,30 +91,70 @@ async function POSTHandler(request: NextRequest) {
 
   const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
-  const cadence = normalizeBillingCadence(plan.cadence);
-  const billingDay = normalizeRecurringBillingDay(body.billingDay, cadence);
+  const cadence = WEEKLY_TUITION_AUTOBILL_CADENCE;
+  const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
   const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  const updatedAt = new Date().toISOString();
 
-  const updated = await prisma.child.update({
-    where: { id: childId },
-    data: {
-      customFields: {
-        ...existingFields,
-        tuitionBillingEnabled: true,
-        tuitionPlanId: plan.id,
-        tuitionPlanName: plan.name,
-        tuitionPlanAgeGroup: plan.ageGroup,
-        tuitionPlanCadence: plan.cadence,
-        tuitionBillingCadence: cadence,
-        tuitionPlanAmountCents: plan.amountCents,
-        tuitionBillingDay: billingDay,
-        tuitionBillingStartsPeriod: billingStartPeriod,
-        tuitionBillingDescription: description || plan.name,
-        tuitionBillingUpdatedAt: new Date().toISOString(),
-        tuitionBillingUpdatedBy: user.email,
-      } as Prisma.InputJsonObject,
-    },
-    select: { id: true, fullName: true, customFields: true },
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedChild = await tx.child.update({
+      where: { id: childId },
+      data: {
+        customFields: {
+          ...existingFields,
+          tuitionBillingEnabled: true,
+          tuitionPlanId: plan.id,
+          tuitionPlanName: plan.name,
+          tuitionPlanAgeGroup: plan.ageGroup,
+          tuitionPlanCadence: cadence,
+          tuitionBillingCadence: cadence,
+          tuitionPlanAmountCents: plan.amountCents,
+          tuitionBillingDay: billingDay,
+          tuitionBillingStartsPeriod: billingStartPeriod,
+          tuitionBillingDescription: description || plan.name,
+          tuitionBillingUpdatedAt: updatedAt,
+          tuitionBillingUpdatedBy: updatedBy,
+        } as Prisma.InputJsonObject,
+      },
+      select: { id: true, fullName: true, customFields: true },
+    });
+
+    const billingAccount = await tx.billingAccount.findUnique({
+      where: { familyId },
+      select: { customFields: true },
+    });
+    const accountFields = jsonObject(billingAccount?.customFields);
+    const hasSavedPaymentMethod = Boolean(clean(accountFields.stripeDefaultPaymentMethodId));
+    const accountCustomFields = {
+      ...accountFields,
+      tuitionAutobillEnabled: true,
+      tuitionAutobillCadence: cadence,
+      tuitionAutobillBillingDay: billingDay,
+      tuitionAutobillStartsPeriod: billingStartPeriod,
+      tuitionAutobillPlanId: plan.id,
+      tuitionAutobillPlanName: plan.name,
+      tuitionAutobillAmountCents: plan.amountCents,
+      tuitionAutobillUpdatedAt: updatedAt,
+      tuitionAutobillUpdatedBy: updatedBy,
+      autopayEnabled: hasSavedPaymentMethod,
+      autopayStatus: hasSavedPaymentMethod ? "enabled" : "pending",
+      paymentMethodManagementStatus: hasSavedPaymentMethod
+        ? "tuition_autobill_ready"
+        : "tuition_autobill_needs_payment_method",
+    } as Prisma.InputJsonObject;
+
+    await tx.billingAccount.upsert({
+      where: { familyId },
+      update: { customFields: accountCustomFields },
+      create: {
+        familyId,
+        balanceCents: 0,
+        autopayPlaceholder: false,
+        customFields: accountCustomFields,
+      },
+    });
+
+    return updatedChild;
   });
 
   await writeAuditLog(user, {

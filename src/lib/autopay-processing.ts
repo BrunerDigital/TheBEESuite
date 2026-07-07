@@ -27,8 +27,9 @@ import {
   stripeConnectReadinessFromSnapshot,
 } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { applySucceededStripeInvoicePayment } from "@/lib/stripe-payment-application";
 
-export type AutopayRunResultStatus = "would_charge" | "processing" | "failed" | "skipped";
+export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
 export type AutopayRunInvoiceResult = {
   invoiceId: string;
@@ -50,6 +51,7 @@ export type AutopayRunSummary = {
   scanned: number;
   eligible: number;
   wouldCharge: number;
+  paid: number;
   processing: number;
   failed: number;
   skipped: number;
@@ -472,33 +474,50 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const intentStatus = intent.paymentIntent?.status || null;
     const accepted = intent.ok && (intentStatus === "succeeded" || intentStatus === "processing");
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
-        externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,
-        customFields: jsonInput({
-          ...jsonRecord(payment.customFields),
-          stripePaymentIntentId: intent.paymentIntent?.id || null,
-          stripePaymentIntentStatus: intentStatus,
-          stripeError: intent.ok ? null : intent.error || `${statusPrefix}_payment_intent_failed`,
-          failedAt: accepted ? null : new Date().toISOString(),
-          status: accepted
-            ? intentStatus === "succeeded"
-              ? `${statusPrefix}_succeeded_pending_webhook`
-              : `${statusPrefix}_processing`
-            : `${statusPrefix}_failed`,
-        }),
-      },
-    });
+    let appliedImmediately = false;
+    let immediateApplicationReason: string | null = null;
 
-    const auditAction = accepted
+    if (accepted && intentStatus === "succeeded" && intent.paymentIntent?.id) {
+      const application = await prisma.$transaction((tx) => applySucceededStripeInvoicePayment(tx, {
+        invoiceId: invoice.id,
+        paymentId: payment.id,
+        externalId: intent.paymentIntent!.id,
+        stripePaymentIntentId: intent.paymentIntent!.id,
+        stripePaymentIntentStatus: intentStatus,
+        stripeAmountTotalCents: intent.paymentIntent?.amountCents ?? amounts.checkoutTotalCents,
+        metadata: jsonRecord(payment.customFields),
+      }));
+      appliedImmediately = application.applied;
+      immediateApplicationReason = application.reason;
+    } else {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: accepted ? PaymentStatus.DRAFT : PaymentStatus.FAILED,
+          externalIdPlaceholder: intent.paymentIntent?.id || intent.error || `${statusPrefix}_payment_intent_failed`,
+          customFields: jsonInput({
+            ...jsonRecord(payment.customFields),
+            stripePaymentIntentId: intent.paymentIntent?.id || null,
+            stripePaymentIntentStatus: intentStatus,
+            stripeError: intent.ok ? null : intent.error || `${statusPrefix}_payment_intent_failed`,
+            failedAt: accepted ? null : new Date().toISOString(),
+            status: accepted ? `${statusPrefix}_processing` : `${statusPrefix}_failed`,
+          }),
+        },
+      });
+    }
+
+    const auditAction = appliedImmediately
       ? collectionMode === "stored_method"
-        ? "billing.stored_method.payment_intent_created"
-        : "billing.autopay.payment_intent_created"
-      : collectionMode === "stored_method"
-        ? "billing.stored_method.failed"
-        : "billing.autopay.failed";
+        ? "billing.stored_method.completed"
+        : "billing.autopay.completed"
+      : accepted
+        ? collectionMode === "stored_method"
+          ? "billing.stored_method.payment_intent_created"
+          : "billing.autopay.payment_intent_created"
+        : collectionMode === "stored_method"
+          ? "billing.stored_method.failed"
+          : "billing.autopay.failed";
 
     await prisma.auditLog.create({
       data: {
@@ -515,25 +534,41 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           checkoutTotalCents: amounts.checkoutTotalCents,
           status: intentStatus,
           error: intent.ok ? null : intent.error || null,
+          appliedImmediately,
+          immediateApplicationReason,
         }),
       },
     });
 
+    const resultStatus: AutopayRunResultStatus = appliedImmediately
+      ? "paid"
+      : accepted && intentStatus === "processing"
+        ? "processing"
+        : "failed";
+    const resultReason = appliedImmediately
+      ? "Payment confirmed and the Bee Suite ledger was updated."
+      : accepted && intentStatus === "processing"
+        ? "Bank payment is processing; the ledger will update when Stripe confirms settlement."
+        : immediateApplicationReason
+          ? `Payment succeeded in Stripe but could not be applied automatically: ${immediateApplicationReason}.`
+          : intent.error || `${collectionLabel} could not be submitted.`;
+
     results.push({
       ...baseResult,
-      status: accepted ? "processing" : "failed",
-      reason: accepted ? "Awaiting signed Stripe webhook reconciliation." : intent.error || `${collectionLabel} could not be submitted.`,
+      status: resultStatus,
+      reason: resultReason,
       paymentId: payment.id,
       stripePaymentIntentId: intent.paymentIntent?.id || null,
     });
   }
 
   const wouldCharge = results.filter((result) => result.status === "would_charge").length;
+  const paid = results.filter((result) => result.status === "paid").length;
   const processing = results.filter((result) => result.status === "processing").length;
   const failed = results.filter((result) => result.status === "failed").length;
   const skipped = results.filter((result) => result.status === "skipped").length;
   const totalCents = results
-    .filter((result) => result.status === "would_charge" || result.status === "processing")
+    .filter((result) => result.status === "would_charge" || result.status === "paid" || result.status === "processing")
     .reduce((sum, result) => sum + result.amountCents, 0);
 
   return {
@@ -541,8 +576,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     dryRun,
     asOf: asOf.toISOString(),
     scanned: invoices.length,
-    eligible: wouldCharge + processing + failed,
+    eligible: wouldCharge + paid + processing + failed,
     wouldCharge,
+    paid,
     processing,
     failed,
     skipped,

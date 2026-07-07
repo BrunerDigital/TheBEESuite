@@ -22,7 +22,7 @@ export type EmailAttachment = {
   disposition?: "attachment" | "inline";
 };
 
-const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-06-24.preview";
+const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-06-24.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || STRIPE_API_VERSION;
 const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "requirements"];
 

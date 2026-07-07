@@ -51,8 +51,13 @@ export function paymentMethodManagementSummary(input: {
   const paymentMethodLast4 = clean(custom.stripePaymentMethodLast4);
   const savedAt = clean(custom.stripePaymentMethodSavedAt);
   const status = clean(custom.autopayStatus);
+  const managementStatus = clean(custom.paymentMethodManagementStatus);
   const enabled = custom.autopayEnabled === true || input.autopayPlaceholder === true;
-  const pending = status === "pending" || clean(custom.stripeSetupCheckoutSessionId) !== null;
+  const pending =
+    status === "pending" ||
+    managementStatus === "setup_session_created" ||
+    managementStatus === "setup_pending" ||
+    managementStatus === "payment_method_setup_pending";
 
   return {
     autopayEnabled: enabled,

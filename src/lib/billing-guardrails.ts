@@ -59,8 +59,8 @@ export function activeStripeCheckoutPaymentMessage(
   const isBankPayment = category === "ach" || category === "link_bank" || Boolean(summary.bankAccountVerificationMethod);
   if (isBankPayment) {
     return scope === "family_balance"
-      ? "A bank payment is already processing for this family balance. ACH bank payments can take a few business days to finish; the balance will update after the processor confirms it."
-      : "A bank payment is already processing for this invoice. ACH bank payments can take a few business days to finish; the invoice will update after the processor confirms it.";
+      ? "A bank payment is already processing for this family balance. ACH bank payments can take a few business days to settle; the balance will update after Stripe confirms the funds."
+      : "A bank payment is already processing for this invoice. ACH bank payments can take a few business days to settle; the invoice will update after Stripe confirms the funds.";
   }
   return scope === "family_balance"
     ? "A balance checkout session is already pending for this family. Complete or expire it before creating another balance checkout."

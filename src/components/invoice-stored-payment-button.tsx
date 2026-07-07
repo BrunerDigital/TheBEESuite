@@ -24,7 +24,7 @@ export type InvoiceStoredPaymentActionData = {
 
 type AutopayResult = {
   invoiceId: string;
-  status: "would_charge" | "processing" | "failed" | "skipped";
+  status: "would_charge" | "paid" | "processing" | "failed" | "skipped";
   reason: string | null;
   stripePaymentIntentId: string | null;
 };
@@ -88,11 +88,11 @@ export function InvoiceStoredPaymentButton({ invoice }: { invoice: InvoiceStored
         setError(json?.error || "Selected payment method could not be submitted.");
         return;
       }
-      if (result.status !== "processing") {
+      if (result.status !== "processing" && result.status !== "paid") {
         setError(result.reason || "Selected payment method was not eligible.");
         return;
       }
-      setMessage(result.stripePaymentIntentId ? "Payment submitted" : "Processing started");
+      setMessage(result.status === "paid" ? "Payment recorded" : result.stripePaymentIntentId ? "Payment submitted" : "Processing started");
       router.refresh();
     });
   }

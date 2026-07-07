@@ -124,7 +124,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment information submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The BEE Suite is saving the verified payment method to this family profile through the secure processor. The school will see the updated autopay status shortly.
+              The BEE Suite received the secure setup confirmation. If your bank needs an extra verification step, this profile will update automatically when the processor confirms it.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -133,7 +133,7 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The BEE Suite received the secure payment confirmation. The school will see it on the family ledger after reconciliation.
+              The BEE Suite received the secure payment confirmation. Confirmed card payments post to the ledger as paid; ACH bank payments show as processing until bank settlement confirms the funds.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -160,7 +160,7 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              To enable ACH autopay, use The BEE Suite Instant Bank Login to verify your account through your bank now. You can still use Debit/Credit Card to make today&apos;s payment.
+              To enable ACH autopay, use The BEE Suite Instant Bank Login to verify your account through your bank now. Open invoices do not block bank verification, and you can still pay today by Instant Bank or Debit/Credit Card.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -169,7 +169,7 @@ export function PaymentMethodRequestForm({
             <Building2 className="size-4" />
             <AlertTitle>ACH autopay verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
-              To complete ACH verification through The BEE Suite and enable autopay, select Verify Bank Instantly. You will log into your bank through the secure portal; The BEE Suite does not store your bank login.
+              Select Verify Bank Instantly to complete ACH verification through The BEE Suite. You will log into your bank through the secure processor; The BEE Suite does not store your bank login, and any open invoices stay separate from this setup.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -192,13 +192,43 @@ export function PaymentMethodRequestForm({
           </div>
         </div>
 
+        <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
+            <div>
+              <div className="text-sm font-medium">The BEE Suite payment profile</div>
+              <p className="mt-1 text-sm leading-6 text-zinc-300">
+                Verify a bank account or save a card for tuition payments. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
+              </p>
+              <p className="mt-2 text-xs text-zinc-400">
+                Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            className={focus === "instant-bank" ? "h-11 bg-sky-500 text-white hover:bg-sky-400" : "h-11"}
+            disabled={isPending}
+            onClick={() => startSetup("link_bank")}
+          >
+            <Building2 data-icon="inline-start" />
+            Verify Bank Instantly
+          </Button>
+          <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startSetup("card")}>
+            <CreditCard data-icon="inline-start" />
+            Save Debit/Credit Card
+          </Button>
+        </div>
+
         {nextOpenInvoice ? (
           <div className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-medium">Pay tuition today</div>
+                <div className="text-sm font-medium">Optional: pay tuition today</div>
                 <p className="mt-1 text-sm leading-6 text-zinc-200">
-                  {nextOpenInvoice.number} is due {formatDate(nextOpenInvoice.dueDate)} for {money(nextOpenInvoice.totalCents)}.
+                  {nextOpenInvoice.number} is due {formatDate(nextOpenInvoice.dueDate)} for {money(nextOpenInvoice.totalCents)}. Paying this invoice is separate from bank verification above.
                 </p>
               </div>
               <Badge className="border-amber-300/30 bg-black/20 text-amber-100" variant="outline">
@@ -224,36 +254,6 @@ export function PaymentMethodRequestForm({
             ) : null}
           </div>
         ) : null}
-
-        <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
-            <div>
-              <div className="text-sm font-medium">The BEE Suite payment profile</div>
-              <p className="mt-1 text-sm leading-6 text-zinc-300">
-                The BEE Suite keeps the school-facing tuition profile branded to your family. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
-              </p>
-              <p className="mt-2 text-xs text-zinc-400">
-                Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button
-            className={focus === "instant-bank" ? "h-11 bg-sky-500 text-white hover:bg-sky-400" : "h-11"}
-            disabled={isPending}
-            onClick={() => startSetup("link_bank")}
-          >
-            <Building2 data-icon="inline-start" />
-            Verify Bank Instantly
-          </Button>
-          <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startSetup("card")}>
-            <CreditCard data-icon="inline-start" />
-            Save Debit/Credit Card
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );

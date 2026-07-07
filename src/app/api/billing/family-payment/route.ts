@@ -35,6 +35,7 @@ import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
@@ -438,26 +439,51 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        externalIdPlaceholder: intent.paymentIntent.id,
-        customFields: jsonInput({
+    let appliedImmediately = false;
+    let immediateApplicationReason: string | null = null;
+    if (intent.paymentIntent.status === "succeeded") {
+      const application = await prisma.$transaction((tx) => applySucceededStripeFamilyBalancePayment(tx, {
+        paymentId: payment.id,
+        externalId: intent.paymentIntent!.id,
+        stripePaymentIntentId: intent.paymentIntent!.id,
+        stripePaymentStatus: intent.paymentIntent?.status || null,
+        stripePaymentIntentStatus: intent.paymentIntent?.status || null,
+        stripeAmountTotalCents: intent.paymentIntent?.amountCents ?? amounts.checkoutTotalCents,
+        metadata: {
           ...metadata,
           paymentId: payment.id,
           paymentMethodLabel: savedPaymentMethod.paymentMethodLabel || null,
           collectionMode: "director_saved_method",
-          status: intent.paymentIntent.status === "succeeded" ? "director_saved_method_succeeded_pending_webhook" : "director_saved_method_processing",
-          stripePaymentIntentId: intent.paymentIntent.id,
-          stripePaymentIntentStatus: intent.paymentIntent.status || null,
-          stripeAmountTotalCents: intent.paymentIntent.amountCents ?? null,
-        }),
-      },
-    });
+        },
+        descriptionFallback: "Director saved method payment",
+      }));
+      appliedImmediately = application.applied || application.reason === "payment_already_applied";
+      immediateApplicationReason = application.reason;
+    }
+
+    if (!appliedImmediately) {
+      await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          externalIdPlaceholder: intent.paymentIntent.id,
+          customFields: jsonInput({
+            ...metadata,
+            paymentId: payment.id,
+            paymentMethodLabel: savedPaymentMethod.paymentMethodLabel || null,
+            collectionMode: "director_saved_method",
+            status: intent.paymentIntent.status === "succeeded" ? "director_saved_method_succeeded_pending_webhook" : "director_saved_method_processing",
+            stripePaymentIntentId: intent.paymentIntent.id,
+            stripePaymentIntentStatus: intent.paymentIntent.status || null,
+            stripeAmountTotalCents: intent.paymentIntent.amountCents ?? null,
+            immediateApplicationReason,
+          }),
+        },
+      });
+    }
 
     await writeAuditLog(user, {
       centerId: center.id,
-      action: "billing.family_payment.payment_intent_created",
+      action: appliedImmediately ? "billing.family_payment.payment_intent_succeeded" : "billing.family_payment.payment_intent_created",
       resource: "BillingAccount",
       resourceId: billingAccount.id,
       metadata: {
@@ -466,12 +492,14 @@ async function POSTHandler(request: NextRequest) {
         amountCents,
         checkoutTotalCents: amounts.checkoutTotalCents,
         paymentMethodCategory: amounts.paymentMethodCategory,
+        appliedImmediately,
+        immediateApplicationReason,
       },
     });
 
     return NextResponse.json({
       ok: true,
-      status: "processing",
+      status: appliedImmediately ? "paid" : "processing",
       paymentId: payment.id,
       stripePaymentIntentId: intent.paymentIntent.id,
       feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,

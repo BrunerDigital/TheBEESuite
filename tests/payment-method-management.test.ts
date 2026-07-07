@@ -57,7 +57,7 @@ test("payment method summary treats setup sessions as pending", () => {
     customFields: {
       stripeCustomerId: "cus_123",
       stripeSetupCheckoutSessionId: "cs_123",
-      autopayStatus: "pending",
+      paymentMethodManagementStatus: "setup_session_created",
     },
   });
 
@@ -66,6 +66,23 @@ test("payment method summary treats setup sessions as pending", () => {
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
   assert.equal(paymentMethodAutopayCategory(summary), "default");
+});
+
+test("payment method summary does not keep expired setup sessions pending", () => {
+  const summary = paymentMethodManagementSummary({
+    autopayPlaceholder: false,
+    customFields: {
+      stripeCustomerId: "cus_123",
+      stripeSetupCheckoutSessionId: "cs_expired",
+      paymentMethodManagementStatus: "setup_session_expired",
+      autopayStatus: "disabled",
+    },
+  });
+
+  assert.equal(summary.autopayEnabled, false);
+  assert.equal(summary.autopayStatus, "disabled");
+  assert.equal(summary.hasStripeCustomer, true);
+  assert.equal(summary.hasSavedPaymentMethod, false);
 });
 
 test("saved payment method charge eligibility is separate from autopay enablement", () => {

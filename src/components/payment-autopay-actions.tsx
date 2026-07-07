@@ -14,7 +14,7 @@ type AutopayResult = {
   familyName: string;
   centerName: string | null;
   amountCents: number;
-  status: "would_charge" | "processing" | "failed" | "skipped";
+  status: "would_charge" | "paid" | "processing" | "failed" | "skipped";
   reason: string | null;
   paymentId: string | null;
   stripePaymentIntentId: string | null;
@@ -27,6 +27,7 @@ type AutopaySummary = {
   scanned?: number;
   eligible?: number;
   wouldCharge?: number;
+  paid?: number;
   processing?: number;
   failed?: number;
   skipped?: number;
@@ -39,7 +40,7 @@ function money(cents: number | null | undefined) {
 }
 
 function statusVariant(status: AutopayResult["status"]): "default" | "outline" | "destructive" | "secondary" {
-  if (status === "processing") return "default";
+  if (status === "paid" || status === "processing") return "default";
   if (status === "failed") return "destructive";
   if (status === "skipped") return "secondary";
   return "outline";
@@ -109,7 +110,7 @@ export function PaymentAutopayActions() {
             <CheckCircle2 className="size-4" />
             <AlertTitle>{summary.dryRun ? "Autopay preview ready" : "Autopay submitted"}</AlertTitle>
             <AlertDescription>
-              Scanned {summary.scanned ?? 0} invoice(s). {summary.dryRun ? summary.wouldCharge ?? 0 : summary.processing ?? 0} eligible for {money(summary.totalCents)}. {summary.skipped ?? 0} skipped. {summary.failed ?? 0} failed.
+              Scanned {summary.scanned ?? 0} invoice(s). {summary.dryRun ? summary.wouldCharge ?? 0 : (summary.paid ?? 0) + (summary.processing ?? 0)} eligible for {money(summary.totalCents)}. {summary.paid ?? 0} paid. {summary.processing ?? 0} processing. {summary.skipped ?? 0} skipped. {summary.failed ?? 0} failed.
             </AlertDescription>
           </Alert>
         ) : null}

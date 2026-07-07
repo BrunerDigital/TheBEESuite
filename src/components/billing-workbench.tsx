@@ -455,6 +455,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         const json = await response.json().catch(() => null) as {
           ok?: boolean;
           error?: string;
+          paid?: number;
           processing?: number;
           failed?: number;
           skipped?: number;
@@ -465,7 +466,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
           setErrorMessage(json?.error || first?.reason || "Saved payment method could not be charged.");
           return;
         }
-        setStatusMessage(`${method === "autopay" ? "Autopay" : "Saved payment method charge"} submitted for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`);
+        setStatusMessage(`${method === "autopay" ? "Autopay" : "Saved payment method charge"} ${first?.status === "paid" ? "recorded" : "submitted"} for ${selectedPaymentInvoice?.number ?? "the selected invoice"}.`);
         router.refresh();
         return;
       }
@@ -515,7 +516,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         window.location.href = json.url;
         return;
       }
-      setStatusMessage("Saved payment method charge submitted for the selected family balance.");
+      setStatusMessage(`Saved payment method charge ${json?.status === "paid" ? "recorded" : "submitted"} for the selected family balance.`);
       router.refresh();
     });
   }

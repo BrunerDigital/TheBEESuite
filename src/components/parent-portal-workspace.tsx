@@ -289,7 +289,7 @@ function pendingPaymentMessage(payment: PendingInvoicePayment) {
   if (label === "Debit/credit card") {
     return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
   }
-  return `${label} payment is processing. Bank payments can take a few business days to finish; the invoice will update when the processor confirms it.`;
+  return `${label} payment is processing. Bank payments can take a few business days to settle; the invoice will update when Stripe confirms the funds.`;
 }
 
 function paymentFields(payment: Payment) {
@@ -1110,7 +1110,7 @@ export function ParentPortalWorkspace({
                     {paymentMethodManagement?.hasSavedPaymentMethod
                       ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "Bank verification is pending. Use Instant Bank Login to verify through your bank now, or pay today by Instant Bank or Debit/Credit Card below."
+                        ? "Bank verification is pending. Use Instant Bank Login to verify through your bank now. Open invoices do not block verification, and payments can still be made below."
                         : "Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below."}
                   </div>
                 </div>

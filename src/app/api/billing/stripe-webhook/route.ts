@@ -1092,6 +1092,11 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
         ignoredReason = currentPayment ? "invoice_not_found" : "payment_not_found";
         return;
       }
+      const currentPaymentFields = jsonObject(currentPayment.customFields);
+      if (currentPayment.status === PaymentStatus.PAID && clean(currentPaymentFields.stripePaymentIntentId) === paymentIntent.id) {
+        ignoredReason = "payment_already_applied";
+        return;
+      }
 
       const guard = checkoutApplicationGuard({
         invoiceStatus: invoice.status,

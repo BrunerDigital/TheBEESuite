@@ -12,9 +12,10 @@ Current repository status:
 - The parent App Store entry and login surface is `https://thebeesuite.io/parents`.
 - Role-specific web entry points now exist for `/parents`, `/teachers`, `/directors`, and `/executives`, each with its own manifest metadata.
 - Public support and privacy routes now exist at `https://thebeesuite.io/support` and `https://thebeesuite.io/privacy`.
-- There is no native iOS project or uploadable `.ipa` in this repository yet.
-- App Store submission requires a native iOS target built and archived from Xcode.
+- A Capacitor iOS project now exists at `ios/App/App.xcodeproj` for the parent app.
+- There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
 - The existing 1024 icon has an alpha channel, so a no-alpha App Store export was generated at `output/app-store/ios/app-icon-1024-no-alpha.png`.
+- The fake App Review parent account `app-review-parent@thebeesuite.io` was created, linked to seeded demo family data, and verified through the live login API on July 7, 2026.
 
 Repository verification completed after the parent-app split:
 
@@ -22,13 +23,17 @@ Repository verification completed after the parent-app split:
 - `npm run typecheck`
 - `npm run lint`
 - `npm run build`
+- `npm audit --omit=dev`
+- `npx cap ls ios`
+- Live login API check for `app-review-parent@thebeesuite.io` returned `ok: true` and `nextPath: /parent-portal`.
+- Authenticated live fetch of `https://thebeesuite.io/parent-portal` returned `200`.
 
 Do not submit until these blockers are resolved:
 
-- Native iOS wrapper exists and is archived successfully in Xcode.
+- Native iOS wrapper is opened on macOS, assigned to the correct Apple Developer team, tested on iPhone, and archived successfully in Xcode.
 - Apple Developer Program account and Team ID are confirmed.
 - Public privacy policy URL and support URL are live and counsel/owner-approved.
-- A fully functional demo parent account is created with fake school/family data.
+- App Review demo credentials are copied into App Store Connect and rotated after review.
 - Production backend is live during review.
 
 ## Recommended App Identity
@@ -70,7 +75,7 @@ Notes:
 
 ## Native iOS Target Requirements
 
-Recommended implementation: a small native iOS shell that launches the parent portal and adds enough app-specific behavior to avoid being treated as only a repackaged website.
+Current implementation: a Capacitor iOS shell that launches the production parent portal route.
 
 Suggested launch URL:
 
@@ -79,6 +84,16 @@ https://thebeesuite.io/parents
 ```
 
 After a parent signs in, the app routes to `https://thebeesuite.io/parent-portal`.
+
+Native project paths:
+
+```text
+capacitor.config.ts
+native/parent-shell/index.html
+native/parent-shell/offline.html
+ios/App/App.xcodeproj
+ios/App/App/Info.plist
+```
 
 Suggested capabilities:
 
@@ -201,9 +216,9 @@ Create a dedicated fake-data review account before submission.
 
 ```text
 Demo account email: app-review-parent@thebeesuite.io
-Demo account password: <set a temporary review password>
-Demo school: App Review Demo Center
-Demo family: Demo Family
+Demo account password: <temporary review password; do not commit to the repository>
+Demo school: Kid City USA - Demo
+Demo family: Rivera Family
 Demo child records: Fake child records only
 ```
 
@@ -353,8 +368,8 @@ Recommended App Store Connect direction:
 1. Enroll or confirm Apple Developer Program membership.
 2. Get the Team ID from Apple Developer account membership.
 3. Register Bundle ID `com.brunerdigital.thebeesuite.parent`.
-4. Create the Xcode project or Capacitor iOS target.
-5. Set display name, bundle ID, version `1.0.0`, build `1`, iPhone-only target.
+4. Open the generated Capacitor iOS target from `ios/App/App.xcodeproj` on macOS.
+5. Set the Apple Developer Team, confirm display name, bundle ID, version `1.0`, build `1`, and iPhone-only target.
 6. Add App Icon using `output/app-store/ios/app-icon-1024-no-alpha.png`.
 7. Add required `Info.plist` permission strings.
 8. Build and test on a real iPhone.
@@ -368,6 +383,8 @@ Recommended App Store Connect direction:
 16. Install TestFlight build on at least one iPhone and run parent login, dashboard, messages, document upload, incident acknowledgement, and billing view smoke tests.
 17. Submit to App Review only after TestFlight smoke passes.
 
+See `docs/PARENT_IOS_BUILD_RUNBOOK.md` for the Mac/Xcode build handoff.
+
 ## Source References
 
 - App Review Guidelines: https://developer.apple.com/app-store/review/guidelines/
@@ -376,3 +393,5 @@ Recommended App Store Connect direction:
 - App Privacy Details: https://developer.apple.com/app-store/app-privacy-details/
 - Screenshot specifications: https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
 - App Review preparation: https://developer.apple.com/distribute/app-review/
+- Capacitor installation: https://capacitorjs.com/docs/getting-started
+- Capacitor iOS setup: https://capacitorjs.com/docs/ios

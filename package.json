@@ -37,6 +37,7 @@
     "kidcity:create-auth-users": "tsx scripts/create-kidcity-auth-users.ts",
     "kidcity:ensure-executives": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-executives.ts",
     "kidcity:ensure-accounting": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-accounting-user.ts",
+    "kidcity:ensure-corporate-schools": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-corporate-schools-user.ts",
     "kidcity:backfill-center-emails": "tsx -r tsconfig-paths/register scripts/backfill-center-notification-emails.ts",
     "kidcity:sync-open-schools": "tsx -r tsconfig-paths/register scripts/sync-kidcity-open-schools.ts",
     "kidcity:cleanup-location-users": "tsx -r tsconfig-paths/register scripts/cleanup-location-user-staff-profiles.ts",

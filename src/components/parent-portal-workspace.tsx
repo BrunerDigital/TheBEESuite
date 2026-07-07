@@ -20,6 +20,7 @@ import {
   Paperclip,
   Plus,
   ReceiptText,
+  Reply,
   ShoppingBag,
   ShieldCheck,
   Sparkles,
@@ -39,6 +40,7 @@ import {
   paymentProcessingRecoverySummary,
 } from "@/lib/payment-disclosures";
 import type { MessageAttachmentView } from "@/lib/message-attachments";
+import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 
 type Child = {
@@ -212,6 +214,10 @@ type Props = {
   currentGuardianId?: string | null;
   kioskCredentials?: GuardianKioskCredential[];
   notificationPreferences?: Partial<NotificationPreferences> | null;
+  replyDraft?: {
+    replyToMessageId: string;
+    subject?: string | null;
+  } | null;
   demoMode?: boolean;
 };
 
@@ -377,13 +383,16 @@ export function ParentPortalWorkspace({
   currentGuardianId = null,
   kioskCredentials = [],
   notificationPreferences,
+  replyDraft = null,
   demoMode,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
-  const [subject, setSubject] = useState("Question for the center");
+  const [subject, setSubject] = useState(replyDraft?.replyToMessageId ? replySubject(replyDraft.subject) : "Question for the center");
   const [message, setMessage] = useState("");
+  const [replyToMessageId, setReplyToMessageId] = useState(replyDraft?.replyToMessageId ?? "");
+  const [replyingToSubject, setReplyingToSubject] = useState(replyDraft?.subject ?? "");
   const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
   const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
   const [requestDetails, setRequestDetails] = useState("");
@@ -490,6 +499,7 @@ export function ParentPortalWorkspace({
   function buildMessageFormData(familyId: string) {
     const formData = new FormData();
     formData.append("familyId", familyId);
+    if (replyToMessageId) formData.append("replyToMessageId", replyToMessageId);
     formData.append("subject", subject);
     formData.append("message", message);
     formData.append("priority", "normal");
@@ -506,6 +516,7 @@ export function ParentPortalWorkspace({
     startTransition(async () => {
       const body = {
         familyId: family.id,
+        replyToMessageId: replyToMessageId || null,
         subject,
         message,
         priority: "normal",
@@ -521,10 +532,21 @@ export function ParentPortalWorkspace({
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Message could not be sent.");
       setMessage("");
+      setReplyToMessageId("");
+      setReplyingToSubject("");
       setMessageAttachments([]);
       setMessageAttachmentInputKey((current) => current + 1);
       showStatus("Message sent to the center and recorded in the family timeline.");
     });
+  }
+
+  function startMessageReply(item: { id: string; subject: string | null }) {
+    const nextSubject = item.subject || "Portal message";
+    setReplyToMessageId(item.id);
+    setReplyingToSubject(nextSubject);
+    setSubject(replySubject(nextSubject));
+    setMessage("");
+    document.getElementById("messages")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function requestContactUpdate() {
@@ -1415,6 +1437,26 @@ export function ParentPortalWorkspace({
               <Label htmlFor="portal-subject">Subject</Label>
               <Input id="portal-subject" value={subject} onChange={(event) => setSubject(event.target.value)} />
             </div>
+            {replyToMessageId ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background/40 p-3 text-sm">
+                <div>
+                  <div className="font-medium">Replying in Bee Suite</div>
+                  <div className="text-xs text-muted-foreground">{replyingToSubject || "Selected message thread"}</div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setReplyToMessageId("");
+                    setReplyingToSubject("");
+                  }}
+                >
+                  <X data-icon="inline-start" />
+                  Cancel reply
+                </Button>
+              </div>
+            ) : null}
             <div className="space-y-1">
               <Label htmlFor="portal-message">Message</Label>
               <Textarea id="portal-message" value={message} onChange={(event) => setMessage(event.target.value)} />
@@ -1566,6 +1608,10 @@ export function ParentPortalWorkspace({
                   ))}
                 </div>
               ) : null}
+              <Button className="mt-3 w-full sm:w-auto" variant="outline" size="sm" onClick={() => startMessageReply(item)}>
+                <Reply data-icon="inline-start" />
+                Reply in Bee Suite
+              </Button>
             </div>
           ))}
           {!messages.length ? <p className="text-sm text-muted-foreground">No messages have been recorded yet.</p> : null}

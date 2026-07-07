@@ -1,0 +1,307 @@
+{
+  "createdAt": "2026-07-07T16:57:13.212Z",
+  "sourceScreenshotRoot": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06",
+  "outputRoot": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07",
+  "appStoreSpecSource": "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/",
+  "assets": [
+    {
+      "category": "app-store",
+      "filename": "app-store-icon-1024.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-icon-1024.png",
+      "width": 1024,
+      "height": 1024,
+      "bytes": 72632,
+      "description": "App icon export",
+      "actualWidth": 1024,
+      "actualHeight": 1024
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-iphone-01-parent-portal-1320x2868.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-iphone-01-parent-portal-1320x2868.png",
+      "width": 1320,
+      "height": 2868,
+      "bytes": 657416,
+      "description": "A cleaner parent portal.",
+      "actualWidth": 1320,
+      "actualHeight": 2868
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-iphone-02-teacher-daily-reports-1320x2868.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-iphone-02-teacher-daily-reports-1320x2868.png",
+      "width": 1320,
+      "height": 2868,
+      "bytes": 753619,
+      "description": "Daily classroom tasks, faster.",
+      "actualWidth": 1320,
+      "actualHeight": 2868
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-iphone-03-director-billing-1320x2868.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-iphone-03-director-billing-1320x2868.png",
+      "width": 1320,
+      "height": 2868,
+      "bytes": 635079,
+      "description": "Tuition billing without the chase.",
+      "actualWidth": 1320,
+      "actualHeight": 2868
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-iphone-04-executive-fte-1320x2868.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-iphone-04-executive-fte-1320x2868.png",
+      "width": 1320,
+      "height": 2868,
+      "bytes": 672634,
+      "description": "Executive visibility across schools.",
+      "actualWidth": 1320,
+      "actualHeight": 2868
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-iphone-05-role-login-1320x2868.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-iphone-05-role-login-1320x2868.png",
+      "width": 1320,
+      "height": 2868,
+      "bytes": 546969,
+      "description": "The right login for every user.",
+      "actualWidth": 1320,
+      "actualHeight": 2868
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-ipad-01-executive-fte-2048x2732.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-ipad-01-executive-fte-2048x2732.png",
+      "width": 2048,
+      "height": 2732,
+      "bytes": 898881,
+      "description": "Weekly FTE reporting at brand level.",
+      "actualWidth": 2048,
+      "actualHeight": 2732
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-ipad-02-director-dashboard-2048x2732.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-ipad-02-director-dashboard-2048x2732.png",
+      "width": 2048,
+      "height": 2732,
+      "bytes": 1038900,
+      "description": "A director command center for daily operations.",
+      "actualWidth": 2048,
+      "actualHeight": 2732
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-ipad-03-parent-portal-2048x2732.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-ipad-03-parent-portal-2048x2732.png",
+      "width": 2048,
+      "height": 2732,
+      "bytes": 903522,
+      "description": "A family experience that feels complete.",
+      "actualWidth": 2048,
+      "actualHeight": 2732
+    },
+    {
+      "category": "app-store",
+      "filename": "app-store-ipad-04-teacher-workspace-2048x2732.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\app-store\\app-store-ipad-04-teacher-workspace-2048x2732.png",
+      "width": 2048,
+      "height": 2732,
+      "bytes": 1008151,
+      "description": "Teacher workflows built for the classroom.",
+      "actualWidth": 2048,
+      "actualHeight": 2732
+    },
+    {
+      "category": "sop",
+      "filename": "sop-training-manual-cover-letter-2550x3300.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-training-manual-cover-letter-2550x3300.png",
+      "width": 2550,
+      "height": 3300,
+      "bytes": 1212026,
+      "description": "Training manual cover",
+      "actualWidth": 2550,
+      "actualHeight": 3300
+    },
+    {
+      "category": "sop",
+      "filename": "sop-header-weekly-fte-reporting-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-header-weekly-fte-reporting-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 312235,
+      "description": "Weekly FTE Reporting",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "sop",
+      "filename": "sop-header-family-billing-autopay-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-header-family-billing-autopay-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 313535,
+      "description": "Family Billing and Autopay",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "sop",
+      "filename": "sop-header-parent-messaging-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-header-parent-messaging-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 312555,
+      "description": "Parent Messaging",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "sop",
+      "filename": "sop-header-teacher-daily-reports-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-header-teacher-daily-reports-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 345611,
+      "description": "Daily Reports and Classroom Notes",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "sop",
+      "filename": "sop-header-parent-portal-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-header-parent-portal-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 311720,
+      "description": "Parent Portal Basics",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "sop",
+      "filename": "sop-school-launch-process-map-1600x900.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\sop\\sop-school-launch-process-map-1600x900.png",
+      "width": 1600,
+      "height": 900,
+      "bytes": 250165,
+      "description": "School launch process map",
+      "actualWidth": 1600,
+      "actualHeight": 900
+    },
+    {
+      "category": "email",
+      "filename": "email-parent-welcome-header-1200x400.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-parent-welcome-header-1200x400.png",
+      "width": 1200,
+      "height": 400,
+      "bytes": 132568,
+      "description": "Welcome to your family portal.",
+      "actualWidth": 1200,
+      "actualHeight": 400
+    },
+    {
+      "category": "email",
+      "filename": "email-director-fte-reminder-header-1200x400.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-director-fte-reminder-header-1200x400.png",
+      "width": 1200,
+      "height": 400,
+      "bytes": 116761,
+      "description": "Weekly FTE is due Friday.",
+      "actualWidth": 1200,
+      "actualHeight": 400
+    },
+    {
+      "category": "email",
+      "filename": "email-family-billing-autopay-header-1200x400.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-family-billing-autopay-header-1200x400.png",
+      "width": 1200,
+      "height": 400,
+      "bytes": 116258,
+      "description": "Tuition billing is ready.",
+      "actualWidth": 1200,
+      "actualHeight": 400
+    },
+    {
+      "category": "email",
+      "filename": "email-teacher-invite-header-1200x400.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-teacher-invite-header-1200x400.png",
+      "width": 1200,
+      "height": 400,
+      "bytes": 131196,
+      "description": "Your classroom portal is ready.",
+      "actualWidth": 1200,
+      "actualHeight": 400
+    },
+    {
+      "category": "email",
+      "filename": "email-executive-reporting-header-1200x400.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-executive-reporting-header-1200x400.png",
+      "width": 1200,
+      "height": 400,
+      "bytes": 119428,
+      "description": "School reporting in one view.",
+      "actualWidth": 1200,
+      "actualHeight": 400
+    },
+    {
+      "category": "email",
+      "filename": "email-signature-banner-1200x300.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\email\\email-signature-banner-1200x300.png",
+      "width": 1200,
+      "height": 300,
+      "bytes": 62751,
+      "description": "Email signature banner",
+      "actualWidth": 1200,
+      "actualHeight": 300
+    },
+    {
+      "category": "web-social",
+      "filename": "social-card-parent-portal-1200x630.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\web-social\\social-card-parent-portal-1200x630.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 195307,
+      "description": "A branded parent portal for childcare families.",
+      "actualWidth": 1200,
+      "actualHeight": 630
+    },
+    {
+      "category": "web-social",
+      "filename": "social-card-school-operations-1200x630.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\web-social\\social-card-school-operations-1200x630.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 227802,
+      "description": "School operations, billing, and FTE reporting in one suite.",
+      "actualWidth": 1200,
+      "actualHeight": 630
+    },
+    {
+      "category": "web-social",
+      "filename": "social-card-executive-visibility-1200x630.png",
+      "path": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\bee-suite-graphics-2026-07-07\\web-social\\social-card-executive-visibility-1200x630.png",
+      "width": 1200,
+      "height": 630,
+      "bytes": 194768,
+      "description": "Executive visibility across every location.",
+      "actualWidth": 1200,
+      "actualHeight": 630
+    }
+  ],
+  "count": 26,
+  "validation": {
+    "issueCount": 0,
+    "issues": []
+  },
+  "updatedAt": "2026-07-07T16:58:58.915Z",
+  "totalBytes": 11542489,
+  "byCategory": {
+    "app-store": 10,
+    "sop": 7,
+    "email": 6,
+    "web-social": 3
+  }
+}

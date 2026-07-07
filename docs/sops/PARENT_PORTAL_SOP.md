@@ -4,6 +4,12 @@ Last updated: June 26, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
+## Visual Overview
+
+![Parent dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png)
+
+Use `PARENT_PORTAL_INSTALL_GUIDE.md` to install the parent portal on a phone or tablet. Use `PARENT_ACH_PAYMENT_GUIDE.md` to verify a bank account and avoid card processing recovery when bank payment is available.
+
 ## Purpose
 
 The BEE Suite parent portal gives families one place to view child updates, messages, documents, balances, payments, photos, incident acknowledgements, and family requests shared by the school.
@@ -117,4 +123,3 @@ Contact the school if:
 - You see information for a family that is not yours.
 
 Include your name, child name, school, email address used to log in, and a screenshot when possible.
-

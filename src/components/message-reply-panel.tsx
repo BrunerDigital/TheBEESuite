@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Bot, CheckCircle2, Paperclip, Send, Sparkles, X } from "lucide-react";
+import { AlertCircle, Bot, CheckCircle2, MessageSquare, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { replySubject } from "@/lib/message-reply-routing";
 
 export type MessageFamilyOption = {
   id: string;
@@ -52,6 +53,14 @@ export type MessageSegmentOptions = {
   tags: Array<{ value: string; label: string }>;
 };
 
+export type MessageReplyDraft = {
+  replyToMessageId: string;
+  targetMode: "family" | "staff";
+  familyId?: string | null;
+  staffId?: string | null;
+  subject?: string | null;
+};
+
 function SegmentChecklist({
   title,
   options,
@@ -92,6 +101,7 @@ export function MessageReplyPanel({
   staffOptions,
   segmentOptions,
   currentRole,
+  replyDraft,
 }: {
   familyOptions: MessageFamilyOption[];
   templates: MessageTemplateOption[];
@@ -99,11 +109,15 @@ export function MessageReplyPanel({
   staffOptions: MessageStaffOption[];
   segmentOptions: MessageSegmentOptions;
   currentRole: string;
+  replyDraft?: MessageReplyDraft | null;
 }) {
   const router = useRouter();
   const templateOptions = templates.length ? templates : [];
-  const [familyId, setFamilyId] = useState(familyOptions[0]?.id ?? "");
-  const [targetMode, setTargetMode] = useState<"family" | "broadcast" | "staff">(familyOptions[0]?.id ? "family" : "staff");
+  const initialTargetMode = replyDraft?.targetMode ?? (familyOptions[0]?.id ? "family" : "staff");
+  const [familyId, setFamilyId] = useState(
+    replyDraft?.targetMode === "family" && replyDraft.familyId ? replyDraft.familyId : familyOptions[0]?.id ?? "",
+  );
+  const [targetMode, setTargetMode] = useState<"family" | "broadcast" | "staff">(initialTargetMode);
   const [segmentCenterIds, setSegmentCenterIds] = useState<string[]>([]);
   const [segmentClassroomIds, setSegmentClassroomIds] = useState<string[]>([]);
   const [segmentStatuses, setSegmentStatuses] = useState<string[]>([]);
@@ -111,15 +125,27 @@ export function MessageReplyPanel({
   const [templateId, setTemplateId] = useState(templateOptions[0]?.id ?? "");
   const [priority, setPriority] = useState("normal");
   const [aiPurpose, setAiPurpose] = useState("reply");
-  const [assignedToId, setAssignedToId] = useState("unassigned");
-  const [subject, setSubject] = useState(templateOptions[0]?.subject ?? "Follow-up from the school");
-  const [message, setMessage] = useState(templateOptions[0]?.body ?? "");
+  const [assignedToId, setAssignedToId] = useState(
+    replyDraft?.targetMode === "staff" && replyDraft.staffId ? replyDraft.staffId : "unassigned",
+  );
+  const [subject, setSubject] = useState(
+    replyDraft?.replyToMessageId ? replySubject(replyDraft.subject) : templateOptions[0]?.subject ?? "Follow-up from the school",
+  );
+  const [message, setMessage] = useState(replyDraft?.replyToMessageId ? "" : templateOptions[0]?.body ?? "");
   const [suggestions, setSuggestions] = useState<Array<{ subject: string; body: string; label: string }>>([]);
   const [guardrailNote, setGuardrailNote] = useState("");
   const [isSuggesting, startSuggestionTransition] = useTransition();
   const [sendEmailCopy, setSendEmailCopy] = useState(true);
   const [sendSmsCopy, setSendSmsCopy] = useState(false);
   const [sendPushCopy, setSendPushCopy] = useState(true);
+  const [replyToMessageId, setReplyToMessageId] = useState(replyDraft?.replyToMessageId ?? "");
+  const [replyingToLabel, setReplyingToLabel] = useState(
+    replyDraft?.replyToMessageId
+      ? replyDraft.targetMode === "staff"
+        ? "Replying in staff thread"
+        : "Replying in family thread"
+      : "",
+  );
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [attachmentInputKey, setAttachmentInputKey] = useState(0);
   const [statusMessage, setStatusMessage] = useState("");
@@ -212,6 +238,7 @@ export function MessageReplyPanel({
       familyId: targetMode === "family" ? familyId : null,
       targetMode,
       broadcastSegment: targetMode === "broadcast" ? selectedSegment : null,
+      replyToMessageId: replyToMessageId || null,
       subject,
       message,
       priority,
@@ -295,6 +322,8 @@ export function MessageReplyPanel({
         ? `Broadcast sent to ${json?.recipientCount ?? targetFamilyCount} families.${smsDetail}${pushDetail}`
         : `Message sent to ${selectedFamily?.name ?? "the family"}.${smsDetail}${pushDetail}`);
       setMessage("");
+      setReplyToMessageId("");
+      setReplyingToLabel("");
       setAttachmentFiles([]);
       setAttachmentInputKey((current) => current + 1);
       setSuggestions([]);
@@ -311,7 +340,7 @@ export function MessageReplyPanel({
 
   return (
     <Card className="glass-panel">
-      <CardHeader>
+      <CardHeader id="message-composer" className="scroll-mt-28">
         <CardTitle>Message Composer</CardTitle>
         <CardDescription>Family, classroom, broadcast, and director/teacher messages are stored in scoped threads.</CardDescription>
       </CardHeader>
@@ -328,6 +357,27 @@ export function MessageReplyPanel({
             <AlertCircle className="size-4" />
             <AlertTitle>Needs attention</AlertTitle>
             <AlertDescription>{errorMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+        {replyToMessageId ? (
+          <Alert>
+            <MessageSquare className="size-4" />
+            <AlertTitle>{replyingToLabel || "Replying in thread"}</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>This message will stay attached to the selected Bee Suite conversation.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setReplyToMessageId("");
+                  setReplyingToLabel("");
+                }}
+              >
+                <X data-icon="inline-start" />
+                Cancel reply
+              </Button>
+            </AlertDescription>
           </Alert>
         ) : null}
         {familyOptions.length || staffRecipientOptions.length ? (

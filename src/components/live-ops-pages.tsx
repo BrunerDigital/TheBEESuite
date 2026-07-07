@@ -29,6 +29,7 @@ import {
   MessageSquare,
   PanelsTopLeft,
   PenTool,
+  Reply,
   ShieldCheck,
   Sparkles,
   Star,
@@ -95,6 +96,7 @@ import {
   MessageReplyPanel,
   type MessageFamilyOption,
   type MessageMergeFieldOption,
+  type MessageReplyDraft,
   type MessageSegmentOptions,
   type MessageStaffOption,
   type MessageTemplateOption,
@@ -2240,6 +2242,7 @@ export type MessagesPageData = {
     sender: { name: string; email: string } | null;
     assignedTo?: { name: string; email: string } | null;
     attachments?: MessageAttachmentView[];
+    replyHref?: string | null;
   }>;
   threads: Array<{
     key: string;
@@ -2258,6 +2261,7 @@ export type MessagesPageData = {
       createdAt: Date | string;
       sender: { name: string; email: string } | null;
       attachments?: MessageAttachmentView[];
+      replyHref?: string | null;
     }>;
   }>;
   stats: {
@@ -2277,6 +2281,7 @@ export type MessagesPageData = {
   notificationPreferenceRoles: NotificationPreferenceRoleOption[];
   currentUserId: string;
   currentRole: string;
+  replyDraft?: MessageReplyDraft | null;
   canManageRoleDefaults: boolean;
   demoMode?: boolean;
 };
@@ -2331,12 +2336,14 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="AI review queue" value={data.stats.aiReview.toLocaleString()} detail="Human approval before sending" />
       </div>
       <MessageReplyPanel
+        key={data.replyDraft?.replyToMessageId ?? "new-message"}
         familyOptions={data.familyOptions}
         templates={data.templates}
         mergeFields={data.mergeFields}
         staffOptions={data.staffOptions}
         segmentOptions={data.segmentOptions}
         currentRole={data.currentRole}
+        replyDraft={data.replyDraft}
       />
       <NotificationPreferencesPanel
         types={data.notificationPreferenceTypes}
@@ -2378,6 +2385,12 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                     <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
                     <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
                     <MessageAttachmentLinks attachments={message.attachments} />
+                    {message.replyHref ? (
+                      <Link href={message.replyHref} className={buttonVariants({ variant: "outline", size: "sm", className: "mt-3" })}>
+                        <Reply data-icon="inline-start" />
+                        Reply in Bee Suite
+                      </Link>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -2402,6 +2415,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                 <TableHead>Channel</TableHead>
                 <TableHead>Priority</TableHead>
                 <TableHead>Sentiment</TableHead>
+                <TableHead>Reply</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2424,11 +2438,19 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                     </Badge>
                   </TableCell>
                   <TableCell>{message.sentiment ?? (message.readAt ? "Reviewed" : "Unread")}</TableCell>
+                  <TableCell>
+                    {message.replyHref ? (
+                      <Link href={message.replyHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                        <Reply data-icon="inline-start" />
+                        Reply
+                      </Link>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               ))}
               {!data.messages.length ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-muted-foreground">
+                  <TableCell colSpan={6} className="text-muted-foreground">
                     No messages are visible for this scope yet.
                   </TableCell>
                 </TableRow>

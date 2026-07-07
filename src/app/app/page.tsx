@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   ArrowRight,
+  BookOpenCheck,
   Building2,
   Camera,
   CheckCircle2,
@@ -80,7 +81,20 @@ const roleOptions: Array<{
   },
 ];
 
-const platformNotes = [
+type PlatformNote = {
+  title: string;
+  detail: string;
+  icon: LucideIcon;
+  href?: string;
+};
+
+const platformNotes: PlatformNote[] = [
+  {
+    title: "SOPs and guides",
+    detail: "Open the public help center for parent setup, ACH verification, classroom, billing, kiosk, and school operating guides.",
+    icon: BookOpenCheck,
+    href: "/resources",
+  },
   {
     title: "iPad and iPhone",
     detail: "Open this screen in Safari, use Share, then Add to Home Screen.",
@@ -196,15 +210,25 @@ export default function AppLauncherPage() {
             </div>
           </div>
 
-          <footer className="grid gap-3 border-t border-white/10 py-5 md:grid-cols-3">
+          <footer className="grid gap-3 border-t border-white/10 py-5 md:grid-cols-4">
             {platformNotes.map((note) => (
-              <div key={note.title} className="flex gap-3 rounded-lg border border-white/10 bg-black/15 p-4">
-                <note.icon className="mt-0.5 size-5 text-sky-300" />
-                <div>
-                  <div className="text-sm font-semibold text-white">{note.title}</div>
-                  <p className="mt-1 text-sm leading-6 text-slate-300">{note.detail}</p>
+              note.href ? (
+                <Link key={note.title} href={note.href} className="flex gap-3 rounded-lg border border-white/10 bg-black/15 p-4 transition hover:border-amber-300/60 hover:bg-white/[0.05]">
+                  <note.icon className="mt-0.5 size-5 text-amber-300" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">{note.title}</div>
+                    <p className="mt-1 text-sm leading-6 text-slate-300">{note.detail}</p>
+                  </div>
+                </Link>
+              ) : (
+                <div key={note.title} className="flex gap-3 rounded-lg border border-white/10 bg-black/15 p-4">
+                  <note.icon className="mt-0.5 size-5 text-sky-300" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">{note.title}</div>
+                    <p className="mt-1 text-sm leading-6 text-slate-300">{note.detail}</p>
+                  </div>
                 </div>
-              </div>
+              )
             ))}
           </footer>
         </div>

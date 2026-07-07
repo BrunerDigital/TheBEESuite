@@ -980,17 +980,25 @@ export default function LandingPage() {
       </section>
 
       <footer className="border-t border-white/10 bg-[#05070a] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4">
           <BrandLogo href="/" compact />
-          <Button
-            variant="outline"
-            size="icon"
-            className="size-9 border-white/15 bg-white/[0.03] text-zinc-400 hover:bg-white/10 hover:text-amber-300"
-            nativeButton={false}
-            render={<Link href="/developer-dashboard" aria-label="Developer dashboard" title="Developer dashboard" />}
-          >
-            <Code2 className="size-4" />
-          </Button>
+          <div className="flex flex-wrap items-center gap-4 text-sm text-zinc-400">
+            <Link className="hover:text-amber-200" href="/resources">
+              SOPs and guides
+            </Link>
+            <Link className="hover:text-amber-200" href="/support">
+              Support
+            </Link>
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-9 border-white/15 bg-white/[0.03] text-zinc-400 hover:bg-white/10 hover:text-amber-300"
+              nativeButton={false}
+              render={<Link href="/developer-dashboard" aria-label="Developer dashboard" title="Developer dashboard" />}
+            >
+              <Code2 className="size-4" />
+            </Button>
+          </div>
         </div>
       </footer>
     </main>

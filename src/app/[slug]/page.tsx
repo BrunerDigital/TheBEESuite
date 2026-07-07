@@ -103,6 +103,7 @@ import {
 } from "@/lib/billing-workflows";
 import { defaultMessageTemplates, messageMergeFields, normalizeMergeFields, notificationPreferenceTypes } from "@/lib/message-templates";
 import { signMessageAttachmentsFromMetadata } from "@/lib/message-attachments";
+import { buildMessageReplyPath } from "@/lib/message-reply-routing";
 import { buildVisibleMessageWhere } from "@/lib/message-visibility";
 import { extractFamilyTags } from "@/lib/message-segmentation";
 import { normalizeSchoolOnboardingSetup, schoolOnboardingSetupSections, type SchoolOnboardingSetupInput } from "@/lib/onboarding-setup";
@@ -134,7 +135,7 @@ import {
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
-import { readStaffClockState, readStaffClockSummary, readStaffKioskPinHash } from "@/lib/staff-kiosk";
+import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
@@ -1963,9 +1964,12 @@ async function renderLivePage(
       webhookConfigured: stripeWebhookConfigured || process.env.STRIPE_REQUIRE_WEBHOOK_FOR_CHECKOUT === "false",
       allowPlatformOnlyPayments: process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true",
     });
+    const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
+    const parentReplySubject = firstSearchParam(searchParams.subject) || "";
 
     return (
       <ParentPortalWorkspace
+        key={parentReplyToMessageId || "parent-portal"}
         family={parentPortalFamily}
         billingAccount={billingAccount ? {
           id: billingAccount.id,
@@ -1990,6 +1994,12 @@ async function renderLivePage(
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={kioskCredentials}
         notificationPreferences={notificationPreferences}
+        replyDraft={parentReplyToMessageId
+          ? {
+              replyToMessageId: parentReplyToMessageId,
+              subject: parentReplySubject || null,
+            }
+          : null}
       />
     );
   }
@@ -1997,11 +2007,12 @@ async function renderLivePage(
   if (slug === "teacher-portal") {
     const staffProfile = await prisma.staffProfile.findUnique({
       where: { userId: user.id },
-      select: { centerId: true, classroomId: true, customFields: true },
+      select: { centerId: true, classroomId: true, title: true, phone: true, customFields: true },
     });
-    const teacherCenter = staffProfile?.centerId
+    const teacherProfileCenterId = staffProfile?.centerId ?? user.primaryCenterId ?? centers[0]?.id ?? null;
+    const teacherCenter = teacherProfileCenterId
       ? await prisma.center.findUnique({
-          where: { id: staffProfile.centerId },
+          where: { id: teacherProfileCenterId },
           select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
         })
       : null;
@@ -2041,6 +2052,7 @@ async function renderLivePage(
       take: 80,
       select: {
         id: true,
+        centerId: true,
         name: true,
         ageGroup: true,
         capacity: true,
@@ -2124,6 +2136,25 @@ async function renderLivePage(
       <TeacherMobileWorkspace
         roster={roster}
         teacherName={user.name}
+        teacherProfile={{
+          name: user.name,
+          loginEmail: user.email,
+          contactEmail: staffProfile ? readStaffContactEmail(staffProfile.customFields) : null,
+          phone: staffProfile?.phone ?? null,
+          title: staffProfile?.title ?? "Teacher",
+          centerId: teacherProfileCenterId,
+          centerName: teacherCenter ? formatCenterName(teacherCenter) : "School not assigned",
+          classroomId: staffProfile?.classroomId ?? null,
+          hasStaffKioskCode: Boolean(staffProfile && readStaffKioskPinHash(staffProfile.customFields)),
+          profilePhotoUrl: user.profilePhotoUrl,
+        }}
+        classroomOptions={classroomRatios
+          .filter((classroom) => !teacherProfileCenterId || classroom.centerId === teacherProfileCenterId)
+          .map((classroom) => ({
+            id: classroom.id,
+            name: classroom.name,
+            ageGroup: classroom.ageGroup,
+          }))}
         kioskAccess={staffProfile?.centerId ? {
           centerId: staffProfile.centerId,
           centerName: teacherCenter ? formatCenterName(teacherCenter) : "Assigned school",
@@ -2159,6 +2190,11 @@ async function renderLivePage(
   }
 
   if (slug === "messages") {
+    const requestedReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
+    const requestedReplyTargetMode = firstSearchParam(searchParams.targetMode) === "staff" ? "staff" : "family";
+    const requestedReplyFamilyId = firstSearchParam(searchParams.familyId) || "";
+    const requestedReplyStaffId = firstSearchParam(searchParams.staffId) || "";
+    const requestedReplySubject = firstSearchParam(searchParams.subject) || "";
     const teacherMessageScope = user.role === UserRole.TEACHER && !allCenters;
     const teacherStaffProfile = teacherMessageScope
       ? await prisma.staffProfile.findUnique({
@@ -2312,9 +2348,34 @@ async function renderLivePage(
       orderBy: [{ userId: "desc" }, { role: "asc" }, { type: "asc" }],
     });
 
+    function messageReplyHref(message: typeof messages[number]) {
+      if (message.familyId) {
+        return buildMessageReplyPath({
+          audience: "staff",
+          replyToMessageId: message.id,
+          familyId: message.familyId,
+          subject: message.subject,
+        });
+      }
+
+      if (message.threadKey?.startsWith("staff:")) {
+        const staffId = message.senderId === user.id ? message.assignedToId : message.senderId;
+        if (!staffId) return null;
+        return buildMessageReplyPath({
+          audience: "staff",
+          replyToMessageId: message.id,
+          staffId,
+          subject: message.subject,
+        });
+      }
+
+      return null;
+    }
+
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
+      replyHref: messageReplyHref(message),
     })));
     const demoMode = showDemoFallbackData && messages.length === 0;
     const visibleMessages = demoMode ? executiveParentMessageDemoRows : signedMessages;
@@ -2362,38 +2423,40 @@ async function renderLivePage(
         createdAt: Date | string;
         sender: { name: string; email: string } | null;
         attachments?: Awaited<ReturnType<typeof signMessageAttachmentsFromMetadata>>;
+        replyHref?: string | null;
       }>;
     };
     const threadMap = signedMessages.reduce((map, message) => {
-        const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
-        const existing = map.get(key) ?? {
-          key,
-          familyName: message.family?.name ?? "Internal thread",
-          centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
-          assignedTo: message.assignedTo ?? null,
-          unread: 0,
-          priority: 0,
-          lastMessageAt: message.createdAt,
-          messages: [],
-        };
-        existing.assignedTo = existing.assignedTo ?? message.assignedTo ?? null;
-        existing.unread += message.readAt ? 0 : 1;
-        existing.priority += ["high", "urgent"].includes(message.priority) ? 1 : 0;
-        if (new Date(message.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
-          existing.lastMessageAt = message.createdAt;
-        }
-        existing.messages.push({
-          id: message.id,
-          subject: message.subject,
-          body: message.body,
-          channel: message.channel,
-          priority: message.priority,
-          createdAt: message.createdAt,
-          sender: message.sender,
-          attachments: message.attachments,
-        });
-        return map;
-      }, new Map<string, MessageThread>());
+      const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
+      const existing = map.get(key) ?? {
+        key,
+        familyName: message.family?.name ?? "Internal thread",
+        centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
+        assignedTo: message.assignedTo ?? null,
+        unread: 0,
+        priority: 0,
+        lastMessageAt: message.createdAt,
+        messages: [],
+      };
+      existing.assignedTo = existing.assignedTo ?? message.assignedTo ?? null;
+      existing.unread += message.readAt ? 0 : 1;
+      existing.priority += ["high", "urgent"].includes(message.priority) ? 1 : 0;
+      if (new Date(message.createdAt).getTime() > new Date(existing.lastMessageAt).getTime()) {
+        existing.lastMessageAt = message.createdAt;
+      }
+      existing.messages.push({
+        id: message.id,
+        subject: message.subject,
+        body: message.body,
+        channel: message.channel,
+        priority: message.priority,
+        createdAt: message.createdAt,
+        sender: message.sender,
+        attachments: message.attachments,
+        replyHref: message.replyHref,
+      });
+      return map;
+    }, new Map<string, MessageThread>());
     const threads = Array.from(threadMap.values())
       .map((thread) => ({
         ...thread,
@@ -2423,6 +2486,15 @@ async function renderLivePage(
           templates: templateOptions,
           mergeFields: messageMergeFields,
           staffOptions: staffUsers,
+          replyDraft: requestedReplyToMessageId
+            ? {
+                replyToMessageId: requestedReplyToMessageId,
+                targetMode: requestedReplyTargetMode,
+                familyId: requestedReplyFamilyId || null,
+                staffId: requestedReplyStaffId || null,
+                subject: requestedReplySubject || null,
+              }
+            : null,
           segmentOptions: {
             centers: centers.map((center) => ({
               id: center.id,

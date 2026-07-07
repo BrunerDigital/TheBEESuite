@@ -1,0 +1,1120 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "createdAt": "2026-07-07T16:26:20.818Z",
+  "screenshots": [
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "home",
+      "route": "/",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__home.png",
+      "url": "http://localhost:3000/",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "app-launcher",
+      "route": "/app",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__app-launcher.png",
+      "url": "http://localhost:3000/app",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "parents-login",
+      "route": "/parents",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__parents-login.png",
+      "url": "http://localhost:3000/parents",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "parents-setup",
+      "route": "/parents/setup",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__parents-setup.png",
+      "url": "http://localhost:3000/parents/setup",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "teachers-login",
+      "route": "/teachers",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__teachers-login.png",
+      "url": "http://localhost:3000/teachers",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "directors-login",
+      "route": "/directors",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__directors-login.png",
+      "url": "http://localhost:3000/directors",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "executives-login",
+      "route": "/executives",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__executives-login.png",
+      "url": "http://localhost:3000/executives",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "registration",
+      "route": "/registration",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__registration.png",
+      "url": "http://localhost:3000/registration",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "public",
+      "view": "check-in-kiosk",
+      "route": "/check-in",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__public__check-in-kiosk.png",
+      "url": "http://localhost:3000/check-in",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "multi-location-dashboard",
+      "route": "/multi-location-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__multi-location-dashboard.png",
+      "url": "http://localhost:3000/multi-location-dashboard",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__fte-reports.png",
+      "url": "http://localhost:3000/fte-reports",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__billing-invoices.png",
+      "url": "http://localhost:3000/billing-invoices",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "corporate-billing",
+      "route": "/corporate-billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__corporate-billing.png",
+      "url": "http://localhost:3000/corporate-billing",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "analytics",
+      "route": "/analytics",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__analytics.png",
+      "url": "http://localhost:3000/analytics",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "team-permissions",
+      "route": "/team-permissions",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__team-permissions.png",
+      "url": "http://localhost:3000/team-permissions",
+      "skippedExisting": true
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "center-dashboard",
+      "route": "/center-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__center-dashboard.png",
+      "url": "http://localhost:3000/center-dashboard",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "crm-leads",
+      "route": "/crm-leads",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__crm-leads.png",
+      "url": "http://localhost:3000/crm-leads",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__fte-reports.png",
+      "url": "http://localhost:3000/fte-reports",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__classroom-dashboard.png",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__billing-invoices.png",
+      "url": "http://localhost:3000/billing-invoices",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "staff",
+      "route": "/staff",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__staff.png",
+      "url": "http://localhost:3000/staff",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "teacher-portal",
+      "route": "/teacher-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__teacher-portal.png",
+      "url": "http://localhost:3000/teacher-portal",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__classroom-dashboard.png",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "attendance",
+      "route": "/attendance",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__attendance.png",
+      "url": "http://localhost:3000/attendance",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "daily-reports",
+      "route": "/daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__daily-reports.png",
+      "url": "http://localhost:3000/daily-reports",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "incident-reports",
+      "route": "/incident-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__incident-reports.png",
+      "url": "http://localhost:3000/incident-reports",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "messages",
+      "route": "/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__messages.png",
+      "url": "http://localhost:3000/messages",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "parent",
+      "view": "parent-portal",
+      "route": "/parent-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__parent__parent-portal.png",
+      "url": "http://localhost:3000/parent-portal",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "parent",
+      "view": "parent-daily-reports",
+      "route": "/parent-portal#daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__parent__parent-daily-reports.png",
+      "url": "http://localhost:3000/parent-portal#daily-reports",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "parent",
+      "view": "parent-activities",
+      "route": "/parent-portal#activities",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__parent__parent-activities.png",
+      "url": "http://localhost:3000/parent-portal#activities",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "parent",
+      "view": "parent-photos",
+      "route": "/parent-portal#photos",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__parent__parent-photos.png",
+      "url": "http://localhost:3000/parent-portal#photos",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "parent",
+      "view": "parent-billing",
+      "route": "/parent-portal#billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__parent__parent-billing.png",
+      "url": "http://localhost:3000/parent-portal#billing",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "executive",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__executive__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "family-detail",
+      "route": "/family-detail",
+      "url": "http://localhost:3000/family-detail",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__family-detail.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "director",
+      "view": "messages",
+      "route": "/messages",
+      "url": "http://localhost:3000/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__director__messages.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "desktop",
+      "deviceLabel": "Desktop 1440x1000",
+      "role": "teacher",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\desktop__teacher__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "home",
+      "route": "/",
+      "url": "http://localhost:3000/",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__home.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "app-launcher",
+      "route": "/app",
+      "url": "http://localhost:3000/app",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__app-launcher.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "parents-login",
+      "route": "/parents",
+      "url": "http://localhost:3000/parents",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__parents-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "parents-setup",
+      "route": "/parents/setup",
+      "url": "http://localhost:3000/parents/setup",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__parents-setup.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "teachers-login",
+      "route": "/teachers",
+      "url": "http://localhost:3000/teachers",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__teachers-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "directors-login",
+      "route": "/directors",
+      "url": "http://localhost:3000/directors",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__directors-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "executives-login",
+      "route": "/executives",
+      "url": "http://localhost:3000/executives",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__executives-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "registration",
+      "route": "/registration",
+      "url": "http://localhost:3000/registration",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__registration.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "public",
+      "view": "check-in-kiosk",
+      "route": "/check-in",
+      "url": "http://localhost:3000/directors?next=%2Fcheck-in",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__public__check-in-kiosk.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "multi-location-dashboard",
+      "route": "/multi-location-dashboard",
+      "url": "http://localhost:3000/multi-location-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__multi-location-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "url": "http://localhost:3000/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__fte-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "url": "http://localhost:3000/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__billing-invoices.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "corporate-billing",
+      "route": "/corporate-billing",
+      "url": "http://localhost:3000/corporate-billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__corporate-billing.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "analytics",
+      "route": "/analytics",
+      "url": "http://localhost:3000/analytics",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__analytics.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "executive",
+      "view": "team-permissions",
+      "route": "/team-permissions",
+      "url": "http://localhost:3000/team-permissions",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__executive__team-permissions.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "center-dashboard",
+      "route": "/center-dashboard",
+      "url": "http://localhost:3000/center-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__center-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "crm-leads",
+      "route": "/crm-leads",
+      "url": "http://localhost:3000/crm-leads",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__crm-leads.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "url": "http://localhost:3000/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__fte-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__classroom-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "family-detail",
+      "route": "/family-detail",
+      "url": "http://localhost:3000/family-detail",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__family-detail.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "url": "http://localhost:3000/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__billing-invoices.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "staff",
+      "route": "/staff",
+      "url": "http://localhost:3000/staff",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__staff.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "director",
+      "view": "messages",
+      "route": "/messages",
+      "url": "http://localhost:3000/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__director__messages.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "teacher-portal",
+      "route": "/teacher-portal",
+      "url": "http://localhost:3000/teacher-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__teacher-portal.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__classroom-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "attendance",
+      "route": "/attendance",
+      "url": "http://localhost:3000/attendance",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__attendance.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "daily-reports",
+      "route": "/daily-reports",
+      "url": "http://localhost:3000/daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__daily-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "incident-reports",
+      "route": "/incident-reports",
+      "url": "http://localhost:3000/incident-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__incident-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "teacher",
+      "view": "messages",
+      "route": "/messages",
+      "url": "http://localhost:3000/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__teacher__messages.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "parent",
+      "view": "parent-portal",
+      "route": "/parent-portal",
+      "url": "http://localhost:3000/parent-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__parent__parent-portal.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "parent",
+      "view": "parent-daily-reports",
+      "route": "/parent-portal#daily-reports",
+      "url": "http://localhost:3000/parent-portal#daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__parent__parent-daily-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "parent",
+      "view": "parent-activities",
+      "route": "/parent-portal#activities",
+      "url": "http://localhost:3000/parent-portal#activities",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__parent__parent-activities.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "parent",
+      "view": "parent-photos",
+      "route": "/parent-portal#photos",
+      "url": "http://localhost:3000/parent-portal#photos",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__parent__parent-photos.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "tablet",
+      "deviceLabel": "Tablet 1024x1366",
+      "role": "parent",
+      "view": "parent-billing",
+      "route": "/parent-portal#billing",
+      "url": "http://localhost:3000/parent-portal#billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\tablet__parent__parent-billing.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "home",
+      "route": "/",
+      "url": "http://localhost:3000/",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__home.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "app-launcher",
+      "route": "/app",
+      "url": "http://localhost:3000/app",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__app-launcher.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "parents-login",
+      "route": "/parents",
+      "url": "http://localhost:3000/parents",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__parents-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "parents-setup",
+      "route": "/parents/setup",
+      "url": "http://localhost:3000/parents/setup",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__parents-setup.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "teachers-login",
+      "route": "/teachers",
+      "url": "http://localhost:3000/teachers",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__teachers-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "directors-login",
+      "route": "/directors",
+      "url": "http://localhost:3000/directors",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__directors-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "executives-login",
+      "route": "/executives",
+      "url": "http://localhost:3000/executives",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__executives-login.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "registration",
+      "route": "/registration",
+      "url": "http://localhost:3000/registration",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__registration.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "public",
+      "view": "check-in-kiosk",
+      "route": "/check-in",
+      "url": "http://localhost:3000/directors?next=%2Fcheck-in",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__public__check-in-kiosk.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "multi-location-dashboard",
+      "route": "/multi-location-dashboard",
+      "url": "http://localhost:3000/multi-location-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__multi-location-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "url": "http://localhost:3000/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__fte-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "url": "http://localhost:3000/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__billing-invoices.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "corporate-billing",
+      "route": "/corporate-billing",
+      "url": "http://localhost:3000/corporate-billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__corporate-billing.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "analytics",
+      "route": "/analytics",
+      "url": "http://localhost:3000/analytics",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__analytics.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "executive",
+      "view": "team-permissions",
+      "route": "/team-permissions",
+      "url": "http://localhost:3000/team-permissions",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__executive__team-permissions.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "center-dashboard",
+      "route": "/center-dashboard",
+      "url": "http://localhost:3000/center-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__center-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "crm-leads",
+      "route": "/crm-leads",
+      "url": "http://localhost:3000/crm-leads",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__crm-leads.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "fte-reports",
+      "route": "/fte-reports",
+      "url": "http://localhost:3000/fte-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__fte-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__classroom-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "family-detail",
+      "route": "/family-detail",
+      "url": "http://localhost:3000/family-detail",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__family-detail.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "billing-invoices",
+      "route": "/billing-invoices",
+      "url": "http://localhost:3000/billing-invoices",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__billing-invoices.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "staff",
+      "route": "/staff",
+      "url": "http://localhost:3000/staff",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__staff.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "director",
+      "view": "messages",
+      "route": "/messages",
+      "url": "http://localhost:3000/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__director__messages.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "dashboard",
+      "route": "/dashboard",
+      "url": "http://localhost:3000/dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "teacher-portal",
+      "route": "/teacher-portal",
+      "url": "http://localhost:3000/teacher-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__teacher-portal.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "classroom-dashboard",
+      "route": "/classroom-dashboard",
+      "url": "http://localhost:3000/classroom-dashboard",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__classroom-dashboard.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "attendance",
+      "route": "/attendance",
+      "url": "http://localhost:3000/attendance",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__attendance.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "daily-reports",
+      "route": "/daily-reports",
+      "url": "http://localhost:3000/daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__daily-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "incident-reports",
+      "route": "/incident-reports",
+      "url": "http://localhost:3000/incident-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__incident-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "teacher",
+      "view": "messages",
+      "route": "/messages",
+      "url": "http://localhost:3000/messages",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__teacher__messages.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "parent",
+      "view": "parent-portal",
+      "route": "/parent-portal",
+      "url": "http://localhost:3000/parent-portal",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__parent__parent-portal.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "parent",
+      "view": "parent-daily-reports",
+      "route": "/parent-portal#daily-reports",
+      "url": "http://localhost:3000/parent-portal#daily-reports",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__parent__parent-daily-reports.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "parent",
+      "view": "parent-activities",
+      "route": "/parent-portal#activities",
+      "url": "http://localhost:3000/parent-portal#activities",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__parent__parent-activities.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "parent",
+      "view": "parent-photos",
+      "route": "/parent-portal#photos",
+      "url": "http://localhost:3000/parent-portal#photos",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__parent__parent-photos.png",
+      "skippedExisting": false
+    },
+    {
+      "device": "phone",
+      "deviceLabel": "Phone 390x844",
+      "role": "parent",
+      "view": "parent-billing",
+      "route": "/parent-portal#billing",
+      "url": "http://localhost:3000/parent-portal#billing",
+      "file": "D:\\Brenden Bruner\\Documents\\The Bee Suite 2\\output\\playwright\\fresh-screenshots-2026-07-07T16-22-06\\phone__parent__parent-billing.png",
+      "skippedExisting": false
+    }
+  ],
+  "failures": [],
+  "updatedAt": "2026-07-07T16:50:24.661Z",
+  "count": 111,
+  "failureCount": 0
+}

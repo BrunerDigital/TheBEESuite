@@ -5,6 +5,12 @@ import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, getC
 import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { messageAttachmentKind, type StoredMessageAttachment } from "@/lib/message-attachments";
+import {
+  messageNotificationPreferenceRoles,
+  shouldNotifyLeadershipOfFamilyMessage,
+  uniqueMessageNotificationUsers,
+} from "@/lib/message-notification-recipients";
+import { appendInAppMessageReplyInstructions, buildAbsoluteMessageReplyUrl } from "@/lib/message-reply-routing";
 import { defaultMessageTemplates, renderMessageTemplate } from "@/lib/message-templates";
 import {
   broadcastSegmentIsEmpty,
@@ -22,6 +28,7 @@ import {
 import type { NotificationPreferenceRecord } from "@/lib/notification-preferences";
 import { prisma } from "@/lib/prisma";
 import { contentTypeForDocumentFile, uploadMessageAttachmentBuffer } from "@/lib/supabase-storage";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { twilioStatusCallbackUrl } from "@/lib/twilio-messaging";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -372,6 +379,7 @@ async function POSTHandler(request: NextRequest) {
   const senderIsParent = isParentGuardian(user);
   const senderCanManageOperations = canManageOperations(user);
   const senderCanManageClassroom = canManageClassroomTasks(user);
+  const appBaseUrl = getAppBaseUrl(request.url);
 
   if (!message && !input.files.length) {
     return NextResponse.json({ ok: false, error: "Message or attachment is required." }, { status: 400 });
@@ -721,18 +729,25 @@ async function POSTHandler(request: NextRequest) {
       });
       createdMessages.push(created);
 
+      const parentReplyUrl = buildAbsoluteMessageReplyUrl({
+        appBaseUrl,
+        audience: "parent",
+        replyToMessageId: created.id,
+        familyId: targetFamily.id,
+        subject: renderedSubject,
+      });
       const delivery = await deliverNotificationExternalChannels({
         tenantId: user.tenantId,
         centerId: targetFamily.centerId,
         messageId: created.id,
         type: "messages",
         title: `Message from ${user.name}: ${renderedSubject}`,
-        body: renderedMessage,
+        body: appendInAppMessageReplyInstructions(renderedMessage, parentReplyUrl),
         recipients: familyNotificationDeliveryRecipients(targetFamily),
         preferences: broadcastNotificationPreferences,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
-        replyTo: user.email,
+        replyTo: null,
         fromName: "The BEE Suite",
         statusCallbackUrl,
         emailPurpose: "communication_email",
@@ -912,14 +927,16 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
+  let replyTargetMessage: { id: string; senderId: string | null; assignedToId: string | null } | null = null;
   if (replyToMessageId) {
     const parentMessage = await prisma.message.findFirst({
       where: { id: replyToMessageId, ...(familyId ? { familyId } : {}) },
-      select: { id: true },
+      select: { id: true, senderId: true, assignedToId: true },
     });
     if (!parentMessage) {
       return NextResponse.json({ ok: false, error: "Reply target message is not available." }, { status: 400 });
     }
+    replyTargetMessage = parentMessage;
   }
 
   let attachments: StoredMessageAttachment[] = [];
@@ -963,20 +980,56 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const directors = senderIsParent && family?.centerId
+  const shouldNotifyLeadership = shouldNotifyLeadershipOfFamilyMessage({
+    senderIsParent,
+    senderRole: user.role,
+  });
+  const directors = shouldNotifyLeadership && family?.centerId
     ? await getCenterLeadershipUsers({
         centerId: family.centerId,
+        excludeUserId: user.id,
         roles: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR],
       })
     : [];
+  const directStaffRecipientIds = uniqueStrings([
+    replyTargetMessage?.senderId,
+    replyTargetMessage?.assignedToId,
+    assignedToId,
+  ]).filter((id) => id !== user.id);
+  const directStaffRecipients = directStaffRecipientIds.length
+    ? await prisma.user.findMany({
+        where: {
+          id: { in: directStaffRecipientIds },
+          tenantId: user.tenantId,
+          isActive: true,
+          role: { notIn: [UserRole.PARENT_GUARDIAN, UserRole.AUTHORIZED_PICKUP] },
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          staffProfile: { select: { phone: true } },
+        },
+      })
+    : [];
+  const staffNotificationUsers = uniqueMessageNotificationUsers([
+    ...directors,
+    ...directStaffRecipients.map((recipient) => ({
+      id: recipient.id,
+      email: recipient.email,
+      role: recipient.role,
+      phone: recipient.staffProfile?.phone ?? null,
+    })),
+  ], user.id);
   const parentUserIds = !senderIsParent && family
     ? Array.from(new Set(family.guardians.map((guardian) => guardian.userId).filter((value): value is string => Boolean(value))))
     : [];
 
-  const notificationUserIds = [...directors.map((director) => director.id), ...parentUserIds];
-  const notificationPreferenceRoles = senderIsParent
-    ? [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR]
-    : [UserRole.PARENT_GUARDIAN];
+  const notificationUserIds = [...staffNotificationUsers.map((recipient) => recipient.id), ...parentUserIds];
+  const notificationPreferenceRoles = messageNotificationPreferenceRoles({
+    staffRecipients: staffNotificationUsers,
+    notifyParents: Boolean(!senderIsParent && family),
+  });
   const notificationPreferenceRows: NotificationPreferenceRecord[] = sendEmailCopy || sendSmsCopy || sendPushCopy
     ? await prisma.notificationPreference.findMany({
         where: {
@@ -991,21 +1044,29 @@ async function POSTHandler(request: NextRequest) {
       })
     : [];
   const pushNotifications = await Promise.all([
-    ...directors.map((director) =>
+    ...staffNotificationUsers.map((recipient) =>
       sendPushCopy && pushEnabledForMessageRecipient({
-        userId: director.id,
-        role: director.role,
+        userId: recipient.id,
+        role: recipient.role,
       }, notificationPreferenceRows) ? prisma.notification.create({
         data: {
-          userId: director.id,
-          title: `New parent message: ${subject}`,
-          body: family ? `${family.name}: ${message}` : message,
+          userId: recipient.id,
+          title: senderIsParent
+            ? `New parent message: ${subject}`
+            : user.role === UserRole.TEACHER
+              ? `Teacher-family message: ${subject}`
+              : `New family message: ${subject}`,
+          body: family
+            ? senderIsParent
+              ? `${family.name}: ${message}`
+              : `${user.name} to ${family.name}: ${message}`
+            : message,
           type: "message",
           priority,
         },
       }) : null,
     ),
-    ...(family?.guardians ?? []).map((guardian) =>
+    ...(!senderIsParent ? family?.guardians ?? [] : []).map((guardian) =>
       sendPushCopy && guardian.userId && pushEnabledForMessageRecipient({
         userId: guardian.userId,
         role: UserRole.PARENT_GUARDIAN,
@@ -1033,10 +1094,28 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const emailSubject = senderIsParent && family ? `Portal message from ${family.name}: ${subject}` : `Message from ${user.name}: ${subject}`;
-  const emailReplyTo = senderIsParent ? family?.billingEmail : user.email;
+  const staffReplyUrl = family
+    ? buildAbsoluteMessageReplyUrl({
+        appBaseUrl,
+        audience: "staff",
+        replyToMessageId: created.id,
+        familyId: family.id,
+        subject,
+      })
+    : null;
+  const parentReplyUrl = family
+    ? buildAbsoluteMessageReplyUrl({
+        appBaseUrl,
+        audience: "parent",
+        replyToMessageId: created.id,
+        familyId: family.id,
+        subject,
+      })
+    : null;
+  const emailReplyUrl = senderIsParent ? staffReplyUrl : parentReplyUrl;
   const deliveryRecipients = family
     ? senderIsParent
-      ? leadershipNotificationDeliveryRecipients(directors)
+      ? leadershipNotificationDeliveryRecipients(staffNotificationUsers)
       : familyNotificationDeliveryRecipients(family)
     : [];
   const statusCallbackUrl = sendSmsCopy && deliveryRecipients.length ? twilioStatusCallbackUrl(request) : null;
@@ -1047,12 +1126,12 @@ async function POSTHandler(request: NextRequest) {
         messageId: created.id,
         type: "messages",
         title: emailSubject,
-        body: message,
+        body: emailReplyUrl ? appendInAppMessageReplyInstructions(message, emailReplyUrl) : message,
         recipients: deliveryRecipients,
         preferences: notificationPreferenceRows,
         emailRequested: sendEmailCopy,
         smsRequested: sendSmsCopy,
-        replyTo: emailReplyTo,
+        replyTo: null,
         fromName: "The BEE Suite",
         statusCallbackUrl,
         emailPurpose: "communication_email",

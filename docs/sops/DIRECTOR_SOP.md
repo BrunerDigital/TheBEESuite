@@ -4,6 +4,12 @@ Last updated: June 26, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
+## Visual Overview
+
+![Director dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png)
+
+Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
+
 ## Purpose
 
 This SOP explains how directors should use The BEE Suite for the workflows that affect live school operations: families, children, classrooms, teachers, attendance, parent portal access, billing, documents, incidents, communications, and support escalation.

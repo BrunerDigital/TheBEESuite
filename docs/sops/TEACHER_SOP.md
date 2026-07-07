@@ -4,6 +4,12 @@ Last updated: June 26, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 
+## Visual Overview
+
+![Teacher mobile workflow](../../screenshots/teacher-mobile.png)
+
+Use `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` for staff kiosk clock-in/out details.
+
 ## Purpose
 
 This SOP explains what teachers should do in The BEE Suite each day and when they should stop and ask a director for help.
@@ -130,4 +136,3 @@ Stop before continuing if:
 - A photo includes a child with media restrictions.
 - The tablet shows repeated sync errors.
 - You accidentally entered information on the wrong child.
-

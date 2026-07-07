@@ -36,6 +36,9 @@ export default function SupportPage() {
               <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/parents" />}>
                 Parent login
               </Button>
+              <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/resources" />}>
+                Guides
+              </Button>
               <Button nativeButton={false} render={<Link href="/privacy" />}>
                 Privacy
               </Button>
@@ -62,6 +65,9 @@ export default function SupportPage() {
                 <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/parents" />}>
                   Open parent app
                   <ArrowRight data-icon="inline-end" />
+                </Button>
+                <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/resources" />}>
+                  SOPs and guides
                 </Button>
               </div>
             </div>

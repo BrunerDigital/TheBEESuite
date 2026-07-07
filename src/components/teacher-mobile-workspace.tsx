@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import { UserAvatar } from "@/components/user-avatar";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
@@ -37,9 +39,30 @@ type ChildOption = {
 type Props = {
   roster: ChildOption[];
   teacherName: string;
+  teacherProfile?: TeacherProfileSetup | null;
+  classroomOptions?: TeacherClassroomOption[];
   kioskAccess?: TeacherKioskAccess | null;
   classroomRatios?: ClassroomRatioSnapshot[];
   teacherChecklistCompletedIds?: string[];
+};
+
+type TeacherProfileSetup = {
+  name: string;
+  loginEmail: string;
+  contactEmail: string | null;
+  phone: string | null;
+  title: string;
+  centerId: string | null;
+  centerName: string;
+  classroomId: string | null;
+  hasStaffKioskCode: boolean;
+  profilePhotoUrl?: string | null;
+};
+
+type TeacherClassroomOption = {
+  id: string;
+  name: string;
+  ageGroup: string;
 };
 
 type TeacherKioskAccess = {
@@ -221,8 +244,24 @@ function createActivityDraft(): ActivityDraft {
   return { id: draftId("activity"), title: "", notes: "" };
 }
 
-export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null, classroomRatios = [], teacherChecklistCompletedIds = [] }: Props) {
+export function TeacherMobileWorkspace({
+  roster,
+  teacherName,
+  teacherProfile = null,
+  classroomOptions = [],
+  kioskAccess = null,
+  classroomRatios = [],
+  teacherChecklistCompletedIds = [],
+}: Props) {
+  const router = useRouter();
   const firstChild = roster[0]?.id ?? "";
+  const [profileName, setProfileName] = useState(teacherProfile?.name ?? teacherName);
+  const [profileContactEmail, setProfileContactEmail] = useState(teacherProfile?.contactEmail ?? "");
+  const [profilePhone, setProfilePhone] = useState(teacherProfile?.phone ?? "");
+  const [profileTitle, setProfileTitle] = useState(teacherProfile?.title ?? "Teacher");
+  const [profileClassroomId, setProfileClassroomId] = useState(teacherProfile?.classroomId ?? "none");
+  const [profileKioskPin, setProfileKioskPin] = useState("");
+  const [hasStaffKioskCode, setHasStaffKioskCode] = useState(Boolean(teacherProfile?.hasStaffKioskCode));
   const [selectedChildId, setSelectedChildId] = useState(firstChild);
   const [selectedDailyReportChildIds, setSelectedDailyReportChildIds] = useState<string[]>(() => firstChild ? [firstChild] : []);
   const [attendanceOverrides, setAttendanceOverrides] = useState<Record<string, AttendanceSnapshot>>({});
@@ -269,6 +308,14 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
 
     return Object.values(grouped);
   }, [roster]);
+  const selectedProfileClassroom = classroomOptions.find((classroom) => classroom.id === profileClassroomId);
+  const profileReady = Boolean(
+    profileName.trim() &&
+    teacherProfile?.centerId &&
+    profileTitle.trim() &&
+    profileClassroomId !== "none" &&
+    hasStaffKioskCode,
+  );
 
   useEffect(() => {
     async function syncStoredQueue() {
@@ -463,6 +510,57 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
   function showError(next: string) {
     setStatus("");
     setError(next);
+  }
+
+  function saveTeacherProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      showError("Reconnect this tablet before saving teacher profile setup.");
+      return;
+    }
+    startTransition(async () => {
+      setStatus("");
+      setError("");
+      const response = await fetch("/api/teacher/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName,
+          contactEmail: profileContactEmail,
+          phone: profilePhone,
+          title: profileTitle,
+          classroomId: profileClassroomId === "none" ? null : profileClassroomId,
+          staffKioskPin: profileKioskPin || null,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        profile?: {
+          name?: string;
+          contactEmail?: string | null;
+          phone?: string | null;
+          title?: string;
+          classroomId?: string | null;
+          hasStaffKioskCode?: boolean;
+        };
+      } | null;
+      if (!response.ok) {
+        showError(json?.error || "Teacher profile setup could not be saved.");
+        return;
+      }
+
+      if (json?.profile) {
+        setProfileName(json.profile.name ?? profileName);
+        setProfileContactEmail(json.profile.contactEmail ?? "");
+        setProfilePhone(json.profile.phone ?? "");
+        setProfileTitle(json.profile.title ?? profileTitle);
+        setProfileClassroomId(json.profile.classroomId ?? "none");
+        setHasStaffKioskCode(Boolean(json.profile.hasStaffKioskCode));
+      }
+      setProfileKioskPin("");
+      showStatus("Teacher profile setup saved.");
+      router.refresh();
+    });
   }
 
   function updateMeal(id: string, patch: Partial<MealDraft>) {
@@ -759,6 +857,135 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
+
+      <Card id="teacher-profile-setup" className="glass-panel scroll-mt-28">
+        <CardHeader>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <UserAvatar name={profileName || teacherName} src={teacherProfile?.profilePhotoUrl} size="lg" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CardTitle>Profile setup</CardTitle>
+                  <Badge variant={profileReady ? "default" : "outline"}>
+                    {profileReady ? "Ready" : "Needs setup"}
+                  </Badge>
+                </div>
+                <CardDescription className="mt-2">
+                  Confirm the teacher profile used for classroom access, parent updates, staff clock-in, and coverage.
+                </CardDescription>
+              </div>
+            </div>
+            <Badge variant={hasStaffKioskCode ? "default" : "destructive"}>
+              {hasStaffKioskCode ? "Staff code ready" : "Staff code missing"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-4" onSubmit={saveTeacherProfile}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-name">Full name</Label>
+                <Input
+                  id="teacher-profile-name"
+                  value={profileName}
+                  onChange={(event) => setProfileName(event.target.value)}
+                  className="h-11"
+                  autoComplete="name"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-contact-email">Contact email</Label>
+                <Input
+                  id="teacher-profile-contact-email"
+                  value={profileContactEmail}
+                  onChange={(event) => setProfileContactEmail(event.target.value)}
+                  className="h-11"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Work or personal email"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-phone">Phone</Label>
+                <Input
+                  id="teacher-profile-phone"
+                  value={profilePhone}
+                  onChange={(event) => setProfilePhone(event.target.value)}
+                  className="h-11"
+                  type="tel"
+                  autoComplete="tel"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-title">Title</Label>
+                <Input
+                  id="teacher-profile-title"
+                  value={profileTitle}
+                  onChange={(event) => setProfileTitle(event.target.value)}
+                  className="h-11"
+                  placeholder="Lead Teacher"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-classroom">Classroom</Label>
+                <Select value={profileClassroomId} onValueChange={(value) => setProfileClassroomId(value || "none")}>
+                  <SelectTrigger id="teacher-profile-classroom" className="h-11 w-full">
+                    <SelectValue placeholder="Choose a classroom" />
+                  </SelectTrigger>
+                  <SelectContent align="start" className="w-[min(28rem,calc(100vw-2rem))]">
+                    <SelectItem value="none">Director will assign later</SelectItem>
+                    {classroomOptions.map((classroom) => (
+                      <SelectItem key={classroom.id} value={classroom.id}>
+                        {classroom.name} - {classroom.ageGroup}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProfileClassroom ? (
+                  <p className="text-xs text-muted-foreground">
+                    Roster access will use {selectedProfileClassroom.name}.
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="teacher-profile-kiosk-pin">Staff kiosk code</Label>
+                <Input
+                  id="teacher-profile-kiosk-pin"
+                  value={profileKioskPin}
+                  onChange={(event) => setProfileKioskPin(event.target.value.replace(/\D/g, "").slice(0, 4))}
+                  className="h-11"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  placeholder={hasStaffKioskCode ? "Leave blank to keep current code" : "Choose a 4 digit code"}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3 rounded-xl border bg-background/40 p-3 text-sm md:grid-cols-3">
+              <div>
+                <div className="text-xs text-muted-foreground">Teacher login</div>
+                <div className="truncate font-medium">{teacherProfile?.loginEmail ?? "Not available"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">School</div>
+                <div className="truncate font-medium">{teacherProfile?.centerName ?? "Not assigned"}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Role</div>
+                <div className="font-medium">Teacher</div>
+              </div>
+            </div>
+
+            <Button type="submit" className="h-11 w-full sm:w-fit" disabled={isPending || !teacherProfile?.centerId}>
+              <Save data-icon="inline-start" />
+              Save Profile Setup
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
       {selectedCustodyWarning ? (
         <Alert variant="destructive">
           <ShieldAlert className="size-4" />
@@ -789,6 +1016,7 @@ export function TeacherMobileWorkspace({ roster, teacherName, kioskAccess = null
       <nav className="sticky top-[4.75rem] z-10 -mx-1 overflow-x-auto rounded-xl border bg-background/95 p-2 shadow-sm backdrop-blur lg:top-20">
         <div className="flex min-w-max gap-2">
           {[
+            ["Profile", "#teacher-profile-setup"],
             ["Roster", "#teacher-roster"],
             ["Attendance", "#teacher-attendance"],
             ["Daily report", "#teacher-daily-report"],

@@ -1,18 +1,22 @@
 import "./load-env";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
 import { prisma } from "@/lib/prisma";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 type CheckStatus = "pass" | "warn" | "fail";
+type ReadinessStatus = "ready" | "ready_with_warnings" | "blocked";
 
-type Check = {
+export type Check = {
   status: CheckStatus;
   label: string;
   detail: string;
 };
 
-type CenterRolloutGap = {
+export type CenterRolloutGap = {
   centerId: string;
   label: string;
   locationId: string;
@@ -28,6 +32,39 @@ type CenterRolloutGap = {
   gaps: string[];
 };
 
+type ChildClassroomMismatch = {
+  id: string;
+  fullName: string;
+  familyCenterId: string | null;
+  classroomCenterId: string | null;
+};
+
+export type PilotReadinessArgs = {
+  all: boolean;
+  json: boolean;
+  failOnWarn: boolean;
+  outputPath?: string;
+};
+
+type PilotReadinessReport = {
+  generatedAt: string;
+  summary: {
+    status: ReadinessStatus;
+    label: string;
+    failures: number;
+    warnings: number;
+    rolloutGapCount: number;
+    childClassroomMismatchCount: number;
+  };
+  checks: {
+    configuration: Check[];
+    database: Check[];
+    pilotData: Check[];
+  };
+  rolloutGaps: CenterRolloutGap[];
+  childClassroomMismatches: ChildClassroomMismatch[];
+};
+
 function check(status: CheckStatus, label: string, detail: string): Check {
   return { status, label, detail };
 }
@@ -38,6 +75,46 @@ function envPresent(name: string) {
 
 const DEMO_TENANT_SLUGS = ["bee-suite-demo", "bee-suite-isolated-demo"];
 
+export function parsePilotReadinessArgs(argv = process.argv.slice(2)): PilotReadinessArgs {
+  const args: PilotReadinessArgs = { all: false, json: false, failOnWarn: false };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--all") {
+      args.all = true;
+    } else if (arg === "--json") {
+      args.json = true;
+    } else if (arg === "--fail-on-warn") {
+      args.failOnWarn = true;
+    } else if (arg === "--output" || arg === "-o") {
+      const value = argv[index + 1]?.trim();
+      if (!value || value.startsWith("-")) throw new Error(`${arg} requires a file path.`);
+      args.outputPath = value;
+      index += 1;
+    } else if (arg.startsWith("--output=")) {
+      const value = arg.slice("--output=".length).trim();
+      if (!value) throw new Error("--output requires a file path.");
+      args.outputPath = value;
+    } else {
+      throw new Error(`Unknown pilot readiness option: ${arg}`);
+    }
+  }
+
+  return args;
+}
+
+export function readinessStatus(failures: number, warnings: number): ReadinessStatus {
+  if (failures > 0) return "blocked";
+  if (warnings > 0) return "ready_with_warnings";
+  return "ready";
+}
+
+function readinessLabel(status: ReadinessStatus) {
+  if (status === "blocked") return "BLOCKED";
+  if (status === "ready_with_warnings") return "READY WITH WARNINGS";
+  return "READY";
+}
+
 function printSection(title: string, checks: Check[]) {
   console.log(`\n${title}`);
   for (const item of checks) {
@@ -46,9 +123,9 @@ function printSection(title: string, checks: Check[]) {
   }
 }
 
-function printRolloutGaps(rows: CenterRolloutGap[]) {
+function printRolloutGaps(rows: CenterRolloutGap[], all: boolean) {
   const rowsWithGaps = rows.filter((row) => row.gaps.length);
-  const limit = process.argv.includes("--all") ? rowsWithGaps.length : 20;
+  const limit = all ? rowsWithGaps.length : 20;
   console.log("\nPer-School Rollout Gaps");
   if (!rowsWithGaps.length) {
     console.log("- PASS: Every active center has the core classroom, staff, family, parent-login, PIN, and director-access setup signals.");
@@ -67,7 +144,69 @@ function printRolloutGaps(rows: CenterRolloutGap[]) {
   }
 }
 
+function buildReport(input: {
+  configChecks: Check[];
+  databaseChecks: Check[];
+  dataChecks: Check[];
+  rolloutGapRows: CenterRolloutGap[];
+  childClassroomMismatches: ChildClassroomMismatch[];
+}): PilotReadinessReport {
+  const allChecks = [...input.configChecks, ...input.databaseChecks, ...input.dataChecks];
+  const failures = allChecks.filter((item) => item.status === "fail").length;
+  const warnings = allChecks.filter((item) => item.status === "warn").length;
+  const status = readinessStatus(failures, warnings);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    summary: {
+      status,
+      label: readinessLabel(status),
+      failures,
+      warnings,
+      rolloutGapCount: input.rolloutGapRows.filter((row) => row.gaps.length).length,
+      childClassroomMismatchCount: input.childClassroomMismatches.length,
+    },
+    checks: {
+      configuration: input.configChecks,
+      database: input.databaseChecks,
+      pilotData: input.dataChecks,
+    },
+    rolloutGaps: input.rolloutGapRows,
+    childClassroomMismatches: input.childClassroomMismatches,
+  };
+}
+
+function printReport(report: PilotReadinessReport, args: PilotReadinessArgs) {
+  if (args.json) {
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  printSection("Configuration", report.checks.configuration);
+  printSection("Database", report.checks.database);
+  if (report.checks.pilotData.length) printSection("Pilot Data", report.checks.pilotData);
+  printRolloutGaps(report.rolloutGaps, args.all);
+
+  if (report.childClassroomMismatches.length) {
+    console.log("\nChild/classroom mismatches");
+    for (const child of report.childClassroomMismatches.slice(0, 10)) {
+      console.log(`- ${child.id}: ${child.fullName}`);
+    }
+  }
+
+  console.log(`\nPilot readiness result: ${report.summary.label}`);
+  console.log(`Failures: ${report.summary.failures}; warnings: ${report.summary.warnings}.`);
+}
+
+function writeReport(report: PilotReadinessReport, outputPath: string) {
+  const absolutePath = resolve(outputPath);
+  mkdirSync(dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  return absolutePath;
+}
+
 async function main() {
+  const args = parsePilotReadinessArgs();
   const configChecks: Check[] = [
     check(
       hasDatabaseConfig(process.env) ? "pass" : "fail",
@@ -91,8 +230,18 @@ async function main() {
     databaseChecks.push(check("pass", "Database connectivity", "Prisma can query the configured database."));
   } catch (error) {
     databaseChecks.push(check("fail", "Database connectivity", error instanceof Error ? error.message : "Database query failed."));
-    printSection("Configuration", configChecks);
-    printSection("Database", databaseChecks);
+    const report = buildReport({
+      configChecks,
+      databaseChecks,
+      dataChecks,
+      rolloutGapRows: [],
+      childClassroomMismatches: [],
+    });
+    printReport(report, args);
+    if (args.outputPath) {
+      const absolutePath = writeReport(report, args.outputPath);
+      if (!args.json) console.log(`Wrote readiness report to ${absolutePath}`);
+    }
     process.exitCode = 1;
     return;
   }
@@ -143,9 +292,14 @@ async function main() {
       classroom: { select: { centerId: true } },
     },
   });
-  const childClassroomMismatches = childClassroomPairs.filter((child) =>
-    child.family.centerId && child.classroom?.centerId && child.family.centerId !== child.classroom.centerId,
-  );
+  const childClassroomMismatches = childClassroomPairs
+    .filter((child) => child.family.centerId && child.classroom?.centerId && child.family.centerId !== child.classroom.centerId)
+    .map((child) => ({
+      id: child.id,
+      fullName: child.fullName,
+      familyCenterId: child.family.centerId,
+      classroomCenterId: child.classroom?.centerId ?? null,
+    }));
 
   const [
     rolloutCenters,
@@ -288,30 +442,30 @@ async function main() {
     check(mediaReviewQueue === 0 ? "pass" : "warn", "Parent media review", `${mediaReviewQueue} photo(s) are waiting for permission review.`),
   ];
 
-  printSection("Configuration", configChecks);
-  printSection("Database", databaseChecks);
-  printSection("Pilot Data", dataChecks);
-  printRolloutGaps(rolloutGapRows);
-
-  if (childClassroomMismatches.length) {
-    console.log("\nChild/classroom mismatches");
-    for (const child of childClassroomMismatches.slice(0, 10)) {
-      console.log(`- ${child.id}: ${child.fullName}`);
-    }
-  }
-
   const failures = [...configChecks, ...databaseChecks, ...dataChecks].filter((item) => item.status === "fail");
   const warnings = [...configChecks, ...databaseChecks, ...dataChecks].filter((item) => item.status === "warn");
-  console.log(`\nPilot readiness result: ${failures.length ? "BLOCKED" : warnings.length ? "READY WITH WARNINGS" : "READY"}`);
-  console.log(`Failures: ${failures.length}; warnings: ${warnings.length}.`);
-  if (failures.length) process.exitCode = 1;
+  const report = buildReport({
+    configChecks,
+    databaseChecks,
+    dataChecks,
+    rolloutGapRows,
+    childClassroomMismatches,
+  });
+  printReport(report, args);
+  if (args.outputPath) {
+    const absolutePath = writeReport(report, args.outputPath);
+    if (!args.json) console.log(`Wrote readiness report to ${absolutePath}`);
+  }
+  if (failures.length || (args.failOnWarn && warnings.length)) process.exitCode = 1;
 }
 
-main()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  main()
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    })
+    .finally(async () => {
+      await prisma.$disconnect();
+    });
+}

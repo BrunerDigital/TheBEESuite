@@ -68,7 +68,7 @@ Status legend:
 
 ## Needs Business Or Vendor Input
 
-- Written approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for card/ACH processing recovery, refunds, disputes, and debit/prepaid handling.
+- Written approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for card processing recovery, refunds, disputes, and debit/prepaid handling. ACH and instant bank remain parent-fee-free.
 - Stripe connected account onboarding for every payout owner before live parent payments at that school.
 - SendGrid/Twilio sender identities, opt-in language, SMS compliance rules, and emergency messaging expectations.
 - State-by-state licensing, ratio, medication, document, meal/CACFP, and subsidy reporting requirements.

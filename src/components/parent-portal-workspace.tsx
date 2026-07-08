@@ -359,7 +359,8 @@ function scheduleSummary(value: unknown) {
 }
 
 function estimatedAchRecovery(cents: number) {
-  return Math.min(Math.round(cents * 0.008), 500);
+  void cents;
+  return 0;
 }
 
 function estimatedCardRecovery(cents: number) {

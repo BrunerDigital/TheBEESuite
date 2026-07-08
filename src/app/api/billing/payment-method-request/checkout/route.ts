@@ -220,9 +220,6 @@ async function POSTHandler(request: NextRequest) {
       { status: 400 },
     );
   }
-  const effectivePaymentMethodCategory =
-    usesSpecificFeePolicy && !paymentMethodConfigurationId ? "default" : requestedPaymentMethodCategory;
-
   const billingAccountFields = jsonRecord(billingAccount.customFields);
   let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);
   if (!stripeCustomerId) {
@@ -298,7 +295,7 @@ async function POSTHandler(request: NextRequest) {
     brandName: center.organization.brand?.name,
   });
   const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
-    paymentMethodCategory: effectivePaymentMethodCategory,
+    paymentMethodCategory: requestedPaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
   });
   const payment = await prisma.payment.create({

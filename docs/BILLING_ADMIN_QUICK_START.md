@@ -9,7 +9,7 @@ This guide is for school billing users, directors who handle billing, and admini
 Do not enable or promote live parent payments for a school until all of the following are complete:
 
 1. Stripe connected account onboarding is complete for the correct school or payout owner.
-2. Payment processing recovery policy, ACH cap, card recovery language, debit/prepaid handling, refunds, disputes, and parent-facing disclosures are approved by the school/legal/accounting owner.
+2. Payment processing recovery policy, card recovery language, debit/prepaid handling, refunds, disputes, and parent-facing disclosures are approved by the school/legal/accounting owner. ACH and instant bank remain parent-fee-free.
 3. Tuition plans, fees, discounts, subsidy rules, invoice cadence, ledger balances, and family billing accounts are validated against school records.
 4. At least one billing smoke test has passed for the school using approved test data or approved live pilot data.
 5. Support ownership is documented for failed payments, parent questions, refunds, disputes, and payout issues.

@@ -328,14 +328,7 @@ function isInvalidPaymentMethodTypeError(json: unknown) {
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
   if (!isStripeParentProcessingRecoveryApproved()) return 0;
 
-  if (paymentMethodCategory === "ach") {
-    return feeFromParts(
-      amountCents,
-      basisPointsEnv("STRIPE_ACH_PROCESSING_RECOVERY_BPS"),
-      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS"),
-      nonNegativeIntEnv("STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS"),
-    );
-  }
+  if (paymentMethodCategory === "ach" || paymentMethodCategory === "link_bank") return 0;
 
   if (paymentMethodCategory === "card") {
     const bps = basisPointsEnv("STRIPE_CARD_PROCESSING_RECOVERY_BPS", 290);
@@ -345,15 +338,6 @@ export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMe
       return grossedUpFee(amountCents, bps, fixedCents, maxCents);
     }
     return feeFromParts(amountCents, bps, fixedCents, maxCents);
-  }
-
-  if (paymentMethodCategory === "link_bank") {
-    return grossedUpFee(
-      amountCents,
-      basisPointsEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_BPS", 260),
-      nonNegativeIntEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_FIXED_CENTS", 30),
-      nonNegativeIntEnv("STRIPE_LINK_BANK_PROCESSING_RECOVERY_MAX_CENTS"),
-    );
   }
 
   return getStripeParentSurchargeAmount(amountCents);

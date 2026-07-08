@@ -298,8 +298,6 @@ async function POSTHandler(request: NextRequest) {
       { status: 400 },
     );
   }
-  const effectivePaymentMethodCategory =
-    method !== "saved_method" && usesSpecificFeePolicy && !paymentMethodConfigurationId ? "default" : requestedPaymentMethodCategory;
   const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
     tenantSlug: center.organization.tenant.slug,
     tenantName: center.organization.tenant.name,
@@ -307,7 +305,7 @@ async function POSTHandler(request: NextRequest) {
     brandName: center.organization.brand?.name,
   });
   const amounts = getStripeCheckoutAmounts(amountCents, {
-    paymentMethodCategory: effectivePaymentMethodCategory,
+    paymentMethodCategory: requestedPaymentMethodCategory,
     waiveBeeSuitePaymentOperationsFee,
   });
 

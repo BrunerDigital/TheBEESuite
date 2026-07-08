@@ -40,7 +40,7 @@ A school is not considered fully live until all of these are true:
 - [ ] Confirm every ProCare field used by schools is mapped, transformed, or intentionally excluded.
 - [ ] Replace remaining demo-login classroom, family, parent, and teacher fallbacks with real imported school data.
 - [ ] Complete Stripe connected account onboarding for every school or payout owner before enabling live parent checkout.
-- [ ] Complete legal/accounting review of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, including processing recovery, ACH cap, refunds, disputes, debit/prepaid handling, and parent-facing disclosures.
+- [ ] Complete legal/accounting review of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, including card processing recovery, refunds, disputes, debit/prepaid handling, and parent-facing disclosures. ACH and instant bank remain parent-fee-free.
 - [ ] Run a formal Supabase advisor/security review after the latest schema migrations.
 - [ ] Add production error monitoring and uptime monitoring.
 - [ ] Run full role-by-role credentialed production smoke tests after the account/data setup pass.

@@ -17,9 +17,6 @@ STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false
 STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true
-STRIPE_ACH_PROCESSING_RECOVERY_BPS=80
-STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS=0
-STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS=500
 STRIPE_CARD_PROCESSING_RECOVERY_BPS=290
 STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS=30
 STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP=true
@@ -43,12 +40,12 @@ STRIPE_CHECKOUT_ON_BEHALF_OF=false
 
 For live tuition, keep the global application fee at `0` and use method-specific processing recovery only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`:
 
-- ACH: 0.8%, capped at $5.
+- ACH and instant bank: no parent-paid processing recovery.
 - Card: 2.9% + $0.30 gross-up.
 - Kid City USA: payment operations fee waived through the waiver env vars above.
 - Future non-waived brands: use `STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS` or `STRIPE_PAYMENT_OPS_FEE_BPS` for the school/brand-side payment operations fee.
 
-Create separate Stripe payment method configurations for ACH and card before enabling method-specific fees. This prevents a parent from opening a low-fee ACH checkout and then paying with a card. Keep card recovery disabled if legal/accounting review or the processor/acquirer setup cannot support debit/prepaid handling.
+Create separate Stripe payment method configurations for ACH and card before enabling card recovery. This prevents a parent from opening a bank checkout and then paying with a card. Keep card recovery disabled if legal/accounting review or the processor/acquirer setup cannot support debit/prepaid handling.
 
 See `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for the final product copy, approval checklist, and source links.
 

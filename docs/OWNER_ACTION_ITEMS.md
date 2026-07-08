@@ -36,7 +36,7 @@ These are the items BrunerDigital cannot safely complete without business approv
 ## Legal, Privacy, And Compliance
 
 - Internal product/security/privacy review is complete in `docs/LEGAL_PRIVACY_SECURITY_REVIEW_2026-06-09.md`; the remaining items below require owner, counsel, accounting, vendor, or production-project approval.
-- Written legal/accounting approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for payment processing recovery, ACH fee cap, card recovery, refund, chargeback, dispute, debit/prepaid, and disclosure language.
+- Written legal/accounting approval of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` for card payment processing recovery, refund, chargeback, dispute, debit/prepaid, and disclosure language. ACH and instant bank remain parent-fee-free.
 - Privacy review for child, guardian, custody, medical, billing, and photo/media data handling.
 - State-specific childcare licensing review before claiming any state-specific workflow support.
 - Approval of data retention, deletion, backup, and incident response policies.

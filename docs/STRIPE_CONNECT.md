@@ -28,9 +28,6 @@ STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false
 STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID=pmc_...
 STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true
-STRIPE_ACH_PROCESSING_RECOVERY_BPS=80
-STRIPE_ACH_PROCESSING_RECOVERY_FIXED_CENTS=0
-STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS=500
 STRIPE_CARD_PROCESSING_RECOVERY_BPS=290
 STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS=30
 STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP=true
@@ -87,9 +84,9 @@ The final product copy, legal/accounting review checklist, and source links live
 
 The preferred tuition model is method-specific processing recovery:
 
-- ACH: parent pays tuition plus `STRIPE_ACH_PROCESSING_RECOVERY_BPS`, capped by `STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS`, only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
+- ACH and instant bank: parent pays tuition only, with no parent-paid processing recovery.
 - Card: parent pays tuition plus grossed-up card processing recovery, only after `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true`.
-- Payment method configurations should be created in Stripe Dashboard and wired into `STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID` and `STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID`. Keep `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` so an ACH-fee checkout cannot accidentally allow card payment methods.
+- Payment method configurations should be created in Stripe Dashboard and wired into `STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID` and `STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID`. Keep `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` so a bank checkout cannot accidentally allow card payment methods.
 - Keep card recovery disabled if the processor/acquirer setup cannot distinguish legally allowed card types from debit/prepaid card payments.
 
 BEE Suite payment operations fees are school/brand-side economics, not an extra parent-paid processing recovery line:
@@ -112,9 +109,9 @@ Example:
 
 ```text
 Invoice tuition: $1,000.00
-ACH parent processing recovery: $5.00
-ACH checkout total: $1,005.00
-Application fee: $5.00 processing recovery + BEE Suite payment operations fee, if not waived
+ACH parent processing recovery: $0.00
+ACH checkout total: $1,000.00
+Application fee: BEE Suite payment operations fee, if not waived
 Family ledger credit: $1,000.00
 
 Credit card parent processing recovery: about $30.18

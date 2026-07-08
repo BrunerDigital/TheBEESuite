@@ -8,7 +8,7 @@ This packet finalizes the product copy, operating assumptions, and launch gate f
 
 - Use `Payment processing recovery` as the parent-facing line-item label.
 - Do not use `convenience fee` or `surcharge` as the default parent-facing label in the app.
-- Keep ACH bank payment positioned as the default low-cost tuition payment option.
+- Keep ACH bank and instant bank payments parent-fee-free.
 - Show any recovery amount as a separate Checkout line before payment.
 - Keep the family ledger tuition amount separate from the recovery amount.
 - Keep BEE Suite payment operations economics school/brand-side, not an undisclosed parent add-on.
@@ -27,7 +27,7 @@ Set it to `true` only after the school/payout owner has approved written policy,
 Parent portal and checkout disclosure:
 
 ```text
-ACH bank payment is the default low-cost tuition payment option. If this school allows card payments, a separate payment processing recovery line may be added before checkout to recover third-party processor and card-network costs. The exact amount is shown before payment, is separate from tuition, and is disabled wherever school policy, card-network rules, or applicable law do not allow it.
+ACH bank and instant bank payments do not include a parent-paid processing recovery. If this school allows card payments, a separate payment processing recovery line may be added before checkout to recover third-party processor and card-network costs. The exact amount is shown before payment, is separate from tuition, and is disabled wherever school policy, card-network rules, or applicable law do not allow it.
 ```
 
 Checkout line item:
@@ -71,7 +71,7 @@ Refunds, failed payments, ACH returns, card disputes, and any refund of payment 
 - `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false` keeps parent-paid recovery at `$0` even if rates are configured.
 - `STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES=true` keeps method-specific Checkout Sessions from mixing low-cost and high-cost payment methods.
 - `STRIPE_PARENT_SURCHARGE_BPS`, `STRIPE_PARENT_SURCHARGE_FIXED_CENTS`, and `STRIPE_PARENT_SURCHARGE_MAX_CENTS` are legacy/global controls and should remain `0` for live tuition unless counsel approves a separate global model.
-- `STRIPE_ACH_PROCESSING_RECOVERY_BPS=80` and `STRIPE_ACH_PROCESSING_RECOVERY_MAX_CENTS=500` match the current ACH recovery policy, but remain inactive until the approval gate is enabled.
+- ACH and instant bank checkout code returns `$0` parent-paid processing recovery regardless of legacy ACH or link-bank recovery environment variables.
 - `STRIPE_CARD_PROCESSING_RECOVERY_BPS=290`, `STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS=30`, and `STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP=true` match the current card recovery policy, but remain inactive until the approval gate is enabled.
 - Checkout metadata stores `feeDisclosureVersion=payment-processing-recovery-2026-06-09`.
 

@@ -275,7 +275,7 @@ Status legend:
 - [x] Stripe webhook route exists.
 - [x] Billing guardrails and idempotency tests exist.
 - [x] Schema covers billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, and subscription placeholders.
-- [x] Payment fee strategy has been defined: ACH recovery cap, card processing recovery, BEE Suite monthly/payment operations fees, and Kid City USA pilot waiver.
+- [x] Payment fee strategy has been defined: ACH/instant bank parent-fee-free, card processing recovery, BEE Suite monthly/payment operations fees, and Kid City USA pilot waiver.
 - [x] Complete parent tuition payment UI in parent portal.
 - [x] Complete school payout onboarding UI for Stripe Connect.
 - [x] Finalize payment processing recovery disclosure packet and code-level legal/accounting approval gate.

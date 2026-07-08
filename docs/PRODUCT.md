@@ -1,12 +1,13 @@
 # Product Notes
 
-Last updated: July 1, 2026
+Last updated: July 8, 2026
 
 ## Production-Ready in This v1
 
 - Next.js App Router, TypeScript, Tailwind CSS, and shadcn/ui component foundation.
 - Dark-mode-first premium SaaS interface with responsive sidebar, command/search chrome, route-driven modules, and mobile-friendly layout.
-- Executive, director/location, teacher, billing, and parent-facing portal surfaces with role-aware navigation and scoped data access foundations.
+- Role-specific login surfaces at `/parents`, `/teachers`, `/directors`, and `/executives`, with automatic routing into parent, teacher, school-operations, or corporate workspaces.
+- Executive, director/location, teacher, billing, and parent-facing portal surfaces with role-aware navigation and scoped data access enforcement.
 - Supabase Auth/session-cookie login, forgot/reset password, forced first-login password reset, parent invitation/password setup, teacher login generation, login rate limiting, session revocation, and device-session controls.
 - PostgreSQL-compatible Prisma schema covering tenancy, CRM, enrollment, families, children, staff, billing, communications, forms, documents, attendance, daily reports, incidents, compliance, marketing, automations, reviews, notifications, audit logs, integrations, white-label settings, and AI.
 - Tenant, brand, owner-group, center, classroom, user, access-grant, brand-asset, brand-customization, feature-flag, DNS-verification request, and support-access audit foundations.
@@ -15,10 +16,10 @@ Last updated: July 1, 2026
 - ProCare import page/API with unencrypted CSV support, batch/row tracking, family/guardian/child/classroom/staff/invoice/balance/attendance import foundations, preview/diff, rollback/export backup, duplicate matching controls, staff login generation, and migration runbook.
 - FTE submission/review/correction/approval, CSV export, executive manual edit table, historical trend filters, missing-report tracking, notification escalation, cron reminders, and Google Sheet backup structure.
 - Kiosk lookup/check foundations with guardian PINs, check-in/check-out handling, attendance logs, pickup verification warnings, staff kiosk support, and classroom attendance workflows.
-- Teacher portal foundations for roster, attendance, daily reports, incidents, media, ratio warnings, staff assignment actions, partial save, and offline/poor-connectivity guidance.
-- Parent portal foundations for balances, tuition payment UI, daily reports, photos/media review, documents, messages, incidents, contact update requests, notification preferences, and guardian account invitations.
-- Billing foundations for billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, subsidy/agency tracking, Stripe Connect onboarding/status/refresh, Checkout, webhooks, payment-method setup/requests, autopay status, recurring tuition scheduler, payment reminders, dunning, reconciliation reports, terminal store checkout, and Kid City software invoices.
-- Communications foundations for parent/director/teacher messaging, announcements, campaigns, templates/merge fields, notification preferences, SendGrid email delivery paths, Twilio SMS delivery/status foundations, inbound SMS handling, and delivery attempt logging.
+- Teacher portal foundations for roster, attendance, daily reports, incidents, media, ratio warnings, staff assignment actions, teacher profile/photo setup, partial save, and offline/poor-connectivity guidance.
+- Parent portal foundations for balances, tuition payment UI, daily reports, photos/media review, documents, messages and in-app replies, incidents, contact update requests, notification preferences, and guardian account invitations.
+- Billing foundations for billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, subsidy/agency tracking, Stripe Connect onboarding/status/refresh, Checkout, webhooks, payment-method setup/requests, autopay status, Friday recurring tuition scheduler, payment reminders, dunning, reconciliation reports, terminal store checkout, and Kid City software invoices.
+- Communications foundations for parent/director/teacher messaging, director oversight of family-school threads, announcements, campaigns, templates/merge fields, notification preferences, SendGrid email delivery paths, Twilio SMS delivery/status foundations, inbound SMS handling, and delivery attempt logging.
 - Compliance/operations foundations for documents, expirations, medication logs, emergency drills, licensing records, tasks, staff records, payroll/time-card reporting foundations, audit logs, exports, and readiness dashboards.
 - Guardrail and quality foundations including lint/typecheck/build/test scripts, Node tests for critical workflows, Playwright smoke-test scripts, pilot readiness check, CI workflow, request/response logging with PII-safe redaction, RLS documentation, retention/deletion policy, backup/restore runbook, and legal/privacy/security review notes.
 
@@ -35,6 +36,13 @@ These capabilities have foundations in the app, but should not be treated as bro
 - **Messaging:** verify sender domains, DNS records, SendGrid authentication, Twilio compliance, SMS consent/opt-out language, school notification recipients, and real-family delivery settings.
 - **Security/operations:** rotate any shared secrets, add/confirm staging, run Supabase advisor/security review after migrations, confirm RLS docs match the current schema, complete a backup restore drill, and add production error/uptime monitoring.
 - **White-label/franchise:** finish actual logo/favicon upload storage and preview flows, custom-domain activation/deployment binding, complete owner-group management views, and granular permission editing before broad franchise/customer rollout.
+
+## Current Rollout Notes
+
+- Kokomo is live production in The BEE Suite and must not be reset, reseeded, overwritten, rolled back, or bulk-reimported.
+- Longmont is the preferred first school for ProCare import and payout onboarding testing in the current corporate rollout wave.
+- `corpschools@kidcityusa.com` is expected to manage payout setup across the corporate-owned schools from one login rather than logging into every school profile.
+- Production Stripe Accounts v2 calls should use `STRIPE_ACCOUNTS_V2_API_VERSION=2026-06-24.dahlia`.
 
 ## Known Limitations
 

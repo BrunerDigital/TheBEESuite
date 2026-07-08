@@ -1,139 +1,146 @@
 # The BEE Suite
 
-Childcare & Preschool CRM/Operations Platform
+Childcare CRM, school operations, billing, parent portal, teacher portal, and executive reporting platform.
 
-Last refreshed: July 1, 2026
+Last refreshed: July 8, 2026
 
-The BEE Suite is a white-label childcare CRM and operations command center for leads, tours, enrollment, families, children, classrooms, staff workflows, billing, parent communication, compliance-ready documentation, reporting, and human-reviewed AI assistance.
+The BEE Suite is a multi-tenant, white-label operating system for childcare brands and schools. It supports inquiry intake, enrollment, families, children, classrooms, staffing, tuition billing, Stripe Connect payout setup, parent communications, documents, compliance workflows, FTE reporting, role-specific portals, and human-reviewed AI assistance.
 
-## Built
+## Current State
 
-- Next.js App Router, TypeScript, Tailwind CSS, shadcn/ui, Recharts, Prisma.
-- Premium dark-mode-first SaaS UI with light-mode tokens.
-- Executive dashboard plus route-driven surfaces for all 40 requested pages.
-- PostgreSQL-compatible schema and realistic seed script.
-- Mock integration structure for Stripe, Twilio, SendGrid/Mailgun, Google Calendar, Google Business Profile, Meta Lead Ads, OpenAI, Zapier/webhooks, signatures, and cloud storage.
-- Documentation for architecture, deployment, Supabase, Prisma, go-live, AI guardrails, privacy, role SOPs, and current getting-started graphics.
+- Production app: `https://thebeesuite.io`
+- Hosting: Vercel project `the-bee-suite`
+- Database/Auth/Storage: Supabase-backed Prisma application
+- Payments: Stripe Checkout and Connect foundations with school payout onboarding and autopay billing workflows
+- Communication: in-app messaging, SendGrid email paths, Twilio SMS foundations, notification preferences, and delivery logging
+- Rollout focus: Kid City USA corporate schools, with Kokomo treated as live production data and Longmont used for import/payout testing
 
-## File Tree
+## Main User Flows
+
+- Parents: `/parents` for parent login, `/parent-portal` for family account access, `/parents/setup` and `/parent-portal/setup` for onboarding/setup flows.
+- Teachers: `/teachers` for teacher login and `/teacher-portal` for classroom-safe workflows.
+- Directors: `/directors` for school operations login and `/dashboard`, `/messages`, `/billing-settings`, `/staff`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/fte-reports`, and related school modules.
+- Executives: `/executives` for corporate login, `/multi-location-dashboard`, `/agency-admin`, `/team-permissions`, `/analytics`, `/fte-reports`, and cross-location reporting.
+- Public/support: `/`, `/app`, `/registration`, `/check-in`, `/support`, `/resources`, `/privacy`, `/login`, `/forgot-password`, and `/reset-password`.
+
+Most operating modules are served through `src/app/[slug]/page.tsx` with RBAC and center/family/classroom scoping enforced server-side.
+
+## Tech Stack
+
+- Next.js 16 App Router, React 19, TypeScript, Tailwind CSS, shadcn-style UI primitives, Recharts, and lucide-react.
+- Prisma 6 with Supabase/Postgres.
+- Supabase Auth session-cookie login plus server-side user/access-grant checks.
+- Stripe Checkout, Connect, billing webhooks, payment method setup, autopay/dunning/reminder cron routes, and terminal store checkout.
+- SendGrid/Twilio integration paths for email/SMS and in-app notification records.
+- Playwright-assisted visual capture scripts and Node test coverage for core workflows.
+
+## Repository Layout
 
 ```text
 .
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── DEPLOYMENT.md
-│   └── PRODUCT.md
-├── prisma/
-│   ├── schema.prisma
-│   └── seed.ts
+├── docs/                 Operational docs, SOPs, rollout plans, launch guides, security notes
+├── ios/                  Capacitor iOS parent shell
+├── native/               Static native/PWA shell helpers
+├── output/               Committed launch screenshots, graphics, and printable deliverables
+├── prisma/               Prisma schema, seed data, and migrations config
+├── public/               Brand/public assets
+├── scripts/              Import, rollout, payout, setup, graphics, and validation scripts
 ├── src/
-│   ├── app/
-│   │   ├── [slug]/page.tsx
-│   │   ├── globals.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/
-│   │   ├── app-shell.tsx
-│   │   ├── dashboard.tsx
-│   │   ├── module-page.tsx
-│   │   └── ui/
-│   └── lib/
-│       ├── demo-data.ts
-│       └── utils.ts
-├── .env.example
-├── components.json
-├── package.json
-└── README.md
+│   ├── app/              App Router pages, role portal routes, API routes, cron routes
+│   ├── components/       Workspace panels, forms, dashboards, portal UI, shared UI primitives
+│   └── lib/              Auth, RBAC, billing, communications, import, reporting, Stripe/Supabase helpers
+├── supabase/             Supabase config and SQL migrations
+├── tests/                Node test suite for guardrails and critical workflows
+└── wordpress-avada/      Kid City public inquiry embed snippets
 ```
 
-## Setup
+## Local Setup
 
 ```bash
 npm install
 npm run cloud:link
 npm run cloud:env
-npm run cloud:dev
+npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-For the full machine and cloud setup runbook, see `docs/LOCAL_CLOUD_SETUP.md`.
+Use `.env.example` as the safe template. Do not commit `.env.local`, pulled production env files, SendGrid env files, or machine-specific Supabase/Vercel temp state.
 
-## Database
+For machine setup details, see [docs/LOCAL_CLOUD_SETUP.md](docs/LOCAL_CLOUD_SETUP.md).
 
-Set `DATABASE_URL` in `.env`, then run:
+## Common Commands
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run vercel-build
+npm run cloud:validate
+```
+
+Database and rollout helpers:
 
 ```bash
 npm run db:generate
-npm run db:push
-npm run db:seed
+npm run db:migrate
+npm run pilot:check
+npm run kidcity:ensure-corporate-schools
+npm run kidcity:prepare-school-payouts
 ```
 
-Production CRM, inquiry intake, dashboard, reporting, users, center profiles, and operational pages are backed by the configured database. `src/lib/demo-data.ts` now only supplies static navigation/module metadata and safe fallback labels for setup-oriented pages.
+Production Vercel builds use:
 
-## Routes
+```bash
+npm run vercel-build
+```
 
-Public landing page: `/`
-
-Primary dashboard: `/dashboard`
-
-Auth and setup: `/login`, `/forgot-password`, `/onboarding`
-
-`/onboarding` creates a gated trial workspace with a tenant, brand, organization, owner group, primary center profile, brand-admin user, explicit access grant, setup integrations, audit log, brand customization records, asset placeholders, and center-linked inquiry form embed. The owner sets their own password through Supabase Auth recovery/setup email; live payments stay gated until payout onboarding is complete and reviewed.
-
-Current onboarding graphics: `docs/GETTING_STARTED_GRAPHICS_AND_PLATFORM_REFRESH_2026-07-01.md` and the public landing page graphics gallery.
-
-Product pages include `/multi-location-dashboard`, `/center-dashboard`, `/classroom-dashboard`, `/crm-leads`, `/family-detail`, `/child-profile`, `/enrollment-pipeline`, `/waitlist`, `/tours`, `/calendar`, `/messages`, `/announcements`, `/campaigns`, `/automations`, `/forms`, `/documents`, `/attendance`, `/daily-reports`, `/incident-reports`, `/staff`, `/billing-invoices`, `/payments`, `/compliance`, `/reputation`, `/analytics`, `/ai-command`, `/parent-portal`, `/teacher-portal`, `/agency-admin`, `/white-label`, `/team-permissions`, `/integrations`, `/billing-settings`, `/notifications`, `/audit-logs`, and `/help`.
-
-Executive users manage live locations, owner groups, scoped users, temporary passwords, and archived/reactivated centers from `/agency-admin`. See `docs/EXECUTIVE_ADMIN.md` for the operational workflow.
+That command runs Prisma generate, lint, typecheck, the full Node test suite, and `next build`.
 
 ## Environment Variables
 
-Use `.env.example` as the guide. External services stay gated until explicitly connected:
+Start from `.env.example`. Important production groups:
 
-- `DATABASE_URL`
-- `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-- `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_APPLICATION_FEE_BPS`, `STRIPE_APPLICATION_FEE_FIXED_CENTS`, `STRIPE_PARENT_SURCHARGE_BPS`, `STRIPE_PARENT_SURCHARGE_FIXED_CENTS`
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_BASE_URL`
-- `SENDGRID_API_KEY` or `MAILGUN_API_KEY`
-- `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`
-- `GOOGLE_BUSINESS_PROFILE_CLIENT_ID`
-- `META_LEAD_ADS_ACCESS_TOKEN`
-- `OPENAI_API_KEY`
-- `ZAPIER_WEBHOOK_SECRET`
-- `SIGNATURE_PROVIDER_API_KEY`
-- `CLOUD_STORAGE_BUCKET`
+- App/auth: `APP_URL`, `NEXT_PUBLIC_APP_URL`, `AUTH_SECRET`, `AUTH_PASSWORD_RESET_REDIRECT_URL`
+- Supabase/Postgres: `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- Stripe: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, Connect/payment fee settings, payout settings, and `STRIPE_ACCOUNTS_V2_API_VERSION=2026-06-24.dahlia`
+- Messaging: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, Twilio account/auth/from/webhook settings
+- Operations: `CRON_SECRET`, `OPENAI_API_KEY`, Google Sheets/Calendar credentials where enabled
 
-## Deployment
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/STRIPE_CONNECT.md](docs/STRIPE_CONNECT.md), and [docs/STRIPE_CONNECT_SETUP.md](docs/STRIPE_CONNECT_SETUP.md).
 
-See `docs/DEPLOYMENT.md` for Vercel, Supabase, Prisma, and go-live steps.
+## Data And Rollout Guardrails
 
-## Screenshots / Visual Previews
+- Kokomo is a live production school in The BEE Suite. Do not reset, reseed, overwrite, rollback, or bulk-reimport Kokomo data.
+- Use Longmont, staging, or approved test data for ProCare import and payout onboarding testing.
+- Use import preview/diff, backups, audit logs, and spot checks before inviting parents or changing payment flows.
+- Live parent payments must remain tied to Stripe Connect readiness, webhook reconciliation, school payout readiness, and approved fee disclosures.
 
-The design concept was generated with Image Gen and used as the implementation reference for the premium dark SaaS command center. Run the app locally to preview the executive dashboard and module pages.
+Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.md](docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.md).
 
-## Production-Ready vs Placeholder
+## Documentation Index
 
-Production-ready foundation: app shell, responsive UI, shadcn component system, dashboard visuals, module routes, data model, seed strategy, docs, and environment structure.
+- Product status: [docs/PRODUCT.md](docs/PRODUCT.md)
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- Security/privacy operations: [docs/SECURITY_PRIVACY_OPERATIONS.md](docs/SECURITY_PRIVACY_OPERATIONS.md)
+- ProCare migration: [docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md](docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md)
+- SOP library: [docs/sops/README.md](docs/sops/README.md)
+- Public resources page content: [docs/sops/](docs/sops/)
+- QA/change notes: [docs/qa-codex-change-notes/README.md](docs/qa-codex-change-notes/README.md)
+- App Store packet: [docs/APP_STORE_SUBMISSION_PACKET.md](docs/APP_STORE_SUBMISSION_PACKET.md)
 
-Connected/live foundation: custom auth session flow, server-side role and center scoping, CRM lead creation/editing, Kid City inquiry routing, SendGrid notifications, Google Sheets inquiry backup, Stripe Connect setup flow, parent Checkout session creation, webhook reconciliation, reporting snapshots, and audit logging.
+## Generated Assets
 
-Gated next phase: per-school live Stripe activation and payout onboarding approvals, expanded SMS/push and calendar/review/lead-ad sync rollout, e-signature provider activation, advanced media retention, QR/PIN kiosk scale-out, and jurisdiction-specific licensing exports.
+Committed launch assets live under:
 
-## Security and Privacy Notes
+- `output/playwright/fresh-screenshots-2026-07-07T16-22-06/`
+- `output/playwright/bee-suite-graphics-2026-07-07/`
+- `output/pdf/`
+- `output/printables/`
 
-Tenant data is separated by `Tenant`, then by `Brand`, `Organization`, `OwnerGroup`, and `Center`. `UserAccessGrant` supports tenant-wide executives, brand/franchise admins, multi-location owners, single-center directors, and auditors without mixing unrelated operators. Sensitive child, custody, medical, billing, incident, and compliance data must be role-filtered, audited, and encrypted where appropriate. The UI marks restricted workflows, and the schema includes audit-log and restricted-field foundations. The product provides compliance-ready documentation support only and does not provide legal or licensing advice.
+These are retained as launch deliverables. Local runtime logs, temp files, `.next`, Supabase `.temp`, and pulled env files are ignored.
 
-## AI Guardrails
+## AI And Safety
 
-AI is labeled as suggestions only. Human review is required for sensitive outputs. AI must not make final safety, medical, legal, custody, billing, or compliance decisions.
-
-## Next Priorities
-
-1. Finish per-school production smoke tests and support handoff for the current role dashboards.
-2. Complete Stripe test-mode and live connected-account validation before enabling each school for parent payments.
-3. Expand real-time SMS/push/calendar/review/lead-ad integrations behind tenant approvals.
-4. Harden media retention, e-signature packets, licensing exports, and advanced compliance reporting.
-5. Continue replacing legacy/static product notes with current role-specific launch graphics and SOPs.
-
+Mr. Bee and AI-assisted copy are suggestion tools only. Human review is required for family-facing, safety, medical, custody, billing, legal, licensing, or compliance-sensitive outputs.

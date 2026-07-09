@@ -83,3 +83,26 @@ export function comparePublicKidCityLocations(
     sensitivity: "base",
   });
 }
+
+function publicLocationKey(location: PublicKidCityLocation) {
+  return normalizeCrmLocationId(location.crmLocationId) || clean(location.crmLocationId).toLowerCase();
+}
+
+export function mergePublicKidCityLocations(
+  liveLocations: PublicKidCityLocation[],
+  staticLocations: PublicKidCityLocation[],
+) {
+  const locationsByCrmId = new Map<string, PublicKidCityLocation>();
+
+  for (const location of staticLocations) {
+    const key = publicLocationKey(location);
+    if (key) locationsByCrmId.set(key, location);
+  }
+
+  for (const location of liveLocations) {
+    const key = publicLocationKey(location);
+    if (key) locationsByCrmId.set(key, location);
+  }
+
+  return Array.from(locationsByCrmId.values()).sort(comparePublicKidCityLocations);
+}

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import {
   comparePublicKidCityLocations,
   isActivePublicSchoolCandidate,
+  mergePublicKidCityLocations,
   toPublicKidCityLocation,
   type PublicKidCityLocation,
 } from "@/lib/active-school-locations";
@@ -26,6 +27,15 @@ const responseHeaders = {
 async function loadStaticLocations() {
   const file = await readFile(path.join(process.cwd(), "public", "kidcity-locations.json"), "utf8");
   return JSON.parse(file) as PublicLocationFile;
+}
+
+async function loadStaticLocationsSafely() {
+  try {
+    return await loadStaticLocations();
+  } catch (error) {
+    logOperationalError("public.kidcity_locations.static_lookup_failed", error);
+    return { locations: [] } satisfies PublicLocationFile;
+  }
 }
 
 async function findKidCityTenantId() {
@@ -74,8 +84,10 @@ async function getLiveLocations() {
 
 async function GETHandler() {
   try {
-    const locations = await getLiveLocations();
-    if (locations.length) {
+    const liveLocations = await getLiveLocations();
+    if (liveLocations.length) {
+      const staticLocations = await loadStaticLocationsSafely();
+      const locations = mergePublicKidCityLocations(liveLocations, staticLocations.locations);
       return NextResponse.json({ locations }, { headers: responseHeaders });
     }
   } catch (error) {

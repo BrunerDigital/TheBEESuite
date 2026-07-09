@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   defaultCenterNameFromCrmLocationId,
   isActivePublicSchoolCandidate,
+  mergePublicKidCityLocations,
   normalizeCrmLocationId,
   parseCrmLocationId,
   toPublicKidCityLocation,
@@ -93,6 +94,54 @@ test("static Kid City fallback locations include Vero Beach for the website drop
     postalCode: "32962",
     phone: "772-778-2262",
   });
+});
+
+test("live Kid City location API results keep static locations missing from the database", () => {
+  const liveLocations: PublicLocationFile["locations"] = [
+    {
+      crmLocationId: "FL | Sarasota",
+      locationId: "Kid City USA - Sarasota",
+      name: "Live Kid City USA - Sarasota",
+      address: "374 Scott Ave",
+      city: "Sarasota",
+      state: "FL",
+      postalCode: "34243",
+      phone: "941-210-4482",
+    },
+  ];
+  const staticLocations: PublicLocationFile["locations"] = [
+    {
+      crmLocationId: "FL | Sarasota",
+      locationId: "FL | Sarasota",
+      name: "Kid City USA - Sarasota",
+      address: "374 Scott Ave",
+      city: "Sarasota",
+      state: "FL",
+      postalCode: "34243",
+      phone: "941-210-4482",
+    },
+    {
+      crmLocationId: "FL | Vero Beach",
+      locationId: "FL | Vero Beach",
+      name: "Kid City USA - Vero Beach",
+      address: "760 20th Avenue",
+      city: "Vero Beach",
+      state: "FL",
+      postalCode: "32962",
+      phone: "772-778-2262",
+    },
+  ];
+
+  const merged = mergePublicKidCityLocations(liveLocations, staticLocations);
+
+  assert.deepEqual(merged.map((location) => location.crmLocationId), [
+    "FL | Sarasota",
+    "FL | Vero Beach",
+  ]);
+  assert.equal(
+    merged.find((location) => location.crmLocationId === "FL | Sarasota")?.name,
+    "Live Kid City USA - Sarasota",
+  );
 });
 
 test("WordPress Avada inquiry snippet includes Vero Beach in the location dropdown", () => {

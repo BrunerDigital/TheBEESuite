@@ -50,6 +50,30 @@ test("inquiry routing ranks CRM location matches before public id and name", () 
   assert.equal(selected?.id, "crm_match");
 });
 
+test("inquiry routing sends Vero Beach website selections to the active Vero Beach CRM center", () => {
+  const selected = selectPreferredInquiryCenter(
+    [
+      {
+        id: "archived_vero",
+        status: "archived",
+        crmLocationId: "FL | Vero Beach",
+        locationId: "Kid City USA - Vero Beach",
+        name: "Kid City USA - Vero Beach",
+      },
+      {
+        id: "active_vero",
+        status: "active",
+        crmLocationId: "FL | Vero Beach",
+        locationId: "Kid City USA - Vero Beach",
+        name: "Kid City USA - Vero Beach",
+      },
+    ],
+    ["FL | Vero Beach", "Kid City USA - Vero Beach"],
+  );
+
+  assert.equal(selected?.id, "active_vero");
+});
+
 test("inquiry routing returns null when no candidate matches selected location ids", () => {
   const selected = selectPreferredInquiryCenter(
     [

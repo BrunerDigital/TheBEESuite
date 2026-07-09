@@ -381,6 +381,16 @@
       "phone": "855-543-2489"
     },
     {
+      "crmLocationId": "FL | Vero Beach",
+      "locationId": "FL | Vero Beach",
+      "name": "Kid City USA - Vero Beach",
+      "address": "760 20th Avenue",
+      "city": "Vero Beach",
+      "state": "FL",
+      "postalCode": "32962",
+      "phone": "772-778-2262"
+    },
+    {
       "crmLocationId": "FL | Wekiva",
       "locationId": "FL | Wekiva",
       "name": "Kid City USA - Wekiva",

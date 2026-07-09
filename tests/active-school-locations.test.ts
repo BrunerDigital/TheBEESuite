@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   defaultCenterNameFromCrmLocationId,
@@ -7,6 +8,19 @@ import {
   parseCrmLocationId,
   toPublicKidCityLocation,
 } from "../src/lib/active-school-locations";
+
+type PublicLocationFile = {
+  locations: Array<{
+    crmLocationId: string;
+    locationId: string;
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    phone: string;
+  }>;
+};
 
 test("active school location IDs normalize to ST pipe City format", () => {
   assert.deepEqual(parseCrmLocationId("fl| Sarasota"), {
@@ -63,4 +77,20 @@ test("public Kid City location serialization feeds the inquiry dropdown", () => 
     phone: "941-210-4482",
   });
   assert.equal(defaultCenterNameFromCrmLocationId("FL | Sarasota"), "Kid City USA - Sarasota");
+});
+
+test("static Kid City fallback locations include Vero Beach for the website dropdown", () => {
+  const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
+  const location = file.locations.find((item) => item.crmLocationId === "FL | Vero Beach");
+
+  assert.deepEqual(location, {
+    crmLocationId: "FL | Vero Beach",
+    locationId: "FL | Vero Beach",
+    name: "Kid City USA - Vero Beach",
+    address: "760 20th Avenue",
+    city: "Vero Beach",
+    state: "FL",
+    postalCode: "32962",
+    phone: "772-778-2262",
+  });
 });

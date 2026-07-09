@@ -10,7 +10,7 @@ import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences 
 import type { DashboardWidgetId } from "@/lib/dashboard-widgets";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
-import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode } from "@/lib/inquiry-embed";
+import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
@@ -33,6 +33,7 @@ export default async function DashboardPage() {
       id: true,
       name: true,
       crmLocationId: true,
+      locationId: true,
       city: true,
       state: true,
       postalCode: true,
@@ -699,12 +700,21 @@ export default async function DashboardPage() {
     return {
       title: `${displayName} inquiry form embed`,
       description:
-        "This center-specific form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup.",
-      embedCode: getCenterInquiryEmbedCode({
-        centerId: center.id,
-        centerName: center.name,
-        brandName,
-      }),
+        isKidCityWorkspace
+          ? "This school-specific Kid City USA form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup."
+          : "This center-specific form sends new inquiries directly into this school's CRM profile, notification routing, and reporting backup.",
+      embedCode: isKidCityWorkspace
+        ? getKidCityLocationInquiryEmbedCode({
+            centerId: center.id,
+            centerName: center.name,
+            crmLocationId: center.crmLocationId,
+            locationId: center.locationId,
+          })
+        : getCenterInquiryEmbedCode({
+            centerId: center.id,
+            centerName: center.name,
+            brandName,
+          }),
     };
   });
   const inquiryEmbeds = canManageCrmLeads(user)

@@ -22,15 +22,17 @@ The preferred Avada embed block is:
 Executive and center users can also copy live embed code from their BEE Suite dashboard:
 
 - Kid City USA executive users receive the multi-location embed above.
-- Single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
+- Kid City USA single-school users receive a location-specific embed powered by `/kidcity-inquiry-form.js`. The snippet includes `data-center-id`, `data-location-id`, `data-public-location-id`, and `data-location-name`, so individual location pages route directly to that school's CRM profile.
+- Non-Kid City single-school users receive a center-specific embed powered by `/bee-suite-inquiry-form.js` and their center profile ID.
 - New public onboarding creates a gated trial workspace with a primary center profile and a center-linked embed code. Providers can copy that form immediately, then add more center-specific codes as additional profiles are completed.
 
-The hosted embed loads active Kid City USA open-school options from `/api/public/kidcity-locations`. The first dropdown option is the placeholder, so a rendered form should show one more `<option>` element than the live API location count.
+The hosted Kid City embed loads active Kid City USA open-school options from `/api/public/kidcity-locations` when it is used as a multi-location form. The first dropdown option is the placeholder, so a rendered form should show one more `<option>` element than the live API location count. When the script includes fixed location attributes, it renders the same form with the school locked and still posts to `/api/inquiries`.
 
 ## What Happens
 
 1. The BEE Suite validates the form payload.
 2. The selected `locationId` is matched to a center by CRM location ID, public location ID, or center name.
+   School-specific Kid City snippets also submit the BEE Suite `centerId`, which is used first.
 3. A CRM `Lead` is created in Supabase.
 4. A follow-up `Task` is created.
 5. A `Note` is attached to the lead.

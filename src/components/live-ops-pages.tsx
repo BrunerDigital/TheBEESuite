@@ -122,6 +122,7 @@ import { FormBuilderPanel } from "@/components/form-builder-panel";
 import { GuardianChangeRequestReviewActions } from "@/components/guardian-change-request-review-actions";
 import { IntegrationSetupPanel } from "@/components/integration-setup-panel";
 import { IncidentReviewActions } from "@/components/incident-review-actions";
+import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import {
   InvoiceStoredPaymentButton,
   type InvoiceStoredPaymentActionData,
@@ -1602,6 +1603,11 @@ export type CenterDashboardData = {
   fteCenters: FteReportCenterOption[];
   ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
+  inquiryEmbed?: {
+    title: string;
+    description: string;
+    embedCode: string;
+  } | null;
   stats: {
     leads: number;
     highIntentLeads: number;
@@ -1671,6 +1677,13 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
           mode="director"
           title="Submit Weekly FTE"
           description="Directors submit the weekly FTE report here. The latest rows show below for quick corrections."
+        />
+      ) : null}
+      {data.inquiryEmbed ? (
+        <InquiryEmbedCard
+          title={data.inquiryEmbed.title}
+          description={data.inquiryEmbed.description}
+          embedCode={data.inquiryEmbed.embedCode}
         />
       ) : null}
       <Card className="glass-panel">

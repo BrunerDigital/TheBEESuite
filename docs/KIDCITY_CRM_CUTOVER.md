@@ -54,7 +54,7 @@ Require password reset after live testing begins if this becomes production acce
 
 ## Inquiry Form Embed
 
-Paste this into an Avada Code Block or the old form replacement area:
+Paste this multi-location embed into shared pages such as the home page, contact page, locations index, and other pages where families should choose a school:
 
 ```html
 <div id="bee-suite-inquiry-form"></div>
@@ -67,6 +67,8 @@ Paste this into an Avada Code Block or the old form replacement area:
 ```
 
 The embed loads school options from `/api/public/kidcity-locations` and posts inquiries to `/api/inquiries`.
+
+For individual Kid City USA location pages, copy that school's location-specific snippet from the school's BEE Suite dashboard. Those snippets use the same hosted `/kidcity-inquiry-form.js` form, but include `data-center-id`, `data-location-id`, `data-public-location-id`, and `data-location-name` so submissions are locked to that school and route directly into the correct CRM location.
 
 ## Google Sheet Backup
 

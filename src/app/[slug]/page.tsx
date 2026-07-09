@@ -70,6 +70,7 @@ import {
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
+import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { buildIntegrationSetupViews, getIntegrationRuntimeStatus } from "@/lib/integration-setup";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
@@ -1898,6 +1899,36 @@ async function renderLivePage(
       !Array.isArray(linkedGuardianCustomFields.notificationPreferences)
         ? linkedGuardianCustomFields.notificationPreferences as Record<string, boolean>
         : null;
+    const accountDeletionRequest = linkedGuardian
+      ? await prisma.dataDeletionRequest.findFirst({
+          where: {
+            tenantId: user.tenantId,
+            userId: user.id,
+            guardianId: linkedGuardian.id,
+            status: {
+              in: [
+                "pending_verification",
+                "verified",
+                "school_review",
+                "approved",
+                "partially_completed",
+              ],
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            requestType: true,
+            status: true,
+            createdAt: true,
+            dueAt: true,
+            verifiedAt: true,
+            completedAt: true,
+            retentionNoticeAccepted: true,
+            schoolReviewRequired: true,
+          },
+        })
+      : null;
     const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
       tenantSlug: familyCenter?.organization.tenant.slug,
       tenantName: familyCenter?.organization.tenant.name,
@@ -1997,6 +2028,7 @@ async function renderLivePage(
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={kioskCredentials}
         notificationPreferences={notificationPreferences}
+        accountDeletionRequest={accountDeletionRequest}
         replyDraft={parentReplyToMessageId
           ? {
               replyToMessageId: parentReplyToMessageId,
@@ -4145,6 +4177,28 @@ async function renderLivePage(
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
           schoolEin: center ? readSchoolEin(center.customFields) : null,
+          inquiryEmbed: center
+            ? {
+                title: `${formatCenterName(center)} inquiry form embed`,
+                description:
+                  user.branding.kind === "kid-city-usa"
+                    ? "Copy this Kid City USA form for this school's website page. It locks submissions to this school and sends new inquiries into The BEE Suite CRM."
+                    : "Copy this form for this school's website page. It sends new inquiries into The BEE Suite CRM for this center.",
+                embedCode:
+                  user.branding.kind === "kid-city-usa"
+                    ? getKidCityLocationInquiryEmbedCode({
+                        centerId: center.id,
+                        centerName: center.name,
+                        crmLocationId: center.crmLocationId,
+                        locationId: center.locationId,
+                      })
+                    : getCenterInquiryEmbedCode({
+                        centerId: center.id,
+                        centerName: center.name,
+                        brandName: user.branding.name,
+                      }),
+              }
+            : null,
           fteCenters: center ? [{ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity }] : [],
           ftePrefills,
           fteReports: fteReports.map(serializeFteReport),

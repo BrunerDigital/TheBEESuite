@@ -94,3 +94,10 @@ test("static Kid City fallback locations include Vero Beach for the website drop
     phone: "772-778-2262",
   });
 });
+
+test("WordPress Avada inquiry snippet includes Vero Beach in the location dropdown", () => {
+  const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
+
+  assert.match(snippet, /<option value="FL \| Vero Beach"[^>]*>FL \| Vero Beach<\/option>/);
+  assert.match(snippet, /data-location-name="Kid City USA - Vero Beach"/);
+});

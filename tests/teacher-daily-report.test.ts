@@ -112,6 +112,37 @@ test("teacher daily report parser accepts nap times on the report date", () => {
   assert.equal(parsed.report.naps[0]?.endsAt?.getMinutes(), 20);
 });
 
+test("teacher daily report parser saves no nap as a parent-readable note", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-06-04",
+    teacherNote: "Quiet morning.",
+    noNap: true,
+    naps: [{ startsAt: "", endsAt: "" }],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.equal(parsed.report.noNap, true);
+  assert.equal(parsed.report.naps.length, 0);
+  assert.equal(parsed.report.teacherNote, "Quiet morning.\nNo nap today.");
+});
+
+test("teacher daily report parser ignores no nap when nap times are present", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-06-04",
+    noNap: true,
+    naps: [{ startsAt: "12:15", endsAt: "13:20" }],
+  });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+
+  assert.equal(parsed.report.noNap, false);
+  assert.equal(parsed.report.naps.length, 1);
+  assert.equal(parsed.report.teacherNote, null);
+});
+
 test("teacher daily report parser keeps legacy single-field payload support", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",

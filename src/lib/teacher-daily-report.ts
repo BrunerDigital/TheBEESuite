@@ -33,6 +33,7 @@ export type ParsedTeacherDailyReportPayload = {
   teacherNote: string | null;
   suppliesNeeded: string | null;
   sendToParent: boolean;
+  noNap: boolean;
   meals: DailyReportMealInput[];
   naps: DailyReportNapInput[];
   diapers: DailyReportDiaperInput[];
@@ -265,6 +266,11 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
   if (!diapers.ok) return diapers;
   const activities = collectActivities(input);
   if (!activities.ok) return { ok: false, status: 400, error: activities.error };
+  const noNap = parseBoolean(input.noNap) && naps.records.length === 0;
+  const teacherNote = clean(input.teacherNote);
+  const normalizedTeacherNote = noNap && !/no nap/i.test(teacherNote)
+    ? [teacherNote, "No nap today."].filter(Boolean).join("\n")
+    : teacherNote;
 
   return {
     ok: true,
@@ -273,9 +279,10 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
       childIds: childIds.childIds,
       date: reportDate,
       mood: clean(input.mood) || null,
-      teacherNote: clean(input.teacherNote) || null,
+      teacherNote: normalizedTeacherNote || null,
       suppliesNeeded: clean(input.suppliesNeeded) || null,
       sendToParent: parseBoolean(input.sendToParent),
+      noNap,
       meals: meals.records,
       naps: naps.records,
       diapers: diapers.records,

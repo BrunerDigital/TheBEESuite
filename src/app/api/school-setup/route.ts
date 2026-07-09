@@ -8,6 +8,7 @@ import {
   type SchoolOnboardingSetupInput,
 } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
+import { isValidEinInput, normalizeEin, schoolEinCustomFields } from "@/lib/school-tax-id";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -23,6 +24,10 @@ const allowedRoles = new Set<UserRole>([
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function hasOwn(value: Record<string, unknown> | null, key: string) {
+  return Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
 }
 
 function cleanSections(value: unknown) {
@@ -61,18 +66,31 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
   }
 
-  const setup = normalizeSchoolOnboardingSetup(cleanSections(body?.sections));
+  const sectionsProvided = hasOwn(body, "sections");
+  const setup = sectionsProvided ? normalizeSchoolOnboardingSetup(cleanSections(body?.sections)) : null;
   const savedAt = new Date().toISOString();
-  const customFields = {
+  let customFields: Record<string, unknown> = {
     ...record(center.customFields),
-    schoolOnboardingSetup: {
+  };
+  if (setup) {
+    customFields.schoolOnboardingSetup = {
       ...setup,
       capturedAt: savedAt,
       capturedByEmail: user.email,
       capturedByUserId: user.id,
       expectedOwner: "school_director",
-    },
-  };
+    };
+  }
+  if (hasOwn(body, "schoolEin")) {
+    if (!isValidEinInput(body?.schoolEin)) {
+      return NextResponse.json({ ok: false, error: "School EIN must be 9 digits." }, { status: 400 });
+    }
+    customFields = schoolEinCustomFields(customFields, body?.schoolEin, {
+      savedAt,
+      savedByEmail: user.email,
+      savedByUserId: user.id,
+    });
+  }
 
   await prisma.center.update({
     where: { id: center.id },
@@ -87,14 +105,16 @@ async function POSTHandler(request: NextRequest) {
     resourceId: center.id,
     centerId: center.id,
     metadata: {
-      status: setup.status,
-      completedSections: setup.completedSections,
-      missingSections: setup.missingSections,
+      status: setup?.status ?? null,
+      completedSections: setup?.completedSections ?? [],
+      missingSections: setup?.missingSections ?? [],
+      sectionsUpdated: sectionsProvided,
+      schoolEinUpdated: hasOwn(body, "schoolEin"),
       savedAt,
     },
   });
 
-  return NextResponse.json({ ok: true, setup });
+  return NextResponse.json({ ok: true, setup, schoolEin: normalizeEin(customFields.schoolEin) });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

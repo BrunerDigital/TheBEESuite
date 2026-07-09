@@ -99,6 +99,7 @@ async function POSTHandler(request: NextRequest) {
             diapers: dailyReport.diapers.length,
             activities: dailyReport.activities.length,
           },
+          noNap: dailyReport.noNap,
           custodyWarning: hasCustodyWarning(child?.family),
         },
       });

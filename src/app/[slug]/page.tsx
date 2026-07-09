@@ -124,6 +124,7 @@ import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES, studentUniformProductOptions } from "@/lib/uniform-products";
+import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
   asRecord,
@@ -888,6 +889,7 @@ async function renderLivePage(
       payoutReady: selectedCenter ? stripeConnectReadinessFromFields(selectedCenter.customFields).status === "ready" : false,
     });
     const externalNeeds = [
+      selectedCenter && readSchoolEin(selectedCenter.customFields) ? null : "School EIN for customer payment receipts and ledger printouts.",
       procareImportCount ? null : "Unencrypted Procare exports for each school: families, children, guardians, classrooms, balances, and staff.",
       tuitionPlanCount || productCount ? null : "Final tuition and fee sheet by program, age group, cadence, discounts, deposits, and late fees.",
       staffCount ? null : "Current staff roster with emails, titles, classroom assignments, schedules, certifications, and background-check status.",
@@ -905,6 +907,7 @@ async function renderLivePage(
       totalSections: sections.length,
       blockingSections,
       lastCapturedAt: formatSavedAt(schoolSetup.capturedAt),
+      schoolEin: selectedCenter ? readSchoolEin(selectedCenter.customFields) : null,
       stats: [
         { label: "Classrooms", value: String(classroomCount), detail: `${selectedCenter?.licensedCapacity ?? 0} licensed capacity` },
         { label: "People imported", value: `${familyCount}/${childCount}/${guardianCount}`, detail: "Families / children / guardians" },
@@ -2683,7 +2686,6 @@ async function renderLivePage(
           billingAccount: billingAccountWhere,
         },
         orderBy: { effectiveAt: "desc" },
-        take: 50,
         include: {
           billingAccount: {
             select: {
@@ -2840,6 +2842,11 @@ async function renderLivePage(
     return (
       <BillingInvoicesPage
         data={{
+          receiptSchools: centers.map((center) => ({
+            id: center.id,
+            name: formatCenterName(center),
+            ein: readSchoolEin(center.customFields),
+          })),
           initialSelection: {
             familyId: requestedBillingFamilyId,
             centerId: requestedBillingCenterId,
@@ -3054,6 +3061,11 @@ async function renderLivePage(
     return (
       <PaymentsPage
         data={{
+          receiptSchools: centers.map((center) => ({
+            id: center.id,
+            name: formatCenterName(center),
+            ein: readSchoolEin(center.customFields),
+          })),
           payments,
           stats: {
             total,
@@ -4132,6 +4144,7 @@ async function renderLivePage(
           centerId: center?.id ?? null,
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
+          schoolEin: center ? readSchoolEin(center.customFields) : null,
           fteCenters: center ? [{ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity }] : [],
           ftePrefills,
           fteReports: fteReports.map(serializeFteReport),

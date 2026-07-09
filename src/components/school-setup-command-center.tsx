@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,6 +49,7 @@ export type SchoolSetupCommandCenterData = {
   totalSections: number;
   blockingSections: number;
   lastCapturedAt: string | null;
+  schoolEin: string | null;
   stats: Array<{
     label: string;
     value: string;
@@ -86,6 +88,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
   const [values, setValues] = useState(() =>
     Object.fromEntries(sections.map((section) => [section.field, section.value])),
   );
+  const [schoolEin, setSchoolEin] = useState(data.schoolEin ?? "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -112,6 +115,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           body: JSON.stringify({
             centerId: data.centerId,
             sections: values,
+            schoolEin,
           }),
         });
         const json = await response.json().catch(() => null);
@@ -133,6 +137,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             <h1 className="text-3xl font-semibold tracking-tight">School setup command center</h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
               Director-facing launch checklist for turning on every BEE Suite module at {data.centerLabel}.
+              Receipts use the saved school EIN when directors print payment and ledger records.
             </p>
           </div>
           <div className="rounded-lg border bg-background/60 p-3 text-sm">
@@ -228,6 +233,28 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         </div>
 
         <aside className="flex flex-col gap-4">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>School Receipt Details</CardTitle>
+              <CardDescription>Used on customer receipts and ledger printouts for this school.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="school-ein">School EIN</Label>
+                <Input
+                  id="school-ein"
+                  inputMode="numeric"
+                  value={schoolEin}
+                  onChange={(event) => setSchoolEin(event.target.value)}
+                  placeholder="12-3456789"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter 9 digits. The app formats it for printed receipts.
+              </p>
+            </CardContent>
+          </Card>
+
           {activeSection ? (
             <Card className="glass-panel">
               <CardHeader>

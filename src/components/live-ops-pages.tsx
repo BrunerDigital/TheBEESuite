@@ -56,6 +56,11 @@ import {
   type BillingWorkbenchProduct,
   type BillingWorkbenchTuitionPlan,
 } from "@/components/billing-workbench";
+import {
+  LedgerPrintButton,
+  PaymentReceiptPrintButton,
+  type BillingReceiptSchool,
+} from "@/components/billing-print-actions";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { CampaignWorkspace, type CampaignWorkspaceData } from "@/components/campaign-workspace";
 import {
@@ -129,6 +134,7 @@ import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { RegistrationReviewActions } from "@/components/registration-review-actions";
 import { ReputationWorkspace, type ReputationWorkspaceData } from "@/components/reputation-workspace";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
+import { SchoolReceiptDetailsCard } from "@/components/school-receipt-details-card";
 import { StaffManagementPanel } from "@/components/staff-management-panel";
 import { StaffOnboardingChecklistPanel } from "@/components/staff-onboarding-checklist-panel";
 import { SignatureRequestPanel, type SignatureRequestFamilyOption } from "@/components/signature-request-panel";
@@ -1592,6 +1598,7 @@ export type CenterDashboardData = {
   centerId: string | null;
   centerName: string;
   place: string;
+  schoolEin: string | null;
   fteCenters: FteReportCenterOption[];
   ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
@@ -1709,6 +1716,9 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
           </Table>
         </CardContent>
       </Card>
+      {data.centerId ? (
+        <SchoolReceiptDetailsCard centerId={data.centerId} schoolEin={data.schoolEin} />
+      ) : null}
       {data.centerId ? (
         <Card className="glass-panel">
           <CardHeader>
@@ -4724,6 +4734,7 @@ export type BillingInvoicesPageData = {
     centerId?: string;
     searchQuery?: string;
   };
+  receiptSchools: BillingReceiptSchool[];
   workbench: {
     families: BillingWorkbenchFamily[];
     centers: BillingWorkbenchCenter[];
@@ -4751,6 +4762,8 @@ export type BillingInvoicesPageData = {
     amountCents: number;
     balanceAfterCents: number | null;
     effectiveAt: Date | string;
+    invoiceId?: string | null;
+    paymentId?: string | null;
     billingAccount: { family: { id: string; name: string; billingEmail: string | null; centerId: string | null } };
   }>;
   stats: {
@@ -4804,6 +4817,11 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
+  const ledgerPrintEntries = data.ledgerEntries.map((entry) => ({
+    ...entry,
+    effectiveAt: new Date(entry.effectiveAt).toISOString(),
+  }));
+
   function billingFamilyHref(family: { id: string; centerId: string | null }) {
     const params = new URLSearchParams({ familyId: family.id });
     if (family.centerId) params.set("centerId", family.centerId);
@@ -4982,9 +5000,12 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       <Card className="glass-panel">
-        <CardHeader>
-          <CardTitle>Family Ledger</CardTitle>
-          <CardDescription>Tuition charges, imported ProCare balances, credits, and manual adjustments.</CardDescription>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Family Ledger</CardTitle>
+            <CardDescription>Tuition charges, imported ProCare balances, credits, and manual adjustments.</CardDescription>
+          </div>
+          <LedgerPrintButton entries={ledgerPrintEntries} schools={data.receiptSchools} />
         </CardHeader>
         <CardContent>
           <Table>
@@ -5039,6 +5060,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
 }
 
 export type PaymentsPageData = {
+  receiptSchools: BillingReceiptSchool[];
   payments: Array<{
     id: string;
     amountCents: number;
@@ -5078,6 +5100,11 @@ export type PaymentsPageData = {
 };
 
 export function PaymentsPage({ data }: { data: PaymentsPageData }) {
+  const receiptPayments = data.payments.map((payment) => ({
+    ...payment,
+    paidAt: payment.paidAt ? new Date(payment.paidAt).toISOString() : null,
+  }));
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -5129,11 +5156,12 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                 <TableHead>Dunning</TableHead>
                 <TableHead>Failure / Next step</TableHead>
                 <TableHead>External ID</TableHead>
+                <TableHead>Receipt</TableHead>
                 <TableHead>Open</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.payments.map((payment) => (
+              {data.payments.map((payment, index) => (
                 <TableRow key={payment.id} className="group">
                   <TableCell>
                     <Link
@@ -5172,6 +5200,9 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>
                   <TableCell>
+                    <PaymentReceiptPrintButton payment={receiptPayments[index]} schools={data.receiptSchools} />
+                  </TableCell>
+                  <TableCell>
                     <Link href={billingRecordHref(payment.billingAccount.family, payment.billingAccount.family.name)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                       <ArrowRight data-icon="inline-start" />
                       Billing
@@ -5181,7 +5212,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
               ))}
               {!data.payments.length ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
+                  <TableCell colSpan={10} className="text-muted-foreground">No payment attempts have been recorded yet.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>

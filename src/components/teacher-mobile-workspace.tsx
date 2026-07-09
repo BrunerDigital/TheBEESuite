@@ -276,6 +276,7 @@ export function TeacherMobileWorkspace({
   const [sendToParent, setSendToParent] = useState(true);
   const [mealRows, setMealRows] = useState<MealDraft[]>(() => [createMealDraft()]);
   const [napRows, setNapRows] = useState<NapDraft[]>(() => [createNapDraft()]);
+  const [noNap, setNoNap] = useState(false);
   const [diaperRows, setDiaperRows] = useState<DiaperDraft[]>(() => [createDiaperDraft()]);
   const [activityRows, setActivityRows] = useState<ActivityDraft[]>(() => [createActivityDraft()]);
   const [photo, setPhoto] = useState<File | null>(null);
@@ -568,6 +569,7 @@ export function TeacherMobileWorkspace({
   }
 
   function updateNap(id: string, patch: Partial<NapDraft>) {
+    if ((patch.startsAt && patch.startsAt.trim()) || (patch.endsAt && patch.endsAt.trim())) setNoNap(false);
     setNapRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
   }
 
@@ -600,6 +602,7 @@ export function TeacherMobileWorkspace({
     setSuppliesNeeded("");
     setMealRows([createMealDraft()]);
     setNapRows([createNapDraft()]);
+    setNoNap(false);
     setDiaperRows([createDiaperDraft()]);
     setActivityRows([createActivityDraft()]);
   }
@@ -616,6 +619,7 @@ export function TeacherMobileWorkspace({
         touched: row.touched === true,
       }));
     const naps = napRows
+      .filter(() => !noNap)
       .filter((row) => row.startsAt.trim() || row.endsAt.trim())
       .map((row) => ({
         startsAt: normalizeReportTime(activeReportDate, row.startsAt),
@@ -628,7 +632,7 @@ export function TeacherMobileWorkspace({
       .filter((row) => row.title.trim() || row.notes.trim() || row.touched)
       .map((row) => ({ title: row.title.trim(), notes: row.notes.trim(), touched: row.touched === true }));
 
-    return { meals, naps, diapers, activities };
+    return { meals, naps, diapers, activities, noNap };
   }
 
   function markDailyReportsLocally(childIds: string[], status: DailyReportSnapshot["status"]) {
@@ -670,11 +674,13 @@ export function TeacherMobileWorkspace({
   }
 
   function startNapNow() {
+    setNoNap(false);
     const nextRow = { ...createNapDraft(), startsAt: timeInputValue() };
     setNapRows((current) => current.length === 1 && !current[0].startsAt && !current[0].endsAt ? [nextRow] : [...current, nextRow]);
   }
 
   function endLatestNapNow() {
+    setNoNap(false);
     let openNapIndex = -1;
     for (let index = napRows.length - 1; index >= 0; index -= 1) {
       if (napRows[index].startsAt && !napRows[index].endsAt) {
@@ -693,6 +699,11 @@ export function TeacherMobileWorkspace({
       }
       return next;
     });
+  }
+
+  function markNoNapToday() {
+    setNoNap(true);
+    setNapRows([createNapDraft()]);
   }
 
   function submitAttendance(options: { childId?: string; status?: string; logType?: string; label?: string } = {}) {
@@ -750,6 +761,7 @@ export function TeacherMobileWorkspace({
           teacherNote,
           meals: entries.meals,
           naps: entries.naps,
+          noNap: entries.noNap,
           diapers: entries.diapers,
           activities: entries.activities,
           suppliesNeeded,
@@ -1427,6 +1439,7 @@ export function TeacherMobileWorkspace({
                 <div className="flex flex-wrap gap-1">
                   <Button type="button" size="xs" variant="outline" onClick={startNapNow}>Start nap</Button>
                   <Button type="button" size="xs" variant="outline" onClick={endLatestNapNow}>End nap</Button>
+                  <Button type="button" size="xs" variant={noNap ? "default" : "outline"} onClick={markNoNapToday}>No Nap</Button>
                   <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Wet")}>Wet</Button>
                   <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Potty")}>Potty</Button>
                 </div>
@@ -1506,11 +1519,16 @@ export function TeacherMobileWorkspace({
                     <Moon className="size-4" />
                     Naps
                   </div>
-                  <Button type="button" size="xs" variant="outline" onClick={() => setNapRows((current) => [...current, createNapDraft()])}>
+                  <Button type="button" size="xs" variant="outline" onClick={() => { setNoNap(false); setNapRows((current) => [...current, createNapDraft()]); }}>
                     <Plus data-icon="inline-start" />
                     Add
                   </Button>
                 </div>
+                {noNap ? (
+                  <div className="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
+                    No nap will be saved on this daily report.
+                  </div>
+                ) : null}
                 <div className="space-y-3">
                   {napRows.map((row, index) => (
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">

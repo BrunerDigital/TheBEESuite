@@ -79,6 +79,7 @@ model Tenant {
   brandAssets             BrandAsset[]
   brandCustomizations     BrandCustomization[]
   deviceSessions          DeviceSession[]
+  dataDeletionRequests    DataDeletionRequest[]
 }
 
 model Brand {
@@ -166,6 +167,7 @@ model Center {
   surveyResponses          SurveyResponse[]
   emergencyDrillLogs       EmergencyDrillLog[]
   complianceTasks          ComplianceTask[]
+  dataDeletionRequests     DataDeletionRequest[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -269,6 +271,7 @@ model User {
   accessGrants              UserAccessGrant[]
   deviceSessions            DeviceSession[]           @relation("UserDeviceSessions")
   revokedDeviceSessions     DeviceSession[]           @relation("DeviceSessionRevokedBy")
+  dataDeletionRequests      DataDeletionRequest[]
 }
 
 model UserAccessGrant {
@@ -433,6 +436,7 @@ model Family {
   documents         Document[]
   notesList         Note[]
   surveyResponses   SurveyResponse[]
+  dataDeletionRequests DataDeletionRequest[]
 
   @@index([centerId, sourceSystem, externalId])
 }
@@ -458,6 +462,7 @@ model Guardian {
   family    Family          @relation(fields: [familyId], references: [id])
   user      User?           @relation(fields: [userId], references: [id])
   checkLogs CheckInOutLog[]
+  dataDeletionRequests DataDeletionRequest[]
 
   @@index([checkInPinHash])
   @@index([sourceSystem, externalId])
@@ -1406,6 +1411,53 @@ model AuditLog {
   tenant Tenant  @relation(fields: [tenantId], references: [id])
   center Center? @relation(fields: [centerId], references: [id])
   user   User?   @relation(fields: [userId], references: [id])
+}
+
+model DataDeletionRequest {
+  id                      String    @id @default(cuid())
+  tenantId                String
+  centerId                String?
+  familyId                String?
+  guardianId              String?
+  userId                  String?
+  requestType             String    @default("account_deletion")
+  status                  String    @default("pending_verification")
+  source                  String    @default("parent_portal")
+  requesterEmail          String?
+  requesterName           String?
+  details                 String?
+  retentionNoticeAccepted Boolean   @default(false)
+  schoolReviewRequired    Boolean   @default(true)
+  verifiedAt              DateTime?
+  dueAt                   DateTime?
+  completedAt             DateTime?
+  deniedAt                DateTime?
+  cancelledAt             DateTime?
+  metadata                Json?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  center   Center?   @relation(fields: [centerId], references: [id])
+  family   Family?   @relation(fields: [familyId], references: [id])
+  guardian Guardian? @relation(fields: [guardianId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, status, createdAt])
+  @@index([userId, status])
+  @@index([guardianId, status])
+  @@index([familyId, status])
+  @@index([centerId, status])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 model PaymentMethodRequestLink {

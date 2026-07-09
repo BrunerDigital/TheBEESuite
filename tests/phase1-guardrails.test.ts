@@ -19,6 +19,7 @@ import {
   canAcknowledgeIncident,
   canCreateFamilyMessage,
   canMessageClassroomFamily,
+  canRequestAccountDeletion,
   canInviteGuardianToPortal,
   canSubmitDocumentForReview,
   normalizeParentNotificationPreferences,
@@ -686,6 +687,38 @@ test("parent portal guards require family-scoped messages and guardian acknowled
     status: 403,
     error: "You do not have access to this family.",
   });
+  assert.deepEqual(canRequestAccountDeletion({
+    isParentGuardian: false,
+    isLinkedGuardian: true,
+    retentionNoticeAccepted: true,
+  }), {
+    ok: false,
+    status: 403,
+    error: "Only linked parent accounts can request parent portal account deletion.",
+  });
+  assert.deepEqual(canRequestAccountDeletion({
+    isParentGuardian: true,
+    isLinkedGuardian: false,
+    retentionNoticeAccepted: true,
+  }), {
+    ok: false,
+    status: 403,
+    error: "You do not have access to this guardian profile.",
+  });
+  assert.deepEqual(canRequestAccountDeletion({
+    isParentGuardian: true,
+    isLinkedGuardian: true,
+    retentionNoticeAccepted: false,
+  }), {
+    ok: false,
+    status: 400,
+    error: "Confirm the childcare record retention notice before submitting the request.",
+  });
+  assert.deepEqual(canRequestAccountDeletion({
+    isParentGuardian: true,
+    isLinkedGuardian: true,
+    retentionNoticeAccepted: true,
+  }), { ok: true });
 });
 
 test("message visibility keeps direct staff threads participant-scoped", () => {

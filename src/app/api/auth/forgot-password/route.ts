@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getPasswordResetRedirectUrl, requestSupabasePasswordReset } from "@/lib/supabase-auth";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -22,7 +22,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Enter a valid email address." }, { status: 400 });
   }
 
-  const rate = checkRateLimit({
+  const rate = await checkPersistentRateLimit({
     key: `forgot-password:${requestIp(request.headers)}:${email}`,
     limit: 5,
     windowMs: 15 * 60 * 1000,

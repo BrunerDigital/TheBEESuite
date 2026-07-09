@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, getCurrentUser, sessionCookieOptions, SESSION_COOKIE } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { updateSupabaseAuthUserPasswordByEmail, verifySupabasePassword } from "@/lib/supabase-auth";
 
 import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
@@ -18,7 +18,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkPersistentRateLimit({
     key: `profile-password:${requestIp(request.headers)}:${user.id}`,
     limit: 6,
     windowMs: 15 * 60 * 1000,

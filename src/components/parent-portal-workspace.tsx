@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   ShieldCheck,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -182,6 +183,18 @@ type NotificationPreferences = {
   announcements: boolean;
 };
 
+type AccountDeletionRequestSummary = {
+  id: string;
+  requestType: string;
+  status: string;
+  createdAt: string | Date;
+  dueAt: string | Date | null;
+  verifiedAt: string | Date | null;
+  completedAt: string | Date | null;
+  retentionNoticeAccepted: boolean;
+  schoolReviewRequired: boolean;
+};
+
 type Props = {
   family: PortalFamily | null;
   billingAccount?: {
@@ -214,6 +227,7 @@ type Props = {
   currentGuardianId?: string | null;
   kioskCredentials?: GuardianKioskCredential[];
   notificationPreferences?: Partial<NotificationPreferences> | null;
+  accountDeletionRequest?: AccountDeletionRequestSummary | null;
   replyDraft?: {
     replyToMessageId: string;
     subject?: string | null;
@@ -384,6 +398,7 @@ export function ParentPortalWorkspace({
   currentGuardianId = null,
   kioskCredentials = [],
   notificationPreferences,
+  accountDeletionRequest: initialAccountDeletionRequest = null,
   replyDraft = null,
   demoMode,
 }: Props) {
@@ -408,6 +423,9 @@ export function ParentPortalWorkspace({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [accountDeletionRequest, setAccountDeletionRequest] = useState<AccountDeletionRequestSummary | null>(initialAccountDeletionRequest);
+  const [accountDeletionDetails, setAccountDeletionDetails] = useState("");
+  const [retentionNoticeAccepted, setRetentionNoticeAccepted] = useState(false);
   const [uniformColor, setUniformColor] = useState<"Black" | "Yellow">(uniformProducts[0]?.color ?? "Black");
   const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
@@ -761,6 +779,43 @@ export function ParentPortalWorkspace({
       setConfirmPassword("");
       showStatus("Password updated.");
       router.refresh();
+    });
+  }
+
+  function requestAccountDeletion() {
+    if (!family || !currentGuardianId) {
+      return showError("Sign in as a linked parent or guardian before requesting account deletion.");
+    }
+    if (!retentionNoticeAccepted) {
+      return showError("Confirm the childcare record retention notice before submitting the request.");
+    }
+    const accepted = window.confirm(
+      "Submit an account deletion request? The school may need to retain childcare, safety, billing, payment, or audit records.",
+    );
+    if (!accepted) return;
+
+    startTransition(async () => {
+      const response = await fetch("/api/privacy/deletion-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guardianId: currentGuardianId,
+          details: accountDeletionDetails,
+          retentionNoticeAccepted,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        duplicate?: boolean;
+        request?: AccountDeletionRequestSummary;
+      } | null;
+      if (!response.ok || !json?.request) {
+        return showError(json?.error || "Account deletion request could not be submitted.");
+      }
+      setAccountDeletionRequest(json.request);
+      setAccountDeletionDetails("");
+      setRetentionNoticeAccepted(false);
+      showStatus(json.duplicate ? "An open account deletion request is already on file." : "Account deletion request submitted for review.");
     });
   }
 
@@ -1673,6 +1728,60 @@ export function ParentPortalWorkspace({
             <KeyRound data-icon="inline-start" />
             Update Password
           </Button>
+          <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 font-medium">
+                  <ShieldCheck className="size-4 text-destructive" />
+                  Privacy and Account Deletion
+                </div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Request removal of parent portal login access. Some childcare, safety, licensing, billing, payment, and audit records may need to be retained by your school or The BEE Suite.
+                </p>
+              </div>
+              {accountDeletionRequest ? (
+                <Badge variant="outline">
+                  {accountDeletionRequest.status.replaceAll("_", " ")}
+                </Badge>
+              ) : null}
+            </div>
+            {accountDeletionRequest ? (
+              <div className="rounded-lg border bg-background/60 p-3 text-sm">
+                <div className="font-medium">Request received {formatDate(accountDeletionRequest.createdAt)}</div>
+                <p className="mt-1 text-muted-foreground">
+                  Status: {accountDeletionRequest.status.replaceAll("_", " ")}
+                  {accountDeletionRequest.dueAt ? ` · target response by ${formatDate(accountDeletionRequest.dueAt)}` : ""}
+                </p>
+              </div>
+            ) : (
+              <>
+                <Textarea
+                  value={accountDeletionDetails}
+                  onChange={(event) => setAccountDeletionDetails(event.target.value)}
+                  placeholder="Optional details for support or your school"
+                />
+                <label className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    checked={retentionNoticeAccepted}
+                    onChange={(event) => setRetentionNoticeAccepted(event.target.checked)}
+                  />
+                  <span>
+                    I understand this starts an account deletion request and that required childcare, licensing, safety, billing, payment, and audit records may be retained.
+                  </span>
+                </label>
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={isPending || !currentGuardianId || !retentionNoticeAccepted}
+                  onClick={requestAccountDeletion}
+                  variant="destructive"
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Request Account Deletion
+                </Button>
+              </>
+            )}
+          </div>
         </CardContent>
       </Card>
 

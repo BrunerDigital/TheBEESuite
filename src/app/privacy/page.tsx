@@ -53,6 +53,12 @@ export default function PrivacyPage() {
               <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/support" />}>
                 Support
               </Button>
+              <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/terms" />}>
+                Terms
+              </Button>
+              <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/eula" />}>
+                EULA
+              </Button>
               <Button nativeButton={false} render={<Link href="/parents" />}>
                 Parent login
               </Button>
@@ -125,8 +131,8 @@ export default function PrivacyPage() {
                   <CardTitle>Parent Choices</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
-                  <p>Parents can update notification preferences where enabled, change their password, submit contact change requests, and ask their school to review incorrect family or child records.</p>
-                  <p>Deletion or correction requests may need school approval when records are required for licensing, safety, accounting, audit, or legal reasons.</p>
+                  <p>Parents can update notification preferences where enabled, change their password, submit contact change requests, request account deletion in Profile Settings, and ask their school to review incorrect family or child records.</p>
+                  <p>Deletion or correction requests may need school approval when records are required for licensing, safety, accounting, payment, audit, or legal reasons.</p>
                 </CardContent>
               </Card>
 

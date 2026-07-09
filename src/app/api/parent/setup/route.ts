@@ -4,7 +4,7 @@ import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -39,7 +39,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can finish parent portal setup." }, { status: 403 });
   }
 
-  const limited = checkRateLimit({
+  const limited = await checkPersistentRateLimit({
     key: `parent-portal-setup:${user.id}:${requestIp(request.headers)}`,
     limit: 10,
     windowMs: 60_000,

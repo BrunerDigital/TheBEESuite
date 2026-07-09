@@ -16,6 +16,7 @@ const supportTopics = [
   "Parent payment or checkout questions",
   "App install, home screen, or App Store access questions",
   "Security or privacy concerns",
+  "Account deletion and data request routing",
 ];
 
 const urgentTopics = [
@@ -35,6 +36,12 @@ export default function SupportPage() {
             <div className="flex items-center gap-2">
               <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/parents" />}>
                 Parent login
+              </Button>
+              <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/terms" />}>
+                Terms
+              </Button>
+              <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/eula" />}>
+                EULA
               </Button>
               <Button variant="outline" className="border-white/15 bg-white/[0.04] text-white hover:bg-white/10" nativeButton={false} render={<Link href="/resources" />}>
                 Guides
@@ -80,6 +87,7 @@ export default function SupportPage() {
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>Email: <a className="font-semibold text-amber-200 underline-offset-4 hover:underline" href="mailto:support@thebeesuite.io">support@thebeesuite.io</a></p>
                   <p>Include your name, school, child name if relevant, the email you use to log in, the page you were on, and a screenshot when it is safe to share one.</p>
+                  <p>Parents can start account deletion from Parent Portal &gt; Profile Settings &gt; Privacy and Account Deletion. Some childcare, safety, licensing, billing, payment, or audit records may need school review or retention.</p>
                   <p>Do not send full card numbers, bank login details, medical documents, custody documents, or other highly sensitive files through ordinary email unless support specifically gives you a secure upload path.</p>
                 </CardContent>
               </Card>

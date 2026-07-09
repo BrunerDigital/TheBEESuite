@@ -8,7 +8,7 @@ import {
   inferDeviceType,
   normalizeDeviceAppMode,
 } from "@/lib/device-sessions";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
 import { resolvePortalPostLoginPath } from "@/lib/login-routing";
@@ -27,7 +27,7 @@ async function POSTHandler(request: NextRequest) {
   const email = resolveLoginIdentifier(loginIdentifier);
   const password = clean(body.password);
   const ipAddress = requestIp(request.headers);
-  const rate = checkRateLimit({
+  const rate = await checkPersistentRateLimit({
     key: `login:${ipAddress}:${loginIdentifier || "unknown"}`,
     limit: 8,
     windowMs: 15 * 60 * 1000,

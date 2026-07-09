@@ -82,6 +82,35 @@ export function canAccessFamilyRecord(input: {
   return { ok: true as const };
 }
 
+export function canRequestAccountDeletion(input: {
+  isParentGuardian: boolean;
+  isLinkedGuardian: boolean;
+  retentionNoticeAccepted: boolean;
+}) {
+  if (!input.isParentGuardian) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "Only linked parent accounts can request parent portal account deletion.",
+    };
+  }
+  if (!input.isLinkedGuardian) {
+    return {
+      ok: false as const,
+      status: 403,
+      error: "You do not have access to this guardian profile.",
+    };
+  }
+  if (!input.retentionNoticeAccepted) {
+    return {
+      ok: false as const,
+      status: 400,
+      error: "Confirm the childcare record retention notice before submitting the request.",
+    };
+  }
+  return { ok: true as const };
+}
+
 export function canInviteGuardianToPortal(input: {
   canManageOperations: boolean;
   hasCenterAccess: boolean;

@@ -16,7 +16,7 @@ import {
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
@@ -44,7 +44,7 @@ function paymentMethodCategoryFrom(value: unknown): StripePaymentMethodCategory 
 async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const token = clean(body.token);
-  const rate = checkRateLimit({
+  const rate = await checkPersistentRateLimit({
     key: `payment-method-request:${requestIp(request.headers)}:${token.slice(-24) || "missing"}`,
     limit: 10,
     windowMs: 15 * 60_000,

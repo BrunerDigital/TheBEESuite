@@ -402,6 +402,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const searchPending = trimmedSearchQuery.length >= 2 && searchResponse.query !== trimmedSearchQuery;
   const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
+  const showWorkspaceTools = !parentFacing;
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessModule(currentUser, item.slug))
@@ -459,6 +460,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
 
 
   useEffect(() => {
+    if (!showWorkspaceTools) return;
+
     function handleSearchShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const isTyping = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
@@ -471,7 +474,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
 
     window.addEventListener("keydown", handleSearchShortcut);
     return () => window.removeEventListener("keydown", handleSearchShortcut);
-  }, []);
+  }, [showWorkspaceTools]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -519,7 +522,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                 <SidebarNav currentUser={currentUser} />
               </SheetContent>
             </Sheet>
-            <div className="hidden flex-1 items-center md:flex">
+            {showWorkspaceTools ? <div className="hidden flex-1 items-center md:flex">
               <div className="relative w-full max-w-2xl">
                 <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -584,9 +587,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </div>
                 ) : null}
               </div>
-            </div>
+            </div> : null}
             <div className="ml-auto flex items-center gap-2">
-              <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
+              {showWorkspaceTools ? <Dialog open={mobileSearchOpen} onOpenChange={setMobileSearchOpen}>
                 <DialogTrigger render={<Button variant="outline" size="icon" aria-label="Search workspace" className="md:hidden" />}>
                   <Search />
                 </DialogTrigger>
@@ -620,15 +623,15 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                     )}
                   </div>
                 </DialogContent>
-              </Dialog>
-              {!parentFacing ? (
+              </Dialog> : null}
+              {showWorkspaceTools ? (
                 <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 sm:inline-flex">
                   <Sparkles data-icon="inline-start" />
                   AI suggestions require review
                 </Badge>
               ) : null}
               {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
-              {!parentFacing ? (
+              {showWorkspaceTools ? (
                 <Dialog>
                   <Tooltip>
                     <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
@@ -658,7 +661,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </DialogContent>
                 </Dialog>
               ) : null}
-              {!parentFacing ? <NotificationDropdown currentUser={currentUser} /> : null}
+              {showWorkspaceTools ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

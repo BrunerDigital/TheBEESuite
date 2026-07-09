@@ -44,7 +44,7 @@ export const storeApps = {
     setupPath: "/parents/setup",
     workspacePath: "/parent-portal",
     manifestPath: "/parents/manifest.webmanifest",
-    description: "Secure parent and guardian access to child updates, messages, documents, tuition, photos, and family requests.",
+    description: "Secure parent and guardian access to the Parent Portal for child updates, tuition, documents, photos, and family requests.",
     appStoreSubtitle: "Childcare updates in one app",
     themeColor: "#f5b51b",
     backgroundColor: "#05070a",
@@ -53,7 +53,7 @@ export const storeApps = {
       {
         name: "Parent Portal",
         short_name: "Portal",
-        description: "Open family dashboard, child updates, photos, messages, documents, and tuition.",
+        description: "Open the Parent Portal for child updates, photos, documents, tuition, and family requests.",
         url: "/parent-portal",
       },
     ],

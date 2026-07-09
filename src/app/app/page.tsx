@@ -48,9 +48,9 @@ const roleOptions: Array<{
     eyebrow: "Family phone app",
     href: "/parents",
     description:
-      "Families log in to see child dashboard details, classroom photos, messages, documents, balances, and tuition payment options.",
+      "Families log in to the Parent Portal for child dashboard details, classroom photos, documents, balances, and tuition payment options.",
     icon: UsersRound,
-    items: ["Child updates and photos", "Tuition and balances", "Messages and documents"],
+    items: ["Parent Portal", "Child updates and photos", "Tuition and balances"],
   },
   {
     title: "Teachers",

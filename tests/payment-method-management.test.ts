@@ -6,6 +6,7 @@ import {
   canRunAutopay,
   paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
+  paymentMethodSetupExpirationPatch,
 } from "../src/lib/payment-method-management";
 
 test("payment method summary identifies saved Stripe customer and autopay status", () => {
@@ -83,6 +84,69 @@ test("payment method summary does not keep expired setup sessions pending", () =
   assert.equal(summary.autopayStatus, "disabled");
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
+});
+
+test("setup expiration preserves an already saved bank payment method", () => {
+  const patch = paymentMethodSetupExpirationPatch({
+    currentFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_bank_123",
+      stripePaymentMethodType: "us_bank_account",
+      stripePaymentMethodLast4: "6789",
+      stripePaymentMethodBankName: "Test Bank",
+      stripePaymentMethodSavedAt: "2026-07-08T15:00:00.000Z",
+      paymentMethodManagementStatus: "payment_method_saved",
+      autopayEnabled: true,
+      autopayStatus: "enabled",
+    },
+    sessionId: "cs_expired",
+    stripeEventId: "evt_expired",
+  });
+
+  assert.equal(patch.autopayPlaceholder, true);
+  assert.equal(patch.customFields.stripeDefaultPaymentMethodId, "pm_bank_123");
+  assert.equal(patch.customFields.stripeExpiredSetupCheckoutSessionId, "cs_expired");
+  assert.equal(patch.customFields.paymentMethodManagementStatus, "payment_method_saved");
+  assert.equal(patch.customFields.autopayEnabled, true);
+  assert.equal(patch.customFields.autopayStatus, "enabled");
+});
+
+test("setup expiration disables incomplete setup sessions without a saved method", () => {
+  const patch = paymentMethodSetupExpirationPatch({
+    currentFields: {
+      stripeCustomerId: "cus_123",
+      stripeSetupCheckoutSessionId: "cs_pending",
+      paymentMethodManagementStatus: "setup_session_created",
+      autopayStatus: "pending",
+    },
+    sessionId: "cs_expired",
+    stripeEventId: "evt_expired",
+  });
+
+  assert.equal(patch.autopayPlaceholder, false);
+  assert.equal(patch.customFields.stripeSetupCheckoutSessionId, "cs_expired");
+  assert.equal(patch.customFields.paymentMethodManagementStatus, "setup_session_expired");
+  assert.equal(patch.customFields.autopayStatus, "disabled");
+});
+
+test("setup expiration does not re-enable a method a user disabled", () => {
+  const patch = paymentMethodSetupExpirationPatch({
+    currentFields: {
+      stripeCustomerId: "cus_123",
+      stripeDefaultPaymentMethodId: "pm_bank_123",
+      stripePaymentMethodType: "us_bank_account",
+      autopayEnabled: false,
+      autopayStatus: "disabled",
+      autopayDisabledAt: "2026-07-08T16:00:00.000Z",
+      autopayDisabledByUserId: "user_123",
+    },
+    sessionId: "cs_expired",
+    stripeEventId: "evt_expired",
+  });
+
+  assert.equal(patch.autopayPlaceholder, false);
+  assert.equal(patch.customFields.paymentMethodManagementStatus, "setup_session_expired");
+  assert.equal(patch.customFields.autopayStatus, "disabled");
 });
 
 test("saved payment method charge eligibility is separate from autopay enablement", () => {

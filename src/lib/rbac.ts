@@ -77,13 +77,10 @@ const billingModules = new Set<ModuleSlug>([
 
 const parentGuardianModules = new Set<ModuleSlug>([
   "parent-portal",
-  "messages",
-  "notifications",
 ]);
 
 const authorizedPickupModules = new Set<ModuleSlug>([
   "parent-portal",
-  "notifications",
 ]);
 
 const readOnlyAuditorModules = new Set<ModuleSlug>([

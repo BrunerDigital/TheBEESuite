@@ -77,6 +77,44 @@ export function paymentMethodManagementSummary(input: {
   };
 }
 
+export function paymentMethodSetupExpirationPatch(input: {
+  currentFields: unknown;
+  sessionId: string;
+  stripeEventId: string;
+}): { autopayPlaceholder: boolean; customFields: Record<string, unknown> } {
+  const current = fields(input.currentFields);
+  const savedPaymentMethodId = clean(current.stripeDefaultPaymentMethodId);
+  const userDisabledAt = clean(current.autopayDisabledAt);
+  const userDisabledBy = clean(current.autopayDisabledByUserId);
+  const hasSavedPaymentMethod = Boolean(savedPaymentMethodId);
+  const userDisabledAfterSave = Boolean(userDisabledAt || userDisabledBy);
+
+  if (hasSavedPaymentMethod && !userDisabledAfterSave) {
+    return {
+      autopayPlaceholder: true,
+      customFields: {
+        ...current,
+        stripeExpiredSetupCheckoutSessionId: input.sessionId,
+        stripeEventId: input.stripeEventId,
+        autopayEnabled: true,
+        autopayStatus: "enabled",
+        paymentMethodManagementStatus: "payment_method_saved",
+      },
+    };
+  }
+
+  return {
+    autopayPlaceholder: false,
+    customFields: {
+      ...current,
+      stripeSetupCheckoutSessionId: input.sessionId,
+      stripeEventId: input.stripeEventId,
+      paymentMethodManagementStatus: "setup_session_expired",
+      autopayStatus: "disabled",
+    },
+  };
+}
+
 export function paymentMethodAutopayCategory(summary: Pick<PaymentMethodManagementSummary, "paymentMethodType">) {
   if (summary.paymentMethodType === "card") return "card" as const;
   if (summary.paymentMethodType === "us_bank_account") return "ach" as const;

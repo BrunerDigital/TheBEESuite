@@ -56,18 +56,6 @@ export const storeApps = {
         description: "Open family dashboard, child updates, photos, messages, documents, and tuition.",
         url: "/parent-portal",
       },
-      {
-        name: "Documents",
-        short_name: "Docs",
-        description: "Open parent documents and requests.",
-        url: "/parent-portal#documents",
-      },
-      {
-        name: "Messages",
-        short_name: "Messages",
-        description: "Open parent-to-center messages.",
-        url: "/parent-portal#messages",
-      },
     ],
   },
   teacher: {

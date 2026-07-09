@@ -549,13 +549,15 @@ test("director launch setup checklist auto-completes from app evidence", () => {
   );
 });
 
-test("parent portal navigation excludes shared dashboard help and documents", () => {
+test("parent portal navigation is limited to the parent portal workspace", () => {
   assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "parent-portal"), true);
-  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "messages"), true);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "messages"), false);
+  assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "notifications"), false);
   assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "dashboard"), false);
   assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "documents"), false);
   assert.equal(canAccessModule({ role: UserRole.PARENT_GUARDIAN }, "help"), false);
   assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "parent-portal"), true);
+  assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "notifications"), false);
   assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "help"), false);
 });
 

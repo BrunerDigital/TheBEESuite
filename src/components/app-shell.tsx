@@ -6,12 +6,10 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   Bell,
-  Camera,
   CheckCheck,
   ChevronDown,
   ClipboardList,
   Command,
-  CreditCard,
   FileText,
   Home,
   Menu,
@@ -354,18 +352,7 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
     { label: "Messages", href: "/messages", Icon: MessageSquare },
     { label: "Docs", href: "/documents", Icon: FileText },
   ];
-  const parentItems = currentUser?.role === "AUTHORIZED_PICKUP"
-    ? [
-        { label: "Family", href: "/parent-portal", Icon: Home },
-        { label: "Alerts", href: "/notifications", Icon: Bell },
-      ]
-    : [
-        { label: "Family", href: "/parent-portal", Icon: Home },
-        { label: "Reports", href: "/parent-portal#daily-reports", Icon: ClipboardList },
-        { label: "Activity", href: "/parent-portal#activities", Icon: Sparkles },
-        { label: "Photos", href: "/parent-portal#photos", Icon: Camera },
-        { label: "Billing", href: "/parent-portal#billing", Icon: CreditCard },
-      ];
+  const parentItems = [{ label: "Parent Portal", href: "/parent-portal", Icon: Home }];
   const items = isTeacherUser(currentUser) ? teacherItems : isParentFacingUser(currentUser) ? parentItems : [];
   if (!items.length) return null;
 
@@ -374,7 +361,7 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
       aria-label="Role quick navigation"
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl xl:hidden"
     >
-      <div className={cn("mx-auto grid max-w-md gap-1", items.length === 2 ? "grid-cols-2" : items.length === 3 ? "grid-cols-3" : items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
+      <div className={cn("mx-auto grid max-w-md gap-1", items.length === 1 ? "grid-cols-1" : items.length === 2 ? "grid-cols-2" : items.length === 3 ? "grid-cols-3" : items.length === 5 ? "grid-cols-5" : "grid-cols-4")}>
         {items.map(({ label, href, Icon }) => {
           const hrefPath = href.split("#")[0];
           const active = pathname === hrefPath;
@@ -414,6 +401,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
   const searchPending = trimmedSearchQuery.length >= 2 && searchResponse.query !== trimmedSearchQuery;
   const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
+  const parentFacing = isParentFacingUser(currentUser);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessModule(currentUser, item.slug))
@@ -633,40 +621,44 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </div>
                 </DialogContent>
               </Dialog>
-              <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 sm:inline-flex">
-                <Sparkles data-icon="inline-start" />
-                AI suggestions require review
-              </Badge>
+              {!parentFacing ? (
+                <Badge variant="secondary" className="hidden gap-1 rounded-lg px-3 py-1 sm:inline-flex">
+                  <Sparkles data-icon="inline-start" />
+                  AI suggestions require review
+                </Badge>
+              ) : null}
               {currentUser ? <LiveRefreshStatus role={currentUser.role} /> : null}
-              <Dialog>
-                <Tooltip>
-                  <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
-                    <Command />
-                  </DialogTrigger>
-                  <TooltipContent>Open command menu</TooltipContent>
-                </Tooltip>
-                <DialogContent className="sm:max-w-xl">
-                  <DialogHeader>
-                    <DialogTitle>Command menu</DialogTitle>
-                    <DialogDescription>Open the next workspace area for your role.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-2">
-                    {visibleCommandItems.map(({ label, slug, Icon, group }) => {
-                      const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
-                      return (
-                        <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
-                          <Icon className="text-primary" />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium">{label}</span>
-                            <span className="block text-xs text-muted-foreground">{group}</span>
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </DialogContent>
-              </Dialog>
-              <NotificationDropdown currentUser={currentUser} />
+              {!parentFacing ? (
+                <Dialog>
+                  <Tooltip>
+                    <DialogTrigger render={<TooltipTrigger render={<Button variant="outline" size="icon" aria-label="Open command menu" />} />}>
+                      <Command />
+                    </DialogTrigger>
+                    <TooltipContent>Open command menu</TooltipContent>
+                  </Tooltip>
+                  <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle>Command menu</DialogTitle>
+                      <DialogDescription>Open the next workspace area for your role.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-2">
+                      {visibleCommandItems.map(({ label, slug, Icon, group }) => {
+                        const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
+                        return (
+                          <Link key={slug} href={href} className="flex items-center gap-3 rounded-lg border bg-background/60 p-3 transition hover:border-primary/50 hover:bg-primary/10">
+                            <Icon className="text-primary" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium">{label}</span>
+                              <span className="block text-xs text-muted-foreground">{group}</span>
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ) : null}
+              {!parentFacing ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

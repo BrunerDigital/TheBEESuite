@@ -9,6 +9,7 @@ import {
   verifyStripeSignature,
 } from "@/lib/integrations";
 import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
+import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
@@ -763,16 +764,16 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
           where: { id: session.metadata.billingAccountId },
           select: { customFields: true },
         });
+        const expirationPatch = paymentMethodSetupExpirationPatch({
+          currentFields: account?.customFields,
+          sessionId: session.id,
+          stripeEventId: event.id,
+        });
         await tx.billingAccount.update({
           where: { id: session.metadata.billingAccountId },
           data: {
-            customFields: {
-              ...jsonObject(account?.customFields),
-              stripeSetupCheckoutSessionId: session.id,
-              stripeEventId: event.id,
-              paymentMethodManagementStatus: "setup_session_expired",
-              autopayStatus: "disabled",
-            },
+            autopayPlaceholder: expirationPatch.autopayPlaceholder,
+            customFields: expirationPatch.customFields as Prisma.InputJsonObject,
           },
         });
       });

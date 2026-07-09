@@ -15,7 +15,8 @@ native
 output
 outputs
 screenshots
-wordpress-avada
+wordpress-avada/*
+!wordpress-avada/kidcity-inquiry-form-bee-suite.html
 supabase/.temp
 *.tsbuildinfo
 .env

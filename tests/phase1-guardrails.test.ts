@@ -820,6 +820,9 @@ test("parent portal invitation and document guards enforce tenant and family bou
     email: "false",
     sms: "true",
     billing: false,
+    fteReports: true,
+    crmLeads: true,
+    enrollment: true,
   }), {
     portal: true,
     email: false,

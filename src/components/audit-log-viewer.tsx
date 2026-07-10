@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Download, Search } from "lucide-react";
+import { Download, Printer, Search } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,6 +78,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
   const [centerFilter, setCenterFilter] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange>("all");
   const [statusMessage, setStatusMessage] = useState("");
+  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const actionOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.action))).sort(), [logs]);
   const resourceOptions = useMemo(() => Array.from(new Set(logs.map((log) => log.resource))).sort(), [logs]);
@@ -121,16 +123,63 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
 
   return (
     <Card className="glass-panel">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable audit event report">
+        <header>
+          <h1>Audit Event Report</h1>
+          <p>
+            Action: {actionFilter === "all" ? "All actions" : actionFilter} | Resource: {resourceFilter === "all" ? "All resources" : resourceFilter} | Center: {centerFilter === "all" ? "All centers" : centerFilter} | Date: {dateRangeLabels[dateRange]}
+          </p>
+          {query.trim() ? <p>Search: {query.trim()}</p> : null}
+          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>{filteredLogs.length.toLocaleString()} visible events of {logs.length.toLocaleString()} loaded</p>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Actor</th>
+              <th>Email</th>
+              <th>Action</th>
+              <th>Center</th>
+              <th>Resource</th>
+              <th>Resource ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredLogs.map((log) => (
+              <tr key={log.id}>
+                <td>{formatDateTime(log.createdAt)}</td>
+                <td>{log.user?.name ?? "System"}</td>
+                <td>{log.user?.email ?? "system"}</td>
+                <td>{log.action}</td>
+                <td>{centerLabel(log)}</td>
+                <td>{log.resource}</td>
+                <td>{log.resourceId ?? ""}</td>
+              </tr>
+            ))}
+            {!filteredLogs.length ? (
+              <tr><td colSpan={7}>No audit events match the current filters.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </PrintableReport>
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <CardTitle>Recent Events</CardTitle>
             <CardDescription>Filter and export the scoped audit trail currently visible to this role.</CardDescription>
           </div>
-          <Button variant="outline" onClick={exportCsv}>
-            <Download data-icon="inline-start" />
-            Export CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={exportCsv}>
+              <Download data-icon="inline-start" />
+              Export CSV
+            </Button>
+            <Button variant="outline" onClick={printReport}>
+              <Printer data-icon="inline-start" />
+              Print events
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

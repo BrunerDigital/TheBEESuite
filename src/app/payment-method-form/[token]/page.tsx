@@ -6,6 +6,7 @@ import { PaymentMethodRequestForm } from "@/components/payment-method-request-fo
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import {
   paymentMethodRequestRecipientOptions,
@@ -140,10 +141,12 @@ export default async function PaymentMethodFormPage({
             <Badge className="mb-3 border-amber-300/30 bg-amber-300/10 text-amber-100" variant="outline">
               The BEE Suite secure tuition flow
             </Badge>
-            <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family payment profile in The BEE Suite</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-300">
-              Save a bank account or debit/credit card for tuition payments connected to {family.name}. The BEE Suite keeps the school-facing experience branded here and opens a secure processor handoff only when payment details must be collected.
-            </p>
+            <div className="flex items-start gap-2">
+              <h1 className="text-3xl font-semibold tracking-normal sm:text-4xl">Set up your family payment profile in The BEE Suite</h1>
+              <InfoTip label="About this payment setup" side="bottom" align="end" className="mt-1 text-zinc-400 hover:text-white">
+                Save a bank account or debit/credit card for tuition payments connected to {family.name}. A secure processor opens only when payment details must be collected.
+              </InfoTip>
+            </div>
           </div>
           <Card className="border-white/10 bg-white/[0.04] text-white">
             <CardContent className="space-y-3 p-4">

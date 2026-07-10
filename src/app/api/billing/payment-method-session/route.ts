@@ -49,9 +49,13 @@ function safeReturnPath(value: unknown, fallback: string) {
 }
 
 function appendQuery(path: string, key: string, value: string) {
+  return appendRawQuery(path, key, encodeURIComponent(value));
+}
+
+function appendRawQuery(path: string, key: string, rawValue: string) {
   const [base, hash = ""] = path.split("#", 2);
   const separator = base.includes("?") ? "&" : "?";
-  return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}${hash ? `#${hash}` : ""}`;
+  return `${base}${separator}${encodeURIComponent(key)}=${rawValue}${hash ? `#${hash}` : ""}`;
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -276,7 +280,7 @@ async function POSTHandler(request: NextRequest) {
     customerEmail: billingAccount.family.billingEmail,
     paymentMethodCategory,
     bankAccountVerificationMethod,
-    successUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "success")}`,
+    successUrl: `${baseUrl}${appendRawQuery(appendQuery(returnPath, "paymentMethod", "success"), "session_id", "{CHECKOUT_SESSION_ID}")}`,
     cancelUrl: `${baseUrl}${appendQuery(returnPath, "paymentMethod", "cancelled")}`,
     metadata: {
       tenantId,

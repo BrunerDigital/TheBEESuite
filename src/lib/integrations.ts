@@ -72,6 +72,7 @@ export type StripePaymentIntentSnapshot = {
 
 export type StripeCheckoutSessionSnapshot = {
   id: string;
+  url?: string | null;
   status?: string | null;
   paymentStatus?: string | null;
   paymentIntentId?: string | null;
@@ -819,6 +820,7 @@ function stripePaymentIntentStatus(value: unknown) {
 function stripeCheckoutSessionSnapshot(json: Record<string, unknown>): StripeCheckoutSessionSnapshot {
   return {
     id: clean(json.id),
+    url: clean(json.url) || null,
     status: clean(json.status) || null,
     paymentStatus: clean(json.payment_status) || null,
     paymentIntentId: stripePaymentIntentId(json.payment_intent),

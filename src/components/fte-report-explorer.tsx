@@ -1,7 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState, useTransition } from "react";
-import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, FilterX, MapPin, Save, Search } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, FilterX, MapPin, Printer, Save, Search } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const options = useMemo(() => ({
     states: uniqueSorted(centers.map((center) => center.state ?? "Unassigned")),
@@ -232,6 +234,14 @@ export function FteReportExplorer({ centers, reports }: Props) {
   })), [latestReportsByCenter, locationFilteredCenters, selectedWeekReportsByCenter]);
 
   const selectedCenterRow = centerId !== ALL ? schoolRows.find((row) => row.center.id === centerId) ?? null : null;
+  const printFilterSummary = [
+    `School: ${centerId === ALL ? "All schools" : centerLabel(centerMap.get(centerId))}`,
+    `State/region: ${state === ALL ? "All states" : state}`,
+    `Owner: ${ownerGroup === ALL ? "All owner groups" : ownerGroup}`,
+    `Week: ${weekStart === ALL ? "All weeks" : weekStart}`,
+    `Status: ${status === ALL ? "All statuses" : status.replaceAll("_", " ")}`,
+    query.trim() ? `Search: ${query.trim()}` : null,
+  ].filter(Boolean).join(" | ");
 
   function resetFilters() {
     setCenterId(ALL);
@@ -277,6 +287,110 @@ export function FteReportExplorer({ centers, reports }: Props) {
 
   return (
     <Card className="glass-panel">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable FTE explorer report">
+        <header>
+          <h1>Historical FTE Explorer</h1>
+          <p>{printFilterSummary}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+        </header>
+        <h2>Summary</h2>
+        <table>
+          <tbody>
+            <tr><th>Filtered reports</th><td>{filteredReports.length.toLocaleString()}</td></tr>
+            <tr><th>Filtered schools</th><td>{filteredCenterIds.size.toLocaleString()}</td></tr>
+            <tr><th>Latest filtered FTE</th><td>{totalFte.toLocaleString()}</td></tr>
+            <tr><th>Latest filtered enrollment</th><td>{totalEnrollment.toLocaleString()}</td></tr>
+            <tr><th>Selected/latest week FTE</th><td>{selectedWeekFte.toLocaleString()}</td></tr>
+          </tbody>
+        </table>
+        <h2>Trend</h2>
+        <table>
+          <thead><tr><th>Week</th><th>FTE</th><th>Enrollment</th><th>Submitted schools</th></tr></thead>
+          <tbody>
+            {trendWeeks.map((week) => (
+              <tr key={week.week}>
+                <td>{week.week}</td>
+                <td>{week.fte.toLocaleString()}</td>
+                <td>{week.enrolled.toLocaleString()}</td>
+                <td>{week.centers.toLocaleString()}</td>
+              </tr>
+            ))}
+            {!trendWeeks.length ? <tr><td colSpan={4}>No reports match these filters.</td></tr> : null}
+          </tbody>
+        </table>
+        <h2>By State/Region</h2>
+        <table>
+          <thead><tr><th>State/region</th><th>FTE</th><th>Schools</th><th>Reports</th></tr></thead>
+          <tbody>
+            {groupedByState.map(([label, row]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                <td>{row.fte.toLocaleString()}</td>
+                <td>{row.centers.size.toLocaleString()}</td>
+                <td>{row.reports.toLocaleString()}</td>
+              </tr>
+            ))}
+            {!groupedByState.length ? <tr><td colSpan={4}>No matching state/region data.</td></tr> : null}
+          </tbody>
+        </table>
+        <h2>By Owner Group</h2>
+        <table>
+          <thead><tr><th>Owner group</th><th>FTE</th><th>Schools</th><th>Reports</th></tr></thead>
+          <tbody>
+            {groupedByOwner.map(([label, row]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                <td>{row.fte.toLocaleString()}</td>
+                <td>{row.centers.size.toLocaleString()}</td>
+                <td>{row.reports.toLocaleString()}</td>
+              </tr>
+            ))}
+            {!groupedByOwner.length ? <tr><td colSpan={4}>No matching owner group data.</td></tr> : null}
+          </tbody>
+        </table>
+        <h2>School Navigator</h2>
+        <table>
+          <thead><tr><th>School</th><th>Selected week</th><th>Latest FTE</th><th>Enrollment</th><th>Status</th></tr></thead>
+          <tbody>
+            {schoolRows.map((row) => (
+              <tr key={row.center.id}>
+                <td>{centerLabel(row.center)}</td>
+                <td>{row.selectedWeekReport?.fteCount.toLocaleString() ?? "Due"}</td>
+                <td>{row.latestReport?.fteCount.toLocaleString() ?? "None"}</td>
+                <td>{row.latestReport?.enrolledCount.toLocaleString() ?? "None"}</td>
+                <td>{row.selectedWeekReport?.status.replaceAll("_", " ") ?? "Due"}</td>
+              </tr>
+            ))}
+            {!schoolRows.length ? <tr><td colSpan={5}>No schools match these filters.</td></tr> : null}
+          </tbody>
+        </table>
+        <h2>Filtered Report History</h2>
+        <table>
+          <thead>
+            <tr><th>Week</th><th>School</th><th>State</th><th>Owner</th><th>FTE</th><th>Enrollment</th><th>Status</th><th>Updated</th><th>Submitted by</th></tr>
+          </thead>
+          <tbody>
+            {filteredReports.map((report) => {
+              const center = centerMap.get(report.centerId);
+              return (
+                <tr key={report.id}>
+                  <td>{formatDate(report.weekStart)}</td>
+                  <td>{centerLabel(center)}</td>
+                  <td>{stateLabel(center)}</td>
+                  <td>{ownerLabel(center)}</td>
+                  <td>{report.fteCount.toLocaleString()}</td>
+                  <td>{report.enrolledCount.toLocaleString()}</td>
+                  <td>{report.status.replaceAll("_", " ")}</td>
+                  <td>{formatDate(report.updatedAt)}</td>
+                  <td>{report.submittedBy ?? "Not set"}</td>
+                </tr>
+              );
+            })}
+            {!filteredReports.length ? <tr><td colSpan={9}>No FTE reports match these filters.</td></tr> : null}
+          </tbody>
+        </table>
+      </PrintableReport>
       <CardHeader>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -288,10 +402,16 @@ export function FteReportExplorer({ centers, reports }: Props) {
               Filter executive FTE history by school, state/region, owner group, week, status, and search terms.
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={resetFilters}>
-            <FilterX data-icon="inline-start" />
-            Reset filters
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={printReport}>
+              <Printer data-icon="inline-start" />
+              Print FTE report
+            </Button>
+            <Button variant="outline" onClick={resetFilters}>
+              <FilterX data-icon="inline-start" />
+              Reset filters
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">

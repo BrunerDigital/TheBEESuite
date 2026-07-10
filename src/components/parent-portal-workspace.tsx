@@ -31,6 +31,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
@@ -1183,13 +1184,18 @@ export function ParentPortalWorkspace({
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-medium">Payment Methods And Autopay</div>
+                  <div className="flex items-center gap-2 font-medium">
+                    Payment Methods And Autopay
+                    <InfoTip label="About payment methods and autopay">
+                      Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block bank verification.
+                    </InfoTip>
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {paymentMethodManagement?.hasSavedPaymentMethod
                       ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
                       : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "Bank verification is pending. Use Instant Bank Login to verify through your bank now. Open invoices do not block verification, and payments can still be made below."
-                        : "Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below."}
+                        ? "Bank verification is pending."
+                        : "No saved payment method yet."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1734,10 +1740,10 @@ export function ParentPortalWorkspace({
                 <div className="flex items-center gap-2 font-medium">
                   <ShieldCheck className="size-4 text-destructive" />
                   Privacy and Account Deletion
+                  <InfoTip label="About account deletion" side="right">
+                    This requests removal of parent portal login access. Some childcare, safety, licensing, billing, payment, and audit records may need to be retained by your school or The BEE Suite.
+                  </InfoTip>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Request removal of parent portal login access. Some childcare, safety, licensing, billing, payment, and audit records may need to be retained by your school or The BEE Suite.
-                </p>
               </div>
               {accountDeletionRequest ? (
                 <Badge variant="outline">

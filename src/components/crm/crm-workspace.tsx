@@ -15,6 +15,7 @@ import {
   Paperclip,
   Phone,
   Plus,
+  Printer,
   Search,
   Send,
   Save,
@@ -34,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import { cn } from "@/lib/utils";
 
@@ -479,6 +481,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [emailPurposePrompt, setEmailPurposePrompt] = useState("");
   const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(() => makeLeadEmailOptions(initialLeads[0]));
   const [emailAttachments, setEmailAttachments] = useState<EmailComposerAttachment[]>([]);
+  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
   const [editForm, setEditForm] = useState({
     familyName: initialLeads[0]?.familyName ?? "",
     childName: initialLeads[0]?.childName ?? "",
@@ -519,6 +522,19 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
 
   const selectedLead = leads.find((lead) => lead.id === selectedLeadId) ?? leads[0];
   const highIntent = filteredLeads.filter((lead) => lead.score >= 75).length;
+  const selectedCenterOption = selectedCenter === "all" ? null : centers.find((center) => center.id === selectedCenter) ?? null;
+  const printSchoolLabel = selectedCenterOption
+    ? getCenterLabel(selectedCenterOption)
+    : centers.length === 1
+      ? getCenterLabel(centers[0])
+      : "All visible schools";
+  const printFilterSummary = [
+    `School: ${printSchoolLabel}`,
+    `Stage: ${stageFilter === "all" ? "All stages" : stageLabels[stageFilter]}`,
+    `Score: ${scoreFilterLabels[scoreFilter]}`,
+    `Created: ${createdRangeLabels[createdRange]}`,
+    query.trim() ? `Search: ${query.trim()}` : null,
+  ].filter(Boolean).join(" | ");
   const timeline = useMemo(() => leadTimeline(selectedLeadDetails), [selectedLeadDetails]);
   const duplicateCandidates = useMemo(() => {
     if (!selectedLead) return [];
@@ -649,6 +665,14 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     link.remove();
     URL.revokeObjectURL(url);
     showStatus(`Exported ${filteredLeads.length.toLocaleString()} visible lead records.`);
+  }
+
+  function printVisibleInquiries() {
+    if (filteredLeads.length === 0) {
+      showError("No visible inquiries to print.");
+      return;
+    }
+    printReport();
   }
 
   function moveDraggedLead(stage: EnrollmentStage) {
@@ -981,6 +1005,59 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable CRM inquiry report">
+          <header className="mb-4 flex items-start justify-between gap-6">
+            <div>
+              <h1 className="text-xl font-bold">CRM Inquiry Report</h1>
+              <p className="mt-1 text-sm font-semibold">{printSchoolLabel}</p>
+              <p className="mt-1 text-xs">{printFilterSummary}</p>
+            </div>
+            <div className="text-right text-xs">
+              <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+              <p>{filteredLeads.length.toLocaleString()} inquiries</p>
+              <p>Printed by: {currentUser.name}</p>
+            </div>
+          </header>
+          <table>
+            <thead>
+              <tr>
+                <th>Family</th>
+                <th>Child</th>
+                <th>Contact</th>
+                <th>Program</th>
+                <th>Stage</th>
+                <th>Score</th>
+                <th>Source</th>
+                <th>Desired Start</th>
+                <th>Received</th>
+                <th>School</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredLeads.map((lead) => (
+                <tr key={lead.id}>
+                  <td>{lead.familyName}</td>
+                  <td>{lead.childName || "Not provided"}</td>
+                  <td>
+                    <div>{lead.email || "No email"}</div>
+                    <div>{lead.phone || "No phone"}</div>
+                  </td>
+                  <td>
+                    <div>{lead.programInterest || "Not provided"}</div>
+                    <div>{lead.ageGroupInterest || ""}</div>
+                  </td>
+                  <td>{stageLabels[lead.stage]}</td>
+                  <td>{lead.score}</td>
+                  <td>{lead.leadSource || "Unknown"}</td>
+                  <td>{dateInputValue(lead.desiredStartDate) || "Not set"}</td>
+                  <td>{safeDate(lead.createdAt)}</td>
+                  <td>{getCenterLabel(lead.center)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+      </PrintableReport>
       <section className="overflow-hidden rounded-2xl border bg-card/80 shadow-2xl shadow-black/20">
         <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
           <div className="p-5 sm:p-6">
@@ -1236,7 +1313,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   placeholder="Saved view name"
                   aria-label="Saved CRM view name"
                 />
-                <div className="grid gap-2 sm:grid-cols-2 xl:flex">
+                <div className="grid gap-2 sm:grid-cols-3 xl:flex">
                   <Button variant="outline" onClick={saveCurrentView}>
                     <Save data-icon="inline-start" />
                     Save view
@@ -1244,6 +1321,10 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   <Button variant="outline" onClick={exportVisibleLeads}>
                     <Download data-icon="inline-start" />
                     Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={printVisibleInquiries}>
+                    <Printer data-icon="inline-start" />
+                    Print inquiries
                   </Button>
                 </div>
               </div>

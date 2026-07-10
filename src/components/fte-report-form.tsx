@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Save } from "lucide-react";
+import { AlertCircle, CheckCircle2, Printer, Save } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -153,6 +154,7 @@ export function FteReportForm({
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const calculatedFte = useMemo(() => {
     const full = Number(form.fullTimeCount || 0);
@@ -260,9 +262,67 @@ export function FteReportForm({
 
   return (
     <Card className="glass-panel">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable FTE report history">
+        <header>
+          <h1>{title}</h1>
+          <p>Scope: {centers.length === 1 ? centers[0].name : `${centers.length.toLocaleString()} visible schools`}</p>
+          <p>Selected school: {selectedCenter?.name ?? "Choose school"}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+        </header>
+        <h2>Current Entry Summary</h2>
+        <table>
+          <tbody>
+            <tr><th>This week</th><td>{currentWeekReport ? "Submitted" : "Not submitted"}</td></tr>
+            <tr><th>Calculated FTE</th><td>{calculatedFte.toLocaleString()}</td></tr>
+            <tr><th>Age group total</th><td>{ageGroupCount.toLocaleString()}</td></tr>
+            <tr><th>Week</th><td>{form.weekStart || "Not set"} to {form.weekEnd || "Not set"}</td></tr>
+          </tbody>
+        </table>
+        <h2>FTE Report History</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Week</th>
+              <th>School</th>
+              <th>FTE</th>
+              <th>FT/PT</th>
+              <th>Enrollment</th>
+              <th>Status</th>
+              <th>Payroll %</th>
+              <th>Submitted by</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((report) => (
+              <tr key={report.id}>
+                <td>{dateInput(report.weekStart)}</td>
+                <td>{report.centerName}</td>
+                <td>{report.fteCount.toLocaleString()}</td>
+                <td>{report.fullTimeCount.toLocaleString()} / {report.partTimeCount.toLocaleString()}</td>
+                <td>{report.enrolledCount.toLocaleString()}</td>
+                <td>{report.status.replaceAll("_", " ")}</td>
+                <td>{report.payrollPercent === null || report.payrollPercent === undefined ? "Not set" : `${report.payrollPercent}%`}</td>
+                <td>{report.submittedBy ?? "Not set"}</td>
+                <td>{dateInput(report.updatedAt)}</td>
+              </tr>
+            ))}
+            {!reports.length ? <tr><td colSpan={9}>No FTE reports have been submitted for this scope yet.</td></tr> : null}
+          </tbody>
+        </table>
+      </PrintableReport>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+          <Button variant="outline" onClick={printReport}>
+            <Printer data-icon="inline-start" />
+            Print FTE history
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-5">
         {statusMessage ? (

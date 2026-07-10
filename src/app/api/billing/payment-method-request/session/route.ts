@@ -178,7 +178,7 @@ async function POSTHandler(request: NextRequest) {
     customerEmail: payload.email,
     paymentMethodCategory,
     bankAccountVerificationMethod,
-    successUrl: `${baseUrl}${formPath}?paymentMethod=success`,
+    successUrl: `${baseUrl}${formPath}?paymentMethod=success&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${baseUrl}${formPath}?paymentMethod=cancelled`,
     metadata: {
       tenantId: payload.tenantId,

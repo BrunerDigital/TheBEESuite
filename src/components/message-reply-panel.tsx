@@ -612,7 +612,7 @@ export function MessageReplyPanel({
             </Button>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No family records are available in this message scope yet.</p>
+          <p className="text-sm text-muted-foreground">No families are available for messaging yet.</p>
         )}
       </CardContent>
     </Card>

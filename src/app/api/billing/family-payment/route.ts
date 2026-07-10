@@ -523,7 +523,20 @@ async function POSTHandler(request: NextRequest) {
       connectedAccountId,
       tenantId: user.tenantId,
       scope: "family_balance",
+      requestedPaymentMethodCategory: checkoutCategory(method),
+      expectedAmountCents: amountCents,
     });
+    if (!blocker.blocked && blocker.url) {
+      return NextResponse.json({
+        ok: true,
+        url: blocker.url,
+        status: "checkout_session_reused",
+        paymentId: activeFamilyPayment.id,
+        stripeSessionId: blocker.pendingPayment?.stripeCheckoutSessionId,
+        feeDisclosure: PAYMENT_PROCESSING_RECOVERY_DISCLOSURE,
+        feeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
+      });
+    }
     if (blocker.blocked) {
       return NextResponse.json(
         {

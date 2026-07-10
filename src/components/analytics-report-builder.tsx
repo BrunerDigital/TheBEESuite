@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Clock, Download, FileText, MessageSquare, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
+import { CalendarDays, Clock, Download, FileText, MessageSquare, Printer, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,6 +58,18 @@ function exportParams(input: AnalyticsReportBuilderFilters & { report: ReportKin
   return `/api/reports/export?${params.toString()}`;
 }
 
+function reportLabel(report: ReportKind) {
+  return reportOptions.find((option) => option.value === report)?.label ?? "Operational report";
+}
+
+function reportRangeLabel(range: string) {
+  if (range === "7") return "Last 7 days";
+  if (range === "30") return "Last 30 days";
+  if (range === "90") return "Last 90 days";
+  if (range === "365") return "Last 12 months";
+  return "Custom dates";
+}
+
 export function AnalyticsReportBuilder({
   data,
   filters,
@@ -70,8 +83,21 @@ export function AnalyticsReportBuilder({
   const [centerId, setCenterId] = useState(filters.centerId || "all");
   const [report, setReport] = useState<ReportKind>("lead_funnel");
   const [query, setQuery] = useState("");
+  const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const exportState = { range, start, end, centerId, report };
+  const selectedCenterLabel = centerId === "all"
+    ? "All accessible centers"
+    : data.centers.find((center) => center.id === centerId)?.label ?? "Selected center";
+  const rangeLabel = range === "all"
+    ? `${start ? formatDate(start) : formatDate(data.range.startDate)} to ${end ? formatDate(end) : formatDate(data.range.endDate)}`
+    : reportRangeLabel(range);
+  const printFilterSummary = [
+    `Report: ${reportLabel(report)}`,
+    `Center: ${selectedCenterLabel}`,
+    `Range: ${rangeLabel}`,
+    query.trim() ? `Search: ${query.trim()}` : null,
+  ].filter(Boolean).join(" | ");
   const filteredLeadSources = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return data.leadSources.filter((row) =>
@@ -121,6 +147,171 @@ export function AnalyticsReportBuilder({
 
   return (
     <div className="space-y-4">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable analytics report">
+        <header>
+          <h1>{reportLabel(report)} Report</h1>
+          <p>{printFilterSummary}</p>
+          <p>Loaded range: {formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+        </header>
+        <h2>Summary</h2>
+        <table>
+          <tbody>
+            <tr><th>Lead conversion</th><td>{data.totals.leadConversionRate}% enrolled</td></tr>
+            <tr><th>Attendance rate</th><td>{data.totals.attendanceRate}% present</td></tr>
+            <tr><th>Message response</th><td>{data.totals.avgResponseHours === null ? "No replies" : `${data.totals.avgResponseHours}h avg`}</td></tr>
+            <tr><th>Staff hours</th><td>{hours(data.totals.staffHoursMinutes)} decimal hours</td></tr>
+          </tbody>
+        </table>
+
+        {report === "lead_funnel" ? (
+          <>
+            <h2>Lead Source Conversion</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Source</th>
+                  <th>Center</th>
+                  <th>Leads</th>
+                  <th>Tours</th>
+                  <th>Applications</th>
+                  <th>Enrolled</th>
+                  <th>Conversion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeadSources.map((row) => (
+                  <tr key={`${row.centerId}:${row.source}`}>
+                    <td>{row.source}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.leads}</td>
+                    <td>{row.tours}</td>
+                    <td>{row.applications}</td>
+                    <td>{row.enrolled}</td>
+                    <td>{row.conversionRate}%</td>
+                  </tr>
+                ))}
+                {!filteredLeadSources.length ? <tr><td colSpan={7}>No lead source rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+            <h2>Funnel Stages</h2>
+            <table>
+              <thead><tr><th>Stage</th><th>Count</th><th>Share</th></tr></thead>
+              <tbody>
+                {data.funnelStages.map((stage) => (
+                  <tr key={stage.stage}>
+                    <td>{stage.stage.replaceAll("_", " ")}</td>
+                    <td>{stage.count}</td>
+                    <td>{stage.share}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "attendance" ? (
+          <>
+            <h2>Attendance And Absence Trends</h2>
+            <table>
+              <thead>
+                <tr><th>Period</th><th>Center</th><th>Present</th><th>Absent</th><th>Check-ins</th><th>Check-outs</th><th>Rate</th></tr>
+              </thead>
+              <tbody>
+                {filteredAttendance.map((row) => (
+                  <tr key={`${row.date}:${row.centerId}`}>
+                    <td>{row.date}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.present}</td>
+                    <td>{row.absent}</td>
+                    <td>{row.checkIns}</td>
+                    <td>{row.checkOuts}</td>
+                    <td>{row.attendanceRate}%</td>
+                  </tr>
+                ))}
+                {!filteredAttendance.length ? <tr><td colSpan={7}>No attendance rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "billing" ? (
+          <>
+            <h2>Billing, Revenue, And AR</h2>
+            <table>
+              <thead>
+                <tr><th>Period</th><th>Center</th><th>Invoices</th><th>Invoiced</th><th>Paid</th><th>Open AR</th><th>Overdue</th></tr>
+              </thead>
+              <tbody>
+                {filteredBilling.map((row) => (
+                  <tr key={`${row.period}:${row.centerId}`}>
+                    <td>{row.period}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.invoiceCount}</td>
+                    <td>{money(row.invoiceCents)}</td>
+                    <td>{money(row.paidCents)}</td>
+                    <td>{money(row.openCents)}</td>
+                    <td>{money(row.overdueCents)}</td>
+                  </tr>
+                ))}
+                {!filteredBilling.length ? <tr><td colSpan={7}>No billing rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "messages" ? (
+          <>
+            <h2>Parent Response Time And Message Analytics</h2>
+            <table>
+              <thead>
+                <tr><th>Center</th><th>Parent messages</th><th>Staff replies</th><th>Unread</th><th>Avg response</th><th>Response rate</th></tr>
+              </thead>
+              <tbody>
+                {filteredMessages.map((row) => (
+                  <tr key={row.centerId}>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.parentMessages}</td>
+                    <td>{row.staffReplies}</td>
+                    <td>{row.unreadMessages}</td>
+                    <td>{row.avgResponseHours === null ? "No replies" : `${row.avgResponseHours}h`}</td>
+                    <td>{row.responseRate}%</td>
+                  </tr>
+                ))}
+                {!filteredMessages.length ? <tr><td colSpan={6}>No message rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "staff_hours" ? (
+          <>
+            <h2>Staff Hours And Time Clock</h2>
+            <table>
+              <thead>
+                <tr><th>Teacher</th><th>Email</th><th>Center</th><th>Classroom</th><th>Status</th><th>Total decimal</th><th>Closed shifts</th><th>Open decimal</th><th>Last action</th></tr>
+              </thead>
+              <tbody>
+                {filteredStaffHours.map((row) => (
+                  <tr key={row.staffId}>
+                    <td>{row.staffName}</td>
+                    <td>{row.staffEmail}</td>
+                    <td>{row.centerLabel}</td>
+                    <td>{row.classroomName}</td>
+                    <td>{row.status === "clocked_in" ? "Clocked in" : "Clocked out"}</td>
+                    <td>{hours(row.totalMinutes)}</td>
+                    <td>{row.closedShiftCount} / {hours(row.closedShiftMinutes)}</td>
+                    <td>{row.openShiftMinutes ? hours(row.openShiftMinutes) : "None"}</td>
+                    <td>{row.lastActionAt ? formatDate(row.lastActionAt) : "No history"}</td>
+                  </tr>
+                ))}
+                {!filteredStaffHours.length ? <tr><td colSpan={9}>No staff hour rows match the report filters.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+      </PrintableReport>
       <Card className="glass-panel">
         <CardHeader>
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -138,6 +329,10 @@ export function AnalyticsReportBuilder({
               <Button variant="outline" onClick={() => download("pdf")}>
                 <FileText data-icon="inline-start" />
                 Export PDF
+              </Button>
+              <Button variant="outline" onClick={printReport}>
+                <Printer data-icon="inline-start" />
+                Print report
               </Button>
             </div>
           </div>

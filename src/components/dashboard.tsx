@@ -10,10 +10,12 @@ import {
   CheckCircle2,
   FileWarning,
   MessageSquare,
+  Printer,
   ShieldAlert,
   Sparkles,
   Users,
 } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -651,9 +653,239 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     familyCommunication: { value: `${parentMessages.length}`, detail: "Recent family messages", href: "/messages" },
     parentAccount: { value: "Portal", detail: "Family account view", href: "/parent-portal" },
   };
+  const { active: printActive, generatedAt: printGeneratedAt, print: printDashboard } = usePrintableReport();
+  const canPrintDashboard = visibleLenses.some((lens) => ["platform", "brand", "regional", "director", "billing"].includes(lens));
+  const dashboardPrintScope = visibleLenses
+    .filter((lens) => ["platform", "brand", "regional", "director", "billing"].includes(lens))
+    .map((lens) => lens.replaceAll("_", " "))
+    .join(", ") || live?.dashboardWidgetRoleLabel || "Dashboard";
 
   return (
     <div className="flex flex-col gap-6">
+      <ReportPrintStyles />
+      <PrintableReport active={printActive} label="Printable dashboard snapshot">
+        <header>
+          <h1>The BEE Suite Dashboard Snapshot</h1>
+          <p>Scope: {dashboardPrintScope}</p>
+          <p>As of: {asOfLabel}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+        </header>
+        <h2>KPI Summary</h2>
+        <table>
+          <thead><tr><th>Metric</th><th>Value</th><th>Detail</th></tr></thead>
+          <tbody>
+            {visibleDashboardKpis.map((kpi) => (
+              <tr key={kpi.label}>
+                <td>{kpi.label}</td>
+                <td>{kpi.value}</td>
+                <td>{kpi.trend}</td>
+              </tr>
+            ))}
+            {!visibleDashboardKpis.length ? <tr><td colSpan={3}>No KPI widgets are visible for this login.</td></tr> : null}
+          </tbody>
+        </table>
+
+        {attendanceSnapshot ? (
+          <>
+            <h2>Attendance Snapshot</h2>
+            <table>
+              <tbody>
+                <tr><th>Scope</th><td>{attendanceSnapshot.scopeLabel}</td></tr>
+                <tr><th>Present</th><td>{attendanceSnapshot.present}/{attendanceSnapshot.total}</td></tr>
+                <tr><th>Checked out</th><td>{attendanceSnapshot.checkedOut}</td></tr>
+                <tr><th>Absent</th><td>{attendanceSnapshot.absent}</td></tr>
+                <tr><th>Not marked</th><td>{attendanceSnapshot.notMarked}</td></tr>
+              </tbody>
+            </table>
+            <table>
+              <thead><tr><th>Classroom</th><th>Center</th><th>Present</th><th>Checked out</th><th>Absent</th><th>Not marked</th><th>Total</th></tr></thead>
+              <tbody>
+                {attendanceSnapshot.rows.map((row) => (
+                  <tr key={row.classroomId}>
+                    <td>{row.classroomName}</td>
+                    <td>{row.centerName}</td>
+                    <td>{row.present}</td>
+                    <td>{row.checkedOut}</td>
+                    <td>{row.absent}</td>
+                    <td>{row.notMarked}</td>
+                    <td>{row.total}</td>
+                  </tr>
+                ))}
+                {!attendanceSnapshot.rows.length ? <tr><td colSpan={7}>No attendance rows are visible.</td></tr> : null}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {live?.executiveMetrics ? (
+          <>
+            <h2>Executive FTE And School Comparison</h2>
+            <table>
+              <tbody>
+                <tr><th>Current week</th><td>{live.executiveMetrics.currentWeekStart}</td></tr>
+                <tr><th>Deadline</th><td>{live.executiveMetrics.fteDeadlineLabel}</td></tr>
+                <tr><th>FTE submitted schools</th><td>{live.executiveMetrics.fteSubmittedSchools}</td></tr>
+                <tr><th>FTE missing schools</th><td>{live.executiveMetrics.fteMissingSchools}</td></tr>
+              </tbody>
+            </table>
+            <table>
+              <thead>
+                <tr><th>School</th><th>Region</th><th>Children</th><th>Capacity</th><th>Occupancy</th><th>Staff</th><th>Leads</th><th>Tours today</th><th>Revenue</th><th>FTE</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                {live.executiveMetrics.schoolComparisons.map((school) => (
+                  <tr key={school.id}>
+                    <td>{school.name}</td>
+                    <td>{school.region}</td>
+                    <td>{school.children}</td>
+                    <td>{school.capacity}</td>
+                    <td>{school.occupancy}%</td>
+                    <td>{school.staff}</td>
+                    <td>{school.leads}</td>
+                    <td>{school.toursToday}</td>
+                    <td>${school.revenueDollars.toLocaleString()}</td>
+                    <td>{school.fteCount ?? 0}</td>
+                    <td>{school.fteSubmitted ? school.fteStatus : "Missing"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <h2>Weekly FTE Trend</h2>
+            <table>
+              <thead><tr><th>Week</th><th>Submitted</th><th>Missing</th><th>FTE total</th><th>Enrolled total</th></tr></thead>
+              <tbody>
+                {live.executiveMetrics.weeklyFteTrend.map((week) => (
+                  <tr key={week.week}>
+                    <td>{week.week}</td>
+                    <td>{week.submitted}</td>
+                    <td>{week.missing}</td>
+                    <td>{week.fteTotal.toLocaleString()}</td>
+                    <td>{week.enrolledTotal.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {dashboardAnalytics.length ? (
+          <>
+            <h2>Enrollment And Revenue Trend</h2>
+            <table>
+              <thead><tr><th>Month</th><th>Leads</th><th>Tours</th><th>Enrolled</th><th>Revenue</th></tr></thead>
+              <tbody>
+                {dashboardAnalytics.map((point) => (
+                  <tr key={point.month}>
+                    <td>{point.month}</td>
+                    <td>{point.leads}</td>
+                    <td>{point.tours}</td>
+                    <td>{point.enrolled}</td>
+                    <td>${point.revenue.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {visibleSnapshotPipeline.length ? (
+          <>
+            <h2>Enrollment Pipeline</h2>
+            <table>
+              <thead><tr><th>Stage</th><th>Count</th><th>Value</th></tr></thead>
+              <tbody>
+                {visibleSnapshotPipeline.map((stage) => (
+                  <tr key={stage.name}>
+                    <td>{stage.name}</td>
+                    <td>{stage.count}</td>
+                    <td>{stage.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {classroomSnapshots.length ? (
+          <>
+            <h2>Classroom Capacity</h2>
+            <table>
+              <thead><tr><th>Classroom</th><th>Age group</th><th>Present/enrolled</th><th>Capacity</th><th>Open seats</th><th>Ratio</th></tr></thead>
+              <tbody>
+                {classroomSnapshots.map((room) => (
+                  <tr key={`${room.name}-${room.ageGroup}`}>
+                    <td>{room.name}</td>
+                    <td>{room.ageGroup}</td>
+                    <td>{room.present}</td>
+                    <td>{room.capacity}</td>
+                    <td>{Math.max(Number(room.capacity) - Number(room.present), 0)}</td>
+                    <td>{room.ratio}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {dashboardLeads.length ? (
+          <>
+            <h2>Lead Scoring And Tours</h2>
+            <table>
+              <thead><tr><th>Family</th><th>Child</th><th>Source</th><th>Stage</th><th>Score</th><th>Desired start</th><th>Tags</th></tr></thead>
+              <tbody>
+                {dashboardLeads.map((lead) => (
+                  <tr key={`${lead.family}-${lead.child}`}>
+                    <td>{lead.family}</td>
+                    <td>{lead.child}</td>
+                    <td>{lead.source}</td>
+                    <td>{lead.stage}</td>
+                    <td>{lead.score}</td>
+                    <td>{lead.desiredStart}</td>
+                    <td>{lead.tags.join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {actionQueue.length ? (
+          <>
+            <h2>Action Queue</h2>
+            <table>
+              <thead><tr><th>#</th><th>Item</th></tr></thead>
+              <tbody>
+                {actionQueue.map((item, index) => (
+                  <tr key={`${index}-${notificationText(item)}`}>
+                    <td>{index + 1}</td>
+                    <td>{notificationText(item)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {parentMessages.length ? (
+          <>
+            <h2>Parent Messages</h2>
+            <table>
+              <thead><tr><th>From</th><th>Subject</th><th>Status</th><th>Sentiment</th><th>Preview</th></tr></thead>
+              <tbody>
+                {parentMessages.map((message) => (
+                  <tr key={`${message.from}-${message.subject}`}>
+                    <td>{message.from}</td>
+                    <td>{message.subject}</td>
+                    <td>{message.status}</td>
+                    <td>{message.sentiment}</td>
+                    <td>{message.preview}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        ) : null}
+      </PrintableReport>
       <section className="relative overflow-hidden rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/20">
         <div className="hive-texture absolute inset-0 opacity-[0.08]" />
         <div className={showAiBrief ? "relative grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]" : "relative grid gap-6"}>
@@ -669,6 +901,10 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 </p>
               </div>
               <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                {canPrintDashboard ? <Button className="w-full sm:w-auto" variant="outline" onClick={printDashboard}>
+                  <Printer data-icon="inline-start" />
+                  Print dashboard
+                </Button> : null}
                 {showAiBrief ? <Button className="w-full sm:w-auto" nativeButton={false} render={<Link href={aiBriefHref} />}>
                   <Sparkles data-icon="inline-start" />
                   {isTeacherDashboard ? "Open teacher portal" : isBillingDashboard ? "Open messages" : isParentDashboard || isPickupDashboard ? "Open family portal" : "Review AI brief"}

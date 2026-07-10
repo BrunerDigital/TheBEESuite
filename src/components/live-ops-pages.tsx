@@ -41,7 +41,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ReportPrintAction } from "@/components/printable-report";
 import { AuditLogViewer } from "@/components/audit-log-viewer";
 import { AiCommandCenter, type AiCommandCenterData } from "@/components/ai-command-center";
 import {
@@ -2339,6 +2341,8 @@ function MessageAttachmentLinks({ attachments }: { attachments?: MessageAttachme
 }
 
 export function MessagesPage({ data }: { data: MessagesPageData }) {
+  const isParentMessagingView = ["PARENT_GUARDIAN", "AUTHORIZED_PICKUP"].includes(data.currentRole.toUpperCase());
+
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
@@ -2346,17 +2350,21 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
           <MessageSquare data-icon="inline-start" />
           Family communication
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Parent Messaging Inbox</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live parent and staff communication records scoped to the current user. Mr. Bee can draft responses, but reviewed human approval remains required before sensitive outreach.
-        </p>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-semibold tracking-tight">{isParentMessagingView ? "Family Messages" : "Parent Messaging Inbox"}</h1>
+          <InfoTip label="About messages" side="right">
+            {isParentMessagingView
+              ? "Messages shown here are connected to your family portal account and school communication history."
+              : "Communication records are limited to the current user's school access. Draft assistance can be used by staff, but sensitive outreach still needs human review."}
+          </InfoTip>
+        </div>
       </section>
       {data.demoMode ? <DemoDataNotice section="parent messaging" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Messages" value={data.stats.total.toLocaleString()} />
         <StatCard label="Unread" value={data.stats.unread.toLocaleString()} />
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
-        <StatCard label="AI review queue" value={data.stats.aiReview.toLocaleString()} detail="Human approval before sending" />
+        {!isParentMessagingView ? <StatCard label="Review queue" value={data.stats.aiReview.toLocaleString()} detail="Needs approval" /> : null}
       </div>
       <MessageReplyPanel
         key={data.replyDraft?.replyToMessageId ?? "new-message"}
@@ -2379,8 +2387,14 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
       />
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Family Threads</CardTitle>
-          <CardDescription>Per-family reply history, assigned owner, and delivery channel context</CardDescription>
+          <div className="flex items-center gap-2">
+            <CardTitle>{isParentMessagingView ? "Message History" : "Family Threads"}</CardTitle>
+            <InfoTip label="About message history">
+              {isParentMessagingView
+                ? "Conversation history appears here when portal messages are linked to your family account."
+                : "Threads group each family's reply history with owner and delivery-channel context."}
+            </InfoTip>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {data.threads.map((thread) => (
@@ -2420,14 +2434,16 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
             </div>
           ))}
           {!data.threads.length ? (
-            <p className="text-sm text-muted-foreground">No family threads are visible for this scope yet.</p>
+            <p className="text-sm text-muted-foreground">{isParentMessagingView ? "No message history is visible yet." : "No family threads are visible yet."}</p>
           ) : null}
         </CardContent>
       </Card>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Conversations</CardTitle>
-          <CardDescription>Email, portal, classroom, and SMS records</CardDescription>
+          <div className="flex items-center gap-2">
+            <CardTitle>Recent Conversations</CardTitle>
+            <InfoTip label="About recent conversations">Includes email, portal, classroom, and SMS records connected to this view.</InfoTip>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -2474,7 +2490,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
               {!data.messages.length ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-muted-foreground">
-                    No messages are visible for this scope yet.
+                    No messages are visible yet.
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -2952,8 +2968,59 @@ export function DailyReportsPage({ data }: { data: DailyReportsPageData }) {
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Recent Daily Reports</CardTitle>
-          <CardDescription>Classroom-ready activity summaries</CardDescription>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle>Recent Daily Reports</CardTitle>
+              <CardDescription>Classroom-ready activity summaries</CardDescription>
+            </div>
+            <ReportPrintAction
+              buttonLabel="Print reports"
+              reportTitle="Daily Reports"
+              label="Printable daily reports"
+              meta={[
+                `${data.stats.total.toLocaleString()} reports`,
+                `${data.stats.sent.toLocaleString()} sent | ${data.stats.inProgress.toLocaleString()} in progress | ${data.stats.needsSupplies.toLocaleString()} needs supplies`,
+              ]}
+            >
+              <h2>Summary</h2>
+              <table>
+                <tbody>
+                  <tr><th>Reports</th><td>{data.stats.total.toLocaleString()}</td></tr>
+                  <tr><th>Sent</th><td>{data.stats.sent.toLocaleString()}</td></tr>
+                  <tr><th>In progress</th><td>{data.stats.inProgress.toLocaleString()}</td></tr>
+                  <tr><th>Needs supplies</th><td>{data.stats.needsSupplies.toLocaleString()}</td></tr>
+                </tbody>
+              </table>
+              <h2>Daily Report Rows</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Child</th>
+                    <th>Classroom</th>
+                    <th>School</th>
+                    <th>Logged items</th>
+                    <th>Status</th>
+                    <th>Note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.reports.map((report) => (
+                    <tr key={report.id}>
+                      <td>{formatDate(report.date)}</td>
+                      <td>{report.child.fullName}</td>
+                      <td>{report.classroom?.name ?? "No classroom"}</td>
+                      <td>{report.classroom?.center.crmLocationId ?? report.classroom?.center.name ?? "No school"}</td>
+                      <td>{report._count.meals} meals | {report._count.naps} naps | {report._count.activities} activities</td>
+                      <td>{report.sentAt ? "sent" : "draft"}</td>
+                      <td>{report.suppliesNeeded ?? report.teacherNote ?? report.mood ?? ""}</td>
+                    </tr>
+                  ))}
+                  {!data.reports.length ? <tr><td colSpan={7}>No daily reports are visible for this scope.</td></tr> : null}
+                </tbody>
+              </table>
+            </ReportPrintAction>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -3184,8 +3251,66 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
       </div>
       <Card className="glass-panel">
         <CardHeader>
-          <CardTitle>Incident Queue</CardTitle>
-          <CardDescription>Director review and parent acknowledgment status</CardDescription>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <CardTitle>Incident Queue</CardTitle>
+              <CardDescription>Director review and parent acknowledgment status</CardDescription>
+            </div>
+            <ReportPrintAction
+              buttonLabel="Print incidents"
+              reportTitle="Incident Reports"
+              label="Printable incident reports"
+              meta={[
+                `${data.stats.total.toLocaleString()} incidents`,
+                `${data.stats.pending.toLocaleString()} pending review | ${data.stats.parentNotified.toLocaleString()} parents notified | ${data.stats.acknowledged.toLocaleString()} acknowledged`,
+              ]}
+            >
+              <h2>Summary</h2>
+              <table>
+                <tbody>
+                  <tr><th>Incidents</th><td>{data.stats.total.toLocaleString()}</td></tr>
+                  <tr><th>Pending review</th><td>{data.stats.pending.toLocaleString()}</td></tr>
+                  <tr><th>Parents notified</th><td>{data.stats.parentNotified.toLocaleString()}</td></tr>
+                  <tr><th>Acknowledged</th><td>{data.stats.acknowledged.toLocaleString()}</td></tr>
+                </tbody>
+              </table>
+              <h2>Incident Queue</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Child</th>
+                    <th>Classroom</th>
+                    <th>School</th>
+                    <th>Type</th>
+                    <th>Review</th>
+                    <th>Parent status</th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.incidents.map((incident) => (
+                    <tr key={incident.id}>
+                      <td>{formatDateTime(incident.occurredAt)}</td>
+                      <td>{incident.child.fullName}</td>
+                      <td>{incident.classroom?.name ?? "No classroom"}</td>
+                      <td>{incident.classroom?.center.crmLocationId ?? incident.classroom?.center.name ?? "No school"}</td>
+                      <td>{incident.type}</td>
+                      <td>{incident.adminReviewStatus}</td>
+                      <td>
+                        {incident.parentNotified ? "Parent notified" : "Parent not notified"}; {incident.parentAcknowledgedAt ? `Acknowledged ${formatDateTime(incident.parentAcknowledgedAt)}` : "Awaiting acknowledgment"}
+                      </td>
+                      <td>
+                        {incident.description} Action: {incident.actionTaken}
+                        {Array.isArray(incident.followUpTasks) && incident.followUpTasks.length ? ` Follow-up: ${incident.followUpTasks.join("; ")}` : ""}
+                      </td>
+                    </tr>
+                  ))}
+                  {!data.incidents.length ? <tr><td colSpan={8}>No incident reports are visible for this scope.</td></tr> : null}
+                </tbody>
+              </table>
+            </ReportPrintAction>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>

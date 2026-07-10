@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { Printer } from "lucide-react";
+import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Button } from "@/components/ui/button";
 
 export type BillingReceiptSchool = {
@@ -57,17 +57,6 @@ function formatDate(value: Date | string | null | undefined) {
   }).format(new Date(value));
 }
 
-function formatDateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
 function schoolForCenterId(schools: BillingReceiptSchool[], centerId: string | null | undefined) {
   return schools.find((school) => school.id === centerId) ?? null;
 }
@@ -80,89 +69,23 @@ function schoolEinLabel(school: BillingReceiptSchool | null) {
   return school?.ein ?? "EIN not saved";
 }
 
-function PrintStyles() {
-  return (
-    <style>{`
-      @media print {
-        body:has(.billing-print-active) * {
-          visibility: hidden !important;
-        }
-
-        body:has(.billing-print-active) .billing-print-active,
-        body:has(.billing-print-active) .billing-print-active * {
-          visibility: visible !important;
-        }
-
-        body:has(.billing-print-active) .billing-print-active {
-          position: absolute !important;
-          inset: 0 auto auto 0 !important;
-          width: 100% !important;
-          min-height: 100% !important;
-          padding: 0.25in !important;
-          background: #ffffff !important;
-          color: #111827 !important;
-          font-size: 12px !important;
-        }
-
-        body:has(.billing-print-active) .billing-print-active table {
-          width: 100% !important;
-          border-collapse: collapse !important;
-        }
-
-        body:has(.billing-print-active) .billing-print-active th,
-        body:has(.billing-print-active) .billing-print-active td {
-          border: 1px solid #111827 !important;
-          padding: 6px !important;
-          text-align: left !important;
-          vertical-align: top !important;
-        }
-
-        body:has(.billing-print-active) .billing-print-active th {
-          background: #f3f4f6 !important;
-          font-weight: 700 !important;
-        }
-      }
-    `}</style>
-  );
-}
-
-function usePrintState() {
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    function handleAfterPrint() {
-      setActive(false);
-    }
-    window.addEventListener("afterprint", handleAfterPrint);
-    return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, []);
-
-  function print() {
-    setActive(true);
-    window.setTimeout(() => window.print(), 0);
-  }
-
-  return { active, print };
-}
-
 export function LedgerPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
-  const { active, print } = usePrintState();
-  const generatedAt = useMemo(() => new Date(), []);
+  const { active, generatedAt, print } = usePrintableReport();
   const totalCharges = entries.filter((entry) => entry.amountCents > 0).reduce((sum, entry) => sum + entry.amountCents, 0);
   const totalCredits = entries.filter((entry) => entry.amountCents < 0).reduce((sum, entry) => sum + Math.abs(entry.amountCents), 0);
   const singleSchool = schools.length === 1 ? schools[0] : null;
 
   return (
     <>
-      <PrintStyles />
+      <ReportPrintStyles />
       <Button type="button" variant="outline" size="sm" onClick={print} disabled={!entries.length}>
         <Printer data-icon="inline-start" />
         Print ledger
       </Button>
-      <section className={active ? "billing-print-active" : "hidden"} aria-hidden={!active}>
+      <PrintableReport active={active} label="Printable customer ledger report">
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Customer Ledger Report</h1>
-          <div>Generated: {formatDateTime(generatedAt)}</div>
+          <div>Generated: {formatPrintDateTime(generatedAt)}</div>
           <div>School: {singleSchool ? schoolLabel(singleSchool) : "Multiple schools"}</div>
           <div>School EIN: {singleSchool ? schoolEinLabel(singleSchool) : "Shown by ledger row"}</div>
           <div>Total charges: {money(totalCharges)}</div>
@@ -202,28 +125,27 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
             })}
           </tbody>
         </table>
-      </section>
+      </PrintableReport>
     </>
   );
 }
 
 export function PaymentReceiptPrintButton({ payment, schools }: { payment: BillingPaymentReceipt; schools: BillingReceiptSchool[] }) {
-  const { active, print } = usePrintState();
-  const generatedAt = useMemo(() => new Date(), []);
+  const { active, generatedAt, print } = usePrintableReport();
   const school = schoolForCenterId(schools, payment.billingAccount.family.centerId);
   const paid = payment.status === "PAID";
 
   return (
     <>
-      <PrintStyles />
+      <ReportPrintStyles />
       <Button type="button" variant="outline" size="sm" onClick={print} disabled={!paid}>
         <Printer data-icon="inline-start" />
         Receipt
       </Button>
-      <section className={active ? "billing-print-active" : "hidden"} aria-hidden={!active}>
+      <PrintableReport active={active} label="Printable customer payment receipt">
         <header style={{ marginBottom: 20 }}>
           <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Customer Payment Receipt</h1>
-          <div>Generated: {formatDateTime(generatedAt)}</div>
+          <div>Generated: {formatPrintDateTime(generatedAt)}</div>
           <div>School: {schoolLabel(school)}</div>
           <div>School EIN: {schoolEinLabel(school)}</div>
         </header>
@@ -238,7 +160,7 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
             </tr>
             <tr>
               <th>Payment date</th>
-              <td>{formatDateTime(payment.paidAt)}</td>
+              <td>{formatPrintDateTime(payment.paidAt)}</td>
             </tr>
             <tr>
               <th>Amount paid</th>
@@ -266,7 +188,7 @@ export function PaymentReceiptPrintButton({ payment, schools }: { payment: Billi
             </tr>
           </tbody>
         </table>
-      </section>
+      </PrintableReport>
     </>
   );
 }

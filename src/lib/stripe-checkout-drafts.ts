@@ -7,6 +7,7 @@ import {
 import {
   expireStripeCheckoutSession,
   retrieveStripeCheckoutSession,
+  type StripePaymentMethodCategory,
   type StripeCheckoutSessionSnapshot,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -30,6 +31,59 @@ function millisecondsSince(value: string | null | undefined, now: Date) {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? now.getTime() - parsed : null;
+}
+
+function normalizeCheckoutCategory(value: unknown): StripePaymentMethodCategory | null {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (normalized === "default" || normalized === "ach" || normalized === "card" || normalized === "link_bank") {
+    return normalized;
+  }
+  return null;
+}
+
+function isOpenUnpaidDraftSession(session: StripeCheckoutSessionSnapshot) {
+  return session.status === "open" && session.paymentStatus === "unpaid" && !session.paymentIntentId;
+}
+
+export function stripeCheckoutDraftReplacementReason({
+  session,
+  pendingPayment,
+  requestedPaymentMethodCategory,
+  expectedAmountCents,
+}: {
+  session: StripeCheckoutSessionSnapshot;
+  pendingPayment: {
+    amountCents?: number | null;
+    paymentMethodCategory?: string | null;
+    requestedPaymentMethodCategory?: string | null;
+  };
+  requestedPaymentMethodCategory?: StripePaymentMethodCategory | null;
+  expectedAmountCents?: number | null;
+}) {
+  if (!isOpenUnpaidDraftSession(session)) return null;
+  if (
+    typeof expectedAmountCents === "number" &&
+    Number.isFinite(expectedAmountCents) &&
+    typeof pendingPayment.amountCents === "number" &&
+    pendingPayment.amountCents !== expectedAmountCents
+  ) {
+    return "superseded_amount" as const;
+  }
+
+  const requestedCategory = normalizeCheckoutCategory(requestedPaymentMethodCategory);
+  const pendingCategory = normalizeCheckoutCategory(pendingPayment.paymentMethodCategory)
+    || normalizeCheckoutCategory(pendingPayment.requestedPaymentMethodCategory);
+  if (
+    requestedCategory &&
+    requestedCategory !== "default" &&
+    pendingCategory &&
+    pendingCategory !== "default" &&
+    requestedCategory !== pendingCategory
+  ) {
+    return "superseded_payment_method" as const;
+  }
+
+  return null;
 }
 
 export function stripeCheckoutDraftClearReason(
@@ -61,12 +115,16 @@ export async function resolveStripeCheckoutDraftBlocker({
   connectedAccountId,
   tenantId,
   scope = "invoice",
+  requestedPaymentMethodCategory,
+  expectedAmountCents,
   now = new Date(),
 }: {
   payment: StripeCheckoutDraftPayment;
   connectedAccountId?: string | null;
   tenantId?: string | null;
   scope?: "invoice" | "family_balance";
+  requestedPaymentMethodCategory?: StripePaymentMethodCategory | null;
+  expectedAmountCents?: number | null;
   now?: Date;
 }) {
   const pendingPayment = activeStripeCheckoutPaymentSummary(payment);
@@ -91,7 +149,13 @@ export async function resolveStripeCheckoutDraftBlocker({
 
   let session = retrieved.session;
   const clearReason = stripeCheckoutDraftClearReason(session, now);
-  if (clearReason === "stale_open") {
+  const replacementReason = clearReason ? null : stripeCheckoutDraftReplacementReason({
+    session,
+    pendingPayment,
+    requestedPaymentMethodCategory,
+    expectedAmountCents,
+  });
+  if (clearReason === "stale_open" || replacementReason) {
     const expired = await expireStripeCheckoutSession({ sessionId, connectedAccountId, tenantId });
     if (!expired.ok || !expired.session) {
       return {
@@ -104,12 +168,17 @@ export async function resolveStripeCheckoutDraftBlocker({
     session = expired.session;
   }
 
-  const finalClearReason = clearReason === "stale_open"
+  const finalClearReason = replacementReason || (clearReason === "stale_open"
     ? "stale_open"
-    : stripeCheckoutDraftClearReason(session, now);
+    : stripeCheckoutDraftClearReason(session, now));
   const fields = jsonRecord(payment.customFields);
 
-  if (finalClearReason === "expired" || finalClearReason === "stale_open") {
+  if (
+    finalClearReason === "expired" ||
+    finalClearReason === "stale_open" ||
+    finalClearReason === "superseded_amount" ||
+    finalClearReason === "superseded_payment_method"
+  ) {
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -117,7 +186,7 @@ export async function resolveStripeCheckoutDraftBlocker({
         externalIdPlaceholder: session.id,
         customFields: jsonInput({
           ...fields,
-          status: finalClearReason === "stale_open" ? "checkout_superseded" : "checkout_expired",
+          status: finalClearReason === "expired" ? "checkout_expired" : "checkout_superseded",
           stripeCheckoutSessionId: session.id,
           stripeCheckoutSessionStatus: session.status || null,
           stripePaymentStatus: session.paymentStatus || null,
@@ -168,6 +237,15 @@ export async function resolveStripeCheckoutDraftBlocker({
   });
 
   const refreshedPayment = { ...payment, customFields: refreshedFields };
+  if (isOpenUnpaidDraftSession(session) && session.url) {
+    return {
+      blocked: false as const,
+      resumed: true as const,
+      url: session.url,
+      pendingPayment: activeStripeCheckoutPaymentSummary(refreshedPayment),
+    };
+  }
+
   return {
     blocked: true as const,
     pendingPayment: activeStripeCheckoutPaymentSummary(refreshedPayment),

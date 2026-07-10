@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { InfoTip } from "@/components/ui/info-tip";
 
 type Props = {
   token: string;
@@ -41,6 +42,7 @@ export function PaymentMethodRequestForm({
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
   const nextOpenInvoice = openInvoices[0] ?? null;
+  const showPendingBankVerification = autopayStatus === "pending" && paymentMethodStatus !== "success";
 
   function money(cents: number) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -155,7 +157,7 @@ export function PaymentMethodRequestForm({
             </AlertDescription>
           </Alert>
         ) : null}
-        {autopayStatus === "pending" ? (
+        {showPendingBankVerification ? (
           <Alert className="border-amber-300/40 bg-amber-300/10 text-amber-50">
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
@@ -196,10 +198,12 @@ export function PaymentMethodRequestForm({
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 size-5 text-amber-300" />
             <div>
-              <div className="text-sm font-medium">The BEE Suite payment profile</div>
-              <p className="mt-1 text-sm leading-6 text-zinc-300">
-                Verify a bank account or save a card for tuition payments. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
-              </p>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                The BEE Suite payment profile
+                <InfoTip label="About secure payment setup" side="right" className="text-zinc-400 hover:text-white">
+                  Verify a bank account or save a card for tuition payments. Stripe may appear during the secure processor step, but The BEE Suite never stores bank login credentials, full card numbers, or full bank account numbers.
+                </InfoTip>
+              </div>
               <p className="mt-2 text-xs text-zinc-400">
                 Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.
               </p>

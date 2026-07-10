@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1129,10 +1130,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">Family payment profile</div>
-              <p className="text-xs text-muted-foreground">
-                Add or update the family&apos;s saved payment method, enable autopay, or open The BEE Suite secure payment method manager.
-              </p>
+              <div className="flex items-center gap-2 text-sm font-medium">
+                Family payment profile
+                <InfoTip label="About family payment profiles">
+                  Add or update a family&apos;s saved payment method, enable autopay, or open the secure payment method manager.
+                </InfoTip>
+              </div>
             </div>
             <Badge variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} className="capitalize">{selectedAutopayStatus}</Badge>
           </div>
@@ -1170,10 +1173,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
           <div className="mt-4 rounded-lg border bg-background/40 p-3">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-sm font-medium">Director payment terminal</div>
-                <p className="text-xs text-muted-foreground">
-                  Choose total balance, an open invoice, or a custom amount, then charge a saved method or open The BEE Suite secure phone card terminal.
-                </p>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  Director payment terminal
+                  <InfoTip label="About director payment actions">
+                    Choose total balance, an open invoice, or a custom amount, then charge a saved method or open the secure phone card terminal.
+                  </InfoTip>
+                </div>
               </div>
               <Badge variant="outline">{money(directorPaymentAmountCents)}</Badge>
             </div>
@@ -1254,8 +1259,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 ACH Bank Checkout
               </Button>
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              Use Open Card Terminal when a parent gives card details by phone. The BEE Suite sends the director to a secure processor card-entry page, so card numbers are never typed into or stored by The BEE Suite.
+            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+              Payment help
+              <InfoTip label="Payment action help" side="right">
+                Use Open Card Terminal when a parent gives card details by phone. The director is sent to a secure processor page, so card numbers are never typed into or stored by The BEE Suite.
+              </InfoTip>
             </div>
           </div>
           <div className="mt-4 rounded-lg border bg-background/40 p-3">
@@ -1264,10 +1272,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <Mail className="size-4 text-muted-foreground" />
                   Branded parent payment and bank verification links
+                  <InfoTip label="About secure payment links" side="right">
+                    Email a secure form branded for The BEE Suite. Parents start in the school-branded portal; Stripe appears only during the secure processor handoff when required.
+                  </InfoTip>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Email a secure form branded for The BEE Suite. Parents start in the school-branded portal; Stripe appears only during the secure processor handoff when required.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button disabled={isPending || !selectedFamily || !selectedPaymentRequestEmails.length} onClick={() => sendPaymentMethodRequest("instant_bank_verification")}>

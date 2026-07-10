@@ -10,7 +10,7 @@ import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
 } from "../src/lib/billing-guardrails";
-import { stripeCheckoutDraftClearReason } from "../src/lib/stripe-checkout-drafts";
+import { stripeCheckoutDraftClearReason, stripeCheckoutDraftReplacementReason } from "../src/lib/stripe-checkout-drafts";
 import { demoAccountEmails, resolveLoginIdentifier } from "../src/lib/demo-accounts";
 import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
@@ -560,6 +560,50 @@ test("parent portal navigation is limited to the parent portal workspace", () =>
   assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "parent-portal"), true);
   assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "notifications"), false);
   assert.equal(canAccessModule({ role: UserRole.AUTHORIZED_PICKUP }, "help"), false);
+});
+
+test("Stripe checkout draft replacement rules supersede recoverable open drafts", () => {
+  const openSession = {
+    id: "cs_open_recent",
+    status: "open",
+    paymentStatus: "unpaid",
+    createdAt: "2026-07-02T20:45:00.000Z",
+    paymentIntentId: null,
+  };
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: openSession,
+    pendingPayment: { amountCents: 25_000, paymentMethodCategory: "link_bank" },
+    requestedPaymentMethodCategory: "card",
+    expectedAmountCents: 25_000,
+  }), "superseded_payment_method");
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: openSession,
+    pendingPayment: { amountCents: 26_000, paymentMethodCategory: "link_bank" },
+    requestedPaymentMethodCategory: "link_bank",
+    expectedAmountCents: 2_500,
+  }), "superseded_amount");
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: openSession,
+    pendingPayment: { amountCents: 25_000, paymentMethodCategory: "link_bank" },
+    requestedPaymentMethodCategory: "link_bank",
+    expectedAmountCents: 25_000,
+  }), null);
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: {
+      id: "cs_processing",
+      status: "complete",
+      paymentStatus: "unpaid",
+      paymentIntentId: "pi_processing",
+      paymentIntentStatus: "processing",
+    },
+    pendingPayment: { amountCents: 25_000, paymentMethodCategory: "link_bank" },
+    requestedPaymentMethodCategory: "card",
+    expectedAmountCents: 25_000,
+  }), null);
 });
 
 test("login rate limit blocks repeated attempts for the same key", () => {

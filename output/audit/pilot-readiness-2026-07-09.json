@@ -1,0 +1,1476 @@
+{
+  "generatedAt": "2026-07-09T18:24:39.689Z",
+  "summary": {
+    "status": "ready_with_warnings",
+    "label": "READY WITH WARNINGS",
+    "failures": 0,
+    "warnings": 7,
+    "rolloutGapCount": 70,
+    "childClassroomMismatchCount": 0
+  },
+  "checks": {
+    "configuration": [
+      {
+        "status": "pass",
+        "label": "Database URL",
+        "detail": "Configured through DATABASE_URL."
+      },
+      {
+        "status": "pass",
+        "label": "AUTH_SECRET",
+        "detail": "Configured."
+      },
+      {
+        "status": "pass",
+        "label": "PIN_HASH_SECRET",
+        "detail": "Configured."
+      },
+      {
+        "status": "pass",
+        "label": "Supabase Auth",
+        "detail": "URL, anon key, and service role key are configured."
+      },
+      {
+        "status": "pass",
+        "label": "Supabase Storage",
+        "detail": "Child media storage can be signed/uploaded server-side."
+      },
+      {
+        "status": "pass",
+        "label": "Stripe billing",
+        "detail": "Stripe secret and webhook secret are configured."
+      }
+    ],
+    "database": [
+      {
+        "status": "pass",
+        "label": "Database connectivity",
+        "detail": "Prisma can query the configured database."
+      }
+    ],
+    "pilotData": [
+      {
+        "status": "pass",
+        "label": "Tenants",
+        "detail": "1 tenant record(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Active rollout schools",
+        "detail": "70 active school center(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Active users",
+        "detail": "106 active user account(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Families",
+        "detail": "357 family record(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Children",
+        "detail": "523 child record(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Guardians",
+        "detail": "687 guardian record(s)."
+      },
+      {
+        "status": "pass",
+        "label": "Guardian kiosk PINs",
+        "detail": "13 guardian(s) have kiosk PINs."
+      },
+      {
+        "status": "pass",
+        "label": "Centerless families",
+        "detail": "0 family record(s) are missing a center."
+      },
+      {
+        "status": "pass",
+        "label": "Child/classroom center consistency",
+        "detail": "0 child record(s) are linked to a classroom from another center."
+      },
+      {
+        "status": "warn",
+        "label": "Classroom setup",
+        "detail": "68 active center(s) have no classrooms."
+      },
+      {
+        "status": "warn",
+        "label": "Staff setup",
+        "detail": "1 active center(s) have no staff/teacher profiles."
+      },
+      {
+        "status": "warn",
+        "label": "Child classroom assignment",
+        "detail": "3 active center(s) have children without classroom assignments."
+      },
+      {
+        "status": "warn",
+        "label": "Parent login links",
+        "detail": "2 active center(s) have guardians but no linked parent/guardian login users."
+      },
+      {
+        "status": "warn",
+        "label": "Guardian PIN rollout",
+        "detail": "1 active center(s) have guardians but no kiosk PINs."
+      },
+      {
+        "status": "pass",
+        "label": "Director/billing access grants",
+        "detail": "0 active center(s) have no active center director, assistant director, or billing grant."
+      },
+      {
+        "status": "pass",
+        "label": "Open invoices",
+        "detail": "13 open invoice(s)."
+      },
+      {
+        "status": "warn",
+        "label": "Pending incident review",
+        "detail": "1 incident(s) need review."
+      },
+      {
+        "status": "warn",
+        "label": "Parent media review",
+        "detail": "6 photo(s) are waiting for permission review."
+      }
+    ]
+  },
+  "rolloutGaps": [
+    {
+      "centerId": "cmp4ew5yx00046alw8i1yf63m",
+      "label": "Kid City USA - Cordera (Colorado Springs)",
+      "locationId": "CO | Colorado Springs - Cordera",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew65w00066alwrh022a4o",
+      "label": "Kid City USA - Grand Junction",
+      "locationId": "CO | Grand Junction",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6ai00086alwrlz0h8e2",
+      "label": "Kid City USA - Highlands Ranch",
+      "locationId": "CO | Highlands Ranch",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6f3000a6alwmz62n7w2",
+      "label": "Kid City USA - Longmont",
+      "locationId": "CO | Longmont",
+      "classroomCount": 8,
+      "staffCount": 1,
+      "familyCount": 349,
+      "childCount": 514,
+      "childrenWithoutClassroomCount": 160,
+      "guardianCount": 674,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "160 child(ren) without classroom assignment",
+        "no linked parent/guardian login users",
+        "no guardian kiosk PINs"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6o9000e6alwr3pjnm9p",
+      "label": "Kid City USA - Woodland Park - East Midland",
+      "locationId": "CO | Woodland Par",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6jo000c6alwlln6522l",
+      "label": "Kid City USA - Woodland Park - Forest Edge",
+      "locationId": "CO | Forest Edge",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6st000g6alw757z6u2s",
+      "label": "Kid City USA - Altamonte - Douglas",
+      "locationId": "FL | Altamonte - Douglas",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew6xp000i6alw2a17nslb",
+      "label": "Kid City USA - Altamonte - Fruitland",
+      "locationId": "FL | Altamonte - Fruitland",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew72b000k6alwbum0c0vi",
+      "label": "Kid City USA - Altamonte - Maitland",
+      "locationId": "FL | Altamonte - Maitland",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew76w000m6alwtie1qhxe",
+      "label": "Kid City USA - Apopka",
+      "locationId": "FL | Apopka",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew7fz000q6alwvx1vh3mc",
+      "label": "Kid City USA - College Park",
+      "locationId": "FL | College Park",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew7p4000u6alwntfmvr32",
+      "label": "Kid City USA - Daytona Beach East",
+      "locationId": "FL | Daytona Beach East",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew7y9000y6alw1y2d6ymi",
+      "label": "Kid City USA - DeLand - Ameila",
+      "locationId": "FL | Deland - Amelia",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew7tp000w6alw8ep0mi0d",
+      "label": "Kid City USA - DeLand - Orange",
+      "locationId": "FL | Deland - Orange",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew82u00106alwa5jib9bn",
+      "label": "Kid City USA - Deltona - Howland",
+      "locationId": "FL | Deltona - Howland",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew8gh00166alwgt1ftxjm",
+      "label": "Kid City USA - Glen St. Mary",
+      "locationId": "FL | Glen Saint Mary",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew8l000186alw9og4cgku",
+      "label": "Kid City USA - Hampton",
+      "locationId": "FL | Hampton",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew8u4001c6alwq674ue16",
+      "label": "Kid City USA - Holly Hill",
+      "locationId": "FL | Holly Hill",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 1,
+      "childCount": 1,
+      "childrenWithoutClassroomCount": 1,
+      "guardianCount": 1,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 1,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "1 child(ren) without classroom assignment",
+        "no linked parent/guardian login users"
+      ]
+    },
+    {
+      "centerId": "cmp4ew8yo001e6alw32jneo3w",
+      "label": "Kid City USA - Beach Blvd",
+      "locationId": "FL | Jacksonville - Beach",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew93a001g6alwf40puaf4",
+      "label": "Kid City USA - Durbin",
+      "locationId": "FL | Jacksonville - Durbin",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew9h2001m6alwxssr4wr6",
+      "label": "Kid City USA - Oakleaf",
+      "locationId": "FL | Jacksonville - Oakleaf",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew9lm001o6alw934xok6n",
+      "label": "Kid City USA - Lake City",
+      "locationId": "FL | Lake City",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew9ur001s6alwkpjqwg10",
+      "label": "Kid City USA - Lake Wales",
+      "locationId": "FL | Lake Wales",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ew9zc001u6alwda3nv9ll",
+      "label": "Kid City USA - Leesburg",
+      "locationId": "FL | Leesburg",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewa3x001w6alwa6ibg0qp",
+      "label": "Kid City USA - Longwood",
+      "locationId": "FL | Longwood",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewa8h001y6alwqpdf40d4",
+      "label": "Kid City USA - Wekiva",
+      "locationId": "FL | Wekiva",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewad200206alw20c6bavy",
+      "label": "Kid City USA - MacClenny",
+      "locationId": "FL | Macclenny",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewaho00226alw99iiqpma",
+      "label": "Kid City USA - Melbourne",
+      "locationId": "FL | Melbourne",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewam900246alw26u8gauh",
+      "label": "Kid City USA - Middleburg",
+      "locationId": "FL | Middleburg",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewb4i002c6alwysmwtm7x",
+      "label": "Kid City USA - Oviedo",
+      "locationId": "FL | Oviedo",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewb92002e6alwqtemjb7u",
+      "label": "Kid City USA - Palatka",
+      "locationId": "FL | Palatka",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewbdl002g6alw35nrvatw",
+      "label": "Kid City USA - Palm Bay",
+      "locationId": "FL | Palm Bay",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewbn2002k6alwaj7pmdd5",
+      "label": "Kid City USA - Port Orange",
+      "locationId": "FL | Port Orange",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewbwa002o6alw5mdimd85",
+      "label": "Kid City USA - South Daytona",
+      "locationId": "FL | South Daytona",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewc0u002q6alwd9azaafl",
+      "label": "Kid City USA - Fruit Cove",
+      "locationId": "FL | Jacksonville - Fruit Cove",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewc5f002s6alwdjdp6w75",
+      "label": "Kid City USA - Sanford",
+      "locationId": "FL | Sanford",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewca2002u6alw7c4lrusd",
+      "label": "Kid City USA - Sarasota",
+      "locationId": "FL | Sarasota",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewcem002w6alw58wkkhfw",
+      "label": "Kid City USA - St. Cloud",
+      "locationId": "FL | Saint Cloud",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewcjl002y6alw4s6dxuy4",
+      "label": "Kid City USA - Starke",
+      "locationId": "FL | Starke",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewcoh00306alwp76sanze",
+      "label": "Kid City USA - Vero Beach",
+      "locationId": "Kid City USA - Vero Beach",
+      "classroomCount": 0,
+      "staffCount": 0,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 1,
+      "gaps": [
+        "no classrooms",
+        "no staff/teacher profiles",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewct200326alw0pv1b74a",
+      "label": "Kid City USA - Winter Park",
+      "locationId": "FL | Winter Park",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewcxl00346alwc6i7gbh0",
+      "label": "Kid City USA - Winter Springs",
+      "locationId": "FL | Winter Springs",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewdba003a6alw43uemp4p",
+      "label": "Kid City USA - Bargersville",
+      "locationId": "IN | Bargersville",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewdkk003e6alwds6ksewc",
+      "label": "Kid City USA - Brownsburg",
+      "locationId": "IN | Brownsburg",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewdp7003g6alw6m4ovngo",
+      "label": "Kid City USA - Elkhart",
+      "locationId": "IN | Elkhart",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewe7i003o6alworuhvudg",
+      "label": "Kid City USA - Greenwood",
+      "locationId": "IN | Greenwood",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewd6p00386alw2ngcihed",
+      "label": "Kid City USA - Avon",
+      "locationId": "IN | Avon",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewfha00486alwwab1t4et",
+      "label": "Kid City USA - Southpointe",
+      "locationId": "IN | Southpointe",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewegp003s6alwi14wz7ao",
+      "label": "Kid City USA - Jasper - Baden Strasse",
+      "locationId": "IN | Jasper - Baden Strasse",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewec5003q6alwuwmakk73",
+      "label": "Kid City USA - Jasper - Truman",
+      "locationId": "IN | Jasper - Truman",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewela003u6alw9ii7uffs",
+      "label": "Kid City USA - Kokomo",
+      "locationId": "IN | Kokomo",
+      "classroomCount": 12,
+      "staffCount": 6,
+      "familyCount": 7,
+      "childCount": 8,
+      "childrenWithoutClassroomCount": 1,
+      "guardianCount": 12,
+      "guardianLoginCount": 11,
+      "guardianPinCount": 12,
+      "directorAccessCount": 3,
+      "gaps": [
+        "1 child(ren) without classroom assignment"
+      ]
+    },
+    {
+      "centerId": "cmp4ewkfu006a6alwld3k89qd",
+      "label": "Kid City USA - Paradise",
+      "locationId": "IN | Paradise",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewf8500446alwfm6uywyl",
+      "label": "Kid City USA - Petersburg",
+      "locationId": "IN | Petersburg",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewflx004a6alw8gwkmbds",
+      "label": "Kid City USA - Westfield",
+      "locationId": "IN | Westfield",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewfqi004c6alw3cwwv99c",
+      "label": "Kid City USA - Whitestown",
+      "locationId": "IN | Whitestown",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewfzn004g6alwqbqrzcql",
+      "label": "Kid City USA - Lees Summit",
+      "locationId": "MO | Lees Summit",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewg4a004i6alwl5c6i3w4",
+      "label": "Kid City USA - Canton",
+      "locationId": "NC | Canton",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewg8w004k6alwid0bwiur",
+      "label": "Kid City USA - Pisgah Forest",
+      "locationId": "NC | Pisgah Forest",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewgi3004o6alw0i7lmh9b",
+      "label": "Kid City USA - Columbia",
+      "locationId": "TN | Columbia",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewgmn004q6alwozvb8z1x",
+      "label": "Kid City USA - Lewisburg",
+      "locationId": "TN | Lewisburg",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewgr7004s6alwakomupve",
+      "label": "Kid City USA - Pulaski TN",
+      "locationId": "TN | Pulaski",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewgvt004u6alwe93flawm",
+      "label": "Kid City USA - Soddy Daisy",
+      "locationId": "TN | Soddy Daisy",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "85f871b5-b20d-4107-b5de-91d3014a1fb0",
+      "label": "Kid City USA - Corpus Christi",
+      "locationId": "TX | Corpus Christi",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewh0e004w6alwzscjwn99",
+      "label": "Kid City USA - Friendswood",
+      "locationId": "TX | Friendswood",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewh78004y6alwu6s3bsv4",
+      "label": "Kid City USA - Garland",
+      "locationId": "TX | Garland",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewhge00526alw7t62nwg4",
+      "label": "Kid City USA - Granbury",
+      "locationId": "TX | Granbury",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewhbt00506alwam35am12",
+      "label": "Kid City USA - North Richland Hills",
+      "locationId": "TX | North Richland Hills",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 3,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewhps00566alwy08a8ruu",
+      "label": "Kid City USA - Pilot Point",
+      "locationId": "TX | Pilot Point",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewhud00586alway2hh9zb",
+      "label": "Kid City USA - Terrell",
+      "locationId": "TX | Terrell",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    },
+    {
+      "centerId": "cmp4ewhyy005a6alw6kj7aix6",
+      "label": "Kid City USA - Tyler",
+      "locationId": "TX | Tyler",
+      "classroomCount": 0,
+      "staffCount": 1,
+      "familyCount": 0,
+      "childCount": 0,
+      "childrenWithoutClassroomCount": 0,
+      "guardianCount": 0,
+      "guardianLoginCount": 0,
+      "guardianPinCount": 0,
+      "directorAccessCount": 2,
+      "gaps": [
+        "no classrooms",
+        "no imported families",
+        "no imported children"
+      ]
+    }
+  ],
+  "childClassroomMismatches": []
+}

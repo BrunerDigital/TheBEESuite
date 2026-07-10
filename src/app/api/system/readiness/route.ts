@@ -83,6 +83,16 @@ async function GETHandler() {
     prisma.center.count({ where: { locationId: { not: null } } }),
   ]);
 
+  let clientErrorReportingReady = false;
+  let clientErrorReportingDetail = "Client error report table is not queryable. Run production migrations before App Store submission.";
+  try {
+    await prisma.clientErrorReport.count();
+    clientErrorReportingReady = true;
+    clientErrorReportingDetail = "Client crash/error reports can be stored and deduped server-side.";
+  } catch {
+    clientErrorReportingReady = false;
+  }
+
   const checks = [
     check("Database", databaseReady ? "ready" : "blocked", databaseReady ? "Prisma can query the production database." : "Database query failed."),
     check("Tenant setup", tenants > 0 ? "ready" : "blocked", `${tenants} tenant record(s) available.`),
@@ -135,6 +145,11 @@ async function GETHandler() {
       "Twilio SMS",
       env("TWILIO_ACCOUNT_SID") && env("TWILIO_AUTH_TOKEN") && (env("TWILIO_FROM_NUMBER") || env("TWILIO_MESSAGING_SERVICE_SID")) ? "ready" : "warning",
       "SMS route is present; production messaging requires Twilio credentials and an approved sender.",
+    ),
+    check(
+      "Client crash reporting",
+      clientErrorReportingReady ? "ready" : "warning",
+      clientErrorReportingDetail,
     ),
   ];
 

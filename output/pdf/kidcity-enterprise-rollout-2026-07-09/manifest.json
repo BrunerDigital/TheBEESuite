@@ -1,0 +1,192 @@
+{
+  "title": "Kid City USA Enterprise Rollout Printable PDFs",
+  "generatedAt": "2026-07-09",
+  "outputDirectory": "output/pdf/kidcity-enterprise-rollout-2026-07-09",
+  "documents": [
+    {
+      "title": "Kid City USA Enterprise Rollout Packet",
+      "source": "docs/kidcity-enterprise-rollout/README.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/00-kidcity-enterprise-rollout-index.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Master Corporate Rollout Playbook",
+      "source": "docs/kidcity-enterprise-rollout/MASTER_CORPORATE_ROLLOUT_PLAYBOOK.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/01-master-corporate-rollout-playbook.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Director Implementation Guide",
+      "source": "docs/kidcity-enterprise-rollout/DIRECTOR_IMPLEMENTATION_GUIDE.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/02-director-implementation-guide.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Rollout Checklists",
+      "source": "docs/kidcity-enterprise-rollout/CHECKLISTS.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/03-rollout-checklists.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Executive Dashboard",
+      "source": "docs/kidcity-enterprise-rollout/EXECUTIVE_DASHBOARD.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/04-executive-dashboard.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Risk Matrix, Contingencies, And Rollback",
+      "source": "docs/kidcity-enterprise-rollout/RISK_CONTINGENCY_ROLLBACK.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/05-risk-contingency-rollback.pdf",
+      "orientation": "landscape"
+    },
+    {
+      "title": "SOPs, Help Center, Training Videos, And Printable Packet",
+      "source": "docs/kidcity-enterprise-rollout/SOPS_HELP_TRAINING_PACKET.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/06-sops-help-training-packet.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Printable Implementation Packet",
+      "source": "docs/kidcity-enterprise-rollout/PRINTABLE_IMPLEMENTATION_PACKET.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/07-printable-implementation-packet.pdf",
+      "orientation": "portrait"
+    },
+    {
+      "title": "Suggested Rollout Order",
+      "source": "docs/kidcity-enterprise-rollout/ROLLOUT_ORDER_2026-07.md",
+      "pdf": "output/pdf/kidcity-enterprise-rollout-2026-07-09/08-suggested-rollout-order.pdf",
+      "orientation": "landscape"
+    }
+  ],
+  "combinedBinder": "kidcity-enterprise-rollout-complete-print-binder.pdf",
+  "notes": [
+    "Individual PDFs are branded for printed school and corporate rollout binders.",
+    "The combined binder is produced by the follow-up merge step in this workflow.",
+    "ProCare remains active until leadership approves final ProCare retirement for each school."
+  ],
+  "pageCounts": {
+    "00-kidcity-enterprise-rollout-index.pdf": 2,
+    "01-master-corporate-rollout-playbook.pdf": 14,
+    "02-director-implementation-guide.pdf": 4,
+    "03-rollout-checklists.pdf": 8,
+    "04-executive-dashboard.pdf": 6,
+    "05-risk-contingency-rollback.pdf": 8,
+    "06-sops-help-training-packet.pdf": 11,
+    "07-printable-implementation-packet.pdf": 6,
+    "08-suggested-rollout-order.pdf": 7,
+    "kidcity-enterprise-rollout-complete-print-binder.pdf": 66
+  },
+  "previewDirectory": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews",
+  "previewImages": [
+    {
+      "pdf": "00-kidcity-enterprise-rollout-index.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/00-kidcity-enterprise-rollout-index-p001-1.png"
+    },
+    {
+      "pdf": "00-kidcity-enterprise-rollout-index.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/00-kidcity-enterprise-rollout-index-p002-2.png"
+    },
+    {
+      "pdf": "01-master-corporate-rollout-playbook.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/01-master-corporate-rollout-playbook-p001-1.png"
+    },
+    {
+      "pdf": "01-master-corporate-rollout-playbook.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/01-master-corporate-rollout-playbook-p002-2.png"
+    },
+    {
+      "pdf": "02-director-implementation-guide.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/02-director-implementation-guide-p001-1.png"
+    },
+    {
+      "pdf": "02-director-implementation-guide.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/02-director-implementation-guide-p002-2.png"
+    },
+    {
+      "pdf": "03-rollout-checklists.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/03-rollout-checklists-p001-1.png"
+    },
+    {
+      "pdf": "03-rollout-checklists.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/03-rollout-checklists-p002-2.png"
+    },
+    {
+      "pdf": "04-executive-dashboard.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/04-executive-dashboard-p001-1.png"
+    },
+    {
+      "pdf": "04-executive-dashboard.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/04-executive-dashboard-p002-2.png"
+    },
+    {
+      "pdf": "05-risk-contingency-rollback.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/05-risk-contingency-rollback-p001-1.png"
+    },
+    {
+      "pdf": "05-risk-contingency-rollback.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/05-risk-contingency-rollback-p002-2.png"
+    },
+    {
+      "pdf": "06-sops-help-training-packet.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/06-sops-help-training-packet-p001-1.png"
+    },
+    {
+      "pdf": "06-sops-help-training-packet.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/06-sops-help-training-packet-p002-2.png"
+    },
+    {
+      "pdf": "07-printable-implementation-packet.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/07-printable-implementation-packet-p001-1.png"
+    },
+    {
+      "pdf": "07-printable-implementation-packet.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/07-printable-implementation-packet-p002-2.png"
+    },
+    {
+      "pdf": "08-suggested-rollout-order.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/08-suggested-rollout-order-p001-1.png"
+    },
+    {
+      "pdf": "08-suggested-rollout-order.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/08-suggested-rollout-order-p002-2.png"
+    },
+    {
+      "pdf": "kidcity-enterprise-rollout-complete-print-binder.pdf",
+      "page": 1,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/kidcity-enterprise-rollout-complete-print-binder-p001-1.png"
+    },
+    {
+      "pdf": "kidcity-enterprise-rollout-complete-print-binder.pdf",
+      "page": 2,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/kidcity-enterprise-rollout-complete-print-binder-p002-2.png"
+    },
+    {
+      "pdf": "kidcity-enterprise-rollout-complete-print-binder.pdf",
+      "page": 33,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/kidcity-enterprise-rollout-complete-print-binder-p033-33.png"
+    },
+    {
+      "pdf": "kidcity-enterprise-rollout-complete-print-binder.pdf",
+      "page": 66,
+      "png": "output/pdf/kidcity-enterprise-rollout-2026-07-09/previews/kidcity-enterprise-rollout-complete-print-binder-p066-66.png"
+    }
+  ]
+}

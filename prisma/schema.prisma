@@ -1460,6 +1460,40 @@ model RateLimitBucket {
   @@index([resetAt])
 }
 
+model ClientErrorReport {
+  id              String    @id @default(cuid())
+  dedupeKey       String    @unique
+  fingerprint     String
+  environment     String    @default("production")
+  release         String?
+  source          String
+  errorType       String
+  severity        String    @default("error")
+  message         String?
+  stackSample     String?
+  componentStack  String?
+  path            String?
+  tenantId        String?
+  centerId        String?
+  userId          String?
+  userAgentHash   String?
+  ipHash          String?
+  metadata        Json?
+  occurrenceCount Int       @default(1)
+  firstSeenAt     DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  resolvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([environment, lastSeenAt])
+  @@index([fingerprint, lastSeenAt])
+  @@index([tenantId, lastSeenAt])
+  @@index([userId, lastSeenAt])
+  @@index([path, lastSeenAt])
+  @@index([resolvedAt, lastSeenAt])
+}
+
 model PaymentMethodRequestLink {
   code      String   @id
   token     String

@@ -26,10 +26,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Parents can take photos of requested documents or attach images to messages for their school.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>BEE Suite can use Face ID to help protect access to family records on this device.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Parents can choose photos and files to send to their school through the parent portal.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

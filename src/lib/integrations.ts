@@ -322,7 +322,10 @@ function isInvalidPaymentMethodTypeError(json: unknown) {
   const message = clean(error.message).toLowerCase();
   const param = clean(error.param);
   return param.startsWith("payment_method_types") ||
-    (message.includes("payment method type provided") && message.includes("invalid"));
+    (message.includes("payment method type provided") && message.includes("invalid")) ||
+    message.includes("no valid payment method types") ||
+    (message.includes("must activate") && message.includes("payment method")) ||
+    (message.includes("payment method") && message.includes("compatible"));
 }
 
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
@@ -781,7 +784,7 @@ export async function createStripeCheckoutSession({
   for (const paymentMethodMode of paymentMethodModes) {
     ({ response, json } = await createSession(buildBody(paymentMethodMode), paymentMethodMode));
     if (response.ok && json?.url) break;
-    if (paymentMethodMode === "configuration" && isMissingPaymentMethodConfigurationError(json)) continue;
+    if (paymentMethodMode === "configuration" && (isMissingPaymentMethodConfigurationError(json) || isInvalidPaymentMethodTypeError(json))) continue;
     if (paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
     break;
   }
@@ -1338,7 +1341,7 @@ export async function createStripeSetupCheckoutSession({
   for (const paymentMethodMode of paymentMethodModes) {
     ({ response, json } = await createSession(buildBody(paymentMethodMode)));
     if (response.ok && json?.url) break;
-    if (paymentMethodMode === "configuration" && isMissingPaymentMethodConfigurationError(json)) continue;
+    if (paymentMethodMode === "configuration" && (isMissingPaymentMethodConfigurationError(json) || isInvalidPaymentMethodTypeError(json))) continue;
     if (paymentMethodMode === "payment_method_types" && isInvalidPaymentMethodTypeError(json)) continue;
     break;
   }

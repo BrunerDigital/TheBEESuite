@@ -525,6 +525,203 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
+async function updateInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const invoiceId = clean(body.invoiceId) || clean(body.id);
+  if (!invoiceId) return NextResponse.json({ ok: false, error: "Invoice is required." }, { status: 400 });
+
+  const amountProvided = clean(body.amountDollars) || body.amountCents !== undefined;
+  const nextTotalCents = amountProvided ? amountCentsFromBody(body) : null;
+  if (amountProvided && (!nextTotalCents || nextTotalCents <= 0)) {
+    return NextResponse.json({ ok: false, error: "Invoice amount must be greater than zero." }, { status: 400 });
+  }
+
+  const dueDateText = clean(body.dueDate);
+  const nextDueDate = dueDateText ? new Date(dueDateText) : null;
+  if (nextDueDate && Number.isNaN(nextDueDate.getTime())) {
+    return NextResponse.json({ ok: false, error: "Invoice due date is not valid." }, { status: 400 });
+  }
+
+  const descriptionProvided = Object.prototype.hasOwnProperty.call(body, "description");
+  const requestedDescription = descriptionProvided ? clean(body.description) : "";
+  if (descriptionProvided && !requestedDescription) {
+    return NextResponse.json({ ok: false, error: "Invoice details are required." }, { status: 400 });
+  }
+
+  if (!amountProvided && !nextDueDate && !descriptionProvided) {
+    return NextResponse.json({ ok: false, error: "Provide an amount, due date, or invoice details to update." }, { status: 400 });
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      billingAccount: {
+        select: {
+          id: true,
+          balanceCents: true,
+          family: { select: { id: true, name: true, centerId: true } },
+        },
+      },
+      items: { orderBy: { id: "asc" }, select: { id: true, description: true, amountCents: true, productId: true } },
+    },
+  });
+  if (!invoice) return NextResponse.json({ ok: false, error: "Invoice not found." }, { status: 404 });
+
+  const requestedFamilyId = clean(body.familyId);
+  if (requestedFamilyId && requestedFamilyId !== invoice.billingAccount.family.id) {
+    return NextResponse.json({ ok: false, error: "Invoice does not belong to the selected family." }, { status: 403 });
+  }
+  const centerId = invoice.billingAccount.family.centerId;
+  if (!centerId || !canAccessCenter(user, centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this invoice." }, { status: 403 });
+  }
+  if (invoice.status !== PaymentStatus.OPEN) {
+    return NextResponse.json({ ok: false, error: "Only open invoices can be edited." }, { status: 400 });
+  }
+
+  const currentDescription = invoice.items[0]?.description || clean((jsonObject(invoice.customFields)).description) || invoice.number;
+  const description = descriptionProvided ? requestedDescription : currentDescription;
+  const totalCents = nextTotalCents ?? invoice.totalCents;
+  const dueDate = nextDueDate ?? invoice.dueDate;
+  const amountDeltaCents = totalCents - invoice.totalCents;
+  const amountChanged = amountDeltaCents !== 0;
+  const dueDateChanged = dueDate.getTime() !== invoice.dueDate.getTime();
+  const descriptionChanged = description !== currentDescription;
+
+  if (!amountChanged && !dueDateChanged && !descriptionChanged) {
+    return NextResponse.json({
+      ok: true,
+      updated: false,
+      invoice: {
+        id: invoice.id,
+        number: invoice.number,
+        status: invoice.status,
+        dueDate: invoice.dueDate,
+        totalCents: invoice.totalCents,
+        items: invoice.items,
+      },
+      deltaCents: 0,
+    });
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const now = new Date();
+    const currentFields = jsonObject(invoice.customFields);
+    await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        totalCents,
+        dueDate,
+        customFields: {
+          ...currentFields,
+          lastEditedAt: now.toISOString(),
+          lastEditedByUserId: user.id,
+          lastEditedByEmail: user.email,
+          lastEditReason: clean(body.reason) || "Director invoice edit",
+          lastEditPreviousTotalCents: invoice.totalCents,
+          lastEditPreviousDueDate: invoice.dueDate.toISOString(),
+          lastEditPreviousDescription: currentDescription,
+        },
+      },
+    });
+
+    if (amountChanged || descriptionChanged) {
+      const primaryItem = invoice.items[0];
+      if (primaryItem) {
+        await tx.invoiceItem.update({
+          where: { id: primaryItem.id },
+          data: { description, amountCents: totalCents },
+        });
+        if (invoice.items.length > 1) {
+          await tx.invoiceItem.deleteMany({
+            where: { invoiceId: invoice.id, id: { not: primaryItem.id } },
+          });
+        }
+      } else {
+        await tx.invoiceItem.create({
+          data: {
+            invoiceId: invoice.id,
+            description,
+            amountCents: totalCents,
+          },
+        });
+      }
+    }
+
+    let balanceAfterCents = invoice.billingAccount.balanceCents;
+    let ledgerEntryId: string | null = null;
+    if (amountDeltaCents !== 0) {
+      const updatedAccount = await tx.billingAccount.update({
+        where: { id: invoice.billingAccount.id },
+        data: { balanceCents: { increment: amountDeltaCents } },
+        select: { balanceCents: true },
+      });
+      balanceAfterCents = updatedAccount.balanceCents;
+      const ledgerEntry = await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: invoice.billingAccount.id,
+          invoiceId: invoice.id,
+          type: "invoice_adjustment",
+          description: `Invoice correction for ${invoice.number}: ${moneyLabel(invoice.totalCents)} to ${moneyLabel(totalCents)}`,
+          amountCents: amountDeltaCents,
+          balanceAfterCents,
+          sourceSystem: "bee_suite_manual",
+          externalId: `invoice-edit:${invoice.id}:${randomUUID()}`,
+          metadata: {
+            editedBy: user.email,
+            familyId: invoice.billingAccount.family.id,
+            centerId,
+            previousTotalCents: invoice.totalCents,
+            updatedTotalCents: totalCents,
+            previousDueDate: invoice.dueDate.toISOString(),
+            updatedDueDate: dueDate.toISOString(),
+            previousDescription: currentDescription,
+            updatedDescription: description,
+          },
+        },
+      });
+      ledgerEntryId = ledgerEntry.id;
+    }
+
+    const updatedInvoice = await tx.invoice.findUniqueOrThrow({
+      where: { id: invoice.id },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        dueDate: true,
+        totalCents: true,
+        items: { orderBy: { id: "asc" }, select: { id: true, description: true, amountCents: true, productId: true } },
+      },
+    });
+
+    return { invoice: updatedInvoice, deltaCents: amountDeltaCents, balanceAfterCents, ledgerEntryId };
+  });
+
+  await writeAuditLog(user, {
+    centerId,
+    action: "billing.invoice.updated",
+    resource: "Invoice",
+    resourceId: invoice.id,
+    metadata: {
+      familyId: invoice.billingAccount.family.id,
+      previousTotalCents: invoice.totalCents,
+      updatedTotalCents: totalCents,
+      deltaCents: result.deltaCents,
+      previousDueDate: invoice.dueDate.toISOString(),
+      updatedDueDate: dueDate.toISOString(),
+      previousDescription: currentDescription,
+      updatedDescription: description,
+      ledgerEntryId: result.ledgerEntryId,
+    },
+  });
+
+  return NextResponse.json({ ok: true, updated: true, ...result });
+}
+
+function moneyLabel(cents: number) {
+  return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
@@ -546,4 +743,19 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({ ok: false, error: "Unsupported billing action." }, { status: 400 });
 }
 
+async function PATCHHandler(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  if (!canManageBilling(user)) {
+    return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
+  }
+  if (!canAccessAllCenters(user) && !user.centerIds.length) {
+    return NextResponse.json({ ok: false, error: "No school access is assigned to this account." }, { status: 403 });
+  }
+
+  const body = jsonObject(await request.json().catch(() => ({})));
+  return updateInvoice(user, body);
+}
+
 export const POST = withApiLogging("POST", POSTHandler);
+export const PATCH = withApiLogging("PATCH", PATCHHandler);

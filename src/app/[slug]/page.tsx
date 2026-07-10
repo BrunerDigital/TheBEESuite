@@ -2777,7 +2777,17 @@ async function renderLivePage(
                 where: { status: PaymentStatus.OPEN },
                 orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
                 take: 20,
-                select: { id: true, number: true, status: true, dueDate: true, totalCents: true },
+                select: {
+                  id: true,
+                  number: true,
+                  status: true,
+                  dueDate: true,
+                  totalCents: true,
+                  items: {
+                    orderBy: { id: "asc" },
+                    select: { id: true, description: true, amountCents: true, productId: true },
+                  },
+                },
               },
             },
           },
@@ -2902,6 +2912,12 @@ async function renderLivePage(
                       status: invoice.status,
                       dueDate: invoice.dueDate,
                       totalCents: invoice.totalCents,
+                      items: invoice.items.map((item) => ({
+                        id: item.id,
+                        description: item.description,
+                        amountCents: item.amountCents,
+                        productId: item.productId,
+                      })),
                     })),
                   }
                 : null,

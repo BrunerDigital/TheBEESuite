@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, Mail, MinusCircle, Play, ReceiptText, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +52,12 @@ export type BillingWorkbenchFamily = {
       status: string;
       dueDate: Date | string;
       totalCents: number;
+      items?: Array<{
+        id: string;
+        description: string;
+        amountCents: number;
+        productId: string | null;
+      }>;
     }>;
   } | null;
   children: Array<{
@@ -110,6 +116,15 @@ type Props = {
 
 type DirectorPaymentMethod = "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
 
+type BillingWorkbenchOpenInvoice = NonNullable<NonNullable<BillingWorkbenchFamily["billingAccount"]>["openInvoices"]>[number];
+
+type InvoiceEditDraft = {
+  invoiceId: string;
+  amountDollars: string;
+  dueDate: string;
+  description: string;
+};
+
 function todayDate() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -142,6 +157,30 @@ function money(cents: number) {
 function dollarsToCents(value: string) {
   const amount = Number.parseFloat(value.replace(/[$,]/g, ""));
   return Number.isFinite(amount) ? Math.round(amount * 100) : 0;
+}
+
+function centsToDollarsInput(cents: number) {
+  return (cents / 100).toFixed(2);
+}
+
+function dateInputValue(value: Date | string | null | undefined) {
+  if (!value) return todayDate();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? todayDate() : date.toISOString().slice(0, 10);
+}
+
+function invoiceLineDescription(invoice: BillingWorkbenchOpenInvoice | null | undefined) {
+  return invoice?.items?.[0]?.description || invoice?.number || "";
+}
+
+function invoiceEditDraftFromInvoice(invoice: BillingWorkbenchOpenInvoice | null | undefined): InvoiceEditDraft | null {
+  if (!invoice) return null;
+  return {
+    invoiceId: invoice.id,
+    amountDollars: centsToDollarsInput(invoice.totalCents),
+    dueDate: dateInputValue(invoice.dueDate),
+    description: invoiceLineDescription(invoice),
+  };
 }
 
 function centerLabel(center: BillingWorkbenchCenter) {
@@ -248,6 +287,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [paymentTarget, setPaymentTarget] = useState("balance");
   const [paymentAmountDollars, setPaymentAmountDollars] = useState("");
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
+  const [invoiceEditorId, setInvoiceEditorId] = useState("");
+  const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
   const [assignmentChildId, setAssignmentChildId] = useState("");
   const [assignmentEnabled, setAssignmentEnabled] = useState("true");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
@@ -310,6 +351,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const selectedPaymentInvoice = selectedPaymentInvoiceId
     ? openInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) ?? null
     : null;
+  const effectiveInvoiceEditorId = invoiceEditorId && openInvoices.some((invoice) => invoice.id === invoiceEditorId)
+    ? invoiceEditorId
+    : openInvoices[0]?.id ?? "";
+  const selectedEditableInvoice = effectiveInvoiceEditorId
+    ? openInvoices.find((invoice) => invoice.id === effectiveInvoiceEditorId) ?? null
+    : null;
+  const activeInvoiceEditDraft = invoiceEditDraft?.invoiceId === selectedEditableInvoice?.id
+    ? invoiceEditDraft
+    : invoiceEditDraftFromInvoice(selectedEditableInvoice);
+  const invoiceEditAmountDollars = activeInvoiceEditDraft?.amountDollars ?? "";
+  const invoiceEditDueDate = activeInvoiceEditDraft?.dueDate ?? todayDate();
+  const invoiceEditDescription = activeInvoiceEditDraft?.description ?? "";
+  const invoiceEditAmountCents = dollarsToCents(invoiceEditAmountDollars);
+  const invoiceEditDeltaCents = selectedEditableInvoice ? invoiceEditAmountCents - selectedEditableInvoice.totalCents : 0;
   const effectivePaymentTarget = selectedPaymentInvoiceId && !selectedPaymentInvoice ? "balance" : paymentTarget;
   const directorPaymentAmountCents = effectivePaymentTarget === "custom"
     ? dollarsToCents(paymentAmountDollars)
@@ -338,6 +393,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   function confirmBillingAction(action: string, childName?: string) {
     if (!selectedFamily) return false;
     return window.confirm(`You are about to ${action} for ${billingContextDescription(childName)}. Continue?`);
+  }
+
+  function updateInvoiceEditDraft(patch: Partial<Omit<InvoiceEditDraft, "invoiceId">>) {
+    if (!selectedEditableInvoice) return;
+    setInvoiceEditDraft((current) => ({
+      ...(current?.invoiceId === selectedEditableInvoice.id ? current : invoiceEditDraftFromInvoice(selectedEditableInvoice)!),
+      ...patch,
+    }));
   }
 
   function paymentMethodLabel(method: DirectorPaymentMethod) {
@@ -583,6 +646,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setChildId("none");
     setAgencyChildId("none");
     setAssignmentChildId("");
+    setInvoiceEditorId("");
+    setInvoiceEditDraft(null);
   }
 
   function handleFamilyChange(value: string | null) {
@@ -591,6 +656,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setChildId("none");
     setAgencyChildId("none");
     setAssignmentChildId("");
+    setInvoiceEditorId("");
+    setInvoiceEditDraft(null);
   }
 
   function handleTuitionPlanChange(value: string | null) {
@@ -716,6 +783,68 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       coverageEnd: agencyCoverageEnd,
       description,
       notes: agencyNotes,
+    });
+  }
+
+  function submitInvoiceEdit() {
+    if (!selectedFamily || !selectedEditableInvoice) {
+      return setErrorMessage("Choose an open invoice before editing invoice details.");
+    }
+    if (invoiceEditAmountCents <= 0) {
+      return setErrorMessage("Enter an invoice amount greater than zero.");
+    }
+    const trimmedDescription = invoiceEditDescription.trim();
+    if (!trimmedDescription) {
+      return setErrorMessage("Enter invoice details for the updated line item.");
+    }
+    const confirmed = window.confirm(
+      `Update invoice ${selectedEditableInvoice.number} from ${money(selectedEditableInvoice.totalCents)} to ${money(invoiceEditAmountCents)} for ${selectedFamily.name}?`,
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/invoices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: selectedEditableInvoice.id,
+          familyId: selectedFamily.id,
+          amountDollars: invoiceEditAmountDollars,
+          dueDate: invoiceEditDueDate,
+          description: trimmedDescription,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        updated?: boolean;
+        deltaCents?: number;
+        invoice?: {
+          id: string;
+          totalCents: number;
+          dueDate: Date | string;
+          items?: Array<{ description: string }>;
+        };
+      } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Invoice could not be updated.");
+        return;
+      }
+      if (json?.invoice) {
+        setInvoiceEditDraft({
+          invoiceId: json.invoice.id || selectedEditableInvoice.id,
+          amountDollars: centsToDollarsInput(json.invoice.totalCents),
+          dueDate: dateInputValue(json.invoice.dueDate),
+          description: json.invoice.items?.[0]?.description || trimmedDescription,
+        });
+      }
+      const deltaCents = typeof json?.deltaCents === "number" ? json.deltaCents : 0;
+      const balanceMessage = deltaCents
+        ? ` Family balance ${deltaCents < 0 ? "reduced" : "increased"} by ${money(Math.abs(deltaCents))}.`
+        : "";
+      setStatusMessage(json?.updated === false ? "Invoice already matched those details." : `Invoice updated.${balanceMessage}`);
+      router.refresh();
     });
   }
 
@@ -1240,6 +1369,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         <Tabs defaultValue="single">
           <TabsList className="flex h-auto flex-wrap justify-start">
             <TabsTrigger value="single"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
+            <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
             <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Recurring</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency payment</TabsTrigger>
@@ -1283,6 +1413,62 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               <ReceiptText data-icon="inline-start" />
               Create Invoice
             </Button>
+          </TabsContent>
+
+          <TabsContent value="edit" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            {selectedEditableInvoice ? (
+              <>
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Open invoice</Label>
+                    <Select
+                      value={effectiveInvoiceEditorId}
+                      onValueChange={(value) => {
+                        if (!value) return;
+                        setInvoiceEditorId(value);
+                        setInvoiceEditDraft(null);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {openInvoices.map((invoice) => (
+                          <SelectItem key={invoice.id} value={invoice.id}>
+                            {invoice.number} · {money(invoice.totalCents)} · due {formatShortDate(invoice.dueDate)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Invoice amount</Label>
+                    <Input inputMode="decimal" value={invoiceEditAmountDollars} onChange={(event) => updateInvoiceEditDraft({ amountDollars: event.target.value })} placeholder="25.00" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Due date</Label>
+                    <Input type="date" value={invoiceEditDueDate} onChange={(event) => updateInvoiceEditDraft({ dueDate: event.target.value })} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Invoice details</Label>
+                  <Textarea value={invoiceEditDescription} onChange={(event) => updateInvoiceEditDraft({ description: event.target.value })} placeholder="Tuition, fee, or correction note" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <SummaryMetric label="Current total" value={money(selectedEditableInvoice.totalCents)} detail={selectedEditableInvoice.number} />
+                  <SummaryMetric label="Updated total" value={invoiceEditAmountCents > 0 ? money(invoiceEditAmountCents) : "$0.00"} detail={formatShortDate(invoiceEditDueDate)} />
+                  <SummaryMetric label="Balance change" value={money(invoiceEditDeltaCents)} detail={invoiceEditDeltaCents < 0 ? "Credit to family balance" : invoiceEditDeltaCents > 0 ? "Debit to family balance" : "No balance change"} />
+                </div>
+                <Button disabled={isPending || !selectedFamily || invoiceEditAmountCents <= 0 || !invoiceEditDescription.trim()} onClick={submitInvoiceEdit}>
+                  <FilePenLine data-icon="inline-start" />
+                  Save Invoice Changes
+                </Button>
+              </>
+            ) : (
+              <Alert>
+                <AlertCircle data-icon="inline-start" />
+                <AlertTitle>No open invoices</AlertTitle>
+                <AlertDescription>Choose a family with an open invoice before editing billed details.</AlertDescription>
+              </Alert>
+            )}
           </TabsContent>
 
           <TabsContent value="batch" className="space-y-4 rounded-lg border bg-background/35 p-4">

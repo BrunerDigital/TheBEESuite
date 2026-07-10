@@ -344,6 +344,53 @@ test("Stripe checkout retries without stale payment method configuration", async
   }
 });
 
+test("Stripe checkout retries when configured payment methods are unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  const bodies: string[] = [];
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    calls += 1;
+    bodies.push(String(init?.body ?? ""));
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        error: {
+          message: "No valid payment method types for this Checkout Session. Please ensure that you have activated payment methods compatible with your chosen currency in your dashboard.",
+        },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ id: "cs_payment_card", url: "https://checkout.stripe.test/payment-card" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 2500,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      paymentMethodCategory: "card",
+      paymentMethodConfigurationId: "pmc_card_unavailable",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 2);
+    assert.match(bodies[0], /payment_method_configuration=pmc_card_unavailable/);
+    assert.doesNotMatch(bodies[1], /payment_method_configuration/);
+    assert.match(bodies[1], /payment_method_types%5B0%5D=card/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Stripe checkout falls back to dynamic methods when ACH is disabled", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_stale";
@@ -449,6 +496,51 @@ test("Stripe setup checkout retries without stale payment method configuration",
     assert.equal(result.ok, true);
     assert.equal(calls, 2);
     assert.match(bodies[0], /payment_method_configuration=pmc_stale/);
+    assert.doesNotMatch(bodies[1], /payment_method_configuration/);
+    assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe setup checkout retries when configured payment methods are unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_link_unavailable";
+  let calls = 0;
+  const bodies: string[] = [];
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    calls += 1;
+    bodies.push(String(init?.body ?? ""));
+    if (calls === 1) {
+      return new Response(JSON.stringify({
+        error: {
+          message: "No valid payment method types for this Checkout Session. Please ensure that you have activated payment methods compatible with your chosen currency in your dashboard.",
+        },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ id: "cs_setup_link", url: "https://checkout.stripe.test/setup-link" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeSetupCheckoutSession({
+      customerId: "cus_connected",
+      paymentMethodCategory: "link_bank",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { billingAccountId: "ba_1", familyId: "family_1" },
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 2);
+    assert.match(bodies[0], /payment_method_configuration=pmc_link_unavailable/);
     assert.doesNotMatch(bodies[1], /payment_method_configuration/);
     assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
   } finally {

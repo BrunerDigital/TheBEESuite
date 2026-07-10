@@ -19,7 +19,7 @@ import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const directorRoles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR];
-const reminderRecipientRoles = [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, ...directorRoles];
+const reminderRecipientRoles = directorRoles;
 
 type FteExternalEscalationTarget = {
   centerId: string;
@@ -103,51 +103,39 @@ async function GETHandler(request: NextRequest) {
     organizationId: center.organizationId,
     ownerGroupId: center.ownerGroupId,
   }));
-  const [platformOwners, reminderUsers] = await Promise.all([
-    prisma.user.findMany({
-      where: { isActive: true, role: UserRole.PLATFORM_OWNER },
-      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { centerId: true, phone: true } }, accessGrants: true },
-      take: 100,
-    }),
-    prisma.user.findMany({
-      where: {
-        isActive: true,
-        tenantId: { in: tenantIds },
-        role: { in: reminderRecipientRoles },
-        OR: [
-          { role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] } },
-          { staffProfile: { is: { centerId: { in: centerScopes.map((center) => center.id) } } } },
-          { accessGrants: { some: { isActive: true, centerId: { in: centerScopes.map((center) => center.id) }, role: { in: directorRoles } } } },
-        ],
-      },
-      select: {
-        id: true,
-        tenantId: true,
-        email: true,
-        role: true,
-        staffProfile: { select: { centerId: true, phone: true } },
-        accessGrants: {
-          where: {
-            isActive: true,
-            OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-            AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
-          },
-          select: {
-            tenantId: true,
-            brandId: true,
-            organizationId: true,
-            ownerGroupId: true,
-            centerId: true,
-            scopeType: true,
-          },
+  const reminderUsers = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      tenantId: { in: tenantIds },
+      role: { in: reminderRecipientRoles },
+      OR: [
+        { staffProfile: { is: { centerId: { in: centerScopes.map((center) => center.id) } } } },
+        { accessGrants: { some: { isActive: true, centerId: { in: centerScopes.map((center) => center.id) }, role: { in: directorRoles } } } },
+      ],
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      email: true,
+      role: true,
+      staffProfile: { select: { centerId: true, phone: true } },
+      accessGrants: {
+        where: {
+          isActive: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+        },
+        select: {
+          centerId: true,
+          scopeType: true,
         },
       },
-      take: 5000,
-    }),
-  ]);
+    },
+    take: 5000,
+  });
 
   const allRecipientsById = new Map<string, FteEscalationRecipient>();
-  for (const user of [...platformOwners, ...reminderUsers]) {
+  for (const user of reminderUsers) {
     allRecipientsById.set(user.id, {
       id: user.id,
       role: user.role,
@@ -161,14 +149,14 @@ async function GETHandler(request: NextRequest) {
       type: "fte_reports",
       OR: [
         { userId: { in: Array.from(allRecipientsById.keys()) } },
-        { role: { in: [UserRole.PLATFORM_OWNER, UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, ...directorRoles] } },
+        { role: { in: directorRoles } },
       ],
     },
     select: { userId: true, role: true, emailEnabled: true, smsEnabled: true },
     take: 5000,
   });
   const recipientsByCenter = new Map<string, string[]>();
-  for (const user of [...platformOwners, ...reminderUsers]) {
+  for (const user of reminderUsers) {
     const scopedCenterIds = fteReminderCenterIdsForUser(
       {
         id: user.id,

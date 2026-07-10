@@ -48,9 +48,9 @@ test("FTE reminder recipients keep school-scoped users on their assigned school"
   assert.deepEqual(
     fteReminderCenterIdsForUser(
       {
-        id: "center_scoped_admin",
+        id: "assistant_b",
         tenantId: "tenant_1",
-        role: "BRAND_ADMIN",
+        role: "ASSISTANT_DIRECTOR",
         accessGrants: [{ scopeType: "CENTER", centerId: "center_b" }],
       },
       centers,
@@ -59,7 +59,7 @@ test("FTE reminder recipients keep school-scoped users on their assigned school"
   );
 });
 
-test("FTE reminder recipients send true executives all matching locations", () => {
+test("FTE reminder recipients exclude executive and platform users", () => {
   const centers = [
     { id: "center_a", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_1" },
     { id: "center_b", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_2" },
@@ -68,10 +68,10 @@ test("FTE reminder recipients send true executives all matching locations", () =
 
   assert.deepEqual(
     fteReminderCenterIdsForUser(
-      { id: "exec", tenantId: "tenant_1", role: "BRAND_ADMIN", accessGrants: [{ scopeType: "TENANT", tenantId: "tenant_1" }] },
+      { id: "exec", tenantId: "tenant_1", role: "BRAND_ADMIN", accessGrants: [{ scopeType: "TENANT" }] },
       centers,
     ),
-    ["center_a", "center_b"],
+    [],
   );
   assert.deepEqual(
     fteReminderCenterIdsForUser(
@@ -79,11 +79,18 @@ test("FTE reminder recipients send true executives all matching locations", () =
         id: "owner_group_exec",
         tenantId: "tenant_1",
         role: "REGIONAL_MANAGER",
-        accessGrants: [{ scopeType: "OWNER_GROUP", tenantId: "tenant_1", ownerGroupId: "owner_2" }],
+        accessGrants: [{ scopeType: "OWNER_GROUP" }],
       },
       centers,
     ),
-    ["center_b"],
+    [],
+  );
+  assert.deepEqual(
+    fteReminderCenterIdsForUser(
+      { id: "platform", tenantId: "tenant_1", role: "PLATFORM_OWNER" },
+      centers,
+    ),
+    [],
   );
 });
 

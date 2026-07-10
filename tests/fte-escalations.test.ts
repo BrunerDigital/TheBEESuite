@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   fteEscalationCopy,
+  fteReminderCenterIdsForUser,
   resolveFteEscalationChannels,
   shouldSendExternalFteEscalation,
 } from "../src/lib/fte-escalations";
@@ -23,6 +24,67 @@ test("FTE escalation channel preferences prefer user settings over role defaults
   );
 
   assert.deepEqual(channels, { email: false, sms: true });
+});
+
+test("FTE reminder recipients keep school-scoped users on their assigned school", () => {
+  const centers = [
+    { id: "center_a", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_1" },
+    { id: "center_b", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_2" },
+  ];
+
+  assert.deepEqual(
+    fteReminderCenterIdsForUser(
+      {
+        id: "director_a",
+        tenantId: "tenant_1",
+        role: "CENTER_DIRECTOR",
+        profileCenterId: "center_a",
+        accessGrants: [{ scopeType: "CENTER", centerId: "center_a" }],
+      },
+      centers,
+    ),
+    ["center_a"],
+  );
+  assert.deepEqual(
+    fteReminderCenterIdsForUser(
+      {
+        id: "center_scoped_admin",
+        tenantId: "tenant_1",
+        role: "BRAND_ADMIN",
+        accessGrants: [{ scopeType: "CENTER", centerId: "center_b" }],
+      },
+      centers,
+    ),
+    ["center_b"],
+  );
+});
+
+test("FTE reminder recipients send true executives all matching locations", () => {
+  const centers = [
+    { id: "center_a", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_1" },
+    { id: "center_b", tenantId: "tenant_1", brandId: "brand_1", organizationId: "org_1", ownerGroupId: "owner_2" },
+    { id: "center_c", tenantId: "tenant_2", brandId: "brand_2", organizationId: "org_2", ownerGroupId: "owner_3" },
+  ];
+
+  assert.deepEqual(
+    fteReminderCenterIdsForUser(
+      { id: "exec", tenantId: "tenant_1", role: "BRAND_ADMIN", accessGrants: [{ scopeType: "TENANT", tenantId: "tenant_1" }] },
+      centers,
+    ),
+    ["center_a", "center_b"],
+  );
+  assert.deepEqual(
+    fteReminderCenterIdsForUser(
+      {
+        id: "owner_group_exec",
+        tenantId: "tenant_1",
+        role: "REGIONAL_MANAGER",
+        accessGrants: [{ scopeType: "OWNER_GROUP", tenantId: "tenant_1", ownerGroupId: "owner_2" }],
+      },
+      centers,
+    ),
+    ["center_b"],
+  );
 });
 
 test("FTE escalation copy includes school, week, and urgency", () => {

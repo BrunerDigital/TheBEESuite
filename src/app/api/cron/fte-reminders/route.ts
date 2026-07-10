@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import {
   fteEscalationCopy,
+  fteReminderCenterIdsForUser,
   resolveFteEscalationChannels,
   shouldSendExternalFteEscalation,
   type FteEscalationPreference,
@@ -18,6 +19,7 @@ import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 const directorRoles = [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR];
+const reminderRecipientRoles = [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, ...directorRoles];
 
 type FteExternalEscalationTarget = {
   centerId: string;
@@ -85,49 +87,67 @@ async function GETHandler(request: NextRequest) {
       crmLocationId: true,
       city: true,
       state: true,
-      organization: { select: { tenantId: true } },
+      organizationId: true,
+      ownerGroupId: true,
+      organization: { select: { tenantId: true, brandId: true } },
     },
     take: 500,
   });
 
   const weekLabel = dueState.weekStart.toISOString().slice(0, 10);
-  const centerIds = missingCenters.map((center) => center.id);
   const tenantIds = Array.from(new Set(missingCenters.map((center) => center.organization.tenantId)));
-  const [platformOwners, executives, staffDirectors, grantDirectors] = await Promise.all([
+  const centerScopes = missingCenters.map((center) => ({
+    id: center.id,
+    tenantId: center.organization.tenantId,
+    brandId: center.organization.brandId,
+    organizationId: center.organizationId,
+    ownerGroupId: center.ownerGroupId,
+  }));
+  const [platformOwners, reminderUsers] = await Promise.all([
     prisma.user.findMany({
       where: { isActive: true, role: UserRole.PLATFORM_OWNER },
-      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { phone: true } } },
+      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { centerId: true, phone: true } }, accessGrants: true },
       take: 100,
     }),
     prisma.user.findMany({
-      where: { isActive: true, tenantId: { in: tenantIds }, role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] } },
-      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { phone: true } } },
-      take: 500,
-    }),
-    prisma.user.findMany({
-      where: { isActive: true, role: { in: directorRoles }, staffProfile: { is: { centerId: { in: centerIds } } } },
-      select: { id: true, tenantId: true, email: true, role: true, staffProfile: { select: { centerId: true, phone: true } } },
-      take: 1000,
-    }),
-    prisma.user.findMany({
-      where: { isActive: true, accessGrants: { some: { isActive: true, centerId: { in: centerIds }, role: { in: directorRoles } } } },
+      where: {
+        isActive: true,
+        tenantId: { in: tenantIds },
+        role: { in: reminderRecipientRoles },
+        OR: [
+          { role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] } },
+          { staffProfile: { is: { centerId: { in: centerScopes.map((center) => center.id) } } } },
+          { accessGrants: { some: { isActive: true, centerId: { in: centerScopes.map((center) => center.id) }, role: { in: directorRoles } } } },
+        ],
+      },
       select: {
         id: true,
         tenantId: true,
         email: true,
         role: true,
-        staffProfile: { select: { phone: true } },
+        staffProfile: { select: { centerId: true, phone: true } },
         accessGrants: {
-          where: { isActive: true, centerId: { in: centerIds }, role: { in: directorRoles } },
-          select: { centerId: true },
+          where: {
+            isActive: true,
+            OR: [{ startsAt: null }, { startsAt: { lte: now } }],
+            AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: now } }] }],
+          },
+          select: {
+            tenantId: true,
+            brandId: true,
+            organizationId: true,
+            ownerGroupId: true,
+            centerId: true,
+            scopeType: true,
+          },
         },
       },
-      take: 1000,
+      take: 5000,
     }),
   ]);
 
   const allRecipientsById = new Map<string, FteEscalationRecipient>();
-  for (const user of [...platformOwners, ...executives, ...staffDirectors, ...grantDirectors]) {
+  for (const user of [...platformOwners, ...reminderUsers]) {
     allRecipientsById.set(user.id, {
       id: user.id,
       role: user.role,
@@ -147,26 +167,22 @@ async function GETHandler(request: NextRequest) {
     select: { userId: true, role: true, emailEnabled: true, smsEnabled: true },
     take: 5000,
   });
-  const executivesByTenant = new Map<string, string[]>();
-  for (const user of executives) {
-    const users = executivesByTenant.get(user.tenantId) ?? [];
-    users.push(user.id);
-    executivesByTenant.set(user.tenantId, users);
-  }
-  const directorsByCenter = new Map<string, string[]>();
-  for (const user of staffDirectors) {
-    const centerId = user.staffProfile?.centerId;
-    if (!centerId) continue;
-    const users = directorsByCenter.get(centerId) ?? [];
-    users.push(user.id);
-    directorsByCenter.set(centerId, users);
-  }
-  for (const user of grantDirectors) {
-    for (const grant of user.accessGrants) {
-      if (!grant.centerId) continue;
-      const users = directorsByCenter.get(grant.centerId) ?? [];
+  const recipientsByCenter = new Map<string, string[]>();
+  for (const user of [...platformOwners, ...reminderUsers]) {
+    const scopedCenterIds = fteReminderCenterIdsForUser(
+      {
+        id: user.id,
+        tenantId: user.tenantId,
+        role: user.role,
+        profileCenterId: user.staffProfile?.centerId,
+        accessGrants: user.accessGrants,
+      },
+      centerScopes,
+    );
+    for (const centerId of scopedCenterIds) {
+      const users = recipientsByCenter.get(centerId) ?? [];
       users.push(user.id);
-      directorsByCenter.set(grant.centerId, users);
+      recipientsByCenter.set(centerId, users);
     }
   }
 
@@ -184,11 +200,7 @@ async function GETHandler(request: NextRequest) {
     const body = dueState.phase === "overdue"
       ? `Friday evening reminder: ${dueState.reminder} Missing report for week of ${weekLabel}.`
       : `Friendly reminder: ${dueState.reminder} Missing report for week of ${weekLabel}.`;
-    const recipientIds = Array.from(new Set([
-      ...platformOwners.map((user) => user.id),
-      ...(executivesByTenant.get(center.organization.tenantId) ?? []),
-      ...(directorsByCenter.get(center.id) ?? []),
-    ]));
+    const recipientIds = Array.from(new Set(recipientsByCenter.get(center.id) ?? []));
 
     for (const userId of recipientIds) {
       const dedupeKey = notificationDedupeKey(["fte_due", weekLabel, dueState.phase, center.id, userId]);

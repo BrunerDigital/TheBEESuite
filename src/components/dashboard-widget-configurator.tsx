@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { ArrowDown, ArrowUp, RotateCcw, Save, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import type { DashboardWidgetView } from "@/lib/dashboard-widgets";
 
 type Props = {
@@ -80,29 +80,31 @@ export function DashboardWidgetConfigurator({ initialWidgets, roleLabel }: Props
   }
 
   return (
-    <Card className="glass-panel">
-      <CardContent className="grid gap-4 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-              <Settings2 className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="font-medium">Dashboard widgets</div>
-              <div className="text-xs text-muted-foreground">{roleLabel} · {visibleCount} visible</div>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => saveWidgets(true)} disabled={isSaving}>
-              <RotateCcw data-icon="inline-start" />
-              Reset
-            </Button>
-            <Button onClick={() => saveWidgets(false)} disabled={isSaving}>
-              <Save data-icon="inline-start" />
-              Save dashboard
-            </Button>
-          </div>
-        </div>
+    <CollapsibleCard
+      id="dashboard-widget-configurator"
+      className="glass-panel"
+      contentClassName="grid gap-4 p-4"
+      eyebrow={(
+        <Badge variant="secondary">
+          <Settings2 data-icon="inline-start" />
+          Setup
+        </Badge>
+      )}
+      title="Dashboard widgets"
+      description={`${roleLabel} · ${visibleCount} visible`}
+      headerActions={(
+        <>
+          <Button variant="outline" onClick={() => saveWidgets(true)} disabled={isSaving}>
+            <RotateCcw data-icon="inline-start" />
+            Reset
+          </Button>
+          <Button onClick={() => saveWidgets(false)} disabled={isSaving}>
+            <Save data-icon="inline-start" />
+            Save dashboard
+          </Button>
+        </>
+      )}
+    >
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
           {widgets.map((widget, index) => (
             <div key={widget.id} className="grid min-h-28 gap-3 rounded-lg border bg-background/55 p-3">
@@ -161,7 +163,6 @@ export function DashboardWidgetConfigurator({ initialWidgets, roleLabel }: Props
           ))}
         </div>
         {statusMessage ? <p className="text-xs text-muted-foreground">{statusMessage}</p> : null}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }

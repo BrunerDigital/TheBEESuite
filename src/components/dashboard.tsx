@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle,
   ArrowUpRight,
   Baby,
   BadgeDollarSign,
@@ -16,22 +15,24 @@ import {
   Users,
 } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
+import { cn } from "@/lib/utils";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
 const kpiWidgetIds: readonly DashboardWidgetId[] = [
@@ -96,6 +97,7 @@ export type LiveDashboardData = {
   }>;
   executiveMetrics?: {
     currentWeekStart: string;
+    currentWeekKey: string;
     fteDeadlineLabel: string;
     fteSubmittedSchools: number;
     fteMissingSchools: number;
@@ -122,6 +124,29 @@ export type LiveDashboardData = {
       fteTotal: number;
       enrolledTotal: number;
     }>;
+    fteSubmissions: Array<{
+      id: string;
+      centerId: string;
+      schoolName: string;
+      region: string;
+      weekStart: string;
+      weekEnd: string | null;
+      enrolledCount: number;
+      fullTimeCount: number;
+      partTimeCount: number;
+      fteCount: number;
+      totalBilledAmount: number | null;
+      payrollAmount: number | null;
+      payrollPercent: number | null;
+      newStarts: number | null;
+      withdrawals: number | null;
+      preregisteredChildren: number | null;
+      status: string;
+      source: string;
+      submittedBy: string;
+      submittedAt: string;
+      updatedAt: string;
+    }>;
   };
 };
 
@@ -131,6 +156,29 @@ function percentBar(value: number, max = 100) {
 
 function compactSchoolName(value: string) {
   return value.replace(/^Kid City USA\s*[-–]\s*/i, "").trim() || value;
+}
+
+function fteReportHref(centerId: string, weekStart?: string | null) {
+  return withQueryParam(withQueryParam("/fte-reports", "centerId", centerId), "weekStart", weekStart);
+}
+
+function formatDashboardMoney(value: number | null | undefined) {
+  return value === null || value === undefined ? "Not set" : `$${value.toLocaleString()}`;
+}
+
+function formatDashboardPercent(value: number | null | undefined) {
+  return value === null || value === undefined ? "Not set" : `${value.toLocaleString()}%`;
+}
+
+function formatDashboardNumber(value: number | null | undefined) {
+  return value === null || value === undefined ? "Not set" : value.toLocaleString();
+}
+
+function formatDashboardDateTime(value: string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function ExecutiveLensDashboard({
@@ -158,23 +206,25 @@ function ExecutiveLensDashboard({
     : 0;
   const totalOpenSeats = metrics.schoolComparisons.reduce((sum, school) => sum + Math.max(school.capacity - school.children, 0), 0);
   const title = lens === "platform" ? "Platform executive view" : lens === "brand" ? "Brand executive view" : "Regional executive view";
-
-  return (
-    <div className="grid gap-6">
-      <Card className="glass-panel">
-        <CardHeader>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle>{title}</CardTitle>
-              <CardDescription>Company-level KPI visualizations across visible schools.</CardDescription>
-            </div>
+  const executiveItems: WorkspaceBoardItem[] = [
+    {
+      id: "executive-summary",
+      title,
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-executive-summary`}
+          className="glass-panel"
+          contentClassName="grid gap-3 md:grid-cols-4"
+          title={title}
+          description="Company-level KPI visualizations across visible schools."
+          headerActions={(
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/multi-location-dashboard" />}>
               <ArrowUpRight data-icon="inline-start" />
               Open multi-location
             </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-4">
+          )}
+        >
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">FTE submitted</div>
             <div className="mt-2 text-3xl font-semibold">{submittedPercent}%</div>
@@ -199,143 +249,266 @@ function ExecutiveLensDashboard({
             <p className="mt-1 text-xs text-muted-foreground">FTE, compliance, enrollment, billing, and parent-response queue</p>
             <Progress className="mt-3" value={Math.min(actionQueue.length * 12, 100)} />
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.85fr]">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Weekly FTE progress</CardTitle>
-            <CardDescription>Submitted schools, missing schools, and total FTE by week.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {metrics.weeklyFteTrend.length ? (
-              <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-                {metrics.weeklyFteTrend.map((week) => (
-                  <div key={week.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                    <div className="flex h-56 w-full items-end justify-center gap-1">
-                      <span className="w-4 rounded-t-md bg-primary" title={`${week.submitted} submitted`} style={{ height: percentBar(week.submitted, metrics.schoolComparisons.length || 1) }} />
-                      <span className="w-4 rounded-t-md bg-destructive/70" title={`${week.missing} missing`} style={{ height: percentBar(week.missing, metrics.schoolComparisons.length || 1) }} />
-                      <span className="w-4 rounded-t-md bg-[var(--chart-2)]" title={`${week.fteTotal} FTE`} style={{ height: percentBar(week.fteTotal, maxFteTotal) }} />
-                    </div>
-                    <span className="truncate text-xs text-muted-foreground">{week.week}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No FTE submissions are visible yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Current-week FTE by school</CardTitle>
-            <CardDescription>Schools missing this week are highlighted for follow-up.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {metrics.schoolComparisons.slice(0, 12).map((school) => (
-              <div key={school.id} className="rounded-xl border bg-background/50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
-                    <div className="text-xs text-muted-foreground">{school.region}</div>
-                  </div>
-                  <Badge variant={school.fteSubmitted ? "default" : "destructive"}>{school.fteSubmitted ? school.fteStatus : "Missing"}</Badge>
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <Progress value={school.fteSubmitted ? 100 : 8} />
-                  <span className="w-14 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Occupancy comparison</CardTitle>
-            <CardDescription>Top schools by current child count against licensed capacity.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {sortedByOccupancy.map((school) => (
-              <div key={school.id} className="grid gap-2">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
-                  <span className="text-muted-foreground">{school.occupancy}%</span>
-                </div>
-                <Progress value={school.occupancy} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Revenue comparison</CardTitle>
-            <CardDescription>Invoice total snapshot by school.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {sortedByRevenue.map((school) => (
-              <div key={school.id} className="grid gap-2">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
-                  <span className="text-muted-foreground">${school.revenueDollars.toLocaleString()}</span>
-                </div>
-                <Progress value={(school.revenueDollars / maxRevenueDollars) * 100} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Lead and tour pressure</CardTitle>
-            <CardDescription>Schools with the highest active inquiry load.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {sortedByLeads.map((school) => (
-              <div key={school.id} className="rounded-xl border bg-background/50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
-                    <div className="text-xs text-muted-foreground">{school.toursToday} tours today</div>
-                  </div>
-                  <Badge variant="secondary">{school.leads} leads</Badge>
-                </div>
-                <Progress className="mt-3" value={(school.leads / maxLeadCount) * 100} />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {trendData.length ? (
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Company trend snapshot</CardTitle>
-            <CardDescription>Enrollment funnel and revenue trend for visible schools.</CardDescription>
-          </CardHeader>
-          <CardContent>
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "weekly-fte-progress",
+      title: "Weekly FTE progress",
+      className: "2xl:col-span-2",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-weekly-fte-progress`}
+          className="glass-panel"
+          title="Weekly FTE progress"
+          description="Submitted schools, missing schools, and total FTE by week."
+        >
+          {metrics.weeklyFteTrend.length ? (
             <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-              {trendData.map((point) => (
-                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+              {metrics.weeklyFteTrend.map((week) => (
+                <div key={week.week} className="flex min-w-0 flex-1 flex-col items-center gap-2">
                   <div className="flex h-56 w-full items-end justify-center gap-1">
-                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: percentBar(point.leads, Math.max(...trendData.map((item) => item.leads), 1)) }} />
-                    <span className="w-3 rounded-t-md bg-primary" style={{ height: percentBar(point.tours, Math.max(...trendData.map((item) => item.tours), 1)) }} />
-                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(point.enrolled, Math.max(...trendData.map((item) => item.enrolled), 1)) }} />
-                    <span className="w-3 rounded-t-md bg-[var(--chart-5)]" style={{ height: percentBar(point.revenue, Math.max(...trendData.map((item) => item.revenue), 1)) }} />
+                    <span className="w-4 rounded-t-md bg-primary" title={`${week.submitted} submitted`} style={{ height: percentBar(week.submitted, metrics.schoolComparisons.length || 1) }} />
+                    <span className="w-4 rounded-t-md bg-destructive/70" title={`${week.missing} missing`} style={{ height: percentBar(week.missing, metrics.schoolComparisons.length || 1) }} />
+                    <span className="w-4 rounded-t-md bg-[var(--chart-2)]" title={`${week.fteTotal} FTE`} style={{ height: percentBar(week.fteTotal, maxFteTotal) }} />
                   </div>
-                  <span className="text-xs text-muted-foreground">{point.month}</span>
+                  <span className="truncate text-xs text-muted-foreground">{week.week}</span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
+          ) : (
+            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No FTE submissions are visible yet.</p>
+          )}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "current-week-fte",
+      title: "Current-week FTE by school",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-current-week-fte`}
+          className="glass-panel"
+          contentClassName="grid gap-3"
+          title="Current-week FTE by school"
+          description="Schools missing this week are highlighted for follow-up."
+        >
+          {metrics.schoolComparisons.slice(0, 12).map((school) => (
+            <div key={school.id} className="rounded-xl border bg-background/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
+                  <div className="text-xs text-muted-foreground">{school.region}</div>
+                </div>
+                <Badge
+                  variant={school.fteSubmitted ? "default" : "destructive"}
+                  render={(
+                    <Link href={fteReportHref(school.id, metrics.currentWeekKey)} aria-label={`Open FTE report follow-up for ${school.name}`} />
+                  )}
+                >
+                  {school.fteSubmitted ? school.fteStatus : "Missing"}
+                </Badge>
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <Progress value={school.fteSubmitted ? 100 : 8} />
+                <span className="w-14 text-right text-xs font-medium">{school.fteCount ?? 0} FTE</span>
+              </div>
+            </div>
+          ))}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "school-fte-submissions",
+      title: "School FTE submissions",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-school-fte-submissions`}
+          className="glass-panel"
+          title="School FTE submissions"
+          description="Submission-level FTE history from every visible school."
+          headerActions={(
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/fte-reports" />}>
+              <ArrowUpRight data-icon="inline-start" />
+              Open reports
+            </Button>
+          )}
+        >
+          {metrics.fteSubmissions.length ? (
+            <div className="max-h-[30rem] overflow-auto rounded-xl border bg-background/40">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead className="min-w-[14rem]">School</TableHead>
+                    <TableHead>Week</TableHead>
+                    <TableHead className="text-right">FTE / enrolled</TableHead>
+                    <TableHead className="text-right">Billing / payroll</TableHead>
+                    <TableHead className="text-right">Movement</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Submitted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.fteSubmissions.map((submission) => {
+                    const href = fteReportHref(submission.centerId, submission.weekStart);
+                    const startsLabel = submission.newStarts === null ? "Starts not set" : `${submission.newStarts.toLocaleString()} starts`;
+                    const withdrawalsLabel = submission.withdrawals === null ? "Withdrawn not set" : `${submission.withdrawals.toLocaleString()} withdrawn`;
+                    const preregisteredLabel = submission.preregisteredChildren === null ? "Preregistered not set" : `${submission.preregisteredChildren.toLocaleString()} preregistered`;
+                    return (
+                      <TableRow key={submission.id}>
+                        <TableCell className="max-w-[18rem] whitespace-normal">
+                          <Link href={href} className="font-medium hover:underline">
+                            {compactSchoolName(submission.schoolName)}
+                          </Link>
+                          <div className="text-xs text-muted-foreground">{submission.region}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Link href={href} className="font-medium hover:underline">{submission.weekStart}</Link>
+                          <div className="text-xs text-muted-foreground">{submission.weekEnd ? `Ends ${submission.weekEnd}` : "Week end not set"}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{submission.fteCount.toLocaleString()} FTE</div>
+                          <div className="text-xs text-muted-foreground">{submission.enrolledCount.toLocaleString()} enrolled · {submission.fullTimeCount.toLocaleString()} FT · {submission.partTimeCount.toLocaleString()} PT</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{formatDashboardMoney(submission.totalBilledAmount)}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardMoney(submission.payrollAmount)} payroll · {formatDashboardPercent(submission.payrollPercent)}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="font-medium">{startsLabel}</div>
+                          <div className="text-xs text-muted-foreground">{withdrawalsLabel} · {preregisteredLabel}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={submission.status === "submitted" ? "default" : "secondary"} render={<Link href={href} aria-label={`Open ${submission.schoolName} FTE submission for ${submission.weekStart}`} />}>
+                            {submission.status}
+                          </Badge>
+                          <div className="mt-1 text-xs text-muted-foreground">{submission.source}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{submission.submittedBy}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(submission.updatedAt)}</div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No school FTE submissions are visible yet.</p>
+          )}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "occupancy-comparison",
+      title: "Occupancy comparison",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-occupancy-comparison`}
+          className="glass-panel"
+          contentClassName="grid gap-3"
+          title="Occupancy comparison"
+          description="Top schools by current child count against licensed capacity."
+        >
+          {sortedByOccupancy.map((school) => (
+            <div key={school.id} className="grid gap-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
+                <span className="text-muted-foreground">{school.occupancy}%</span>
+              </div>
+              <Progress value={school.occupancy} />
+            </div>
+          ))}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "revenue-comparison",
+      title: "Revenue comparison",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-revenue-comparison`}
+          className="glass-panel"
+          contentClassName="grid gap-3"
+          title="Revenue comparison"
+          description="Invoice total snapshot by school."
+        >
+          {sortedByRevenue.map((school) => (
+            <div key={school.id} className="grid gap-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-medium">{compactSchoolName(school.name)}</span>
+                <span className="text-muted-foreground">${school.revenueDollars.toLocaleString()}</span>
+              </div>
+              <Progress value={(school.revenueDollars / maxRevenueDollars) * 100} />
+            </div>
+          ))}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "lead-tour-pressure",
+      title: "Lead and tour pressure",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-lead-tour-pressure`}
+          className="glass-panel"
+          contentClassName="grid gap-3"
+          title="Lead and tour pressure"
+          description="Schools with the highest active inquiry load."
+        >
+          {sortedByLeads.map((school) => (
+            <div key={school.id} className="rounded-xl border bg-background/50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{compactSchoolName(school.name)}</div>
+                  <div className="text-xs text-muted-foreground">{school.toursToday} tours today</div>
+                </div>
+                <Badge
+                  variant="secondary"
+                  render={<Link href={withQueryParam("/crm-leads", "q", school.name)} aria-label={`Open CRM leads for ${school.name}`} />}
+                >
+                  {school.leads} leads
+                </Badge>
+              </div>
+              <Progress className="mt-3" value={(school.leads / maxLeadCount) * 100} />
+            </div>
+          ))}
+        </CollapsibleCard>
+      ),
+    },
+    ...(trendData.length ? [{
+      id: "company-trend-snapshot",
+      title: "Company trend snapshot",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-company-trend-snapshot`}
+          className="glass-panel"
+          title="Company trend snapshot"
+          description="Enrollment funnel and revenue trend for visible schools."
+        >
+          <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
+            {trendData.map((point) => (
+              <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                <div className="flex h-56 w-full items-end justify-center gap-1">
+                  <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: percentBar(point.leads, Math.max(...trendData.map((item) => item.leads), 1)) }} />
+                  <span className="w-3 rounded-t-md bg-primary" style={{ height: percentBar(point.tours, Math.max(...trendData.map((item) => item.tours), 1)) }} />
+                  <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: percentBar(point.enrolled, Math.max(...trendData.map((item) => item.enrolled), 1)) }} />
+                  <span className="w-3 rounded-t-md bg-[var(--chart-5)]" style={{ height: percentBar(point.revenue, Math.max(...trendData.map((item) => item.revenue), 1)) }} />
+                </div>
+                <span className="text-xs text-muted-foreground">{point.month}</span>
+              </div>
+            ))}
+          </div>
+        </CollapsibleCard>
+      ),
+    } satisfies WorkspaceBoardItem] : []),
+  ];
+
+  return (
+    <WorkspaceBoard storageId={`dashboard-${lens}-executive`} className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3" items={executiveItems} />
   );
 }
 
@@ -423,21 +596,16 @@ function AttendanceSnapshotCard({
 }) {
   const attendanceRate = snapshot.total ? Math.round((snapshot.present / snapshot.total) * 100) : 0;
   return (
-    <Card className="glass-panel">
-      <CardHeader>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <CardTitle>Attendance Snapshot</CardTitle>
-            <CardDescription>
-              {isTeacherDashboard
-                ? "Current check-in view for your assigned classroom."
-                : "Current check-in view across all classes in your school scope."}
-            </CardDescription>
-          </div>
-          <Badge variant="outline">{snapshot.scopeLabel}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-5">
+    <CollapsibleCard
+      id="dashboard-attendance-snapshot"
+      className="glass-panel"
+      contentClassName="grid gap-5"
+      title="Attendance Snapshot"
+      description={isTeacherDashboard
+        ? "Current check-in view for your assigned classroom."
+        : "Current check-in view across all classes in your school scope."}
+      headerActions={<Badge variant="outline">{snapshot.scopeLabel}</Badge>}
+    >
         <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border bg-background/45 p-3">
             <div className="text-xs text-muted-foreground">Present now</div>
@@ -482,8 +650,7 @@ function AttendanceSnapshotCard({
             No classroom attendance records are visible for this login yet.
           </p>
         )}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }
 
@@ -562,7 +729,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isClassroomDemo = showDemoFallbackData && !live?.classroomSnapshots?.length;
   const isParentMessageDemo = showDemoFallbackData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
-    "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm any sensitive action before sending messages or changing records. AI does not make safety, billing, custody, medical, legal, or compliance decisions.";
+    "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm sensitive actions before sending messages or changing records.";
   const aiHighlights = live?.aiHighlights?.length
     ? live.aiHighlights
     : showDemoFallbackData
@@ -659,6 +826,43 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     .filter((lens) => ["platform", "brand", "regional", "director", "billing"].includes(lens))
     .map((lens) => lens.replaceAll("_", " "))
     .join(", ") || live?.dashboardWidgetRoleLabel || "Dashboard";
+
+  function renderKpiCard({ kpi, Icon, widgetId }: (typeof dashboardKpiRows)[number], valueClassName: string) {
+    const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
+    return (
+      <Link
+        href={href}
+        className="group block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Open ${kpi.label}`}
+      >
+        <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
+          <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
+            <CardDescription>{kpi.label}</CardDescription>
+            <Icon className="text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className={cn("font-semibold", valueClassName)}>{kpi.value}</div>
+            <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
+            <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
+              Open view
+              <ArrowUpRight className="size-3" />
+            </span>
+          </CardContent>
+        </Card>
+      </Link>
+    );
+  }
+
+  const topKpiItems: WorkspaceBoardItem[] = topKpiRows.map((row) => ({
+    id: `top-kpi-${row.widgetId}-${row.kpi.label}`,
+    title: row.kpi.label,
+    children: renderKpiCard(row, "text-3xl"),
+  }));
+  const lowerKpiItems: WorkspaceBoardItem[] = lowerKpiRows.map((row) => ({
+    id: `director-kpi-${row.widgetId}-${row.kpi.label}`,
+    title: row.kpi.label,
+    children: renderKpiCard(row, "text-2xl"),
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -763,6 +967,27 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{week.enrolledTotal.toLocaleString()}</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+            <h2>School FTE Submissions</h2>
+            <table>
+              <thead><tr><th>School</th><th>Week</th><th>FTE</th><th>Enrolled</th><th>Total billed</th><th>Payroll</th><th>Starts</th><th>Withdrawn</th><th>Status</th><th>Updated</th></tr></thead>
+              <tbody>
+                {live.executiveMetrics.fteSubmissions.map((submission) => (
+                  <tr key={submission.id}>
+                    <td>{submission.schoolName}</td>
+                    <td>{submission.weekStart}</td>
+                    <td>{submission.fteCount.toLocaleString()}</td>
+                    <td>{submission.enrolledCount.toLocaleString()}</td>
+                    <td>{formatDashboardMoney(submission.totalBilledAmount)}</td>
+                    <td>{formatDashboardMoney(submission.payrollAmount)}</td>
+                    <td>{formatDashboardNumber(submission.newStarts)}</td>
+                    <td>{formatDashboardNumber(submission.withdrawals)}</td>
+                    <td>{submission.status}</td>
+                    <td>{formatDashboardDateTime(submission.updatedAt)}</td>
+                  </tr>
+                ))}
+                {!live.executiveMetrics.fteSubmissions.length ? <tr><td colSpan={10}>No FTE submissions are visible.</td></tr> : null}
               </tbody>
             </table>
           </>
@@ -916,46 +1141,21 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
               </div>
             </div>
             {topKpiRows.length ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {topKpiRows.map(({ kpi, Icon, widgetId }) => {
-                const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
-                return (
-                  <Link
-                    key={kpi.label}
-                    href={href}
-                    className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Open ${kpi.label}`}
-                  >
-                    <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
-                      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-                        <CardDescription>{kpi.label}</CardDescription>
-                        <Icon className="text-primary" />
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-3xl font-semibold">{kpi.value}</div>
-                        <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-                        <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                          Open view
-                          <ArrowUpRight className="size-3" />
-                        </span>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                );
-              })}
-            </div>
+              <WorkspaceBoard storageId="dashboard-command-center-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" items={topKpiItems} />
             ) : null}
           </div>
           {showAiBrief ? (
-          <Card className="border-primary/30 bg-primary/10">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
+          <CollapsibleCard
+            id="dashboard-ai-daily-summary"
+            className="border-primary/30 bg-primary/10"
+            title={(
+              <span className="flex items-center gap-2 text-lg">
                 <Sparkles className="text-primary" />
                 AI daily center summary
-              </CardTitle>
-              <CardDescription>Human review required</CardDescription>
-            </CardHeader>
-            <CardContent>
+              </span>
+            )}
+            description="Human review required"
+          >
               <p className="text-sm leading-6 text-muted-foreground">
                 {aiSummary}
               </p>
@@ -968,8 +1168,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                 ))}
               </div>
               ) : null}
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
           ) : null}
         </div>
       </section>
@@ -1042,407 +1241,440 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
             <div className="grid gap-6">
               {lowerKpiRows.length ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {lowerKpiRows.map(({ kpi, Icon, widgetId }) => {
-                  const href = widgetSummaries[widgetId]?.href ?? "/dashboard";
-                  return (
-                    <Link
-                      key={kpi.label}
-                      href={href}
-                      className="group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`Open ${kpi.label}`}
-                    >
-                      <Card className="glass-panel h-full transition group-hover:border-primary/40 group-hover:bg-background/70">
-                        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-                          <CardDescription>{kpi.label}</CardDescription>
-                          <Icon className="text-primary" />
-                        </CardHeader>
-                        <CardContent>
-                          <div className="text-2xl font-semibold">{kpi.value}</div>
-                          <p className="mt-1 text-xs text-muted-foreground">{kpi.trend}</p>
-                          <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary">
-                            Open view
-                            <ArrowUpRight className="size-3" />
-                          </span>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  );
-                })}
-              </div>
+                <WorkspaceBoard storageId="dashboard-director-kpis" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" items={lowerKpiItems} />
               ) : null}
               {isAnyWidgetVisible(["enrollmentPipeline", "billingRevenue", "classroomCapacity", "staffingRatios"]) ? (
-              <div className="grid gap-6 xl:grid-cols-2">
-                {isAnyWidgetVisible(["enrollmentPipeline", "billingRevenue"]) ? (
-                <Card className="glass-panel">
-                  <CardHeader>
-                    <CardTitle>Enrollment and revenue snapshot</CardTitle>
-                    <CardDescription>Leads, tours, enrollments, and revenue index</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {dashboardAnalytics.length ? (
-                    <div className="flex h-64 items-end gap-4 rounded-xl border bg-background/40 p-4">
+                <WorkspaceBoard
+                  storageId="dashboard-director-operations"
+                  className="grid gap-6 xl:grid-cols-2"
+                  items={[
+                    ...(isAnyWidgetVisible(["enrollmentPipeline", "billingRevenue"]) ? [{
+                      id: "enrollment-revenue-snapshot",
+                      title: "Enrollment and revenue snapshot",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-enrollment-revenue"
+                          className="glass-panel"
+                          title="Enrollment and revenue snapshot"
+                          description="Leads, tours, enrollments, and revenue index"
+                        >
+                          {dashboardAnalytics.length ? (
+                            <div className="flex h-64 items-end gap-4 rounded-xl border bg-background/40 p-4">
+                              {dashboardAnalytics.map((point) => (
+                                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+                                  <div className="flex h-52 w-full items-end justify-center gap-1">
+                                    <span
+                                      className="w-4 rounded-t-md bg-primary"
+                                      style={{ height: barHeight(point.revenue, maxRevenue) }}
+                                    />
+                                    <span
+                                      className="w-4 rounded-t-md bg-[var(--chart-2)]"
+                                      style={{ height: barHeight(point.enrolled, maxFunnelCount) }}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{point.month}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                              No enrollment or revenue trend data is available for this login yet.
+                            </p>
+                          )}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
+                    ...(isAnyWidgetVisible(["classroomCapacity", "staffingRatios"]) ? [{
+                      id: "capacity-by-classroom",
+                      title: "Capacity by classroom",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-capacity-by-classroom"
+                          className="glass-panel"
+                          contentClassName="flex flex-col gap-4"
+                          title="Capacity by classroom"
+                          description={isClassroomDemo ? "Demo account preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
+                        >
+                          {classroomSnapshots.slice(0, 6).map((room) => (
+                            <div key={room.name} className="flex flex-col gap-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-medium">{room.name}</div>
+                                  <div className="text-xs text-muted-foreground">{room.ageGroup} · ratio {room.ratio}</div>
+                                </div>
+                                <Badge
+                                  variant="secondary"
+                                  render={<Link href={withQueryParam("/center-dashboard", "q", String(room.name))} aria-label={`Open capacity details for ${room.name}`} />}
+                                >
+                                  {Math.max(Number(room.capacity) - Number(room.present), 0)} open
+                                </Badge>
+                              </div>
+                              <Progress value={(Number(room.present) / Math.max(Number(room.capacity), 1)) * 100} />
+                            </div>
+                          ))}
+                          {!classroomSnapshots.length ? (
+                            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                              No classroom records are visible for this login yet.
+                            </p>
+                          ) : null}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
+                  ]}
+                />
+              ) : null}
+              {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
+                <WorkspaceBoard
+                  storageId="dashboard-director-enrollment"
+                  className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]"
+                  items={[
+                    ...(showEnrollment ? [{
+                      id: "enrollment-pipeline",
+                      title: "Enrollment pipeline",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-enrollment-pipeline"
+                          className="glass-panel"
+                          contentClassName="grid gap-3 sm:grid-cols-2"
+                          title="Enrollment pipeline"
+                          description="Board-ready stages"
+                        >
+                          {dashboardPipeline.slice(0, 8).map((stage) => (
+                            <Link
+                              key={stage.name}
+                              href={withQueryParam("/crm-leads", "q", stage.name)}
+                              className="group rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              aria-label={`Open CRM leads for ${stage.name}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-medium">{stage.name}</span>
+                                <Badge>{stage.count}</Badge>
+                              </div>
+                              <p className="mt-2 text-xs text-muted-foreground">Projected value {stage.value}</p>
+                              <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                                Open matching leads
+                                <ArrowUpRight className="size-3" />
+                              </span>
+                            </Link>
+                          ))}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
+                    ...(isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? [{
+                      id: "lead-scoring-tours",
+                      title: "Lead scoring and tours",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-lead-scoring-tours"
+                          className="glass-panel"
+                          contentClassName="flex flex-col gap-3"
+                          title="Lead scoring and tours"
+                          description="Childcare-specific CRM records"
+                        >
+                          {dashboardLeads.map((lead) => (
+                            <Link
+                              key={lead.family}
+                              href={withQueryParam("/crm-leads", "q", lead.family)}
+                              className="group grid gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[1fr_auto]"
+                              aria-label={`Open CRM lead for ${lead.family}`}
+                            >
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <div className="font-medium">{lead.family}</div>
+                                  <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                                </div>
+                                <p className="text-sm text-muted-foreground">{lead.child} · {lead.source} · start {lead.desiredStart}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {lead.tags.map((tag) => (
+                                    <Badge key={tag} variant="secondary">{tag}</Badge>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-2xl font-semibold">{lead.score}</div>
+                                <p className="text-xs text-muted-foreground">{lead.stage}</p>
+                              </div>
+                            </Link>
+                          ))}
+                          {!dashboardLeads.length ? (
+                            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                              No visible CRM leads are available for this login yet.
+                            </p>
+                          ) : null}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
+                  ]}
+                />
+              ) : null}
+            </div>
+            <aside>
+              <WorkspaceBoard
+                storageId="dashboard-director-sidebar"
+                className="flex flex-col gap-6"
+                items={[
+                  ...(isAnyWidgetVisible(["toursAndTasks", "complianceQueue", "familyCommunication", "classroomCapacity", "enrollmentPipeline"]) ? [{
+                    id: "action-queue",
+                    title: "Action queue",
+                    children: (
+                      <CollapsibleCard
+                        id="dashboard-director-action-queue"
+                        className="glass-panel"
+                        contentClassName="flex flex-col gap-3"
+                        title="Action queue"
+                        description="Notifications, reminders, and review items"
+                      >
+                        {actionQueue.slice(0, 8).map((item, index) => {
+                          const href = typeof item === "string"
+                            ? "/notifications"
+                            : item.widgetId
+                              ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
+                              : "/notifications";
+                          return (
+                            <Link
+                              key={notificationText(item)}
+                              href={withQueryParam(href, "q", notificationText(item))}
+                              className="group flex items-start gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
+                                {index + 1}
+                              </span>
+                              <p className="min-w-0 flex-1 text-sm leading-5">{notificationText(item)}</p>
+                              <ArrowUpRight className="mt-1 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                            </Link>
+                          );
+                        })}
+                        {!actionQueue.length ? (
+                          <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                            No dashboard action items are visible for this login yet.
+                          </p>
+                        ) : null}
+                      </CollapsibleCard>
+                    ),
+                  } satisfies WorkspaceBoardItem] : []),
+                  ...(showFamilyCommunication ? [{
+                    id: "parent-messages",
+                    title: "Parent messages",
+                    children: (
+                      <CollapsibleCard
+                        id="dashboard-director-parent-messages"
+                        className="glass-panel"
+                        contentClassName="flex flex-col gap-4"
+                        title="Parent messages"
+                        description={isParentMessageDemo ? "Demo account preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
+                      >
+                        {parentMessages.map((message) => (
+                          <Link
+                            key={message.subject}
+                            href={withQueryParam("/messages", "q", message.from)}
+                            className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`Open message from ${message.from}`}
+                          >
+                            <Avatar className="size-9">
+                              <AvatarFallback>{message.from.slice(0, 2).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="truncate text-sm font-medium">{message.from}</p>
+                                <Badge variant="outline">{message.status}</Badge>
+                              </div>
+                              <p className="truncate text-xs text-muted-foreground">{message.preview}</p>
+                            </div>
+                            <ArrowUpRight className="mt-2 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                          </Link>
+                        ))}
+                        {!parentMessages.length ? (
+                          <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                            No parent messages are visible for this login yet.
+                          </p>
+                        ) : null}
+                      </CollapsibleCard>
+                    ),
+                  } satisfies WorkspaceBoardItem] : []),
+                ]}
+              />
+            </aside>
+          </div>
+        </TabsContent> : null}
+        {secondaryLenses.map((tab) => {
+          const executiveMetrics = live?.executiveMetrics ?? null;
+          const isExecutiveLens = Boolean(executiveMetrics && ["platform", "brand", "regional"].includes(tab));
+          const secondaryItems: WorkspaceBoardItem[] = [
+            ...(isExecutiveLens && executiveMetrics ? [{
+              id: `${tab}-executive-lens`,
+              title: `${tab} executive lens`,
+              className: "md:col-span-3",
+              children: (
+                <ExecutiveLensDashboard
+                  lens={tab as Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">}
+                  metrics={executiveMetrics}
+                  trendData={dashboardAnalytics}
+                  actionQueue={actionQueue}
+                />
+              ),
+            } satisfies WorkspaceBoardItem] : []),
+            ...(!isExecutiveLens ? visibleConfiguredWidgets.map((widget) => {
+              const summary = widgetSummaries[widget.id];
+              return {
+                id: `${tab}-widget-${widget.id}`,
+                title: widget.title,
+                children: (
+                  <CollapsibleCard
+                    id={`dashboard-${tab}-widget-${widget.id}`}
+                    className="glass-panel"
+                    contentClassName="flex flex-col gap-3"
+                    eyebrow={<Badge variant="outline">{widget.category}</Badge>}
+                    title={widget.title}
+                    description={widget.description}
+                  >
+                    {summary ? (
+                      <>
+                        <div>
+                          <div className="text-2xl font-semibold">{summary.value}</div>
+                          <p className="text-xs text-muted-foreground">{summary.detail}</p>
+                        </div>
+                        <Button variant="outline" size="sm" nativeButton={false} render={<Link href={summary.href} />}>
+                          <ArrowUpRight data-icon="inline-start" />
+                          Open
+                        </Button>
+                      </>
+                    ) : null}
+                  </CollapsibleCard>
+                ),
+              } satisfies WorkspaceBoardItem;
+            }) : []),
+            ...(!isExecutiveLens && showExecutiveRollup ? dashboardCenters.map((center) => ({
+              id: `${tab}-center-${center.name}`,
+              title: center.name,
+              children: (
+                <Link
+                  href={withQueryParam("/multi-location-dashboard", "q", center.name)}
+                  className="group block rounded-xl border bg-background/50 p-4 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Open multi-location view for ${center.name}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">{center.name}</div>
+                    <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>
+                  <Separator className="my-4" />
+                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                    <div><b>{center.children}</b><span className="block text-xs text-muted-foreground">Children</span></div>
+                    <div><b>{center.staff}</b><span className="block text-xs text-muted-foreground">Teachers</span></div>
+                    <div><b>{center.compliance}%</b><span className="block text-xs text-muted-foreground">Docs</span></div>
+                  </div>
+                </Link>
+              ),
+            } satisfies WorkspaceBoardItem)) : []),
+          ];
+
+          return (
+            <TabsContent key={tab} value={tab} className="mt-0">
+              <CollapsibleCard
+                id={`dashboard-${tab}-lens-container`}
+                className="glass-panel"
+                contentClassName="grid gap-4"
+                title={<span className="capitalize">{tab} dashboard lens</span>}
+                description={`${live?.dashboardWidgetRoleLabel ?? "Role"} widgets from the current permission scope`}
+              >
+                {secondaryItems.length ? (
+                  <WorkspaceBoard storageId={`dashboard-${tab}-lens`} className="grid gap-4 md:grid-cols-3" items={secondaryItems} />
+                ) : (
+                  <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
+                    No dashboard widgets are visible for this login yet.
+                  </p>
+                )}
+              </CollapsibleCard>
+            </TabsContent>
+          );
+        })}
+      </Tabs>
+
+      {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks", "classroomCapacity"]) ? (
+        <WorkspaceBoard
+          storageId="dashboard-shared-insights"
+          className="grid gap-6 lg:grid-cols-2"
+          items={[
+            ...(isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? [{
+              id: "enrollment-funnel",
+              title: "Enrollment funnel",
+              children: (
+                <CollapsibleCard
+                  id="dashboard-enrollment-funnel"
+                  className="glass-panel"
+                  title="Enrollment funnel"
+                  description="Inquiry to enrolled conversion snapshot"
+                >
+                  {dashboardAnalytics.length ? (
+                    <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
                       {dashboardAnalytics.map((point) => (
                         <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                          <div className="flex h-52 w-full items-end justify-center gap-1">
-                            <span
-                              className="w-4 rounded-t-md bg-primary"
-                              style={{ height: barHeight(point.revenue, maxRevenue) }}
-                            />
-                            <span
-                              className="w-4 rounded-t-md bg-[var(--chart-2)]"
-                              style={{ height: barHeight(point.enrolled, maxFunnelCount) }}
-                            />
+                          <div className="flex h-56 w-full items-end justify-center gap-1">
+                            <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: barHeight(point.leads, maxFunnelCount) }} />
+                            <span className="w-3 rounded-t-md bg-primary" style={{ height: barHeight(point.tours, maxFunnelCount) }} />
+                            <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
                           </div>
                           <span className="text-xs text-muted-foreground">{point.month}</span>
                         </div>
                       ))}
                     </div>
-                    ) : (
-                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                        No enrollment or revenue trend data is available for this login yet.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-                ) : null}
-                {isAnyWidgetVisible(["classroomCapacity", "staffingRatios"]) ? (
-                <Card className="glass-panel">
-                  <CardHeader>
-                    <CardTitle>Capacity by classroom</CardTitle>
-                    <CardDescription>
-                      {isClassroomDemo ? "Demo account preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    {classroomSnapshots.slice(0, 6).map((room) => (
-                      <div key={room.name} className="flex flex-col gap-2">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium">{room.name}</div>
-                            <div className="text-xs text-muted-foreground">{room.ageGroup} · ratio {room.ratio}</div>
-                          </div>
-                          <Badge variant="secondary">{Math.max(Number(room.capacity) - Number(room.present), 0)} open</Badge>
-                        </div>
-                        <Progress value={(Number(room.present) / Math.max(Number(room.capacity), 1)) * 100} />
-                      </div>
-                    ))}
-                    {!classroomSnapshots.length ? (
-                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                        No classroom records are visible for this login yet.
-                      </p>
-                    ) : null}
-                  </CardContent>
-                </Card>
-                ) : null}
-              </div>
-              ) : null}
-              {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
-              <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-                {showEnrollment ? (
-                <Card className="glass-panel">
-                  <CardHeader>
-                    <CardTitle>Enrollment pipeline</CardTitle>
-                    <CardDescription>Drag-and-drop board-ready stages</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 sm:grid-cols-2">
-                    {dashboardPipeline.slice(0, 8).map((stage) => (
-                      <Link
-                        key={stage.name}
-                        href={withQueryParam("/crm-leads", "q", stage.name)}
-                        className="group rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`Open CRM leads for ${stage.name}`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium">{stage.name}</span>
-                          <Badge>{stage.count}</Badge>
-                        </div>
-                        <p className="mt-2 text-xs text-muted-foreground">Projected value {stage.value}</p>
-                        <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-primary opacity-0 transition group-hover:opacity-100">
-                          Open matching leads
-                          <ArrowUpRight className="size-3" />
-                        </span>
-                      </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-                ) : null}
-                {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
-                <Card className="glass-panel">
-                  <CardHeader>
-                    <CardTitle>Lead scoring and tours</CardTitle>
-                    <CardDescription>Childcare-specific CRM records</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    {dashboardLeads.map((lead) => (
-                      <Link
-                        key={lead.family}
-                        href={withQueryParam("/crm-leads", "q", lead.family)}
-                        className="group grid gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[1fr_auto]"
-                        aria-label={`Open CRM lead for ${lead.family}`}
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{lead.family}</div>
-                            <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
-                          </div>
-                          <p className="text-sm text-muted-foreground">{lead.child} · {lead.source} · start {lead.desiredStart}</p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {lead.tags.map((tag) => (
-                              <Badge key={tag} variant="secondary">{tag}</Badge>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-semibold">{lead.score}</div>
-                          <p className="text-xs text-muted-foreground">{lead.stage}</p>
-                        </div>
-                      </Link>
-                    ))}
-                    {!dashboardLeads.length ? (
-                      <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                        No visible CRM leads are available for this login yet.
-                      </p>
-                    ) : null}
-                  </CardContent>
-                </Card>
-                ) : null}
-              </div>
-              ) : null}
-            </div>
-            <aside className="flex flex-col gap-6">
-              {isAnyWidgetVisible(["toursAndTasks", "complianceQueue", "familyCommunication", "classroomCapacity", "enrollmentPipeline"]) ? (
-              <Card className="glass-panel">
-                <CardHeader>
-                  <CardTitle>Action queue</CardTitle>
-                  <CardDescription>Notifications, reminders, and review items</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {actionQueue.slice(0, 8).map((item, index) => {
-                    const href = typeof item === "string"
-                      ? "/notifications"
-                      : item.widgetId
-                        ? widgetSummaries[item.widgetId]?.href ?? "/notifications"
-                        : "/notifications";
-                    return (
-                      <Link
-                        key={notificationText(item)}
-                        href={withQueryParam(href, "q", notificationText(item))}
-                        className="group flex items-start gap-3 rounded-xl border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
-                          {index + 1}
-                        </span>
-                        <p className="min-w-0 flex-1 text-sm leading-5">{notificationText(item)}</p>
-                        <ArrowUpRight className="mt-1 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
-                      </Link>
-                    );
-                  })}
-                  {!actionQueue.length ? (
+                  ) : (
                     <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                      No dashboard action items are visible for this login yet.
+                      No enrollment funnel trend data is available for this login yet.
                     </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-              ) : null}
-              {showFamilyCommunication ? (
-              <Card className="glass-panel">
-                <CardHeader>
-                  <CardTitle>Parent messages</CardTitle>
-                  <CardDescription>
-                    {isParentMessageDemo ? "Demo account preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  {parentMessages.map((message) => (
-                    <Link
-                      key={message.subject}
-                      href={withQueryParam("/messages", "q", message.from)}
-                      className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      aria-label={`Open message from ${message.from}`}
-                    >
-                      <Avatar className="size-9">
-                        <AvatarFallback>{message.from.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-medium">{message.from}</p>
-                          <Badge variant="outline">{message.status}</Badge>
+                  )}
+                </CollapsibleCard>
+              ),
+            } satisfies WorkspaceBoardItem] : []),
+            ...(showClassroomCapacity ? [{
+              id: "open-seats-by-age-group",
+              title: "Open seats by age group",
+              children: (
+                <CollapsibleCard
+                  id="dashboard-open-seats-by-age-group"
+                  className="glass-panel"
+                  title="Open seats by age group"
+                  description="Capacity planning for enrollment"
+                >
+                  {openSeatsByAgeGroup.length ? (
+                    <div className="grid gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[14rem_1fr]">
+                      <div className="grid aspect-square place-items-center rounded-full border bg-primary/10">
+                        <div className="grid size-28 place-items-center rounded-full bg-card text-center">
+                          <span className="text-3xl font-semibold">{totalOpenSeats}</span>
+                          <span className="-mt-7 text-xs text-muted-foreground">open seats</span>
                         </div>
-                        <p className="truncate text-xs text-muted-foreground">{message.preview}</p>
                       </div>
-                      <ArrowUpRight className="mt-2 size-3.5 shrink-0 opacity-0 transition group-hover:opacity-100" />
-                    </Link>
-                  ))}
-                  {!parentMessages.length ? (
+                      <div className="flex flex-col justify-center gap-3">
+                        {openSeatsByAgeGroup.map((item, index) => (
+                          <Link
+                            key={item.label}
+                            href={withQueryParam("/center-dashboard", "q", item.label)}
+                            className="group flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            aria-label={`Open center capacity for ${item.label}`}
+                          >
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                              <span className="size-3 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
+                              {item.label}
+                            </span>
+                            <span className="flex items-center gap-2">
+                              <Badge variant="secondary">{item.value} open</Badge>
+                              <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
+                            </span>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
                     <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                      No parent messages are visible for this login yet.
+                      No open-seat data is available for this login yet.
                     </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-              ) : null}
-            </aside>
-          </div>
-        </TabsContent> : null}
-        {secondaryLenses.map((tab) => (
-          <TabsContent key={tab} value={tab} className="mt-0">
-            <Card className="glass-panel">
-              <CardHeader>
-                <CardTitle className="capitalize">{tab} dashboard lens</CardTitle>
-                <CardDescription>{live?.dashboardWidgetRoleLabel ?? "Role"} widgets from the current permission scope</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-3">
-                {live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab) ? (
-                  <div className="md:col-span-3">
-                    <ExecutiveLensDashboard
-                      lens={tab as Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">}
-                      metrics={live.executiveMetrics}
-                      trendData={dashboardAnalytics}
-                      actionQueue={actionQueue}
-                    />
-                  </div>
-                ) : null}
-                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) ? visibleConfiguredWidgets.map((widget) => {
-                  const summary = widgetSummaries[widget.id];
-                  return (
-                    <div key={widget.id} className="flex flex-col gap-3 rounded-xl border bg-background/50 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="outline">{widget.category}</Badge>
-                        <span className="text-sm font-medium">{widget.title}</span>
-                      </div>
-                      <p className="text-xs leading-5 text-muted-foreground">{widget.description}</p>
-                      {summary ? (
-                        <>
-                          <Separator />
-                          <div>
-                            <div className="text-2xl font-semibold">{summary.value}</div>
-                            <p className="text-xs text-muted-foreground">{summary.detail}</p>
-                          </div>
-                          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={summary.href} />}>
-                            <ArrowUpRight data-icon="inline-start" />
-                            Open
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  );
-                }) : null}
-                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && showExecutiveRollup ? dashboardCenters.map((center) => (
-                  <Link
-                    key={center.name}
-                    href={withQueryParam("/multi-location-dashboard", "q", center.name)}
-                    className="group rounded-xl border bg-background/50 p-4 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Open multi-location view for ${center.name}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium">{center.name}</div>
-                      <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{center.region} · {center.director}</p>
-                    <Separator className="my-4" />
-                    <div className="grid grid-cols-3 gap-3 text-center text-sm">
-                      <div><b>{center.children}</b><span className="block text-xs text-muted-foreground">Children</span></div>
-                      <div><b>{center.staff}</b><span className="block text-xs text-muted-foreground">Teachers</span></div>
-                      <div><b>{center.compliance}%</b><span className="block text-xs text-muted-foreground">Docs</span></div>
-                    </div>
-                  </Link>
-                )) : null}
-                {!(live?.executiveMetrics && ["platform", "brand", "regional"].includes(tab)) && !visibleConfiguredWidgets.length && (!showExecutiveRollup || !dashboardCenters.length) ? (
-                  <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                    No dashboard widgets are visible for this login yet.
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
-      </Tabs>
-
-      {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks", "classroomCapacity"]) ? (
-      <section className="grid gap-6 lg:grid-cols-2">
-        {isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Enrollment funnel</CardTitle>
-            <CardDescription>Inquiry to enrolled conversion snapshot</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {dashboardAnalytics.length ? (
-            <div className="flex h-72 items-end gap-4 rounded-xl border bg-background/40 p-5">
-              {dashboardAnalytics.map((point) => (
-                <div key={point.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-                  <div className="flex h-56 w-full items-end justify-center gap-1">
-                    <span className="w-3 rounded-t-md bg-[var(--chart-3)]" style={{ height: barHeight(point.leads, maxFunnelCount) }} />
-                    <span className="w-3 rounded-t-md bg-primary" style={{ height: barHeight(point.tours, maxFunnelCount) }} />
-                    <span className="w-3 rounded-t-md bg-[var(--chart-2)]" style={{ height: barHeight(point.enrolled, maxFunnelCount) }} />
-                  </div>
-                  <span className="text-xs text-muted-foreground">{point.month}</span>
-                </div>
-              ))}
-            </div>
-            ) : (
-              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                No enrollment funnel trend data is available for this login yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        ) : null}
-        {showClassroomCapacity ? (
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Open seats by age group</CardTitle>
-            <CardDescription>Capacity planning for enrollment</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {openSeatsByAgeGroup.length ? (
-            <div className="grid gap-6 rounded-xl border bg-background/40 p-5 sm:grid-cols-[14rem_1fr]">
-              <div className="grid aspect-square place-items-center rounded-full border bg-primary/10">
-                <div className="grid size-28 place-items-center rounded-full bg-card text-center">
-                  <span className="text-3xl font-semibold">{totalOpenSeats}</span>
-                  <span className="-mt-7 text-xs text-muted-foreground">open seats</span>
-                </div>
-              </div>
-              <div className="flex flex-col justify-center gap-3">
-                {openSeatsByAgeGroup.map((item, index) => (
-                  <Link
-                    key={item.label}
-                    href={withQueryParam("/center-dashboard", "q", item.label)}
-                    className="group flex items-center justify-between gap-3 rounded-lg border bg-background/50 p-3 transition hover:border-primary/40 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Open center capacity for ${item.label}`}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <span className="size-3 rounded-full" style={{ background: ageGroupColors[index % ageGroupColors.length] }} />
-                      {item.label}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <Badge variant="secondary">{item.value} open</Badge>
-                      <ArrowUpRight className="size-3.5 opacity-0 transition group-hover:opacity-100" />
-                    </span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-            ) : (
-              <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">
-                No open-seat data is available for this login yet.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-        ) : null}
-      </section>
+                  )}
+                </CollapsibleCard>
+              ),
+            } satisfies WorkspaceBoardItem] : []),
+          ]}
+        />
       ) : null}
-
-      <Alert className="border-amber-400/30 bg-amber-400/10">
-        <AlertTriangle />
-        <AlertTitle>Compliance-ready documentation support</AlertTitle>
-        <AlertDescription>
-          The BEE Suite provides workflow and documentation support, but does not provide legal, licensing, medical, custody, billing, or compliance advice.
-        </AlertDescription>
-      </Alert>
     </div>
   );
 }

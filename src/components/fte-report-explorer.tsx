@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, FilterX, MapPin, Printer, Save, Search } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,10 +37,22 @@ type InlineCorrectionState = {
   centerId: string;
   weekStart: string;
   weekEnd: string;
+  locationData: string;
+  accountReceivableAmount: string;
+  selfPayerBillAmount: string;
+  subsidyBillAmount: string;
+  totalBilledAmount: string;
   enrolledCount: string;
   fullTimeCount: string;
   partTimeCount: string;
   fteCount: string;
+  licenseCapacity: string;
+  occupancyPercent: string;
+  payrollAmount: string;
+  payrollPercent: string;
+  newStarts: string;
+  withdrawals: string;
+  preregisteredChildren: string;
   infants: string;
   toddlers: string;
   twos: string;
@@ -83,16 +96,40 @@ function inputNumber(value: number) {
   return value ? String(value) : "";
 }
 
+function inputOptionalNumber(value?: number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function formatMoney(value?: number | null) {
+  return value === null || value === undefined ? "Not set" : `$${value.toLocaleString()}`;
+}
+
+function formatPercent(value?: number | null) {
+  return value === null || value === undefined ? "Not set" : `${value.toLocaleString()}%`;
+}
+
 function correctionFromReport(report: FteReportRow): InlineCorrectionState {
   return {
     id: report.id,
     centerId: report.centerId,
     weekStart: dateKey(report.weekStart),
     weekEnd: dateKey(report.weekEnd),
+    locationData: report.locationData ?? "",
+    accountReceivableAmount: inputOptionalNumber(report.accountReceivableAmount),
+    selfPayerBillAmount: inputOptionalNumber(report.selfPayerBillAmount),
+    subsidyBillAmount: inputOptionalNumber(report.subsidyBillAmount),
+    totalBilledAmount: inputOptionalNumber(report.totalBilledAmount),
     enrolledCount: inputNumber(report.enrolledCount),
     fullTimeCount: inputNumber(report.fullTimeCount),
     partTimeCount: inputNumber(report.partTimeCount),
     fteCount: report.fteCount ? String(report.fteCount) : "",
+    licenseCapacity: inputOptionalNumber(report.licenseCapacity),
+    occupancyPercent: inputOptionalNumber(report.occupancyPercent),
+    payrollAmount: inputOptionalNumber(report.payrollAmount),
+    payrollPercent: inputOptionalNumber(report.payrollPercent),
+    newStarts: inputOptionalNumber(report.newStarts),
+    withdrawals: inputOptionalNumber(report.withdrawals),
+    preregisteredChildren: inputOptionalNumber(report.preregisteredChildren),
     infants: inputNumber(report.infants),
     toddlers: inputNumber(report.toddlers),
     twos: inputNumber(report.twos),
@@ -105,13 +142,18 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
 }
 
 export function FteReportExplorer({ centers, reports }: Props) {
+  const searchParams = useSearchParams();
+  const requestedCenterId = searchParams.get("centerId") || ALL;
+  const requestedWeekStart = searchParams.get("weekStart") || ALL;
+  const requestedQuery = searchParams.get("q") || "";
+  const initialCenterId = requestedCenterId !== ALL && centers.some((center) => center.id === requestedCenterId) ? requestedCenterId : ALL;
   const centerMap = useMemo(() => new Map(centers.map((center) => [center.id, center])), [centers]);
-  const [centerId, setCenterId] = useState(ALL);
+  const [centerId, setCenterId] = useState(initialCenterId);
   const [state, setState] = useState(ALL);
   const [ownerGroup, setOwnerGroup] = useState(ALL);
-  const [weekStart, setWeekStart] = useState(ALL);
+  const [weekStart, setWeekStart] = useState(requestedWeekStart);
   const [status, setStatus] = useState(ALL);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(requestedQuery);
   const [correction, setCorrection] = useState<InlineCorrectionState | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -368,7 +410,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
         <h2>Filtered Report History</h2>
         <table>
           <thead>
-            <tr><th>Week</th><th>School</th><th>State</th><th>Owner</th><th>FTE</th><th>Enrollment</th><th>Status</th><th>Updated</th><th>Submitted by</th></tr>
+            <tr><th>Week</th><th>School</th><th>State</th><th>Owner</th><th>FTE</th><th>Enrollment</th><th>Total billed</th><th>Payroll amount</th><th>Starts</th><th>Withdrawn</th><th>Preregistered</th><th>Status</th><th>Updated</th><th>Submitted by</th></tr>
           </thead>
           <tbody>
             {filteredReports.map((report) => {
@@ -381,13 +423,18 @@ export function FteReportExplorer({ centers, reports }: Props) {
                   <td>{ownerLabel(center)}</td>
                   <td>{report.fteCount.toLocaleString()}</td>
                   <td>{report.enrolledCount.toLocaleString()}</td>
+                  <td>{formatMoney(report.totalBilledAmount)}</td>
+                  <td>{formatMoney(report.payrollAmount)}</td>
+                  <td>{report.newStarts ?? 0}</td>
+                  <td>{report.withdrawals ?? 0}</td>
+                  <td>{report.preregisteredChildren ?? 0}</td>
                   <td>{report.status.replaceAll("_", " ")}</td>
                   <td>{formatDate(report.updatedAt)}</td>
                   <td>{report.submittedBy ?? "Not set"}</td>
                 </tr>
               );
             })}
-            {!filteredReports.length ? <tr><td colSpan={9}>No FTE reports match these filters.</td></tr> : null}
+            {!filteredReports.length ? <tr><td colSpan={14}>No FTE reports match these filters.</td></tr> : null}
           </tbody>
         </table>
       </PrintableReport>
@@ -521,6 +568,11 @@ export function FteReportExplorer({ centers, reports }: Props) {
               <MetricPill label="Enrollment" value={selectedCenterRow.latestReport?.enrolledCount.toLocaleString() ?? "None"} />
               <MetricPill label="Full-time" value={selectedCenterRow.latestReport?.fullTimeCount.toLocaleString() ?? "None"} />
               <MetricPill label="Part-time" value={selectedCenterRow.latestReport?.partTimeCount.toLocaleString() ?? "None"} />
+              <MetricPill label="Total billed" value={formatMoney(selectedCenterRow.latestReport?.totalBilledAmount)} />
+              <MetricPill label="Payroll amount" value={formatMoney(selectedCenterRow.latestReport?.payrollAmount)} />
+              <MetricPill label="Occupancy" value={formatPercent(selectedCenterRow.latestReport?.occupancyPercent)} />
+              <MetricPill label="Starts/withdrawn" value={`${selectedCenterRow.latestReport?.newStarts ?? 0} / ${selectedCenterRow.latestReport?.withdrawals ?? 0}`} />
+              <MetricPill label="Preregistered" value={(selectedCenterRow.latestReport?.preregisteredChildren ?? 0).toLocaleString()} />
             </div>
           </div>
         ) : null}
@@ -612,7 +664,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
           </div>
         </div>
 
-        <div className="rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -622,6 +674,11 @@ export function FteReportExplorer({ centers, reports }: Props) {
                 <TableHead>Owner</TableHead>
                 <TableHead>FTE</TableHead>
                 <TableHead>Enrollment</TableHead>
+                <TableHead>Total billed</TableHead>
+                <TableHead>Payroll amount</TableHead>
+                <TableHead>Occupancy</TableHead>
+                <TableHead>Starts/withdrawn</TableHead>
+                <TableHead>Preregistered</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Correction</TableHead>
@@ -639,6 +696,11 @@ export function FteReportExplorer({ centers, reports }: Props) {
                       <TableCell>{ownerLabel(center)}</TableCell>
                       <TableCell>{report.fteCount.toLocaleString()}</TableCell>
                       <TableCell>{report.enrolledCount.toLocaleString()}</TableCell>
+                      <TableCell>{formatMoney(report.totalBilledAmount)}</TableCell>
+                      <TableCell>{formatMoney(report.payrollAmount)}</TableCell>
+                      <TableCell>{formatPercent(report.occupancyPercent)}</TableCell>
+                      <TableCell>{report.newStarts ?? 0} / {report.withdrawals ?? 0}</TableCell>
+                      <TableCell>{report.preregisteredChildren ?? 0}</TableCell>
                       <TableCell><Badge variant="outline">{report.status.replaceAll("_", " ")}</Badge></TableCell>
                       <TableCell>{formatDate(report.updatedAt)}</TableCell>
                       <TableCell>
@@ -649,7 +711,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
                     </TableRow>
                     {correction?.id === report.id ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="bg-muted/30">
+                        <TableCell colSpan={14} className="bg-muted/30">
                           <div className="space-y-4 rounded-xl border bg-background/80 p-4">
                             <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                               <div>
@@ -665,6 +727,20 @@ export function FteReportExplorer({ centers, reports }: Props) {
                               <InlineNumberField label="Full-time" value={correction.fullTimeCount} onChange={(value) => setCorrectionField("fullTimeCount", value)} />
                               <InlineNumberField label="Part-time" value={correction.partTimeCount} onChange={(value) => setCorrectionField("partTimeCount", value)} />
                               <InlineNumberField label="FTE" value={correction.fteCount} onChange={(value) => setCorrectionField("fteCount", value)} />
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-4">
+                              <InlineTextField label="Location data" value={correction.locationData} onChange={(value) => setCorrectionField("locationData", value)} />
+                              <InlineNumberField label="Accounts receivable" value={correction.accountReceivableAmount} onChange={(value) => setCorrectionField("accountReceivableAmount", value)} />
+                              <InlineNumberField label="Self-payer billed" value={correction.selfPayerBillAmount} onChange={(value) => setCorrectionField("selfPayerBillAmount", value)} />
+                              <InlineNumberField label="Subsidy billed" value={correction.subsidyBillAmount} onChange={(value) => setCorrectionField("subsidyBillAmount", value)} />
+                              <InlineNumberField label="Total billed" value={correction.totalBilledAmount} onChange={(value) => setCorrectionField("totalBilledAmount", value)} />
+                              <InlineNumberField label="License capacity" value={correction.licenseCapacity} onChange={(value) => setCorrectionField("licenseCapacity", value)} />
+                              <InlineNumberField label="Occupancy %" value={correction.occupancyPercent} onChange={(value) => setCorrectionField("occupancyPercent", value)} />
+                              <InlineNumberField label="Payroll amount" value={correction.payrollAmount} onChange={(value) => setCorrectionField("payrollAmount", value)} />
+                              <InlineNumberField label="Payroll %" value={correction.payrollPercent} onChange={(value) => setCorrectionField("payrollPercent", value)} />
+                              <InlineNumberField label="New starts" value={correction.newStarts} onChange={(value) => setCorrectionField("newStarts", value)} />
+                              <InlineNumberField label="Withdrawals" value={correction.withdrawals} onChange={(value) => setCorrectionField("withdrawals", value)} />
+                              <InlineNumberField label="Preregistered" value={correction.preregisteredChildren} onChange={(value) => setCorrectionField("preregisteredChildren", value)} />
                             </div>
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                               <InlineNumberField label="Infants" value={correction.infants} onChange={(value) => setCorrectionField("infants", value)} />
@@ -714,7 +790,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
               })}
               {!filteredReports.length ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground">No FTE reports match these filters.</TableCell>
+                  <TableCell colSpan={14} className="text-muted-foreground">No FTE reports match these filters.</TableCell>
                 </TableRow>
               ) : null}
             </TableBody>
@@ -730,6 +806,15 @@ function InlineNumberField({ label, value, onChange }: { label: string; value: s
     <div className="space-y-1">
       <Label>{label}</Label>
       <Input value={value} onChange={(event) => onChange(event.target.value)} inputMode="decimal" />
+    </div>
+  );
+}
+
+function InlineTextField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label>{label}</Label>
+      <Input value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }

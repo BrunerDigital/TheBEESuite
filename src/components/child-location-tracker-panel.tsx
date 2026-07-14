@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowRightLeft, CheckCircle2, MapPin, Move, Users } from "lucide-react";
@@ -328,7 +329,21 @@ export function ChildLocationTrackerPanel({
                     {roomChildren.length} current · {assignedCount} assigned · {classroom.centerName}
                   </div>
                 </div>
-                <Badge variant={warning.tone}>{warning.label}</Badge>
+                {warning.status !== "healthy" ? (
+                  <Badge
+                    variant={warning.tone}
+                    render={(
+                      <Link
+                        href="/classroom-dashboard#classroom-editor"
+                        aria-label={`Open classroom setup to resolve ${warning.label} for ${classroom.name}`}
+                      />
+                    )}
+                  >
+                    {warning.label}
+                  </Badge>
+                ) : (
+                  <Badge variant={warning.tone}>{warning.label}</Badge>
+                )}
               </div>
               <div className="mb-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
                 <span className="rounded-md border bg-card/45 px-2 py-1">{roomChildren.length}/{classroom.capacity} current</span>

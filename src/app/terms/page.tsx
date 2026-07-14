@@ -163,6 +163,16 @@ export default function TermsPage() {
 
               <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
                 <CardHeader>
+                  <CardTitle>Compliance Support</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
+                  <p>The BEE Suite provides workflow and documentation support, but does not provide legal, licensing, medical, custody, billing, tax, employment, or compliance advice.</p>
+                  <p>Schools, owner groups, and authorized users remain responsible for reviewing records, policies, disclosures, regulatory duties, and professional guidance before acting.</p>
+                </CardContent>
+              </Card>
+
+              <Card className="border-white/10 bg-white/[0.06] text-white shadow-2xl shadow-black/25">
+                <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <LifeBuoy className="size-5 text-amber-300" />
                     Support

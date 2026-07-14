@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import { directorLaunchChecklistTasks } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
 
@@ -191,12 +191,14 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
           </div>
 
           {groups.map((group) => (
-            <Card key={group} className="glass-panel">
-              <CardHeader>
-                <CardTitle>{group}</CardTitle>
-                <CardDescription>Complete these records and director decisions before turning on the related modules.</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3">
+            <CollapsibleCard
+              key={group}
+              id={`school-setup-group-${group.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              className="glass-panel"
+              contentClassName="grid gap-3"
+              title={group}
+              description="Complete these records and director decisions before turning on the related modules."
+            >
                 {sections.filter((section) => section.group === group).map((section) => {
                   const status = displayedStatus(section);
                   const Icon = statusIcon(status);
@@ -227,18 +229,18 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     </button>
                   );
                 })}
-              </CardContent>
-            </Card>
+            </CollapsibleCard>
           ))}
         </div>
 
         <aside className="flex flex-col gap-4">
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle>School Receipt Details</CardTitle>
-              <CardDescription>Used on customer receipts and ledger printouts for this school.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <CollapsibleCard
+            id="school-setup-receipt-details"
+            className="glass-panel"
+            contentClassName="space-y-3"
+            title="School Receipt Details"
+            description="Used on customer receipts and ledger printouts for this school."
+          >
               <div className="space-y-2">
                 <Label htmlFor="school-ein">School EIN</Label>
                 <Input
@@ -252,16 +254,16 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
               <p className="text-xs text-muted-foreground">
                 Enter 9 digits. The app formats it for printed receipts.
               </p>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
 
           {activeSection ? (
-            <Card className="glass-panel">
-              <CardHeader>
-                <CardTitle>{activeSection.label}</CardTitle>
-                <CardDescription>{activeSection.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
+            <CollapsibleCard
+              id="school-setup-active-section"
+              className="glass-panel"
+              contentClassName="space-y-4"
+              title={activeSection.label}
+              description={activeSection.description}
+            >
                 <div className="grid gap-2">
                   {activeSection.metrics.map((metric) => (
                     <div key={metric} className="rounded-lg border bg-background/50 p-3 text-sm">{metric}</div>
@@ -295,21 +297,19 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                 </div>
                 {message ? <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
                 {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
-              </CardContent>
-            </Card>
+            </CollapsibleCard>
           ) : null}
 
-          <Card className="glass-panel">
-            <CardHeader>
-              <CardTitle>What we still need from you</CardTitle>
-              <CardDescription>Items the app cannot reliably infer from existing records.</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <CollapsibleCard
+            id="school-setup-external-needs"
+            className="glass-panel"
+            title="What we still need from you"
+            description="Items the app cannot reliably infer from existing records."
+          >
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {data.externalNeeds.map((need) => <li key={need}>{need}</li>)}
               </ul>
-            </CardContent>
-          </Card>
+          </CollapsibleCard>
         </aside>
       </div>
     </div>

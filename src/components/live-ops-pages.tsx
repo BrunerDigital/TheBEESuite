@@ -2788,7 +2788,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
         title="Schoolwide Attendance Rooms"
         description="Drag checked-in or enrolled children into their current room or school area for class combinations, playground time, temporary coverage, and subs. Assigned classroom stays unchanged."
       />
-      <Card className="glass-panel">
+      <Card id="end-of-day-reconciliation" className="glass-panel scroll-mt-24">
         <CardHeader>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -2797,9 +2797,16 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                 Kiosk activity for {formatDate(data.reconciliation.serviceDate)} with unresolved check-ins and front desk review flags.
               </CardDescription>
             </div>
-            <Badge variant={data.reconciliation.stillCheckedIn > 0 ? "destructive" : "default"}>
-              {data.reconciliation.stillCheckedIn > 0 ? "Needs closeout" : "Balanced"}
-            </Badge>
+            {data.reconciliation.stillCheckedIn > 0 ? (
+              <Badge
+                variant="destructive"
+                render={<Link href="/check-in" aria-label="Open check-in workflow to close out unresolved check-ins" />}
+              >
+                Needs closeout
+              </Badge>
+            ) : (
+              <Badge variant="default">Balanced</Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-5">

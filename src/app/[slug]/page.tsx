@@ -250,6 +250,10 @@ function formatCenterName(center: { name: string; crmLocationId: string | null; 
   ].filter(Boolean).join(" · ");
 }
 
+function centerLocationData(center: { ownerGroup?: { name: string; ownerType?: string | null } | null }) {
+  return center.ownerGroup?.name || center.ownerGroup?.ownerType || null;
+}
+
 function recordFromJson(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -426,19 +430,28 @@ function serializeFteReport(report: {
   sourceMetadata?: unknown;
   notes: string | null;
   updatedAt: Date;
-  center: { name: string; crmLocationId: string | null };
+  center: { name: string; crmLocationId: string | null; ownerGroup?: { name: string; ownerType?: string | null } | null };
   submittedBy: { name: string; email: string } | null;
 }): FteReportRow {
+  const metadata = recordFromJson(report.sourceMetadata);
   return {
     id: report.id,
     centerId: report.centerId,
     centerName: report.center.crmLocationId ?? report.center.name,
+    locationData: stringField(metadata.locationData) || centerLocationData(report.center),
     weekStart: report.weekStart.toISOString(),
     weekEnd: report.weekEnd?.toISOString() ?? null,
+    accountReceivableAmount: numberField(metadata.accountReceivableAmount),
+    selfPayerBillAmount: numberField(metadata.selfPayerBillAmount),
+    subsidyBillAmount: numberField(metadata.subsidyBillAmount),
+    totalBilledAmount: numberField(metadata.totalBilledAmount),
     enrolledCount: report.enrolledCount,
     fullTimeCount: report.fullTimeCount,
     partTimeCount: report.partTimeCount,
     fteCount: report.fteCount,
+    licenseCapacity: numberField(metadata.licenseCapacity),
+    occupancyPercent: numberField(metadata.occupancyPercent),
+    payrollAmount: numberField(metadata.payrollAmount),
     infants: report.infants,
     toddlers: report.toddlers,
     twos: report.twos,
@@ -447,7 +460,10 @@ function serializeFteReport(report: {
     schoolAge: report.schoolAge,
     status: report.status,
     source: report.source,
-    payrollPercent: numberField(recordFromJson(report.sourceMetadata).payrollPercent),
+    payrollPercent: numberField(metadata.payrollPercent),
+    newStarts: numberField(metadata.newStarts),
+    withdrawals: numberField(metadata.withdrawals),
+    preregisteredChildren: numberField(metadata.preregisteredChildren),
     notes: report.notes,
     submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
     updatedAt: report.updatedAt.toISOString(),
@@ -460,7 +476,7 @@ async function getFteReports(centerIds: string[], take = 150) {
     orderBy: [{ weekStart: "desc" }, { updatedAt: "desc" }],
     take,
     include: {
-      center: { select: { name: true, crmLocationId: true } },
+      center: { select: { name: true, crmLocationId: true, ownerGroup: { select: { name: true, ownerType: true } } } },
       submittedBy: { select: { name: true, email: true } },
     },
   });
@@ -962,7 +978,7 @@ async function renderLivePage(
             .filter((center) => !currentWeekReportedCenterIds.has(center.id))
             .map((center) => ({ id: center.id, name: formatCenterName(center) })),
           fte,
-          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity })),
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity, locationData: centerLocationData(center) })),
           ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
         }}
@@ -1009,7 +1025,7 @@ async function renderLivePage(
           trendWeeks: trend.trendWeeks,
           centerSnapshots: trend.centerSnapshots,
           fte,
-          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity })),
+          fteCenters: centers.map((center) => ({ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity, locationData: centerLocationData(center) })),
           ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
           exportHref: "/api/fte-reports?format=csv",
@@ -4215,7 +4231,7 @@ async function renderLivePage(
                       }),
               }
             : null,
-          fteCenters: center ? [{ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity }] : [],
+          fteCenters: center ? [{ id: center.id, name: formatCenterName(center), licensedCapacity: center.licensedCapacity, locationData: centerLocationData(center) }] : [],
           ftePrefills,
           fteReports: fteReports.map(serializeFteReport),
           stats: {

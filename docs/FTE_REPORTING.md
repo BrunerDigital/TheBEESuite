@@ -70,6 +70,30 @@ Month
 
 It keeps the latest row per school/location and totals the FTE column for the executive snapshot.
 
+## Legacy Weekly Report Coverage
+
+The Bee Suite FTE submission flow also covers the columns from the pre-Bee Suite weekly PDF report:
+
+```text
+School Name
+Location Data
+Accounts Receivable
+Amount of Self-Payer Bill
+Amount of Subsidy Bill
+Total Amount Billed
+Total FTE's (FTE)
+Total currently enrolled
+License Capacity
+Occupancy Percent
+Payroll Amount
+Payroll Percentage
+# New Starts
+# Withdrawn
+# Children preregistered
+```
+
+Directors can enter these values in the weekly FTE form. Executive users can import them from CSV, correct them in the historical FTE explorer, print them, and export them through `/api/fte-reports?format=csv`. Total billed, occupancy percent, and payroll percent can be entered directly or calculated from self-payer/subsidy billing, enrollment/capacity, and payroll amount when the derived field is left blank.
+
 ## Notes
 
 - This is reporting only. The sheet remains the backup/source-of-truth until Kid City confirms the final internal FTE workflow.

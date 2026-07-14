@@ -5,8 +5,8 @@ import { useMemo, useState, useTransition } from "react";
 import { ArrowUpRight, CheckCircle2, FileText, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { CollapsibleCard } from "@/components/workspace-preferences";
 import type { SetupChecklistKey, SetupChecklistTask } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
 
@@ -74,36 +74,37 @@ export function SetupChecklistPanel({
   }
 
   return (
-    <Card className="glass-panel">
-      <CardHeader>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Setup</Badge>
-              <Badge variant={progress === 100 ? "default" : "outline"}>{completedCount}/{tasks.length} complete</Badge>
-              {isPending ? <Badge variant="outline"><Loader2 data-icon="inline-start" className="animate-spin" />Saving</Badge> : null}
-            </div>
-            <CardTitle className="mt-3">{title}</CardTitle>
-            <CardDescription className="mt-2 max-w-3xl">{description}</CardDescription>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {guideHref ? (
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link href={guideHref} target="_blank" />}>
-                <FileText data-icon="inline-start" />
-                Guide
-              </Button>
-            ) : null}
-            {graphicHref ? (
-              <Button variant="outline" size="sm" nativeButton={false} render={<Link href={graphicHref} target="_blank" />}>
-                <ArrowUpRight data-icon="inline-start" />
-                Roadmap
-              </Button>
-            ) : null}
-          </div>
-        </div>
-        <Progress value={progress} />
-      </CardHeader>
-      <CardContent className={cn("grid gap-3", compact ? "md:grid-cols-2" : "xl:grid-cols-2")}>
+    <CollapsibleCard
+      id={`setup-checklist-${checklistKey}`}
+      className="glass-panel"
+      contentClassName={cn("grid gap-3", compact ? "md:grid-cols-2" : "xl:grid-cols-2")}
+      eyebrow={(
+        <>
+          <Badge variant="secondary">Setup</Badge>
+          <Badge variant={progress === 100 ? "default" : "outline"}>{completedCount}/{tasks.length} complete</Badge>
+          {isPending ? <Badge variant="outline"><Loader2 data-icon="inline-start" className="animate-spin" />Saving</Badge> : null}
+        </>
+      )}
+      title={title}
+      description={description}
+      headerActions={(
+        <>
+          {guideHref ? (
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={guideHref} target="_blank" />}>
+              <FileText data-icon="inline-start" />
+              Guide
+            </Button>
+          ) : null}
+          {graphicHref ? (
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href={graphicHref} target="_blank" />}>
+              <ArrowUpRight data-icon="inline-start" />
+              Roadmap
+            </Button>
+          ) : null}
+        </>
+      )}
+      headerAfter={<Progress value={progress} />}
+    >
         {tasks.map((task, index) => {
           const automatic = automaticIds.has(task.id);
           const done = completedIds.has(task.id) || automatic;
@@ -149,8 +150,7 @@ export function SetupChecklistPanel({
             {error}
           </div>
         ) : null}
-      </CardContent>
-    </Card>
+    </CollapsibleCard>
   );
 }
 

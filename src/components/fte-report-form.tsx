@@ -17,18 +17,27 @@ export type FteReportCenterOption = {
   id: string;
   name: string;
   licensedCapacity?: number;
+  locationData?: string | null;
 };
 
 export type FteReportRow = {
   id: string;
   centerId: string;
   centerName: string;
+  locationData?: string | null;
   weekStart: string;
   weekEnd: string | null;
+  accountReceivableAmount?: number | null;
+  selfPayerBillAmount?: number | null;
+  subsidyBillAmount?: number | null;
+  totalBilledAmount?: number | null;
   enrolledCount: number;
   fullTimeCount: number;
   partTimeCount: number;
   fteCount: number;
+  licenseCapacity?: number | null;
+  occupancyPercent?: number | null;
+  payrollAmount?: number | null;
   infants: number;
   toddlers: number;
   twos: number;
@@ -38,6 +47,9 @@ export type FteReportRow = {
   status: string;
   source: string;
   payrollPercent?: number | null;
+  newStarts?: number | null;
+  withdrawals?: number | null;
+  preregisteredChildren?: number | null;
   notes: string | null;
   submittedBy: string | null;
   updatedAt: string;
@@ -75,11 +87,22 @@ type FormState = {
   centerId: string;
   weekStart: string;
   weekEnd: string;
+  locationData: string;
+  accountReceivableAmount: string;
+  selfPayerBillAmount: string;
+  subsidyBillAmount: string;
+  totalBilledAmount: string;
   enrolledCount: string;
   fullTimeCount: string;
   partTimeCount: string;
   fteCount: string;
+  licenseCapacity: string;
+  occupancyPercent: string;
+  payrollAmount: string;
   payrollPercent: string;
+  newStarts: string;
+  withdrawals: string;
+  preregisteredChildren: string;
   infants: string;
   toddlers: string;
   twos: string;
@@ -111,18 +134,29 @@ function defaultValuesForCenter(centerId: string, prefills: FteReportPrefill[] =
   return Array.isArray(prefills) ? prefills.find((item) => item.centerId === centerId) : undefined;
 }
 
-function emptyForm(centerId = "", prefill?: FteReportPrefill): FormState {
+function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReportCenterOption): FormState {
   const weekStart = defaultWeekStart();
   return {
     id: "",
     centerId,
     weekStart,
     weekEnd: defaultWeekEnd(weekStart),
+    locationData: center?.locationData ?? "",
+    accountReceivableAmount: "",
+    selfPayerBillAmount: "",
+    subsidyBillAmount: "",
+    totalBilledAmount: "",
     enrolledCount: prefill ? asInput(prefill.enrolledCount) : "",
     fullTimeCount: prefill?.fullTimeCount === null || prefill?.fullTimeCount === undefined ? "" : asInput(prefill.fullTimeCount),
     partTimeCount: prefill?.partTimeCount === null || prefill?.partTimeCount === undefined ? "" : asInput(prefill.partTimeCount),
     fteCount: "",
+    licenseCapacity: asOptionalInput(prefill?.licensedCapacity ?? center?.licensedCapacity ?? null),
+    occupancyPercent: "",
+    payrollAmount: "",
     payrollPercent: "",
+    newStarts: "",
+    withdrawals: "",
+    preregisteredChildren: "",
     infants: prefill ? asInput(prefill.infants) : "",
     toddlers: prefill ? asInput(prefill.toddlers) : "",
     twos: prefill ? asInput(prefill.twos) : "",
@@ -140,6 +174,22 @@ function asInput(value: number) {
   return value ? String(value) : "";
 }
 
+function asOptionalInput(value?: number | null) {
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function roundedNumber(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatMoney(value?: number | null) {
+  return value === null || value === undefined ? "Not set" : `$${value.toLocaleString()}`;
+}
+
+function formatPercent(value?: number | null) {
+  return value === null || value === undefined ? "Not set" : `${value.toLocaleString()}%`;
+}
+
 export function FteReportForm({
   centers,
   reports,
@@ -150,7 +200,8 @@ export function FteReportForm({
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
   const defaultCenterId = centers[0]?.id ?? "";
-  const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills)));
+  const defaultCenter = centers[0];
+  const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills), defaultCenter));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -161,6 +212,11 @@ export function FteReportForm({
     const part = Number(form.partTimeCount || 0);
     return Number.isFinite(full + part) ? calculateFteCount(full, part) : 0;
   }, [form.fullTimeCount, form.partTimeCount]);
+  const calculatedTotalBilled = useMemo(() => {
+    const selfPayer = Number(form.selfPayerBillAmount || 0);
+    const subsidy = Number(form.subsidyBillAmount || 0);
+    return Number.isFinite(selfPayer + subsidy) && (selfPayer || subsidy) ? roundedNumber(selfPayer + subsidy) : 0;
+  }, [form.selfPayerBillAmount, form.subsidyBillAmount]);
   const ageGroupCount = useMemo(() => ageGroupTotal({
     infants: Number(form.infants || 0),
     toddlers: Number(form.toddlers || 0),
@@ -171,6 +227,16 @@ export function FteReportForm({
   }), [form.infants, form.toddlers, form.twos, form.preschool, form.preK, form.schoolAge]);
   const selectedCenter = centers.find((center) => center.id === form.centerId);
   const selectedPrefill = defaultValuesForCenter(form.centerId, prefills);
+  const calculatedOccupancyPercent = useMemo(() => {
+    const enrolled = Number(form.enrolledCount || 0);
+    const capacity = Number(form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || 0);
+    return capacity > 0 ? roundedNumber((enrolled / capacity) * 100) : 0;
+  }, [form.enrolledCount, form.licenseCapacity, selectedCenter?.licensedCapacity, selectedPrefill?.licensedCapacity]);
+  const calculatedPayrollPercent = useMemo(() => {
+    const payrollAmount = Number(form.payrollAmount || 0);
+    const totalBilled = Number(form.totalBilledAmount || calculatedTotalBilled || 0);
+    return totalBilled > 0 ? roundedNumber((payrollAmount / totalBilled) * 100) : 0;
+  }, [calculatedTotalBilled, form.payrollAmount, form.totalBilledAmount]);
   const currentWeekReport = reports.find((report) => (
     report.centerId === form.centerId && dateInput(report.weekStart) === form.weekStart
   ));
@@ -191,20 +257,30 @@ export function FteReportForm({
     if (!value) return;
     setStatusMessage("");
     setErrorMessage("");
-    setForm(emptyForm(value, defaultValuesForCenter(value, prefills)));
+    setForm(emptyForm(value, defaultValuesForCenter(value, prefills), centers.find((center) => center.id === value)));
   }
 
   function applyPrefill() {
     const prefill = defaultValuesForCenter(form.centerId, prefills);
     if (!prefill) return;
-    const next = emptyForm(form.centerId, prefill);
+    const next = emptyForm(form.centerId, prefill, selectedCenter);
     setForm((current) => ({
       ...next,
       id: current.id,
       weekStart: current.weekStart,
       weekEnd: current.weekEnd,
       status: current.status,
+      locationData: current.locationData,
+      accountReceivableAmount: current.accountReceivableAmount,
+      selfPayerBillAmount: current.selfPayerBillAmount,
+      subsidyBillAmount: current.subsidyBillAmount,
+      totalBilledAmount: current.totalBilledAmount,
+      occupancyPercent: current.occupancyPercent,
+      payrollAmount: current.payrollAmount,
       payrollPercent: current.payrollPercent,
+      newStarts: current.newStarts,
+      withdrawals: current.withdrawals,
+      preregisteredChildren: current.preregisteredChildren,
     }));
   }
 
@@ -216,11 +292,22 @@ export function FteReportForm({
       centerId: report.centerId,
       weekStart: dateInput(report.weekStart),
       weekEnd: dateInput(report.weekEnd) || defaultWeekEnd(dateInput(report.weekStart)),
+      locationData: report.locationData ?? "",
+      accountReceivableAmount: asOptionalInput(report.accountReceivableAmount),
+      selfPayerBillAmount: asOptionalInput(report.selfPayerBillAmount),
+      subsidyBillAmount: asOptionalInput(report.subsidyBillAmount),
+      totalBilledAmount: asOptionalInput(report.totalBilledAmount),
       enrolledCount: asInput(report.enrolledCount),
       fullTimeCount: asInput(report.fullTimeCount),
       partTimeCount: asInput(report.partTimeCount),
       fteCount: report.fteCount ? String(report.fteCount) : "",
+      licenseCapacity: asOptionalInput(report.licenseCapacity),
+      occupancyPercent: asOptionalInput(report.occupancyPercent),
+      payrollAmount: asOptionalInput(report.payrollAmount),
       payrollPercent: report.payrollPercent === null || report.payrollPercent === undefined ? "" : String(report.payrollPercent),
+      newStarts: asOptionalInput(report.newStarts),
+      withdrawals: asOptionalInput(report.withdrawals),
+      preregisteredChildren: asOptionalInput(report.preregisteredChildren),
       infants: asInput(report.infants),
       toddlers: asInput(report.toddlers),
       twos: asInput(report.twos),
@@ -244,6 +331,10 @@ export function FteReportForm({
           ...form,
           status: mode === "executive" ? form.status : undefined,
           fteCount: form.fteCount || calculatedFte,
+          totalBilledAmount: form.totalBilledAmount || calculatedTotalBilled || "",
+          licenseCapacity: form.licenseCapacity || selectedPrefill?.licensedCapacity || selectedCenter?.licensedCapacity || "",
+          occupancyPercent: form.occupancyPercent || calculatedOccupancyPercent || "",
+          payrollPercent: form.payrollPercent || calculatedPayrollPercent || "",
           source: form.id ? "manual_correction" : "prefilled_director_review",
         }),
       });
@@ -255,7 +346,8 @@ export function FteReportForm({
       }
 
       setStatusMessage(`FTE report saved${json?.report?.centerName ? ` for ${json.report.centerName}` : ""}.`);
-      setForm(emptyForm(form.centerId || defaultCenterId, defaultValuesForCenter(form.centerId || defaultCenterId, prefills)));
+      const nextCenterId = form.centerId || defaultCenterId;
+      setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
       window.setTimeout(() => window.location.reload(), 750);
     });
   }
@@ -276,6 +368,9 @@ export function FteReportForm({
             <tr><th>This week</th><td>{currentWeekReport ? "Submitted" : "Not submitted"}</td></tr>
             <tr><th>Calculated FTE</th><td>{calculatedFte.toLocaleString()}</td></tr>
             <tr><th>Age group total</th><td>{ageGroupCount.toLocaleString()}</td></tr>
+            <tr><th>Total billed</th><td>{formatMoney(Number(form.totalBilledAmount || calculatedTotalBilled || 0) || null)}</td></tr>
+            <tr><th>Payroll amount</th><td>{formatMoney(Number(form.payrollAmount || 0) || null)}</td></tr>
+            <tr><th>Occupancy</th><td>{formatPercent(Number(form.occupancyPercent || calculatedOccupancyPercent || 0) || null)}</td></tr>
             <tr><th>Week</th><td>{form.weekStart || "Not set"} to {form.weekEnd || "Not set"}</td></tr>
           </tbody>
         </table>
@@ -288,6 +383,8 @@ export function FteReportForm({
               <th>FTE</th>
               <th>FT/PT</th>
               <th>Enrollment</th>
+              <th>Total billed</th>
+              <th>Payroll amount</th>
               <th>Status</th>
               <th>Payroll %</th>
               <th>Submitted by</th>
@@ -302,13 +399,15 @@ export function FteReportForm({
                 <td>{report.fteCount.toLocaleString()}</td>
                 <td>{report.fullTimeCount.toLocaleString()} / {report.partTimeCount.toLocaleString()}</td>
                 <td>{report.enrolledCount.toLocaleString()}</td>
+                <td>{formatMoney(report.totalBilledAmount)}</td>
+                <td>{formatMoney(report.payrollAmount)}</td>
                 <td>{report.status.replaceAll("_", " ")}</td>
-                <td>{report.payrollPercent === null || report.payrollPercent === undefined ? "Not set" : `${report.payrollPercent}%`}</td>
+                <td>{formatPercent(report.payrollPercent)}</td>
                 <td>{report.submittedBy ?? "Not set"}</td>
                 <td>{dateInput(report.updatedAt)}</td>
               </tr>
             ))}
-            {!reports.length ? <tr><td colSpan={9}>No FTE reports have been submitted for this scope yet.</td></tr> : null}
+            {!reports.length ? <tr><td colSpan={11}>No FTE reports have been submitted for this scope yet.</td></tr> : null}
           </tbody>
         </table>
       </PrintableReport>
@@ -340,7 +439,7 @@ export function FteReportForm({
           </Alert>
         ) : null}
 
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-4 xl:grid-cols-6">
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Selected school</div>
             <div className="mt-1 text-sm font-semibold">{selectedCenter?.name ?? "Choose school"}</div>
@@ -356,6 +455,14 @@ export function FteReportForm({
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Age group total</div>
             <div className="mt-1 text-sm font-semibold">{ageGroupCount.toLocaleString()}</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Total billed</div>
+            <div className="mt-1 text-sm font-semibold">{formatMoney(Number(form.totalBilledAmount || calculatedTotalBilled || 0) || null)}</div>
+          </div>
+          <div className="rounded-xl border bg-background/50 p-4">
+            <div className="text-xs text-muted-foreground">Occupancy</div>
+            <div className="mt-1 text-sm font-semibold">{formatPercent(Number(form.occupancyPercent || calculatedOccupancyPercent || 0) || null)}</div>
           </div>
         </div>
 
@@ -399,6 +506,10 @@ export function FteReportForm({
             <Label htmlFor="fte-week-end">Week end</Label>
             <Input id="fte-week-end" type="date" value={form.weekEnd} onChange={(event) => setField("weekEnd", event.target.value)} />
           </div>
+          <div className="space-y-1 lg:col-span-2">
+            <Label>Location data</Label>
+            <Input value={form.locationData} onChange={(event) => setField("locationData", event.target.value)} placeholder="ABee Schools, franchised location, owner group..." />
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -429,8 +540,69 @@ export function FteReportForm({
               value={form.payrollPercent}
               onChange={(event) => setField("payrollPercent", event.target.value)}
               inputMode="decimal"
-              placeholder="Enter if not available"
+              placeholder={calculatedPayrollPercent ? `Calculated ${calculatedPayrollPercent}` : "Enter if not available"}
             />
+          </div>
+        </div>
+
+        <div className="grid gap-3 rounded-xl border bg-background/35 p-4">
+          <div>
+            <div className="text-sm font-semibold">Legacy FTE report fields</div>
+            <p className="text-xs text-muted-foreground">
+              These match the pre-Bee Suite report columns: receivables, billed amounts, capacity, occupancy, payroll, starts, withdrawals, and preregistration.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1">
+              <Label>Accounts receivable</Label>
+              <Input value={form.accountReceivableAmount} onChange={(event) => setField("accountReceivableAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label>Self-payer billed</Label>
+              <Input value={form.selfPayerBillAmount} onChange={(event) => setField("selfPayerBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label>Subsidy billed</Label>
+              <Input value={form.subsidyBillAmount} onChange={(event) => setField("subsidyBillAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label>Total billed</Label>
+              <Input
+                value={form.totalBilledAmount}
+                onChange={(event) => setField("totalBilledAmount", event.target.value)}
+                inputMode="decimal"
+                placeholder={calculatedTotalBilled ? `Calculated ${calculatedTotalBilled}` : "0.00"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>License capacity</Label>
+              <Input value={form.licenseCapacity} onChange={(event) => setField("licenseCapacity", event.target.value)} inputMode="numeric" placeholder="Capacity" />
+            </div>
+            <div className="space-y-1">
+              <Label>Occupancy %</Label>
+              <Input
+                value={form.occupancyPercent}
+                onChange={(event) => setField("occupancyPercent", event.target.value)}
+                inputMode="decimal"
+                placeholder={calculatedOccupancyPercent ? `Calculated ${calculatedOccupancyPercent}` : "0"}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label>Payroll amount</Label>
+              <Input value={form.payrollAmount} onChange={(event) => setField("payrollAmount", event.target.value)} inputMode="decimal" placeholder="0.00" />
+            </div>
+            <div className="space-y-1">
+              <Label>New starts</Label>
+              <Input value={form.newStarts} onChange={(event) => setField("newStarts", event.target.value)} inputMode="numeric" />
+            </div>
+            <div className="space-y-1">
+              <Label>Withdrawals</Label>
+              <Input value={form.withdrawals} onChange={(event) => setField("withdrawals", event.target.value)} inputMode="numeric" />
+            </div>
+            <div className="space-y-1">
+              <Label>Children preregistered</Label>
+              <Input value={form.preregisteredChildren} onChange={(event) => setField("preregisteredChildren", event.target.value)} inputMode="numeric" />
+            </div>
           </div>
         </div>
 
@@ -481,7 +653,15 @@ export function FteReportForm({
             {form.id ? "Save FTE Correction" : "Submit FTE Report"}
           </Button>
           {form.id ? (
-            <Button variant="outline" onClick={() => setForm(emptyForm(form.centerId || defaultCenterId, defaultValuesForCenter(form.centerId || defaultCenterId, prefills)))}>Cancel edit</Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const nextCenterId = form.centerId || defaultCenterId;
+                setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
+              }}
+            >
+              Cancel edit
+            </Button>
           ) : null}
           {selectedPrefill ? (
             <Button variant="outline" onClick={applyPrefill}>Reset to school data</Button>
@@ -491,7 +671,7 @@ export function FteReportForm({
           </span>
         </div>
 
-        <div className="rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -500,6 +680,9 @@ export function FteReportForm({
                 <TableHead>FTE</TableHead>
                 <TableHead>FT/PT</TableHead>
                 <TableHead>Enrollment</TableHead>
+                <TableHead>Total billed</TableHead>
+                <TableHead>Payroll amount</TableHead>
+                <TableHead>Starts/withdrawn</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Payroll %</TableHead>
                 <TableHead>Submitted by</TableHead>
@@ -515,8 +698,11 @@ export function FteReportForm({
                   <TableCell>{report.fteCount.toLocaleString()}</TableCell>
                   <TableCell>{report.fullTimeCount.toLocaleString()} / {report.partTimeCount.toLocaleString()}</TableCell>
                   <TableCell>{report.enrolledCount.toLocaleString()}</TableCell>
+                  <TableCell>{formatMoney(report.totalBilledAmount)}</TableCell>
+                  <TableCell>{formatMoney(report.payrollAmount)}</TableCell>
+                  <TableCell>{report.newStarts ?? 0} / {report.withdrawals ?? 0}</TableCell>
                   <TableCell>{report.status.replaceAll("_", " ")}</TableCell>
-                  <TableCell>{report.payrollPercent === null || report.payrollPercent === undefined ? "Not set" : `${report.payrollPercent}%`}</TableCell>
+                  <TableCell>{formatPercent(report.payrollPercent)}</TableCell>
                   <TableCell>{report.submittedBy ?? "Not set"}</TableCell>
                   <TableCell>{dateInput(report.updatedAt)}</TableCell>
                   <TableCell>
@@ -526,7 +712,7 @@ export function FteReportForm({
               ))}
               {!reports.length ? (
                 <TableRow>
-                    <TableCell colSpan={10} className="text-muted-foreground">
+                    <TableCell colSpan={13} className="text-muted-foreground">
                     No FTE reports have been submitted for this scope yet.
                   </TableCell>
                 </TableRow>

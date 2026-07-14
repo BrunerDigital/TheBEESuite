@@ -23,8 +23,8 @@ type BulkImportResult = {
 };
 
 const sampleCsv = [
-  "CRM Location ID,Week Start,Week End,Enrolled,Full Time,Part Time,FTE,Infants,Toddlers,Twos,Preschool,Pre-K,School Age,Status,Notes",
-  "CO | Longmont,2026-05-25,2026-05-31,92,80,12,86,10,14,16,20,18,14,corrected,Corporate adjustment",
+  "School Name,Location Data,Week Start,Week End,Accounts Receivable,Amount of Self-Payer Bill,Amount of Subsidy Bill,Total Amount Billed,Total FTE's (FTE),Total currently enrolled,License Capacity,Occupancy Percent,Payroll Amount,Payroll %,# New Starts,# Withdrawn,# Children preregistered,Full Time,Part Time,Infants,Toddlers,Twos,Preschool,Pre-K,School Age,Status,Notes",
+  "CO | Longmont,ABee Schools (Formally),2026-05-25,2026-05-31,795,8220.75,15624.10,23844.85,67.7,73,92,73,14457.32,60,1,3,2,60,15,10,14,16,20,18,14,corrected,Corporate adjustment",
 ].join("\n");
 
 export function FteBulkImportPanel() {
@@ -75,7 +75,7 @@ export function FteBulkImportPanel() {
       <CardHeader>
         <CardTitle>Executive Bulk FTE Import</CardTitle>
         <CardDescription>
-          Upload or paste a CSV to create or correct weekly FTE reports across visible schools. Existing school/week rows are updated.
+          Upload or paste a CSV to create or correct weekly FTE reports across visible schools, including legacy billing, payroll, capacity, starts, withdrawals, and preregistration columns. Existing school/week rows are updated.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

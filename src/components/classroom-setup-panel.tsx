@@ -227,7 +227,22 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
                   </TableCell>
                   <TableCell>
                     <div className="flex max-w-64 flex-col gap-1">
-                      <Badge variant={warning.tone}>{warning.label}</Badge>
+                      {canManage && warning.status !== "healthy" ? (
+                        <Badge
+                          variant={warning.tone}
+                          render={(
+                            <button
+                              type="button"
+                              onClick={() => loadClassroom(classroom)}
+                              aria-label={`Edit ${classroom.name} to resolve ${warning.label}`}
+                            />
+                          )}
+                        >
+                          {warning.label}
+                        </Badge>
+                      ) : (
+                        <Badge variant={warning.tone}>{warning.label}</Badge>
+                      )}
                       <span className="text-xs text-muted-foreground">{warning.detail}</span>
                     </div>
                   </TableCell>

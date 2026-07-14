@@ -20,6 +20,22 @@ import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness
 
 export const dynamic = "force-dynamic";
 
+function executiveFteReportTake(centerCount: number) {
+  return Math.min(Math.max(centerCount * 12, 1500), 5000);
+}
+
+function recordFromJson(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function metadataNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function dateKey(value: Date | null | undefined) {
+  return value ? value.toISOString().slice(0, 10) : null;
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser({ allowPasswordResetRequired: true });
   if (!user) redirect(loginHrefForNextPath("/dashboard"));
@@ -488,8 +504,6 @@ export default async function DashboardPage() {
   });
   const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const fteDueState = getFteDueState(today);
-  const fteTrendStart = new Date(fteDueState.weekStart);
-  fteTrendStart.setUTCDate(fteTrendStart.getUTCDate() - 7 * 7);
   const [
     executiveClassroomRows,
     executiveStaffRows,
@@ -539,15 +553,24 @@ export default async function DashboardPage() {
     canSeeExecutiveMetrics ? prisma.fteReport.findMany({
       where: {
         centerId: scopedCenterFilter,
-        weekStart: { gte: fteTrendStart },
       },
-      orderBy: [{ weekStart: "asc" }, { updatedAt: "desc" }],
+      orderBy: [{ weekStart: "desc" }, { updatedAt: "desc" }],
+      take: executiveFteReportTake(centers.length),
       select: {
+        id: true,
         centerId: true,
         weekStart: true,
+        weekEnd: true,
         enrolledCount: true,
+        fullTimeCount: true,
+        partTimeCount: true,
         fteCount: true,
         status: true,
+        source: true,
+        sourceMetadata: true,
+        createdAt: true,
+        updatedAt: true,
+        submittedBy: { select: { name: true, email: true } },
       },
     }) : Promise.resolve([]),
     canSeeExecutiveMetrics ? prisma.document.findMany({
@@ -616,6 +639,7 @@ export default async function DashboardPage() {
     if (!centerId) continue;
     pendingIncidentsByCenter.set(centerId, (pendingIncidentsByCenter.get(centerId) ?? 0) + 1);
   }
+  const executiveCenterById = new Map(centers.map((center) => [center.id, center]));
   const currentWeekFteByCenter = new Map<string, (typeof executiveFteRows)[number]>();
   for (const report of executiveFteRows) {
     if (report.weekStart.getTime() === fteDueState.weekStart.getTime() && !currentWeekFteByCenter.has(report.centerId)) {
@@ -668,6 +692,33 @@ export default async function DashboardPage() {
     };
   });
   const fteSubmittedSchools = executiveSchoolComparisons.filter((school) => school.fteSubmitted).length;
+  const fteSubmissions = executiveFteRows.map((report) => {
+    const center = executiveCenterById.get(report.centerId);
+    const metadata = recordFromJson(report.sourceMetadata);
+    return {
+      id: report.id,
+      centerId: report.centerId,
+      schoolName: center?.crmLocationId ?? center?.name ?? "Unknown school",
+      region: [center?.city, center?.state].filter(Boolean).join(", ") || "Region not set",
+      weekStart: dateKey(report.weekStart) ?? "",
+      weekEnd: dateKey(report.weekEnd),
+      enrolledCount: report.enrolledCount,
+      fullTimeCount: report.fullTimeCount,
+      partTimeCount: report.partTimeCount,
+      fteCount: Math.round(report.fteCount * 100) / 100,
+      totalBilledAmount: metadataNumber(metadata.totalBilledAmount),
+      payrollAmount: metadataNumber(metadata.payrollAmount),
+      payrollPercent: metadataNumber(metadata.payrollPercent),
+      newStarts: metadataNumber(metadata.newStarts),
+      withdrawals: metadataNumber(metadata.withdrawals),
+      preregisteredChildren: metadataNumber(metadata.preregisteredChildren),
+      status: report.status.replaceAll("_", " "),
+      source: report.source,
+      submittedBy: report.submittedBy?.name ?? report.submittedBy?.email ?? "Unknown",
+      submittedAt: report.createdAt.toISOString(),
+      updatedAt: report.updatedAt.toISOString(),
+    };
+  });
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
@@ -691,8 +742,8 @@ export default async function DashboardPage() {
         `${totalOpenSeats.toLocaleString()} open seats`,
       ];
   const aiSummary = user.role === UserRole.TEACHER
-    ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, or licensing decisions.`
-    : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread. Mr. Bee suggestions require human review and do not make safety, medical, custody, legal, billing, or compliance decisions.`;
+    ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread.`
+    : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread.`;
   const centerEmbedCards = centers.map((center) => {
     const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
@@ -817,11 +868,13 @@ export default async function DashboardPage() {
     executiveMetrics: canSeeExecutiveMetrics
       ? {
           currentWeekStart: fteDueState.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          currentWeekKey: dateKey(fteDueState.weekStart) ?? "",
           fteDeadlineLabel: fteDueState.deadlineLabel,
           fteSubmittedSchools,
           fteMissingSchools: Math.max(executiveSchoolComparisons.length - fteSubmittedSchools, 0),
           schoolComparisons: executiveSchoolComparisons,
           weeklyFteTrend,
+          fteSubmissions,
         }
       : undefined,
   };

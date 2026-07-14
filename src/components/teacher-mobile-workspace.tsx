@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
@@ -1158,7 +1159,21 @@ export function TeacherMobileWorkspace({
                     Present
                   </Button>
                   {ratioWarning ? (
-                    <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
+                    ratioWarning.status !== "healthy" ? (
+                      <Badge
+                        variant={ratioWarning.tone}
+                        render={(
+                          <Link
+                            href="/classroom-dashboard#classroom-editor"
+                            aria-label={`Open classroom setup to resolve ${ratioWarning.label} for ${classroom.name}`}
+                          />
+                        )}
+                      >
+                        {ratioWarning.label}
+                      </Badge>
+                    ) : (
+                      <Badge variant={ratioWarning.tone}>{ratioWarning.label}</Badge>
+                    )
                   ) : null}
                 </div>
               </div>

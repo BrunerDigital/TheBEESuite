@@ -21,6 +21,15 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function roundAmount(value: number | null) {
+  return value === null ? null : Math.max(0, Math.round(value * 100) / 100);
+}
+
+function percent(numerator: number | null, denominator: number | null) {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return Math.max(0, Math.round((numerator / denominator) * 10_000) / 100);
+}
+
 function parseDate(value: string) {
   const text = value.trim();
   if (!text) return null;
@@ -106,6 +115,12 @@ async function POSTHandler(request: NextRequest) {
     const calculatedFte = calculateFteCount(row.fullTimeCount, row.partTimeCount);
     const fteCount = row.fteCount ?? calculatedFte;
     const ageGroupCount = ageGroupTotal(row);
+    const totalBilledAmount = row.totalBilledAmount ??
+      (row.selfPayerBillAmount !== null || row.subsidyBillAmount !== null
+        ? roundAmount((row.selfPayerBillAmount ?? 0) + (row.subsidyBillAmount ?? 0))
+        : null);
+    const occupancyPercent = row.occupancyPercent ?? percent(row.enrolledCount, row.licenseCapacity);
+    const payrollPercent = row.payrollPercent ?? percent(row.payrollAmount, totalBilledAmount);
     const data = {
       centerId,
       submittedById: user.id,
@@ -132,6 +147,18 @@ async function POSTHandler(request: NextRequest) {
         centerKey: row.centerKey,
         calculatedFte,
         ageGroupCount,
+        locationData: row.locationData,
+        accountReceivableAmount: row.accountReceivableAmount,
+        selfPayerBillAmount: row.selfPayerBillAmount,
+        subsidyBillAmount: row.subsidyBillAmount,
+        totalBilledAmount,
+        licenseCapacity: row.licenseCapacity,
+        occupancyPercent,
+        payrollAmount: row.payrollAmount,
+        payrollPercent,
+        newStarts: row.newStarts,
+        withdrawals: row.withdrawals,
+        preregisteredChildren: row.preregisteredChildren,
         enrollmentVariance: row.enrolledCount - ageGroupCount,
       },
     } satisfies Prisma.FteReportUncheckedCreateInput;

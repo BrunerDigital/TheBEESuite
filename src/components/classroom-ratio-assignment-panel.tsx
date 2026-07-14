@@ -49,6 +49,12 @@ function openClassroomEditor(classroomId: string) {
   window.dispatchEvent(new CustomEvent("bee-suite:edit-classroom", { detail: { classroomId } }));
 }
 
+function scrollToAssignmentAction() {
+  window.requestAnimationFrame(() => {
+    document.getElementById("ratio-assignment-action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
 export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = false, demoMode = false }: Props) {
   const router = useRouter();
   const ratioRows = useMemo(
@@ -86,6 +92,22 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
+
+  function handleRatioWarningAction(classroom: ClassroomAssignmentClassroom) {
+    setSelectedClassroomId(classroom.id);
+    if (!canManage) return;
+    const warning = evaluateClassroomRatio({
+      children: classroom._count.children,
+      staff: classroom._count.staff,
+      capacity: classroom.capacity,
+      ratioRule: classroom.ratioRule,
+    });
+    if (warning.status === "missing_rule" || warning.status === "over_capacity") {
+      openClassroomEditor(classroom.id);
+      return;
+    }
+    scrollToAssignmentAction();
+  }
 
   function saveAssignment(nextClassroomId: string | null) {
     if (!selectedStaff) return;
@@ -174,6 +196,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
               key={classroom.id}
               type="button"
               className={`rounded-xl border bg-background/45 p-3 text-left transition hover:bg-background/70 ${selectedClassroom?.id === classroom.id ? "border-foreground/60" : ""}`}
+              aria-label={`Select ${classroom.name} to review ${warning.label}`}
               onClick={() => {
                 setSelectedClassroomId(classroom.id);
                 const nextTeacher = staff.find((teacher) => teacher.user.isActive && teacher.centerId === classroom.centerId && !teacher.classroomId)
@@ -207,7 +230,24 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
                   ) : null}
                 </p>
               </div>
-              {selectedRatio ? <Badge variant={selectedRatio.tone}>{selectedRatio.label}</Badge> : null}
+              {selectedRatio && selectedClassroom ? (
+                canManage && selectedRatio.status !== "healthy" ? (
+                  <Badge
+                    variant={selectedRatio.tone}
+                    render={(
+                      <button
+                        type="button"
+                        onClick={() => handleRatioWarningAction(selectedClassroom)}
+                        aria-label={`Resolve ${selectedRatio.label} for ${selectedClassroom.name}`}
+                      />
+                    )}
+                  >
+                    {selectedRatio.label}
+                  </Badge>
+                ) : (
+                  <Badge variant={selectedRatio.tone}>{selectedRatio.label}</Badge>
+                )
+              ) : null}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-lg border bg-card/50 p-3">
@@ -231,7 +271,7 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
           </div>
 
           {canManage ? (
-          <div className="rounded-xl border bg-background/40 p-4">
+          <div id="ratio-assignment-action" className="scroll-mt-24 rounded-xl border bg-background/40 p-4">
             <div className="mb-3">
               <div className="text-sm font-medium">Assignment action</div>
               <p className="text-xs text-muted-foreground">Assign, move, or unassign one active teacher.</p>

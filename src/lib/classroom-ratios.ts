@@ -97,7 +97,7 @@ export function evaluateClassroomRatio(input: ClassroomRatioInput): ClassroomRat
     return {
       status: "missing_rule",
       tone: "outline",
-      label: "Ratio rule needed",
+      label: "Needs ratio rule",
       detail: "Add this classroom's licensing ratio rule to enable live ratio warnings.",
       requiredStaff: null,
       maxChildrenForStaff: null,

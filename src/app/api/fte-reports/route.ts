@@ -22,13 +22,24 @@ const FTE_SHEET_HEADERS = [
   "Submitted At",
   "Week Start",
   "Week End",
-  "Center",
+  "School Name",
+  "Location Data",
   "CRM Location ID",
-  "Enrolled",
+  "Accounts Receivable",
+  "Amount of Self-Payer Bill",
+  "Amount of Subsidy Bill",
+  "Total Amount Billed",
+  "Total FTE's (FTE)",
+  "Total currently enrolled",
+  "License Capacity",
+  "Occupancy Percent",
+  "Payroll Amount",
+  "Payroll %",
+  "# New Starts",
+  "# Withdrawn",
+  "# Children preregistered",
   "Full Time",
   "Part Time",
-  "FTE",
-  "Payroll %",
   "Infants",
   "Toddlers",
   "Twos",
@@ -60,12 +71,31 @@ function nullableFloatValue(value: unknown) {
   return Number.isFinite(number) ? Math.max(0, Math.round(number * 100) / 100) : null;
 }
 
+function nullableIntValue(value: unknown) {
+  if (value === "" || value === undefined || value === null) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.round(number)) : null;
+}
+
 function recordFromJson(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function metadataNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metadataText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function roundAmount(value: number | null) {
+  return value === null ? null : Math.max(0, Math.round(value * 100) / 100);
+}
+
+function percent(numerator: number | null, denominator: number | null) {
+  if (numerator === null || denominator === null || denominator <= 0) return null;
+  return Math.max(0, Math.round((numerator / denominator) * 10_000) / 100);
 }
 
 function parseDate(value: unknown) {
@@ -81,22 +111,49 @@ function csvValue(value: unknown) {
 }
 
 const reportInclude = {
-  center: { select: { name: true, crmLocationId: true } },
+  center: {
+    select: {
+      name: true,
+      crmLocationId: true,
+      ownerGroup: { select: { name: true, ownerType: true } },
+    },
+  },
   submittedBy: { select: { name: true, email: true } },
 } satisfies Prisma.FteReportInclude;
 
+function reportMetadata(report: { sourceMetadata?: unknown }) {
+  return recordFromJson(report.sourceMetadata);
+}
+
+function reportLocationData(report: Prisma.FteReportGetPayload<{ include: typeof reportInclude }>) {
+  const metadata = reportMetadata(report);
+  return metadataText(metadata.locationData) || report.center.ownerGroup?.name || report.center.ownerGroup?.ownerType || "";
+}
+
 function reportCsvRow(report: Prisma.FteReportGetPayload<{ include: typeof reportInclude }>) {
+  const metadata = reportMetadata(report);
   return [
     report.updatedAt.toISOString(),
     report.weekStart.toISOString().slice(0, 10),
     report.weekEnd?.toISOString().slice(0, 10) ?? "",
     report.center.crmLocationId ?? report.center.name,
+    reportLocationData(report),
     report.center.crmLocationId ?? "",
+    metadataNumber(metadata.accountReceivableAmount) ?? "",
+    metadataNumber(metadata.selfPayerBillAmount) ?? "",
+    metadataNumber(metadata.subsidyBillAmount) ?? "",
+    metadataNumber(metadata.totalBilledAmount) ?? "",
+    report.fteCount,
     report.enrolledCount,
+    metadataNumber(metadata.licenseCapacity) ?? "",
+    metadataNumber(metadata.occupancyPercent) ?? "",
+    metadataNumber(metadata.payrollAmount) ?? "",
+    metadataNumber(metadata.payrollPercent) ?? "",
+    metadataNumber(metadata.newStarts) ?? "",
+    metadataNumber(metadata.withdrawals) ?? "",
+    metadataNumber(metadata.preregisteredChildren) ?? "",
     report.fullTimeCount,
     report.partTimeCount,
-    report.fteCount,
-    metadataNumber(recordFromJson(report.sourceMetadata).payrollPercent) ?? "",
     report.infants,
     report.toddlers,
     report.twos,
@@ -210,29 +267,43 @@ async function GETHandler(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    reports: reports.map((report) => ({
-      id: report.id,
-      centerId: report.centerId,
-      centerName: report.center.crmLocationId ?? report.center.name,
-      weekStart: report.weekStart,
-      weekEnd: report.weekEnd,
-      enrolledCount: report.enrolledCount,
-      fullTimeCount: report.fullTimeCount,
-      partTimeCount: report.partTimeCount,
-      fteCount: report.fteCount,
-      payrollPercent: metadataNumber(recordFromJson(report.sourceMetadata).payrollPercent),
-      infants: report.infants,
-      toddlers: report.toddlers,
-      twos: report.twos,
-      preschool: report.preschool,
-      preK: report.preK,
-      schoolAge: report.schoolAge,
-      status: report.status,
-      source: report.source,
-      notes: report.notes,
-      submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
-      updatedAt: report.updatedAt,
-    })),
+    reports: reports.map((report) => {
+      const metadata = reportMetadata(report);
+      return {
+        id: report.id,
+        centerId: report.centerId,
+        centerName: report.center.crmLocationId ?? report.center.name,
+        locationData: reportLocationData(report),
+        weekStart: report.weekStart,
+        weekEnd: report.weekEnd,
+        accountReceivableAmount: metadataNumber(metadata.accountReceivableAmount),
+        selfPayerBillAmount: metadataNumber(metadata.selfPayerBillAmount),
+        subsidyBillAmount: metadataNumber(metadata.subsidyBillAmount),
+        totalBilledAmount: metadataNumber(metadata.totalBilledAmount),
+        enrolledCount: report.enrolledCount,
+        fullTimeCount: report.fullTimeCount,
+        partTimeCount: report.partTimeCount,
+        fteCount: report.fteCount,
+        licenseCapacity: metadataNumber(metadata.licenseCapacity),
+        occupancyPercent: metadataNumber(metadata.occupancyPercent),
+        payrollAmount: metadataNumber(metadata.payrollAmount),
+        payrollPercent: metadataNumber(metadata.payrollPercent),
+        newStarts: metadataNumber(metadata.newStarts),
+        withdrawals: metadataNumber(metadata.withdrawals),
+        preregisteredChildren: metadataNumber(metadata.preregisteredChildren),
+        infants: report.infants,
+        toddlers: report.toddlers,
+        twos: report.twos,
+        preschool: report.preschool,
+        preK: report.preK,
+        schoolAge: report.schoolAge,
+        status: report.status,
+        source: report.source,
+        notes: report.notes,
+        submittedBy: report.submittedBy?.email ?? report.submittedBy?.name ?? null,
+        updatedAt: report.updatedAt,
+      };
+    }),
   });
 }
 
@@ -278,7 +349,14 @@ async function POSTHandler(request: NextRequest) {
 
   const center = await prisma.center.findUnique({
     where: { id: centerId },
-    select: { id: true, name: true, crmLocationId: true, organization: { select: { tenantId: true } } },
+    select: {
+      id: true,
+      name: true,
+      crmLocationId: true,
+      licensedCapacity: true,
+      ownerGroup: { select: { name: true, ownerType: true } },
+      organization: { select: { tenantId: true } },
+    },
   });
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
 
@@ -288,7 +366,21 @@ async function POSTHandler(request: NextRequest) {
 
   const fullTimeCount = intValue(body.fullTimeCount);
   const partTimeCount = intValue(body.partTimeCount);
-  const payrollPercent = nullableFloatValue(body.payrollPercent);
+  const accountReceivableAmount = nullableFloatValue(body.accountReceivableAmount);
+  const selfPayerBillAmount = nullableFloatValue(body.selfPayerBillAmount);
+  const subsidyBillAmount = nullableFloatValue(body.subsidyBillAmount);
+  const totalBilledAmount = nullableFloatValue(body.totalBilledAmount) ??
+    (selfPayerBillAmount !== null || subsidyBillAmount !== null
+      ? roundAmount((selfPayerBillAmount ?? 0) + (subsidyBillAmount ?? 0))
+      : null);
+  const licenseCapacity = nullableIntValue(body.licenseCapacity) ?? center.licensedCapacity ?? null;
+  const occupancyPercent = nullableFloatValue(body.occupancyPercent) ?? percent(intValue(body.enrolledCount), licenseCapacity);
+  const payrollAmount = nullableFloatValue(body.payrollAmount);
+  const payrollPercent = nullableFloatValue(body.payrollPercent) ?? percent(payrollAmount, totalBilledAmount);
+  const newStarts = nullableIntValue(body.newStarts) ?? 0;
+  const withdrawals = nullableIntValue(body.withdrawals) ?? 0;
+  const preregisteredChildren = nullableIntValue(body.preregisteredChildren) ?? 0;
+  const locationData = clean(body.locationData) || center.ownerGroup?.name || center.ownerGroup?.ownerType || "";
   const calculatedFte = calculateFteCount(fullTimeCount, partTimeCount);
   const fteCount = body.fteCount === "" || body.fteCount === undefined || body.fteCount === null
     ? calculatedFte
@@ -351,7 +443,18 @@ async function POSTHandler(request: NextRequest) {
       app: "the_bee_suite",
       calculatedFte,
       ageGroupCount,
+      locationData,
+      accountReceivableAmount,
+      selfPayerBillAmount,
+      subsidyBillAmount,
+      totalBilledAmount,
+      licenseCapacity,
+      occupancyPercent,
+      payrollAmount,
       payrollPercent,
+      newStarts,
+      withdrawals,
+      preregisteredChildren,
       prefillSource: clean(body.source),
       enrollmentVariance: enrolledCount - ageGroupCount,
       requestedCenterId,
@@ -376,12 +479,23 @@ async function POSTHandler(request: NextRequest) {
     report.weekStart.toISOString().slice(0, 10),
     report.weekEnd?.toISOString().slice(0, 10) ?? "",
     report.center.crmLocationId ?? report.center.name,
+    locationData,
     report.center.crmLocationId ?? "",
+    accountReceivableAmount ?? "",
+    selfPayerBillAmount ?? "",
+    subsidyBillAmount ?? "",
+    totalBilledAmount ?? "",
+    report.fteCount,
     report.enrolledCount,
+    licenseCapacity ?? "",
+    occupancyPercent ?? "",
+    payrollAmount ?? "",
+    payrollPercent ?? "",
+    newStarts,
+    withdrawals,
+    preregisteredChildren,
     report.fullTimeCount,
     report.partTimeCount,
-    report.fteCount,
-    payrollPercent ?? "",
     report.infants,
     report.toddlers,
     report.twos,
@@ -424,7 +538,15 @@ async function POSTHandler(request: NextRequest) {
     metadata: {
       weekStart: report.weekStart.toISOString(),
       fteCount: report.fteCount,
+      accountReceivableAmount,
+      selfPayerBillAmount,
+      subsidyBillAmount,
+      totalBilledAmount,
+      payrollAmount,
       payrollPercent,
+      newStarts,
+      withdrawals,
+      preregisteredChildren,
       status: report.status,
       ageGroupCount,
       enrollmentVariance: report.enrolledCount - ageGroupCount,
@@ -438,12 +560,24 @@ async function POSTHandler(request: NextRequest) {
       id: report.id,
       centerId: report.centerId,
       centerName: report.center.crmLocationId ?? report.center.name,
+      locationData,
       weekStart: report.weekStart,
       weekEnd: report.weekEnd,
+      accountReceivableAmount,
+      selfPayerBillAmount,
+      subsidyBillAmount,
+      totalBilledAmount,
       enrolledCount: report.enrolledCount,
       fullTimeCount: report.fullTimeCount,
       partTimeCount: report.partTimeCount,
       fteCount: report.fteCount,
+      licenseCapacity,
+      occupancyPercent,
+      payrollAmount,
+      payrollPercent,
+      newStarts,
+      withdrawals,
+      preregisteredChildren,
       status: report.status,
       updated: Boolean(reportToUpdate),
     },

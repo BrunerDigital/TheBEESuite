@@ -54,6 +54,12 @@ function weekEnd(weekStart: Date) {
   return date;
 }
 
+function demoCareScheduleType(index: number): "full_time" | "part_time" {
+  // Deterministic shuffle: 17 of 69 children are part-time without grouping
+  // schedule types together in classroom or family order.
+  return ((index * 37 + 11) % 69) < 17 ? "part_time" : "full_time";
+}
+
 async function upsertTenant() {
   return prisma.tenant.upsert({
     where: { slug: DEMO_TENANT_SLUG },
@@ -446,6 +452,7 @@ async function upsertChild(familyId: string, classroomId: string, input: {
   startDate: Date;
   photoVideoPermission: boolean;
   fieldTripPermission: boolean;
+  careScheduleType: "full_time" | "part_time";
   allergies?: Array<{ allergen: string; severity: string; actionPlan: string }>;
 }) {
   const existing = await prisma.child.findFirst({
@@ -460,13 +467,21 @@ async function upsertChild(familyId: string, classroomId: string, input: {
     ageGroup: input.ageGroup,
     enrollmentStatus: "enrolled",
     startDate: input.startDate,
-    schedule: {
-      monday: "7:45 AM - 5:15 PM",
-      tuesday: "7:45 AM - 5:15 PM",
-      wednesday: "7:45 AM - 5:15 PM",
-      thursday: "7:45 AM - 5:15 PM",
-      friday: "8:00 AM - 4:30 PM",
-    },
+    schedule: input.careScheduleType === "full_time"
+      ? {
+          days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+          monday: "7:45 AM - 5:15 PM",
+          tuesday: "7:45 AM - 5:15 PM",
+          wednesday: "7:45 AM - 5:15 PM",
+          thursday: "7:45 AM - 5:15 PM",
+          friday: "8:00 AM - 4:30 PM",
+        }
+      : {
+          days: ["Monday", "Wednesday", "Friday"],
+          monday: "8:30 AM - 3:00 PM",
+          wednesday: "8:30 AM - 3:00 PM",
+          friday: "8:30 AM - 3:00 PM",
+        },
     photoVideoPermission: input.photoVideoPermission,
     fieldTripPermission: input.fieldTripPermission,
     napNotes: `${input.preferredName} rests best with a quiet story and soft music.`,
@@ -480,6 +495,7 @@ async function upsertChild(familyId: string, classroomId: string, input: {
       tshirtSize: input.ageGroup === "Infant" ? "12-18M" : "4T",
       sunscreenPermission: true,
       registrationPacket: "complete",
+      careScheduleType: input.careScheduleType,
     },
   };
 
@@ -653,7 +669,15 @@ async function upsertLead(centerId: string, input: {
 }
 
 async function upsertBilling(familyId: string, index: number) {
-  const balance = [0, 18500, 32450, 9200][index % 4];
+  const outstandingByIndex = new Map([
+    [6, 5500],
+    [17, 8000],
+    [28, 11000],
+    [39, 14500],
+    [50, 19000],
+    [61, 24000],
+  ]);
+  const balance = outstandingByIndex.get(index) ?? 0;
   const account = await prisma.billingAccount.upsert({
     where: { familyId },
     update: {
@@ -726,10 +750,11 @@ async function upsertBilling(familyId: string, index: number) {
   const existingPayment = await prisma.payment.findFirst({
     where: { billingAccountId: account.id, externalIdPlaceholder: `demo-payment-${invoiceNumber}` },
   });
-  if (!balance) {
+  const paidAmount = invoice.totalCents - balance;
+  if (paidAmount > 0) {
     const paymentData = {
       billingAccountId: account.id,
-      amountCents: invoice.totalCents,
+      amountCents: paidAmount,
       status: PaymentStatus.PAID,
       provider: "stripe_mock",
       externalIdPlaceholder: `demo-payment-${invoiceNumber}`,
@@ -738,7 +763,7 @@ async function upsertBilling(familyId: string, index: number) {
         method: index % 2 === 0 ? "ACH" : "Card",
         convenienceFeeCents: index % 2 === 0 ? 500 : 0,
       },
-      paidAt: dateAt(-3),
+      paidAt: dateAt(balance > 0 ? -1 : -3),
     };
     if (existingPayment) await prisma.payment.update({ where: { id: existingPayment.id }, data: paymentData });
     else await prisma.payment.create({ data: paymentData });
@@ -752,7 +777,7 @@ async function upsertBilling(familyId: string, index: number) {
       type: "charge",
       description: "Weekly tuition charge",
       amountCents: invoice.totalCents,
-      balanceAfterCents: balance || invoice.totalCents,
+      balanceAfterCents: invoice.totalCents,
       effectiveAt: dateAt(-7),
       metadata: { demoWorkspace: true },
     },
@@ -762,10 +787,36 @@ async function upsertBilling(familyId: string, index: number) {
       type: "charge",
       description: "Weekly tuition charge",
       amountCents: invoice.totalCents,
-      balanceAfterCents: balance || invoice.totalCents,
+      balanceAfterCents: invoice.totalCents,
       effectiveAt: dateAt(-7),
       sourceSystem: DEMO_SOURCE,
       externalId: `ledger-${invoiceNumber}-charge`,
+      metadata: { demoWorkspace: true },
+    },
+  });
+
+  await prisma.ledgerEntry.upsert({
+    where: { sourceSystem_externalId: { sourceSystem: DEMO_SOURCE, externalId: `ledger-${invoiceNumber}-payment` } },
+    update: {
+      billingAccountId: account.id,
+      invoiceId: invoice.id,
+      type: "payment",
+      description: balance > 0 ? "Partial tuition payment" : "Tuition payment",
+      amountCents: -paidAmount,
+      balanceAfterCents: balance,
+      effectiveAt: dateAt(balance > 0 ? -1 : -3),
+      metadata: { demoWorkspace: true },
+    },
+    create: {
+      billingAccountId: account.id,
+      invoiceId: invoice.id,
+      type: "payment",
+      description: balance > 0 ? "Partial tuition payment" : "Tuition payment",
+      amountCents: -paidAmount,
+      balanceAfterCents: balance,
+      effectiveAt: dateAt(balance > 0 ? -1 : -3),
+      sourceSystem: DEMO_SOURCE,
+      externalId: `ledger-${invoiceNumber}-payment`,
       metadata: { demoWorkspace: true },
     },
   });
@@ -874,10 +925,12 @@ async function upsertAttendance(input: {
 
   if (status !== "present") return;
 
-  for (const [type, hour, minute] of [
+  const attendanceEvents: Array<readonly ["check_in" | "check_out", number, number]> = [
     ["check_in", 7 + (input.index % 3), 35 + (input.index % 20)],
-    ["check_out", 15 + (input.index % 2), 10 + (input.index % 25)],
-  ] as const) {
+  ];
+  if (input.index % 23 === 0) attendanceEvents.push(["check_out", 10 + (input.index % 2), 10 + (input.index % 25)]);
+
+  for (const [type, hour, minute] of attendanceEvents) {
     const externalId = `${externalBase}-${type}`;
     const existingLog = await prisma.checkInOutLog.findFirst({
       where: { sourceSystem: DEMO_SOURCE, externalId },
@@ -936,7 +989,7 @@ async function upsertFteReports(
         enrolledCount: fullTime + partTime,
         fullTimeCount: fullTime,
         partTimeCount: partTime,
-        fteCount: Number((fullTime + partTime * 0.55).toFixed(2)),
+        fteCount: Number((fullTime + partTime * 0.5).toFixed(2)),
         infants: counts.infants,
         toddlers: counts.toddlers,
         twos: counts.twos,
@@ -956,7 +1009,7 @@ async function upsertFteReports(
         enrolledCount: fullTime + partTime,
         fullTimeCount: fullTime,
         partTimeCount: partTime,
-        fteCount: Number((fullTime + partTime * 0.55).toFixed(2)),
+        fteCount: Number((fullTime + partTime * 0.5).toFixed(2)),
         infants: counts.infants,
         toddlers: counts.toddlers,
         twos: counts.twos,
@@ -1176,6 +1229,12 @@ async function main() {
     ["Camila Brooks", "3's Teacher", primaryClassrooms[2]?.id],
     ["Noah Bennett", "Pre-K Teacher", primaryClassrooms[3]?.id],
     ["Jordan Carter", "Afterschool Teacher", primaryClassrooms[4]?.id],
+    ["Olivia Stone", "Infant Teacher", primaryClassrooms[0]?.id],
+    ["Ethan Reed", "Infant Teacher", primaryClassrooms[0]?.id],
+    ["Sophie Martin", "Toddler Teacher", primaryClassrooms[1]?.id],
+    ["Lucas Green", "Toddler Teacher", primaryClassrooms[1]?.id],
+    ["Emma Wilson", "3's Teacher", primaryClassrooms[2]?.id],
+    ["Mason Clark", "Afterschool Teacher", primaryClassrooms[4]?.id],
   ] as const;
   const teacherInitialPassword = getDefaultTeacherInitialPassword();
   const teacherUsers = [demoTeacherUser];
@@ -1230,11 +1289,11 @@ async function main() {
   };
 
   const demoRosterTargets = [
-    { ageGroup: "Infant", children: 8 },
-    { ageGroup: "Toddler", children: 12 },
-    { ageGroup: "3's", children: 11 },
-    { ageGroup: "Pre-K", children: 14 },
-    { ageGroup: "Afterschool", children: 12 },
+    { ageGroup: "Infant", children: 9 },
+    { ageGroup: "Toddler", children: 13 },
+    { ageGroup: "3's", children: 12 },
+    { ageGroup: "Pre-K", children: 16 },
+    { ageGroup: "Afterschool", children: 19 },
   ] as const;
   const legacyFamilySeeds = [
     ["rivera", "Rivera", "212 Oak Blossom Drive, Port Orange, FL", "maria.rivera.demo@example.com", "Lena Rivera"],
@@ -1370,6 +1429,7 @@ async function main() {
       startDate: dateAt(-45 - index * 7),
       photoVideoPermission: permission,
       fieldTripPermission: permission,
+      careScheduleType: demoCareScheduleType(index),
       allergies: index === 1 ? [{ allergen: "Peanuts", severity: "High", actionPlan: "No nuts in classroom; emergency plan on file." }] : undefined,
     });
     createdChildren.push({ childId: child.id, classroomId: classroom.id, guardianId: guardian.id, childName });
@@ -1467,9 +1527,9 @@ async function main() {
     });
   }
 
-  const demoFteAgeGroupCounts = { infants: 8, toddlers: 12, twos: 0, preschool: 11, preK: 14, schoolAge: 12 };
+  const demoFteAgeGroupCounts = { infants: 9, toddlers: 13, twos: 0, preschool: 12, preK: 16, schoolAge: 19 };
   for (let centerIndex = 0; centerIndex < centers.length; centerIndex += 1) {
-    await upsertFteReports(centers[centerIndex].id, centerIndex === 0 ? schoolUser.id : execUser.id, [43][centerIndex] ?? 43, demoFteAgeGroupCounts);
+    await upsertFteReports(centers[centerIndex].id, centerIndex === 0 ? schoolUser.id : execUser.id, [52][centerIndex] ?? 52, demoFteAgeGroupCounts);
     const existingAnnouncement = await prisma.announcement.findFirst({
       where: { centerId: centers[centerIndex].id, title: "Demo Family Newsletter" },
     });

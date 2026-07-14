@@ -217,16 +217,14 @@ export default async function DashboardPage() {
         user: { role: UserRole.TEACHER },
       },
     }),
-    prisma.invoice.aggregate({
+    prisma.billingAccount.aggregate({
       where: {
-        billingAccount: {
-          family: {
-            centerId: scopedCenterFilter,
-          },
+        family: {
+          centerId: scopedCenterFilter,
         },
       },
       _sum: {
-        totalCents: true,
+        balanceCents: true,
       },
     }),
     prisma.lead.groupBy({
@@ -444,7 +442,7 @@ export default async function DashboardPage() {
 
   const capacity = centers.reduce((sum, center) => sum + center.licensedCapacity, 0);
   const occupancy = capacity ? Math.round((activeChildren / capacity) * 1000) / 10 : 0;
-  const revenueDollars = Math.round((revenue._sum.totalCents ?? 0) / 100);
+  const revenueDollars = Math.round((revenue._sum.balanceCents ?? 0) / 100);
   const totalOpenSeats = Math.max(capacity - activeChildren, 0);
   const monthKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}`;
   const trendBuckets = Array.from({ length: 6 }, (_, index) => {
@@ -787,7 +785,7 @@ export default async function DashboardPage() {
       { label: "Occupancy", value: `${occupancy}%`, trend: "Live from center capacity", tone: "amber" },
       { label: "New leads", value: newLeadCount.toLocaleString(), trend: `${highIntentLeadCount.toLocaleString()} high-fit`, tone: "violet" },
       { label: "Tours today", value: toursToday.toLocaleString(), trend: `${openTasks.toLocaleString()} open CRM tasks`, tone: "sky" },
-      { label: "Outstanding balances", value: `$${revenueDollars.toLocaleString()}`, trend: "Invoice total snapshot", tone: "rose" },
+      { label: "Outstanding balances", value: `$${revenueDollars.toLocaleString()}`, trend: "Current family balances", tone: "rose" },
       { label: "Teachers", value: staffCount.toLocaleString(), trend: "Assigned to visible centers", tone: "emerald" },
       { label: "Incidents to review", value: pendingIncidents.toLocaleString(), trend: `${expiringDocuments.toLocaleString()} expiring docs`, tone: "amber" },
     ],

@@ -629,7 +629,7 @@ async function POSTHandler(request: NextRequest) {
       );
     }
 
-    let selectedTemplate: { subject: string; body: string } | null = null;
+    let selectedTemplate: { subject: string; body: string; category: string } | null = null;
     if (templateId && !templateId.startsWith("default-")) {
       selectedTemplate = await prisma.messageTemplate.findFirst({
         where: {
@@ -638,7 +638,7 @@ async function POSTHandler(request: NextRequest) {
           isActive: true,
           OR: [{ centerId: null }, { centerId: { in: familyCenterIds } }],
         },
-        select: { subject: true, body: true },
+        select: { subject: true, body: true, category: true },
       });
     } else if (templateId) {
       selectedTemplate = defaultMessageTemplates.find((item) => item.id === templateId) ?? null;
@@ -751,6 +751,7 @@ async function POSTHandler(request: NextRequest) {
         fromName: "The BEE Suite",
         statusCallbackUrl,
         emailPurpose: "communication_email",
+        emailCategory: selectedTemplate?.category,
         smsPurpose: "communication_sms",
         metadata: { familyId: targetFamily.id, broadcast: true },
       });
@@ -874,6 +875,7 @@ async function POSTHandler(request: NextRequest) {
       : null;
   }
 
+  let selectedTemplateCategory: string | undefined;
   if (templateId && !templateId.startsWith("default-")) {
     const template = await prisma.messageTemplate.findFirst({
       where: {
@@ -882,15 +884,17 @@ async function POSTHandler(request: NextRequest) {
         isActive: true,
         OR: [{ centerId: null }, ...(family?.centerId ? [{ centerId: family.centerId }] : [])],
       },
-      select: { subject: true, body: true },
+      select: { subject: true, body: true, category: true },
     });
     if (template) {
+      selectedTemplateCategory = template.category;
       subject = input.subject || template.subject;
       message = input.message || template.body;
     }
   } else if (templateId) {
     const template = defaultMessageTemplates.find((item) => item.id === templateId);
     if (template) {
+      selectedTemplateCategory = template.category;
       subject = input.subject || template.subject;
       message = input.message || template.body;
     }
@@ -1135,6 +1139,7 @@ async function POSTHandler(request: NextRequest) {
         fromName: "The BEE Suite",
         statusCallbackUrl,
         emailPurpose: "communication_email",
+        emailCategory: selectedTemplateCategory,
         smsPurpose: "communication_sms",
         metadata: { familyId: family.id },
       })

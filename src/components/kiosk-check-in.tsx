@@ -9,9 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { IScannerControls } from "@zxing/browser";
 
 type VerificationMethod = "pin" | "qr";
 type KioskMode = "family" | "staff";
+type CameraState = "idle" | "starting" | "scanning" | "unavailable";
 
 type KioskChild = {
   id: string;
@@ -97,6 +99,8 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   const [credentialMode, setCredentialMode] = useState<VerificationMethod>("pin");
   const [pin, setPin] = useState("");
   const [qrToken, setQrToken] = useState("");
+  const [cameraState, setCameraState] = useState<CameraState>("idle");
+  const [cameraMessage, setCameraMessage] = useState("");
   const [verifiedCredential, setVerifiedCredential] = useState<VerifiedCredential | null>(null);
   const [lookup, setLookup] = useState<LookupResult | null>(null);
   const [staffEmail, setStaffEmail] = useState("");
@@ -108,6 +112,9 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const idleSecondsRef = useRef(idleResetSeconds);
+  const qrVideoRef = useRef<HTMLVideoElement | null>(null);
+  const qrControlsRef = useRef<IScannerControls | null>(null);
+  const qrScanHandledRef = useRef(false);
   const [idleSecondsRemaining, setIdleSecondsRemaining] = useState(idleResetSeconds);
   const [isPending, startTransition] = useTransition();
   const selectedChildren = useMemo(
@@ -120,8 +127,13 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   const staffIsClockedIn = staffLookup?.staff.clock.status === "clocked_in";
 
   const reset = useCallback((nextStatus = "") => {
+    qrControlsRef.current?.stop();
+    qrControlsRef.current = null;
+    qrScanHandledRef.current = false;
     setPin("");
     setQrToken("");
+    setCameraState("idle");
+    setCameraMessage("");
     setVerifiedCredential(null);
     setLookup(null);
     setStaffEmail("");
@@ -154,6 +166,11 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
     setCredentialMode(method);
     setPin("");
     setQrToken("");
+    qrControlsRef.current?.stop();
+    qrControlsRef.current = null;
+    qrScanHandledRef.current = false;
+    setCameraState("idle");
+    setCameraMessage("");
     setVerifiedCredential(null);
     setLookup(null);
     setSelectedIds([]);
@@ -191,10 +208,11 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
     setStaffPin((current) => (current.length >= 4 ? current : `${current}${digit}`));
   }
 
-  function lookupCredential() {
+  function lookupCredential(scannedQrToken?: string) {
     markActivity();
+    const normalizedQrToken = typeof scannedQrToken === "string" ? scannedQrToken.trim() : qrToken.trim();
     const credential: VerifiedCredential = credentialMode === "qr"
-      ? { method: "qr", qrToken: qrToken.trim() }
+      ? { method: "qr", qrToken: normalizedQrToken }
       : { method: "pin", pin };
     if ((credential.method === "pin" && credential.pin.length !== 4) || (credential.method === "qr" && !credential.qrToken)) {
       setError("Enter a PIN or scan a QR code before finding a family.");
@@ -223,6 +241,71 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
       setSignatureName(json.guardian.fullName);
     });
   }
+
+  useEffect(() => {
+    if (kioskMode !== "family" || credentialMode !== "qr" || lookup) return undefined;
+    let active = true;
+    qrScanHandledRef.current = false;
+
+    async function startScanner() {
+      if (!navigator.mediaDevices?.getUserMedia || !qrVideoRef.current) {
+        if (!active) return;
+        setCameraState("unavailable");
+        setCameraMessage("This device does not have an available camera. Please use your 4 digit PIN.");
+        setCredentialMode("pin");
+        return;
+      }
+
+      setCameraState("starting");
+      setCameraMessage("Allow camera access, then hold your QR code inside the frame.");
+      try {
+        const { BrowserQRCodeReader } = await import("@zxing/browser");
+        if (!active || !qrVideoRef.current) return;
+        const reader = new BrowserQRCodeReader(undefined, { delayBetweenScanAttempts: 150 });
+        const controls = await reader.decodeFromConstraints(
+          { audio: false, video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+          qrVideoRef.current,
+          (result) => {
+            if (!active || !result || qrScanHandledRef.current) return;
+            const value = result.getText().trim();
+            if (!value) return;
+            qrScanHandledRef.current = true;
+            controls.stop();
+            qrControlsRef.current = null;
+            setQrToken(value);
+            setCameraMessage("QR code scanned. Finding your family…");
+            lookupCredential(value);
+          },
+        );
+        if (!active) {
+          controls.stop();
+          return;
+        }
+        qrControlsRef.current = controls;
+        setCameraState("scanning");
+      } catch (cameraError) {
+        if (!active) return;
+        qrControlsRef.current?.stop();
+        qrControlsRef.current = null;
+        const name = cameraError instanceof DOMException ? cameraError.name : "";
+        const denied = name === "NotAllowedError" || name === "SecurityError";
+        setCameraState("unavailable");
+        setCameraMessage(denied
+          ? "Camera access was not allowed. Please use your 4 digit PIN, or enable camera permission and try QR again."
+          : "No usable camera was found on this device. Please use your 4 digit PIN.");
+        setCredentialMode("pin");
+      }
+    }
+
+    void startScanner();
+    return () => {
+      active = false;
+      qrControlsRef.current?.stop();
+      qrControlsRef.current = null;
+    };
+  // The lookup function intentionally uses the current kiosk state when a scan completes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credentialMode, kioskMode, lookup]);
 
   function submit(type: "check_in" | "check_out") {
     markActivity();
@@ -399,6 +482,14 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                     </Button>
                   </div>
 
+                  {cameraState === "unavailable" && cameraMessage ? (
+                    <Alert>
+                      <KeyRound className="size-4" />
+                      <AlertTitle>Use your PIN</AlertTitle>
+                      <AlertDescription>{cameraMessage}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
                   {credentialMode === "pin" ? (
                     <>
                       <div className="grid grid-cols-4 gap-3">
@@ -427,36 +518,33 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                     </>
                   ) : (
                     <div className="grid gap-3">
-                      <Label htmlFor="guardian-qr-token" className="text-base">QR scan</Label>
-                      <Textarea
-                        id="guardian-qr-token"
-                        className="min-h-40 resize-none font-mono text-sm"
-                        value={qrToken}
-                        onChange={(event) => {
-                          markActivity();
-                          setError("");
-                          setStatus("");
-                          setQrToken(event.target.value);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" && !event.shiftKey) {
-                            event.preventDefault();
-                            if (!isPending && qrToken.trim()) lookupCredential();
-                          }
-                        }}
-                        placeholder="Scan QR code"
-                        autoComplete="off"
-                      />
-                      <Button type="button" variant="outline" onClick={() => {
-                        markActivity();
-                        setQrToken("");
-                      }}>
-                        Clear QR
-                      </Button>
+                      <Label className="text-base">Tablet camera</Label>
+                      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border bg-black">
+                        <video ref={qrVideoRef} className="size-full object-cover" muted playsInline aria-label="QR code camera preview" />
+                        <div className="pointer-events-none absolute inset-[12%] rounded-3xl border-4 border-white/90 shadow-[0_0_0_999px_rgba(0,0,0,0.35)]" />
+                        {cameraState === "starting" ? (
+                          <div className="absolute inset-0 grid place-items-center bg-black/50 px-6 text-center font-semibold text-white">Starting camera…</div>
+                        ) : null}
+                      </div>
+                      <p className="text-sm leading-6 text-muted-foreground" aria-live="polite">{cameraMessage || "Hold the guardian QR code inside the frame."}</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" variant="outline" onClick={() => selectCredentialMode("pin")}>
+                          <KeyRound data-icon="inline-start" />
+                          Use PIN instead
+                        </Button>
+                        <Button type="button" variant="outline" disabled={cameraState === "starting" || cameraState === "scanning"} onClick={() => {
+                          setCameraState("idle");
+                          setCameraMessage("");
+                          setCredentialMode("pin");
+                          window.setTimeout(() => setCredentialMode("qr"), 0);
+                        }}>
+                          Try camera again
+                        </Button>
+                      </div>
                     </div>
                   )}
 
-                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !credentialReady} onClick={lookupCredential}>
+                  <Button className="h-14 w-full text-lg sm:h-16 lg:h-12 2xl:h-16" disabled={isPending || !credentialReady} onClick={() => lookupCredential()}>
                     Find Family
                   </Button>
                 </>

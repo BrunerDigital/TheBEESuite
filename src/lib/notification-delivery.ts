@@ -5,6 +5,7 @@ import {
 } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms, uniqueEmails, type IntegrationSendResult } from "@/lib/integrations";
 import { notificationDedupeKey } from "@/lib/notification-policy";
+import { buildBeeSuiteEmailHtml } from "@/lib/communications-kit";
 import {
   resolveNotificationPreferenceChannels,
   type NotificationPreferenceRecord,
@@ -39,6 +40,7 @@ export type NotificationExternalDeliveryInput = {
   emailPurpose?: Extract<IntegrationDeliveryPurpose, "communication_email" | "notification_email">;
   smsPurpose?: Extract<IntegrationDeliveryPurpose, "communication_sms" | "notification_sms">;
   metadata?: Record<string, unknown>;
+  emailCategory?: string;
   providers?: Partial<NotificationDeliveryProviders>;
 };
 
@@ -158,6 +160,7 @@ export async function deliverNotificationExternalChannels({
   emailPurpose = "notification_email",
   smsPurpose = "notification_sms",
   metadata = {},
+  emailCategory,
   providers: providerOverrides = {},
 }: NotificationExternalDeliveryInput): Promise<NotificationDeliverySummary> {
   const providers: NotificationDeliveryProviders = {
@@ -190,6 +193,7 @@ export async function deliverNotificationExternalChannels({
       to: emailRecipients,
       subject: title,
       text: body,
+      html: buildBeeSuiteEmailHtml({ title, body, category: emailCategory || type }),
       replyTo,
       fromName,
       categories: [emailPurpose, type],

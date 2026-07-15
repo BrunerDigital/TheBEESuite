@@ -183,12 +183,16 @@ async function refreshRealisticBilling(centerId: string) {
     include: { invoices: { orderBy: { dueDate: "desc" }, take: 1 } },
   });
 
+  let totalBilledCents = 0;
+  let totalPaidCents = 0;
   for (const [index, account] of accounts.entries()) {
     const balance = openIndexes.get(index) ?? 0;
     const invoice = account.invoices[0];
     if (!invoice) throw new Error(`Missing demo invoice for billing account ${account.id}`);
     const totalCents = 21800 + (index % 5) * 2700;
     const paidAmount = totalCents - balance;
+    totalBilledCents += totalCents;
+    totalPaidCents += paidAmount;
     await prisma.billingAccount.update({ where: { id: account.id }, data: { balanceCents: balance, autopayPlaceholder: index % 4 !== 1, ledgerSyncedAt: dateAt(-1) } });
     await prisma.invoice.update({ where: { id: invoice.id }, data: { status: balance > 0 ? PaymentStatus.OPEN : PaymentStatus.PAID, totalCents, dueDate: dateAt(balance > 0 ? 3 : -3) } });
     await prisma.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
@@ -204,7 +208,14 @@ async function refreshRealisticBilling(centerId: string) {
     await prisma.ledgerEntry.upsert({ where: { sourceSystem_externalId: { sourceSystem: SOURCE, externalId: `ledger-${invoice.number}-charge` } }, update: { billingAccountId: account.id, invoiceId: invoice.id, type: "charge", description: "Weekly tuition charge", amountCents: totalCents, balanceAfterCents: totalCents, effectiveAt: dateAt(-7), metadata: { demoWorkspace: true } }, create: { billingAccountId: account.id, invoiceId: invoice.id, type: "charge", description: "Weekly tuition charge", amountCents: totalCents, balanceAfterCents: totalCents, effectiveAt: dateAt(-7), sourceSystem: SOURCE, externalId: `ledger-${invoice.number}-charge`, metadata: { demoWorkspace: true } } });
     await prisma.ledgerEntry.upsert({ where: { sourceSystem_externalId: { sourceSystem: SOURCE, externalId: `ledger-${invoice.number}-payment` } }, update: { billingAccountId: account.id, invoiceId: invoice.id, type: "payment", description: balance > 0 ? "Partial tuition payment" : "Tuition payment", amountCents: -paidAmount, balanceAfterCents: balance, effectiveAt: dateAt(balance > 0 ? -1 : -3), metadata: { demoWorkspace: true } }, create: { billingAccountId: account.id, invoiceId: invoice.id, type: "payment", description: balance > 0 ? "Partial tuition payment" : "Tuition payment", amountCents: -paidAmount, balanceAfterCents: balance, effectiveAt: dateAt(balance > 0 ? -1 : -3), sourceSystem: SOURCE, externalId: `ledger-${invoice.number}-payment`, metadata: { demoWorkspace: true } } });
   }
-  return { accounts: accounts.length, paid: accounts.length - openIndexes.size, open: openIndexes.size, outstandingCents: openBalances.reduce((sum, value) => sum + value, 0) };
+  return {
+    accounts: accounts.length,
+    paid: accounts.length - openIndexes.size,
+    open: openIndexes.size,
+    outstandingCents: openBalances.reduce((sum, value) => sum + value, 0),
+    totalBilledCents,
+    totalPaidCents,
+  };
 }
 
 async function ensureRatioCoverage(input: { centerId: string; tenantId: string; organizationId: string; classrooms: Array<{ id: string; name: string }> }) {
@@ -235,6 +246,11 @@ async function main() {
   const center = await prisma.center.findFirstOrThrow({ where: { sourceSystem: SOURCE, externalId: CENTER_EXTERNAL_ID }, include: { organization: { select: { tenantId: true } }, classrooms: true } });
   if (process.argv.includes("--billing-only")) {
     const billing = await refreshRealisticBilling(center.id);
+    const currentFte = await prisma.fteReport.findFirst({ where: { centerId: center.id }, orderBy: { weekStart: "desc" } });
+    if (currentFte) {
+      const metadata = currentFte.sourceMetadata && typeof currentFte.sourceMetadata === "object" && !Array.isArray(currentFte.sourceMetadata) ? currentFte.sourceMetadata as Record<string, unknown> : {};
+      await prisma.fteReport.update({ where: { id: currentFte.id }, data: { sourceMetadata: { ...metadata, accountReceivableAmount: billing.outstandingCents / 100, selfPayerBillAmount: billing.totalBilledCents / 100, subsidyBillAmount: 0, totalBilledAmount: billing.totalBilledCents / 100, paidAmount: billing.totalPaidCents / 100, licenseCapacity: 79, occupancyPercent: 87.34, billingAccounts: billing.accounts, paidAccounts: billing.paid, openAccounts: billing.open } } });
+    }
     console.log(JSON.stringify({ ok: true, center: center.name, billing }, null, 2));
     return;
   }
@@ -309,7 +325,7 @@ async function main() {
   await prisma.notification.updateMany({ where: { userId: schoolUser.id, readAt: null }, data: { readAt: now } });
 
   const currentFte = await prisma.fteReport.findFirst({ where: { centerId: center.id }, orderBy: { weekStart: "desc" } });
-  if (currentFte) await prisma.fteReport.update({ where: { id: currentFte.id }, data: { enrolledCount: TARGET_ENROLLMENT, fullTimeCount: 52, partTimeCount: 17, fteCount: 60.5, infants: 9, toddlers: 13, twos: 0, preschool: 12, preK: 16, schoolAge: 19, status: "submitted", notes: "Demo weekly FTE aligned to 87% licensed occupancy and current child records." } });
+  if (currentFte) await prisma.fteReport.update({ where: { id: currentFte.id }, data: { enrolledCount: TARGET_ENROLLMENT, fullTimeCount: 52, partTimeCount: 17, fteCount: 60.5, infants: 9, toddlers: 13, twos: 0, preschool: 12, preK: 16, schoolAge: 19, status: "submitted", notes: "Demo weekly FTE aligned to 87% licensed occupancy, current child records, and the reconciled billing snapshot.", sourceMetadata: { demoWorkspace: true, accountReceivableAmount: billing.outstandingCents / 100, selfPayerBillAmount: billing.totalBilledCents / 100, subsidyBillAmount: 0, totalBilledAmount: billing.totalBilledCents / 100, paidAmount: billing.totalPaidCents / 100, licenseCapacity: 79, occupancyPercent: 87.34, billingAccounts: billing.accounts, paidAccounts: billing.paid, openAccounts: billing.open } } });
 
   console.log(JSON.stringify({ ok: true, center: center.name, targetEnrollment: TARGET_ENROLLMENT, attendance, billing }, null, 2));
 }

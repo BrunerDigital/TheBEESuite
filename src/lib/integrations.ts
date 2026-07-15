@@ -486,6 +486,7 @@ export async function sendEmail({
   to,
   subject,
   text,
+  html,
   replyTo,
   fromName = "The BEE Suite",
   categories,
@@ -498,6 +499,7 @@ export async function sendEmail({
   to: string[];
   subject: string;
   text: string;
+  html?: string;
   replyTo?: string | null;
   fromName?: string;
   categories?: string[];
@@ -539,7 +541,10 @@ export async function sendEmail({
       tracking_settings: disableClickTracking
         ? transactionalTrackingSettings
         : undefined,
-      content: [{ type: "text/plain", value: text }],
+      content: [
+        { type: "text/plain", value: text },
+        ...(html ? [{ type: "text/html", value: html }] : []),
+      ],
       attachments: attachments?.length
         ? attachments.map((attachment) => ({
             content: attachment.content,

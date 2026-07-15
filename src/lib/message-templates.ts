@@ -1,3 +1,5 @@
+import { communicationsKitTemplates } from "@/lib/communications-kit";
+
 export type MessageTemplateView = {
   id: string;
   name: string;
@@ -120,6 +122,7 @@ export const defaultMessageTemplates: MessageTemplateView[] = [
     channel: "broadcast",
     mergeFields: ["guardian.firstName", "center.name", "center.phone", "center.email"],
   },
+  ...communicationsKitTemplates.map((template) => ({ ...template, channel: "email", mergeFields: [...template.mergeFields] })),
 ];
 
 export type MessageTemplateContext = {

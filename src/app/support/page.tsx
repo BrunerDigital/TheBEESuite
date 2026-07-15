@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
+import { ArrowRight, ChevronDown, Mail, ShieldCheck, TriangleAlert } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { processFaqs } from "@/lib/communications-kit";
 
 export const metadata: Metadata = {
   title: "Support | The BEE Suite",
@@ -128,6 +129,25 @@ export default function SupportPage() {
               </Card>
             </div>
           </div>
+
+          <section className="pb-14" id="faq">
+            <div className="mb-6 max-w-3xl">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-amber-300">Process FAQ</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight">Specific answers for families and school teams</h2>
+              <p className="mt-3 leading-7 text-slate-300">These steps cover the most common enrollment, attendance, classroom, billing, document, FTE, security, and support procedures.</p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              {processFaqs.map((faq) => (
+                <details key={faq.question} className="group rounded-2xl border border-white/10 bg-white/[0.06] p-5 open:border-amber-300/30 open:bg-amber-300/[0.08]">
+                  <summary className="flex cursor-pointer list-none items-start justify-between gap-4 font-semibold text-white">
+                    <span><span className="mb-2 block text-xs font-bold uppercase tracking-[0.14em] text-amber-300">{faq.audience}</span>{faq.question}</span>
+                    <ChevronDown className="mt-1 size-5 shrink-0 text-amber-300 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <p className="mt-4 border-t border-white/10 pt-4 text-sm leading-6 text-slate-300">{faq.answer}</p>
+                </details>
+              ))}
+            </div>
+          </section>
         </div>
       </section>
     </main>

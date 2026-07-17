@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { PwaInstallManager } from "@/components/pwa-install-manager";
+import { SubmissionFeedback } from "@/components/submission-feedback";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
@@ -59,6 +60,7 @@ export default function RootLayout({
         <TooltipProvider>{children}</TooltipProvider>
         <ClientErrorReporter />
         <PwaInstallManager />
+        <SubmissionFeedback />
         <Analytics />
       </body>
     </html>

@@ -6,6 +6,7 @@ import {
   buildIntegrationSetupViews,
   getIntegrationRuntimeStatus,
   integrationRecordConfig,
+  isMarketingIntegrationProvider,
   normalizeIntegrationProvider,
   normalizeIntegrationSetupStatus,
   sanitizeIntegrationConfig,
@@ -21,6 +22,7 @@ const allowedRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
+  UserRole.CENTER_DIRECTOR,
 ]);
 
 function actionValue(value: unknown) {
@@ -40,6 +42,9 @@ async function POSTHandler(request: NextRequest) {
   const provider = normalizeIntegrationProvider(body?.provider);
   if (!provider) {
     return NextResponse.json({ ok: false, error: "Unknown integration provider." }, { status: 400 });
+  }
+  if (user.role === UserRole.CENTER_DIRECTOR && !isMarketingIntegrationProvider(provider)) {
+    return NextResponse.json({ ok: false, error: "Directors can manage marketing connections only." }, { status: 403 });
   }
 
   const action = actionValue(body?.action);

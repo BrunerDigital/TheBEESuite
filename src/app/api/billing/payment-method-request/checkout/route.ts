@@ -14,6 +14,7 @@ import {
   getStripeSecretKey,
   getStripeWebhookSecret,
   readStripeConnectedAccountId,
+  requiresStripePaymentMethodConfiguration,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
   type StripePaymentMethodCategory,
@@ -212,7 +213,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
-  const usesSpecificFeePolicy = requestedPaymentMethodCategory !== "default";
+  const usesSpecificFeePolicy = requiresStripePaymentMethodConfiguration(requestedPaymentMethodCategory);
   const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
   if (usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
     return NextResponse.json(

@@ -2029,10 +2029,23 @@ async function DELETEHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "You do not have access to this teacher profile." }, { status: 403 });
     }
 
+    const deactivatedAt = new Date();
     const result = await prisma.$transaction(async (tx) => {
       await tx.staffProfile.update({
         where: { id: staff.id },
         data: { classroomId: null },
+      });
+      await tx.staffSchedule.updateMany({
+        where: {
+          staffId: staff.id,
+          endsAt: { gte: deactivatedAt },
+          status: { notIn: ["cancelled", "completed"] },
+        },
+        data: { status: "cancelled" },
+      });
+      await tx.deviceSession.updateMany({
+        where: { userId: staff.userId, revokedAt: null },
+        data: { revokedAt: deactivatedAt, revokedById: user.id },
       });
       return tx.user.update({
         where: { id: staff.userId },
@@ -2043,6 +2056,8 @@ async function DELETEHandler(request: NextRequest) {
     const auditMetadata: Record<string, Prisma.InputJsonValue> = {
       mode: "deactivated",
       userId: staff.userId,
+      loginSessionsRevoked: true,
+      futureSchedulesCancelled: true,
     };
     if (staff.classroomId) auditMetadata.previousClassroomId = staff.classroomId;
     try {

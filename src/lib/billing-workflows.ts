@@ -223,3 +223,27 @@ export function billingDedupeKey(input: {
     childScope,
   ].join(":");
 }
+
+export function planFamilyRefundAllocations<T extends { id: string; refundableCents: number }>(
+  payments: T[],
+  requestedCents: number,
+  preferredPaymentIds: string[] = [],
+) {
+  const preferredOrder = new Map(preferredPaymentIds.map((id, index) => [id, index]));
+  const ordered = [...payments].sort((left, right) => {
+    const leftRank = preferredOrder.get(left.id);
+    const rightRank = preferredOrder.get(right.id);
+    if (leftRank !== undefined || rightRank !== undefined) return (leftRank ?? Number.MAX_SAFE_INTEGER) - (rightRank ?? Number.MAX_SAFE_INTEGER);
+    return 0;
+  });
+  let remainingCents = Math.max(0, requestedCents);
+  const allocations: Array<{ payment: T; amountCents: number }> = [];
+  for (const payment of ordered) {
+    const availableCents = Math.max(0, payment.refundableCents);
+    if (!availableCents || !remainingCents) continue;
+    const amountCents = Math.min(remainingCents, availableCents);
+    allocations.push({ payment, amountCents });
+    remainingCents -= amountCents;
+  }
+  return { allocations, remainingCents, availableCents: payments.reduce((total, payment) => total + Math.max(0, payment.refundableCents), 0) };
+}

@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { DocumentStatus, EnrollmentStage, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
+import { ConsolidatedWorkspaceNav } from "@/components/consolidated-workspace-nav";
 import {
   AgencyAdminPage,
   AiCommandPage,
@@ -44,6 +45,7 @@ import {
 } from "@/components/live-ops-pages";
 import type { FteReportPrefill, FteReportRow } from "@/components/fte-report-form";
 import { AuthLikePage } from "@/components/module-page";
+import { AssetHubWorkspace } from "@/components/asset-hub-workspace";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
 import {
   SchoolSetupCommandCenter,
@@ -72,7 +74,7 @@ import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } 
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
-import { buildIntegrationSetupViews, getIntegrationRuntimeStatus } from "@/lib/integration-setup";
+import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
 import {
@@ -85,7 +87,8 @@ import {
   isStripeParentProcessingRecoveryApproved,
   shouldWaiveStripePaymentOperationsFee,
 } from "@/lib/integrations";
-import { getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
+import { getKidCitySoftwareFeeUnitAmountCents, getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
+import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
 import { buildGuardianKioskCredential, kioskPathForCenter } from "@/lib/kiosk-credentials";
 import {
   activeStripeCheckoutPaymentSummary,
@@ -120,6 +123,7 @@ import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { canAccessModule } from "@/lib/rbac";
+import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
@@ -135,9 +139,10 @@ import {
   summarizeEnrollmentChecklist,
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
-import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
+import { createAssetHubSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
+import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
@@ -530,27 +535,46 @@ async function buildFtePrefills(
   const centerIds = centers.map((center) => center.id);
   if (!centerIds.length) return [];
 
-  const children = await prisma.child.findMany({
+  const weekStart = startOfFteWeek(new Date());
+  const weekEndExclusive = new Date(weekStart);
+  weekEndExclusive.setUTCDate(weekEndExclusive.getUTCDate() + 7);
+
+  const [children, invoices, accountBalances, staffProfiles] = await Promise.all([prisma.child.findMany({
     where: {
-      AND: [
-        currentlyEnrolledChildWhere(),
-        {
-          OR: [
-            { family: { is: { centerId: centerIdFilter(centerIds) } } },
-            { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
-          ],
-        },
+      OR: [
+        { family: { is: { centerId: centerIdFilter(centerIds) } } },
+        { classroom: { is: { centerId: centerIdFilter(centerIds) } } },
       ],
     },
     select: {
       ageGroup: true,
       enrollmentStatus: true,
+      startDate: true,
+      updatedAt: true,
       schedule: true,
       customFields: true,
       family: { select: { centerId: true } },
       classroom: { select: { centerId: true } },
     },
-  });
+  }), prisma.invoice.findMany({
+    where: {
+      billingAccount: { family: { centerId: centerIdFilter(centerIds) } },
+      createdAt: { gte: weekStart, lt: weekEndExclusive },
+      status: { not: PaymentStatus.VOID },
+    },
+    select: {
+      totalCents: true,
+      customFields: true,
+      items: { select: { description: true, amountCents: true } },
+      billingAccount: { select: { family: { select: { centerId: true } } } },
+    },
+  }), prisma.billingAccount.findMany({
+    where: { family: { centerId: centerIdFilter(centerIds) } },
+    select: { balanceCents: true, family: { select: { centerId: true } } },
+  }), prisma.staffProfile.findMany({
+    where: { centerId: centerIdFilter(centerIds), user: { isActive: true } },
+    select: { centerId: true, customFields: true },
+  })]);
 
   const byCenter = new Map(centers.map((center) => [center.id, {
     centerId: center.id,
@@ -565,26 +589,81 @@ async function buildFtePrefills(
     preschool: 0,
     preK: 0,
     schoolAge: 0,
+    accountReceivableAmount: 0,
+    selfPayerBillAmount: 0,
+    subsidyBillAmount: 0,
+    totalBilledAmount: 0,
+    payrollAmount: null as number | null,
+    payrollPercent: null as number | null,
+    newStarts: 0,
+    withdrawals: 0,
+    preregisteredChildren: 0,
     generatedAt: new Date().toISOString(),
-    sourceLabel: "Current active child records",
+    sourceLabel: "Live enrollment, billing, receivables, and staff records",
   } satisfies FteReportPrefill]));
 
   for (const child of children) {
-    if (!activeEnrollmentStatus(child.enrollmentStatus)) continue;
     const centerId = child.classroom?.centerId ?? child.family.centerId;
     if (!centerId) continue;
     const row = byCenter.get(centerId);
     if (!row) continue;
-    row.enrolledCount += 1;
-    row[ageBucket(child.ageGroup)] += 1;
-    const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
-    if (classification === "full_time") row.fullTimeCount = (row.fullTimeCount ?? 0) + 1;
-    else if (classification === "part_time") row.partTimeCount = (row.partTimeCount ?? 0) + 1;
-    else row.unknownScheduleCount += 1;
+    const isActive = activeEnrollmentStatus(child.enrollmentStatus);
+    if (isActive) {
+      row.enrolledCount += 1;
+      row[ageBucket(child.ageGroup)] += 1;
+      const classification = childScheduleClassification({ schedule: child.schedule, customFields: child.customFields });
+      if (classification === "full_time") row.fullTimeCount = (row.fullTimeCount ?? 0) + 1;
+      else if (classification === "part_time") row.partTimeCount = (row.partTimeCount ?? 0) + 1;
+      else row.unknownScheduleCount += 1;
+    }
+    if (child.startDate && child.startDate >= weekStart && child.startDate < weekEndExclusive) row.newStarts += 1;
+    if (!isActive && child.updatedAt >= weekStart && child.updatedAt < weekEndExclusive) row.withdrawals += 1;
+    if (child.startDate && child.startDate >= weekEndExclusive) row.preregisteredChildren += 1;
+  }
+
+  for (const account of accountBalances) {
+    const row = account.family.centerId ? byCenter.get(account.family.centerId) : null;
+    if (row) row.accountReceivableAmount += Math.max(account.balanceCents, 0) / 100;
+  }
+
+  for (const invoice of invoices) {
+    const row = invoice.billingAccount.family.centerId ? byCenter.get(invoice.billingAccount.family.centerId) : null;
+    if (!row) continue;
+    const invoiceMetadataText = JSON.stringify(invoice.customFields).toLowerCase();
+    const subsidyCents = /subsidy|agency|voucher|scholarship|elc|dhs/.test(invoiceMetadataText)
+      ? invoice.totalCents
+      : invoice.items.filter((item) => /subsidy|agency|voucher|scholarship|elc|dhs/i.test(item.description)).reduce((sum, item) => sum + item.amountCents, 0);
+    row.totalBilledAmount += invoice.totalCents / 100;
+    row.subsidyBillAmount += subsidyCents / 100;
+    row.selfPayerBillAmount += Math.max(invoice.totalCents - subsidyCents, 0) / 100;
+  }
+
+  for (const staff of staffProfiles) {
+    const row = byCenter.get(staff.centerId);
+    if (!row) continue;
+    const compensation = readStaffCompensation(staff.customFields);
+    if (compensation.payrollStatus !== "active") continue;
+    let grossCents: number | null = null;
+    if (compensation.payType === "salary" && compensation.annualSalaryCents !== null) grossCents = Math.round(compensation.annualSalaryCents / 52);
+    else {
+      const clock = readStaffClockSummary(staff.customFields, { startDate: weekStart, endDate: weekEndExclusive });
+      grossCents = estimatedHourlyGrossPayCents({
+        compensation,
+        regularMinutes: Math.min(clock.totalMinutes, 40 * 60),
+        overtimeMinutes: Math.max(clock.totalMinutes - 40 * 60, 0),
+      });
+    }
+    if (grossCents !== null) row.payrollAmount = (row.payrollAmount ?? 0) + grossCents / 100;
   }
 
   return Array.from(byCenter.values()).map((row) => ({
     ...row,
+    accountReceivableAmount: Math.round(row.accountReceivableAmount * 100) / 100,
+    selfPayerBillAmount: Math.round(row.selfPayerBillAmount * 100) / 100,
+    subsidyBillAmount: Math.round(row.subsidyBillAmount * 100) / 100,
+    totalBilledAmount: Math.round(row.totalBilledAmount * 100) / 100,
+    payrollAmount: row.payrollAmount === null ? null : Math.round(row.payrollAmount * 100) / 100,
+    payrollPercent: row.payrollAmount !== null && row.totalBilledAmount > 0 ? Math.round((row.payrollAmount / row.totalBilledAmount) * 10000) / 100 : null,
     fullTimeCount: row.fullTimeCount || row.unknownScheduleCount ? row.fullTimeCount : null,
     partTimeCount: row.partTimeCount || row.unknownScheduleCount ? row.partTimeCount : null,
   }));
@@ -638,6 +717,23 @@ async function renderLivePage(
   user: CurrentUser,
   searchParams: Record<string, string | string[] | undefined> = {},
 ) {
+  if (slug === "asset-hub") {
+    const rows = await prisma.brandAsset.findMany({
+      where: { tenantId: user.tenantId, assetType: CORPORATE_ASSET_TYPE },
+      orderBy: { createdAt: "desc" },
+      take: 1000,
+    });
+    const assets = await Promise.all(rows.map(async (row) => {
+      const metadata = readAssetMetadata(row.metadata);
+      const previewable = assetKind(metadata.contentType, metadata.originalName) === "image";
+      let previewUrl: string | null = null;
+      if (previewable && row.storageKey && metadata.uploadStatus === "ready") {
+        previewUrl = await createAssetHubSignedUrl(row.storageKey).catch(() => null);
+      }
+      return { id: row.id, name: metadata.originalName, contentType: metadata.contentType, size: metadata.size, category: metadata.category, description: metadata.description, tags: metadata.tags, uploadedBy: metadata.uploadedByName, createdAt: row.createdAt.toISOString(), previewUrl };
+    }));
+    return <AssetHubWorkspace initialAssets={assets.filter((_, index) => readAssetMetadata(rows[index].metadata).uploadStatus === "ready")} canManage={canManageAssetHub(user.role)} />;
+  }
   const tenantWide = canAccessAllCenters(user);
   const allCenters = tenantWide;
   const showDemoFallbackData = canViewDemoFallbackData(user);
@@ -1993,7 +2089,7 @@ async function renderLivePage(
             checkoutTotalCents: instantBankAmounts.checkoutTotalCents,
             parentProcessingRecoveryAmountCents: instantBankAmounts.parentProcessingRecoveryAmountCents,
             applicationFeeAmountCents: instantBankAmounts.applicationFeeAmountCents,
-            paymentMethodConfigurationReady: Boolean(getStripePaymentMethodConfigurationId("link_bank")),
+            paymentMethodConfigurationReady: true,
           },
           card: {
             checkoutTotalCents: cardAmounts.checkoutTotalCents,
@@ -2625,7 +2721,7 @@ async function renderLivePage(
     const campaignWhere: Prisma.CampaignWhereInput = {
       OR: [{ tenantId: user.tenantId }, { brand: { is: { tenantId: user.tenantId } } }],
     };
-    const [campaigns, total, active, draft, paused, scheduled, sent] = await Promise.all([
+    const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials] = await Promise.all([
       prisma.campaign.findMany({
         where: campaignWhere,
         orderBy: [{ updatedAt: "desc" }, { name: "asc" }],
@@ -2644,9 +2740,58 @@ async function renderLivePage(
       prisma.campaign.count({ where: { ...campaignWhere, status: "paused" } }),
       prisma.campaign.count({ where: { ...campaignWhere, status: "scheduled" } }),
       prisma.campaign.count({ where: { ...campaignWhere, status: "sent" } }),
+      prisma.integration.findMany({
+        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        select: { id: true, provider: true, status: true, configPlaceholder: true, lastSyncAt: true },
+      }),
+      prisma.integrationCredential.findMany({
+        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        select: { provider: true, key: true, lastFour: true },
+      }),
     ]);
 
-    return <CampaignsPage data={{ campaigns, stats: { total, active, draft, paused, scheduled, sent } }} />;
+    const setupViews = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
+    const marketingConnections = setupViews
+      .filter((integration) => AD_INTEGRATION_PROVIDERS.includes(integration.provider))
+      .map((integration) => ({
+        provider: integration.provider,
+        name: integration.name,
+        purpose: integration.purpose,
+        status: integration.status,
+        setupStatus: integration.setupStatus,
+        configured: integration.env.configured,
+        accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
+        lastSyncAt: integration.lastSyncAt,
+      }));
+    const socialConnections = setupViews
+      .filter((integration) => SOCIAL_INTEGRATION_PROVIDERS.includes(integration.provider))
+      .map((integration) => {
+        const stored = integrationRecords.find((record) => record.provider === integration.provider);
+        const analyticsRecord = recordFromJson(recordFromJson(stored?.configPlaceholder).analytics);
+        const analytics = Object.fromEntries(Object.entries(analyticsRecord).filter((entry): entry is [string, number] => typeof entry[1] === "number"));
+        const stringConfig = (key: string) => typeof integration.config[key] === "string" && String(integration.config[key]).trim().length > 0;
+        const availableChannels = integration.provider === "meta_social"
+          ? [stringConfig("facebookPageId") ? "facebook" : null, stringConfig("instagramAccountId") ? "instagram" : null].filter((channel): channel is string => Boolean(channel))
+          : integration.provider === "linkedin_social" && stringConfig("organizationId") ? ["linkedin_social"]
+            : integration.provider === "google_business" && stringConfig("accountId") && stringConfig("locationId") ? ["google_business"]
+              : integration.provider === "tiktok_social" && stringConfig("openId") ? ["tiktok_social"]
+                : integration.provider === "pinterest_social" && stringConfig("boardId") ? ["pinterest_social"]
+                  : integration.provider === "x_social" && stringConfig("userId") ? ["x_social"] : [];
+        return {
+          provider: integration.provider,
+          name: integration.name,
+          purpose: integration.purpose,
+          configured: integration.env.configured,
+          availableChannels,
+          accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
+          profileHandle: typeof integration.config.profileHandle === "string" ? integration.config.profileHandle : "",
+          auditStatus: typeof integration.config.auditStatus === "string" ? integration.config.auditStatus : "",
+          analytics,
+          lastSyncAt: integration.lastSyncAt,
+        };
+      });
+
+    return <CampaignsPage data={{ campaigns, marketingConnections, socialConnections, stats: { total, active, draft, paused, scheduled, sent } }} />;
   }
 
   if (slug === "automations") {
@@ -2805,6 +2950,20 @@ async function renderLivePage(
                   },
                 },
               },
+              payments: {
+                where: { provider: "stripe", status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+                take: 20,
+                select: {
+                  id: true,
+                  amountCents: true,
+                  status: true,
+                  provider: true,
+                  paidAt: true,
+                  externalIdPlaceholder: true,
+                  customFields: true,
+                },
+              },
             },
           },
           children: {
@@ -2935,6 +3094,23 @@ async function renderLivePage(
                         productId: item.productId,
                       })),
                     })),
+                    recentPayments: family.billingAccount.payments.map((payment) => {
+                      const fields = recordFromJson(payment.customFields);
+                      const refundedCents = Math.max(0, Number(fields.stripeAmountRefundedCents) || 0);
+                      return {
+                        id: payment.id,
+                        amountCents: payment.amountCents,
+                        refundedCents,
+                        refundableCents: Math.max(0, payment.amountCents - refundedCents),
+                        status: payment.status,
+                        provider: payment.provider,
+                        paidAt: payment.paidAt,
+                        paymentMethodLabel: typeof fields.paymentMethodLabel === "string" ? fields.paymentMethodLabel : null,
+                        stripePaymentIntentId: typeof fields.stripePaymentIntentId === "string"
+                          ? fields.stripePaymentIntentId
+                          : payment.externalIdPlaceholder?.startsWith("pi_") ? payment.externalIdPlaceholder : null,
+                      };
+                    }),
                   }
                 : null,
               children: family.children.map((child) => ({
@@ -3293,10 +3469,11 @@ async function renderLivePage(
 
   if (slug === "ai-command") {
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
-    const [summaries, suggestions, pendingReview, aiLeads, aiFamilies] = await Promise.all([
+    const aiDayStart = new Date();
+    aiDayStart.setHours(0, 0, 0, 0);
+    const [summaries, suggestions, aiLeads, aiFamilies, unreadMessages, openInvoices, overdueInvoices, pendingIncidents, upcomingTours, aiCheckLogs, aiStaff, classroomCapacity, openComplianceTasks, overdueInvoiceTotal] = await Promise.all([
       prisma.aiSummary.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
-      prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
-      prisma.aiSuggestion.count({ where: { status: "pending_review" } }),
+      prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.lead.findMany({
         where: leadWhere,
         orderBy: [{ score: "desc" }, { createdAt: "desc" }],
@@ -3329,7 +3506,76 @@ async function renderLivePage(
           _count: { select: { children: { where: currentlyEnrolledChildWhere() } } },
         },
       }),
+      prisma.message.count({ where: { readAt: null, family: { centerId: scopedCenterIds } } }),
+      prisma.invoice.count({
+        where: {
+          billingAccount: { family: { centerId: scopedCenterIds } },
+          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
+        },
+      }),
+      prisma.invoice.count({
+        where: {
+          billingAccount: { family: { centerId: scopedCenterIds } },
+          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
+          dueDate: { lt: new Date() },
+        },
+      }),
+      prisma.incidentReport.count({
+        where: {
+          adminReviewStatus: "pending",
+          OR: [
+            { classroom: { is: { centerId: scopedCenterIds } } },
+            { child: { family: { is: { centerId: scopedCenterIds } } } },
+          ],
+        },
+      }),
+      prisma.tour.count({
+        where: { centerId: scopedCenterIds, startsAt: { gte: new Date() } },
+      }),
+      prisma.checkInOutLog.findMany({
+        where: { centerId: scopedCenterIds, occurredAt: { gte: aiDayStart } },
+        orderBy: { occurredAt: "desc" },
+        select: { childId: true, type: true, occurredAt: true },
+      }),
+      prisma.staffProfile.findMany({
+        where: { centerId: scopedCenterIds },
+        select: { customFields: true },
+      }),
+      prisma.classroom.aggregate({
+        where: { centerId: scopedCenterIds },
+        _sum: { capacity: true },
+      }),
+      prisma.complianceTask.count({
+        where: { centerId: scopedCenterIds, status: { notIn: ["completed", "closed", "cancelled"] } },
+      }),
+      prisma.invoice.aggregate({
+        where: {
+          billingAccount: { family: { centerId: scopedCenterIds } },
+          status: { in: [PaymentStatus.OPEN, PaymentStatus.FAILED] },
+          dueDate: { lt: new Date() },
+        },
+        _sum: { totalCents: true },
+      }),
     ]);
+
+    const aiVisibleCenterIds = new Set(centers.map((center) => center.id));
+    const visibleLeadIds = new Set(aiLeads.map((lead) => lead.id));
+    const visibleFamilyIds = new Set(aiFamilies.map((family) => family.id));
+    const visibleSuggestions = suggestions.filter((suggestion) => {
+      const context = jsonRecord(suggestion.promptContext);
+      const segment = jsonRecord(context.segment);
+      const referencedCenterIds = [
+        typeof context.centerId === "string" ? context.centerId : "",
+        ...(Array.isArray(context.centerIds) ? context.centerIds.filter((value): value is string => typeof value === "string") : []),
+        ...(Array.isArray(segment.centerIds) ? segment.centerIds.filter((value): value is string => typeof value === "string") : []),
+      ].filter(Boolean);
+      const familyId = typeof context.familyId === "string" ? context.familyId : "";
+      const leadId = typeof context.leadId === "string" ? context.leadId : "";
+      if (familyId && !visibleFamilyIds.has(familyId)) return false;
+      if (leadId && !visibleLeadIds.has(leadId)) return false;
+      if (referencedCenterIds.some((id) => !aiVisibleCenterIds.has(id))) return false;
+      return Boolean(familyId || leadId || referencedCenterIds.length || tenantWide);
+    }).slice(0, 30);
 
     return (
       <AiCommandPage
@@ -3358,15 +3604,32 @@ async function renderLivePage(
             ...summary,
             createdAt: summary.createdAt.toISOString(),
           })),
-          suggestions: suggestions.map((suggestion) => ({
+          suggestions: visibleSuggestions.map((suggestion) => ({
             id: suggestion.id,
             type: suggestion.type,
+            promptContext: suggestion.promptContext,
             suggestion: suggestion.suggestion,
             status: suggestion.status,
             guardrailNote: suggestion.guardrailNote,
             createdAt: suggestion.createdAt.toISOString(),
           })),
-          stats: { summaries: summaries.length, suggestions: suggestions.length, pendingReview },
+          stats: { summaries: summaries.length, suggestions: visibleSuggestions.length, pendingReview: visibleSuggestions.filter((suggestion) => suggestion.status === "pending_review").length },
+          pulse: {
+            activeChildren: aiFamilies.reduce((total, family) => total + family._count.children, 0),
+            checkedInChildren: Array.from(latestLogMap(aiCheckLogs).values()).filter((log) => log.type === "check_in").length,
+            staffClockedIn: aiStaff.filter((staff) => readStaffClockState(staff.customFields).status === "clocked_in").length,
+            staffTotal: aiStaff.length,
+            licensedCapacity: classroomCapacity._sum.capacity ?? 0,
+            openLeads: aiLeads.length,
+            highIntentLeads: aiLeads.filter((lead) => lead.score >= 75).length,
+            unreadMessages,
+            openInvoices,
+            overdueInvoices,
+            overdueInvoiceCents: overdueInvoiceTotal._sum.totalCents ?? 0,
+            pendingIncidents,
+            upcomingTours,
+            openComplianceTasks,
+          },
         }}
       />
     );
@@ -3981,6 +4244,9 @@ async function renderLivePage(
       webhooks,
       imports,
       auditLogs,
+      platformUsers,
+      softwareCenters,
+      monthlyPayments,
     ] = await Promise.all([
       prisma.auditLog.count({ where: auditWhere }),
       prisma.auditLog.count({ where: { ...auditWhere, action: { startsWith: "operations." } } }),
@@ -4058,7 +4324,38 @@ async function renderLivePage(
           center: { select: { name: true, crmLocationId: true } },
         },
       }),
+      prisma.user.groupBy({ where: { tenantId: user.tenantId }, by: ["isActive"], _count: { _all: true } }),
+      prisma.center.findMany({ where: { organization: { tenantId: user.tenantId }, status: { notIn: ["closed", "archived"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, customFields: true } }),
+      prisma.payment.findMany({ where: { status: PaymentStatus.PAID, paidAt: { gte: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, billingAccount: { family: { centerId: { in: centers.map((item) => item.id) } } } }, select: { amountCents: true, customFields: true } }),
     ]);
+
+    const unitAmountCents = getKidCitySoftwareFeeUnitAmountCents();
+    const softwareSubscriptions = await Promise.all(softwareCenters.map(async (school) => {
+      const fields = jsonRecord(school.customFields);
+      const activeUsers = await countCenterBillableUsers(prisma, school.id);
+      return {
+        id: school.id,
+        name: school.name,
+        activeUsers,
+        monthlyAmountCents: activeUsers * unitAmountCents,
+        customerReady: typeof fields.stripeSoftwareCustomerId === "string" && fields.stripeSoftwareCustomerId.startsWith("cus_"),
+        paymentMethodReady: typeof fields.stripeSoftwareDefaultPaymentMethodId === "string" && fields.stripeSoftwareDefaultPaymentMethodId.startsWith("pm_"),
+        subscriptionId: typeof fields.stripeSoftwareSubscriptionId === "string" ? fields.stripeSoftwareSubscriptionId : null,
+        status: typeof fields.stripeSoftwareSubscriptionStatus === "string" ? fields.stripeSoftwareSubscriptionStatus : "not_started",
+        cancelAtPeriodEnd: fields.stripeSoftwareCancelAtPeriodEnd === true,
+        currentPeriodEnd: typeof fields.stripeSoftwareCurrentPeriodEnd === "string" ? fields.stripeSoftwareCurrentPeriodEnd : null,
+        lastInvoiceStatus: typeof fields.stripeSoftwareLatestInvoiceStatus === "string" ? fields.stripeSoftwareLatestInvoiceStatus : null,
+        lastInvoiceAmountCents: typeof fields.stripeSoftwareLatestInvoiceAmountCents === "number" ? fields.stripeSoftwareLatestInvoiceAmountCents : null,
+      };
+    }));
+    const paymentTotals = monthlyPayments.reduce((total, payment) => {
+      const fields = jsonRecord(payment.customFields);
+      total.processed += payment.amountCents;
+      total.fees += typeof fields.beeSuitePaymentOperationsFeeAmountCents === "number" ? fields.beeSuitePaymentOperationsFeeAmountCents : 0;
+      return total;
+    }, { processed: 0, fees: 0 });
+    const activeUsers = platformUsers.find((row) => row.isActive)?._count._all ?? 0;
+    const inactiveUsers = platformUsers.find((row) => !row.isActive)?._count._all ?? 0;
 
     return (
       <DeveloperDashboardPage
@@ -4072,7 +4369,14 @@ async function renderLivePage(
             failedDeliveries,
             webhookErrors,
             procareImports,
+            activeUsers,
+            inactiveUsers,
+            subscriptionMrrCents: softwareSubscriptions.filter((row) => ["active", "trialing", "past_due"].includes(row.status)).reduce((sum, row) => sum + row.monthlyAmountCents, 0),
+            tuitionProcessedCents: paymentTotals.processed,
+            beeSuiteFeesCents: paymentTotals.fees,
+            schoolNetCents: Math.max(0, paymentTotals.processed - paymentTotals.fees),
           },
+          softwareSubscriptions,
           integrations,
           deliveries,
           webhooks,
@@ -4142,7 +4446,8 @@ async function renderLivePage(
           },
           recentDeliveries,
           setupIntegrations,
-          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER,
+          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR,
+          manageableProviders: user.role === UserRole.CENTER_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
           integrations: setupIntegrations.map((integration) => ({
             name: integration.name,
             purpose: integration.purpose,
@@ -5358,17 +5663,77 @@ export async function renderAuthenticatedModulePage(
     redirect(`/reset-password?force=1&next=/${encodeURIComponent(slug)}`);
   }
 
+  if (slug === "enrollment-pipeline") redirect("/crm-leads?view=pipeline");
+  if (slug === "tours") redirect("/crm-leads?view=tours");
+  if (slug === "waitlist") redirect("/crm-leads?view=waitlist");
+  if (slug === "automations") redirect("/campaigns?view=automations");
+  if (slug === "attendance") redirect("/classroom-dashboard?view=attendance");
+  if (slug === "daily-reports") redirect("/classroom-dashboard?view=reports");
+  if (slug === "incident-reports") redirect("/classroom-dashboard?view=incidents");
+  if (slug === "child-profile") redirect("/family-detail?view=children");
+  if (slug === "messages") redirect("/family-detail?view=messages");
+  if (slug === "parent-media-review") redirect("/family-detail?view=media");
+  if (slug === "payments") redirect("/billing-invoices?view=payments");
+  if (slug === "documents") redirect("/forms?view=documents");
+  if (slug === "compliance") redirect("/forms?view=compliance");
+  if (slug === "reputation") redirect("/analytics?view=reputation");
+  if (slug === "team-permissions") redirect("/staff?view=permissions");
+  if (slug === "integrations") redirect("/billing-settings?view=integrations");
+  if (slug === "school-setup") redirect("/billing-settings?view=setup");
+  if (slug === "notifications") redirect("/billing-settings?view=notifications");
+  if (slug === "white-label") redirect("/billing-settings?view=branding");
+
+  const requestedView = firstSearchParam(resolvedSearchParams.view);
+  const enrollmentView: "leads" | "pipeline" | "tours" | "waitlist" = slug === "crm-leads" && requestedView === "pipeline"
+    ? "pipeline"
+    : slug === "crm-leads" && requestedView === "tours"
+      ? "tours"
+      : slug === "crm-leads" && requestedView === "waitlist"
+        ? "waitlist"
+        : "leads";
+  const growthView: "campaigns" | "automations" = slug === "campaigns" && requestedView === "automations" ? "automations" : "campaigns";
+  const operationsView = slug === "classroom-dashboard" && ["attendance", "reports", "incidents"].includes(requestedView ?? "") ? requestedView! : "classrooms";
+  const familiesView = slug === "family-detail" && ["children", "messages", "media"].includes(requestedView ?? "") ? requestedView! : "families";
+  const billingView = slug === "billing-invoices" && requestedView === "payments" ? "payments" : "billing";
+  const recordsView = slug === "forms" && ["documents", "compliance"].includes(requestedView ?? "") ? requestedView! : "forms";
+  const insightsView = slug === "analytics" && requestedView === "reputation" ? "reputation" : "analytics";
+  const staffView = slug === "staff" && requestedView === "permissions" ? "permissions" : "teachers";
+  const settingsView = slug === "billing-settings" && ["integrations", "setup", "notifications", "branding"].includes(requestedView ?? "") ? requestedView! : "settings";
+  const effectiveSlug = slug === "crm-leads"
+    ? enrollmentView === "leads" ? "crm-leads" : enrollmentView === "pipeline" ? "enrollment-pipeline" : enrollmentView
+    : slug === "campaigns" && growthView === "automations" ? "automations"
+      : slug === "classroom-dashboard" ? operationsView === "reports" ? "daily-reports" : operationsView === "incidents" ? "incident-reports" : operationsView === "attendance" ? "attendance" : slug
+        : slug === "family-detail" ? familiesView === "children" ? "child-profile" : familiesView === "messages" ? "messages" : familiesView === "media" ? "parent-media-review" : slug
+          : slug === "billing-invoices" && billingView === "payments" ? "payments"
+            : slug === "forms" ? recordsView === "documents" ? "documents" : recordsView === "compliance" ? "compliance" : slug
+              : slug === "analytics" && insightsView === "reputation" ? "reputation"
+                : slug === "staff" && staffView === "permissions" ? "team-permissions"
+                  : slug === "billing-settings" ? settingsView === "integrations" ? "integrations" : settingsView === "setup" ? "school-setup" : settingsView === "notifications" ? "notifications" : settingsView === "branding" ? "white-label" : slug
+                    : slug;
+
   if (slug === "teacher-portal" && !canAccessModule(user, slug)) {
     redirect(canAccessModule(user, "classroom-dashboard") ? "/classroom-dashboard" : "/dashboard");
   }
 
-  if (!canAccessModule(user, slug)) {
+  if (!canAccessModule(user, slug) || !canAccessModule(user, effectiveSlug)) {
     notFound();
   }
 
-  const livePage = await renderLivePage(slug, user, resolvedSearchParams);
+  const allowedViews = (entries: ReadonlyArray<readonly [string, string]>) => entries.filter(([, moduleSlug]) => canAccessModule(user, moduleSlug)).map(([view]) => view);
+  const livePage = await renderLivePage(effectiveSlug, user, resolvedSearchParams);
   if (livePage) {
-    return <AppShell currentUser={user}>{livePage}</AppShell>;
+    return <AppShell currentUser={user}>
+      {slug === "crm-leads" ? <ConsolidatedWorkspaceNav workspace="enrollment" activeView={enrollmentView} /> : null}
+      {slug === "campaigns" ? <ConsolidatedWorkspaceNav workspace="growth" activeView={growthView} /> : null}
+      {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["classrooms", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}
+      {slug === "family-detail" ? <ConsolidatedWorkspaceNav workspace="families" activeView={familiesView} allowedViews={allowedViews([["families", "family-detail"], ["children", "child-profile"], ["messages", "messages"], ["media", "parent-media-review"]])} /> : null}
+      {slug === "billing-invoices" ? <ConsolidatedWorkspaceNav workspace="billing" activeView={billingView} allowedViews={allowedViews([["billing", "billing-invoices"], ["payments", "payments"]])} /> : null}
+      {slug === "forms" ? <ConsolidatedWorkspaceNav workspace="records" activeView={recordsView} allowedViews={allowedViews([["forms", "forms"], ["documents", "documents"], ["compliance", "compliance"]])} /> : null}
+      {slug === "analytics" ? <ConsolidatedWorkspaceNav workspace="insights" activeView={insightsView} allowedViews={allowedViews([["analytics", "analytics"], ["reputation", "reputation"]])} /> : null}
+      {slug === "staff" ? <ConsolidatedWorkspaceNav workspace="staff" activeView={staffView} allowedViews={allowedViews([["teachers", "staff"], ["permissions", "team-permissions"]])} /> : null}
+      {slug === "billing-settings" ? <ConsolidatedWorkspaceNav workspace="settings" activeView={settingsView} allowedViews={allowedViews([["settings", "billing-settings"], ["integrations", "integrations"], ["setup", "school-setup"], ["notifications", "notifications"], ["branding", "white-label"]])} /> : null}
+      {livePage}
+    </AppShell>;
   }
 
   notFound();

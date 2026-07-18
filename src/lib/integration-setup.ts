@@ -1,6 +1,29 @@
 import { credentialPresenceFromKeys, integrationCredentialFields, type IntegrationCredentialField, type IntegrationCredentialPresence } from "@/lib/integration-credentials";
 
-export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "google_calendar" | "openai" | "stripe" | "twilio";
+export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "google_calendar" | "openai" | "stripe" | "twilio" | "meta_ads" | "google_ads" | "tiktok_ads" | "linkedin_ads" | "microsoft_ads" | "meta_social" | "linkedin_social" | "google_business" | "tiktok_social" | "pinterest_social" | "x_social";
+
+export const AD_INTEGRATION_PROVIDERS: IntegrationProvider[] = [
+  "meta_ads",
+  "google_ads",
+  "tiktok_ads",
+  "linkedin_ads",
+  "microsoft_ads",
+];
+
+export const SOCIAL_INTEGRATION_PROVIDERS: IntegrationProvider[] = [
+  "meta_social",
+  "linkedin_social",
+  "google_business",
+  "tiktok_social",
+  "pinterest_social",
+  "x_social",
+];
+
+export const MARKETING_INTEGRATION_PROVIDERS: IntegrationProvider[] = [...AD_INTEGRATION_PROVIDERS, ...SOCIAL_INTEGRATION_PROVIDERS];
+
+export function isMarketingIntegrationProvider(provider: IntegrationProvider) {
+  return MARKETING_INTEGRATION_PROVIDERS.includes(provider);
+}
 
 export type IntegrationDisplayStatus = "Connected" | "Configured" | "Missing" | "Placeholder";
 export type IntegrationSetupStatus = "not_started" | "in_progress" | "needs_credentials" | "ready_for_test" | "verified";
@@ -156,6 +179,162 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
       },
       { key: "syncOwner", label: "Calendar owner", type: "email", placeholder: "director@example.com" },
       { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Calendar sharing, OAuth app, and sync ownership notes" },
+    ],
+  },
+  {
+    provider: "meta_ads",
+    name: "Meta Ads",
+    purpose: "Facebook and Instagram Campaigns",
+    detail: "Links the school's Meta ad account, Facebook Page, and Instagram profile for campaign reporting and lead attribution.",
+    envRequirements: [{ label: "Meta access token", names: ["META_ADS_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "adAccountId", label: "Ad account ID", type: "text", placeholder: "act_123456789" },
+      { key: "facebookPageId", label: "Facebook Page ID", type: "text", placeholder: "Page ID" },
+      { key: "instagramAccountId", label: "Instagram business account ID", type: "text", placeholder: "Instagram account ID" },
+      { key: "accountLabel", label: "Account label", type: "text", placeholder: "School enrollment campaigns" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Ownership, permissions, and attribution notes" },
+    ],
+  },
+  {
+    provider: "google_ads",
+    name: "Google Ads",
+    purpose: "Search, Display, YouTube, and Local Campaigns",
+    detail: "Links the school's Google Ads customer and optional manager account for spend, lead, conversion, and channel reporting.",
+    envRequirements: [
+      { label: "Developer token", names: ["GOOGLE_ADS_DEVELOPER_TOKEN"] },
+      { label: "OAuth refresh token", names: ["GOOGLE_ADS_REFRESH_TOKEN"] },
+      { label: "OAuth client", names: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] },
+    ],
+    fields: [
+      { key: "customerId", label: "Customer ID", type: "text", placeholder: "123-456-7890" },
+      { key: "managerCustomerId", label: "Manager customer ID", type: "text", placeholder: "Optional MCC ID" },
+      { key: "conversionAction", label: "Primary conversion action", type: "text", placeholder: "Enrollment inquiry" },
+      { key: "accountLabel", label: "Account label", type: "text", placeholder: "School Google Ads" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Tracking and conversion notes" },
+    ],
+  },
+  {
+    provider: "tiktok_ads",
+    name: "TikTok Ads",
+    purpose: "TikTok Business Campaigns",
+    detail: "Links a TikTok Business advertiser account for campaign delivery, engagement, lead, and cost reporting.",
+    envRequirements: [{ label: "TikTok access token", names: ["TIKTOK_ADS_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "advertiserId", label: "Advertiser ID", type: "text", placeholder: "Advertiser ID" },
+      { key: "businessCenterId", label: "Business Center ID", type: "text", placeholder: "Optional Business Center ID" },
+      { key: "profileHandle", label: "TikTok profile", type: "text", placeholder: "@schoolprofile" },
+      { key: "accountLabel", label: "Account label", type: "text", placeholder: "School TikTok Ads" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Pixel, events, and attribution notes" },
+    ],
+  },
+  {
+    provider: "linkedin_ads",
+    name: "LinkedIn Ads",
+    purpose: "LinkedIn Campaign Manager",
+    detail: "Links a LinkedIn ad account and organization page for hiring, employer brand, and enrollment campaign reporting.",
+    envRequirements: [{ label: "LinkedIn access token", names: ["LINKEDIN_ADS_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "adAccountId", label: "Ad account ID", type: "text", placeholder: "LinkedIn account ID" },
+      { key: "organizationId", label: "Organization Page ID", type: "text", placeholder: "Organization ID" },
+      { key: "accountLabel", label: "Account label", type: "text", placeholder: "School LinkedIn" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Campaign and lead form notes" },
+    ],
+  },
+  {
+    provider: "microsoft_ads",
+    name: "Microsoft Advertising",
+    purpose: "Bing Search and Audience Campaigns",
+    detail: "Links Microsoft Advertising for search, audience, lead, conversion, and cost reporting alongside Google Ads.",
+    envRequirements: [
+      { label: "Developer token", names: ["MICROSOFT_ADS_DEVELOPER_TOKEN"] },
+      { label: "OAuth refresh token", names: ["MICROSOFT_ADS_REFRESH_TOKEN"] },
+      { label: "OAuth client", names: ["MICROSOFT_ADS_CLIENT_ID", "MICROSOFT_ADS_CLIENT_SECRET"] },
+    ],
+    fields: [
+      { key: "accountId", label: "Account ID", type: "text", placeholder: "Microsoft Ads account ID" },
+      { key: "customerId", label: "Customer ID", type: "text", placeholder: "Customer ID" },
+      { key: "accountLabel", label: "Account label", type: "text", placeholder: "School Microsoft Ads" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "UET and conversion notes" },
+    ],
+  },
+  {
+    provider: "meta_social",
+    name: "Facebook & Instagram",
+    purpose: "Page Publishing and Social Insights",
+    detail: "Connects a Facebook Page and Instagram professional account for approved publishing, post history, and owned-profile insights.",
+    envRequirements: [{ label: "Meta Page access token", names: ["META_SOCIAL_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "facebookPageId", label: "Facebook Page ID", type: "text", placeholder: "Page ID" },
+      { key: "instagramAccountId", label: "Instagram professional account ID", type: "text", placeholder: "Instagram account ID" },
+      { key: "profileHandle", label: "Instagram handle", type: "text", placeholder: "@school" },
+      { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School social profiles" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Meta app review and Page ownership notes" },
+    ],
+  },
+  {
+    provider: "linkedin_social",
+    name: "LinkedIn Pages",
+    purpose: "Organization Publishing and Analytics",
+    detail: "Connects an organization Page for posts and engagement reporting after LinkedIn Community Management approval.",
+    envRequirements: [{ label: "LinkedIn access token", names: ["LINKEDIN_SOCIAL_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "organizationId", label: "Organization ID", type: "text", placeholder: "Organization ID" },
+      { key: "vanityName", label: "Page vanity name", type: "text", placeholder: "kid-city-usa" },
+      { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School LinkedIn Page" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Community Management approval notes" },
+    ],
+  },
+  {
+    provider: "google_business",
+    name: "Google Business Profile",
+    purpose: "Local Posts and Profile Performance",
+    detail: "Connects a verified location for local updates, events, offers, calls, website clicks, directions, and search visibility metrics.",
+    envRequirements: [{ label: "Google Business OAuth token", names: ["GOOGLE_BUSINESS_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "accountId", label: "Business account ID", type: "text", placeholder: "Account ID" },
+      { key: "locationId", label: "Location ID", type: "text", placeholder: "Location ID" },
+      { key: "accountLabel", label: "Location label", type: "text", placeholder: "School Google Business Profile" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Verification and OAuth notes" },
+    ],
+  },
+  {
+    provider: "tiktok_social",
+    name: "TikTok",
+    purpose: "Video Publishing and Creator Data",
+    detail: "Connects a creator or business profile. Public Direct Post requires TikTok audit; unaudited clients can publish private-only test posts.",
+    envRequirements: [{ label: "TikTok user access token", names: ["TIKTOK_SOCIAL_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "openId", label: "TikTok Open ID", type: "text", placeholder: "Open ID" },
+      { key: "profileHandle", label: "TikTok handle", type: "text", placeholder: "@school" },
+      { key: "auditStatus", label: "Content Posting audit", type: "select", options: [{ value: "not_submitted", label: "Not submitted" }, { value: "in_review", label: "In review" }, { value: "approved", label: "Approved" }] },
+      { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School TikTok" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Audit and consent notes" },
+    ],
+  },
+  {
+    provider: "pinterest_social",
+    name: "Pinterest",
+    purpose: "Pin Publishing and Organic Analytics",
+    detail: "Connects a Pinterest business account and board for Pins, outbound clicks, saves, impressions, and engagement reporting.",
+    envRequirements: [{ label: "Pinterest access token", names: ["PINTEREST_SOCIAL_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "boardId", label: "Default board ID", type: "text", placeholder: "Board ID" },
+      { key: "profileHandle", label: "Pinterest profile", type: "text", placeholder: "Profile name" },
+      { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School Pinterest" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Board and app review notes" },
+    ],
+  },
+  {
+    provider: "x_social",
+    name: "X",
+    purpose: "Post Publishing and Engagement Metrics",
+    detail: "Connects an X account for posts and owned-post engagement metrics, subject to the active X API access tier.",
+    envRequirements: [{ label: "X user access token", names: ["X_SOCIAL_ACCESS_TOKEN"] }],
+    fields: [
+      { key: "userId", label: "X user ID", type: "text", placeholder: "User ID" },
+      { key: "profileHandle", label: "X handle", type: "text", placeholder: "@school" },
+      { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School X account" },
+      { key: "notes", label: "Setup notes", type: "textarea", placeholder: "API tier and OAuth notes" },
     ],
   },
   {

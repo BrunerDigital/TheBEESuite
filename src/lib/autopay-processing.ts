@@ -440,6 +440,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       centerName: center.name,
       customerId: scopedStripeCustomerId,
       paymentMethodId: paymentMethod.stripeDefaultPaymentMethodId!,
+      paymentMethodType: paymentMethod.paymentMethodType,
       customerEmail: family.billingEmail,
       metadata: {
         tenantId,

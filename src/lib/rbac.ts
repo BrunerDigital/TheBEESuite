@@ -25,7 +25,6 @@ const executiveOnlyModules = new Set<ModuleSlug>([
   "agency-admin",
   "developer-dashboard",
   "white-label",
-  "integrations",
 ]);
 
 const enrollmentModules = new Set<ModuleSlug>([
@@ -56,6 +55,7 @@ const schoolAdminModules = new Set<ModuleSlug>([
   "audit-logs",
   "ai-command",
   "staff",
+  "integrations",
 ]);
 
 const classroomModules = new Set<ModuleSlug>([
@@ -124,6 +124,7 @@ export function canAccessModule(subject: AccessSubject, slug: string) {
   if (slug === "teacher-portal") return role === "TEACHER";
   if (role === "READ_ONLY_AUDITOR") return readOnlyAuditorModules.has(slug as ModuleSlug);
   if (slug === "terminal-store") return terminalStoreRoles.has(role);
+  if (slug === "asset-hub") return ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER", "CENTER_DIRECTOR", "ASSISTANT_DIRECTOR"].includes(role);
   if (slug === "corporate-billing") return hasTenantWideUiAccess(subject);
   if (executiveOnlyModules.has(slug as ModuleSlug)) return hasTenantWideUiAccess(subject);
   if (hasTenantWideUiAccess(subject)) return true;

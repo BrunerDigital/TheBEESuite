@@ -244,11 +244,18 @@ export function getStripeCardProcessingRecoveryFixedCents() {
 export function getStripePaymentMethodConfigurationId(paymentMethodCategory: StripePaymentMethodCategory) {
   if (paymentMethodCategory === "ach") return clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
   if (paymentMethodCategory === "card") return clean(process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION_ID);
-  if (paymentMethodCategory === "link_bank") {
-    return clean(process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID) ||
-      clean(process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID);
-  }
   return "";
+}
+
+export function requiresStripePaymentMethodConfiguration(paymentMethodCategory: StripePaymentMethodCategory) {
+  return paymentMethodCategory === "ach" || paymentMethodCategory === "card";
+}
+
+function stripeCheckoutPaymentMethodTypes(paymentMethodCategory: StripePaymentMethodCategory) {
+  if (paymentMethodCategory === "link_bank") return ["link"];
+  if (paymentMethodCategory === "ach") return ["us_bank_account"];
+  if (paymentMethodCategory === "card") return ["card"];
+  return [];
 }
 
 function stripeSetupPaymentMethodTypes(paymentMethodCategory: StripePaymentMethodCategory) {
@@ -703,7 +710,7 @@ export async function createStripeCheckoutSession({
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
 
-  const fallbackPaymentMethodTypes = stripeSetupPaymentMethodTypes(paymentMethodCategory);
+  const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
   type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
 
   function buildBody(paymentMethodMode: CheckoutPaymentMethodMode) {
@@ -742,7 +749,7 @@ export async function createStripeCheckoutSession({
       addIndexedParams(body, "payment_method_types", fallbackPaymentMethodTypes);
     }
 
-    if (bankAccountVerificationMethod === "instant") {
+    if (bankAccountVerificationMethod === "instant" && paymentMethodCategory !== "link_bank") {
       body.set("payment_method_options[us_bank_account][verification_method]", "instant");
       body.set("payment_method_options[us_bank_account][financial_connections][permissions][0]", "payment_method");
     }
@@ -780,7 +787,7 @@ export async function createStripeCheckoutSession({
   }
 
   const paymentMethodModes: CheckoutPaymentMethodMode[] = [
-    ...(paymentMethodConfigurationId ? ["configuration" as const] : []),
+    ...(paymentMethodConfigurationId && paymentMethodCategory !== "link_bank" ? ["configuration" as const] : []),
     ...(fallbackPaymentMethodTypes.length ? ["payment_method_types" as const] : []),
     "dynamic",
   ];
@@ -930,6 +937,7 @@ export async function createStripeOffSessionPaymentIntent({
   centerName,
   customerId,
   paymentMethodId,
+  paymentMethodType,
   customerEmail,
   metadata,
   connectedAccountId,
@@ -946,6 +954,7 @@ export async function createStripeOffSessionPaymentIntent({
   centerName?: string | null;
   customerId: string;
   paymentMethodId: string;
+  paymentMethodType?: string | null;
   customerEmail?: string | null;
   metadata: Record<string, string>;
   connectedAccountId?: string | null;
@@ -980,6 +989,11 @@ export async function createStripeOffSessionPaymentIntent({
     off_session: "true",
     description,
   });
+
+  const savedPaymentMethodType = clean(paymentMethodType);
+  if (savedPaymentMethodType === "card" || savedPaymentMethodType === "us_bank_account") {
+    body.set("payment_method_types[0]", savedPaymentMethodType);
+  }
 
   if (customerEmail && isEmail(customerEmail)) {
     body.set("receipt_email", customerEmail);
@@ -1088,6 +1102,180 @@ export async function createStripeCustomer({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id };
+}
+
+export async function createStripeRefund({
+  paymentIntentId,
+  amountCents,
+  reason,
+  metadata,
+  connectedAccountId,
+  idempotencyKey,
+  tenantId,
+  credentials,
+}: {
+  paymentIntentId: string;
+  amountCents: number;
+  reason: string;
+  metadata?: Record<string, string>;
+  connectedAccountId?: string | null;
+  idempotencyKey: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { refund?: { id: string; amountCents: number; status: string | null } }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  if (!clean(paymentIntentId).startsWith("pi_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "The original Stripe payment could not be identified." };
+  }
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    return { ok: false, configured: true, provider: "stripe", error: "Refund amount must be greater than zero." };
+  }
+
+  const body = new URLSearchParams({
+    payment_intent: paymentIntentId,
+    amount: String(amountCents),
+    reason: "requested_by_customer",
+  });
+  if (clean(connectedAccountId).startsWith("acct_")) body.set("refund_application_fee", "true");
+  body.set("metadata[beeSuiteReason]", clean(reason).slice(0, 500));
+  Object.entries(metadata ?? {}).forEach(([key, value]) => body.set(`metadata[${key}]`, value));
+
+  const response = await fetch("https://api.stripe.com/v1/refunds", {
+    method: "POST",
+    headers: {
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      "Idempotency-Key": idempotencyKey,
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as {
+    id?: string;
+    amount?: number;
+    status?: string | null;
+    error?: { message?: string };
+  } | null;
+  if (!response.ok || !json?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(json?.error?.message) || "Stripe could not issue the refund.",
+    };
+  }
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: json.id,
+    refund: { id: json.id, amountCents: json.amount ?? amountCents, status: clean(json.status) || null },
+  };
+}
+
+export async function setStripeCustomerDefaultPaymentMethod({
+  customerId,
+  paymentMethodId,
+  tenantId,
+  credentials,
+}: {
+  customerId: string;
+  paymentMethodId: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  if (!clean(customerId).startsWith("cus_") || !clean(paymentMethodId).startsWith("pm_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A valid customer and payment method are required." };
+  }
+  const response = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(customerId)}`, {
+    method: "POST",
+    headers: connectedStripeHeaders(apiKey, "form"),
+    body: new URLSearchParams({ "invoice_settings[default_payment_method]": paymentMethodId }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!response.ok || !json?.id) {
+    return { ok: false, configured: true, provider: "stripe", error: json?.error?.message || `Payment processor returned ${response.status}.` };
+  }
+  return { ok: true, configured: true, provider: "stripe", id: json.id };
+}
+
+export type StripeSoftwareSubscriptionSnapshot = {
+  id: string;
+  status: string;
+  customerId: string;
+  priceId: string | null;
+  itemId: string | null;
+  quantity: number;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  latestInvoiceId: string | null;
+};
+
+function stripeTimestamp(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000).toISOString() : null;
+}
+
+export async function ensureStripeSoftwareRecurringPrice({ tenantId, unitAmountCents }: { tenantId?: string | null; unitAmountCents: number }) {
+  const apiKey = await getStripeSecretKey({ tenantId });
+  if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
+  const configuredPriceId = clean(process.env.STRIPE_SCHOOL_SOFTWARE_PRICE_ID);
+  if (configuredPriceId.startsWith("price_")) return { ok: true as const, configured: true, priceId: configuredPriceId };
+  const lookupKey = `bee_suite_school_user_monthly_${unitAmountCents}`;
+  const lookupResponse = await fetch(`https://api.stripe.com/v1/prices?active=true&lookup_keys[]=${encodeURIComponent(lookupKey)}&limit=1`, {
+    headers: stripeHeaders(apiKey, "form"), signal: AbortSignal.timeout(10_000),
+  });
+  const lookup = await lookupResponse.json().catch(() => null) as { data?: Array<{ id?: string }>; error?: { message?: string } } | null;
+  if (lookupResponse.ok && lookup?.data?.[0]?.id) return { ok: true as const, configured: true, priceId: lookup.data[0].id };
+  const productBody = new URLSearchParams({ name: "The BEE Suite school software access", "metadata[billingScope]": "school_software_fee" });
+  const productResponse = await fetch("https://api.stripe.com/v1/products", { method: "POST", headers: stripeHeaders(apiKey, "form"), body: productBody, signal: AbortSignal.timeout(10_000) });
+  const product = await productResponse.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!productResponse.ok || !product?.id) return { ok: false as const, configured: true, error: product?.error?.message || "Software billing product could not be created." };
+  const priceBody = new URLSearchParams({ currency: "usd", unit_amount: String(unitAmountCents), product: product.id, lookup_key: lookupKey, "recurring[interval]": "month", "metadata[billingScope]": "school_software_fee" });
+  const priceResponse = await fetch("https://api.stripe.com/v1/prices", { method: "POST", headers: stripeHeaders(apiKey, "form"), body: priceBody, signal: AbortSignal.timeout(10_000) });
+  const price = await priceResponse.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+  if (!priceResponse.ok || !price?.id) return { ok: false as const, configured: true, error: price?.error?.message || "Monthly software price could not be created." };
+  return { ok: true as const, configured: true, priceId: price.id };
+}
+
+function softwareSubscriptionSnapshot(json: Record<string, unknown>): StripeSoftwareSubscriptionSnapshot {
+  const items = asRecord(json.items);
+  const first = Array.isArray(items.data) ? asRecord(items.data[0]) : {};
+  const price = asRecord(first.price);
+  return {
+    id: clean(json.id), status: clean(json.status) || "unknown", customerId: clean(json.customer),
+    priceId: clean(price.id) || null, itemId: clean(first.id) || null,
+    quantity: typeof first.quantity === "number" ? first.quantity : 0,
+    currentPeriodStart: stripeTimestamp(first.current_period_start ?? json.current_period_start),
+    currentPeriodEnd: stripeTimestamp(first.current_period_end ?? json.current_period_end),
+    cancelAtPeriodEnd: json.cancel_at_period_end === true,
+    latestInvoiceId: clean(json.latest_invoice) || clean(asRecord(json.latest_invoice).id) || null,
+  };
+}
+
+export async function createStripeSoftwareSubscription({ customerId, priceId, quantity, tenantId, centerId }: { customerId: string; priceId: string; quantity: number; tenantId?: string | null; centerId: string }) {
+  const apiKey = await getStripeSecretKey({ tenantId });
+  if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
+  const body = new URLSearchParams({ customer: customerId, "items[0][price]": priceId, "items[0][quantity]": String(Math.max(1, quantity)), payment_behavior: "default_incomplete", "payment_settings[save_default_payment_method]": "on_subscription", "metadata[tenantId]": tenantId || "", "metadata[centerId]": centerId, "metadata[paymentScope]": "school_software_fee", expand: "latest_invoice" });
+  const response = await fetch("https://api.stripe.com/v1/subscriptions", { method: "POST", headers: { ...stripeHeaders(apiKey, "form"), "Idempotency-Key": `school-software:${centerId}` }, body, signal: AbortSignal.timeout(10_000) });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !json?.id) return { ok: false as const, configured: true, error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.` };
+  return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };
+}
+
+export async function updateStripeSoftwareSubscription({ subscriptionId, itemId, quantity, cancelAtPeriodEnd, tenantId }: { subscriptionId: string; itemId?: string | null; quantity?: number; cancelAtPeriodEnd?: boolean; tenantId?: string | null }) {
+  const apiKey = await getStripeSecretKey({ tenantId });
+  if (!apiKey) return { ok: false as const, configured: false, error: "Payment processor is not configured." };
+  const body = new URLSearchParams({ proration_behavior: "create_prorations", expand: "latest_invoice" });
+  if (itemId && quantity !== undefined) { body.set("items[0][id]", itemId); body.set("items[0][quantity]", String(Math.max(1, quantity))); }
+  if (cancelAtPeriodEnd !== undefined) body.set("cancel_at_period_end", String(cancelAtPeriodEnd));
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: "POST", headers: stripeHeaders(apiKey, "form"), body, signal: AbortSignal.timeout(10_000) });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !json?.id) return { ok: false as const, configured: true, error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.` };
+  return { ok: true as const, configured: true, subscription: softwareSubscriptionSnapshot(json) };
 }
 
 export async function createStripeInvoice({

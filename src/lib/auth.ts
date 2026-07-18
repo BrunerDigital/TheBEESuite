@@ -431,6 +431,16 @@ export function getLeadScopeWhere(user: CurrentUser) {
   return { id: { in: user.centerIds } };
 }
 
+export function getDashboardCenterScopeWhere(user: CurrentUser) {
+  if (user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR) {
+    return user.primaryCenterId
+      ? { id: user.primaryCenterId }
+      : { id: "__no_authorized_center__" };
+  }
+
+  return getLeadScopeWhere(user);
+}
+
 export function canAccessCenter(user: CurrentUser, centerId: string) {
   return (
     user.role === UserRole.PLATFORM_OWNER ||

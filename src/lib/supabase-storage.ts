@@ -6,6 +6,7 @@ export const CHILD_MEDIA_BUCKET = process.env.SUPABASE_CHILD_MEDIA_BUCKET || "ch
 export const DOCUMENT_BUCKET = process.env.SUPABASE_DOCUMENT_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
 export const MESSAGE_ATTACHMENT_BUCKET = process.env.SUPABASE_MESSAGE_ATTACHMENT_BUCKET || DOCUMENT_BUCKET;
 export const PROFILE_PHOTO_BUCKET = process.env.SUPABASE_PROFILE_PHOTO_BUCKET || process.env.SUPABASE_CHILD_MEDIA_BUCKET || "child-media";
+export const ASSET_HUB_BUCKET = process.env.SUPABASE_ASSET_HUB_BUCKET || "corporate-assets";
 export const CHILD_MEDIA_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_CHILD_MEDIA_SIGNED_URL_SECONDS || 60 * 60 * 2);
 export const DOCUMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_DOCUMENT_SIGNED_URL_SECONDS || 60 * 60);
 export const MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS = Number(process.env.SUPABASE_MESSAGE_ATTACHMENT_SIGNED_URL_SECONDS || 60 * 60 * 2);
@@ -37,6 +38,38 @@ export function getSupabaseStorageClient(): StorageClient {
       persistSession: false,
     },
   });
+}
+
+export async function ensureAssetHubBucket() {
+  const client = getSupabaseStorageClient();
+  const { data } = await client.storage.getBucket(ASSET_HUB_BUCKET);
+  if (data) return;
+  const { error } = await client.storage.createBucket(ASSET_HUB_BUCKET, { public: false });
+  if (error && !/already exists/i.test(error.message)) throw new Error(error.message);
+}
+
+export async function createAssetHubUploadUrl(storageKey: string) {
+  await ensureAssetHubBucket();
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.from(ASSET_HUB_BUCKET).createSignedUploadUrl(storageKey);
+  if (error || !data?.token) throw new Error(error?.message || "Could not prepare the asset upload.");
+  return { token: data.token, path: data.path };
+}
+
+export async function createAssetHubSignedUrl(storageKey: string, downloadName?: string, expiresIn = 60 * 60) {
+  const client = getSupabaseStorageClient();
+  const { data, error } = await client.storage.from(ASSET_HUB_BUCKET).createSignedUrl(
+    storageKey,
+    expiresIn,
+    downloadName ? { download: downloadName } : undefined,
+  );
+  if (error || !data?.signedUrl) throw new Error(error?.message || "Could not create a secure asset link.");
+  return data.signedUrl;
+}
+
+export async function deleteAssetHubObject(storageKey: string) {
+  const { error } = await getSupabaseStorageClient().storage.from(ASSET_HUB_BUCKET).remove([storageKey]);
+  if (error) throw new Error(error.message);
 }
 
 function safePathPart(value: string) {

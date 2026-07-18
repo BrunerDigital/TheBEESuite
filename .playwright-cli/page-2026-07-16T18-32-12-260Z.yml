@@ -1,0 +1,41 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - link "The BEE Suite home" [ref=e4] [cursor=pointer]:
+      - /url: /
+      - img "The BEE Suite logo" [ref=e6]
+      - generic [ref=e7]:
+        - generic [ref=e8]: The BEE Suite
+        - generic [ref=e9]: Childcare CRM & Operations
+    - generic [ref=e10]:
+      - heading "Choose the right BEE Suite portal." [level=1] [ref=e11]
+      - paragraph [ref=e12]: Use the role-specific login page for your daily workspace. Each entry keeps the first screen focused on the tools that match your account.
+      - generic [ref=e13]:
+        - generic [ref=e14]: Directors
+        - generic [ref=e15]: Teachers
+        - generic [ref=e16]: Parents
+    - generic [ref=e17]: Access is still verified after sign-in, so users only reach the data their role allows.
+  - generic [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e24]: Log in to The BEE Suite
+      - generic [ref=e25]: Use the portal link your school or organization gave you, or sign in here if you are not sure.
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]: Email or username
+          - textbox "Email or username" [ref=e30]
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]: Password
+            - link "Forgot password?" [ref=e34] [cursor=pointer]:
+              - /url: /forgot-password?next=%2Fdashboard
+          - textbox "Password" [ref=e35]
+        - button "Sign in" [ref=e36]
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - text: Parents and guardians can sign in here with their personal email and BusyBees unless they already changed their password.
+          - link "Open parent portal login" [ref=e39] [cursor=pointer]:
+            - /url: /parents
+        - generic [ref=e42]:
+          - text: New to The BEE Suite?
+          - link "Start onboarding" [ref=e43] [cursor=pointer]:
+            - /url: /onboarding

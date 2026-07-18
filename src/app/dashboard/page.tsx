@@ -3,7 +3,7 @@ import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
-import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
+import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
 import { buildDashboardAttendanceSnapshot } from "@/lib/dashboard-attendance-snapshot";
 import { getDashboardWidgetPreferenceValue, normalizeDashboardWidgetPreferences } from "@/lib/dashboard-widgets";
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   if (!user) redirect(loginHrefForNextPath("/dashboard"));
   if (requiresPasswordResetGate(user)) redirect("/reset-password?force=1&next=/dashboard");
 
-  const centerWhere = { ...getLeadScopeWhere(user), status: { not: "closed" } };
+  const centerWhere = { ...getDashboardCenterScopeWhere(user), status: { not: "closed" } };
   const centers = await prisma.center.findMany({
     where: centerWhere,
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],

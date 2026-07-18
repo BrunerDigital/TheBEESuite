@@ -225,6 +225,9 @@ async function updateSuggestionStatus(
 ) {
   const suggestionId = clean(body.suggestionId);
   const status = clean(body.status);
+  const selectedSubject = clean(body.selectedSubject).slice(0, 240);
+  const selectedBody = clean(body.selectedBody).slice(0, 8_000);
+  const destination = clean(body.destination).slice(0, 80);
   if (!suggestionId) return NextResponse.json({ ok: false, error: "Suggestion ID is required." }, { status: 400 });
   if (!suggestionStatuses.has(status)) return NextResponse.json({ ok: false, error: "Unsupported suggestion status." }, { status: 400 });
 
@@ -238,8 +241,22 @@ async function updateSuggestionStatus(
 
   const suggestion = await prisma.aiSuggestion.update({
     where: { id: suggestionId },
-    data: { status },
-    select: { id: true, type: true, suggestion: true, status: true, guardrailNote: true, createdAt: true },
+    data: {
+      status,
+      promptContext: {
+        ...asRecord(existing.promptContext),
+        review: {
+          status,
+          reviewedAt: new Date().toISOString(),
+          reviewedByUserId: user.id,
+          reviewedByName: user.name,
+          destination: destination || null,
+          selectedSubject: selectedSubject || null,
+          selectedBody: selectedBody || null,
+        },
+      },
+    },
+    select: { id: true, type: true, promptContext: true, suggestion: true, status: true, guardrailNote: true, createdAt: true },
   });
 
   await writeAuditLog(user, {
@@ -251,6 +268,8 @@ async function updateSuggestionStatus(
       fromStatus: existing.status,
       toStatus: suggestion.status,
       suggestionType: suggestion.type,
+      destination: destination || "review_queue",
+      selectedDraftRecorded: Boolean(selectedBody),
     },
   });
 

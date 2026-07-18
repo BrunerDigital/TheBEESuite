@@ -46,7 +46,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { navGroups } from "@/lib/demo-data";
+import { modules, navGroups } from "@/lib/demo-data";
 import { canAccessModule } from "@/lib/rbac";
 import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
@@ -254,6 +254,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
 
 function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: ShellUser }) {
   const pathname = usePathname();
+  const descriptionBySlug = new Map(modules.map((module) => [module.slug, module.description]));
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
@@ -276,21 +277,32 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
               <div className="flex flex-col gap-1">
                 {group.items.map(([label, slug, Icon]) => {
                   const href = slug === "dashboard" ? "/dashboard" : `/${slug}`;
-                  const active = pathname === href || (pathname === "/dashboard" && slug === "dashboard");
+                  const active = pathname === href || (slug === "dashboard" && pathname === "/center-dashboard");
+                  const description = descriptionBySlug.get(slug) ?? `${label} workspace, tools, and related activity.`;
                   return (
-                    <Link
-                      key={slug}
-                      href={href}
-                      onClick={close}
-                      className={cn(
-                        "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        active &&
-                          "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
-                      )}
-                    >
-                      <Icon data-icon="inline-start" />
-                      <span className="truncate">{label}</span>
-                    </Link>
+                    <Tooltip key={slug}>
+                      <TooltipTrigger
+                        render={
+                          <Link
+                            href={href}
+                            onClick={close}
+                            aria-description={description}
+                            className={cn(
+                              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                              active &&
+                                "bg-sidebar-accent pl-4 text-sidebar-accent-foreground shadow-sm before:absolute before:left-1.5 before:top-1/2 before:h-5 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-primary",
+                            )}
+                          />
+                        }
+                      >
+                        <Icon data-icon="inline-start" />
+                        <span className="truncate">{label}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" align="start" className="max-w-80 flex-col items-start gap-0.5 px-3 py-2 text-xs leading-5">
+                        <span className="font-semibold">{label}</span>
+                        <span className="text-background/80">{description}</span>
+                      </TooltipContent>
+                    </Tooltip>
                   );
                 })}
               </div>
@@ -503,11 +515,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
       </a>
-      <aside className={cn("fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl", hasRoleBottomNav ? "xl:block" : "lg:block")}>
+      <aside className={cn("app-sidebar fixed inset-y-0 left-0 z-20 hidden h-dvh w-72 overflow-hidden border-r bg-sidebar/90 backdrop-blur-xl", hasRoleBottomNav ? "xl:block" : "lg:block")}>
         <SidebarNav currentUser={currentUser} />
       </aside>
       <div className={cn(hasRoleBottomNav ? "xl:pl-72" : "lg:pl-72")}>
-        <header className="sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
+        <header className="app-header sticky top-0 z-10 border-b bg-background/75 backdrop-blur-xl">
           <div className="flex min-h-16 items-center gap-3 px-4 sm:px-6">
             <Sheet>
               <SheetTrigger
@@ -530,7 +542,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   aria-autocomplete="list"
                   aria-controls="global-search-results"
                   aria-expanded={searchOpen && searchQuery.trim().length >= 2}
-                  className="h-11 rounded-xl border-border/70 bg-card/70 pl-10 pr-16"
+                  className="app-global-search h-11 rounded-xl border-border/70 bg-card/70 pl-10 pr-16"
                   placeholder={searchPlaceholder}
                   role="combobox"
                   value={searchQuery}
@@ -691,7 +703,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
             </div>
           </div>
         </header>
-        <main id="workspace-main" className={cn("min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
+        <main id="workspace-main" className={cn("dashboard-workspace min-h-[calc(100vh-4rem)] scroll-mt-20 p-4 sm:p-6 xl:p-8", hasRoleBottomNav && "pb-24 xl:pb-8")}>{children}</main>
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>

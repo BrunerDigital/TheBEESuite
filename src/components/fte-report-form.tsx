@@ -68,6 +68,15 @@ export type FteReportPrefill = {
   preschool: number;
   preK: number;
   schoolAge: number;
+  accountReceivableAmount: number;
+  selfPayerBillAmount: number;
+  subsidyBillAmount: number;
+  totalBilledAmount: number;
+  payrollAmount: number | null;
+  payrollPercent: number | null;
+  newStarts: number;
+  withdrawals: number;
+  preregisteredChildren: number;
   generatedAt: string;
   sourceLabel: string;
 };
@@ -142,21 +151,21 @@ function emptyForm(centerId = "", prefill?: FteReportPrefill, center?: FteReport
     weekStart,
     weekEnd: defaultWeekEnd(weekStart),
     locationData: center?.locationData ?? "",
-    accountReceivableAmount: "",
-    selfPayerBillAmount: "",
-    subsidyBillAmount: "",
-    totalBilledAmount: "",
+    accountReceivableAmount: asOptionalInput(prefill?.accountReceivableAmount),
+    selfPayerBillAmount: asOptionalInput(prefill?.selfPayerBillAmount),
+    subsidyBillAmount: asOptionalInput(prefill?.subsidyBillAmount),
+    totalBilledAmount: asOptionalInput(prefill?.totalBilledAmount),
     enrolledCount: prefill ? asInput(prefill.enrolledCount) : "",
     fullTimeCount: prefill?.fullTimeCount === null || prefill?.fullTimeCount === undefined ? "" : asInput(prefill.fullTimeCount),
     partTimeCount: prefill?.partTimeCount === null || prefill?.partTimeCount === undefined ? "" : asInput(prefill.partTimeCount),
     fteCount: "",
     licenseCapacity: asOptionalInput(prefill?.licensedCapacity ?? center?.licensedCapacity ?? null),
     occupancyPercent: "",
-    payrollAmount: "",
-    payrollPercent: "",
-    newStarts: "",
-    withdrawals: "",
-    preregisteredChildren: "",
+    payrollAmount: asOptionalInput(prefill?.payrollAmount),
+    payrollPercent: asOptionalInput(prefill?.payrollPercent),
+    newStarts: asOptionalInput(prefill?.newStarts),
+    withdrawals: asOptionalInput(prefill?.withdrawals),
+    preregisteredChildren: asOptionalInput(prefill?.preregisteredChildren),
     infants: prefill ? asInput(prefill.infants) : "",
     toddlers: prefill ? asInput(prefill.toddlers) : "",
     twos: prefill ? asInput(prefill.twos) : "",
@@ -271,16 +280,6 @@ export function FteReportForm({
       weekEnd: current.weekEnd,
       status: current.status,
       locationData: current.locationData,
-      accountReceivableAmount: current.accountReceivableAmount,
-      selfPayerBillAmount: current.selfPayerBillAmount,
-      subsidyBillAmount: current.subsidyBillAmount,
-      totalBilledAmount: current.totalBilledAmount,
-      occupancyPercent: current.occupancyPercent,
-      payrollAmount: current.payrollAmount,
-      payrollPercent: current.payrollPercent,
-      newStarts: current.newStarts,
-      withdrawals: current.withdrawals,
-      preregisteredChildren: current.preregisteredChildren,
     }));
   }
 
@@ -471,7 +470,7 @@ export function FteReportForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Prefilled from current school records</AlertTitle>
             <AlertDescription>
-              Enrollment and age groups were prefilled from active child records for {selectedCenter?.name ?? "this school"}.
+              Enrollment, age groups, weekly billing, receivables, payroll estimates, and enrollment movement were prefilled from live school records for {selectedCenter?.name ?? "this school"}.
               Licensed capacity is {selectedPrefill.licensedCapacity ?? selectedCenter?.licensedCapacity ?? "not set"}.
               {selectedPrefill.unknownScheduleCount
                 ? ` ${selectedPrefill.unknownScheduleCount} child schedule(s) could not be classified as full-time or part-time, so verify those fields before submitting.`

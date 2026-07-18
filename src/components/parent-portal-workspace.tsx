@@ -981,6 +981,9 @@ export function ParentPortalWorkspace({
                     {report.naps?.map((nap) => (
                       <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
                     ))}
+                    {!report.naps?.length && /\bno nap\b/i.test(report.teacherNote ?? "") ? (
+                      <span>Nap: No nap today</span>
+                    ) : null}
                     {report.diapers?.map((diaper) => (
                       <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
                     ))}

@@ -1,0 +1,10 @@
+[    6631ms] Error: Minified React error #418; visit https://react.dev/errors/418?args[]=text&args[]= for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at rX (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:47213)
+    at rG (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:48246)
+    at https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:142594
+    at sh (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:147755)
+    at sd (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:139005)
+    at https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:133830
+    at se (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:133931)
+    at s$ (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:160495)
+    at MessagePort.O (https://thebeesuite.io/_next/static/chunks/0b_fd-wyy5vm8.js?dpl=dpl_3BPWKw5M1TA89da4x5vaEuUFzAhQ:1:8660)

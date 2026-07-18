@@ -96,6 +96,7 @@ async function POSTHandler(request: NextRequest) {
 
   let targetLabel = "{{guardian.firstName}}";
   let recipientCount = 0;
+  let targetCenterId: string | null = null;
 
   if (targetMode === "broadcast") {
     if (!senderCanManageOperations || senderIsParent) {
@@ -124,6 +125,7 @@ async function POSTHandler(request: NextRequest) {
       },
     });
     recipientCount = candidates.filter((family) => familyMatchesBroadcastSegment(family, segment)).length;
+    targetCenterId = scopedCenterIds.length === 1 ? scopedCenterIds[0] : null;
     targetLabel = "{{guardian.firstName}}";
   } else {
     if (!familyId) {
@@ -168,6 +170,7 @@ async function POSTHandler(request: NextRequest) {
 
     targetLabel = firstName(family.guardians[0]?.fullName) || "there";
     recipientCount = 1;
+    targetCenterId = family.centerId;
   }
 
   const suggestions = buildSuggestions({
@@ -182,6 +185,7 @@ async function POSTHandler(request: NextRequest) {
       type: "message_composer_reply",
       promptContext: {
         targetMode,
+        centerId: targetCenterId,
         familyId,
         purpose,
         segment,

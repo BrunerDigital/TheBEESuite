@@ -17,6 +17,7 @@ import {
   getStripeSecretKey,
   getStripeWebhookSecret,
   readStripeConnectedAccountId,
+  requiresStripePaymentMethodConfiguration,
   retrieveStripeConnectedAccount,
   shouldWaiveStripePaymentOperationsFee,
   type StripePaymentMethodCategory,
@@ -287,7 +288,7 @@ async function POSTHandler(request: NextRequest) {
     ? paymentMethodAutopayCategory(savedPaymentMethod)
     : checkoutCategory(method);
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(requestedPaymentMethodCategory);
-  const usesSpecificFeePolicy = requestedPaymentMethodCategory !== "default";
+  const usesSpecificFeePolicy = requiresStripePaymentMethodConfiguration(requestedPaymentMethodCategory);
   const requirePaymentMethodConfiguration = process.env.STRIPE_REQUIRE_PAYMENT_METHOD_CONFIGURATION_FOR_FEES === "true";
   if (method !== "saved_method" && usesSpecificFeePolicy && requirePaymentMethodConfiguration && !paymentMethodConfigurationId) {
     return NextResponse.json(
@@ -402,6 +403,7 @@ async function POSTHandler(request: NextRequest) {
       centerName: center.name,
       customerId: stripeCustomerId,
       paymentMethodId: savedPaymentMethod.stripeDefaultPaymentMethodId,
+      paymentMethodType: savedPaymentMethod.paymentMethodType,
       customerEmail: billingAccount.family.billingEmail,
       metadata: {
         ...metadata,

@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CopyCheck, Library, LineChart, Save, Send } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarClock, CheckCircle2, CopyCheck, Library, LineChart, Link2, Save, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { campaignTemplates } from "@/lib/marketing-workflows";
+import { SocialPublishingStudio, type SocialConnection } from "@/components/social-publishing-studio";
 
 type CampaignRow = {
   id: string;
@@ -31,6 +33,17 @@ type CampaignRow = {
 
 export type CampaignWorkspaceData = {
   campaigns: CampaignRow[];
+  marketingConnections: Array<{
+    provider: string;
+    name: string;
+    purpose: string;
+    status: "Connected" | "Configured" | "Missing" | "Placeholder";
+    setupStatus: string;
+    configured: boolean;
+    accountLabel: string;
+    lastSyncAt: Date | string | null;
+  }>;
+  socialConnections: SocialConnection[];
   stats: {
     total: number;
     active: number;
@@ -70,6 +83,24 @@ function reportMetric(metrics: unknown, key: string) {
   return "None";
 }
 
+function numericMetric(metrics: unknown, keys: string[]) {
+  const record = asRecord(metrics);
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && Number.isFinite(Number(value))) return Number(value);
+  }
+  return 0;
+}
+
+function compactNumber(value: number) {
+  return new Intl.NumberFormat("en", { notation: value >= 1_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+}
+
+function currency(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+}
+
 export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   const router = useRouter();
   const firstCampaign = data.campaigns[0] ?? null;
@@ -85,6 +116,13 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
+  const connectedPlatforms = data.marketingConnections.filter((connection) => connection.configured);
+  const campaignTotals = data.campaigns.reduce((totals, campaign) => ({
+    spend: totals.spend + numericMetric(campaign.metrics, ["spend", "amountSpent", "cost"]),
+    impressions: totals.impressions + numericMetric(campaign.metrics, ["impressions", "views"]),
+    clicks: totals.clicks + numericMetric(campaign.metrics, ["clicks", "linkClicks"]),
+    leads: totals.leads + numericMetric(campaign.metrics, ["leads", "conversions", "inquiries"]),
+  }), { spend: 0, impressions: 0, clicks: 0, leads: 0 });
 
   const selectedCampaign = useMemo(
     () => data.campaigns.find((campaign) => campaign.id === selectedId) ?? null,
@@ -187,12 +225,74 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
 
   return (
     <div className="space-y-6">
+      <section className="overflow-hidden rounded-2xl border bg-card/80 shadow-xl shadow-black/10">
+        <div className="flex flex-col gap-4 border-b bg-gradient-to-r from-primary/10 via-card to-card p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-lg font-semibold"><BarChart3 className="size-5 text-primary" /> Cross-platform campaign analytics</div>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Monitor connected advertising channels, compare results, and keep enrollment attribution in one director workspace.</p>
+          </div>
+          <Button variant="outline" render={<Link href="/billing-settings?view=integrations&provider=meta_ads" />}>
+            <Link2 data-icon="inline-start" /> Manage ad accounts
+          </Button>
+        </div>
+        <div className="grid gap-px bg-border md:grid-cols-4">
+          {[
+            ["Spend", currency(campaignTotals.spend)],
+            ["Impressions", compactNumber(campaignTotals.impressions)],
+            ["Clicks", compactNumber(campaignTotals.clicks)],
+            ["Leads", compactNumber(campaignTotals.leads)],
+          ].map(([label, value]) => (
+            <div key={label} className="bg-card px-5 py-4">
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
+              <div className="mt-2 text-2xl font-semibold">{value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {!connectedPlatforms.length ? (
+        <section className="rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card p-6">
+          <div className="max-w-3xl">
+            <h2 className="text-xl font-semibold">Connect your advertising channels</h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">No ad account is connected yet. Choose a platform to open its exact configuration in Settings & Setup. Campaign editing and Bee Suite email reporting remain available while you connect external channels.</p>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {data.marketingConnections.map((connection) => (
+              <Button key={connection.provider} variant="outline" className="h-auto justify-between py-3" render={<Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} />}>
+                <span className="text-left"><span className="block font-medium">{connection.name}</span><span className="block text-xs text-muted-foreground">Configure account</span></span>
+                <ArrowRight className="size-4" />
+              </Button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {data.marketingConnections.map((connection) => (
+          <div key={connection.provider} className="rounded-xl border bg-card/70 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="font-medium">{connection.name}</div>
+              {connection.configured ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Link2 className="size-4 text-muted-foreground" />}
+            </div>
+            <div className="mt-1 min-h-9 text-xs leading-4 text-muted-foreground">{connection.accountLabel || connection.purpose}</div>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <Badge variant={connection.configured ? "default" : "outline"}>{connection.configured ? "Connected" : "Setup needed"}</Badge>
+              <Link className="text-xs font-medium text-primary hover:underline" href={`/billing-settings?view=integrations&provider=${connection.provider}`}>{connection.configured ? "Manage" : "Connect"}</Link>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <Tabs defaultValue="editor" className="gap-4">
         <TabsList>
           <TabsTrigger value="editor">Editor</TabsTrigger>
+          <TabsTrigger value="social">Social Publisher</TabsTrigger>
           <TabsTrigger value="templates">Templates</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
         </TabsList>
+        <TabsContent value="social">
+          <SocialPublishingStudio connections={data.socialConnections} />
+        </TabsContent>
         <TabsContent value="editor" className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="glass-panel">
             <CardHeader>
@@ -380,8 +480,9 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                     <TableHead>Audience</TableHead>
                     <TableHead>Schedule</TableHead>
                     <TableHead>Sent</TableHead>
-                    <TableHead>Recipients</TableHead>
-                    <TableHead>Delivery</TableHead>
+                    <TableHead>Platform</TableHead>
+                    <TableHead>Spend</TableHead>
+                    <TableHead>Results</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -395,14 +496,18 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                       <TableCell>{textValue(asRecord(campaign.audience).label) || "All eligible"}</TableCell>
                       <TableCell>{formatDate(campaign.scheduledAt)}</TableCell>
                       <TableCell>{formatDate(campaign.sentAt)}</TableCell>
-                      <TableCell>{reportMetric(campaign.metrics, "lastRecipientCount")}</TableCell>
-                      <TableCell>{reportMetric(campaign.metrics, "lastDeliveryStatus")}</TableCell>
+                      <TableCell>{reportMetric(campaign.metrics, "platform") === "None" ? campaign.type : reportMetric(campaign.metrics, "platform")}</TableCell>
+                      <TableCell>{currency(numericMetric(campaign.metrics, ["spend", "amountSpent", "cost"]))}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{compactNumber(numericMetric(campaign.metrics, ["clicks", "linkClicks"]))} clicks</div>
+                        <div className="text-xs text-muted-foreground">{compactNumber(numericMetric(campaign.metrics, ["leads", "conversions", "inquiries"]))} leads</div>
+                      </TableCell>
                       <TableCell><Badge variant={campaign.status === "active" ? "default" : "outline"}>{campaign.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                   {!data.campaigns.length ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-muted-foreground">No tenant campaigns have been configured yet.</TableCell>
+                      <TableCell colSpan={8} className="text-muted-foreground">No tenant campaigns have been configured yet.</TableCell>
                     </TableRow>
                   ) : null}
                 </TableBody>

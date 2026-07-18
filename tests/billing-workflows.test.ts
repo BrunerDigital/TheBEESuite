@@ -19,7 +19,27 @@ import {
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
+  planFamilyRefundAllocations,
 } from "../src/lib/billing-workflows";
+
+test("family refunds prioritize optional payment references and span payments", () => {
+  const result = planFamilyRefundAllocations([
+    { id: "newer", refundableCents: 3000 },
+    { id: "preferred", refundableCents: 5000 },
+  ], 6500, ["preferred"]);
+  assert.deepEqual(result.allocations.map((item) => ({ id: item.payment.id, amountCents: item.amountCents })), [
+    { id: "preferred", amountCents: 5000 },
+    { id: "newer", amountCents: 1500 },
+  ]);
+  assert.equal(result.remainingCents, 0);
+  assert.equal(result.availableCents, 8000);
+});
+
+test("family refund allocation reports an amount beyond Stripe refund capacity", () => {
+  const result = planFamilyRefundAllocations([{ id: "payment", refundableCents: 2500 }], 4000);
+  assert.equal(result.allocations[0]?.amountCents, 2500);
+  assert.equal(result.remainingCents, 1500);
+});
 
 test("billing workflow helpers parse family charge amounts", () => {
   assert.equal(parseCurrencyCents("1,250.50"), 125050);

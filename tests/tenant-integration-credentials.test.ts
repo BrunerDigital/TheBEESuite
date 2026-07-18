@@ -4,10 +4,50 @@ import { googleSheetsRuntimeConfig, hasGoogleSheetsApiConfig } from "@/lib/googl
 import {
   createStripeCheckoutSession,
   createStripeCustomer,
+  createStripeOffSessionPaymentIntent,
+  createStripeRefund,
   createStripeSetupCheckoutSession,
   getStripePaymentMethodConfigurationId,
   getStripeSecretKey,
 } from "@/lib/integrations";
+
+test("Stripe refunds target the original PaymentIntent with an exact partial amount", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestUrl = "";
+  let requestBody = "";
+  let requestHeaders: HeadersInit | undefined;
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestUrl = String(url);
+    requestBody = String(init?.body ?? "");
+    requestHeaders = init?.headers;
+    return new Response(JSON.stringify({ id: "re_partial", amount: 3750, status: "succeeded" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeRefund({
+      paymentIntentId: "pi_original",
+      amountCents: 3750,
+      reason: "Duplicate payment",
+      connectedAccountId: "acct_school",
+      idempotencyKey: "refund:test:1",
+      credentials: { STRIPE_SECRET_KEY: "sk_test_tenant" },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.refund?.amountCents, 3750);
+    assert.equal(requestUrl, "https://api.stripe.com/v1/refunds");
+    assert.match(requestBody, /payment_intent=pi_original/);
+    assert.match(requestBody, /amount=3750/);
+    assert.match(requestBody, /refund_application_fee=true/);
+    assert.match(requestBody, /beeSuiteReason/);
+    assert.equal(new Headers(requestHeaders).get("Stripe-Account"), "acct_school");
+    assert.equal(new Headers(requestHeaders).get("Idempotency-Key"), "refund:test:1");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 const originalStripeSecret = process.env.STRIPE_SECRET_KEY;
 const originalStripeAchPaymentMethodConfigurationId = process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID;
@@ -59,15 +99,14 @@ test("Stripe helpers prefer tenant credentials over platform env vars", async ()
   assert.equal(secret, "sk_tenant");
 });
 
-test("Stripe instant bank configuration falls back to ACH configuration", () => {
+test("Stripe instant bank checkout never reuses account-scoped configurations", () => {
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_bank";
   delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
 
-  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "pmc_bank");
+  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "");
 
   process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_instant_bank";
-
-  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "pmc_instant_bank");
+  assert.equal(getStripePaymentMethodConfigurationId("link_bank"), "");
 });
 
 test("Stripe customer creation uses the tenant secret key when provided", async () => {
@@ -199,7 +238,7 @@ test("Stripe checkout can require instant bank verification", async () => {
   }
 });
 
-test("Stripe checkout uses ACH configuration for instant bank login when no dedicated link bank configuration exists", async () => {
+test("Stripe checkout uses Link for instant bank payments when no dedicated configuration exists", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_ACH_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_bank";
   delete process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID;
@@ -228,8 +267,47 @@ test("Stripe checkout uses ACH configuration for instant bank login when no dedi
     });
 
     assert.equal(result.ok, true);
-    assert.match(body, /payment_method_configuration=pmc_bank/);
-    assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
+    assert.match(body, /payment_method_types%5B0%5D=link/);
+    assert.doesNotMatch(body, /payment_method_configuration=pmc_bank/);
+    assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe instant bank checkout bypasses account-scoped payment method configurations", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+  let calls = 0;
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    calls += 1;
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "cs_link_bank", url: "https://checkout.stripe.test/link-bank" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeCheckoutSession({
+      amountCents: 123,
+      invoiceNumber: "INV-1",
+      customerId: "cus_connected",
+      successUrl: "https://app.test/success",
+      cancelUrl: "https://app.test/cancel",
+      metadata: { invoiceId: "inv_1", paymentId: "pay_1" },
+      paymentMethodCategory: "link_bank",
+      paymentMethodConfigurationId: "pmc_platform_or_other_school",
+      bankAccountVerificationMethod: "instant",
+      credentials: { STRIPE_SECRET_KEY: "sk_platform" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(calls, 1);
+    assert.match(body, /payment_method_types%5B0%5D=link/);
+    assert.doesNotMatch(body, /payment_method_configuration/);
+    assert.doesNotMatch(body, /payment_method_options%5Bus_bank_account%5D/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -339,6 +417,66 @@ test("Stripe checkout retries without stale payment method configuration", async
     assert.match(bodies[0], /payment_method_configuration=pmc_stale/);
     assert.doesNotMatch(bodies[1], /payment_method_configuration/);
     assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe saved bank payments declare us_bank_account on the PaymentIntent", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "pi_bank", status: "processing", amount: 10000, currency: "usd" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeOffSessionPaymentIntent({
+      amountCents: 10000,
+      invoiceNumber: "INV-ACH",
+      customerId: "cus_bank",
+      paymentMethodId: "pm_bank",
+      paymentMethodType: "us_bank_account",
+      metadata: {},
+      credentials: { STRIPE_SECRET_KEY: "sk_test_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_types%5B0%5D=us_bank_account/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe saved card payments declare card on the PaymentIntent", async () => {
+  const originalFetch = globalThis.fetch;
+  let body = "";
+
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    body = String(init?.body ?? "");
+    return new Response(JSON.stringify({ id: "pi_card", status: "succeeded", amount: 10000, currency: "usd" }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeOffSessionPaymentIntent({
+      amountCents: 10000,
+      invoiceNumber: "INV-CARD",
+      customerId: "cus_card",
+      paymentMethodId: "pm_card",
+      paymentMethodType: "card",
+      metadata: {},
+      credentials: { STRIPE_SECRET_KEY: "sk_test_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.match(body, /payment_method_types%5B0%5D=card/);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -503,7 +641,7 @@ test("Stripe setup checkout retries without stale payment method configuration",
   }
 });
 
-test("Stripe setup checkout retries when configured payment methods are unavailable", async () => {
+test("Stripe bank setup bypasses account-scoped Link configurations", async () => {
   const originalFetch = globalThis.fetch;
   process.env.STRIPE_LINK_BANK_PAYMENT_METHOD_CONFIGURATION_ID = "pmc_link_unavailable";
   let calls = 0;
@@ -540,9 +678,10 @@ test("Stripe setup checkout retries when configured payment methods are unavaila
 
     assert.equal(result.ok, true);
     assert.equal(calls, 2);
-    assert.match(bodies[0], /payment_method_configuration=pmc_link_unavailable/);
+    assert.doesNotMatch(bodies[0], /payment_method_configuration/);
+    assert.match(bodies[0], /payment_method_types%5B0%5D=us_bank_account/);
     assert.doesNotMatch(bodies[1], /payment_method_configuration/);
-    assert.match(bodies[1], /payment_method_types%5B0%5D=us_bank_account/);
+    assert.doesNotMatch(bodies[1], /payment_method_types/);
   } finally {
     globalThis.fetch = originalFetch;
   }

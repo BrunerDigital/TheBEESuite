@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle2, RefreshCw, Save, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ type IntegrationSetupRow = {
 type Props = {
   integrations: IntegrationSetupRow[];
   canManage: boolean;
+  manageableProviders?: IntegrationProvider[];
 };
 
 const setupStatuses: Array<{ value: IntegrationSetupStatus; label: string }> = [
@@ -82,9 +84,14 @@ function credentialMap(integrations: IntegrationSetupRow[]) {
   ])) as Record<IntegrationProvider, Record<string, string>>;
 }
 
-export function IntegrationSetupPanel({ integrations, canManage }: Props) {
+export function IntegrationSetupPanel({ integrations, canManage, manageableProviders }: Props) {
+  const searchParams = useSearchParams();
+  const requestedProvider = searchParams.get("provider") as IntegrationProvider | null;
+  const initialProvider = integrations.some((integration) => integration.provider === requestedProvider)
+    ? requestedProvider!
+    : integrations[0]?.provider ?? "supabase";
   const [rows, setRows] = useState(integrations);
-  const [activeProvider, setActiveProvider] = useState<IntegrationProvider>(integrations[0]?.provider ?? "supabase");
+  const [activeProvider, setActiveProvider] = useState<IntegrationProvider>(initialProvider);
   const active = useMemo(
     () => rows.find((integration) => integration.provider === activeProvider) ?? rows[0],
     [activeProvider, rows],
@@ -97,6 +104,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
   const draft = active ? drafts[active.provider] ?? active.config : {};
   const credentialDraft = active ? credentialDrafts[active.provider] ?? {} : {};
   const setupStatus = active ? setupStatusesByProvider[active.provider] ?? active.setupStatus : "not_started";
+  const activeCanManage = canManage && (!manageableProviders || manageableProviders.includes(active.provider));
 
   function updateDraft(key: string, value: string | boolean) {
     if (!active) return;
@@ -169,8 +177,8 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
               Setup records track owners, public identifiers, review status, tenant-specific encrypted credentials, and server environment readiness.
             </CardDescription>
           </div>
-          <Badge variant={canManage ? "default" : "outline"}>
-            {canManage ? "Editable" : "Read only"}
+          <Badge variant={activeCanManage ? "default" : "outline"}>
+            {activeCanManage ? "Editable" : "Read only"}
           </Badge>
         </div>
       </CardHeader>
@@ -241,7 +249,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                 className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 value={setupStatus}
                 onChange={(event) => updateSetupStatus(event.target.value as IntegrationSetupStatus)}
-                disabled={!canManage || isPending}
+                disabled={!activeCanManage || isPending}
               >
                 {setupStatuses.map((status) => (
                   <option key={status.value} value={status.value}>{status.label}</option>
@@ -256,7 +264,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                       type="checkbox"
                       checked={draft[field.key] === true}
                       onChange={(event) => updateDraft(field.key, event.target.checked)}
-                      disabled={!canManage || isPending}
+                      disabled={!activeCanManage || isPending}
                     />
                     <span>{field.label}</span>
                   </label>
@@ -267,7 +275,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                       value={fieldValue(draft[field.key])}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
                       placeholder={field.placeholder}
-                      disabled={!canManage || isPending}
+                      disabled={!activeCanManage || isPending}
                     />
                   </>
                 ) : field.type === "select" ? (
@@ -277,7 +285,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                       className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                       value={fieldValue(draft[field.key]) || field.options?.[0]?.value || ""}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
-                      disabled={!canManage || isPending}
+                      disabled={!activeCanManage || isPending}
                     >
                       {field.options?.map((option) => (
                         <option key={option.value} value={option.value}>{option.label}</option>
@@ -292,7 +300,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                       value={fieldValue(draft[field.key])}
                       onChange={(event) => updateDraft(field.key, event.target.value)}
                       placeholder={field.placeholder}
-                      disabled={!canManage || isPending}
+                      disabled={!activeCanManage || isPending}
                     />
                   </>
                 )}
@@ -326,7 +334,7 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
                         value={credentialDraft[field.key] ?? ""}
                         onChange={(event) => updateCredentialDraft(field.key, event.target.value)}
                         placeholder={field.placeholder ?? (presence?.configured ? "Leave blank to keep saved value" : "Enter tenant credential")}
-                        disabled={!canManage || isPending}
+                        disabled={!activeCanManage || isPending}
                         autoComplete="off"
                       />
                     </div>
@@ -339,11 +347,11 @@ export function IntegrationSetupPanel({ integrations, canManage }: Props) {
           {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => submit("save")} disabled={!canManage || isPending}>
+            <Button type="button" onClick={() => submit("save")} disabled={!activeCanManage || isPending}>
               <Save data-icon="inline-start" />
               Save setup
             </Button>
-            <Button type="button" variant="outline" onClick={() => submit("check")} disabled={!canManage || isPending}>
+            <Button type="button" variant="outline" onClick={() => submit("check")} disabled={!activeCanManage || isPending}>
               <RefreshCw data-icon="inline-start" />
               Check server config
             </Button>

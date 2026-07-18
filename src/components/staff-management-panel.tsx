@@ -735,7 +735,8 @@ export function StaffManagementPanel({
 
   function deactivateTeacher() {
     if (selectedStaffId === "new") return;
-    const confirmed = window.confirm("Move this teacher to previous staff? Their records stay available, but they will be hidden from active teacher lists and cannot log in.");
+    const teacherName = activeStaff.find((teacher) => teacher.id === selectedStaffId)?.user.name ?? "this teacher";
+    const confirmed = window.confirm(`Remove ${teacherName} from active staff? They will be removed from teacher lists, classroom assignments, future schedules, and login access. Historical records will remain available under Previous staff.`);
     if (!confirmed) return;
     startTransition(async () => {
       setStatusMessage("");
@@ -747,10 +748,10 @@ export function StaffManagementPanel({
       });
       const json = await response.json().catch(() => null) as { error?: string; mode?: string } | null;
       if (!response.ok) {
-        setErrorMessage(json?.error || "Teacher account could not be moved to previous staff.");
+        setErrorMessage(json?.error || "Teacher could not be removed from active staff.");
         return;
       }
-      setStatusMessage("Teacher moved to previous staff.");
+      setStatusMessage("Teacher removed from active staff and teacher menus.");
       setSelectedStaffId("new");
       resetTeacherForm();
       router.refresh();
@@ -1632,9 +1633,9 @@ export function StaffManagementPanel({
                 {selectedPreviousTeacher ? "Restore teacher" : "Save teacher"}
               </Button>
               {selectedStaffId !== "new" && !selectedPreviousTeacher ? (
-                <Button type="button" variant="outline" disabled={isPending} onClick={deactivateTeacher}>
+                <Button type="button" variant="destructive" disabled={isPending} onClick={deactivateTeacher}>
                   <Archive data-icon="inline-start" />
-                  Move to previous staff
+                  Remove teacher
                 </Button>
               ) : null}
             </div>
@@ -1644,7 +1645,7 @@ export function StaffManagementPanel({
               <div>
                 <div className="text-sm font-medium">Previous staff</div>
                 <p className="text-xs text-muted-foreground">
-                  Archived teachers are hidden from active assignment, clock, certification, and schedule workflows.
+                  Removed teachers stay here for historical records and can be restored later. They are hidden from active lists and cannot log in.
                 </p>
               </div>
               <Badge variant="outline">{previousStaffRows.length} archived</Badge>

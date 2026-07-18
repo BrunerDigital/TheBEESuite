@@ -1,0 +1,250 @@
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/" tree={[...]} params={{}} cacheNode={{rsc:<Fragment>, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="page.tsx">
+          <SegmentTrieNode>
+          <LandingPage>
+            <main className="min-h-scre...">
+              <header>
+              <section>
+              <section>
+              <section>
+              <section>
+              <section id="savings" className="relative b...">
+                <div className="mx-auto ma...">
+                  <div>
+                  <div className="mt-10">
+                    <LandingSavingsCalculator>
+                      <div className="grid gap-5...">
+                        <div className="rounded-xl...">
+                          <div>
+                          <div className="mt-6 space...">
+                            <div>
+                              ...
+                                <Input id="savings-ce..." type="number" min={1} max={75} step={1} value={3} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ce..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-centers"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={3}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={1}
+                                        max={75}
+                                        step={1}
+                                        aria-label="Schools"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={75}
+                                  step={1}
+                                  value={3}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Schools slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-ch..." type="number" min={25} max={6000} step={25} value={280} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ch..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-children"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={280}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={25}
+                                        max={6000}
+                                        step={25}
+                                        aria-label="Enrolled children"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={25}
+                                  max={6000}
+                                  step={25}
+                                  value={280}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Enrolled children slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-staff" type="number" min={5} max={900} step={5} value={42} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-staff" ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-staff"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={42}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={5}
+                                        max={900}
+                                        step={5}
+                                        aria-label="Teachers and staff"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={900}
+                                  step={5}
+                                  value={42}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Teachers and staff slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-ho..." type="number" min={15} max={55} step={1} value={24} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ho..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-hourlyRate"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={24}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={15}
+                                        max={55}
+                                        step={1}
+                                        aria-label="Admin hourly cost"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={15}
+                                  max={55}
+                                  step={1}
+                                  value={24}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Admin hourly cost slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-we..." type="number" min={125} max={650} step={5} value={235} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-we..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-weeklyTuition"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={235}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={125}
+                                        max={650}
+                                        step={5}
+                                        aria-label="Average weekly tuition"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={125}
+                                  max={650}
+                                  step={5}
+                                  value={235}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Average weekly tuition slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                        ...
+              ...
+        ...
+      ...
+ 
+    at <unknown> (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:3439:25)
+    at runWithFiberInDEV (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at emitPendingHydrationWarnings (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:3438:13)
+    at completeWork (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:7065:32)
+    at runWithFiberInDEV (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:965:74)
+    at completeUnitOfWork (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9622:23)
+    at performUnitOfWork (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9557:28)
+    at workLoopConcurrentByScheduler (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9551:58)
+    at renderRootConcurrent (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9534:71)
+    at performWorkOnRoot (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9061:150)
+    at performWorkOnRootViaSchedulerTask (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10255:9)
+    at MessagePort.performWorkUntilDeadline (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_0rpq4pf._.js:2647:64) (file://D:/Brenden Bruner/Documents/The Bee Suite 2/.next/dev/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:3439:25)

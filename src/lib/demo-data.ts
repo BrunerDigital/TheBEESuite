@@ -1,27 +1,19 @@
 import {
   Activity,
   BadgeDollarSign,
-  Bell,
   BookOpen,
   Bot,
   Building2,
-  CalendarDays,
   Code2,
   ClipboardCheck,
   CreditCard,
   FileText,
+  FolderOpen,
   HeartHandshake,
-  Home,
-  Image as ImageIcon,
-  Inbox,
   LayoutDashboard,
   Megaphone,
-  MessageSquare,
   ShieldCheck,
-  Sparkles,
-  Star,
   Users,
-  Workflow,
 } from "lucide-react";
 
 export type ModuleSlug =
@@ -55,6 +47,7 @@ export type ModuleSlug =
   | "billing-invoices"
   | "payments"
   | "terminal-store"
+  | "asset-hub"
   | "corporate-billing"
   | "compliance"
   | "reputation"
@@ -266,69 +259,48 @@ export const navGroups = [
     title: "Command",
     items: [
       ["Dashboard", "dashboard", LayoutDashboard],
-      ["School setup", "school-setup", ClipboardCheck],
       ["Multi-location", "multi-location-dashboard", Building2],
-      ["Notifications", "notifications", Bell],
       ["AI Command", "ai-command", Bot],
     ],
   },
   {
-    title: "Enrollment CRM",
+    title: "School Day",
     items: [
-      ["CRM leads", "crm-leads", Users],
-      ["Pipeline", "enrollment-pipeline", Workflow],
-      ["Tours", "tours", CalendarDays],
-      ["Waitlist", "waitlist", ClipboardCheck],
-      ["Campaigns", "campaigns", Megaphone],
-      ["Automations", "automations", Workflow],
-    ],
-  },
-  {
-    title: "Operations",
-    items: [
-      ["Center dashboard", "center-dashboard", Home],
       ["FTE reports", "fte-reports", ClipboardCheck],
-      ["Classroom", "classroom-dashboard", Activity],
-      ["Attendance", "attendance", ClipboardCheck],
-      ["Daily reports", "daily-reports", BookOpen],
-      ["Incidents", "incident-reports", ShieldCheck],
-      ["Teachers", "staff", HeartHandshake],
+      ["School Operations", "classroom-dashboard", Activity],
     ],
   },
   {
-    title: "Families",
+    title: "People",
     items: [
-      ["Family detail", "family-detail", Users],
-      ["Child profile", "child-profile", HeartHandshake],
-      ["Messages", "messages", MessageSquare],
-      ["Media review", "parent-media-review", ImageIcon],
-      ["Parent portal", "parent-portal", Inbox],
-      ["Teacher portal", "teacher-portal", Activity],
+      ["Families & Communication", "family-detail", Users],
+      ["Staff & Access", "staff", HeartHandshake],
+      ["Billing & Payments", "billing-invoices", BadgeDollarSign],
+      ["Records & Compliance", "forms", FileText],
     ],
   },
   {
-    title: "Business",
-    items: [
-      ["Billing & invoices", "billing-invoices", BadgeDollarSign],
-      ["Payments", "payments", CreditCard],
-      ["Terminal store", "terminal-store", CreditCard],
-      ["Software invoice", "corporate-billing", CreditCard],
-      ["Forms", "forms", FileText],
-      ["Documents", "documents", FileText],
-      ["Compliance", "compliance", ShieldCheck],
-      ["Analytics", "analytics", Activity],
-      ["Reputation", "reputation", Star],
-    ],
-  },
-  {
-    title: "Platform",
+    title: "Administration",
     items: [
       ["Executive admin", "agency-admin", Building2],
       ["Developer", "developer-dashboard", Code2],
-      ["White-label", "white-label", Sparkles],
-      ["Team permissions", "team-permissions", Users],
-      ["Integrations", "integrations", Workflow],
-      ["Settings", "billing-settings", CreditCard],
+      ["Software invoice", "corporate-billing", CreditCard],
+    ],
+  },
+  {
+    title: "Growth",
+    items: [
+      ["Enrollment CRM", "crm-leads", Users],
+      ["Campaigns & Automations", "campaigns", Megaphone],
+      ["Insights & Reputation", "analytics", Activity],
+    ],
+  },
+  {
+    title: "Utilities",
+    items: [
+      ["Settings & Setup", "billing-settings", CreditCard],
+      ["Terminal store", "terminal-store", CreditCard],
+      ["Asset Hub", "asset-hub", FolderOpen],
       ["Audit logs", "audit-logs", ShieldCheck],
       ["Help", "help", BookOpen],
     ],
@@ -662,6 +634,16 @@ export const modules: ModuleDefinition[] = [
     features: ["Role-gated hardware catalog", "Quantity-based cart", "Bee Suite-branded hosted checkout", "Audit trail for created purchases"],
     records: ["Terminal catalog", "Checkout session", "Purchaser metadata", "School association"],
     sensitive: true,
+  },
+  {
+    slug: "asset-hub",
+    title: "Corporate Asset Hub",
+    eyebrow: "Brand resources",
+    description: "Search, preview, and securely download corporate-approved social media, brand, training, and school resources in one modern library.",
+    owner: "Executive team and school directors",
+    metrics: ["Private corporate library", "Fast search", "Common file formats", "Secure downloads"],
+    features: ["Executive multi-file uploads", "Category and type filters", "Grid and list views", "Director downloads"],
+    records: ["Social media graphics", "Brand files", "Flyers", "Training documents"],
   },
   {
     slug: "corporate-billing",

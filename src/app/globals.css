@@ -460,7 +460,129 @@
   }
 
   .glass-panel {
-    @apply border bg-card/80 shadow-2xl shadow-black/15 backdrop-blur-xl;
+    @apply border border-foreground/10 bg-card/85 shadow-xl shadow-black/10 backdrop-blur-xl;
+    background-image: linear-gradient(145deg, color-mix(in oklch, var(--card) 96%, var(--primary) 4%), var(--card));
+    transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  }
+
+  .glass-panel:hover {
+    border-color: color-mix(in oklch, var(--primary) 28%, var(--border));
+    box-shadow: 0 20px 45px color-mix(in oklch, black 18%, transparent);
+  }
+
+  .dashboard-workspace > div {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 96rem;
+  }
+
+  .dashboard-workspace {
+    position: relative;
+    background-image:
+      radial-gradient(circle at 92% 4%, color-mix(in oklch, var(--primary) 7%, transparent), transparent 24rem),
+      linear-gradient(color-mix(in oklch, var(--foreground) 2.5%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in oklch, var(--foreground) 2.5%, transparent) 1px, transparent 1px);
+    background-position: top right, center, center;
+    background-size: auto, 32px 32px, 32px 32px;
+  }
+
+  .app-sidebar {
+    background-image:
+      radial-gradient(circle at 105% 8%, color-mix(in oklch, var(--primary) 13%, transparent), transparent 17rem),
+      linear-gradient(180deg, color-mix(in oklch, var(--sidebar) 97%, black), var(--sidebar));
+    box-shadow: 14px 0 42px color-mix(in oklch, black 10%, transparent);
+  }
+
+  .app-sidebar::after {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 1px;
+    pointer-events: none;
+    content: "";
+    background: linear-gradient(to bottom, transparent, color-mix(in oklch, var(--primary) 35%, transparent) 18%, color-mix(in oklch, var(--primary) 12%, transparent) 72%, transparent);
+  }
+
+  .app-header {
+    box-shadow: 0 10px 35px color-mix(in oklch, black 8%, transparent);
+  }
+
+  .app-header::after {
+    position: absolute;
+    inset: auto 0 -1px;
+    height: 1px;
+    pointer-events: none;
+    content: "";
+    background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--primary) 35%, transparent) 35%, transparent 78%);
+  }
+
+  .app-global-search {
+    box-shadow: inset 0 1px 0 color-mix(in oklch, white 5%, transparent), 0 8px 24px color-mix(in oklch, black 6%, transparent);
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  .app-global-search:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 16%, transparent), 0 10px 28px color-mix(in oklch, black 9%, transparent);
+  }
+
+  .dashboard-workspace > div > section:first-child {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-color: color-mix(in oklch, var(--primary) 24%, var(--border));
+    background:
+      radial-gradient(circle at 88% 12%, color-mix(in oklch, var(--primary) 14%, transparent), transparent 22rem),
+      linear-gradient(135deg, color-mix(in oklch, var(--card) 96%, black), var(--card));
+    box-shadow: 0 22px 55px color-mix(in oklch, black 16%, transparent);
+  }
+
+  .dashboard-workspace > div > section:first-child::after {
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: -1;
+    width: 3px;
+    content: "";
+    background: linear-gradient(to bottom, var(--primary), color-mix(in oklch, var(--primary) 15%, transparent));
+  }
+
+  .dashboard-workspace [data-slot="card-title"] {
+    letter-spacing: -0.015em;
+  }
+
+  .dashboard-workspace [data-slot="card-header"].border-b {
+    background: linear-gradient(90deg, color-mix(in oklch, var(--primary) 5%, transparent), transparent 55%);
+  }
+
+  .dashboard-workspace table thead {
+    background: color-mix(in oklch, var(--muted) 70%, transparent);
+  }
+
+  .dashboard-workspace table th {
+    color: color-mix(in oklch, var(--muted-foreground) 88%, var(--foreground));
+    font-size: 0.7rem;
+    font-weight: 650;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-workspace table tbody tr {
+    transition: background-color 140ms ease;
+  }
+
+  .dashboard-workspace table tbody tr:hover {
+    background-color: color-mix(in oklch, var(--primary) 4.5%, transparent);
+  }
+
+  .dashboard-workspace :is(input, textarea, select):focus-visible {
+    border-color: color-mix(in oklch, var(--primary) 65%, var(--border));
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 13%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .glass-panel,
+    .app-global-search,
+    .dashboard-workspace table tbody tr {
+      transition: none;
+    }
   }
 
   .hive-texture {

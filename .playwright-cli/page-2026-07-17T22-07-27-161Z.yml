@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - status "Loading The BEE Suite" [ref=e2]:
+    - generic [ref=e12]:
+      - paragraph [ref=e13]: The BEE Suite
+      - paragraph [ref=e14]: Preparing your workspace
+      - paragraph [ref=e15]: Bringing your next view into focus…
+    - generic [ref=e18]: Loading your next BEE Suite screen.
+  - alert [ref=e19]

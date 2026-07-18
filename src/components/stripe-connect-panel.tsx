@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -203,6 +203,24 @@ export function StripeConnectPanel({
     }
   }
 
+  async function startSoftwarePaymentSetup(centerId: string, method: "ach" | "card" | "default") {
+    setBusyCenterId(centerId);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/billing/software-payment-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId, method }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok || !json.url) throw new Error(json.error || "Software payment setup could not be opened.");
+      window.location.assign(json.url as string);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Software payment setup could not be opened.");
+      setBusyCenterId(null);
+    }
+  }
+
   const syncStatus = useCallback(async (centerId: string) => {
     setBusyCenterId(centerId);
     setMessage(null);
@@ -259,6 +277,15 @@ export function StripeConnectPanel({
     };
     if (stripeConnectStatus && messages[stripeConnectStatus]) {
       const timer = window.setTimeout(() => setMessage(messages[stripeConnectStatus]), 0);
+      return () => window.clearTimeout(timer);
+    }
+    const softwarePayment = searchParams.get("softwarePayment");
+    if (softwarePayment === "success") {
+      const timer = window.setTimeout(() => setMessage("Software payment method authorized. Stripe is confirming it as the school's default method."), 0);
+      return () => window.clearTimeout(timer);
+    }
+    if (softwarePayment === "cancelled") {
+      const timer = window.setTimeout(() => setMessage("Software payment method setup was cancelled. The payout account was not changed."), 0);
       return () => window.clearTimeout(timer);
     }
     return undefined;
@@ -459,6 +486,7 @@ export function StripeConnectPanel({
               <TableHead>Payout account</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
+              <TableHead>Software fee method</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -467,6 +495,14 @@ export function StripeConnectPanel({
               const readiness = stripeConnectReadinessFromFields(center.customFields);
               const status = statusLabel(center);
               const hasAccount = maskedAccount(center) !== "Not connected";
+              const centerFields = fields(center.customFields);
+              const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
+              const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
+              const softwareMethodLabel = softwareMethodType === "us_bank_account"
+                ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
+                : softwareMethodType === "card"
+                  ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
+                  : hasAccount ? "Payout bank preferred · authorization required" : "Add after payout setup";
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
@@ -481,6 +517,19 @@ export function StripeConnectPanel({
                         ? "Parent payments enabled"
                         : readiness.blockingReason || "Awaiting payout status"}
                     {readiness.requirementFields.length > 4 ? ` +${readiness.requirementFields.length - 4} more` : ""}
+                  </TableCell>
+                  <TableCell className="max-w-xs whitespace-normal">
+                    <div className="text-xs font-medium">{softwareMethodLabel}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasAccount} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
+                        <BadgeDollarSign data-icon="inline-start" />
+                        {softwareMethodType ? "Use bank" : "Authorize bank"}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
+                        <CreditCard data-icon="inline-start" />
+                        {softwareMethodType ? "Change" : "Add card"}
+                      </Button>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
@@ -512,7 +561,7 @@ export function StripeConnectPanel({
             })}
             {!localCenters.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
+                <TableCell colSpan={8} className="text-muted-foreground">No centers are visible for this workspace.</TableCell>
               </TableRow>
             ) : null}
           </TableBody>
@@ -521,6 +570,12 @@ export function StripeConnectPanel({
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
           Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated Bee Suite screen.
+        </div>
+        <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
+          <CreditCard className="mt-0.5 size-5 shrink-0 text-primary" />
+          <span>
+            The payout bank is the preferred software-fee method after payout onboarding. Stripe requires the school to authorize a separate ACH mandate before that bank can be charged. This does not alter the payout destination. Directors can replace the default with another bank account or card at any time from this table.
+          </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}

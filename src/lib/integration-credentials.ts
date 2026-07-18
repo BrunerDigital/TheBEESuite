@@ -21,6 +21,37 @@ export type TenantIntegrationCredentialEntry = {
 };
 
 const credentialFieldsByProvider: Partial<Record<IntegrationProvider, IntegrationCredentialField[]>> = {
+  meta_social: [{ key: "META_SOCIAL_ACCESS_TOKEN", label: "Meta Page access token" }],
+  linkedin_social: [{ key: "LINKEDIN_SOCIAL_ACCESS_TOKEN", label: "LinkedIn access token" }],
+  google_business: [{ key: "GOOGLE_BUSINESS_ACCESS_TOKEN", label: "Google Business OAuth access token" }],
+  tiktok_social: [{ key: "TIKTOK_SOCIAL_ACCESS_TOKEN", label: "TikTok user access token" }],
+  pinterest_social: [{ key: "PINTEREST_SOCIAL_ACCESS_TOKEN", label: "Pinterest access token" }],
+  x_social: [{ key: "X_SOCIAL_ACCESS_TOKEN", label: "X OAuth user access token" }],
+  meta_ads: [
+    { key: "META_ADS_ACCESS_TOKEN", label: "Meta access token" },
+  ],
+  google_ads: [
+    { key: "GOOGLE_ADS_DEVELOPER_TOKEN", label: "Developer token" },
+    { key: "GOOGLE_ADS_REFRESH_TOKEN", label: "OAuth refresh token" },
+    { key: "GOOGLE_CLIENT_ID", label: "OAuth client ID" },
+    { key: "GOOGLE_CLIENT_SECRET", label: "OAuth client secret" },
+  ],
+  tiktok_ads: [
+    { key: "TIKTOK_ADS_ACCESS_TOKEN", label: "TikTok access token" },
+    { key: "TIKTOK_ADS_APP_ID", label: "App ID" },
+    { key: "TIKTOK_ADS_APP_SECRET", label: "App secret" },
+  ],
+  linkedin_ads: [
+    { key: "LINKEDIN_ADS_ACCESS_TOKEN", label: "LinkedIn access token" },
+    { key: "LINKEDIN_ADS_CLIENT_ID", label: "Client ID" },
+    { key: "LINKEDIN_ADS_CLIENT_SECRET", label: "Client secret" },
+  ],
+  microsoft_ads: [
+    { key: "MICROSOFT_ADS_DEVELOPER_TOKEN", label: "Developer token" },
+    { key: "MICROSOFT_ADS_REFRESH_TOKEN", label: "OAuth refresh token" },
+    { key: "MICROSOFT_ADS_CLIENT_ID", label: "Client ID" },
+    { key: "MICROSOFT_ADS_CLIENT_SECRET", label: "Client secret" },
+  ],
   sendgrid: [
     { key: "SENDGRID_API_KEY", label: "SendGrid API key", placeholder: "SG..." },
     { key: "SENDGRID_FROM_EMAIL", label: "From email", placeholder: "hello@example.com" },

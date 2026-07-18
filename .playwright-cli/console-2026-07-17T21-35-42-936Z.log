@@ -1,0 +1,7 @@
+[   14559ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   14692ms] [LOG] [HMR] connected @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   15389ms] [LOG] %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   15390ms] [LOG] %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {route: /, path: /} @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   15391ms] [LOG] %c[Vercel Web Analytics]%c [view] http://127.0.0.1:3100/ color: rgb(120, 120, 120) color: inherit {o: http://127.0.0.1:3100/, sv: 0.1.3, sdkn: @vercel/analytics/next, sdkv: 2.0.1, ts: 1784324158326} /_vercel/insights/view @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   71244ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   71389ms] [LOG] [Fast Refresh] done in 249ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477

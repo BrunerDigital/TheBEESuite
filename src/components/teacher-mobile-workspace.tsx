@@ -1454,7 +1454,7 @@ export function TeacherMobileWorkspace({
                 <div className="flex flex-wrap gap-1">
                   <Button type="button" size="xs" variant="outline" onClick={startNapNow}>Start nap</Button>
                   <Button type="button" size="xs" variant="outline" onClick={endLatestNapNow}>End nap</Button>
-                  <Button type="button" size="xs" variant={noNap ? "default" : "outline"} onClick={markNoNapToday}>No Nap</Button>
+                  <Button type="button" size="xs" variant={noNap ? "default" : "outline"} onClick={() => noNap ? setNoNap(false) : markNoNapToday()}>No nap today</Button>
                   <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Wet")}>Wet</Button>
                   <Button type="button" size="xs" variant="outline" onClick={() => addDiaperPreset("Potty")}>Potty</Button>
                 </div>
@@ -1534,17 +1534,22 @@ export function TeacherMobileWorkspace({
                     <Moon className="size-4" />
                     Naps
                   </div>
-                  <Button type="button" size="xs" variant="outline" onClick={() => { setNoNap(false); setNapRows((current) => [...current, createNapDraft()]); }}>
-                    <Plus data-icon="inline-start" />
-                    Add
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="xs" variant={noNap ? "default" : "outline"} onClick={() => noNap ? setNoNap(false) : markNoNapToday()}>
+                      No nap today
+                    </Button>
+                    <Button type="button" size="xs" variant="outline" onClick={() => { setNoNap(false); setNapRows((current) => [...current, createNapDraft()]); }}>
+                      <Plus data-icon="inline-start" />
+                      Add nap
+                    </Button>
+                  </div>
                 </div>
                 {noNap ? (
                   <div className="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
                     No nap will be saved on this daily report.
                   </div>
                 ) : null}
-                <div className="space-y-3">
+                <div className={noNap ? "hidden" : "space-y-3"}>
                   {napRows.map((row, index) => (
                     <div key={row.id} className="grid gap-2 rounded-lg border bg-card/40 p-2">
                       <div className="flex items-center justify-between gap-2">

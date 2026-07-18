@@ -1,0 +1,260 @@
+[    3337ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    3558ms] [LOG] [HMR] connected @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    4625ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    4776ms] [LOG] %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    4777ms] [LOG] %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {route: /, path: /} @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    4777ms] [LOG] %c[Vercel Web Analytics]%c [view] http://127.0.0.1:3100/ color: rgb(120, 120, 120) color: inherit {o: http://127.0.0.1:3100/, sv: 0.1.3, sdkn: @vercel/analytics/next, sdkv: 2.0.1, ts: 1784324393110} /_vercel/insights/view @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[    4910ms] [LOG] [Fast Refresh] done in 391ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   12094ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   12251ms] [LOG] [Fast Refresh] done in 267ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   36261ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   36505ms] [LOG] [Fast Refresh] done in 349ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   36719ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   37069ms] [LOG] [Fast Refresh] done in 453ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   49831ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   50341ms] [LOG] [Fast Refresh] done in 618ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   50534ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   50573ms] [LOG] [HMR] connected @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   51176ms] [ERROR] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <InnerLayoutRouter url="/" tree={[...]} params={{}} cacheNode={{rsc:<Fragment>, ...}} segmentPath={[...]} ...>
+        <SegmentViewNode type="page" pagePath="page.tsx">
+          <SegmentTrieNode>
+          <LandingPage>
+            <main className="min-h-scre...">
+              <header>
+              <section>
+              <section>
+              <section>
+              <section>
+              <section id="savings" className="relative b...">
+                <div className="mx-auto ma...">
+                  <div>
+                  <div className="mt-10">
+                    <LandingSavingsCalculator>
+                      <div className="grid gap-5...">
+                        <div className="rounded-xl...">
+                          <div>
+                          <div className="mt-6 space...">
+                            <div>
+                              ...
+                                <Input id="savings-ce..." type="number" min={1} max={75} step={1} value={3} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ce..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-centers"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={3}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={1}
+                                        max={75}
+                                        step={1}
+                                        aria-label="Schools"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={1}
+                                  max={75}
+                                  step={1}
+                                  value={3}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Schools slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-ch..." type="number" min={25} max={6000} step={25} value={280} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ch..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-children"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={280}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={25}
+                                        max={6000}
+                                        step={25}
+                                        aria-label="Enrolled children"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={25}
+                                  max={6000}
+                                  step={25}
+                                  value={280}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Enrolled children slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-staff" type="number" min={5} max={900} step={5} value={42} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-staff" ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-staff"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={42}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={5}
+                                        max={900}
+                                        step={5}
+                                        aria-label="Teachers and staff"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={5}
+                                  max={900}
+                                  step={5}
+                                  value={42}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Teachers and staff slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-ho..." type="number" min={15} max={55} step={1} value={24} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-ho..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-hourlyRate"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={24}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={15}
+                                        max={55}
+                                        step={1}
+                                        aria-label="Admin hourly cost"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={15}
+                                  max={55}
+                                  step={1}
+                                  value={24}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Admin hourly cost slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                            <div>
+                              ...
+                                <Input id="savings-we..." type="number" min={125} max={650} step={5} value={235} ...>
+                                  <Input type="number" data-slot="input" className="w-full min..." id="savings-we..." ...>
+                                    <FieldControl ref={null} type="number" data-slot="input" className="w-full min..." ...>
+                                      <input
+                                        id="savings-weeklyTuition"
+                                        disabled={false}
+                                        name={undefined}
+                                        ref={function}
+                                        aria-labelledby={undefined}
+                                        autoFocus={false}
+                                        value={235}
+                                        onChange={function}
+                                        onFocus={function}
+                                        onBlur={function}
+                                        onKeyDown={function}
+                                        type="number"
+                                        data-slot="input"
+                                        min={125}
+                                        max={650}
+                                        step={5}
+                                        aria-label="Average weekly tuition"
+                                        className="w-full min-w-0 rounded-lg border px-2.5 py-1 text-base transition-c..."
+-                                       style={{caret-color:"transparent"}}
+                                      >
+                              <div className="mt-3 flex ...">
+                                <span>
+                                <input
+                                  type="range"
+                                  min={125}
+                                  max={650}
+                                  step={5}
+                                  value={235}
+                                  onChange={function onChange}
+                                  className="h-2 flex-1 cursor-pointer accent-amber-300"
+                                  aria-label="Average weekly tuition slider"
+-                                 style={{caret-color:"transparent"}}
+                                >
+                                ...
+                        ...
+              ...
+        ...
+      ...
+ @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[   51206ms] [LOG] %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   51207ms] [LOG] %c[Vercel Web Analytics]%c Running queued event color: rgb(120, 120, 120) color: inherit pageview {route: /, path: /} @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   51207ms] [LOG] %c[Vercel Web Analytics]%c [view] http://127.0.0.1:3100/ color: rgb(120, 120, 120) color: inherit {o: http://127.0.0.1:3100/, sv: 0.1.3, sdkn: @vercel/analytics/next, sdkv: 2.0.1, ts: 1784324439540} /_vercel/insights/view @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   51314ms] [LOG] [Fast Refresh] rebuilding @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   51496ms] [LOG] [Fast Refresh] done in 288ms @ http://127.0.0.1:3100/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477

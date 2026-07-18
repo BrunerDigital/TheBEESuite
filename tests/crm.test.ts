@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { EnrollmentStage, UserRole } from "@prisma/client";
-import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
+import { getDashboardCenterScopeWhere, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
 import { stageNurtureTask } from "@/lib/crm";
 
@@ -39,4 +39,17 @@ test("location CRM lead scope limits dashboard leads to the user's assigned cent
   } satisfies CurrentUser;
 
   assert.deepEqual(getLeadScopeWhere(user), { id: { in: ["center_holly_hill"] } });
+
+  assert.deepEqual(
+    getDashboardCenterScopeWhere({ ...user, centerIds: ["center_holly_hill", "center_other"] }),
+    { id: "center_holly_hill" },
+  );
+  assert.deepEqual(
+    getDashboardCenterScopeWhere({
+      ...user,
+      role: UserRole.REGIONAL_MANAGER,
+      centerIds: ["center_holly_hill", "center_other"],
+    }),
+    { id: { in: ["center_holly_hill", "center_other"] } },
+  );
 });

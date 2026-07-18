@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Building2, CalendarClock, CheckCircle2, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
+import { DisplayValue } from "@/components/ui/editable-display-field";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,6 +60,17 @@ export type BillingWorkbenchFamily = {
         amountCents: number;
         productId: string | null;
       }>;
+    }>;
+    recentPayments?: Array<{
+      id: string;
+      amountCents: number;
+      refundedCents: number;
+      refundableCents: number;
+      status: string;
+      provider: string;
+      paidAt: Date | string | null;
+      paymentMethodLabel: string | null;
+      stripePaymentIntentId: string | null;
     }>;
   } | null;
   children: Array<{
@@ -285,6 +297,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [agencyCoverageEnd, setAgencyCoverageEnd] = useState("");
   const [agencyChildId, setAgencyChildId] = useState("none");
   const [agencyNotes, setAgencyNotes] = useState("");
+  const [checkAmountDollars, setCheckAmountDollars] = useState("");
+  const [checkNumber, setCheckNumber] = useState("");
+  const [checkPaidAt, setCheckPaidAt] = useState(todayDate());
+  const [checkNotes, setCheckNotes] = useState("");
+  const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
+  const [refundAmountDollars, setRefundAmountDollars] = useState("");
+  const [refundReason, setRefundReason] = useState("");
   const [paymentTarget, setPaymentTarget] = useState("balance");
   const [paymentAmountDollars, setPaymentAmountDollars] = useState("");
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
@@ -348,6 +367,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
+  const refundablePayments = (selectedBillingAccount?.recentPayments ?? []).filter((payment) => payment.refundableCents > 0 && payment.stripePaymentIntentId);
+  const selectedRefundPaymentIds = refundPaymentIds.filter((id) => refundablePayments.some((payment) => payment.id === id));
+  const visibleRefundableCents = refundablePayments.reduce((total, payment) => total + payment.refundableCents, 0);
   const selectedPaymentInvoiceId = paymentTarget.startsWith("invoice:") ? paymentTarget.slice("invoice:".length) : "";
   const selectedPaymentInvoice = selectedPaymentInvoiceId
     ? openInvoices.find((invoice) => invoice.id === selectedPaymentInvoiceId) ?? null
@@ -646,6 +668,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setFamilyId("");
     setChildId("none");
     setAgencyChildId("none");
+    setRefundPaymentIds([]);
+    setRefundAmountDollars("");
     setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
@@ -656,6 +680,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setFamilyId(value);
     setChildId("none");
     setAgencyChildId("none");
+    setRefundPaymentIds([]);
+    setRefundAmountDollars("");
     setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
@@ -682,6 +708,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         created?: number;
         skipped?: number;
         totalCents?: number;
+        warning?: string | null;
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Billing action could not be completed.");
@@ -693,11 +720,31 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         setAgencyAmountDollars("");
         setAgencyReference("");
         setAgencyNotes("");
+        router.refresh();
+        return;
+      }
+      if (payload.mode === "manualCheckPayment") {
+        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
+        setStatusMessage(`${total} check payment posted to the family ledger.`);
+        setCheckAmountDollars("");
+        setCheckNumber("");
+        setCheckNotes("");
+        router.refresh();
+        return;
+      }
+      if (payload.mode === "refundPayment") {
+        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
+        setStatusMessage(json?.warning || `${total} family refund issued across the eligible original payment method(s).`);
+        setRefundAmountDollars("");
+        setRefundReason("");
+        setRefundPaymentIds([]);
+        router.refresh();
         return;
       }
       if (payload.mode === "adjustment") {
         setStatusMessage("Ledger adjustment posted to the selected family account.");
         setAmountDollars("");
+        router.refresh();
         return;
       }
       const created = json?.created ?? 0;
@@ -784,6 +831,36 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       coverageEnd: agencyCoverageEnd,
       description,
       notes: agencyNotes,
+    });
+  }
+
+  function submitManualCheckPayment() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before posting a check payment.");
+    if (!checkAmountDollars || !checkNumber.trim()) return setErrorMessage("Enter the check amount and check number.");
+    if (!confirmBillingAction(`post check #${checkNumber.trim()} as a payment`)) return;
+    submit({
+      mode: "manualCheckPayment",
+      familyId: selectedFamily.id,
+      amountDollars: checkAmountDollars,
+      checkNumber: checkNumber.trim(),
+      paidAt: checkPaidAt,
+      description: `Check payment #${checkNumber.trim()}`,
+      notes: checkNotes,
+    });
+  }
+
+  function submitRefundPayment() {
+    if (!selectedFamily) return setErrorMessage("Choose a family.");
+    const refundCents = dollarsToCents(refundAmountDollars);
+    if (refundCents <= 0) return setErrorMessage("Enter a refund amount greater than zero.");
+    if (!refundReason.trim()) return setErrorMessage("Enter a reason for the refund.");
+    if (!confirmBillingAction(`refund ${money(refundCents)} to ${selectedFamily.name}`)) return;
+    submit({
+      mode: "refundPayment",
+      familyId: selectedFamily.id,
+      paymentIds: selectedRefundPaymentIds,
+      amountDollars: refundAmountDollars,
+      reason: refundReason.trim(),
     });
   }
 
@@ -1362,10 +1439,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               <Label>Amount</Label>
               <Input inputMode="decimal" value={planAmountDollars} onChange={(event) => setPlanAmountDollars(event.target.value)} placeholder="250.00" />
             </div>
-            <div className="space-y-1">
-              <Label>Cadence</Label>
-              <Input value="Weekly" readOnly />
-            </div>
+            <DisplayValue label="Cadence" value="Weekly" detail="Standard billing cycle" />
             <div className="flex items-end">
               <Button disabled={isPending} onClick={saveTuitionPlan} className="w-full">
                 Save Rate
@@ -1380,8 +1454,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
             <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Recurring</TabsTrigger>
+            <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
+            <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency payment</TabsTrigger>
-            <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / debit</TabsTrigger>
+            <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
           </TabsList>
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
@@ -1578,10 +1654,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label>Autobill weekday</Label>
-                <Input value="Friday" readOnly />
-              </div>
+              <DisplayValue label="Autobill weekday" value="Friday" detail="Runs automatically" />
               <div className="space-y-1">
                 <Label>Start week</Label>
                 <Input
@@ -1661,6 +1734,84 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             </Button>
           </TabsContent>
 
+          <TabsContent value="check" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Record a payment received by check</div>
+              <p className="mt-1 text-xs text-muted-foreground">This posts a completed manual payment and reduces the family ledger balance. Keep the physical check according to the school&apos;s deposit policy.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>Amount</Label>
+                <Input inputMode="decimal" value={checkAmountDollars} onChange={(event) => setCheckAmountDollars(event.target.value)} placeholder="250.00" />
+              </div>
+              <div className="space-y-1">
+                <Label>Check number / reference</Label>
+                <Input value={checkNumber} onChange={(event) => setCheckNumber(event.target.value)} placeholder="1042" />
+              </div>
+              <div className="space-y-1">
+                <Label>Received date</Label>
+                <Input type="date" value={checkPaidAt} onChange={(event) => setCheckPaidAt(event.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea value={checkNotes} onChange={(event) => setCheckNotes(event.target.value)} placeholder="Optional deposit, payer, or office notes" />
+            </div>
+            <Button disabled={isPending || !selectedFamily || !checkAmountDollars || !checkNumber.trim()} onClick={submitManualCheckPayment}>
+              <Banknote data-icon="inline-start" />
+              Post Check Payment
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="refund" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Issue a family refund</div>
+              <p className="mt-1 text-xs text-muted-foreground">Enter the total amount for the family. Bee Suite can split it across eligible Stripe transactions; payment references are optional and are used first for record keeping.</p>
+            </div>
+            {refundablePayments.length ? (
+              <>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label>Total refund amount</Label>
+                    <Input inputMode="decimal" value={refundAmountDollars} onChange={(event) => setRefundAmountDollars(event.target.value)} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label>Payment references <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                    <div className="max-h-36 space-y-1 overflow-auto rounded-lg border bg-card/40 p-2">
+                      {refundablePayments.map((payment) => (
+                        <label key={payment.id} className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/50">
+                          <input
+                            type="checkbox"
+                            checked={selectedRefundPaymentIds.includes(payment.id)}
+                            onChange={(event) => setRefundPaymentIds((current) => event.target.checked ? [...current, payment.id] : current.filter((id) => id !== payment.id))}
+                          />
+                          <span>{formatShortDate(payment.paidAt)} · {money(payment.amountCents)} paid · {money(payment.refundableCents)} available{payment.paymentMethodLabel ? ` · ${payment.paymentMethodLabel}` : ""}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Refund reason</Label>
+                  <Textarea value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="Duplicate payment, incorrect amount, enrollment change, or other approved reason" />
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button disabled={isPending || dollarsToCents(refundAmountDollars) <= 0 || !refundReason.trim()} onClick={submitRefundPayment} variant="destructive">
+                    <RotateCcw data-icon="inline-start" />
+                    Issue Refund
+                  </Button>
+                  <Badge variant="outline">{money(visibleRefundableCents)} shown as Stripe-refundable</Badge>
+                </div>
+              </>
+            ) : (
+              <Alert>
+                <AlertCircle data-icon="inline-start" />
+                <AlertTitle>No refundable Stripe payments</AlertTitle>
+                <AlertDescription>This family has no completed processor payment with a remaining refundable amount.</AlertDescription>
+              </Alert>
+            )}
+          </TabsContent>
+
           <TabsContent value="adjustment" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div className="grid gap-3 md:grid-cols-3">
               <div className="space-y-1">
@@ -1668,7 +1819,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <Select value={adjustmentType} onValueChange={(value) => value && setAdjustmentType(value)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="credit">Credit family balance</SelectItem>
+                    <SelectItem value="credit">Add family credit</SelectItem>
                     <SelectItem value="debit">Add balance debit</SelectItem>
                   </SelectContent>
                 </Select>

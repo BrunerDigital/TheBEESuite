@@ -115,6 +115,8 @@ async function POSTHandler(request: NextRequest) {
     stripeFundsFlow: "connected_account_direct_charge_application_fee",
     stripePayoutCollectionMode: "stripe_automatic",
     stripePayoutSchedulePreference: "fastest_available",
+    stripeSoftwarePaymentPreference: clean(existingFields.stripeSoftwarePaymentPreference) || "payout_bank",
+    stripeSoftwarePaymentStatus: clean(existingFields.stripeSoftwareDefaultPaymentMethodId) ? "ready" : "authorization_required",
   };
   let accountId = readStripeConnectedAccountId(existingFields);
   let createdAccount = false;

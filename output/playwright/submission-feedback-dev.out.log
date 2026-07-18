@@ -1,0 +1,15 @@
+
+> the-bee-suite@0.1.0 dev
+> next dev --hostname 127.0.0.1 --port 3100
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://127.0.0.1:3100
+- Network:       http://127.0.0.1:3100
+- Environments: .env.local
+✓ Ready in 4.9s
+
+ GET / 200 in 3.9s (next.js: 464ms, proxy.ts: 545ms, application-code: 2.9s)
+✓ Compiled in 305ms
+ GET / 200 in 583ms (next.js: 209ms, proxy.ts: 80ms, application-code: 294ms)
+ GET / 200 in 1278ms (next.js: 10ms, proxy.ts: 10ms, application-code: 1258ms)
+[?25h

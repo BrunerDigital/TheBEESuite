@@ -12,10 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Textarea } from "@/components/ui/textarea";
+import { EditableDisplayField } from "@/components/ui/editable-display-field";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard } from "@/components/workspace-preferences";
 import { directorLaunchChecklistTasks } from "@/lib/setup-checklists";
@@ -241,16 +239,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             title="School Receipt Details"
             description="Used on customer receipts and ledger printouts for this school."
           >
-              <div className="space-y-2">
-                <Label htmlFor="school-ein">School EIN</Label>
-                <Input
-                  id="school-ein"
-                  inputMode="numeric"
-                  value={schoolEin}
-                  onChange={(event) => setSchoolEin(event.target.value)}
-                  placeholder="12-3456789"
-                />
-              </div>
+              <EditableDisplayField id="school-ein" label="School EIN" inputMode="numeric" value={schoolEin} onChange={setSchoolEin} placeholder="12-3456789" emptyLabel="Add the school EIN" />
               <p className="text-xs text-muted-foreground">
                 Enter 9 digits. The app formats it for printed receipts.
               </p>
@@ -269,16 +258,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     <div key={metric} className="rounded-lg border bg-background/50 p-3 text-sm">{metric}</div>
                   ))}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="setup-notes">Director input</Label>
-                  <Textarea
-                    id="setup-notes"
-                    value={values[activeSection.field] ?? ""}
-                    onChange={(event) => updateValue(activeSection.field, event.target.value)}
-                    placeholder={activeSection.placeholder}
-                    className="min-h-36"
-                  />
-                </div>
+                <EditableDisplayField id="setup-notes" label="Director input" multiline value={values[activeSection.field] ?? ""} onChange={(value) => updateValue(activeSection.field, value)} placeholder={activeSection.placeholder} emptyLabel="Click the amber dot to add director notes" />
                 <div className="rounded-lg border bg-background/50 p-3">
                   <div className="text-sm font-medium">Required actions</div>
                   <ul className="mt-2 space-y-2 text-sm text-muted-foreground">

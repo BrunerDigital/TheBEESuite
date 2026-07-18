@@ -1,0 +1,693 @@
+- main [ref=e2]:
+  - generic [ref=e4]:
+    - link "The BEE Suite home" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - img "The BEE Suite logo" [ref=e7]
+      - generic [ref=e8]:
+        - generic [ref=e9]: The BEE Suite
+        - generic [ref=e10]: Childcare CRM & Operations
+    - navigation [ref=e11]:
+      - link "Product" [ref=e12] [cursor=pointer]:
+        - /url: "#product"
+      - link "How it works" [ref=e13] [cursor=pointer]:
+        - /url: "#workflows"
+      - link "Capacity" [ref=e14] [cursor=pointer]:
+        - /url: "#capacity-planning"
+      - link "Savings" [ref=e15] [cursor=pointer]:
+        - /url: "#savings"
+      - link "Schools" [ref=e16] [cursor=pointer]:
+        - /url: "#school-use"
+      - link "App" [ref=e17] [cursor=pointer]:
+        - /url: /app
+      - link "Registration" [ref=e18] [cursor=pointer]:
+        - /url: /registration
+      - link "Trust" [ref=e19] [cursor=pointer]:
+        - /url: "#trust"
+    - generic [ref=e20]:
+      - link "Log in" [ref=e21] [cursor=pointer]:
+        - /url: /directors
+      - button "Request workspace" [ref=e22] [cursor=pointer]
+  - generic [ref=e26]:
+    - generic [ref=e27]:
+      - heading "The BEE Suite" [level=1] [ref=e28]
+      - img "The BEE Suite" [ref=e29]
+      - paragraph [ref=e30]: The secure, web-based, easy to use command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
+      - generic [ref=e31]:
+        - button "Request web app workspace" [ref=e32] [cursor=pointer]
+        - button "View registration flow" [ref=e33] [cursor=pointer]
+        - button "Log in" [ref=e34] [cursor=pointer]
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]: Role-safe web app
+          - generic [ref=e38]: Tenant, brand, owner group, school, and classroom scope
+        - generic [ref=e39]:
+          - generic [ref=e40]: Enrollment to ops
+          - generic [ref=e41]: Inquiry, registration, family setup, billing, and reports
+        - generic [ref=e42]:
+          - generic [ref=e43]: Human-reviewed AI
+          - generic [ref=e44]: Drafts and summaries with staff decision guardrails
+    - generic [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: Live product view
+          - generic [ref=e51]: Command center
+          - generic [ref=e52]: Executive visibility across enrollment, occupancy, staff ratios, billing readiness, and center tasks.
+        - generic [ref=e53]:
+          - button "Previous hero slide" [ref=e54]
+          - button "Next hero slide" [ref=e57]
+      - generic [ref=e61]:
+        - complementary [ref=e62]:
+          - generic [ref=e63]:
+            - img "The BEE Suite logo" [ref=e65]
+            - generic [ref=e66]:
+              - generic [ref=e67]: The BEE Suite
+              - generic [ref=e68]: Childcare CRM
+          - navigation [ref=e69]:
+            - generic [ref=e70]: Command Center
+            - generic [ref=e74]: Dashboard
+            - generic [ref=e78]: Inbox
+            - generic [ref=e82]: Families
+            - generic [ref=e86]: Enrollments
+            - generic [ref=e90]: Reports
+          - generic [ref=e94]:
+            - generic [ref=e95]: Little Explorers Center
+            - generic [ref=e96]: "Center ID: LEC-1001"
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]: Search families, children, staff, invoices, and more...
+            - generic [ref=e104]:
+              - button "Quick Add" [ref=e105]
+              - button "Notifications" [ref=e107]
+          - generic [ref=e111]:
+            - generic [ref=e112]:
+              - heading "Welcome back, Maya" [level=2] [ref=e113]
+              - paragraph [ref=e114]: Here is what is happening across your centers today.
+            - generic [ref=e115]: May 16, 2025
+          - generic [ref=e119]:
+            - generic [ref=e126]:
+              - generic [ref=e127]: Active Enrollments
+              - generic [ref=e128]: "128"
+              - generic [ref=e129]: +8 vs last month
+            - generic [ref=e134]:
+              - generic [ref=e135]: Open Inquiries
+              - generic [ref=e136]: "27"
+              - generic [ref=e137]: +5 this week
+            - generic [ref=e143]:
+              - generic [ref=e144]: Occupancy Rate
+              - generic [ref=e145]: 87%
+              - generic [ref=e146]: +4% vs last month
+            - generic [ref=e151]:
+              - generic [ref=e152]: Collected MTD
+              - generic [ref=e153]: $48.3k
+              - generic [ref=e154]: +12% vs last month
+          - generic [ref=e155]:
+            - generic [ref=e156]:
+              - generic [ref=e158]:
+                - generic [ref=e159]: Enrollment Pipeline
+                - generic [ref=e160]: "Total prospects: 54"
+              - generic [ref=e163]:
+                - generic [ref=e164]:
+                  - generic [ref=e165]: New Inquiry
+                  - generic [ref=e166]: "18"
+                - generic [ref=e167]:
+                  - generic [ref=e168]: Tour Scheduled
+                  - generic [ref=e169]: "12"
+                - generic [ref=e170]:
+                  - generic [ref=e171]: Application
+                  - generic [ref=e172]: "9"
+                - generic [ref=e173]:
+                  - generic [ref=e174]: Offer Extended
+                  - generic [ref=e175]: "6"
+                - generic [ref=e176]:
+                  - generic [ref=e177]: Enrolled
+                  - generic [ref=e178]: "9"
+              - generic [ref=e185]:
+                - generic [ref=e186]: Apr 16
+                - generic [ref=e187]: Apr 30
+                - generic [ref=e188]: May 14
+            - generic [ref=e189]:
+              - generic [ref=e190]: AI Daily Center Summary
+              - paragraph [ref=e195]: Good morning. Mr. Bee found 2 tours today, 4 follow-ups due, and 3 compliance reminders that need review.
+              - generic [ref=e196]:
+                - generic [ref=e201]:
+                  - generic [ref=e202]: Tours scheduled
+                  - generic [ref=e203]: 10:00 AM, 1:30 PM
+                - generic [ref=e208]:
+                  - generic [ref=e209]: Birthday reminders
+                  - generic [ref=e210]: Celebrate Ava, Logan, Mia
+                - generic [ref=e215]:
+                  - generic [ref=e216]: Records expiring
+                  - generic [ref=e217]: 4 children need updates
+      - generic [ref=e218]:
+        - button "Show Command center slide" [ref=e219]
+        - button "Show Inquiry to tour slide" [ref=e220]
+        - button "Show School day loop slide" [ref=e221]
+  - generic [ref=e224]:
+    - generic [ref=e225]:
+      - heading "A CRM built around childcare enrollment, not generic sales." [level=2] [ref=e226]
+      - paragraph [ref=e227]: Every inquiry is tied to a center, program, family, child, tour, status, source, and follow-up history. Schools can create and edit leads directly while executives keep the system-level view across brands, owner groups, and centers.
+    - generic [ref=e228]:
+      - generic [ref=e235]:
+        - heading "Capture every inquiry" [level=3] [ref=e236]
+        - paragraph [ref=e237]: Website embeds, online registration packets, manual lead entry, location routing, Google Sheets backup, and notification emails all feed the same CRM record.
+      - generic [ref=e245]:
+        - heading "Move families with context" [level=3] [ref=e246]
+        - paragraph [ref=e247]: Directors can update stages, notes, tours, tasks, start dates, program interest, and child details without leaving the pipeline.
+      - generic [ref=e254]:
+        - heading "Follow up with Mr. Bee" [level=3] [ref=e255]
+        - paragraph [ref=e256]: AI suggestions draft warm replies and next steps, while sensitive enrollment, billing, safety, and compliance decisions stay human-reviewed.
+  - generic [ref=e259]:
+    - generic [ref=e260]:
+      - heading "The workflows connect instead of living in separate tabs." [level=2] [ref=e261]
+      - paragraph [ref=e262]: Inquiry capture, online registration, classroom engagement, billing readiness, compliance work, reporting, and AI assistance share the same center record, so schools do less duplicate admin work.
+    - generic [ref=e263]:
+      - generic [ref=e266]:
+        - heading "Enrollment capture" [level=3] [ref=e271]
+        - paragraph [ref=e272]: Parents inquire or submit an online registration packet, the form routes by school, the CRM creates the lead, and the school receives a notification.
+        - generic [ref=e273]:
+          - generic [ref=e274]:
+            - generic [ref=e275]: "1"
+            - generic [ref=e276]: Website form
+          - generic [ref=e278]:
+            - generic [ref=e279]: "2"
+            - generic [ref=e280]: Registration packet
+          - generic [ref=e282]:
+            - generic [ref=e283]: "3"
+            - generic [ref=e284]: CRM lead
+          - generic [ref=e286]:
+            - generic [ref=e287]: "4"
+            - generic [ref=e288]: School alert
+      - generic [ref=e291]:
+        - heading "School day engagement" [level=3] [ref=e296]
+        - paragraph [ref=e297]: The lobby kiosk, classroom updates, photos, and daily reports create one connected record for staff and families.
+        - generic [ref=e298]:
+          - generic [ref=e299]:
+            - generic [ref=e300]: "1"
+            - generic [ref=e301]: PIN check-in
+          - generic [ref=e303]:
+            - generic [ref=e304]: "2"
+            - generic [ref=e305]: Teacher update
+          - generic [ref=e307]:
+            - generic [ref=e308]: "3"
+            - generic [ref=e309]: Parent portal
+          - generic [ref=e311]:
+            - generic [ref=e312]: "4"
+            - generic [ref=e313]: Daily report
+      - generic [ref=e316]:
+        - heading "Executive rollup" [level=3] [ref=e320]
+        - paragraph [ref=e321]: Operators see FTE, occupancy, conversion, revenue readiness, ratio snapshots, and action queues across every center.
+        - generic [ref=e322]:
+          - generic [ref=e323]:
+            - generic [ref=e324]: "1"
+            - generic [ref=e325]: FTE data
+          - generic [ref=e327]:
+            - generic [ref=e328]: "2"
+            - generic [ref=e329]: Pipeline health
+          - generic [ref=e331]:
+            - generic [ref=e332]: "3"
+            - generic [ref=e333]: Center snapshot
+          - generic [ref=e335]:
+            - generic [ref=e336]: "4"
+            - generic [ref=e337]: Next action
+      - generic [ref=e340]:
+        - heading "Account separation" [level=3] [ref=e345]
+        - paragraph [ref=e346]: A provider can run one school, a franchisee can own a few locations, and a brand admin can manage the larger network without crossing data boundaries.
+        - generic [ref=e347]:
+          - generic [ref=e348]:
+            - generic [ref=e349]: "1"
+            - generic [ref=e350]: Tenant
+          - generic [ref=e352]:
+            - generic [ref=e353]: "2"
+            - generic [ref=e354]: Brand
+          - generic [ref=e356]:
+            - generic [ref=e357]: "3"
+            - generic [ref=e358]: Owner group
+          - generic [ref=e360]:
+            - generic [ref=e361]: "4"
+            - generic [ref=e362]: Center
+  - generic [ref=e365]:
+    - generic [ref=e366]:
+      - generic [ref=e367]:
+        - heading "Capacity planning before empty seats cost the school." [level=2] [ref=e368]
+        - paragraph [ref=e369]: "The BEE Suite already tracks the pieces that make enrollment planning real: child age, program interest, classroom capacity, staff assignment, start dates, tours, registration status, billing readiness, and open documents. The next layer turns those signals into a forward-looking seat plan."
+      - generic [ref=e370]:
+        - generic [ref=e376]:
+          - heading "30, 60, and 90 day room view" [level=3] [ref=e377]
+          - paragraph [ref=e378]: Directors can see where starts, withdrawals, birthdays, move-ups, capacity, and ratios may collide before a seat sits empty or a room drifts out of range.
+        - generic [ref=e386]:
+          - heading "Waitlist fit with school context" [level=3] [ref=e387]
+          - paragraph [ref=e388]: Open seats are more useful when they are matched to program interest, child age, desired start date, required documents, and billing readiness.
+        - generic [ref=e395]:
+          - heading "Ratio and staffing early warnings" [level=3] [ref=e396]
+          - paragraph [ref=e397]: Enrollment planning is tied back to classroom ratios, teacher assignment, schedules, and licensed capacity instead of living in a separate spreadsheet.
+        - generic [ref=e404]:
+          - heading "A director answer screen" [level=3] [ref=e405]
+          - paragraph [ref=e406]: When a parent asks when a child can start, the school can answer from one planning surface instead of checking files, calendars, rosters, and inboxes.
+    - generic [ref=e407]:
+      - generic [ref=e409]:
+        - generic [ref=e410]: Seat forecast
+        - heading "Director planning board" [level=3] [ref=e411]
+        - paragraph [ref=e412]: A clearer answer for openings, move-ups, waitlist fit, and ratio risk.
+      - generic [ref=e416]:
+        - generic [ref=e417]:
+          - generic [ref=e418]: Infants
+          - generic [ref=e419]: 2 projected openings
+          - generic [ref=e420]: 1 waitlist match
+          - generic [ref=e421]: Ratio review
+        - generic [ref=e422]:
+          - generic [ref=e423]: Toddlers
+          - generic [ref=e424]: 5 move-ups within 60 days
+          - generic [ref=e425]: 4 tour families
+          - generic [ref=e426]: Staff ready
+        - generic [ref=e427]:
+          - generic [ref=e428]: Preschool
+          - generic [ref=e429]: 3 starts pending packets
+          - generic [ref=e430]: 2 payment setups
+          - generic [ref=e431]: Docs needed
+        - generic [ref=e432]:
+          - generic [ref=e433]: VPK
+          - generic [ref=e434]: Full today
+          - generic [ref=e435]: 8 upcoming transitions
+          - generic [ref=e436]: Watch capacity
+      - generic [ref=e437]:
+        - generic [ref=e438]:
+          - generic [ref=e439]: 90 days
+          - generic [ref=e440]: planning window
+        - generic [ref=e441]:
+          - generic [ref=e442]: 4 signals
+          - generic [ref=e443]: capacity, age, docs, billing
+        - generic [ref=e444]:
+          - generic [ref=e445]: 1 answer
+          - generic [ref=e446]: what can we offer this family?
+  - generic [ref=e448]:
+    - generic [ref=e449]:
+      - generic [ref=e450]:
+        - heading "A better savings calculator for real operating decisions." [level=2] [ref=e451]
+        - paragraph [ref=e452]: Generic time-savings math is not enough for childcare. This estimate considers school count, children, staff, admin cost, tuition, and the seat visibility that comes from tying enrollment to rooms, billing, documents, and staff coverage.
+      - generic [ref=e453]:
+        - generic [ref=e459]:
+          - heading "Adjustable" [level=3] [ref=e460]
+          - paragraph [ref=e461]: Use your own school, enrollment, staff, and tuition assumptions.
+        - generic [ref=e468]:
+          - heading "Operational" [level=3] [ref=e469]
+          - paragraph [ref=e470]: Includes enrollment, billing, classroom, and compliance admin drag.
+        - generic [ref=e477]:
+          - heading "Capacity-aware" [level=3] [ref=e478]
+          - paragraph [ref=e479]: Separates labor savings from seats that need earlier visibility.
+    - generic [ref=e481]:
+      - generic [ref=e482]:
+        - generic [ref=e487]:
+          - heading "Estimate your monthly operating drag" [level=3] [ref=e488]
+          - paragraph [ref=e489]: Adjust the assumptions for a directional planning conversation.
+        - generic [ref=e490]:
+          - generic [ref=e491]:
+            - generic [ref=e492]:
+              - generic [ref=e493]: Schools
+              - spinbutton "Schools" [ref=e495]: "3"
+            - generic [ref=e496]:
+              - generic [ref=e497]: "1"
+              - slider "Schools slider" [ref=e498] [cursor=pointer]: "3"
+              - generic [ref=e499]: "75"
+          - generic [ref=e500]:
+            - generic [ref=e501]:
+              - generic [ref=e502]: Enrolled children
+              - spinbutton "Enrolled children" [ref=e504]: "280"
+            - generic [ref=e505]:
+              - generic [ref=e506]: "25"
+              - slider "Enrolled children slider" [ref=e507] [cursor=pointer]: "275"
+              - generic [ref=e508]: 6,000
+          - generic [ref=e509]:
+            - generic [ref=e510]:
+              - generic [ref=e511]: Teachers and staff
+              - spinbutton "Teachers and staff" [ref=e513]: "42"
+            - generic [ref=e514]:
+              - generic [ref=e515]: "5"
+              - slider "Teachers and staff slider" [ref=e516] [cursor=pointer]: "40"
+              - generic [ref=e517]: "900"
+          - generic [ref=e518]:
+            - generic [ref=e519]:
+              - generic [ref=e520]: Admin hourly cost
+              - spinbutton "Admin hourly cost" [ref=e522]: "24"
+            - generic [ref=e523]:
+              - generic [ref=e524]: $15
+              - slider "Admin hourly cost slider" [ref=e525] [cursor=pointer]: "24"
+              - generic [ref=e526]: $55
+          - generic [ref=e527]:
+            - generic [ref=e528]:
+              - generic [ref=e529]: Average weekly tuition
+              - spinbutton "Average weekly tuition" [ref=e531]: "235"
+            - generic [ref=e532]:
+              - generic [ref=e533]: $125
+              - slider "Average weekly tuition slider" [ref=e534] [cursor=pointer]: "235"
+              - generic [ref=e535]: $650
+      - generic [ref=e536]:
+        - generic [ref=e537]:
+          - generic [ref=e541]: "111"
+          - generic [ref=e542]: estimated hours exposed each month
+          - paragraph [ref=e543]: Lead follow-up, manual billing work, classroom note reconstruction, document chasing, and compliance prep.
+        - generic [ref=e544]:
+          - generic [ref=e547]: $2,664
+          - generic [ref=e548]: estimated admin time value
+          - paragraph [ref=e549]: A planning value for replacing repeat spreadsheet, inbox, and paper packet work with connected workflows.
+        - generic [ref=e550]:
+          - generic [ref=e554]: "7"
+          - generic [ref=e555]: seats to watch before they sit open
+          - paragraph [ref=e556]: A simple forecast target for upcoming starts, move-ups, waitlist fit, and rooms drifting below capacity.
+        - generic [ref=e557]:
+          - generic [ref=e560]: $9,787
+          - generic [ref=e561]: monthly planning value to review
+          - paragraph [ref=e562]: Directional only. Actual savings depend on process, adoption, tuition, staffing, and center configuration.
+  - generic [ref=e566]:
+    - generic [ref=e567]:
+      - generic [ref=e568]:
+        - heading "Visual guides that make the platform easier to explain." [level=2] [ref=e569]
+        - paragraph [ref=e570]: These product maps help new users, school leaders, franchise teams, and agency partners understand The BEE Suite before they touch the dashboard.
+      - generic [ref=e571]:
+        - generic [ref=e572]:
+          - generic [ref=e573]: Sales calls
+          - paragraph [ref=e574]: Show the full operating model without opening every tab.
+        - generic [ref=e575]:
+          - generic [ref=e576]: Onboarding
+          - paragraph [ref=e577]: Explain what schools configure before going live.
+        - generic [ref=e578]:
+          - generic [ref=e579]: Training
+          - paragraph [ref=e580]: Teach each role how their dashboard connects to the rest of the suite.
+    - generic [ref=e582]:
+      - img "Getting started platform map product explainer graphic" [ref=e584]
+      - generic [ref=e585]:
+        - heading "Getting started platform map" [level=3] [ref=e586]
+        - paragraph [ref=e587]: Shows the current launch order across Vercel, Supabase, Stripe, messaging, Google/webhooks, OpenAI, Procare migration, school setup, and user training.
+    - generic [ref=e588]:
+      - generic [ref=e589]:
+        - img "School launch swimlane product explainer graphic" [ref=e591]
+        - generic [ref=e592]:
+          - heading "School launch swimlane" [level=3] [ref=e593]
+          - paragraph [ref=e594]: Breaks go-live into role-by-role steps for owners, directors, teachers, parents, billing/compliance users, and support so every handoff is explicit.
+      - generic [ref=e595]:
+        - img "Daily user quick start product explainer graphic" [ref=e597]
+        - generic [ref=e598]:
+          - heading "Daily user quick start" [level=3] [ref=e599]
+          - paragraph [ref=e600]: A role-card graphic for the first actions directors, teachers, parents, billing users, executives, and support teams should take in the current app.
+      - generic [ref=e601]:
+        - img "Childcare operating system product explainer graphic" [ref=e603]
+        - generic [ref=e604]:
+          - heading "Childcare operating system" [level=3] [ref=e605]
+          - paragraph [ref=e606]: Shows how enrollment, operations, families, billing, reporting, and platform controls connect around one shared school record.
+      - generic [ref=e607]:
+        - img "Inquiry to enrolled family product explainer graphic" [ref=e609]
+        - generic [ref=e610]:
+          - heading "Inquiry to enrolled family" [level=3] [ref=e611]
+          - paragraph [ref=e612]: Explains the website form, Location ID routing, CRM follow-up, family setup, and school operations handoff.
+      - generic [ref=e613]:
+        - img "Permission-safe data model product explainer graphic" [ref=e615]
+        - generic [ref=e616]:
+          - heading "Permission-safe data model" [level=3] [ref=e617]
+          - paragraph [ref=e618]: Clarifies why executives, directors, teachers, parents, auditors, and pickup users each see the right scope.
+      - generic [ref=e619]:
+        - img "School go-live setup path product explainer graphic" [ref=e621]
+        - generic [ref=e622]:
+          - heading "School go-live setup path" [level=3] [ref=e623]
+          - paragraph [ref=e624]: Walks a new school through active location setup, director configuration, classrooms, families, billing, routing, and smoke testing.
+      - generic [ref=e625]:
+        - img "Daily operating loop product explainer graphic" [ref=e627]
+        - generic [ref=e628]:
+          - heading "Daily operating loop" [level=3] [ref=e629]
+          - paragraph [ref=e630]: Frames the everyday school rhythm from morning command check through drop-off, teacher logs, parent communication, and closeout reporting.
+      - generic [ref=e631]:
+        - img "Director dashboard guide product explainer graphic" [ref=e633]
+        - generic [ref=e634]:
+          - heading "Director dashboard guide" [level=3] [ref=e635]
+          - paragraph [ref=e636]: Gives directors a one-page operating guide for dashboard review, family records, tuition payments, parent follow-up, forms, and common billing FAQs.
+      - generic [ref=e637]:
+        - img "Parent portal guide product explainer graphic" [ref=e639]
+        - generic [ref=e640]:
+          - heading "Parent portal guide" [level=3] [ref=e641]
+          - paragraph [ref=e642]: Shows parents how to set up their portal, see balances, pay by card or verified bank, manage payment info, complete forms, and use kiosk check-in/out.
+  - generic [ref=e645]:
+    - generic [ref=e646]:
+      - heading "Designed for how schools actually use the system." [level=2] [ref=e647]
+      - paragraph [ref=e648]: The BEE Suite is not just a back-office dashboard. It supports the lobby, classroom, enrollment desk, director office, and executive view with role-aware screens and workflows.
+    - generic [ref=e649]:
+      - generic [ref=e650]:
+        - generic [ref=e651]:
+          - img "Parent using a tablet kiosk with a school director in a childcare lobby" [ref=e652]
+          - generic [ref=e659]:
+            - generic [ref=e660]: PIN + QR ready
+            - generic [ref=e661]: Drop-off, pickup, and authorization support
+        - generic [ref=e662]:
+          - heading "Lobby check-in without the morning scramble" [level=3] [ref=e663]
+          - paragraph [ref=e664]: Parents use director-managed PIN or QR options while the school keeps attendance, pickup authorization, and daily arrival records in one place.
+      - generic [ref=e665]:
+        - generic [ref=e666]:
+          - img "Teacher using a tablet in a preschool classroom" [ref=e667]
+          - generic [ref=e674]:
+            - generic [ref=e675]: Daily reports
+            - generic [ref=e676]: Care logs, photos, notes, and parent updates
+        - generic [ref=e677]:
+          - heading "Teacher updates while the classroom keeps moving" [level=3] [ref=e678]
+          - paragraph [ref=e679]: Staff can document meals, naps, activities, photos, incidents, and daily reports without turning classroom communication into end-of-day paperwork.
+      - generic [ref=e680]:
+        - generic [ref=e681]:
+          - img "Childcare directors collaborating at a laptop in a preschool office" [ref=e682]
+          - generic [ref=e691]:
+            - generic [ref=e692]: One operating record
+            - generic [ref=e693]: CRM, enrollment, documents, billing, and staffing
+        - generic [ref=e694]:
+          - heading "Director follow-up with the full school picture" [level=3] [ref=e695]
+          - paragraph [ref=e696]: Directors can review leads, tours, applications, tuition setup, staffing, documents, and parent communication from the same operating record.
+  - generic [ref=e698]:
+    - generic [ref=e699]:
+      - generic [ref=e700]:
+        - heading "Web-based now, split for role-specific app packaging." [level=2] [ref=e701]
+        - paragraph [ref=e702]: The product stays one secure platform, but App Store entries should be role-specific. Parents need a focused phone app, teachers need classroom tablet flows, directors need school operations, and executives need multi-location controls without unrelated login copy.
+      - generic [ref=e703]:
+        - generic [ref=e704]: Native app path
+        - generic [ref=e705]:
+          - paragraph [ref=e706]: 1. Submit the parent app first with /parents as the native launch URL.
+          - paragraph [ref=e707]: 2. Keep teacher, director, and executive apps on their own role-specific login entries.
+          - paragraph [ref=e708]: 3. Package each app with its own bundle ID, screenshots, privacy answers, and review notes.
+        - button "Open app launcher" [ref=e709] [cursor=pointer]
+    - generic [ref=e710]:
+      - generic [ref=e717]:
+        - heading "Parents on phones" [level=3] [ref=e718]
+        - paragraph [ref=e719]: Family portal flows prioritize balance, invoices, documents, messages, daily reports, and contact requests with thumb-friendly actions.
+      - generic [ref=e727]:
+        - heading "Teachers on classroom tablets" [level=3] [ref=e728]
+        - paragraph [ref=e729]: "Teacher screens are optimized for iPad/tablet use: attendance, care logs, photos, incident notes, and daily reports stay reachable while the class keeps moving."
+      - generic [ref=e735]:
+        - heading "Directors and executives on desktop" [level=3] [ref=e736]
+        - paragraph [ref=e737]: "School and executive dashboards stay dense enough for repeated operational work: pipeline, occupancy, billing readiness, reports, setup, and compliance queues."
+  - generic [ref=e740]:
+    - generic [ref=e741]:
+      - heading "Production onboarding starts with the pieces a provider actually needs." [level=2] [ref=e742]
+      - paragraph [ref=e743]: A new operator can create a gated workspace, define the ownership container, complete brand and center setup, copy their inquiry form, invite users, and prepare payout onboarding before live parent workflows are enabled.
+    - generic [ref=e744]:
+      - generic [ref=e752]:
+        - heading "Brand profile" [level=3] [ref=e753]
+        - paragraph [ref=e754]: Name, theme, logo assets, custom domain, and parent-facing identity.
+      - generic [ref=e761]:
+        - heading "Owner groups" [level=3] [ref=e762]
+        - paragraph [ref=e763]: Single-center owners, franchisees, and multi-location operators stay properly separated.
+      - generic [ref=e770]:
+        - heading "Centers" [level=3] [ref=e771]
+        - paragraph [ref=e772]: Location profiles, CRM IDs, routing emails, capacity, and open or closed status.
+      - generic [ref=e780]:
+        - heading "Users" [level=3] [ref=e781]
+        - paragraph [ref=e782]: Role-scoped access for owners, regional teams, directors, staff, and auditors.
+      - generic [ref=e789]:
+        - heading "Branding layers" [level=3] [ref=e790]
+        - paragraph [ref=e791]: Tenant, brand, owner group, and center customizations can override the right surfaces.
+      - generic [ref=e799]:
+        - heading "Inquiry form" [level=3] [ref=e800]
+        - paragraph [ref=e801]: Copyable embed codes tied to the correct center or multi-location account.
+      - generic [ref=e809]:
+        - heading "Online registration" [level=3] [ref=e810]
+        - paragraph [ref=e811]: Public registration packets create application-stage leads and director review tasks.
+      - generic [ref=e817]:
+        - heading "Payouts" [level=3] [ref=e818]
+        - paragraph [ref=e819]: School payout readiness is captured before live parent payments are enabled.
+      - generic [ref=e825]:
+        - heading "Reports" [level=3] [ref=e826]
+        - paragraph [ref=e827]: FTE, CRM, occupancy, revenue, task, and conversion snapshots for schools and executives.
+  - generic [ref=e830]:
+    - generic [ref=e831]:
+      - heading "Trust, integrations, and state readiness built into the sales story." [level=2] [ref=e832]
+      - paragraph [ref=e833]: "Large competitors separate these into resource pages and marketplaces. The BEE Suite can make them part of the product promise: move data in cleanly, keep sensitive records role-gated, track readiness by school, and support the state-specific work directors actually manage."
+    - generic [ref=e834]:
+      - generic [ref=e835]:
+        - heading "Trust posture" [level=3] [ref=e836]
+        - paragraph [ref=e837]: What leaders need to know before sensitive family, child, billing, and staff data moves into a live system.
+        - generic [ref=e838]:
+          - generic [ref=e844]:
+            - generic [ref=e845]: Role and tenant boundaries
+            - paragraph [ref=e846]: Access is scoped by tenant, brand, owner group, school, classroom, and user role before sensitive records are shown.
+          - generic [ref=e853]:
+            - generic [ref=e854]: Audit-ready workflow records
+            - paragraph [ref=e855]: Registration, documents, billing setup, staff actions, messages, incidents, and compliance work create reviewable operational history.
+          - generic [ref=e862]:
+            - generic [ref=e863]: Protected data posture
+            - paragraph [ref=e864]: Custody, medical, child, family, billing, and staff records are treated as protected workflows with human review on sensitive decisions.
+      - generic [ref=e865]:
+        - heading "Integration runway" [level=3] [ref=e866]
+        - paragraph [ref=e867]: The operational handoffs that keep enrollment, accounting, calendar, payments, messaging, and migration work connected.
+        - generic [ref=e868]:
+          - generic [ref=e875]:
+            - generic [ref=e876]: Migration intake
+            - paragraph [ref=e877]: Procare CSV import support helps schools move families, children, guardians, classrooms, staff, invoices, balances, and attendance into The BEE Suite.
+          - generic [ref=e882]:
+            - generic [ref=e883]: Calendar and communication
+            - paragraph [ref=e884]: Tour events, school closures, staff-visible events, parent notices, Gmail inquiry intake, and message workflows keep teams out of scattered inboxes.
+          - generic [ref=e889]:
+            - generic [ref=e890]: Accounting and payment runway
+            - paragraph [ref=e891]: Billing readiness, payout setup, invoice flows, parent payment methods, and export-friendly records keep financial operations connected.
+      - generic [ref=e892]:
+        - heading "State-ready operations" [level=3] [ref=e893]
+        - paragraph [ref=e894]: The licensing, funding, credential, and school setup evidence that directors need before audits and renewals.
+        - generic [ref=e895]:
+          - generic [ref=e901]:
+            - generic [ref=e902]: State readiness
+            - paragraph [ref=e903]: Licensing, QRIS, funding, professional development, and required document rules can be tracked as school setup and compliance evidence.
+          - generic [ref=e910]:
+            - generic [ref=e911]: Credential visibility
+            - paragraph [ref=e912]: Staff profiles, background status, certifications, schedule rows, onboarding documents, and expiration reminders stay visible to authorized leaders.
+          - generic [ref=e918]:
+            - generic [ref=e919]: Launch checklist
+            - paragraph [ref=e920]: Each school can track classrooms, families, staff, registration packets, billing setup, integrations, forms, and smoke testing before going live.
+  - generic [ref=e923]:
+    - generic [ref=e924]:
+      - heading "Real feedback from the people who run childcare." [level=2] [ref=e925]
+      - paragraph [ref=e926]: These are real customer reviews. Names and identifying details have been changed to protect customer privacy.
+    - generic [ref=e927]:
+      - generic [ref=e928]:
+        - generic [ref=e929]: Owner group visibility
+        - paragraph [ref=e934]: The part that matters to franchisees is separation. I can see owner-group performance without giving every location access to every other school’s families, billing, or staffing details.
+        - generic [ref=e935]:
+          - generic [ref=e936]: Megan L.
+          - generic [ref=e937]: Multi-location childcare owner
+      - generic [ref=e938]:
+        - generic [ref=e939]: Lead follow-up discipline
+        - paragraph [ref=e944]: Our directors used to chase leads in email, text threads, and sticky notes. The BEE Suite gives them one place to see inquiry source, tour status, registration packet, and next follow-up.
+        - generic [ref=e945]:
+          - generic [ref=e946]: Carlos R.
+          - generic [ref=e947]: Regional childcare franchisee
+      - generic [ref=e948]:
+        - generic [ref=e949]: Enrollment handoff
+        - paragraph [ref=e954]: Online registration is useful because it does not just collect a form. Approval creates the family record, document requests, checklist, parent portal invite, and billing next steps.
+        - generic [ref=e955]:
+          - generic [ref=e956]: Dana M.
+          - generic [ref=e957]: Center director
+      - generic [ref=e958]:
+        - generic [ref=e959]: Start-date readiness
+        - paragraph [ref=e964]: "I need to know what is missing before a child starts: custody paperwork, immunizations, signatures, tuition setup, classroom assignment, and start date. The checklist makes that visible."
+        - generic [ref=e965]:
+          - generic [ref=e966]: Rachel P.
+          - generic [ref=e967]: Enrollment and front desk lead
+      - generic [ref=e968]:
+        - generic [ref=e969]: Executive rollup
+        - paragraph [ref=e974]: At the corporate level, the value is a cleaner operating rhythm. We can review FTE, pipeline, open documents, payments readiness, ratios, and location setup without asking schools for another spreadsheet.
+        - generic [ref=e975]:
+          - generic [ref=e976]: Monica S.
+          - generic [ref=e977]: Childcare brand operations
+      - generic [ref=e978]:
+        - generic [ref=e979]: Daily report accuracy
+        - paragraph [ref=e984]: The teacher view is practical. I can add meals, naps, activities, photos, and notes during the day instead of reconstructing everything after pickup.
+        - generic [ref=e985]:
+          - generic [ref=e986]: Taylor K.
+          - generic [ref=e987]: Preschool classroom lead
+      - generic [ref=e988]:
+        - generic [ref=e989]: Records readiness
+        - paragraph [ref=e994]: For agencies supporting multiple providers, the document and compliance queues are the difference. It is easier to see which families, staff, or children need records before a visit or file review.
+        - generic [ref=e995]:
+          - generic [ref=e996]: Nina H.
+          - generic [ref=e997]: Family services and records support
+      - generic [ref=e998]:
+        - generic [ref=e999]: Licensing support workflows
+        - paragraph [ref=e1004]: Medication logs, incident review, emergency drills, and staff credential reminders all reduce the number of places directors have to look before they know what needs attention.
+        - generic [ref=e1005]:
+          - generic [ref=e1006]: Jordan C.
+          - generic [ref=e1007]: Childcare agency field support
+      - generic [ref=e1008]:
+        - generic [ref=e1009]: Human-reviewed communication
+        - paragraph [ref=e1014]: The AI assistant helps with the blank-page problem. It can draft a warm parent reply or summarize a lead, but the school still makes the final call on sensitive issues.
+        - generic [ref=e1015]:
+          - generic [ref=e1016]: Alyssa B.
+          - generic [ref=e1017]: Early learning agency staff
+  - generic [ref=e1019]:
+    - generic [ref=e1020]:
+      - generic [ref=e1021]:
+        - heading "Executive reporting without losing the school-level truth." [level=2] [ref=e1022]
+        - paragraph [ref=e1023]: The BEE Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, compliance work, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view.
+      - generic [ref=e1024]:
+        - generic [ref=e1025]:
+          - generic [ref=e1026]: Enrollment funnel
+          - paragraph [ref=e1030]: Tours, applications, deposits, waitlist, lost leads
+        - generic [ref=e1031]:
+          - generic [ref=e1032]: Center health
+          - paragraph [ref=e1036]: Occupancy, open seats, ratio snapshots, tasks
+        - generic [ref=e1037]:
+          - generic [ref=e1038]: Executive rollup
+          - paragraph [ref=e1042]: Multi-location pipeline, FTE, revenue, source mix
+        - generic [ref=e1043]:
+          - generic [ref=e1044]: Compliance support
+          - paragraph [ref=e1048]: Expiring docs, incidents, certifications, audit trails
+    - generic [ref=e1049]:
+      - generic [ref=e1052]:
+        - generic [ref=e1053]: Multi-location snapshot
+        - generic [ref=e1054]: Open centers, lead volume, FTE source, and conversion health
+      - generic [ref=e1057]:
+        - generic [ref=e1058]:
+          - generic [ref=e1059]:
+            - generic [ref=e1060]: Centers
+            - generic [ref=e1061]: Open and active locations only
+          - generic [ref=e1062]: Ready
+        - generic [ref=e1063]:
+          - generic [ref=e1064]:
+            - generic [ref=e1065]: Lead routing
+            - generic [ref=e1066]: CRM, email, and Sheets backup
+          - generic [ref=e1067]: Live
+        - generic [ref=e1068]:
+          - generic [ref=e1069]:
+            - generic [ref=e1070]: FTE source
+            - generic [ref=e1071]: Latest compatible report tab
+          - generic [ref=e1072]: Rolling
+        - generic [ref=e1073]:
+          - generic [ref=e1074]:
+            - generic [ref=e1075]: AI guardrails
+            - generic [ref=e1076]: Suggestions never make final decisions
+          - generic [ref=e1077]: Review
+  - generic [ref=e1079]:
+    - generic [ref=e1082]:
+      - img "Mr. Bee AI assistant" [ref=e1083]
+      - generic [ref=e1084]:
+        - generic [ref=e1085]: Mr. Bee communication assistant
+        - heading "Helpful drafts. Human decisions." [level=2] [ref=e1089]
+        - paragraph [ref=e1090]: Mr. Bee can summarize a lead, draft a tour follow-up, suggest a parent reply, and highlight next steps. Sensitive safety, medical, custody, billing, licensing, and compliance decisions stay with authorized staff.
+    - generic [ref=e1091]:
+      - generic [ref=e1098]:
+        - heading "Role-scoped" [level=3] [ref=e1099]
+        - paragraph [ref=e1100]: Users only see the centers and workflows their role allows.
+      - generic [ref=e1108]:
+        - heading "Sensitive by design" [level=3] [ref=e1109]
+        - paragraph [ref=e1110]: Custody, medical, child, and billing data are treated as protected workflows.
+      - generic [ref=e1118]:
+        - heading "Review-ready" [level=3] [ref=e1119]
+        - paragraph [ref=e1120]: Important changes create traceable records for operational review.
+  - generic [ref=e1123]:
+    - generic [ref=e1124]:
+      - heading "Ready to run enrollment from one command center?" [level=2] [ref=e1125]
+      - paragraph [ref=e1126]: Start the web app onboarding path for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
+    - generic [ref=e1127]:
+      - button "Request workspace" [ref=e1128] [cursor=pointer]
+      - button "Log in" [ref=e1129] [cursor=pointer]
+      - button "Registration" [ref=e1130] [cursor=pointer]
+  - generic [ref=e1132]:
+    - link "The BEE Suite home" [ref=e1133] [cursor=pointer]:
+      - /url: /
+      - img "The BEE Suite logo" [ref=e1135]
+      - generic [ref=e1136]: The BEE Suite
+    - generic [ref=e1138]:
+      - link "SOPs and guides" [ref=e1139] [cursor=pointer]:
+        - /url: /resources
+      - link "Support" [ref=e1140] [cursor=pointer]:
+        - /url: /support
+      - button "Developer dashboard" [ref=e1141] [cursor=pointer]

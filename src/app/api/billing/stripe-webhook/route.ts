@@ -6,6 +6,7 @@ import {
   retrieveStripeConnectedAccount,
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
+  setStripeCustomerDefaultPaymentMethod,
   verifyStripeSignature,
 } from "@/lib/integrations";
 import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
@@ -897,6 +898,57 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
   return NextResponse.json({ ok: true });
 }
 
+async function handleSchoolSoftwarePaymentMethodCompleted(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted, matchedTenantId?: string | null) {
+  const centerId = clean(session.metadata?.centerId);
+  if (!centerId) return NextResponse.json({ ok: false, error: "Missing school metadata." }, { status: 400 });
+  const tenantId = matchedTenantId || session.metadata?.tenantId || null;
+  const setupIntentId = clean(session.setup_intent);
+  const setupIntent = setupIntentId ? await retrieveStripeSetupIntent(setupIntentId, { tenantId }) : null;
+  if (!setupIntent?.ok || !setupIntent.setupIntent?.paymentMethodId) {
+    return NextResponse.json({ ok: false, error: setupIntent?.error || "The school payment method could not be confirmed." }, { status: setupIntent?.configured === false ? 503 : 502 });
+  }
+  const customerId = setupIntent.setupIntent.customerId || clean(session.customer) || clean(session.metadata?.stripeCustomerId);
+  const paymentMethodId = setupIntent.setupIntent.paymentMethodId;
+  const methodLookup = await retrieveStripePaymentMethod(paymentMethodId, { tenantId });
+  if (!methodLookup.ok || !methodLookup.paymentMethod || !customerId) {
+    return NextResponse.json({ ok: false, error: methodLookup.error || "The school payment method details could not be confirmed." }, { status: methodLookup.configured ? 502 : 503 });
+  }
+  const methodDetails = methodLookup.paymentMethod;
+  const defaultResult = await setStripeCustomerDefaultPaymentMethod({ customerId, paymentMethodId, tenantId });
+  if (!defaultResult.ok) {
+    return NextResponse.json({ ok: false, error: defaultResult.error || "The default school payment method could not be saved." }, { status: defaultResult.configured ? 502 : 503 });
+  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      const center = await tx.center.findUnique({ where: { id: centerId }, select: { customFields: true } });
+      if (!center) return;
+      const fields = jsonObject(center.customFields);
+      await tx.center.update({
+        where: { id: centerId },
+        data: { customFields: {
+          ...fields,
+          stripeSoftwareCustomerId: customerId,
+          stripeSoftwareDefaultPaymentMethodId: paymentMethodId,
+          stripeSoftwarePaymentMethodType: methodDetails.type,
+          stripeSoftwarePaymentMethodLast4: methodDetails.last4,
+          stripeSoftwarePaymentMethodBrand: methodDetails.brand,
+          stripeSoftwarePaymentMethodBankName: methodDetails.bankName,
+          stripeSoftwarePaymentStatus: "ready",
+          stripeSoftwarePaymentPreference: methodDetails.type === "us_bank_account" ? "payout_bank" : methodDetails.type,
+          stripeSoftwarePaymentMethodSavedAt: new Date().toISOString(),
+          stripeSoftwareSetupIntentId: setupIntentId,
+          stripeSoftwareSetupSessionId: session.id,
+        } },
+      });
+    });
+  } catch (error) {
+    if (isDuplicateWebhookEvent(error)) return NextResponse.json({ ok: true, duplicate: true });
+    throw error;
+  }
+  return NextResponse.json({ ok: true });
+}
+
 async function handleFamilyBalanceCheckoutEvent(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
   const metadata = jsonObject(session.metadata) as StripeMetadata;
   const paymentId = clean(metadata.paymentId);
@@ -1456,6 +1508,49 @@ async function POSTHandler(request: NextRequest) {
     return handleConnectedAccountEvent(event, signatureMatch.tenantId);
   }
 
+  if (event.type.startsWith("customer.subscription.") || ["invoice.paid", "invoice.payment_failed", "invoice.payment_action_required"].includes(event.type)) {
+    const object = jsonObject(event.data.object);
+    const metadata = jsonObject(object.metadata);
+    const subscriptionDetails = jsonObject(object.subscription_details);
+    const subscriptionMetadata = jsonObject(subscriptionDetails.metadata);
+    const centerId = clean(metadata.centerId) || clean(subscriptionMetadata.centerId);
+    const customerId = clean(object.customer);
+    const center = centerId
+      ? await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, customFields: true } })
+      : customerId
+        ? await prisma.center.findFirst({ where: { customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId } }, select: { id: true, customFields: true } })
+        : null;
+    if (!center) return NextResponse.json({ ok: true, ignored: true });
+    const fields = jsonObject(center.customFields);
+    const items = jsonObject(object.items);
+    const firstItem = Array.isArray(items.data) ? jsonObject(items.data[0]) : {};
+    const price = jsonObject(firstItem.price);
+    const patch: Record<string, unknown> = { stripeSoftwareLastWebhookAt: new Date().toISOString(), stripeSoftwareLastWebhookEventId: event.id };
+    if (event.type.startsWith("customer.subscription.")) {
+      patch.stripeSoftwareSubscriptionId = clean(object.id);
+      patch.stripeSoftwareSubscriptionStatus = event.type === "customer.subscription.deleted" ? "canceled" : clean(object.status) || "unknown";
+      patch.stripeSoftwareSubscriptionItemId = clean(firstItem.id) || null;
+      patch.stripeSoftwarePriceId = clean(price.id) || null;
+      patch.stripeSoftwareQuantity = typeof firstItem.quantity === "number" ? firstItem.quantity : 0;
+      patch.stripeSoftwareCancelAtPeriodEnd = object.cancel_at_period_end === true;
+      patch.stripeSoftwareCurrentPeriodStart = typeof firstItem.current_period_start === "number" ? new Date(firstItem.current_period_start * 1000).toISOString() : null;
+      patch.stripeSoftwareCurrentPeriodEnd = typeof firstItem.current_period_end === "number" ? new Date(firstItem.current_period_end * 1000).toISOString() : null;
+    } else {
+      patch.stripeSoftwareLatestInvoiceId = clean(object.id);
+      patch.stripeSoftwareLatestInvoiceStatus = event.type.replace("invoice.", "");
+      patch.stripeSoftwareLatestInvoiceAmountCents = typeof object.amount_due === "number" ? object.amount_due : null;
+      patch.stripeSoftwareLatestInvoicePaidCents = typeof object.amount_paid === "number" ? object.amount_paid : null;
+      patch.stripeSoftwareLatestInvoiceUrl = clean(object.hosted_invoice_url) || null;
+      patch.stripeSoftwareLatestInvoiceAt = new Date().toISOString();
+      patch.stripeSoftwarePaymentStatus = event.type === "invoice.paid" ? "current" : event.type === "invoice.payment_action_required" ? "action_required" : "past_due";
+    }
+    await prisma.$transaction(async (tx) => {
+      await recordStripeWebhookEvent(tx, event);
+      await tx.center.update({ where: { id: center.id }, data: { customFields: { ...fields, ...patch } as Prisma.InputJsonObject } });
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   if (![
     "checkout.session.completed",
     "checkout.session.async_payment_succeeded",
@@ -1486,6 +1581,9 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const session = event.data.object as StripeCheckoutSessionCompleted;
+  if (event.type === "checkout.session.completed" && session.metadata?.setupFlow === "school_software_payment_method") {
+    return handleSchoolSoftwarePaymentMethodCompleted(event, session, signatureMatch.tenantId);
+  }
   if (event.type === "checkout.session.completed" && (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method")) {
     return handlePaymentMethodSetupCompleted(event, session, signatureMatch.tenantId);
   }

@@ -12,9 +12,11 @@ import {
   normalizeBillingPeriod,
   normalizeRecurringBillingPeriod,
   parseCurrencyCents,
+  planFamilyRefundAllocations,
 } from "@/lib/billing-workflows";
 import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
+import { createStripeRefund } from "@/lib/integrations";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -525,6 +527,192 @@ async function createAgencyPayment(user: CurrentBillingUser, body: Record<string
   return NextResponse.json({ ok: true, created: 1, skipped: 0, totalCents: amountCents, payment: result.payment, entry: result.entry });
 }
 
+async function createManualCheckPayment(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
+  if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
+  const amountCents = amountCentsFromBody(body);
+  if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Check payment amount is required." }, { status: 400 });
+  const checkNumber = clean(body.checkNumber);
+  if (!checkNumber) return NextResponse.json({ ok: false, error: "Check number or reference is required." }, { status: 400 });
+  const paidAt = parseDate(body.paidAt);
+  const description = clean(body.description) || `Check payment #${checkNumber}`;
+  const notes = clean(body.notes);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const account = await tx.billingAccount.upsert({
+      where: { familyId: familyAccess.family.id },
+      update: {},
+      create: { familyId: familyAccess.family.id, balanceCents: 0 },
+    });
+    const payment = await tx.payment.create({
+      data: {
+        billingAccountId: account.id,
+        amountCents,
+        status: PaymentStatus.PAID,
+        provider: "manual_check",
+        externalIdPlaceholder: `check:${checkNumber}:${randomUUID()}`,
+        paidAt,
+        customFields: {
+          paymentType: "manual_check",
+          checkNumber,
+          notes: notes || null,
+          enteredBy: user.email,
+          familyId: familyAccess.family.id,
+          centerId: familyAccess.centerId,
+        },
+      },
+    });
+    const updatedAccount = await tx.billingAccount.update({
+      where: { id: account.id },
+      data: { balanceCents: { decrement: amountCents } },
+    });
+    const entry = await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: account.id,
+        paymentId: payment.id,
+        type: "check_payment",
+        description,
+        amountCents: -amountCents,
+        balanceAfterCents: updatedAccount.balanceCents,
+        effectiveAt: paidAt,
+        sourceSystem: "bee_suite_manual_check",
+        externalId: `check:${payment.id}`,
+        metadata: { checkNumber, notes: notes || null, enteredBy: user.email },
+      },
+    });
+    return { payment, entry };
+  });
+
+  await writeAuditLog(user, {
+    centerId: familyAccess.centerId,
+    action: "billing.check_payment.created",
+    resource: "Payment",
+    resourceId: result.payment.id,
+    metadata: { familyId: familyAccess.family.id, amountCents, checkNumber },
+  });
+  return NextResponse.json({ ok: true, totalCents: amountCents, payment: result.payment, entry: result.entry });
+}
+
+async function refundStripePayment(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const familyId = clean(body.familyId);
+  if (!familyId) return NextResponse.json({ ok: false, error: "Choose a family to refund." }, { status: 400 });
+  const amountCents = amountCentsFromBody(body);
+  if (amountCents <= 0) return NextResponse.json({ ok: false, error: "Refund amount is required." }, { status: 400 });
+  const reason = clean(body.reason) || clean(body.description);
+  if (!reason) return NextResponse.json({ ok: false, error: "Refund reason is required." }, { status: 400 });
+
+  const account = await prisma.billingAccount.findUnique({
+    where: { familyId },
+    select: {
+      id: true,
+      family: { select: { centerId: true, name: true } },
+      payments: {
+        where: { provider: "stripe", status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+        orderBy: [{ paidAt: "desc" }, { id: "desc" }],
+        select: {
+          id: true, amountCents: true, status: true, externalIdPlaceholder: true, customFields: true,
+          ledgerEntries: { where: { invoiceId: { not: null } }, orderBy: { effectiveAt: "desc" }, take: 1, select: { invoiceId: true } },
+        },
+      },
+    },
+  });
+  if (!account) return NextResponse.json({ ok: false, error: "Family billing account not found." }, { status: 404 });
+  if (!account.family.centerId || !canAccessCenter(user, account.family.centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
+  }
+
+  const preferredIds = Array.isArray(body.paymentIds)
+    ? body.paymentIds.map((value) => clean(value)).filter(Boolean)
+    : clean(body.paymentId) ? [clean(body.paymentId)] : [];
+  const candidates = account.payments
+    .map((payment) => {
+      const fields = jsonObject(payment.customFields);
+      const refundedCents = Math.max(0, Number(fields.stripeAmountRefundedCents) || 0);
+      const paymentIntentId = clean(fields.stripePaymentIntentId) || (clean(payment.externalIdPlaceholder).startsWith("pi_") ? clean(payment.externalIdPlaceholder) : "");
+      return { ...payment, fields, refundedCents, refundableCents: Math.max(0, payment.amountCents - refundedCents), paymentIntentId };
+    })
+    .filter((payment) => payment.refundableCents > 0 && payment.paymentIntentId);
+  const refundPlan = planFamilyRefundAllocations(candidates, amountCents, preferredIds);
+  const availableCents = refundPlan.availableCents;
+  if (amountCents > availableCents) {
+    return NextResponse.json({
+      ok: false,
+      error: `Stripe can return ${moneyLabel(availableCents)} across this family's completed payments. Use a family credit or manual reimbursement for the remaining ${moneyLabel(amountCents - availableCents)}.`,
+      availableCents,
+    }, { status: 400 });
+  }
+
+  const operationId = randomUUID();
+  const allocations: Array<{ paymentId: string; stripeRefundId: string; amountCents: number }> = [];
+  for (const planned of refundPlan.allocations) {
+    const payment = planned.payment;
+    const allocationCents = planned.amountCents;
+    const connectedAccountId = clean(payment.fields.stripeConnectedAccountId) || null;
+    const refund = await createStripeRefund({
+      paymentIntentId: payment.paymentIntentId,
+      amountCents: allocationCents,
+      reason,
+      connectedAccountId,
+      idempotencyKey: `billing-family-refund:${operationId}:${payment.id}`,
+      tenantId: user.tenantId,
+      metadata: { paymentId: payment.id, familyId, requestedByUserId: user.id, operationId },
+    });
+    if (!refund.ok || !refund.refund?.id) {
+      if (!allocations.length) return NextResponse.json({ ok: false, error: refund.error || "Refund could not be issued." }, { status: refund.configured ? 502 : 503 });
+      break;
+    }
+    const refundedAmountCents = refund.refund.amountCents;
+    const totalRefundedCents = payment.refundedCents + refundedAmountCents;
+    const invoiceId = payment.ledgerEntries[0]?.invoiceId ?? null;
+    await prisma.$transaction(async (tx) => {
+      const updatedAccount = await tx.billingAccount.update({ where: { id: account.id }, data: { balanceCents: { increment: refundedAmountCents } } });
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: totalRefundedCents >= payment.amountCents ? PaymentStatus.REFUNDED : PaymentStatus.PAID,
+          customFields: {
+            ...payment.fields,
+            stripeAmountRefundedCents: totalRefundedCents,
+            stripeFullyRefunded: totalRefundedCents >= payment.amountCents,
+            latestStripeRefundId: refund.refund!.id,
+            latestRefundReason: reason,
+            latestRefundedBy: user.email,
+            latestFamilyRefundOperationId: operationId,
+            status: totalRefundedCents >= payment.amountCents ? "refunded" : "partially_refunded",
+          },
+        },
+      });
+      if (invoiceId) await tx.invoice.update({ where: { id: invoiceId }, data: { status: PaymentStatus.OPEN } });
+      await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: account.id, invoiceId, paymentId: payment.id, type: "refund", description: `Refund: ${reason}`,
+          amountCents: refundedAmountCents, balanceAfterCents: updatedAccount.balanceCents, sourceSystem: "stripe",
+          externalId: `stripe-refund:${refund.refund!.id}`,
+          metadata: { stripeRefundId: refund.refund!.id, stripePaymentIntentId: payment.paymentIntentId, refundReason: reason, refundedBy: user.email, totalRefundedCents, familyRefundOperationId: operationId },
+        },
+      });
+    });
+    allocations.push({ paymentId: payment.id, stripeRefundId: refund.refund.id, amountCents: refundedAmountCents });
+  }
+
+  const totalCents = allocations.reduce((total, allocation) => total + allocation.amountCents, 0);
+  await writeAuditLog(user, {
+    centerId: account.family.centerId,
+    action: "billing.family.refunded",
+    resource: "Family",
+    resourceId: familyId,
+    metadata: { requestedAmountCents: amountCents, refundedAmountCents: totalCents, reason, familyId, operationId, paymentIds: allocations.map((item) => item.paymentId), stripeRefundIds: allocations.map((item) => item.stripeRefundId) },
+  });
+  return NextResponse.json({
+    ok: true,
+    totalCents,
+    requestedCents: amountCents,
+    allocations,
+    partial: totalCents < amountCents,
+    warning: totalCents < amountCents ? `${moneyLabel(totalCents)} was sent before Stripe stopped the remaining allocation.` : null,
+  });
+}
+
 async function updateInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {
   const invoiceId = clean(body.invoiceId) || clean(body.id);
   if (!invoiceId) return NextResponse.json({ ok: false, error: "Invoice is required." }, { status: 400 });
@@ -739,6 +927,8 @@ async function POSTHandler(request: NextRequest) {
   if (mode === "batch") return createBatchInvoices(user, body);
   if (mode === "adjustment") return createLedgerAdjustment(user, body);
   if (mode === "agencyPayment") return createAgencyPayment(user, body);
+  if (mode === "manualCheckPayment") return createManualCheckPayment(user, body);
+  if (mode === "refundPayment") return refundStripePayment(user, body);
 
   return NextResponse.json({ ok: false, error: "Unsupported billing action." }, { status: 400 });
 }

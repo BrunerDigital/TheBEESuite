@@ -78,6 +78,7 @@ import {
 } from "@/components/child-location-tracker-panel";
 import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
+import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "@/components/developer-subscription-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
 import { DocumentUploadActions } from "@/components/document-upload-actions";
@@ -154,7 +155,7 @@ import {
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import type { FteSnapshot } from "@/lib/fte-reports";
-import type { IntegrationSetupView } from "@/lib/integration-setup";
+import type { IntegrationProvider, IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
 import type { RegistrationReviewStatus } from "@/lib/registration-packet";
 import { formatRegistrationPaymentAmount, type RegistrationPaymentStatus } from "@/lib/registration-billing";
@@ -273,14 +274,18 @@ function StatCard({
   detail?: string;
 }) {
   return (
-    <Card className="glass-panel">
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl">{value}</CardTitle>
+    <Card className="group/stat relative overflow-hidden border-foreground/10 bg-card/90 shadow-lg shadow-black/5 transition duration-200 hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-xl hover:shadow-primary/5">
+      <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-primary via-amber-300 to-transparent opacity-70" />
+      <CardHeader className="pb-1 pt-1">
+        <div className="flex items-center justify-between gap-3">
+          <CardDescription className="text-[0.68rem] font-semibold uppercase tracking-[0.12em]">{label}</CardDescription>
+          <span className="size-1.5 rounded-full bg-primary shadow-[0_0_10px_var(--primary)]" aria-hidden="true" />
+        </div>
+        <CardTitle className="mt-2 text-2xl font-semibold tracking-tight xl:text-3xl">{value}</CardTitle>
       </CardHeader>
       {detail ? (
-        <CardContent>
-          <p className="text-xs text-muted-foreground">{detail}</p>
+        <CardContent className="pt-1">
+          <p className="text-xs leading-5 text-muted-foreground">{detail}</p>
         </CardContent>
       ) : null}
     </Card>
@@ -297,9 +302,10 @@ function MetricTile({
   detail?: string;
 }) {
   return (
-    <div className="rounded-lg border bg-background/40 p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-lg font-semibold">{value}</div>
+    <div className="relative overflow-hidden rounded-xl border bg-background/55 p-3 shadow-sm transition hover:border-primary/30 hover:bg-primary/[0.035]">
+      <div className="absolute inset-y-3 left-0 w-0.5 rounded-full bg-primary/70" />
+      <div className="pl-1 text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{label}</div>
+      <div className="mt-1 pl-1 text-lg font-semibold tracking-tight">{value}</div>
       {detail ? <div className="mt-1 text-xs text-muted-foreground">{detail}</div> : null}
     </div>
   );
@@ -821,6 +827,7 @@ export type IntegrationsData = {
   }>;
   setupIntegrations: IntegrationSetupView[];
   canManageSetup: boolean;
+  manageableProviders?: IntegrationProvider[];
   deliveryStats?: {
     total: number;
     delivered: number;
@@ -891,7 +898,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           </Card>
         ))}
       </div>
-      <IntegrationSetupPanel integrations={data.setupIntegrations} canManage={data.canManageSetup} />
+      <IntegrationSetupPanel integrations={data.setupIntegrations} canManage={data.canManageSetup} manageableProviders={data.manageableProviders} />
       {data.recentDeliveries ? (
         <Card className="glass-panel">
           <CardHeader>
@@ -963,7 +970,14 @@ export type DeveloperDashboardPageData = {
     failedDeliveries: number;
     webhookErrors: number;
     procareImports: number;
+    activeUsers: number;
+    inactiveUsers: number;
+    subscriptionMrrCents: number;
+    tuitionProcessedCents: number;
+    beeSuiteFeesCents: number;
+    schoolNetCents: number;
   };
+  softwareSubscriptions: DeveloperSubscriptionSchool[];
   integrations: Array<{
     id: string;
     provider: string;
@@ -1156,6 +1170,20 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
           Production-facing technical operations for integrations, imports, webhooks, audit events, and record maintenance.
         </p>
       </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Software MRR" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.subscriptionMrrCents / 100)} detail="Recurring school subscriptions" />
+        <StatCard label="Tuition processed" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.tuitionProcessedCents / 100)} detail="Current month" />
+        <StatCard label="BEE Suite share" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.beeSuiteFeesCents / 100)} detail="Platform fees retained" />
+        <StatCard label="School net" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.schoolNetCents / 100)} detail="After BEE Suite split" />
+      </section>
+
+      <DeveloperSubscriptionConsole schools={data.softwareSubscriptions} />
+
+      <Card className="glass-panel border-primary/25">
+        <CardHeader><CardTitle className="flex items-center gap-2"><Users className="size-5 text-primary" />Users, roles, and access</CardTitle><CardDescription>The developer lens controls user creation, roles, school scope, credential resets, session revocation, and account activation.</CardDescription></CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-3"><Badge variant="outline">{data.stats.activeUsers} active</Badge><Badge variant="outline">{data.stats.inactiveUsers} inactive</Badge><Link className={buttonVariants()} href="/agency-admin#existing-user-accounts">Open user access control <ArrowRight /></Link></CardContent>
+      </Card>
 
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -1636,14 +1664,22 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
   return (
     <div className="flex flex-col gap-6">
       <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <MapPin data-icon="inline-start" />
-          Today at {data.centerName}
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">Center Dashboard</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Live center-scoped snapshot for enrollment work, tours, teachers, classrooms, and follow-up tasks. {data.place}
-        </p>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div>
+            <Badge className="mb-4">
+              <MapPin data-icon="inline-start" />
+              Today at {data.centerName}
+            </Badge>
+            <h1 className="text-3xl font-semibold tracking-tight">Dashboard · Center Operations</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              Center-level enrollment, tours, teachers, classrooms, FTE reporting, and follow-up work within the main dashboard.
+              {data.place ? ` ${data.place}` : ""}
+            </p>
+          </div>
+          <Link href="/dashboard" className={buttonVariants({ variant: "outline" })}>
+            Dashboard overview
+          </Link>
+        </div>
       </section>
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
@@ -5455,15 +5491,9 @@ export type AiCommandPageData = AiCommandCenterData;
 export function AiCommandPage({ data }: { data: AiCommandPageData }) {
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card/80 p-6 shadow-2xl shadow-black/15">
-        <Badge className="mb-4">
-          <Bot data-icon="inline-start" />
-          Mr. Bee assistant
-        </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight">AI Command Center</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Mr. Bee helps summarize, draft, prioritize, and recommend next steps. Suggestions are labeled, logged, and require human review for sensitive workflows.
-        </p>
+      <section>
+        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">AI Command Center</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Your live operating layer across attendance, staffing, enrollment, families, billing, communication, and compliance.</p>
       </section>
       <AiCommandCenter data={data} />
     </div>

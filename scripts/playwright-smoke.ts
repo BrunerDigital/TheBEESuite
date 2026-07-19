@@ -7,6 +7,9 @@ import { chromium, request as playwrightRequest } from "playwright";
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
 const workspaceDir = realpathSync(process.cwd());
+const fallbackChromiumExecutable =
+  process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ||
+  (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "");
 
 type SmokeRoute = {
   name: string;
@@ -14,15 +17,17 @@ type SmokeRoute = {
   expectedText?: RegExp;
 };
 
+const loginScreenText = /Log in to The BEE Suite|Log in as a director|Log in as an executive|Log in to your parent portal|Log in to your teacher portal/i;
+
 const smokeRoutes: SmokeRoute[] = [
   { name: "public landing", path: "/", expectedText: /The BEE Suite|childcare/i },
-  { name: "login", path: "/login", expectedText: /Log in to The BEE Suite/i },
+  { name: "login", path: "/login", expectedText: loginScreenText },
   { name: "onboarding", path: "/onboarding", expectedText: /onboarding|workspace/i },
-  { name: "crm protected route", path: "/crm-leads", expectedText: /Log in to The BEE Suite|CRM/i },
-  { name: "fte protected route", path: "/fte-reports", expectedText: /Log in to The BEE Suite|FTE/i },
-  { name: "kiosk launcher", path: "/check-in", expectedText: /Log in to The BEE Suite|check/i },
-  { name: "parent portal protected route", path: "/parent-portal", expectedText: /Log in to The BEE Suite|Parent/i },
-  { name: "billing protected route", path: "/billing-invoices", expectedText: /Log in to The BEE Suite|Billing/i },
+  { name: "crm protected route", path: "/crm-leads", expectedText: new RegExp(`${loginScreenText.source}|CRM`, "i") },
+  { name: "fte protected route", path: "/fte-reports", expectedText: new RegExp(`${loginScreenText.source}|FTE`, "i") },
+  { name: "kiosk launcher", path: "/check-in", expectedText: new RegExp(`${loginScreenText.source}|check`, "i") },
+  { name: "parent portal protected route", path: "/parent-portal", expectedText: new RegExp(`${loginScreenText.source}|Parent`, "i") },
+  { name: "billing protected route", path: "/billing-invoices", expectedText: new RegExp(`${loginScreenText.source}|Billing`, "i") },
 ];
 
 const apiChecks = [
@@ -86,7 +91,7 @@ async function optionalLogin(baseUrl: string) {
   const password = process.env.SMOKE_TEST_PASSWORD;
   if (!email || !password) return null;
 
-  const browser = await chromium.launch();
+  const browser = await launchChromium();
   const page = await browser.newPage();
   page.setDefaultTimeout(20_000);
   page.setDefaultNavigationTimeout(30_000);
@@ -114,6 +119,17 @@ function stopServer(server: ChildProcessWithoutNullStreams | null) {
   server.kill();
 }
 
+async function launchChromium() {
+  try {
+    return await chromium.launch();
+  } catch (error) {
+    if (fallbackChromiumExecutable && existsSync(fallbackChromiumExecutable)) {
+      return chromium.launch({ executablePath: fallbackChromiumExecutable });
+    }
+    throw error;
+  }
+}
+
 async function run() {
   const externalBaseUrl =
     cleanUrl(process.env.SMOKE_BASE_URL) ||
@@ -131,7 +147,7 @@ async function run() {
       await waitForServer(baseUrl);
     }
 
-    browser = await chromium.launch();
+    browser = await launchChromium();
     const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
     page.setDefaultTimeout(20_000);
     page.setDefaultNavigationTimeout(30_000);

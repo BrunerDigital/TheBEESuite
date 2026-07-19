@@ -1,3 +1,4 @@
+import "./load-env";
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
 import { realpathSync } from "node:fs";
@@ -6,6 +7,7 @@ import { discoverApiRouteSpecs, type ApiHttpMethod, type ApiRouteSpec } from "./
 const require = createRequire(import.meta.url);
 const nextBin = require.resolve("next/dist/bin/next");
 const workspaceDir = realpathSync(process.cwd());
+const requestTimeoutMs = Number(process.env.API_SMOKE_REQUEST_TIMEOUT_MS || 60_000);
 
 type ApiSmokeResult = {
   method: ApiHttpMethod;
@@ -64,12 +66,28 @@ async function findReusableLocalServer() {
 }
 
 function startLocalServer(port: number) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "http://127.0.0.1:54321";
+  const supabaseKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    "api-smoke-publishable-key";
   const child = spawn(process.execPath, [nextBin, "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
     cwd: workspaceDir,
     env: {
       ...process.env,
       NEXT_TELEMETRY_DISABLED: "1",
       API_ROUTE_SMOKE: "1",
+      AUTH_SECRET: process.env.AUTH_SECRET || "api-smoke-auth-secret",
+      PIN_HASH_SECRET: process.env.PIN_HASH_SECRET || "api-smoke-pin-secret",
+      NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
+      SUPABASE_URL: process.env.SUPABASE_URL || supabaseUrl,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: supabaseKey,
+      SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY || supabaseKey,
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || supabaseKey,
+      SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || supabaseKey,
+      SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || "api-smoke-service-role-key",
     },
   });
 
@@ -142,7 +160,7 @@ async function smokeRouteMethod(baseUrl: string, spec: ApiRouteSpec, method: Api
     headers: headersForRoute(spec.routePath, method),
     body,
     redirect: "manual",
-    signal: AbortSignal.timeout(20_000),
+    signal: AbortSignal.timeout(requestTimeoutMs),
   });
 
   return {

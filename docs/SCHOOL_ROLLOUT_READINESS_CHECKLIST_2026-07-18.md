@@ -25,7 +25,7 @@ The platform health check, database connection, unit tests, typecheck, lint, pro
 - [ ] **GO-LIVE BLOCKER — Verify Stripe Connect per school.** Platform Stripe configuration is present, but that does not prove each school's connected account can accept charges and payouts.
 - [ ] **GO-LIVE BLOCKER — Complete credentialed role smoke tests.** Use real scoped accounts for corporate, director/billing, teacher, and linked parent/guardian roles at each selected school.
 - [ ] **GO-LIVE BLOCKER — Approve the cutover and rollback plan.** ProCare remains the source of truth until reconciliation, billing preview, training, support coverage, and written signoff are complete.
-- [ ] Resolve the production smoke script's stale CRM assertion. `/crm-leads` correctly redirects to the director login, but `npm run test:smoke` currently fails because it does not recognize the newer director-login wording.
+- [x] Resolve the production smoke script's stale CRM assertion. `/crm-leads` correctly redirects to the director login, and `npm run test:smoke` passed against production after recognizing the newer role-specific login wording on July 19, 2026.
 
 ## Audited rollout-wave data snapshot
 
@@ -139,7 +139,7 @@ This is a point-in-time setup signal, not final school signoff. Re-run `npm run 
 - [ ] Deploy the focused release and confirm Vercel status is Ready.
 - [x] Production `/api/health` returned OK with database connected on July 18.
 - [ ] Authenticated `/api/system/readiness` is healthy for an authorized launch owner.
-- [ ] Re-run `npm run test:smoke` after updating the director-login assertion; require a passing result.
+- [x] `npm run test:smoke` passed against `https://thebeesuite.io` on July 19, 2026 after updating the director-login assertion.
 - [ ] Review production logs and complete the changed live workflows after deployment.
 
 ## 9. Training and first-week support
@@ -173,5 +173,4 @@ This is a point-in-time setup signal, not final school signoff. Re-run `npm run 
 - `npm run lint`: 0 errors, 3 warnings.
 - Production `/api/health`: OK; database connected.
 - Production `/crm-leads`: protected access redirected to `/directors?next=%2Fcrm-leads` and rendered the director login.
-- Production smoke: stopped on the stale CRM expected-text assertion; update the check and rerun before release signoff.
-
+- Production smoke: passed on July 19, 2026 after the stale CRM/director-login expected-text assertion was updated.

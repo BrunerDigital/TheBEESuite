@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const workspaceRoot = dirname(fileURLToPath(import.meta.url));
 
 const securityHeaders = [
   {
@@ -32,6 +36,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: workspaceRoot,
+  },
   async headers() {
     return [
       {

@@ -64,8 +64,6 @@ async function ensureAdditionalFamily(input: {
       { familyId: family.id, fullName: `Taylor ${lastName}`, email: `secondary.${lastName.toLowerCase()}.${number}.demo@example.com`, phone: `(386) 555-7${number.padStart(3, "0")}`, relation: "Parent / Guardian", isBillingContact: false, preferredCommunication: "Portal notification", checkInPinHash: hashGuardianPin(`demo-guardian-${externalKey}-secondary`, "1357"), checkInPinSetAt: dateAt(-7), sourceSystem: SOURCE, externalId: `demo-guardian-${externalKey}-secondary`, customFields: { demoWorkspace: true } },
     ],
   });
-  const guardian = await prisma.guardian.findFirstOrThrow({ where: { familyId: family.id, externalId: `demo-guardian-${externalKey}-primary` } });
-
   const child = await prisma.child.findFirst({ where: { familyId: family.id, sourceSystem: SOURCE, externalId: `demo-child-${externalKey}` } })
     ?? await prisma.child.create({
       data: {

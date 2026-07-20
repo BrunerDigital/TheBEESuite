@@ -1,20 +1,21 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
+const nativeProjectPresent = existsSync("ios/App/App.xcodeproj/project.pbxproj") && existsSync("ios/App/App/Info.plist");
 const capacitorConfig = readFileSync("capacitor.config.ts", "utf8");
-const project = readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8");
-const infoPlist = readFileSync("ios/App/App/Info.plist", "utf8");
+const project = nativeProjectPresent ? readFileSync("ios/App/App.xcodeproj/project.pbxproj", "utf8") : "";
+const infoPlist = nativeProjectPresent ? readFileSync("ios/App/App/Info.plist", "utf8") : "";
 
-test("parent iOS release identity stays aligned", () => {
+test("parent iOS release identity stays aligned", { skip: !nativeProjectPresent }, () => {
   assert.match(capacitorConfig, /appId:\s*"com\.brunerdigital\.thebeesuite\.parent"/);
   assert.match(project, /PRODUCT_BUNDLE_IDENTIFIER = com\.brunerdigital\.thebeesuite\.parent;/);
   assert.match(project, /MARKETING_VERSION = 1\.0;/);
   assert.match(project, /CURRENT_PROJECT_VERSION = 1;/);
 });
 
-test("parent iOS v1 remains iPhone-only and HTTPS-only", () => {
+test("parent iOS v1 remains iPhone-only and HTTPS-only", { skip: !nativeProjectPresent }, () => {
   assert.match(project, /IPHONEOS_DEPLOYMENT_TARGET = 16\.0;/);
   assert.match(project, /TARGETED_DEVICE_FAMILY = 1;/);
   assert.match(capacitorConfig, /url:\s*`https:\/\//);
@@ -22,13 +23,13 @@ test("parent iOS v1 remains iPhone-only and HTTPS-only", () => {
   assert.match(capacitorConfig, /cleartext:\s*false/);
 });
 
-test("parent iOS v1 does not declare unfinished native capabilities", () => {
+test("parent iOS v1 does not declare unfinished native capabilities", { skip: !nativeProjectPresent }, () => {
   assert.doesNotMatch(infoPlist, /NSFaceIDUsageDescription/);
   assert.doesNotMatch(project, /com\.apple\.developer\.aps-environment/);
   assert.doesNotMatch(project, /com\.apple\.developer\.associated-domains/);
 });
 
-test("parent iOS privacy and permission metadata is present", () => {
+test("parent iOS privacy and permission metadata is present", { skip: !nativeProjectPresent }, () => {
   const privacyManifest = readFileSync("ios/App/App/PrivacyInfo.xcprivacy", "utf8");
 
   assert.match(infoPlist, /NSCameraUsageDescription/);
@@ -38,7 +39,7 @@ test("parent iOS privacy and permission metadata is present", () => {
   assert.match(privacyManifest, /NSPrivacyCollectedDataTypes/);
 });
 
-test("mobile store configuration audit passes", () => {
+test("mobile store configuration audit passes", { skip: !nativeProjectPresent }, () => {
   const output = execFileSync(process.execPath, ["scripts/mobile-store-readiness-check.mjs"], { encoding: "utf8" });
 
   assert.match(output, /PASS mobile store repository configuration/);

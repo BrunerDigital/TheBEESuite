@@ -12,6 +12,8 @@ const EXECUTIVE_USERS = [
   { email: "kayleen@kidcityusa.com", name: "Kayleen Kid City USA" },
   { email: "dee@kidcityusa.com", name: "Dee Kid City USA" },
   { email: "tracey@kidcityusa.com", name: "Tracey Kid City USA" },
+  { email: "jianna@kidcityusa.com", name: "Jianna Kid City USA" },
+  { email: "linda@kidcityusa.com", name: "Linda Kid City USA" },
 ];
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;

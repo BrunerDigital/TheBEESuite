@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   DEFAULT_PROFILE_PHOTO_URL,
+  KID_CITY_PROFILE_PHOTO_URL,
   MANAGEMENT_PROFILE_PHOTO_ROLES,
   contentTypeForProfilePhotoFile,
+  defaultProfilePhotoUrlForRole,
   mergeProfilePhotoCustomFields,
   readProfilePhotoFields,
   readProfilePhotoStorageKey,
@@ -55,4 +57,12 @@ test("management profile photo roles cover admins, executives, and directors", (
   ]);
   assert.equal(usesManagementProfilePhoto("CENTER_DIRECTOR"), true);
   assert.equal(usesManagementProfilePhoto("TEACHER"), false);
+});
+
+test("teachers and family accounts default to the Kid City USA school logo", () => {
+  assert.equal(KID_CITY_PROFILE_PHOTO_URL, "/brand/kid-city-usa/kid-city-usa-profile.jpg");
+  assert.equal(defaultProfilePhotoUrlForRole("TEACHER"), KID_CITY_PROFILE_PHOTO_URL);
+  assert.equal(defaultProfilePhotoUrlForRole("PARENT_GUARDIAN"), KID_CITY_PROFILE_PHOTO_URL);
+  assert.equal(defaultProfilePhotoUrlForRole("AUTHORIZED_PICKUP"), KID_CITY_PROFILE_PHOTO_URL);
+  assert.equal(defaultProfilePhotoUrlForRole("CENTER_DIRECTOR"), DEFAULT_PROFILE_PHOTO_URL);
 });

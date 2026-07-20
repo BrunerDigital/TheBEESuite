@@ -5,7 +5,7 @@ import { UserRole } from "@prisma/client";
 import { resolveWorkspaceBranding, type WorkspaceBranding } from "@/lib/brand-assets";
 import { isDemoAccountEmail } from "@/lib/demo-accounts";
 import { loginHrefForNextPath } from "@/lib/login-routing";
-import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
+import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
@@ -164,16 +164,17 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
   return `${data}.${sign(data)}`;
 }
 
-async function resolveCurrentUserProfilePhotoUrl(customFields: unknown) {
+async function resolveCurrentUserProfilePhotoUrl(customFields: unknown, role: UserRole) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
       return await createProfilePhotoSignedUrl(storageKey);
     } catch {
-      return readProfilePhotoUrl(customFields);
+      return readProfilePhotoUrl(customFields) ?? fallbackUrl;
     }
   }
-  return readProfilePhotoUrl(customFields);
+  return readProfilePhotoUrl(customFields) ?? fallbackUrl;
 }
 
 export function verifySessionToken(token?: string) {
@@ -339,7 +340,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
-    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields),
+    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role),
     branding: resolveWorkspaceBranding({
       tenantName: user.tenant.name,
       tenantSlug: user.tenant.slug,

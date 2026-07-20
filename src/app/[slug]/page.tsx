@@ -134,7 +134,7 @@ import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { invoicePurposeLabel } from "@/lib/product-billing";
-import { readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
+import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { loginHrefForNextPath } from "@/lib/login-routing";
@@ -165,16 +165,17 @@ export const dynamic = "force-dynamic";
 
 const centerIdFilter = visibleCenterIdFilter;
 
-async function signedProfilePhotoUrl(customFields: unknown) {
+async function signedProfilePhotoUrl(customFields: unknown, role: UserRole) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
       return await createProfilePhotoSignedUrl(storageKey);
     } catch {
-      return readProfilePhotoUrl(customFields);
+      return readProfilePhotoUrl(customFields) ?? fallbackUrl;
     }
   }
-  return readProfilePhotoUrl(customFields);
+  return readProfilePhotoUrl(customFields) ?? fallbackUrl;
 }
 
 export function generateStaticParams() {
@@ -5082,7 +5083,7 @@ async function renderLivePage(
         ...profile,
         user: {
           ...profile.user,
-          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields),
+          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields, profile.user.role),
         },
       })),
     );

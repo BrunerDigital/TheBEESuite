@@ -74,6 +74,7 @@ import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } 
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
+import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
@@ -162,6 +163,8 @@ import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 
 export const dynamic = "force-dynamic";
 
+const centerIdFilter = visibleCenterIdFilter;
+
 async function signedProfilePhotoUrl(customFields: unknown) {
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
@@ -184,15 +187,6 @@ export function generateStaticParams() {
 
 function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
   return { enrollmentStatus: { notIn: currentlyEnrolledStatusValues() } };
-}
-
-function visibleChildCenterWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.ChildWhereInput {
-  return {
-    OR: [
-      { classroom: { is: { centerId: scopedCenterIds } } },
-      { family: { is: { centerId: scopedCenterIds } } },
-    ],
-  };
 }
 
 function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
@@ -1786,9 +1780,28 @@ async function renderLivePage(
   }
 
   if (slug === "parent-portal") {
+    const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
+    const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
+      ? await prisma.family.findMany({
+          where: {
+            ...parentPortalFamilyScopeWhere({ userId: user.id }),
+            children: { some: currentlyEnrolledChildWhere() },
+          },
+          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            centerId: true,
+            children: { where: currentlyEnrolledChildWhere(), select: { fullName: true }, orderBy: { fullName: "asc" } },
+          },
+        })
+      : [];
+    const selectedParentFamilyId = requestedParentFamilyId && linkedParentFamilies.some((item) => item.id === requestedParentFamilyId)
+      ? requestedParentFamilyId
+      : linkedParentFamilies[0]?.id ?? null;
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
-        ? { guardians: { some: { userId: user.id } }, children: { some: currentlyEnrolledChildWhere() } }
+        ? { ...parentPortalFamilyScopeWhere({ userId: user.id, requestedFamilyId: selectedParentFamilyId }), children: { some: currentlyEnrolledChildWhere() } }
         : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } },
       orderBy: { createdAt: "desc" },
       include: {
@@ -2150,6 +2163,17 @@ async function renderLivePage(
               subject: parentReplySubject || null,
             }
           : null}
+        availableFamilies={linkedParentFamilies.map((item) => ({
+          id: item.id,
+          name: item.name,
+          centerName: item.centerId
+            ? (() => {
+                const center = centers.find((candidate) => candidate.id === item.centerId);
+                return center ? formatCenterName(center) : null;
+              })()
+            : null,
+          childNames: item.children.map((child) => child.fullName),
+        }))}
       />
     );
   }
@@ -2189,6 +2213,7 @@ async function renderLivePage(
         enrollmentStatus: true,
         photoVideoPermission: true,
         classroom: { select: { id: true, name: true } },
+        liveLocation: { select: { currentClassroomId: true, areaName: true, status: true, movedAt: true, currentClassroom: { select: { id: true, name: true } } } },
         family: { select: { custodyNotes: true } },
       },
     });
@@ -4957,9 +4982,7 @@ async function renderLivePage(
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "shared", sharedWithParents: true, createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.childMedia.count({ where: scopedMediaWhere({ status: "rejected", createdAt: { gte: thirtyDaysAgo } }) }),
       prisma.child.count({
-        where: allCenters
-          ? { ...currentlyEnrolledChildWhere(), photoVideoPermission: false }
-          : { ...currentlyEnrolledChildWhere(), photoVideoPermission: false, family: { is: { centerId: scopedCenterIds } } },
+        where: { ...currentlyEnrolledChildWhere(), photoVideoPermission: false, family: { is: { centerId: scopedCenterIds } } },
       }),
     ]);
 
@@ -5236,9 +5259,7 @@ async function renderLivePage(
         },
       }),
       prisma.family.findMany({
-        where: allCenters
-          ? { children: { some: currentlyEnrolledChildWhere() } }
-          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
+        where: { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
         orderBy: { name: "asc" },
         take: 250,
         select: {
@@ -5258,7 +5279,7 @@ async function renderLivePage(
         },
       }),
       prisma.staffProfile.findMany({
-        where: allCenters ? { user: { isActive: true } } : { centerId: scopedCenterIds, user: { isActive: true } },
+        where: { centerId: scopedCenterIds, user: { isActive: true } },
         orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
         take: 250,
         select: {

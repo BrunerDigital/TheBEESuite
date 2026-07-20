@@ -5,8 +5,9 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { buildParentLoginSetupUrl, getParentPortalDefaultPassword, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
+import { PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import { prisma } from "@/lib/prisma";
 import {
   asRecord,
@@ -27,7 +28,6 @@ import {
   registrationLedgerExternalId,
   type RegistrationPaymentStatus,
 } from "@/lib/registration-billing";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -424,21 +424,10 @@ async function createParentPortalInvite(input: {
 }) {
   const email = normalizeEmailText(input.guardian.email);
   if (!validEmail(email)) {
-    return { ok: false, error: "Primary guardian email is not valid.", emailSent: false, passwordResetSent: false, defaultPasswordSet: false };
-  }
-  const defaultPassword = getParentPortalDefaultPassword();
-  if (defaultPassword.length < 8) {
-    return {
-      ok: false,
-      error: "Parent portal default password is not configured.",
-      emailSent: false,
-      passwordResetSent: false,
-      defaultPasswordSet: false,
-    };
+    return { ok: false, error: "Primary guardian email is not valid.", emailSent: false, setupLinkIssued: false, credentialCreated: false };
   }
 
   try {
-    const appBaseUrl = getAppBaseUrl(input.requestUrl);
     const parentPortal = await ensureParentPortalLoginForGuardian({
       guardianId: input.guardian.id,
       linkedBy: input.user.email,
@@ -450,13 +439,24 @@ async function createParentPortalInvite(input: {
         ok: false,
         error: parentPortal.reason,
         emailSent: false,
-        passwordResetSent: false,
-        defaultPasswordSet: false,
+        setupLinkIssued: false,
+        credentialCreated: false,
       };
     }
-    const defaultPasswordSet = parentPortal.defaultPasswordSet;
+    const setupLink = await issueParentPortalSetupLink({
+      requestUrl: input.requestUrl,
+      user: input.user,
+      parentUserId: parentPortal.userId,
+      guardianId: input.guardian.id,
+      email,
+      centerId: input.center.id,
+      familyId: input.family.id,
+      reason: "registration_approval",
+    });
+    if (!setupLink.ok) {
+      return { ok: false, error: setupLink.error, emailSent: false, setupLinkIssued: false, credentialCreated: parentPortal.credentialCreated };
+    }
 
-    const portalUrl = buildParentLoginSetupUrl(appBaseUrl);
     const paymentLine = input.registrationPayment?.required
       ? `A registration fee/deposit invoice for ${formatRegistrationPaymentAmount(input.registrationPayment.totalCents)} is ready in the parent portal for secure checkout.`
       : "";
@@ -464,15 +464,15 @@ async function createParentPortalInvite(input: {
       `Hi ${input.guardian.fullName},`,
       "",
       `Your registration application for ${input.center.crmLocationId ?? input.center.name} was approved for the next enrollment steps.`,
-      `Use ${email} as your login email.`,
-      `Use ${defaultPassword} as your default password if you have not changed it yet.`,
+      `Open this private one-time link to create the password for ${email}: ${setupLink.setupUrl}`,
+      `The link expires at ${setupLink.expiresAt.toISOString()} and stops working after use.`,
       "Your approved child records and school connections are already linked in the portal.",
-      `Confirm your family portal information and check-in PIN: ${portalUrl}`,
-      "You do not have to choose a new password, but you can set one any time from Profile settings after you sign in.",
+      "After creating your password, confirm your family portal information and check-in PIN.",
       paymentLine || null,
       "",
       "The school may still need uploaded documents, signatures, tuition/deposit setup, classroom assignment, and start-date confirmation before final enrollment.",
     ].filter((line): line is string => line !== null).join("\n");
+    const deliveryAuditText = text.replace(setupLink.setupUrl, "[private setup link redacted]");
     const emailCopy = await sendEmail({
       to: [email],
       subject: "Kid City USA registration next steps",
@@ -480,7 +480,7 @@ async function createParentPortalInvite(input: {
       fromName: "Kid City USA",
       disableClickTracking: true,
       categories: ["parent_invitation_email"],
-      customArgs: { guardianId: input.guardian.id, familyId: input.family.id, centerId: input.center.id },
+      customArgs: { guardianId: input.guardian.id, familyId: input.family.id, centerId: input.center.id, setupTokenId: setupLink.tokenId },
       tenantId: input.user.tenantId,
     });
     await recordEmailDeliveryAttempt({
@@ -489,11 +489,12 @@ async function createParentPortalInvite(input: {
       purpose: "parent_invitation_email",
       to: [email],
       subject: "Kid City USA registration next steps",
-      text,
+      text: deliveryAuditText,
       fromName: "Kid City USA",
       result: emailCopy,
-      metadata: { guardianId: input.guardian.id, familyId: input.family.id, registrationApproval: true },
+      metadata: { guardianId: input.guardian.id, familyId: input.family.id, registrationApproval: true, setupTokenId: setupLink.tokenId },
     });
+    await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: emailCopy.ok });
 
     await writeAuditLog(input.user, {
       centerId: input.center.id,
@@ -506,7 +507,9 @@ async function createParentPortalInvite(input: {
         linkedGuardianIds: parentPortal.linkedGuardianIds,
         email,
         authMode: PARENT_PORTAL_INVITE_MODE,
-        defaultPasswordSet,
+        credentialCreated: parentPortal.credentialCreated,
+        setupTokenId: setupLink.tokenId,
+        setupLinkExpiresAt: setupLink.expiresAt.toISOString(),
         emailCopySent: emailCopy.ok,
       },
     });
@@ -516,19 +519,19 @@ async function createParentPortalInvite(input: {
         ok: false,
         error: emailCopy.error || "The parent portal user was linked, but the login email could not be sent.",
         emailSent: false,
-        passwordResetSent: false,
-        defaultPasswordSet,
+        setupLinkIssued: true,
+        credentialCreated: parentPortal.credentialCreated,
       };
     }
 
-    return { ok: true, emailSent: true, passwordResetSent: false, defaultPasswordSet, parentUserId: parentPortal.userId };
+    return { ok: true, emailSent: true, setupLinkIssued: true, credentialCreated: parentPortal.credentialCreated, parentUserId: parentPortal.userId };
   } catch (error) {
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Parent portal invite failed.",
       emailSent: false,
-      passwordResetSent: false,
-      defaultPasswordSet: false,
+      setupLinkIssued: false,
+      credentialCreated: false,
     };
   }
 }
@@ -1225,8 +1228,8 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     ok: boolean;
     error?: string;
     emailSent: boolean;
-    passwordResetSent: boolean;
-    defaultPasswordSet: boolean;
+    setupLinkIssued: boolean;
+    credentialCreated: boolean;
     invitedCount?: number;
     failedCount?: number;
     results?: Array<Awaited<ReturnType<typeof createParentPortalInvite>>>;
@@ -1234,8 +1237,8 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       ok: false,
       error: "Parent portal invite was not requested.",
       emailSent: false,
-      passwordResetSent: false,
-      defaultPasswordSet: false,
+      setupLinkIssued: false,
+      credentialCreated: false,
     };
   if (inviteParent && approval.guardians.length) {
     const results = [];
@@ -1254,8 +1257,8 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       ok: successes.length > 0,
       error: successes.length ? undefined : results.find((result) => !result.ok)?.error ?? "Parent portal invites failed.",
       emailSent: successes.some((result) => result.emailSent),
-      passwordResetSent: false,
-      defaultPasswordSet: successes.some((result) => result.defaultPasswordSet),
+      setupLinkIssued: successes.some((result) => result.setupLinkIssued),
+      credentialCreated: successes.some((result) => result.credentialCreated),
       invitedCount: successes.length,
       failedCount: results.length - successes.length,
       results,

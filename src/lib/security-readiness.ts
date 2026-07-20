@@ -1,4 +1,5 @@
 export type DatabaseSecurityPosture = {
+  expectedPublicTableCount?: number;
   publicTableCount: number;
   rlsEnabledCount: number;
   tablesWithoutRls: string[];
@@ -8,12 +9,19 @@ export type DatabaseSecurityPosture = {
 };
 
 export type SecurityPostureFinding = {
-  code: "RLS_COVERAGE" | "BROWSER_GRANT" | "SECURITY_DEFINER" | "UNSAFE_VIEW";
+  code: "TABLE_COUNT_DRIFT" | "RLS_COVERAGE" | "BROWSER_GRANT" | "SECURITY_DEFINER" | "UNSAFE_VIEW";
   detail: string;
 };
 
 export function evaluateDatabaseSecurityPosture(posture: DatabaseSecurityPosture): SecurityPostureFinding[] {
   const findings: SecurityPostureFinding[] = [];
+
+  if (posture.expectedPublicTableCount !== undefined && posture.publicTableCount !== posture.expectedPublicTableCount) {
+    findings.push({
+      code: "TABLE_COUNT_DRIFT",
+      detail: `Expected ${posture.expectedPublicTableCount} public tables but found ${posture.publicTableCount}; reconcile migrations before accepting RLS coverage`,
+    });
+  }
 
   if (posture.publicTableCount !== posture.rlsEnabledCount || posture.tablesWithoutRls.length > 0) {
     findings.push({

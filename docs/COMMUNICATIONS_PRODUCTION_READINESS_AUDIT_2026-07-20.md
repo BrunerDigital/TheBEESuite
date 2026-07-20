@@ -56,6 +56,21 @@ Communications are production-ready for a selected school only when its sender a
 
 Provider configuration and retained evidence requirements are defined in `docs/SENDGRID_PROVIDER_CONFIGURATION_EVIDENCE_CHECKLIST.md`.
 
+## Exact authorized test sequence
+
+After separate authorization to configure the provider and deploy the migration/code—but before any real-family send—perform this sequence with the approved school/test tenant:
+
+1. Apply the `SendGridEventReceipt` migration and deploy the focused release; confirm readiness reports the signed-event key present.
+2. Configure the signed webhook and six event types from the provider checklist; run the provider's endpoint test and retain a redacted `2xx` result.
+3. POST an unsigned and a tampered test payload; confirm `403`, zero new receipts, and zero delivery updates.
+4. Send one invitation through the normal application UI to the approved non-family test inbox; confirm recipient/school/reply route, tracking-disabled landing URL, initial `accepted`, then signed `delivered` with one durable event receipt.
+5. Replay the identical signed batch; confirm the duplicate counter increases while receipt count and delivery state remain unchanged.
+6. Send one payment-method request to the same approved test inbox; confirm the same accepted-to-delivered evidence, 14-day token behavior, mobile landing, and monitored reply route without entering bank/card data.
+7. Send one approved controlled failure test to the designated invalid test address; confirm accepted-to-bounce/drop, generic redacted failure storage, bounced/suppressed count, and needs-follow-up count.
+8. Use a seeded/local clock-controlled record—not a delayed live-family message—to verify accepted older than 24 hours appears as accepted-stale and a deferred event appears separately.
+9. Review operational logs and UI evidence for absence of recipient email, signature, provider reason/response, tokenized URL, and full message/event IDs.
+10. Record tester, reviewer, release, environment, date/time, school/test tenant, results, exceptions, and redacted evidence links. Stop without broader invitations or payment enablement.
+
 ## Current decision
 
 The wider wave remains **NO-GO** until this workstream and all shared signoffs pass. Kokomo may continue normal production use; this audit does not authorize new messaging, billing, or a deployment.

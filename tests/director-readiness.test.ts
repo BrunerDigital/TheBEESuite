@@ -15,7 +15,7 @@ function director(centerIds = ["school_a"]) {
 test("director authorization covers the complete operating workspace without tenant-wide access", () => {
   const user = director();
   const modules = ["school-setup", "crm-leads", "family-detail", "staff", "attendance", "incident-reports", "documents", "fte-reports", "analytics", "notifications", "billing-invoices"] as const;
-  for (const module of modules) assert.equal(canAccessModule(user, module), true, `Director should access ${module}`);
+  for (const moduleSlug of modules) assert.equal(canAccessModule(user, moduleSlug), true, `Director should access ${moduleSlug}`);
   assert.equal(canManageOperations(user), true);
   assert.equal(canManageCrmLeads(user), true);
   assert.equal(canManageBilling(user), true);
@@ -35,7 +35,7 @@ test("director cross-school object access fails closed across operational, billi
 test("critical Director APIs expose authentication, role, missing-object, and scope recovery responses", () => {
   const routes = [
     ["src/app/api/school-setup/route.ts", /Authentication required/, /not allowed for this role/, /do not have access/, /School not found/],
-    ["src/app/api/incidents/[id]/review/route.ts", /Authentication required/, /not allowed for this role/, /do not have access/, /Incident not found/],
+    ["src/app/api/incidents/[id]/review/route.ts", /Authentication required/, /not allowed for this role/, /centerScopedAccessGuard/, /Incident not found/],
     ["src/app/api/documents/[id]/review/route.ts", /Authentication required/, /not allowed for this role/, /do not have access/, /Document not found/],
     ["src/app/api/fte-reports/route.ts", /Authentication required/, /not allowed for this role/, /do not have access/, /report not found/i],
     ["src/app/api/reports/export/route.ts", /Authentication required/, /not allowed for this role/],

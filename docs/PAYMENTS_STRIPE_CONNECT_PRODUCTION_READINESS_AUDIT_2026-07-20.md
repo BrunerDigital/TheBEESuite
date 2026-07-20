@@ -29,9 +29,13 @@ A school is payments-ready only when all of the following are evidenced for that
 - Webhook review confirmed signed-event validation, event deduplication, successful and failed Checkout/PaymentIntent handling, invoice and family-balance ledger application, refunds, and disputes.
 - Refund review confirmed exact partial refunds against original PaymentIntents, connected-account scoping, idempotency keys, multi-payment allocation, ledger entries, and explicit handling when Stripe-refundable capacity is insufficient.
 - A readiness defect was fixed: outstanding Stripe requirement fields and incomplete details now block readiness even when charges and payouts are enabled.
+- A separate per-school business gate now blocks payment-method setup, Checkout, family payments, saved-method charges, and autopay until billing-preview, accounting, and cutover approvals are recorded. Kokomo alone retains a narrow legacy-production compatibility path.
+- A read-only connected-account reconciliation endpoint now compares local paid/refunded activity with Stripe balance transactions and payouts and reports explicit missing, unmatched, pending, failed, and mismatch states.
+- `docs/STRIPE_SCHOOL_EVIDENCE_PACKET_TEMPLATE.md` provides the reusable per-school evidence record.
 - Connect documentation now matches the implemented direct-charge model.
-- Focused payment/Stripe tests: 66 passed, 0 failed.
-- TypeScript typecheck passed.
+- Focused payment/Stripe lifecycle tests: 84 passed, 0 failed after the business-gate and reconciliation additions.
+- Full repository tests: 505 passed and 4 unrelated shared-worktree tests failed in message-notification/password-reset coverage.
+- TypeScript reported no Payments/Stripe workstream error; repository typecheck remains blocked by unrelated parent-invitation/setup-link union errors in the shared worktree.
 
 ## Findings
 
@@ -39,8 +43,8 @@ A school is payments-ready only when all of the following are evidenced for that
 
 1. **Additional schools have no connected accounts.** Sixty-nine real active schools other than Kokomo have no connected Stripe account recorded. Owner: Brenden until delegated.
 2. **No selected-school Stripe evidence packet exists.** The first wave and dates are not named, so charges, payouts, requirements, payout schedule, identity, bank ownership, and support details cannot be signed off per school. Owner: Brenden until delegated.
-3. **No explicit school-level business enablement gate exists.** Checkout and autopay are technically allowed when Stripe/webhook/account readiness passes (subject to environment overrides), but the code does not separately require recorded approval of the billing preview, disclosures, accounting, and cutover. Do not mark a new connected account ready until this gate is designed and implemented. Owner: Brenden until delegated.
-4. **Payout reconciliation is not implemented as an evidenced workflow.** The repo can configure and display connected-account readiness, but it does not ingest/list Stripe payout or balance-transaction events and cannot reconcile a billing batch to a Stripe payout. Owner: Brenden until delegated.
+3. **Per-school business approvals remain incomplete.** The repo now fails closed unless billing-preview, accounting, and cutover approvals are recorded; Kokomo alone has a narrow legacy-production exception. No additional school has completed those human approvals. Owner: Brenden until delegated.
+4. **Payout reconciliation evidence remains incomplete.** A read-only connected-account balance-transaction and payout workflow now reports clear mismatch states, but it has not been run and signed off for a selected school/batch. Owner: Brenden until delegated.
 5. **The complete lifecycle has not been executed per selected school.** No retained safe-environment evidence covers payment-method setup, Checkout, saved method/autopay, asynchronous settlement, webhook ledger application, failure/dunning, receipt, correction, partial refund, dispute ownership, application fee, and payout. Owner: Brenden until delegated.
 6. **Billing preview and opening balances are not approved per selected school.** Twenty open invoices exist, but the current evidence does not establish which school records are authoritative or approved for charging. Owner: Brenden until delegated.
 
@@ -54,8 +58,8 @@ A school is payments-ready only when all of the following are evidenced for that
 
 ### FOLLOW-UP
 
-1. Replace narrative-only payout checks with a durable per-school evidence record containing Stripe snapshot time, requirements, capabilities, payout schedule, test case IDs, reconciliation totals, signoffs, and exceptions. Owner: Brenden until delegated.
-2. Add automated tests around the future business enablement gate and payout reconciliation workflow. Owner: Brenden until delegated.
+1. Complete `docs/STRIPE_SCHOOL_EVIDENCE_PACKET_TEMPLATE.md` for each selected school with Stripe snapshot time, requirements, capabilities, payout schedule, test case IDs, reconciliation totals, signoffs, and exceptions. Owner: Brenden until delegated.
+2. Retain the automated business-gate and payout-reconciliation tests in the release regression suite. Owner: Brenden until delegated.
 3. Review whether future/eventually-due Stripe requirements should block immediately or receive a documented due-date policy; the current safety gate blocks on every returned requirement field. Owner: Brenden until delegated.
 
 ## External decisions required

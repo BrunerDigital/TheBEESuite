@@ -159,7 +159,7 @@ export async function ensureParentPortalLoginForGuardian({
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
-      mustResetPassword: true,
+      ...(credentialCreated || (existingUser && !existingUser.isActive) ? { mustResetPassword: true } : {}),
       sessionVersion: { increment: 1 },
     },
     create: {

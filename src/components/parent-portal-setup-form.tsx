@@ -52,7 +52,7 @@ function pinDigits(value: string) {
 const setupSteps = [
   {
     title: "Use your school login",
-    body: "Sign in with your guardian email and BusyBees as the default password. You can change it later from Profile Settings.",
+    body: "Open the private one-time setup link from your school, create a password, and then sign in with your guardian email.",
   },
   {
     title: "Confirm this profile",

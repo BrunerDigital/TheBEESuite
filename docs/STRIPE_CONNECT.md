@@ -8,8 +8,10 @@ The BEE Suite uses Stripe Checkout and PaymentIntents with Connect direct charge
 2. They start Stripe Connect onboarding for a school.
 3. Stripe collects payout, identity, and bank information directly from the school.
 4. Parent portal invoice payments create a Checkout Session only after Stripe platform keys, webhook reconciliation, and the school connected account are ready.
-5. The Checkout Session creates the charge on the school's connected account and retains the configured BEE Suite application fee.
-6. The webhook at `/api/billing/stripe-webhook` marks payments paid, closes invoices, writes ledger credits, and stores processed Stripe event IDs for idempotency.
+5. A separate school business gate must record billing-preview, accounting, and cutover approval. Technical Stripe readiness does not open billing by itself.
+6. The Checkout Session creates the charge on the school's connected account and retains the configured BEE Suite application fee.
+7. The webhook at `/api/billing/stripe-webhook` marks payments paid, closes invoices, writes ledger credits, and stores processed Stripe event IDs for idempotency.
+8. Authorized billing users can run the read-only connected-account reconciliation endpoint at `/api/billing/connect/reconciliation` for a window of 31 days or less.
 
 ## Required Stripe Settings
 
@@ -132,3 +134,5 @@ Review fee disclosures, state-specific rules, card-network/acquirer notice, debi
 - Confirm the family balance, invoice status, payment record, ledger entry, application fee, and school payout all reconcile.
 - Confirm refund and dispute handling with Stripe test events before live parent payments are broadly enabled.
 - Keep `STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS=false` in production.
+- `STRIPE_BILLING_LEGACY_APPROVED_CENTER_NAMES` defaults narrowly to `Kid City USA - Kokomo` so existing production use can continue. Do not add another school; use explicit per-school approval fields after human signoffs.
+- Copy `docs/STRIPE_SCHOOL_EVIDENCE_PACKET_TEMPLATE.md` for every proposed school.

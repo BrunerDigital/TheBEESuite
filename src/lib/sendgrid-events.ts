@@ -87,9 +87,14 @@ export function normalizeSendGridEvent(value: unknown): NormalizedSendGridEvent 
 }
 
 export function sendGridStateTransition(currentStatus: string, event: NormalizedSendGridEvent) {
-  if (event.status === "accepted" && (currentStatus === "delivered" || currentStatus === "failed")) return null;
-  if (event.status === "delivered" && currentStatus === "failed") return null;
+  if (sendGridBlockedCurrentStatuses(event).includes(currentStatus)) return null;
   return event.status;
+}
+
+export function sendGridBlockedCurrentStatuses(event: NormalizedSendGridEvent) {
+  if (event.status === "accepted") return ["delivered", "failed"];
+  if (event.status === "delivered") return ["failed"];
+  return [];
 }
 
 export async function processSendGridEventBatch(events: unknown[], repository: SendGridEventRepository) {

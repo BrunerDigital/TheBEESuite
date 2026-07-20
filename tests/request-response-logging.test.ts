@@ -173,7 +173,7 @@ test("SendGrid webhook logs redact signatures, recipients, ids, and provider fai
   assert.equal(serialized.includes("message-secret"), false);
   assert.equal(serialized.includes("secret-signature"), false);
   assert.equal(serialized.includes("Mailbox"), false);
-  assert.equal(serialized.includes('"event":"bounce"'), true);
+  assert.equal(serialized.includes('"status":"failed"'), true);
 });
 
 test("operational error logs redact messages and metadata", () => {

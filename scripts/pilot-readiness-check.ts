@@ -116,11 +116,11 @@ function optionValue(argv: string[], index: number, option: string) {
 
 function addModules(args: PilotReadinessArgs, value: string) {
   for (const raw of value.split(",")) {
-    const module = raw.trim() as RolloutModule;
-    if (!rolloutModules.includes(module)) {
+    const rolloutModule = raw.trim() as RolloutModule;
+    if (!rolloutModules.includes(rolloutModule)) {
       throw new Error(`Unknown rollout module: ${raw.trim()}. Choose from ${rolloutModules.join(", ")}.`);
     }
-    if (!args.modules.includes(module)) args.modules.push(module);
+    if (!args.modules.includes(rolloutModule)) args.modules.push(rolloutModule);
   }
 }
 
@@ -187,16 +187,18 @@ export function selectSchoolIds(candidates: SchoolSelectorCandidate[], selectors
 
 export function buildModuleGates(input: {
   setupGaps: string[];
+  operationalActivationGaps?: string[];
   guardianCount: number;
   guardianLoginCount: number;
   guardianPinCount: number;
 }): CenterRolloutGap["moduleGates"] {
-  const invitationGaps = [...input.setupGaps];
+  const operationalActivationGaps = input.operationalActivationGaps ?? input.setupGaps;
+  const invitationGaps = [...operationalActivationGaps];
   if (input.guardianCount === 0) invitationGaps.push("no guardians available for invitation review");
   if (input.guardianLoginCount < input.guardianCount) {
     invitationGaps.push(`${input.guardianCount - input.guardianLoginCount} guardian(s) are not linked to login users`);
   }
-  const kioskGaps = [...input.setupGaps];
+  const kioskGaps = [...operationalActivationGaps];
   if (input.guardianCount === 0) kioskGaps.push("no guardians available for kiosk credential review");
   if (input.guardianPinCount < input.guardianCount) {
     kioskGaps.push(`${input.guardianCount - input.guardianPinCount} guardian(s) do not have kiosk PINs`);
@@ -323,9 +325,9 @@ function printReport(report: PilotReadinessReport, args: PilotReadinessArgs) {
 
   console.log("\nSelected Module Gates");
   for (const row of report.rolloutGaps) {
-    for (const module of report.selection.modules) {
-      const gate = row.moduleGates[module];
-      console.log(`- ${row.label}: ${module} = ${gate.status}${gate.automatedGaps.length ? ` (${gate.automatedGaps.join("; ")})` : ""}`);
+    for (const rolloutModule of report.selection.modules) {
+      const gate = row.moduleGates[rolloutModule];
+      console.log(`- ${row.label}: ${rolloutModule} = ${gate.status}${gate.automatedGaps.length ? ` (${gate.automatedGaps.join("; ")})` : ""}`);
     }
   }
   console.log(`- CONTROL: ${report.selection.controls}`);
@@ -573,6 +575,7 @@ async function main() {
     if (!center.timezone) setupGaps.push("missing school timezone");
     if (!center.locationId && !center.crmLocationId) setupGaps.push("missing school/CRM location ID");
     if (!center.ownerGroupId) setupGaps.push("missing owner group");
+    if (!readSchoolEin(center.customFields)) setupGaps.push("school EIN/tax receipt details are not configured");
     if (classroomCount === 0) setupGaps.push("no classrooms");
     if (staffCount === 0) setupGaps.push("no staff/teacher profiles");
     if (familyCount === 0) setupGaps.push("no imported families");
@@ -581,8 +584,9 @@ async function main() {
     if (guardianCount === 0) setupGaps.push("no guardian records");
     if (directorAccessCount === 0) setupGaps.push("no center director/billing access grant");
 
-    const moduleGates = buildModuleGates({ setupGaps, guardianCount, guardianLoginCount, guardianPinCount });
-    const gaps = Array.from(new Set(args.modules.flatMap((module) => moduleGates[module].automatedGaps)));
+    const operationalActivationGaps = setupGaps.filter((gap) => gap !== "school EIN/tax receipt details are not configured");
+    const moduleGates = buildModuleGates({ setupGaps, operationalActivationGaps, guardianCount, guardianLoginCount, guardianPinCount });
+    const gaps = Array.from(new Set(args.modules.flatMap((rolloutModule) => moduleGates[rolloutModule].automatedGaps)));
 
     return {
       centerId: center.id,
@@ -635,18 +639,18 @@ async function main() {
     check(activeCentersWithoutClassrooms === 0 ? "pass" : "warn", "Classroom setup", `${activeCentersWithoutClassrooms} active center(s) have no classrooms.`),
     check(activeCentersWithoutStaff === 0 ? "pass" : "warn", "Staff setup", `${activeCentersWithoutStaff} active center(s) have no staff/teacher profiles.`),
     check(activeCentersWithUnassignedChildren === 0 ? "pass" : "warn", "Child classroom assignment", `${activeCentersWithUnassignedChildren} active center(s) have children without classroom assignments.`),
-    check(activeCentersWithoutGuardianLogins === 0 ? "pass" : "warn", "Parent login links", `${activeCentersWithoutGuardianLogins} active center(s) have guardians but no linked parent/guardian login users.`),
-    check(activeCentersWithoutGuardianPins === 0 ? "pass" : "warn", "Guardian PIN rollout", `${activeCentersWithoutGuardianPins} active center(s) have guardians but no kiosk PINs.`),
+    check(activeCentersWithoutGuardianLogins === 0 ? "pass" : "warn", "Parent login links", `${activeCentersWithoutGuardianLogins} active center(s) have one or more guardians without linked parent/guardian login users.`),
+    check(activeCentersWithoutGuardianPins === 0 ? "pass" : "warn", "Guardian PIN rollout", `${activeCentersWithoutGuardianPins} active center(s) have one or more guardians without kiosk PINs.`),
     check(activeCentersWithoutDirectorAccess === 0 ? "pass" : "warn", "Director/billing access grants", `${activeCentersWithoutDirectorAccess} active center(s) have no active center director, assistant director, or billing grant.`),
     check(openInvoices >= 0 ? "pass" : "warn", "Open invoices", `${openInvoices} open invoice(s).`),
     check(pendingIncidents === 0 ? "pass" : "warn", "Pending incident review", `${pendingIncidents} incident(s) need review.`),
     check(mediaReviewQueue === 0 ? "pass" : "warn", "Parent media review", `${mediaReviewQueue} photo(s) are waiting for permission review.`),
-    ...args.modules.map((module) => {
-      const blocked = rolloutGapRows.filter((row) => row.moduleGates[module].status === "blocked").length;
-      const manual = rolloutGapRows.filter((row) => row.moduleGates[module].status === "manual_approval_required").length;
+    ...args.modules.map((rolloutModule) => {
+      const blocked = rolloutGapRows.filter((row) => row.moduleGates[rolloutModule].status === "blocked").length;
+      const manual = rolloutGapRows.filter((row) => row.moduleGates[rolloutModule].status === "manual_approval_required").length;
       return check(
-        blocked ? "warn" : "pass",
-        `Module gate: ${module}`,
+        blocked ? (args.schools.length ? "fail" : "warn") : "pass",
+        `Module gate: ${rolloutModule}`,
         `${blocked} selected school(s) blocked by automated data signals; ${manual} require separate manual approval. This check does not activate the module.`,
       );
     }),

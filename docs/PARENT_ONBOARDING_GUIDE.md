@@ -11,7 +11,7 @@ Use this guide when a school is ready to invite families into the parent portal.
 5. In `Family Profiles`, open `Parent Portal Access`.
 6. Select `Invite Parent` for the guardian.
 7. The guardian email becomes the parent's login email.
-8. Ask the parent to sign in at `https://thebeesuite.io/login` with their guardian email and `BusyBees` as the default password unless they already reset their password.
+8. Send the parent setup invitation only after launch approval. The parent opens the private one-time link, creates a password, and then signs in with the guardian email. The link expires after one hour and cannot be reused.
 9. Their linked child records and classroom connections are available through the guardian-to-family link.
 
 For the sendable parent instructions, use `docs/sops/PARENT_PORTAL_SOP.md`.
@@ -39,7 +39,7 @@ For the sendable parent instructions, use `docs/sops/PARENT_PORTAL_SOP.md`.
 
 ## Troubleshooting
 
-- If a parent cannot log in, resend portal access from `Family Profiles`.
+- If a parent cannot log in, send a fresh setup link from `Family Profiles` or direct them to **Forgot password**. A new setup link revokes the previous unused setup link.
 - If the parent logs in but sees no family, confirm the guardian record has the correct email and is linked to the parent user.
 - If payment buttons show an error, confirm the school has completed Stripe payout onboarding and parent payments are enabled.
 - If photos are missing, confirm the child has photo/video permission and the media item is approved/shared.

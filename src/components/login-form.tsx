@@ -53,11 +53,11 @@ const loginCopy: Record<LoginPortal, {
     heroFooter: "Family data remains connected to the school records already assigned to your account.",
     heroItems: ["Child updates", "Messages", "Tuition"],
     cardTitle: "Log in to your parent portal",
-    cardDescription: "Use the parent or guardian email on file. The default password is BusyBees unless you changed it.",
+    cardDescription: "Use the parent or guardian email on file and the private password you created from your setup link.",
     emailLabel: "Parent login email",
     emailPlaceholder: "parent@example.com",
-    passwordPlaceholder: "BusyBees",
-    helpText: "Use the personal parent or guardian email your school has on file and the default password BusyBees. You can change the password later from Profile Settings in the parent portal.",
+    passwordPlaceholder: "Your private password",
+    helpText: "First visit: open the private setup link from your school and create a password. If the link expired or you forgot your password, use Forgot password to request a fresh recovery link.",
   },
   teachers: {
     heroTitle: "Open your teacher workspace.",
@@ -254,8 +254,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
             ) : (
               <div className="mt-5 grid gap-3">
                 <div className="rounded-lg border bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                  Parents and guardians can sign in here with their personal email and BusyBees unless they already changed their
-                  password.{" "}
+                  Parents and guardians sign in with their personal email and the private password created from their setup link.{" "}
                   <Link href="/parents" className="inline-flex items-center font-semibold text-slate-950 hover:underline">
                     Open parent portal login <ArrowRight className="ml-1 size-3.5" />
                   </Link>

@@ -1236,7 +1236,7 @@ export type StripeSoftwareSubscriptionSnapshot = {
   latestInvoiceId: string | null;
 };
 
-function stripeTimestamp(value: unknown) {
+function stripeReconciliationTimestamp(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000).toISOString() : null;
 }
 
@@ -2023,8 +2023,8 @@ export async function listStripeBalanceTransactions(input: {
       feeCents: typeof row.fee === "number" ? row.fee : 0,
       netCents: typeof row.net === "number" ? row.net : 0,
       sourceId: clean(row.source) || null,
-      createdAt: stripeTimestamp(row.created),
-      availableOn: stripeTimestamp(row.available_on),
+      createdAt: stripeReconciliationTimestamp(row.created),
+      availableOn: stripeReconciliationTimestamp(row.available_on),
     };
   });
   return { ok: true, configured: true, provider: "stripe", transactions, hasMore: json.has_more === true };
@@ -2062,8 +2062,8 @@ export async function listStripePayouts(input: {
       id: clean(row.id),
       amountCents: typeof row.amount === "number" ? row.amount : 0,
       status: clean(row.status),
-      createdAt: stripeTimestamp(row.created),
-      arrivalDate: stripeTimestamp(row.arrival_date),
+      createdAt: stripeReconciliationTimestamp(row.created),
+      arrivalDate: stripeReconciliationTimestamp(row.arrival_date),
       failureCode: clean(row.failure_code) || null,
     };
   });

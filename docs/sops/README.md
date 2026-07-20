@@ -53,7 +53,7 @@ Before the guides are sent broadly, the school should confirm:
 - Teachers can log in and see the correct classroom rosters.
 - Parent guardian emails are accurate on family profiles.
 - Parent portal login is available from `https://thebeesuite.io/parents` and `https://thebeesuite.io/login`.
-- The default parent password is `BusyBees` unless a parent has already reset their password or the school changed launch instructions.
+- Parent accounts use private one-time setup links. Links expire after one hour, cannot be reused, and must never be forwarded or copied into school records.
 - Kiosk PIN or QR credentials are ready before lobby check-in is used.
 - Stripe payout and checkout readiness are complete before parents are asked to pay online.
 - Billing and document workflows have been tested with one low-risk family record.

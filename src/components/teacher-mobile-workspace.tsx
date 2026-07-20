@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
+import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
   classroomOfflineQueueStorageKey,
+  classifyClassroomReplayStatus,
   createClassroomOfflineAction,
   decryptClassroomOfflineQueue,
   encryptClassroomOfflineQueue,
@@ -34,6 +35,7 @@ type ChildOption = {
   enrollmentStatus: string;
   photoVideoPermission: boolean;
   classroom: { id: string; name: string } | null;
+  liveLocation?: { currentClassroomId: string | null; areaName: string | null; status: string; movedAt: string | Date; currentClassroom: { id: string; name: string } | null } | null;
   family?: { custodyNotes: string | null } | null;
   attendance?: AttendanceSnapshot;
   dailyReport?: DailyReportSnapshot | null;
@@ -289,6 +291,9 @@ export function TeacherMobileWorkspace({
   const [incidentDescription, setIncidentDescription] = useState("");
   const [actionTaken, setActionTaken] = useState("");
   const [offlineQueue, setOfflineQueue] = useState<ClassroomOfflineAction[]>([]);
+  const [locationOverrides, setLocationOverrides] = useState<Record<string, string>>({});
+  const [locationTarget, setLocationTarget] = useState("area:Playground");
+  const [locationReason, setLocationReason] = useState("");
   const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
@@ -356,8 +361,9 @@ export function TeacherMobileWorkspace({
     for (const action of queued) {
       try {
         const response = await fetch(action.endpoint, { method: action.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(action.body) });
-        if (response.ok) synced += 1;
-        else if (response.status >= 500 || response.status === 409 || response.status === 429) remaining.push(action);
+        const outcome = classifyClassroomReplayStatus(response.status);
+        if (outcome === "complete") synced += 1;
+        else remaining.push(action);
       } catch { remaining.push(action); }
     }
     await persistOfflineQueue(remaining);
@@ -387,9 +393,15 @@ export function TeacherMobileWorkspace({
   }, []);
 
   async function queueOfflineAction(action: ClassroomOfflineAction) {
-    const currentStoredQueue = await readOfflineQueue();
-    await persistOfflineQueue([...(currentStoredQueue.length ? currentStoredQueue : offlineQueue), action]);
-    showStatus(`${action.label} queued securely for this account and classroom.`);
+    try {
+      const currentStoredQueue = await readOfflineQueue();
+      await persistOfflineQueue([...(currentStoredQueue.length ? currentStoredQueue : offlineQueue), action]);
+      showStatus(`${action.label} queued securely for this account and classroom.`);
+      return true;
+    } catch {
+      showError("This tablet could not securely store the action. Keep a paper note and contact the director before leaving this screen.");
+      return false;
+    }
   }
 
   async function postJsonOrQueue({
@@ -407,8 +419,7 @@ export function TeacherMobileWorkspace({
   }) {
     const action = createClassroomOfflineAction({ endpoint, body, label });
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      await queueOfflineAction(action);
-      onQueued?.();
+      if (await queueOfflineAction(action)) onQueued?.();
       return;
     }
 
@@ -420,8 +431,7 @@ export function TeacherMobileWorkspace({
         body: JSON.stringify(action.body),
       });
     } catch {
-      await queueOfflineAction(action);
-      onQueued?.();
+      if (await queueOfflineAction(action)) onQueued?.();
       return;
     }
 
@@ -445,7 +455,7 @@ export function TeacherMobileWorkspace({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(action.body),
           });
-          if (response.ok) {
+          if (classifyClassroomReplayStatus(response.status) === "complete") {
             synced += 1;
           } else {
             remaining.push(action);
@@ -577,6 +587,29 @@ export function TeacherMobileWorkspace({
   function updateNap(id: string, patch: Partial<NapDraft>) {
     if ((patch.startsAt && patch.startsAt.trim()) || (patch.endsAt && patch.endsAt.trim())) setNoNap(false);
     setNapRows((current) => current.map((row) => row.id === id ? { ...row, ...patch } : row));
+  }
+
+  function locationFor(child: ChildOption) {
+    return locationOverrides[child.id] ?? child.liveLocation?.areaName ?? child.liveLocation?.currentClassroom?.name ?? child.classroom?.name ?? "Unassigned";
+  }
+
+  function submitLocation() {
+    if (!selectedChild) return;
+    const isArea = locationTarget.startsWith("area:");
+    const targetValue = locationTarget.slice(locationTarget.indexOf(":") + 1);
+    startTransition(async () => {
+      await postJsonOrQueue({
+        endpoint: "/api/children/location",
+        body: { childId: selectedChild.id, classroomId: isArea ? null : targetValue, areaName: isArea ? targetValue : null, reason: locationReason },
+        label: `${selectedChild.fullName} location`,
+        onQueued: () => setLocationOverrides((current) => ({ ...current, [selectedChild.id]: isArea ? targetValue : classroomOptions.find((room) => room.id === targetValue)?.name ?? "Classroom" })),
+        onSuccess: () => {
+          setLocationOverrides((current) => ({ ...current, [selectedChild.id]: isArea ? targetValue : classroomOptions.find((room) => room.id === targetValue)?.name ?? "Classroom" }));
+          setLocationReason("");
+          showStatus(`${selectedChild.fullName} location updated.`);
+        },
+      });
+    });
   }
 
   function updateDiaper(id: string, patch: Partial<DiaperDraft>) {
@@ -1322,6 +1355,36 @@ export function TeacherMobileWorkspace({
             <Button disabled={isPending || !selectedChild} className="w-full" onClick={() => submitAttendance()}>
               <ClipboardCheck data-icon="inline-start" />
               Save Attendance
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card id="teacher-location" className="glass-panel scroll-mt-28">
+          <CardHeader>
+            <CardTitle>Child location</CardTitle>
+            <CardDescription>{selectedChild ? `${selectedChild.fullName} · currently ${locationFor(selectedChild)}` : "Choose a child"}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-1">
+              <Label>Move to</Label>
+              <Select value={locationTarget} onValueChange={(value) => value && setLocationTarget(value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectLabel>School areas</SelectLabel>
+                    {['Playground', 'Gym', 'Cafeteria', 'Front office'].map((area) => <SelectItem key={area} value={`area:${area}`}>{area}</SelectItem>)}
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Classrooms</SelectLabel>
+                    {classroomOptions.map((room) => <SelectItem key={room.id} value={`classroom:${room.id}`}>{room.name}</SelectItem>)}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <Input value={locationReason} onChange={(event) => setLocationReason(event.target.value)} placeholder="Reason (optional)" maxLength={180} />
+            <Button disabled={isPending || !selectedChild} className="w-full" onClick={submitLocation}>
+              <MapPin data-icon="inline-start" />
+              Update Location
             </Button>
           </CardContent>
         </Card>

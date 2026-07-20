@@ -18,9 +18,10 @@ The BEE Suite parent portal gives families one place to view child updates, mess
 
 1. Go to `https://thebeesuite.io/login`.
 2. Enter the personal email address that is on your guardian profile with the school.
-3. Enter `BusyBees` as the password if you have not reset your password yet.
-4. If you already reset your password, use your own password.
-5. After login, open the parent portal.
+3. On your first visit, open the private setup link sent by your school and create a password. The link expires after one hour and stops working after it is used.
+4. For later visits, use your private password.
+5. If the setup link expired or you forgot your password, select **Forgot password** to request a fresh recovery link.
+6. After login, open the parent portal.
 
 If login does not work, ask the school to confirm the email address on your guardian profile. The email must match the one you are entering.
 
@@ -105,8 +106,8 @@ Do not use messages for emergencies. Call the school directly for urgent safety,
 
 Use these rules:
 
-- If you have never used the parent portal, try `BusyBees`.
-- If you already reset your password, use your reset password.
+- If you have never used the parent portal, open the private one-time setup link from your school.
+- If the setup link is expired or already used, request a fresh recovery link; do not ask the school to send a password.
 - If you forgot your password, use the password reset option or ask the school for help.
 - If the app says your account cannot be found, ask the school to confirm your guardian email.
 

@@ -38,7 +38,7 @@ async function POSTHandler(request: NextRequest) {
   }
   if (temporaryPassword) {
     return NextResponse.json(
-      { ok: false, error: "Parent portal passwords use the configured default parent password." },
+      { ok: false, error: "Temporary passwords are not accepted. Parent access uses a private one-time setup link." },
       { status: 400 },
     );
   }
@@ -127,6 +127,7 @@ async function POSTHandler(request: NextRequest) {
       setupUrl: setupLink.setupUrl,
       expiresAt: setupLink.expiresAt,
     });
+    const deliveryAuditText = invitationText.replace(setupLink.setupUrl, "[private setup link redacted]");
     const emailCopy = await sendEmail({
       to: [email],
       subject: "Create your The BEE Suite parent portal password",
@@ -144,7 +145,7 @@ async function POSTHandler(request: NextRequest) {
       purpose: "parent_invitation_email",
       to: [email],
       subject: "Create your The BEE Suite parent portal password",
-      text: invitationText,
+      text: deliveryAuditText,
       fromName: "The BEE Suite",
       result: emailCopy,
       metadata: { guardianId: guardian.id, familyId: guardian.familyId, setupTokenId: setupLink.tokenId },

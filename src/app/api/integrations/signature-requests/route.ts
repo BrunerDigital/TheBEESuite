@@ -89,7 +89,7 @@ async function POSTHandler(request: NextRequest) {
     `Type: ${type}`,
     "",
     `Open the branded parent form to review and sign: ${portalUrl}#documents`,
-    "Sign in with the guardian email where you received this message. Use the school default parent password if you have not changed it yet.",
+    "Sign in with the guardian email where you received this message and your private password. If you have not created one yet or forgot it, use the parent login recovery link.",
     "",
     `Signature consent: ${SIGNATURE_CONSENT_TEXT}`,
   ].join("\n");

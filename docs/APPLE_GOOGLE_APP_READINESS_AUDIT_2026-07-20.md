@@ -72,3 +72,15 @@ Google is production-ready only after Brenden chooses a Play Store release rathe
 ## Exact next action
 
 On a Mac signed into the intended Apple Developer team, Brenden should clone the final approved commit, run `npm ci` and `npm run ios:parent:sync`, select the team in Xcode, archive version `1.0` build `1`, upload it to TestFlight, export/review the archive privacy report, and record the first physical-iPhone smoke result. Do not submit for App Review until every Apple BLOCKER above is closed.
+
+## Repository-safe continuation completed
+
+- Added `npm run mobile:store:check` to validate the Capacitor/Xcode identity, HTTPS/offline configuration, release version, permissions, privacy manifest/resource inclusion, deferred entitlements, and no-alpha icon/splash dimensions without requiring macOS or store access.
+- Expanded `tests/mobile-store-readiness.test.ts` to execute that audit and guard the v1 in-app-only notification wording/provider behavior.
+- Corrected user-facing “push/in-app” labels and the integration response so database alerts are accurately described as in-app notifications; native delivery now reports `configured: false` and `deliveryMode: "in_app_only"` instead of inferring readiness from an unused environment variable.
+- Added `PARENT_ANDROID_BUILD_RUNBOOK.md` without generating an Android target or signing material.
+- Expanded `PARENT_IOS_BUILD_RUNBOOK.md` with exact archive validation, upload, privacy-report reconciliation, TestFlight, and physical-device evidence steps.
+- Added `MOBILE_APP_PHYSICAL_DEVICE_EVIDENCE_PACKET.md` with the exact first-device smoke order and stop conditions.
+- Added only platform choice, store/account ownership, signing values, capability decisions, store declarations, and device signoff to `BRENDENS_TASKS.md`.
+
+The remaining classifications are unchanged: signing/store/privacy/device items are **BLOCKER**; target-device workflow proof and any approved link/push implementation are **REQUIRED BEFORE WAVE**; later role-specific native apps and optional native enhancements are **FOLLOW-UP**.

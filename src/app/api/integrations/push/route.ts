@@ -84,7 +84,7 @@ async function POSTHandler(request: NextRequest) {
     resourceId: notification.id,
     metadata: {
       provider: "in_app_notification",
-      pushProviderConfigured: Boolean(process.env.PUSH_PROVIDER_KEY),
+      nativePushConfigured: false,
       targetUserId,
     },
   });
@@ -92,8 +92,9 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     notification,
-    configured: Boolean(process.env.PUSH_PROVIDER_KEY),
+    configured: false,
     provider: "in_app_notification",
+    deliveryMode: "in_app_only",
   }, { status: 201 });
 }
 

@@ -856,7 +856,7 @@ async function GETHandler(request: NextRequest) {
     const childIds = [...new Set(batch.rows.map((row) => row.createdChildId).filter((id): id is string => Boolean(id)))];
     const sourceBalanceCents = batch.rows.reduce((sum, row) => {
       const raw = row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
-        ? row.rawData as Record<string, unknown>
+        ? Object.fromEntries(Object.entries(row.rawData).map(([key, field]) => [key, typeof field === "string" ? field : ""]))
         : {};
       return sum + cents(value(raw, ["balance", "account balance", "ledger balance", "amount due"]));
     }, 0);

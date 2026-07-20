@@ -564,7 +564,7 @@ async function POSTHandler(request: NextRequest) {
               linkedGuardianIds: parentPortal.linkedGuardianIds,
               created: parentPortal.created,
               reactivated: parentPortal.reactivated,
-              defaultPasswordSet: parentPortal.defaultPasswordSet,
+              credentialCreated: parentPortal.credentialCreated,
             }
           : {
               status: "skipped",

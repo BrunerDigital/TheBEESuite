@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   processSendGridEventBatch,
+  sendGridBlockedCurrentStatuses,
   type NormalizedSendGridEvent,
   verifySendGridEventSignature,
 } from "@/lib/sendgrid-events";
@@ -45,16 +46,12 @@ async function POSTHandler(request: NextRequest) {
               occurredAt: event.occurredAt,
             },
           });
-          const statusGuard = event.status === "accepted"
-            ? { notIn: ["delivered", "failed"] }
-            : event.status === "delivered"
-              ? { not: "failed" }
-              : undefined;
+          const blockedStatuses = sendGridBlockedCurrentStatuses(event);
           const result = await tx.integrationDelivery.updateMany({
             where: {
               provider: "sendgrid",
               providerMessageId: { in: event.messageIds },
-              ...(statusGuard ? { status: statusGuard } : {}),
+              ...(blockedStatuses.length ? { status: { notIn: blockedStatuses } } : {}),
             },
             data: {
               status: event.status,

@@ -8,7 +8,7 @@ Audience: parents and guardians whose school uses The BEE Suite.
 
 - The guardian email address your school has on file.
 - Your parent portal password.
-- If you have never reset your password, try the default password your school provided. Current launch guidance uses `BusyBees` unless the school changed it.
+- On your first visit, use the private one-time setup link from your school to create your password. The link expires after one hour and cannot be reused.
 - A phone, tablet, or computer with internet access.
 
 ## Visual Preview
@@ -79,7 +79,7 @@ Chrome and Edge may show an install icon in the address bar.
 1. Open the installed parent portal icon or go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address on your guardian profile.
 3. Enter your password.
-4. If you have never reset your password, use the default password your school provided.
+4. Use the private password you created from your setup link. If you have not created one yet or forgot it, request a fresh recovery link.
 5. After login, open the parent portal.
 6. Confirm your child or children appear.
 

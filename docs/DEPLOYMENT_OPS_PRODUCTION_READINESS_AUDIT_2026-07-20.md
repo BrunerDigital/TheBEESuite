@@ -18,7 +18,7 @@ This workstream is production-ready only when the final intended release commit 
 
 ### REQUIRED BEFORE WAVE
 
-- Run `npm run vercel-build` on the final intended commit. The July 20 audit attempt stopped during `prisma generate` with Windows `EPERM` replacing `node_modules/.prisma/client/query_engine-windows.dll.node`; multiple concurrent workspace lint/typecheck processes were active and were deliberately not terminated because they belong to other workstreams. Owner: technical release owner (Brenden until delegated). Exact retest: after other workspace jobs finish, stop only confirmed stale workspace Node/Next processes and rerun with a long timeout. A passing audit checkout is still not the final-release gate.
+- Run `npm run vercel-build` on the final intended commit. The July 20 audit attempt stopped during `prisma generate` with Windows `EPERM` replacing `node_modules/.prisma/client/query_engine-windows.dll.node`. A later coordination check confirmed multiple workstreams were still actively running Next, Prisma, lint, typecheck, and focused validation jobs. No process was stopped because none was verified stale. The readiness orchestrator centrally deferred the single clean build until all 17 workstreams settle. Owner: readiness orchestrator for the consolidated run; technical release owner (Brenden until delegated) for acceptance. Exact retest: freeze the consolidated candidate, confirm no active workspace jobs, stop only verified stale workspace processes if necessary, then run one long-timeout `npm run vercel-build`. Until that passes, candidate build status is **DEFERRED / NOT YET CLEAN**.
 - Prove Vercel `READY`, aliases, `/api/health`, authenticated `/api/system/readiness`, runtime log review, role smoke, and changed workflows after the authorized deployment. Owner: technical release owner (Brenden until delegated).
 - Prove successful production execution and expected result counts for all eight cron handlers: FTE reminders, integration retries, campaign scheduler, tuition billing, tuition reminders, document expirations, payment dunning, and autopay. Repository configuration and `CRON_SECRET` checks do not prove execution. Owner: operations owner (Brenden until delegated).
 - Define migration rollback per change. Prefer backward-compatible schema changes and forward fixes; never reverse a migration that could discard Kokomo writes. Owner: database owner (Brenden until delegated). External decision: approve restore-versus-forward-fix criteria and maximum acceptable recovery time/data loss.
@@ -39,7 +39,7 @@ This workstream is production-ready only when the final intended release commit 
 - API request/response logging emits request IDs, status, duration, and privacy-oriented redaction. Operational errors have a separate structured event.
 - The production smoke script covers public and protected entry points, public embed/API checks, CORS, browser errors, and optional credentialed login. It does not replace per-role/per-school workflow smoke.
 - `npm run ops:check` now performs a read-only static check for build-gate contents, cron manifest/handler parity, cron secret enforcement, and Prisma migration file completeness.
-- `npm run ops:check` passed: 8 cron handlers matched 8 configured paths and 28 Prisma migration directories contained `migration.sql`; its focused test passed 2 of 2.
+- Latest `npm run ops:check` passed: 8 cron handlers matched 8 configured paths and 31 Prisma migration directories contained `migration.sql`; its focused test passed 2 of 2. The migration count increased while other workstreams were active, so the consolidated release owner must freeze and review the final set before the central build.
 
 ## Release sequence and stop conditions
 
@@ -60,4 +60,13 @@ This workstream is production-ready only when the final intended release commit 
 
 ## Exact next action
 
-Brenden names the technical release, database/migration, monitoring/alerts, incident-command, and after-hours owners; those owners then run a safe-environment alert and restore/forward-recovery drill and attach evidence before the final intended commit is frozen for `npm run vercel-build`.
+The readiness orchestrator waits for all 17 workstreams to settle, freezes the consolidated candidate, verifies no active workspace jobs remain, and runs one clean `npm run vercel-build`. Separately, Brenden names the technical release, database/migration, monitoring/alerts, incident-command, and after-hours owners; those owners run the approved alert and recovery drills before production authorization.
+
+## Operational packet index
+
+- `MONITORING_ALERT_TEST_PLAN.md`
+- `DATABASE_MIGRATION_RECOVERY_DRILL_PACKET.md`
+- `CRON_EXECUTION_EVIDENCE_TEMPLATE.md`
+- `INCIDENT_ESCALATION_MATRIX.md`
+- `RELEASE_STOP_CONDITIONS_AND_ROLLBACK_DECISION.md`
+- `POST_RELEASE_SMOKE_CHECKLIST.md`

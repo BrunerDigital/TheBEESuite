@@ -5,6 +5,7 @@ import {
   normalizeSendGridEvent,
   processSendGridEventBatch,
   sendGridDeliveryStatus,
+  sendGridBlockedCurrentStatuses,
   sendGridMessageIdCandidates,
   sendGridStateTransition,
   summarizeSendGridDeliveryHealth,
@@ -62,6 +63,9 @@ test("SendGrid state transitions do not regress final outcomes", () => {
   assert.equal(sendGridStateTransition("delivered", accepted), null);
   assert.equal(sendGridStateTransition("failed", delivered), null);
   assert.equal(sendGridStateTransition("delivered", bounced), "failed");
+  assert.deepEqual(sendGridBlockedCurrentStatuses(accepted), ["delivered", "failed"]);
+  assert.deepEqual(sendGridBlockedCurrentStatuses(delivered), ["failed"]);
+  assert.deepEqual(sendGridBlockedCurrentStatuses(bounced), []);
 });
 
 test("SendGrid delivery health reports stale, deferred, suppressed, bounced, and follow-up counts", () => {

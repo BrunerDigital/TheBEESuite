@@ -15,7 +15,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-const ATTENDANCE_STATUSES = new Set(["present", "absent", "checked_out"]);
+const ATTENDANCE_STATUSES = new Set(["present", "absent", "sick", "vacation", "checked_out"]);
 
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
@@ -47,7 +47,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Check log type must be check_in or check_out." }, { status: 400 });
   }
   if (!ATTENDANCE_STATUSES.has(requestedStatus)) {
-    return NextResponse.json({ ok: false, error: "Attendance status must be present, absent, or checked_out." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Attendance status must be present, absent, sick, vacation, or checked_out." }, { status: 400 });
   }
 
   const child = await prisma.child.findUnique({
@@ -77,7 +77,8 @@ async function POSTHandler(request: NextRequest) {
   }
   if (clientActionId) {
     const existing = await prisma.attendanceRecord.findUnique({ where: { clientActionId } });
-    if (existing) return NextResponse.json({ ok: true, record: existing, replayed: true }, { status: 200 });
+    if (existing?.childId === childId) return NextResponse.json({ ok: true, record: existing, replayed: true }, { status: 200 });
+    if (existing) return NextResponse.json({ ok: false, error: "Offline action ID conflicts with another record." }, { status: 409 });
   }
 
   const center = centerId

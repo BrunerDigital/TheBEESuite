@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { REPORT_DEFINITIONS, type AnalyticsReportData, type ReportKind } from "@/lib/reporting-analytics";
+import type { AnalyticsReportData } from "@/lib/reporting-analytics";
+import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
 
 export type AnalyticsReportBuilderFilters = {
   range: string;

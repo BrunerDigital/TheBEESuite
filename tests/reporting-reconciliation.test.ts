@@ -17,7 +17,11 @@ test("two-school fixtures isolate rows to the authorized school", () => {
 const data: AnalyticsReportData = {
   generatedAt: "2026-07-20T14:00:00.000Z",
   range: { startDate: "2026-07-13T00:00:00.000Z", endDate: "2026-07-19T23:59:59.999Z" },
-  centers: [{ id: "school_a", name: "School A", label: "IN | School A", timezone: "America/Indiana/Indianapolis" }],
+  scope: { centerIds: ["school_a"], centerLabels: ["IN | School A"] },
+  centers: [
+    { id: "school_a", name: "School A", label: "IN | School A", timezone: "America/Indiana/Indianapolis" },
+    { id: "school_b", name: "School B", label: "IN | School B", timezone: "America/Indiana/Indianapolis" },
+  ],
   leadSources: [{ source: "Website", centerId: "school_a", centerLabel: "IN | School A", leads: 4, tours: 2, applications: 1, enrolled: 1, waitlisted: 0, conversionRate: 25 }],
   funnelStages: [{ stage: "ENROLLED", count: 1, share: 25 }],
   attendanceTrends: [], billing: [], messages: [], staffHours: [],
@@ -30,6 +34,7 @@ test("CSV export rows are equivalent to the displayed report rows and retain tra
   assert.equal(exportMatchesReportRows(report, csv), true);
   assert.match(csv, /Generated at/);
   assert.match(csv, /IN \| School A/);
+  assert.doesNotMatch(csv, /IN \| School B/);
   assert.match(csv, /BEE Suite CRM records/);
 });
 

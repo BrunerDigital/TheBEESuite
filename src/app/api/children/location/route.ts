@@ -84,10 +84,11 @@ async function POSTHandler(request: NextRequest) {
   }
   if (clientActionId) {
     const existing = await prisma.childLocationTransition.findUnique({ where: { clientActionId } });
-    if (existing) {
+    if (existing?.childId === childId) {
       const liveLocation = await prisma.childLiveLocation.findUnique({ where: { childId }, include: { currentClassroom: { select: { id: true, name: true } }, movedBy: { select: { id: true, name: true } } } });
       return NextResponse.json({ ok: true, child: { id: child.id, fullName: child.fullName, assignedClassroom: child.classroom }, liveLocation, replayed: true }, { status: 200 });
     }
+    if (existing) return NextResponse.json({ ok: false, error: "Offline action ID conflicts with another record." }, { status: 409 });
   }
 
   if (assignedCenterId && centerId && assignedCenterId !== centerId) {

@@ -44,6 +44,8 @@ test("payment return states cover expiry, cancellation, failure, retry, and conf
   assert.match(paymentForm, /retry with Instant Bank Login or Debit\/Credit Card/i);
   assert.match(paymentForm, /paymentStatus === "success"/);
   assert.match(paymentForm, /secure payment confirmation/i);
+  assert.match(paymentForm, /statement and receipt after processing/i);
+  assert.match(paymentForm, /Open parent portal for statement and receipt/i);
   assert.match(checkoutRoute, /successUrl/);
   assert.match(checkoutRoute, /cancelUrl/);
 });

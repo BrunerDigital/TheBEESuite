@@ -41,12 +41,13 @@ async function main() {
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public'
         AND c.relkind = 'v'
-        AND COALESCE(c.reloptions, ARRAY[]::text[]) @> ARRAY['security_invoker=true']::text[] IS FALSE
+        AND NOT (COALESCE(c.reloptions, ARRAY[]::text[]) @> ARRAY['security_invoker=true']::text[])
       ORDER BY c.relname
     `,
   ]);
 
   const posture: DatabaseSecurityPosture = {
+    expectedPublicTableCount: Number(process.env.EXPECTED_PUBLIC_TABLE_COUNT ?? "86"),
     publicTableCount: Number(counts[0]?.public_table_count ?? 0),
     rlsEnabledCount: Number(counts[0]?.rls_enabled_count ?? 0),
     tablesWithoutRls: noRls.map((row) => row.name),

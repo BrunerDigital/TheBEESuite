@@ -24,8 +24,12 @@ function base64UrlToBytes(value: string) {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
+function ownedArrayBuffer(bytes: Uint8Array) {
+  return Uint8Array.from(bytes).buffer;
+}
+
 async function importQueueKey(key: string) {
-  return crypto.subtle.importKey("raw", base64UrlToBytes(key), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", ownedArrayBuffer(base64UrlToBytes(key)), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 export function classroomOfflineQueueStorageKey(scopeId: string) {
@@ -35,13 +39,13 @@ export function classroomOfflineQueueStorageKey(scopeId: string) {
 export async function encryptClassroomOfflineQueue(input: { actions: ClassroomOfflineAction[]; key: string; scopeId: string; now?: Date; iv?: Uint8Array }): Promise<EncryptedClassroomOfflineQueue> {
   const actions = input.actions.slice(0, 50);
   const iv = input.iv ?? crypto.getRandomValues(new Uint8Array(12));
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await importQueueKey(input.key), new TextEncoder().encode(JSON.stringify(actions)));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: ownedArrayBuffer(iv) }, await importQueueKey(input.key), new TextEncoder().encode(JSON.stringify(actions)));
   return { version: 2, scopeId: input.scopeId, iv: bytesToBase64Url(iv), ciphertext: bytesToBase64Url(new Uint8Array(ciphertext)), count: actions.length, updatedAt: (input.now ?? new Date()).toISOString() };
 }
 
 export async function decryptClassroomOfflineQueue(input: { envelope: EncryptedClassroomOfflineQueue; key: string; scopeId: string }) {
   if (input.envelope.scopeId !== input.scopeId) throw new Error("Offline queue belongs to another account or classroom.");
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: base64UrlToBytes(input.envelope.iv) }, await importQueueKey(input.key), base64UrlToBytes(input.envelope.ciphertext));
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: ownedArrayBuffer(base64UrlToBytes(input.envelope.iv)) }, await importQueueKey(input.key), ownedArrayBuffer(base64UrlToBytes(input.envelope.ciphertext)));
   return parseClassroomOfflineQueue(new TextDecoder().decode(plaintext));
 }
 
@@ -61,6 +65,12 @@ export function clearClassroomOfflineQueues(storage: Pick<Storage, "length" | "k
   }
   for (const key of keys) storage.removeItem(key);
   return keys.length;
+}
+
+export function classifyClassroomReplayStatus(status: number): "complete" | "retry" | "review" {
+  if (status >= 200 && status < 300) return "complete";
+  if (status === 408 || status === 425 || status === 429 || status >= 500) return "retry";
+  return "review";
 }
 
 export function createClassroomOfflineAction(input: {

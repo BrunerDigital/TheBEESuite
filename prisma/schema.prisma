@@ -1596,6 +1596,9 @@ model ParentPortalSetupToken {
   claimedAt      DateTime?
   usedAt         DateTime?
   revokedAt      DateTime?
+  attemptCount   Int       @default(0)
+  lastAttemptAt  DateTime?
+  lastFailureReason String?
   issuedById     String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

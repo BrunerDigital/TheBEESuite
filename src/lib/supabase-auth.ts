@@ -371,7 +371,7 @@ export async function updateSupabaseAuthUserPasswordByEmail({
 }: {
   email: string;
   password: string;
-  metadataSource?: "forced_password_reset" | "profile_password_change" | "password_change";
+  metadataSource?: "forced_password_reset" | "profile_password_change" | "parent_setup_transition" | "password_change";
 }) {
   const normalizedEmail = email.toLowerCase();
   const { supabase, user } = await findSupabaseAuthUserByEmail(normalizedEmail);
@@ -387,6 +387,8 @@ export async function updateSupabaseAuthUserPasswordByEmail({
       ? "forced_password_reset_completed_at"
       : metadataSource === "profile_password_change"
         ? "profile_password_changed_at"
+        : metadataSource === "parent_setup_transition"
+          ? "parent_setup_transition_started_at"
         : "password_changed_at";
   const { error } = await supabase.auth.admin.updateUserById(user.id, {
     password,

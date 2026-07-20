@@ -95,7 +95,9 @@ Copy the signing secret into `STRIPE_WEBHOOK_SECRET`, then redeploy.
 5. Return to The BEE Suite. The payout table auto-syncs after return.
 6. Use `Check` to refresh payout status later.
 
-Parent checkout is blocked until Stripe platform keys, webhook reconciliation, and the selected school connected account are ready. A school account is ready only when Stripe reports completed details, no outstanding requirement fields, charges enabled, and payouts enabled.
+Parent checkout is blocked until Stripe platform keys, webhook reconciliation, and the selected school connected account are ready. A school account is technically ready only when Stripe reports completed details, no outstanding requirement fields, charges enabled, and payouts enabled. Live billing still remains off until the separate per-school billing-preview, accounting, and cutover approvals are recorded. Kokomo alone retains the narrow legacy-production compatibility path.
+
+Use the authenticated, read-only `/api/billing/connect/reconciliation?centerId=...&start=...&end=...` endpoint for a window of 31 days or less to compare BEE Suite payments/refunds with connected-account balance transactions and payouts. Copy `docs/STRIPE_SCHOOL_EVIDENCE_PACKET_TEMPLATE.md` for retained school evidence.
 
 ## Test Mode Checklist
 

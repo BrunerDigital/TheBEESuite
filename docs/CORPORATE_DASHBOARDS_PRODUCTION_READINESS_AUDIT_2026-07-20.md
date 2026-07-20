@@ -68,3 +68,18 @@ The current-week FTE panel previously rendered only the first 12 visible schools
 ## Exact next action
 
 Correct every tenant-wide `allCenters ? {}` query in `src/app/[slug]/page.tsx` to preserve the intended tenant/visible-center boundary, add a two-tenant regression fixture covering corporate child, enrollment, messages, attendance, and forms views, then rerun typecheck and the focused corporate suite before any credentialed corporate smoke.
+
+## Isolation continuation completed
+
+The unsafe empty-filter pattern has been replaced with visible-center constraints across enrollment/application submissions, child and family views, parent workspace selection, messaging families/classrooms/internal threads, billing invoices/payments, analytics, attendance, forms, daily reports, media review, incident reports, documents, compliance data, and compliance export. Tenant-wide corporate visibility remains available across every center returned by the authenticated tenant scope; limited and empty grants fail closed.
+
+Additional evidence:
+
+- Two-tenant, full-tenant, limited-grant, empty-grant, stale-filter, invalid-filter, and tenant-scoped internal-message tests pass.
+- Focused corporate suite: 30 passed, 0 failed.
+- Final isolation regression subset: 5 passed, 0 failed.
+- Focused ESLint: 0 errors and 0 warnings after removing the obsolete local child-scope helper.
+- `git diff --check`: passed.
+- Typecheck reached unrelated concurrent-work failures after workstream type errors were corrected. The remaining observed errors were in parent-portal concurrent edits and `src/lib/classroom-offline-queue.ts`; no `corporate-view-scope.ts`, message-visibility, compliance-export, or corporate isolation test error remained.
+
+The next action is now the credentialed corporate smoke and human signoff sequence recorded in `docs/BRENDENS_TASKS.md`; no account credentials or production mutations were created by this workstream.

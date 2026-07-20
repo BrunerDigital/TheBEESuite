@@ -10,7 +10,8 @@ import {
 
 test("database drift evaluation fails missing RLS and browser grants", () => {
   const findings = evaluateDatabaseSecurityPosture({
-    publicTableCount: 86,
+    expectedPublicTableCount: 86,
+    publicTableCount: 85,
     rlsEnabledCount: 85,
     tablesWithoutRls: ["SensitiveTable"],
     browserTableGrants: [{ grantee: "authenticated", tableName: "SensitiveTable", privileges: ["SELECT"] }],
@@ -18,6 +19,7 @@ test("database drift evaluation fails missing RLS and browser grants", () => {
     unsafePublicViews: ["family_export"],
   });
   assert.deepEqual(findings.map((finding) => finding.code), [
+    "TABLE_COUNT_DRIFT",
     "RLS_COVERAGE",
     "BROWSER_GRANT",
     "SECURITY_DEFINER",
@@ -74,7 +76,7 @@ test("Stripe webhook boundary verifies signatures and payment forms do not colle
   const webhook = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
   const paymentForm = await readFile("src/components/payment-method-request-form.tsx", "utf8");
   assert.match(webhook, /stripe-signature/);
-  assert.match(webhook, /constructEvent/);
+  assert.match(webhook, /verifyStripeSignature/);
   assert.doesNotMatch(paymentForm, /name=["'](?:cardNumber|cvc|routingNumber|accountNumber)["']/i);
 });
 
@@ -93,7 +95,8 @@ test("custody and medical mutation paths remain authenticated and audited", asyn
 test("CSP remains an explicit readiness item until external allowlists are tested", async () => {
   const config = await readFile("next.config.ts", "utf8");
   const audit = await readFile("docs/SECURITY_COMPLIANCE_PRODUCTION_READINESS_AUDIT_2026-07-20.md", "utf8");
-  assert.doesNotMatch(config, /Content-Security-Policy/);
+  assert.match(config, /source: "\/sw\.js"[\s\S]*Content-Security-Policy/);
+  assert.match(config, /source: "\/:path\*"[\s\S]*headers: securityHeaders/);
   assert.match(audit, /Content Security Policy/);
   assert.match(audit, /report-only allowlist/i);
 });

@@ -246,7 +246,7 @@ export function FamilyProfilesEnrollmentPanel({
           <CardTitle>Parent Portal Access</CardTitle>
           <CardDescription>
             Send parent portal login emails for linked parent accounts. Parents sign in with their guardian email and the school
-            default parent password, then only see family records connected through that guardian profile.
+            private password from a one-time setup link, then only see family records connected through that guardian profile.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">

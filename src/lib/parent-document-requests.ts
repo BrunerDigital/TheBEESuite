@@ -3,11 +3,12 @@ import type { CurrentUser } from "@/lib/auth";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { isEmail, sendEmail } from "@/lib/integrations";
 import { notificationExpiresAt } from "@/lib/notification-policy";
-import { buildParentPortalUrl, getParentPortalDefaultPassword } from "@/lib/parent-portal-invitations";
+import { buildParentPortalUrl } from "@/lib/parent-portal-invitations";
 import {
   ensureParentPortalLoginForGuardian,
   parentPortalAccessDisabled,
 } from "@/lib/parent-portal-logins";
+import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import { prisma } from "@/lib/prisma";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 
@@ -69,7 +70,8 @@ export function buildParentDocumentRequestEmailText({
   centerLabel,
   documentName,
   actionLabel,
-  portalUrl,
+  accessUrl,
+  setupLinkExpiresAt,
 }: {
   recipientLabel: string;
   familyName: string;
@@ -77,9 +79,9 @@ export function buildParentDocumentRequestEmailText({
   centerLabel: string;
   documentName: string;
   actionLabel: string;
-  portalUrl: string;
+  accessUrl: string;
+  setupLinkExpiresAt?: Date | null;
 }) {
-  const defaultPassword = getParentPortalDefaultPassword();
   const subjectLine = childName ? `${documentName} for ${childName}` : `${documentName} for ${familyName}`;
   return [
     `Hi ${recipientLabel || "there"},`,
@@ -88,8 +90,12 @@ export function buildParentDocumentRequestEmailText({
     `Please open the parent portal to ${actionLabel} the requested information.`,
     "Your submission will go directly back to the school document record for director review.",
     "",
-    `Open the branded parent form: ${portalUrl}`,
-    `Sign in with the guardian email where you received this message. Use ${defaultPassword} as your default password if you have not changed it yet.`,
+    setupLinkExpiresAt
+      ? `Create your password with this private one-time link: ${accessUrl}`
+      : `Open the branded parent form: ${accessUrl}`,
+    setupLinkExpiresAt
+      ? `The link expires at ${setupLinkExpiresAt.toISOString()} and stops working after use.`
+      : "Sign in with the guardian email where you received this message and your private password.",
     "",
     "If you were not expecting this request, please contact the school before continuing.",
   ].join("\n");
@@ -120,6 +126,7 @@ async function ensureParentPortalLoginForRecipient({
     userId: login.userId,
     created: login.created,
     reactivated: login.reactivated,
+    credentialCreated: login.credentialCreated,
   };
 }
 
@@ -212,6 +219,24 @@ export async function sendParentDocumentRequestEmailForDocument({
     if (login.created || login.reactivated) parentAccountsLinked += 1;
     if (login.userId) linkedUserIds.add(login.userId);
 
+    const needsSetupLink = login.created || login.reactivated || login.credentialCreated;
+    const setupLink = needsSetupLink
+      ? await issueParentPortalSetupLink({
+          requestUrl,
+          user,
+          parentUserId: login.userId,
+          guardianId: recipient.guardianIds[0],
+          email: recipient.email,
+          centerId: center.id,
+          familyId: family.id,
+          reason: "parent_document_request",
+        })
+      : null;
+    if (setupLink && !setupLink.ok) {
+      results.push({ email: recipient.email, ok: false, configured: true, error: setupLink.error });
+      continue;
+    }
+
     const text = buildParentDocumentRequestEmailText({
       recipientLabel: recipient.label,
       familyName: family.name,
@@ -219,7 +244,8 @@ export async function sendParentDocumentRequestEmailForDocument({
       centerLabel,
       documentName: document.name,
       actionLabel,
-      portalUrl,
+      accessUrl: setupLink?.ok ? setupLink.setupUrl : portalUrl,
+      setupLinkExpiresAt: setupLink?.ok ? setupLink.expiresAt : null,
     });
     const email = await sendEmail({
       to: [recipient.email],
@@ -228,21 +254,25 @@ export async function sendParentDocumentRequestEmailForDocument({
       replyTo: center.email,
       fromName: `${centerLabel} via The BEE Suite`,
       categories: [PARENT_DOCUMENT_REQUEST_EMAIL_PURPOSE],
-      customArgs: { documentId: document.id, familyId: family.id, centerId: center.id },
+      customArgs: { documentId: document.id, familyId: family.id, centerId: center.id, ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}) },
       tenantId: center.organization.tenantId,
     });
+    const deliveryAuditText = setupLink?.ok
+      ? text.replace(setupLink.setupUrl, "[private setup link redacted]")
+      : text;
     await recordEmailDeliveryAttempt({
       tenantId: center.organization.tenantId,
       centerId: center.id,
       purpose: PARENT_DOCUMENT_REQUEST_EMAIL_PURPOSE,
       to: [recipient.email],
       subject,
-      text,
+      text: deliveryAuditText,
       replyTo: center.email,
       fromName: `${centerLabel} via The BEE Suite`,
       result: email,
-      metadata: { documentId: document.id, familyId: family.id, portalUrl },
+      metadata: { documentId: document.id, familyId: family.id, accessMode: setupLink?.ok ? "one_time_setup_link" : "existing_parent_login", ...(setupLink?.ok ? { setupTokenId: setupLink.tokenId } : {}) },
     });
+    if (setupLink?.ok) await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: email.ok });
     if (email.ok) emailsSent += 1;
     results.push({ email: recipient.email, ok: email.ok, configured: email.configured, error: email.error });
   }

@@ -27,18 +27,18 @@ The parent experience is production-ready for a selected school only when a cred
 
 ### BLOCKER
 
-1. **Shared parent default password is launch-unsafe.** New parent users are provisioned with the shared `BusyBees` password, the login UI and guides publish it, and parent users are not required to reset it. A known guardian email plus the shared password can become account access. Existing-account remediation requires a controlled credential transition, delivery/recovery testing, and authorization to invalidate or rotate credentials. **Owner: Brenden.** Exact retest: invite a new test guardian through a one-time setup/recovery link, prove the link expires or cannot be reused, prove the shared password cannot authenticate, and prove reset recovery returns to the correct parent setup route.
+1. **Credential transition requires approval and credentialed evidence.** Repo code no longer provisions or advertises the shared parent password. An authorized setup-link action now replaces the prior Supabase credential with an unknown random value, revokes prior unused setup tokens, stores only a token fingerprint, issues a one-hour link, atomically claims it, denies expiry/replay, and records issue/completion audit state. No real account was transitioned. **Owner: Brenden.** Exact retest: approve a synthetic parent account, send one setup link, prove the former credential fails, prove a second issued link revokes the first, prove expiry and replay denial, complete setup once, and prove ordinary forgot-password recovery returns to the parent portal.
 2. **No selected-school credentialed parent isolation signoff exists.** Unit guardrails pass, but there is no current browser/device evidence using a linked guardian, an unlinked guardian, and a guardian from another school against the intended wave data. **Owner: Brenden.** Exact retest: for each selected school, authenticate all three identities and record positive family/child visibility plus denied wrong-family and cross-school access for portal data and mutations.
 3. **Wave guardian/PIN data is not ready.** The shared readiness audit reports Longmont with 674 guardians but 0 linked logins and 0 PINs; Holly Hill has no linked guardian login; most proposed schools have no imported families or children. **Owner: Brenden.** Exact retest: after authorized import/setup, run `npm run pilot:check -- --all`, reconcile guardian-to-family/user linkage, and verify the approved PIN rollout before sending any invitations.
 4. **Per-school payment lifecycle is not signed off.** Platform configuration and unit tests do not prove the selected school's connected account, payment methods, webhook, receipt, failure/dunning, ledger application, refund, or payout reconciliation. **Owner: Brenden.** Exact retest: in an approved safe tenant or test mode, complete setup, card and bank payment, pending-to-settled transition, failed payment, receipt delivery, duplicate prevention, ledger reconciliation, and approved partial refund for each payment-enabled school.
 
 ### REQUIRED BEFORE WAVE
 
-1. **Multi-family guardian behavior is unresolved.** Login provisioning can link matching guardian records across a tenant, but `/parent-portal` selects only the newest linked family. A guardian connected to multiple valid family records cannot select or review the others. **Owner: Brenden.** Exact retest: define the intended multi-family experience, create a test guardian linked to two families, and prove every permitted family is selectable without mixing records.
-2. **Parent documents are feature-flagged off unless `NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED=1`.** Documentation describes document upload/signature as generally available, so the intended launch state and school training copy are not aligned. **Owner: Brenden.** Exact retest: decide the wave setting, then verify an assigned family document download, upload/signature, director review state, rejection/resubmission, and wrong-family denial on desktop and mobile.
+1. **Multi-family code defect fixed; credentialed evidence remains.** The parent portal now accepts a requested family only when that family has a guardian linked to the current user, falls back to the first linked enrolled family, and shows a selector when more than one family is permitted. **Owner: Brenden.** Exact retest: use the approved two-family guardian plus unlinked and cross-school identities; prove both permitted families are selectable and every other family is denied without mixed invoices, documents, reports, incidents, messages, media, or PINs.
+2. **Parent documents now default on; school policy signoff remains.** Secure server-side family/document guards remain authoritative. The UI is visible by default so document-request emails cannot land on a hidden action; `NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED=0` is reserved for an approved rollout hold. **Owner: Brenden.** Exact retest: verify assigned download, upload/signature, review, rejection/resubmission, mobile layout, and wrong-family denial.
 3. **Invitation, reset, receipt, and transactional delivery need real delivery evidence.** Static link construction and email helper tests pass, but provider delivery, bounce/suppression handling, reset completion, Stripe receipt arrival, and the school reply/support path were not exercised in this repo-only audit. **Owner: Brenden.** Exact retest: use approved test addresses for delivered, bounced, and suppressed cases; retain provider IDs and screen evidence without exposing tokens.
 4. **PIN and authorized-pickup operation needs device evidence.** Hash removal, default-PIN helpers, and QR center scoping pass unit tests, but valid/invalid PIN, custody warning, pickup authorization, duplicate check action, location state, and audit history are not currently evidenced on the target kiosk. **Owner: Brenden.** Exact retest: run the complete guardian PIN and authorized-pickup matrix on the actual launch device with safe test records.
-5. **Parent receipt retrieval is not a clearly evidenced portal workflow.** Checkout supplies `receipt_email` and the portal lists payment/ledger history, but the audited workspace does not expose a dedicated receipt download or verified resend path. **Owner: Brenden.** Exact retest: decide whether Stripe email plus ledger history satisfies the school/accounting requirement; otherwise add and test a stable receipt retrieval/resend workflow.
+5. **Receipt standard requires billing/accounting approval.** Recommended default: Stripe sends the payment receipt to `receipt_email`, while BEE Suite retains payment and ledger history as the operational record. Do not label either as a school tax receipt until legal name, EIN, address, numbering, retention, and resend requirements are approved. **Owner: Brenden.** Exact retest: approve the standard, verify receipt delivery and portal history for card and bank settlement/failure, then decide whether a dedicated receipt resend/download is required.
 
 ### FOLLOW-UP
 
@@ -47,7 +47,7 @@ The parent experience is production-ready for a selected school only when a cred
 
 ## External decisions required
 
-- Approve a one-time parent invitation/password-setup design and an existing-account credential transition; do not broadly invite parents while the shared-password blocker remains.
+- Approve the implemented one-hour single-use setup-link policy and a staged existing-account credential transition; do not broadly invite parents until synthetic expiry/replay/recovery and delivery evidence passes.
 - Select the actual first school wave, dates, and whether parent portal, kiosk, documents, and payments are enabled independently for each school.
 - Name and obtain acceptance from the director signoff, data/import, billing/Stripe, technical release, training, and first-week support owners. Until then Brenden owns each open parent item.
 - Approve the guardian PIN source/reset policy, custody/pickup operating procedure, parent-facing payment disclosures, receipt standard, and document feature-flag state.
@@ -55,14 +55,30 @@ The parent experience is production-ready for a selected school only when a cred
 
 ## Files changed
 
-- `src/components/parent-portal-workspace.tsx` — added the parent-visible support/recovery entry point.
-- `docs/PARENT_EXPERIENCE_PRODUCTION_READINESS_2026-07-20.md` — added this evidence record and owner-based launch gates.
+- Parent credential/setup state: `prisma/schema.prisma`, `prisma/migrations/20260720200000_parent_portal_setup_tokens/migration.sql`, `src/lib/parent-portal-setup-links.ts`, `src/lib/parent-portal-logins.ts`, `src/lib/parent-portal-invitations.ts`, `src/lib/supabase-auth.ts`, `src/lib/auth.ts`, and the login/reset/invitation/registration/document-request routes.
+- Parent isolation and workflow UI: `src/lib/portal-guardrails.ts`, `src/app/[slug]/page.tsx`, parent login/setup/invite/workspace components, signature-request copy, and `.env.example`.
+- Parent guidance and policy: this audit, `docs/BRENDENS_TASKS.md`, parent onboarding/SOP/install/director guides, and the SOP index.
+- Tests: `tests/parent-portal-setup-links.test.ts` and parent assertions in `tests/phase1-guardrails.test.ts`.
 
 ## Tests run
 
-- `npm test` — passed, 424 tests, 0 failures.
-- `node --import tsx --test tests/parent-app-rbac.test.ts tests/parent-portal-logins.test.ts tests/parent-portal-invite-links.test.ts tests/guardian-kiosk-pin.test.ts tests/guardian-change-requests.test.ts tests/notification-preferences.test.ts tests/payment-method-management.test.ts tests/payment-disclosures.test.ts tests/billing-reconciliation.test.ts tests/daily-report-email.test.ts tests/teacher-incident.test.ts tests/required-document-checklist.test.ts` — passed, 43 tests, 0 failures.
+- `npm run db:generate` — passed.
+- Focused parent/security/billing/document suite — passed, 84 tests, 0 failures.
+- `npm test` — passed, 512 tests, 0 failures.
+- `npm run typecheck` — passed.
+- Focused ESLint across changed parent/auth/routes/components/tests — passed with no findings.
+- `git diff --check` — passed.
+
+## Safe release and credentialed-smoke sequence
+
+1. Approve the setup-link, document, receipt, test-identity, evidence, support, and rollback decisions in `docs/BRENDENS_TASKS.md`.
+2. Create a focused release diff without unrelated concurrent work; run `npm run vercel-build` on that exact commit.
+3. Apply `20260720200000_parent_portal_setup_tokens` in an approved non-production environment and verify the table/indexes before exercising any link.
+4. With a synthetic parent, issue link A, issue link B, prove A is revoked, prove the former credential fails, prove B expires/replays only as designed, complete B once, and prove ordinary forgot-password recovery still works. Confirm delivery/audit storage contains only the token record ID/fingerprint and never the raw link.
+5. Run the linked two-family, unlinked, and cross-school identity matrix across portal reads and mutations; then run documents, PIN/pickup, daily reports, incidents, preferences, support, payment setup/test payment/receipt/failure, and mobile/desktop recovery.
+6. Collect Director, technical/security, billing/accounting, and support signoff. Promote the focused migration/release only with separate authorization; verify readiness, health, logs, and the changed synthetic flow before authorizing any staged real-account transition.
+7. Transition existing parent accounts in small named batches with delivery monitoring, stop conditions, and support coverage. Broad invitations remain off until the first batch reconciles.
 
 ## Exact next action
 
-Brenden must approve the one-time parent setup and existing-account credential-transition design; then the implementation owner should remove shared-password parent provisioning and published login guidance, add positive/reuse/expiry/reset tests, and run the credentialed three-identity isolation smoke in the first selected school's safe test data before any broad parent invitation.
+Brenden must approve a synthetic parent test account and the staged credential-transition policy; then apply the migration in a safe environment, run setup-link issue/supersession/expiry/replay/recovery tests plus the linked/unlinked/cross-school and two-family smoke, and collect Director/technical/billing/support signoff before any release or broad parent invitation.

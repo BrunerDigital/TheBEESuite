@@ -56,8 +56,8 @@ export function buildStripePayoutReconciliation(input: {
   const failedPayouts = input.payouts.filter((payout) => payout.status === "failed" || Boolean(payout.failureCode));
   const paidPayoutCents = sum(paidPayouts.map((payout) => payout.amountCents));
   const pendingPayoutCents = sum(pendingPayouts.map((payout) => payout.amountCents));
-  const localChargeIds = new Set(input.localPayments.map((payment) => payment.stripeChargeId).filter(Boolean));
-  const stripeChargeIds = new Set(relevantBalance.filter((item) => item.type === "charge").map((item) => item.sourceId).filter(Boolean));
+  const localChargeIds = new Set(input.localPayments.map((payment) => payment.stripeChargeId).filter((id): id is string => typeof id === "string" && id.length > 0));
+  const stripeChargeIds = new Set(relevantBalance.filter((item) => item.type === "charge").map((item) => item.sourceId).filter((id): id is string => typeof id === "string" && id.length > 0));
   const missingChargeIds = [...localChargeIds].filter((id) => !stripeChargeIds.has(id));
   const unmatchedChargeIds = [...stripeChargeIds].filter((id) => !localChargeIds.has(id));
 

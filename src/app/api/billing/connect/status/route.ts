@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { getStripeSecretKey, readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -51,6 +52,7 @@ async function GETHandler(request: NextRequest) {
   const accountId = readStripeConnectedAccountId(existingFields);
   if (!accountId) {
     const readiness = stripeConnectReadinessFromFields(existingFields);
+    const billingApproval = stripeSchoolBillingApproval({ customFields: existingFields, centerName: center.name });
     return NextResponse.json({
       ok: true,
       configured: Boolean(await getStripeSecretKey({ tenantId: user.tenantId })),
@@ -58,6 +60,7 @@ async function GETHandler(request: NextRequest) {
       account: null,
       status: "not_started",
       readiness,
+      billingApproval,
     });
   }
 
@@ -70,6 +73,7 @@ async function GETHandler(request: NextRequest) {
   }
 
   const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
+  const billingApproval = stripeSchoolBillingApproval({ customFields: existingFields, centerName: center.name });
 
   await prisma.center.update({
     where: { id: center.id },
@@ -101,6 +105,7 @@ async function GETHandler(request: NextRequest) {
     centerId: center.id,
     status: readiness.status,
     readiness,
+    billingApproval,
     account: retrieved.account,
   });
 }

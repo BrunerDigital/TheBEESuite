@@ -16,6 +16,7 @@ import { hashGuardianPin, verifyGuardianPin } from "../src/lib/kiosk";
 import { centerScopedAccessGuard, classroomFamilyGuard, scopedUpdateGuard, staffTenantGuard } from "../src/lib/operations-guardrails";
 import {
   canAccessFamilyRecord,
+  parentPortalFamilyScopeWhere,
   canAcknowledgeIncident,
   canCreateFamilyMessage,
   canMessageClassroomFamily,
@@ -33,9 +34,7 @@ import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import {
   buildParentPortalInvitationText,
-  buildParentLoginSetupUrl,
   buildParentPortalUrl,
-  getParentPortalDefaultPassword,
   PARENT_PORTAL_PATH,
 } from "../src/lib/parent-portal-invitations";
 import { buildParentDocumentRequestEmailText, parentDocumentRequestRecipientOptions } from "../src/lib/parent-document-requests";
@@ -65,9 +64,9 @@ import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath,
 import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
 import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
-test("password reset gate does not block teacher or parent profile accounts", () => {
+test("password reset gate blocks parent credential transitions but keeps teacher PIN accounts separate", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
-  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), false);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
 });
@@ -445,48 +444,27 @@ test("external payment session callbacks use the branded app base URL", () => {
   }
 });
 
-test("parent portal invite copy uses guardian email and school default password login", () => {
-  const previousParentPortalDefault = process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-  const previousParentDefault = process.env.PARENT_DEFAULT_PASSWORD;
-  try {
-    delete process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-    delete process.env.PARENT_DEFAULT_PASSWORD;
-    const portalUrl = buildParentLoginSetupUrl("https://thebeesuite.io/");
-    const text = buildParentPortalInvitationText({
-      guardianName: "Taylor Parent",
-      centerLabel: "Kid City Kokomo",
-      email: "taylor@example.com",
-      portalUrl,
-    });
+test("parent portal invite copy uses a private expiring one-time setup link", () => {
+  const setupUrl = "https://thebeesuite.io/reset-password?token_hash=secret&type=recovery&next=%2Fparent-portal%2Fsetup";
+  const text = buildParentPortalInvitationText({
+    guardianName: "Taylor Parent",
+    centerLabel: "Kid City Kokomo",
+    email: "taylor@example.com",
+    setupUrl,
+    expiresAt: new Date("2026-07-20T21:00:00.000Z"),
+  });
 
-    assert.equal(getParentPortalDefaultPassword(), "BusyBees");
-    assert.equal(portalUrl, "https://thebeesuite.io/parents/setup");
-    assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
-    assert.match(text, /Use these steps:/);
-    assert.match(text, /- Go to: https:\/\/thebeesuite\.io\/parents\/setup/);
-    assert.match(text, /- Login email: taylor@example\.com/);
-    assert.match(text, /- Default password: BusyBees/);
-    assert.match(text, /You do not have to choose a new password/);
-    assert.match(text, /Profile settings/);
-    assert.match(text, /child records and classroom connections/);
-    assert.doesNotMatch(text, /temporary password/i);
-    assert.doesNotMatch(text, /token_hash/i);
-    assert.doesNotMatch(text, /Open the password setup email/i);
-    assert.doesNotMatch(text, /vercel\.app/i);
-  } finally {
-    if (previousParentPortalDefault === undefined) delete process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-    else process.env.PARENT_PORTAL_DEFAULT_PASSWORD = previousParentPortalDefault;
-    if (previousParentDefault === undefined) delete process.env.PARENT_DEFAULT_PASSWORD;
-    else process.env.PARENT_DEFAULT_PASSWORD = previousParentDefault;
-  }
+  assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
+  assert.match(text, /private one-time link/);
+  assert.match(text, /Create a password for taylor@example\.com/);
+  assert.match(text, /expires at 2026-07-20T21:00:00\.000Z/);
+  assert.match(text, /stops working after it is used/);
+  assert.match(text, /child records and classroom connections/);
+  assert.doesNotMatch(text, /BusyBees|default password/i);
+  assert.doesNotMatch(text, /vercel\.app/i);
 });
 
-test("parent document request emails use guardian personal emails and branded form copy", () => {
-  const previousParentPortalDefault = process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-  const previousParentDefault = process.env.PARENT_DEFAULT_PASSWORD;
-  try {
-    delete process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-    delete process.env.PARENT_DEFAULT_PASSWORD;
+test("parent document request emails use guardian personal emails and private password copy", () => {
     const recipients = parentDocumentRequestRecipientOptions([
       { id: "guardian_1", fullName: "Taylor Parent", email: "Taylor@Example.com", userId: "user_1" },
       { id: "guardian_2", fullName: "Duplicate Parent", email: "taylor@example.com", userId: "user_1" },
@@ -503,19 +481,14 @@ test("parent document request emails use guardian personal emails and branded fo
       centerLabel: "Kokomo",
       documentName: "Immunization Record",
       actionLabel: "upload or submit",
-      portalUrl: "https://thebeesuite.io/parent-portal#documents",
+      accessUrl: "https://thebeesuite.io/parent-portal#documents",
     });
     assert.match(text, /Kokomo is requesting Immunization Record for Avery Taylor in The BEE Suite\./);
     assert.match(text, /Open the branded parent form: https:\/\/thebeesuite\.io\/parent-portal#documents/);
     assert.match(text, /guardian email where you received this message/);
-    assert.match(text, /BusyBees as your default password/);
+    assert.match(text, /your private password/);
+    assert.doesNotMatch(text, /BusyBees|default password/i);
     assert.doesNotMatch(text, /vercel\.app/i);
-  } finally {
-    if (previousParentPortalDefault === undefined) delete process.env.PARENT_PORTAL_DEFAULT_PASSWORD;
-    else process.env.PARENT_PORTAL_DEFAULT_PASSWORD = previousParentPortalDefault;
-    if (previousParentDefault === undefined) delete process.env.PARENT_DEFAULT_PASSWORD;
-    else process.env.PARENT_DEFAULT_PASSWORD = previousParentDefault;
-  }
 });
 
 test("director launch setup checklist auto-completes from app evidence", () => {
@@ -666,6 +639,13 @@ test("demo login aliases resolve to the Kid City demo users", () => {
 });
 
 test("parent portal guards require family-scoped messages and guardian acknowledgements", () => {
+  assert.deepEqual(parentPortalFamilyScopeWhere({ userId: "parent_1", requestedFamilyId: "family_2" }), {
+    id: "family_2",
+    guardians: { some: { userId: "parent_1" } },
+  });
+  assert.deepEqual(parentPortalFamilyScopeWhere({ userId: "parent_1" }), {
+    guardians: { some: { userId: "parent_1" } },
+  });
   assert.deepEqual(canCreateFamilyMessage({
     isParentGuardian: true,
     canManageOperations: false,

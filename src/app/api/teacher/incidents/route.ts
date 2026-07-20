@@ -60,7 +60,8 @@ async function POSTHandler(request: NextRequest) {
   }
   if (clientActionId) {
     const existing = await prisma.incidentReport.findUnique({ where: { clientActionId } });
-    if (existing) return NextResponse.json({ ok: true, incident: existing, replayed: true }, { status: 200 });
+    if (existing?.childId === incidentInput.childId) return NextResponse.json({ ok: true, incident: existing, replayed: true }, { status: 200 });
+    if (existing) return NextResponse.json({ ok: false, error: "Offline action ID conflicts with another record." }, { status: 409 });
   }
 
   const incident = await prisma.incidentReport.create({

@@ -73,5 +73,12 @@ The production smoke harness previously inspected protected-route text immediate
 
 ## Exact next action
 
-After the concurrent Prisma process finishes, the named release/build owner reruns `npm run vercel-build` on the unchanged release candidate. In parallel, Brenden names the role/device/performance owners and selected-school test matrix so the credentialed smoke blocker can be executed without production customer-data mutation.
+The competing Prisma process completed and the unchanged candidate was retested. `npm run vercel-build` passed Prisma generation, then failed at lint because `scripts/pilot-readiness-check.ts` assigns to the reserved `module` variable at lines 119 and 326; `src/app/[slug]/page.tsx` also reports an unused-variable warning. These belong to School Setup/Onboarding and User/Role route workstreams, not Performance and QA, and were not edited here.
 
+The repo-safe QA package is defined in `PERFORMANCE_QA_EXECUTION_PACKAGE_2026-07-20.md`, with guarded scripts in `scripts/qa-synthetic-load.ts` and `scripts/qa-responsive.ts`, shared defaults in `scripts/qa-standards.ts`, and contract tests in `tests/qa-standards.test.ts`.
+
+The focused QA contract tests passed (3/3), and targeted ESLint passed for `qa-standards.ts`, `qa-synthetic-load.ts`, `qa-responsive.ts`, and `qa-standards.test.ts`. The combined recovery test selection found a Teacher Experience assertion mismatch: `createClassroomOfflineAction` now adds `clientActionId` for idempotency, while `tests/classroom-offline-queue.test.ts` still expects the older body. Owner: Teacher Experience. Exact retest: that workstream reconciles the expected idempotency contract, then reruns `tests/classroom-offline-queue.test.ts` plus rendered offline replay.
+
+Per readiness-orchestrator coordination, another full build/Prisma run and local server execution are centrally deferred until all shared workstreams settle. The synthetic load and responsive scripts were not pointed at production and were not run against a shared mutable local build. Their focused contract and lint checks passed; actual non-production metrics/screenshots remain REQUIRED BEFORE WAVE.
+
+Exact next action: the readiness orchestrator runs one clean `npm run vercel-build` after all 17 workstreams settle. Brenden approves owners, selected-school devices/accounts, and thresholds in `BRENDENS_TASKS.md`; Performance and QA then runs the guarded non-production synthetic/responsive baseline followed by the exact credentialed/device/load sequence, without production customer-data mutation.

@@ -82,6 +82,13 @@ export function canAccessFamilyRecord(input: {
   return { ok: true as const };
 }
 
+export function parentPortalFamilyScopeWhere(input: { userId: string; requestedFamilyId?: string | null }) {
+  return {
+    ...(input.requestedFamilyId ? { id: input.requestedFamilyId } : {}),
+    guardians: { some: { userId: input.userId } },
+  };
+}
+
 export function canRequestAccountDeletion(input: {
   isParentGuardian: boolean;
   isLinkedGuardian: boolean;

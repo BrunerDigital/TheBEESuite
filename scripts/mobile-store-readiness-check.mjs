@@ -37,6 +37,10 @@ const capacitor = read(files.capacitor);
 const project = read(files.project);
 const info = read(files.info);
 const privacy = read(files.privacy);
+const storeApps = read("src/lib/app-store-apps.ts");
+const packageJson = JSON.parse(read("package.json"));
+const submissionPacket = read("docs/APP_STORE_SUBMISSION_PACKET.md");
+const connectDraft = read("docs/APP_STORE_CONNECT_CONTENT_DRAFT_2026-07-09.md");
 const iconContents = JSON.parse(read(files.iconContents));
 const splashContents = JSON.parse(read(files.splashContents));
 
@@ -55,6 +59,11 @@ assert.match(project, /IPHONEOS_DEPLOYMENT_TARGET = 16\.0;/);
 assert.match(project, /TARGETED_DEVICE_FAMILY = 1;/);
 assert.doesNotMatch(project, /com\.apple\.developer\.aps-environment/);
 assert.doesNotMatch(project, /com\.apple\.developer\.associated-domains/);
+assert.match(storeApps, /bundleId:\s*"com\.brunerdigital\.thebeesuite\.parent"/);
+assert.match(submissionPacket, /Initial version \| `1\.0`/);
+assert.match(connectDraft, /Version \| `1\.0`/);
+assert.ok(!packageJson.dependencies?.["@capacitor/push-notifications"], "Native push dependency must remain absent while push is deferred");
+assert.ok(!packageJson.dependencies?.["@capacitor/android"], "Android dependency must remain absent until the native Android release is approved");
 
 assert.match(info, /NSCameraUsageDescription/);
 assert.match(info, /NSPhotoLibraryUsageDescription/);

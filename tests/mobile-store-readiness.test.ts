@@ -49,10 +49,14 @@ test("mobile store configuration audit passes", () => {
 test("v1 UI describes database alerts as in-app notifications, not native push", () => {
   const messagePanel = readFileSync("src/components/message-reply-panel.tsx", "utf8");
   const preferencePanel = readFileSync("src/components/notification-preferences-panel.tsx", "utf8");
+  const integrationRoute = readFileSync("src/app/api/integrations/push/route.ts", "utf8");
 
   assert.doesNotMatch(messagePanel, /push\/in-app notifications/i);
   assert.doesNotMatch(messagePanel, /Queue push\/in-app/i);
   assert.match(messagePanel, /in-app notifications queued/i);
   assert.match(preferencePanel, /In-app on/);
   assert.match(preferencePanel, /<TableHead>In-app<\/TableHead>/);
+  assert.doesNotMatch(integrationRoute, /PUSH_PROVIDER_KEY/);
+  assert.match(integrationRoute, /configured:\s*false/);
+  assert.match(integrationRoute, /deliveryMode:\s*"in_app_only"/);
 });

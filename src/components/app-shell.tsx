@@ -490,7 +490,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   }, [showWorkspaceTools]);
 
   async function logout() {
-    clearClassroomOfflineQueues(window.localStorage);
+    try {
+      clearClassroomOfflineQueues(window.localStorage);
+    } catch {
+      // Logout must still revoke the server session when managed storage is unavailable.
+    }
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();

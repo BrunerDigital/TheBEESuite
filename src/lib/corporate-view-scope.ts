@@ -65,10 +65,7 @@ export function visibleFormSubmissionWhere(
   const visibleIds = centerIds.length ? centerIds : [NO_VISIBLE_CENTER_ID];
   return {
     ...(formType ? { form: { type: formType } } : {}),
-    OR: [
-      { family: { is: { centerId: visibleCenterIdFilter(centerIds) } } },
-      ...visibleIds.map((centerId) => ({ data: { path: ["centerId"], equals: centerId } })),
-    ],
+    OR: visibleIds.map((centerId) => ({ data: { path: ["centerId"], equals: centerId } })),
   };
 }
 

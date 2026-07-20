@@ -237,6 +237,7 @@ type Props = {
     replyToMessageId: string;
     subject?: string | null;
   } | null;
+  availableFamilies?: Array<{ id: string; name: string; centerName: string | null; childNames: string[] }>;
   demoMode?: boolean;
 };
 
@@ -269,7 +270,11 @@ const fallbackCheckoutReadiness: StripeCheckoutReadiness = {
   allowPlatformOnlyPayments: false,
 };
 
-const parentPortalDocumentsEnabled = process.env.NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED === "1";
+// Secure family/document guards are always enforced server-side. Keep the parent
+// document surface on by default so a school-issued document request cannot land
+// on a portal where the requested action is hidden. Set explicitly to "0" only
+// for an approved school-level rollout hold.
+const parentPortalDocumentsEnabled = process.env.NEXT_PUBLIC_PARENT_PORTAL_DOCUMENTS_ENABLED !== "0";
 
 function requiresDocumentSignature(document: { storageKey?: string | null }) {
   return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
@@ -405,6 +410,7 @@ export function ParentPortalWorkspace({
   notificationPreferences,
   accountDeletionRequest: initialAccountDeletionRequest = null,
   replyDraft = null,
+  availableFamilies = [],
   demoMode,
 }: Props) {
   const router = useRouter();
@@ -888,6 +894,22 @@ export function ParentPortalWorkspace({
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Daily reports, classroom activities, photos, messages, billing, and family account details.
         </p>
+        {availableFamilies.length > 1 ? (
+          <div className="mt-5 flex flex-wrap gap-2" aria-label="Choose family profile">
+            {availableFamilies.map((item) => (
+              <Button
+                key={item.id}
+                size="sm"
+                variant={item.id === family.id ? "default" : "outline"}
+                nativeButton={false}
+                render={<Link href={`/parent-portal?familyId=${encodeURIComponent(item.id)}`} />}
+              >
+                <Building2 data-icon="inline-start" />
+                {item.name}{item.centerName ? ` · ${item.centerName}` : ""}
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       {demoMode ? (

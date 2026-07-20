@@ -49,7 +49,7 @@ This workstream is production-ready only when all of the following are evidenced
 - **Payments:** payment-method collection is delegated to Stripe-hosted flows; the webhook route reads `stripe-signature` and verifies events with `constructEvent`. Per-school connected-account, dispute, payout, and reconciliation evidence remains external.
 - **Medical/custody:** audited mutation paths authenticate, enforce center/role scope, and write audit events. Credentialed need-to-know visibility and imported-data accuracy remain BLOCKER evidence.
 - **Auditability:** sensitive administrative, family, document, compliance, access, and billing routes have durable audit calls. Audit-log access isolation and retention recovery must be proven in credentialed and restore drills.
-- **CSP:** baseline security headers exist, but no enforced CSP is present. This remains FOLLOW-UP until Stripe, Turnstile, Supabase media, white-label domains, and embeds are validated under a report-only allowlist.
+- **CSP:** the service worker has a narrow enforced CSP and baseline security headers apply globally, but the application does not yet have an app-wide CSP. This remains FOLLOW-UP until Stripe, Turnstile, Supabase media, white-label domains, and embeds are validated under a report-only allowlist.
 
 ### Backup limitation identified
 
@@ -113,7 +113,12 @@ Supabase documents that database backups include Storage metadata but not the st
 ## Tests run
 
 - `node --import tsx --test tests/public-table-rls-migration.test.ts tests/custody-visibility.test.ts tests/compliance-workflows.test.ts tests/stripe-checkout-fees.test.ts tests/director-notification-audit.test.ts` — 17 passed, 0 failed.
+- Continuation-focused suite covering RLS drift, evidence validation, secrets, log redaction, Stripe boundaries, custody/medical auditability, CSP status, and role isolation — 20 passed, 0 failed.
+- Focused ESLint for the new security library, scripts, and tests — passed.
+- Credentialed-isolation template JSON parse — passed; blank packet validation was correctly rejected as incomplete.
+- `npm run db:generate` — passed.
 - `npm audit --omit=dev` — 0 vulnerabilities.
+- `npm run typecheck` — attempted after Prisma generation; blocked by pre-existing/in-progress parent-invitation union narrowing errors in `src/app/api/parent/invitations/route.ts`, `src/app/api/registration/[id]/review/route.ts`, and `src/lib/parent-document-requests.ts`. No new security-workstream file appeared in the error list.
 - Tracked-source live-secret pattern scan — no matches for live-format Stripe secret/webhook or Supabase secret keys.
 - An initial combined verification command timed out during broad scanning; it produced no usable result and was replaced by the bounded commands above.
 

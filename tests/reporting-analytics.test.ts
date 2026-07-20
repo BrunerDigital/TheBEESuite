@@ -12,6 +12,7 @@ import {
 const emptyReportData: AnalyticsReportData = {
   generatedAt: "2026-06-08T12:00:00.000Z",
   range: { startDate: "2026-06-01T00:00:00.000Z", endDate: "2026-06-08T23:59:59.999Z" },
+  scope: { centerIds: ["center_1"], centerLabels: ["FL | Tampa"] },
   centers: [{ id: "center_1", name: "Main", label: "FL | Tampa", timezone: "America/New_York" }],
   leadSources: [
     {

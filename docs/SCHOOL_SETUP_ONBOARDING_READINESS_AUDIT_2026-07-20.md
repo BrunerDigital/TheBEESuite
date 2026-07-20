@@ -70,3 +70,23 @@ A selected school is setup-ready only when its official identity, location mappi
 ## Exact next action
 
 Brenden names the first-wave schools, center IDs, dates, modules, and one accepted human owner for launch, director signoff, data/reconciliation, billing, technical release, training, and first-week support. Then run a school-scoped reconciliation pass for only that named wave before creating accounts, sending invitations, activating kiosk PINs, or enabling billing.
+
+## Continuation evidence — selected-school and module controls
+
+The read-only audit was refreshed at `2026-07-20T16:24:05.717Z`: 70 active centers, 69 with existing core rollout gaps, and 0 cross-center child/classroom mismatches. No production records or external systems were changed.
+
+`pilot:check` now supports repeated exact `--school` selectors and explicit `--module` gates for `setup`, `parent-invitations`, `kiosk`, and `billing`. The generated report includes school identity/ownership, classroom/staff/family/child/guardian/access counts, child and staff assignment signals, authorized-pickup counts, guardian login/PIN coverage, and an independent status for every requested module.
+
+Automated gates do not authorize activation:
+
+- `setup` can report data-ready only when its automated identity, structure, record, assignment, guardian, and access signals pass. Source reconciliation and written cutover approval remain external.
+- `parent-invitations` remains blocked until every guardian in the imported population is accounted for in login linking, then still requires a separate written activation decision.
+- `kiosk` remains blocked until every guardian in the imported population is accounted for in PIN readiness, then still requires custody, pickup, device, fallback, and written activation approval.
+- `billing` never treats platform Stripe configuration as school approval. It reports setup prerequisites and always retains separate billing/accounting, Stripe, preview, reconciliation, and activation approval.
+- ProCare remains the source of truth until a separate written cutover decision is recorded.
+
+The initial school-scoped runtime test used already-live Kokomo only to verify report behavior. It correctly exposed 2 of 15 guardians without linked login users, so the parent-invitation gate was blocked while kiosk and billing remained manual-approval-only. A subsequent identity expansion also flags missing stored EIN/tax receipt configuration for reconciliation; this does not interrupt Kokomo's authorized normal use.
+
+Reusable evidence is in `SCHOOL_SETUP_RECONCILIATION_EVIDENCE_PACKET.md`. `BRENDENS_TASKS.md` is now limited to actual wave choices, accepted delegations, and completed signoffs; no proposed selection or unaccepted owner was recorded.
+
+Final post-change read-only run at `2026-07-20T16:36:53Z` evaluated all 70 active schools and all four module gates. The stricter identity/reconciliation rules report 70 setup blockers, 70 parent-invitation blockers, 69 kiosk blockers, 70 billing blockers, and 0 cross-center child/classroom mismatches. The global report remains informational (`READY WITH WARNINGS`); an exact `--school` selection converts a blocked requested module into a failing `BLOCKED` result and exit code `1`. This prevents a global inventory warning from being mistaken for selected-school approval.

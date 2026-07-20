@@ -28,15 +28,15 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; auth?: { defaultPasswordSet?: boolean } } | null;
+      const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
         return;
       }
       setStatusMessage(
-        json?.auth?.defaultPasswordSet
-          ? "Parent portal access was created and the login email was sent. The parent signs in with their guardian email and the default parent password, then finishes the parent setup screen."
-          : "Parent portal access was linked and the login email was sent. The parent signs in with their guardian email and their existing password, or the default parent password if they have not changed it.",
+        json?.auth?.credentialCreated
+          ? "Parent portal access was created and a private one-time setup link was sent. The parent creates a password before finishing setup."
+          : "Parent portal access was linked and a fresh private setup link was sent. The prior unused setup link is no longer valid.",
       );
     });
   }
@@ -68,7 +68,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email becomes the parent login. Parents use the default parent password from the school and can change it
+          The guardian email becomes the parent login. Parents create a private password from the one-time setup link and can change it
           later from the login screen. The setup screen confirms contact details and the check-in PIN.
         </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">

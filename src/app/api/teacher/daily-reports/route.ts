@@ -39,16 +39,6 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "One or more children were not found." }, { status: 404 });
   }
 
-  if (clientActionId) {
-    const existingReports = await prisma.dailyReport.findMany({
-      where: { childId: { in: dailyReport.childIds }, clientActionId },
-      include: { child: { select: { fullName: true } }, _count: { select: { meals: true, naps: true, diapers: true, activities: true } } },
-    });
-    if (existingReports.length === dailyReport.childIds.length) {
-      return NextResponse.json({ ok: true, report: existingReports[0], reports: existingReports, reportCount: existingReports.length, replayed: true }, { status: 200 });
-    }
-  }
-
   const hasTenantWideAccess = canAccessAllCenters(user);
   const childById = new Map(children.map((child) => [child.id, child]));
   for (const childId of dailyReport.childIds) {
@@ -68,6 +58,16 @@ async function POSTHandler(request: NextRequest) {
     }
     if (!canManageChildInClassroom(user, child.classroom?.id)) {
       return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
+    }
+  }
+
+  if (clientActionId) {
+    const existingReports = await prisma.dailyReport.findMany({
+      where: { childId: { in: dailyReport.childIds }, clientActionId },
+      include: { child: { select: { fullName: true } }, _count: { select: { meals: true, naps: true, diapers: true, activities: true } } },
+    });
+    if (existingReports.length === dailyReport.childIds.length) {
+      return NextResponse.json({ ok: true, report: existingReports[0], reports: existingReports, reportCount: existingReports.length, replayed: true }, { status: 200 });
     }
   }
 

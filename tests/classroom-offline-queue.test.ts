@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   createClassroomOfflineAction,
   clearClassroomOfflineQueues,
+  classifyClassroomReplayStatus,
   decryptClassroomOfflineQueue,
   encryptClassroomOfflineQueue,
   parseClassroomOfflineQueue,
@@ -22,10 +23,18 @@ test("classroom offline action captures endpoint body label and created time", (
     id: "offline_1",
     endpoint: "/api/teacher/attendance",
     method: "POST",
-    body: { childId: "child_1", status: "present" },
+    body: { childId: "child_1", status: "present", clientActionId: "offline_1" },
     label: "Ava attendance",
     createdAt: "2026-06-05T12:00:00.000Z",
   });
+});
+
+test("classroom replay completes successes, retries transient failures, and retains conflicts for review", () => {
+  assert.equal(classifyClassroomReplayStatus(200), "complete");
+  assert.equal(classifyClassroomReplayStatus(429), "retry");
+  assert.equal(classifyClassroomReplayStatus(503), "retry");
+  assert.equal(classifyClassroomReplayStatus(409), "review");
+  assert.equal(classifyClassroomReplayStatus(403), "review");
 });
 
 test("classroom offline queue encrypts payloads and rejects account scope switching", async () => {

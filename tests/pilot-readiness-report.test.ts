@@ -74,4 +74,16 @@ test("module gates keep setup, invitations, kiosk, and billing separately contro
   assert.equal(gates.kiosk.status, "manual_approval_required");
   assert.equal(gates.billing.status, "manual_approval_required");
   assert.equal(gates.billing.separateApprovalRequired, true);
+
+  const identityGates = buildModuleGates({
+    setupGaps: ["school EIN/tax receipt details are not configured"],
+    operationalActivationGaps: [],
+    guardianCount: 2,
+    guardianLoginCount: 2,
+    guardianPinCount: 2,
+  });
+  assert.equal(identityGates.setup.status, "blocked");
+  assert.equal(identityGates["parent-invitations"].status, "manual_approval_required");
+  assert.equal(identityGates.kiosk.status, "manual_approval_required");
+  assert.equal(identityGates.billing.status, "blocked");
 });

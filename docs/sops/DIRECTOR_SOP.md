@@ -62,9 +62,9 @@ https://thebeesuite.io/login
 Parent login rules:
 
 - Username/email: the parent's personal email address on the guardian profile.
-- Default password: `BusyBees`.
-- If the parent already reset their password, they should use their own password.
-- If the parent cannot log in, confirm the guardian email is correct before resetting anything.
+- First access: the parent creates a private password from the one-time setup link sent to that email.
+- The setup link expires after one hour and cannot be reused; sending a new setup link revokes the prior unused setup link.
+- If the parent cannot log in, confirm the guardian email is correct and use a fresh setup/recovery link. Never send or request a password.
 
 Director steps:
 
@@ -72,7 +72,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to use `https://thebeesuite.io/login`, their email, and `BusyBees` unless they changed the password.
+5. Tell the parent to open the private one-time setup link, create a password, and then use their guardian email at `https://thebeesuite.io/parents`. If the link expires, send a fresh link; never send or request a password.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.

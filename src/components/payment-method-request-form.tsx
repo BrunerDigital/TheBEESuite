@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { AlertCircle, Building2, CheckCircle2, CreditCard, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -143,7 +144,10 @@ export function PaymentMethodRequestForm({
             <CheckCircle2 className="size-4" />
             <AlertTitle>Payment submitted</AlertTitle>
             <AlertDescription className="text-emerald-100">
-              The BEE Suite received the secure payment confirmation. Confirmed card payments post to the ledger as paid; ACH bank payments show as processing until bank settlement confirms the funds.
+              The BEE Suite received the secure payment confirmation. Confirmed card payments post to the ledger as paid; ACH bank payments show as processing until bank settlement confirms the funds. Open the parent portal to review the updated statement and receipt after processing.
+              <Link href="/parents" className="mt-2 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
+                Open parent portal for statement and receipt
+              </Link>
             </AlertDescription>
           </Alert>
         ) : null}

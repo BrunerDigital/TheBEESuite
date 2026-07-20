@@ -81,7 +81,11 @@ lines.push(
 lines.push(statusLine(Boolean(run("node", ["--version"])), "Node", run("node", ["--version"])));
 lines.push(statusLine(Boolean(run("npm", ["--version"])), "npm", run("npm", ["--version"])));
 lines.push(statusLine(Boolean(run("gh", ["--version"])), "GitHub CLI", run("gh", ["--version"]).split(/\r?\n/)[0]));
+const githubAuth = run("gh", ["auth", "status", "--hostname", "github.com"]);
+lines.push(statusLine(Boolean(githubAuth), "GitHub authentication", githubAuth ? "active" : "run gh auth login --hostname github.com"));
 lines.push(statusLine(Boolean(run("vercel", ["--version"])), "Vercel CLI", run("vercel", ["--version"]).split(/\r?\n/).at(-1)));
+const vercelAccount = run("vercel", ["whoami"]);
+lines.push(statusLine(Boolean(vercelAccount), "Vercel authentication", vercelAccount || "run vercel login or set VERCEL_TOKEN"));
 lines.push(statusLine(Boolean(run("supabase", ["--version"])), "Supabase CLI", run("supabase", ["--version"])));
 lines.push(statusLine(Boolean(run("docker", ["--version"])), "Docker CLI", run("docker", ["--version"])));
 

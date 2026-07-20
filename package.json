@@ -18,6 +18,7 @@
     "cloud:env:prod": "npx vercel@54.14.0 env pull .env.production.pulled.local --environment=production --yes",
     "cloud:dev": "npm run dev",
     "cloud:status": "node scripts/check-local-cloud-setup.mjs",
+    "codespace:setup": "node scripts/setup-codespace.mjs",
     "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "cloud:validate": "npm run clean:next && npm audit --omit=dev && npm run vercel-build",
     "test": "node --import tsx --test tests/*.test.ts",

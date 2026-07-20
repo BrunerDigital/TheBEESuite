@@ -23,6 +23,7 @@ import {
   uniquePaymentRequestEmails,
 } from "@/lib/payment-method-request-forms";
 import { prisma } from "@/lib/prisma";
+import { buildManualEmailCopy, type ManualEmailCopy } from "@/lib/manual-email-copy";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -122,6 +123,7 @@ async function POSTHandler(request: NextRequest) {
   const subject = buildPaymentMethodRequestEmailSubject({ centerLabel, intent });
   const fromName = paymentMethodRequestBrandSender(centerLabel);
   const results: Array<{ email: string; ok: boolean; configured: boolean; error?: string; notified: number; formUrl: string }> = [];
+  const manualCopies: ManualEmailCopy[] = [];
   let emailsSent = 0;
   let notificationsCreated = 0;
 
@@ -159,6 +161,7 @@ async function POSTHandler(request: NextRequest) {
       formUrl,
       intent,
     });
+    manualCopies.push(buildManualEmailCopy({ to: email, subject, body: text }));
     const emailResult = await sendEmail({
       to: [email],
       subject,
@@ -235,6 +238,7 @@ async function POSTHandler(request: NextRequest) {
       emailsSent,
       notificationsCreated,
       results,
+      manualCopies,
       error: allFailed ? failureReason : undefined,
     },
     { status: allFailed ? 502 : 200 },

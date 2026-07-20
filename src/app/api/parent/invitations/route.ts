@@ -14,6 +14,7 @@ import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { buildManualEmailCopy } from "@/lib/manual-email-copy";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -42,7 +43,7 @@ async function POSTHandler(request: NextRequest) {
   }
   if (temporaryPassword) {
     return NextResponse.json(
-      { ok: false, error: "Temporary passwords are not accepted. Parent access uses a private one-time setup link." },
+      { ok: false, error: "Custom temporary passwords are not accepted. Parent access uses the school-issued first-login password." },
       { status: 400 },
     );
   }
@@ -148,6 +149,7 @@ async function POSTHandler(request: NextRequest) {
       branding,
     });
     const subject = `${center.crmLocationId ?? center.name}: your parent app is ready`;
+    const manualCopy = buildManualEmailCopy({ to: email, subject, body: invitationText });
     const emailCopy = await sendEmail({
       to: [email],
       subject,
@@ -194,9 +196,10 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: emailCopy.error || "The parent account was linked, but the private setup email could not be sent. Send a fresh parent setup link.",
+          error: emailCopy.error || "The parent account was linked, but the invitation email could not be sent. Use the manual email copy provided.",
           auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: false },
           emailCopy,
+          manualCopy,
         },
         { status: 502 },
       );
@@ -212,6 +215,7 @@ async function POSTHandler(request: NextRequest) {
       },
       auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: true },
       emailCopy,
+      manualCopy,
     });
   } catch (error) {
     return NextResponse.json(

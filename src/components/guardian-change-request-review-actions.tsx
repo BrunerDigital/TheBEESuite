@@ -33,7 +33,7 @@ export function GuardianChangeRequestReviewActions({
         return;
       }
       setNote("");
-      setMessage(nextStatus === "approved" ? "Approved" : "Rejected");
+      setMessage(nextStatus === "approved" ? "Approved and family record updated" : "Rejected");
       router.refresh();
     });
   }

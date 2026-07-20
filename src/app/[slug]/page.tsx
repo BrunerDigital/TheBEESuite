@@ -1662,6 +1662,9 @@ async function renderLivePage(
         familyName: note.family.name,
         requestType: parsed.requestType,
         details: parsed.details,
+        changeSummary: parsed.changeData
+          ? [parsed.changeData.operation, parsed.changeData.entity.replaceAll("_", " "), parsed.changeData.fullName, parsed.changeData.phone, parsed.changeData.relation].filter(Boolean).join(" · ")
+          : null,
         status: parsed.status,
         submittedBy: note.user?.name ?? note.user?.email ?? "Parent/guardian",
         createdAt: note.createdAt,
@@ -1805,6 +1808,8 @@ async function renderLivePage(
             checkInPinHash: true,
           },
         },
+        pickups: { orderBy: { fullName: "asc" } },
+        emergencyContacts: { orderBy: { fullName: "asc" } },
           children: {
             where: currentlyEnrolledChildWhere(),
             select: {

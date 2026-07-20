@@ -13,6 +13,22 @@ test("guardian change request notes parse pending requests", () => {
     requestType: "Emergency contact / authorized pickup update",
     details: "Add Grandma Jane, 555-1212",
     status: "pending",
+    changeData: null,
+  });
+});
+
+test("guardian change request notes preserve structured changes", () => {
+  const body = formatGuardianChangeRequestBody({
+    requestType: "Authorized pickup update",
+    details: "Add Grandma Jane",
+    changeData: { entity: "authorized_pickup", operation: "add", fullName: "Grandma Jane", phone: "555-1212", relation: "Grandmother" },
+  });
+  assert.deepEqual(parseGuardianChangeRequestNote(body)?.changeData, {
+    entity: "authorized_pickup",
+    operation: "add",
+    fullName: "Grandma Jane",
+    phone: "555-1212",
+    relation: "Grandmother",
   });
 });
 

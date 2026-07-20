@@ -54,6 +54,12 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (!requestDetails) {
     return NextResponse.json({ ok: false, error: "This note is not a guardian change request." }, { status: 400 });
   }
+  if (requestDetails.status !== "pending") {
+    return NextResponse.json({ ok: false, error: "This request has already been reviewed." }, { status: 409 });
+  }
+  if (status === "approved" && !requestDetails.changeData) {
+    return NextResponse.json({ ok: false, error: "This older free-text request cannot update the family record automatically. Ask the parent to submit a new structured request." }, { status: 409 });
+  }
 
   const centerId = note.family.centerId;
   const hasCenterAccess = canAccessAllCenters(user) || Boolean(centerId && canAccessCenter(user, centerId));
@@ -62,6 +68,33 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    const change = requestDetails.changeData;
+    if (status === "approved" && change) {
+      const values = {
+        ...(change.fullName ? { fullName: change.fullName } : {}),
+        ...(change.phone ? { phone: change.phone } : {}),
+        ...(change.relation ? { relation: change.relation } : {}),
+      };
+      if (change.entity === "emergency_contact") {
+        if (change.operation === "add") {
+          await tx.emergencyContact.create({ data: { familyId: note.family!.id, fullName: change.fullName!, phone: change.phone!, relation: change.relation! } });
+        } else {
+          const existing = await tx.emergencyContact.findFirst({ where: { id: change.targetId!, familyId: note.family!.id } });
+          if (!existing) throw new Error("The emergency contact no longer exists on this family.");
+          if (change.operation === "remove") await tx.emergencyContact.delete({ where: { id: existing.id } });
+          else await tx.emergencyContact.update({ where: { id: existing.id }, data: values });
+        }
+      } else {
+        if (change.operation === "add") {
+          await tx.authorizedPickup.create({ data: { familyId: note.family!.id, fullName: change.fullName!, phone: change.phone, relation: change.relation } });
+        } else {
+          const existing = await tx.authorizedPickup.findFirst({ where: { id: change.targetId!, familyId: note.family!.id } });
+          if (!existing) throw new Error("The authorized pickup no longer exists on this family.");
+          if (change.operation === "remove") await tx.authorizedPickup.delete({ where: { id: existing.id } });
+          else await tx.authorizedPickup.update({ where: { id: existing.id }, data: values });
+        }
+      }
+    }
     const nextBody = [
       formatGuardianChangeRequestBody({ ...requestDetails, status }),
       reviewNote ? `Review note: ${reviewNote}` : "",
@@ -100,6 +133,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       previousStatus: requestDetails.status,
       nextStatus: status,
       hasReviewNote: Boolean(reviewNote),
+      familyRecordUpdated: status === "approved" && Boolean(requestDetails.changeData),
     },
   });
 

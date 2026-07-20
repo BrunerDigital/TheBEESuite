@@ -5,6 +5,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
+import { formatGuardianChangeRequestBody, normalizeGuardianChangeData } from "@/lib/guardian-change-requests";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -23,9 +24,19 @@ async function POSTHandler(request: NextRequest) {
   const familyId = clean(body.familyId);
   const requestType = clean(body.requestType) || "Contact update";
   const details = clean(body.details);
+  const changeData = normalizeGuardianChangeData(body.changeData);
 
-  if (!familyId || !details) {
-    return NextResponse.json({ ok: false, error: "Family ID and details are required." }, { status: 400 });
+  if (!familyId || !details || !changeData) {
+    return NextResponse.json({ ok: false, error: "Family ID, details, and a valid structured change are required." }, { status: 400 });
+  }
+  if (changeData.operation === "add" && (!changeData.fullName || !changeData.phone || !changeData.relation)) {
+    return NextResponse.json({ ok: false, error: "Name, phone, and relationship are required when adding a contact." }, { status: 400 });
+  }
+  if ((changeData.operation === "update" || changeData.operation === "remove") && !changeData.targetId) {
+    return NextResponse.json({ ok: false, error: "Choose the existing record to change." }, { status: 400 });
+  }
+  if (changeData.operation === "update" && !changeData.fullName && !changeData.phone && !changeData.relation) {
+    return NextResponse.json({ ok: false, error: "Enter at least one updated value." }, { status: 400 });
   }
 
   const family = await prisma.family.findUnique({
@@ -51,7 +62,7 @@ async function POSTHandler(request: NextRequest) {
     data: {
       familyId,
       userId: user.id,
-      body: `${requestType} request: ${details}`,
+      body: formatGuardianChangeRequestBody({ requestType, details, changeData }),
       restricted: true,
     },
   });

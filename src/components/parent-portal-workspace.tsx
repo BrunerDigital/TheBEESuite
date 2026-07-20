@@ -170,6 +170,8 @@ type PortalFamily = {
     relation?: string | null;
     preferredCommunication?: string | null;
   }>;
+  pickups?: Array<{ id: string; fullName: string; phone: string | null; relation: string | null }>;
+  emergencyContacts?: Array<{ id: string; fullName: string; phone: string; relation: string }>;
   children: Child[];
 };
 
@@ -413,6 +415,12 @@ export function ParentPortalWorkspace({
   const [messageAttachments, setMessageAttachments] = useState<File[]>([]);
   const [messageAttachmentInputKey, setMessageAttachmentInputKey] = useState(0);
   const [requestDetails, setRequestDetails] = useState("");
+  const [requestEntity, setRequestEntity] = useState<"emergency_contact" | "authorized_pickup">("emergency_contact");
+  const [requestOperation, setRequestOperation] = useState<"add" | "update" | "remove">("add");
+  const [requestTargetId, setRequestTargetId] = useState("");
+  const [requestName, setRequestName] = useState("");
+  const [requestPhone, setRequestPhone] = useState("");
+  const [requestRelation, setRequestRelation] = useState("");
   const [documentNotes, setDocumentNotes] = useState<Record<string, string>>({});
   const [documentFiles, setDocumentFiles] = useState<Record<string, File | null>>({});
   const [signatureAcknowledgements, setSignatureAcknowledgements] = useState<Record<string, boolean>>({});
@@ -577,13 +585,25 @@ export function ParentPortalWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           familyId: family.id,
-          requestType: "Emergency contact / authorized pickup update",
+          requestType: requestEntity === "emergency_contact" ? "Emergency contact update" : "Authorized pickup update",
           details: requestDetails,
+          changeData: {
+            entity: requestEntity,
+            operation: requestOperation,
+            targetId: requestTargetId || undefined,
+            fullName: requestName,
+            phone: requestPhone,
+            relation: requestRelation,
+          },
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string } | null;
       if (!response.ok) return showError(json?.error || "Request could not be submitted.");
       setRequestDetails("");
+      setRequestTargetId("");
+      setRequestName("");
+      setRequestPhone("");
+      setRequestRelation("");
       showStatus("Update request sent for director review.");
     });
   }
@@ -1632,8 +1652,53 @@ export function ParentPortalWorkspace({
             ))}
             <div className="space-y-2">
               <Label htmlFor="contact-request">Request an emergency contact or pickup change</Label>
-              <Textarea id="contact-request" value={requestDetails} onChange={(event) => setRequestDetails(event.target.value)} />
-              <Button className="w-full sm:w-auto" disabled={isPending || !requestDetails.trim()} onClick={requestContactUpdate}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-sm">
+                  <span>Record type</span>
+                  <select className="h-10 w-full rounded-md border bg-background px-3" value={requestEntity} onChange={(event) => { setRequestEntity(event.target.value as typeof requestEntity); setRequestTargetId(""); }}>
+                    <option value="emergency_contact">Emergency contact</option>
+                    <option value="authorized_pickup">Authorized pickup</option>
+                  </select>
+                </label>
+                <label className="space-y-1 text-sm">
+                  <span>Change</span>
+                  <select className="h-10 w-full rounded-md border bg-background px-3" value={requestOperation} onChange={(event) => { setRequestOperation(event.target.value as typeof requestOperation); setRequestTargetId(""); }}>
+                    <option value="add">Add</option>
+                    <option value="update">Update</option>
+                    <option value="remove">Remove</option>
+                  </select>
+                </label>
+              </div>
+              {requestOperation !== "add" ? (
+                <label className="block space-y-1 text-sm">
+                  <span>Existing record</span>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-3"
+                    value={requestTargetId}
+                    onChange={(event) => {
+                      const id = event.target.value;
+                      setRequestTargetId(id);
+                      const records = requestEntity === "emergency_contact" ? (family.emergencyContacts ?? []) : (family.pickups ?? []);
+                      const selected = records.find((item) => item.id === id);
+                      setRequestName(selected?.fullName ?? "");
+                      setRequestPhone(selected?.phone ?? "");
+                      setRequestRelation(selected?.relation ?? "");
+                    }}
+                  >
+                    <option value="">Choose a record</option>
+                    {(requestEntity === "emergency_contact" ? (family.emergencyContacts ?? []) : (family.pickups ?? [])).map((item) => <option key={item.id} value={item.id}>{item.fullName}</option>)}
+                  </select>
+                </label>
+              ) : null}
+              {requestOperation !== "remove" ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <Input aria-label="Contact name" placeholder="Full name" value={requestName} onChange={(event) => setRequestName(event.target.value)} />
+                  <Input aria-label="Contact phone" placeholder="Phone" value={requestPhone} onChange={(event) => setRequestPhone(event.target.value)} />
+                  <Input aria-label="Contact relationship" placeholder="Relationship" value={requestRelation} onChange={(event) => setRequestRelation(event.target.value)} />
+                </div>
+              ) : null}
+              <Textarea id="contact-request" placeholder="Reason or helpful details for the director" value={requestDetails} onChange={(event) => setRequestDetails(event.target.value)} />
+              <Button className="w-full sm:w-auto" disabled={isPending || !requestDetails.trim() || ((requestOperation === "update" || requestOperation === "remove") && !requestTargetId) || (requestOperation !== "remove" && (!requestName.trim() || !requestPhone.trim() || !requestRelation.trim()))} onClick={requestContactUpdate}>
                 <FileText data-icon="inline-start" />
                 Submit Request
               </Button>

@@ -4769,6 +4769,7 @@ export type FamilyProfilesPageData = {
     familyName: string;
     requestType: string;
     details: string;
+    changeSummary: string | null;
     status: string;
     submittedBy: string;
     createdAt: Date | string;
@@ -4815,7 +4816,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         <CardHeader>
           <CardTitle>Guardian Self-Service Change Requests</CardTitle>
           <CardDescription>
-            Parent portal requests stay restricted until a director approves or rejects them and applies any record changes in the editor.
+            Parent portal requests stay restricted until a director approves or rejects them. Approval automatically applies the requested emergency-contact or authorized-pickup change to the family record.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -4840,6 +4841,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
                     </TableCell>
                     <TableCell>
                       <div className="font-medium">{request.requestType}</div>
+                      {request.changeSummary ? <div className="mt-1 text-xs font-medium capitalize">{request.changeSummary}</div> : null}
                       <div className="max-w-xl whitespace-normal text-xs text-muted-foreground">{request.details}</div>
                     </TableCell>
                     <TableCell>

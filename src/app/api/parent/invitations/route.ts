@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
   buildParentPortalInvitationText,
-  buildParentLoginSetupUrl,
-  getParentPortalDefaultPassword,
   PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
+import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
-import {
-  getAppBaseUrl,
-  upsertSupabaseAuthUserWithPassword,
-} from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -100,146 +95,108 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
   }
 
-  let auth:
-    | { ok: true; created?: boolean; updated?: boolean; defaultPasswordSet?: boolean; emailSent?: boolean }
-    | { ok: false; error?: string; defaultPasswordSet?: boolean; emailSent?: boolean };
-  const appBaseUrl = getAppBaseUrl(request.url);
-  const defaultPassword = getParentPortalDefaultPassword();
-
-  if (defaultPassword.length < 8) {
-    return NextResponse.json({ ok: false, error: "Parent portal default password is not configured." }, { status: 500 });
-  }
-
   try {
-    const upsert = await upsertSupabaseAuthUserWithPassword({
-      email,
-      name: guardian.fullName,
-      password: defaultPassword,
-      role: UserRole.PARENT_GUARDIAN,
-      source: PARENT_PORTAL_INVITE_MODE,
-      updateExistingPassword: false,
+    const provisioned = await ensureParentPortalLoginForGuardian({
+      guardianId: guardian.id,
+      linkedBy: user.email,
+      linkedReason: "direct_parent_invitation",
     });
-    const preservedExistingPassword = "alreadyExisted" in upsert && upsert.alreadyExisted;
-    auth = {
-      ok: true,
-      created: upsert.created,
-      updated: upsert.updated,
-      defaultPasswordSet: !preservedExistingPassword,
-    };
-  } catch (error) {
-    auth = { ok: false, error: error instanceof Error ? error.message : "Supabase auth setup failed." };
-  }
+    if (!provisioned.ok) {
+      return NextResponse.json({ ok: false, error: provisioned.reason }, { status: provisioned.status ?? 502 });
+    }
 
-  if (!auth.ok) {
-    return NextResponse.json({ ok: false, error: auth.error || "Parent portal auth setup failed." }, { status: 502 });
-  }
-
-  const parentUser = await prisma.user.upsert({
-    where: { email },
-    update: {
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      organizationId: center.organizationId,
-      mustResetPassword: false,
-      sessionVersion: { increment: 1 },
-    },
-    create: {
-      tenantId: center.organization.tenantId,
-      organizationId: center.organizationId,
+    const setupLink = await issueParentPortalSetupLink({
+      requestUrl: request.url,
+      user,
+      parentUserId: provisioned.userId,
+      guardianId: guardian.id,
       email,
-      name: guardian.fullName,
-      role: UserRole.PARENT_GUARDIAN,
-      isActive: true,
-      mustResetPassword: false,
-    },
-  });
-
-  const updatedGuardian = await prisma.guardian.update({
-    where: { id: guardian.id },
-    data: {
-      userId: parentUser.id,
-      customFields: {
-        ...(guardian.customFields && typeof guardian.customFields === "object" && !Array.isArray(guardian.customFields)
-          ? guardian.customFields
-          : {}),
-        parentPortal: {
-          linkedAt: new Date().toISOString(),
-          linkedBy: user.email,
-          inviteMode: PARENT_PORTAL_INVITE_MODE,
-          loginEmail: email,
-        },
-      },
-    },
-  });
-
-  const portalUrl = buildParentLoginSetupUrl(appBaseUrl);
-  const invitationText = buildParentPortalInvitationText({
-    guardianName: guardian.fullName,
-    centerLabel: center.crmLocationId ?? center.name,
-    email,
-    portalUrl,
-  });
-  const emailCopy = await sendEmail({
-    to: [email],
-    subject: "Your The BEE Suite parent portal is ready",
-    text: invitationText,
-    fromName: "The BEE Suite",
-    disableClickTracking: true,
-    categories: ["parent_invitation_email"],
-    customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
-    tenantId: user.tenantId,
-  });
-  await recordEmailDeliveryAttempt({
-    tenantId: user.tenantId,
-    centerId: center.id,
-    purpose: "parent_invitation_email",
-    to: [email],
-    subject: "Your The BEE Suite parent portal is ready",
-    text: invitationText,
-    fromName: "The BEE Suite",
-    result: emailCopy,
-    metadata: { guardianId: guardian.id, familyId: guardian.familyId },
-  });
-
-  await writeAuditLog(user, {
-    centerId: center.id,
-    action: "parent_portal.guardian_invited",
-    resource: "Guardian",
-    resourceId: guardian.id,
-    metadata: {
+      centerId: center.id,
       familyId: guardian.familyId,
-      parentUserId: parentUser.id,
-      email,
-      authMode: PARENT_PORTAL_INVITE_MODE,
-      defaultPasswordSet: "defaultPasswordSet" in auth ? auth.defaultPasswordSet : false,
-      emailCopySent: emailCopy.ok,
-    },
-  });
+      reason: "direct_parent_invitation",
+    });
+    if (!setupLink.ok) {
+      return NextResponse.json({ ok: false, error: setupLink.error }, { status: 502 });
+    }
 
-  if (!emailCopy.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: emailCopy.error || "The parent portal user was linked, but the login email could not be sent. Try Send Parent Login again.",
-        auth: { ...auth, emailSent: false },
-        emailCopy,
+    const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
+    const invitationText = buildParentPortalInvitationText({
+      guardianName: guardian.fullName,
+      centerLabel: center.crmLocationId ?? center.name,
+      email,
+      setupUrl: setupLink.setupUrl,
+      expiresAt: setupLink.expiresAt,
+    });
+    const emailCopy = await sendEmail({
+      to: [email],
+      subject: "Create your The BEE Suite parent portal password",
+      text: invitationText,
+      fromName: "The BEE Suite",
+      disableClickTracking: true,
+      categories: ["parent_invitation_email"],
+      customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id, setupTokenId: setupLink.tokenId },
+      tenantId: user.tenantId,
+    });
+    await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: emailCopy.ok });
+    await recordEmailDeliveryAttempt({
+      tenantId: user.tenantId,
+      centerId: center.id,
+      purpose: "parent_invitation_email",
+      to: [email],
+      subject: "Create your The BEE Suite parent portal password",
+      text: invitationText,
+      fromName: "The BEE Suite",
+      result: emailCopy,
+      metadata: { guardianId: guardian.id, familyId: guardian.familyId, setupTokenId: setupLink.tokenId },
+    });
+
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "parent_portal.guardian_invited",
+      resource: "Guardian",
+      resourceId: guardian.id,
+      metadata: {
+        familyId: guardian.familyId,
+        parentUserId: provisioned.userId,
+        email,
+        authMode: PARENT_PORTAL_INVITE_MODE,
+        credentialCreated: provisioned.credentialCreated,
+        setupTokenId: setupLink.tokenId,
+        setupLinkExpiresAt: setupLink.expiresAt.toISOString(),
+        emailCopySent: emailCopy.ok,
       },
+    });
+
+    if (!emailCopy.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: emailCopy.error || "The parent account was linked, but the private setup email could not be sent. Send a fresh parent setup link.",
+          auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: false },
+          emailCopy,
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      guardian: {
+        id: updatedGuardian?.id ?? guardian.id,
+        fullName: updatedGuardian?.fullName ?? guardian.fullName,
+        email: updatedGuardian?.email ?? guardian.email,
+        userId: provisioned.userId,
+      },
+      auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: true },
+      setupLink: { expiresAt: setupLink.expiresAt },
+      emailCopy,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : "Parent portal setup could not be prepared." },
       { status: 502 },
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    guardian: {
-      id: updatedGuardian.id,
-      fullName: updatedGuardian.fullName,
-      email: updatedGuardian.email,
-      userId: parentUser.id,
-    },
-    auth: { ...auth, emailSent: true },
-    emailCopy,
-  });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

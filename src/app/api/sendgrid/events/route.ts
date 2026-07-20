@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  sendGridDeliveryStatus,
-  sendGridMessageIdCandidates,
-  type SendGridEvent,
+  processSendGridEventBatch,
+  type NormalizedSendGridEvent,
   verifySendGridEventSignature,
 } from "@/lib/sendgrid-events";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -23,43 +23,69 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid SendGrid signature." }, { status: 403 });
   }
 
-  let events: SendGridEvent[];
+  let events: unknown[];
   try {
     const parsed = JSON.parse(payload) as unknown;
     if (!Array.isArray(parsed)) throw new Error("Expected an event array.");
-    events = parsed as SendGridEvent[];
+    events = parsed;
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid SendGrid event payload." }, { status: 400 });
   }
 
   let updated = 0;
-  for (const event of events) {
-    const status = sendGridDeliveryStatus(event.event ?? "");
-    const ids = sendGridMessageIdCandidates(event.sg_message_id ?? "");
-    if (!status || !ids.length) continue;
-    const now = new Date();
-    const result = await prisma.integrationDelivery.updateMany({
-      where: { provider: "sendgrid", providerMessageId: { in: ids } },
-      data: {
-        status,
-        lastResult: {
-          ok: status !== "failed",
-          event: event.event ?? null,
-          sgEventId: event.sg_event_id ?? null,
-          sgMessageId: event.sg_message_id ?? null,
-          timestamp: event.timestamp ?? null,
-          response: event.response ?? null,
-          reason: event.reason ?? null,
-        },
-        lastError: status === "failed" ? event.reason || event.response || event.event || "SendGrid delivery failed." : null,
-        nextAttemptAt: null,
-        deliveredAt: status === "delivered" ? now : null,
-      },
-    });
-    updated += result.count;
-  }
+  const summary = await processSendGridEventBatch(events, {
+    processOnce: async (event: NormalizedSendGridEvent) => {
+      try {
+        const matched = await prisma.$transaction(async (tx) => {
+          await tx.sendGridEventReceipt.create({
+            data: {
+              eventId: event.eventId,
+              providerMessageId: event.messageIds[0],
+              eventType: event.eventType,
+              occurredAt: event.occurredAt,
+            },
+          });
+          const statusGuard = event.status === "accepted"
+            ? { notIn: ["delivered", "failed"] }
+            : event.status === "delivered"
+              ? { not: "failed" }
+              : undefined;
+          const result = await tx.integrationDelivery.updateMany({
+            where: {
+              provider: "sendgrid",
+              providerMessageId: { in: event.messageIds },
+              ...(statusGuard ? { status: statusGuard } : {}),
+            },
+            data: {
+              status: event.status,
+              lastResult: {
+                ok: event.status !== "failed",
+                event: event.eventType,
+                eventId: event.eventId,
+                occurredAt: event.occurredAt?.toISOString() ?? null,
+                failureKind: event.failureKind,
+              },
+              lastError: event.status === "failed" ? `SendGrid ${event.failureKind || "delivery"} event.` : null,
+              nextAttemptAt: null,
+              deliveredAt: event.status === "delivered" ? event.occurredAt ?? new Date() : null,
+            },
+          });
+          await tx.sendGridEventReceipt.update({
+            where: { eventId: event.eventId },
+            data: { matchedDeliveries: result.count },
+          });
+          return result.count;
+        });
+        updated += matched;
+        return "processed" as const;
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return "duplicate" as const;
+        throw error;
+      }
+    },
+  });
 
-  return new Response(JSON.stringify({ ok: true, received: events.length, updated }), {
+  return new Response(JSON.stringify({ ok: true, ...summary, updated }), {
     status: 200,
     headers: { "content-type": "application/json" },
   });

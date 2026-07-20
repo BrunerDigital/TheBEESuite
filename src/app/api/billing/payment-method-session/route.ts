@@ -13,6 +13,7 @@ import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -184,11 +185,15 @@ async function POSTHandler(request: NextRequest) {
   const center = centerId
     ? await prisma.center.findUnique({
         where: { id: centerId },
-        select: { id: true, customFields: true, organization: { select: { tenantId: true } } },
+        select: { id: true, name: true, customFields: true, organization: { select: { tenantId: true } } },
       })
     : null;
   const tenantId = center?.organization.tenantId ?? billingAccount.family.children[0]?.classroom?.center?.organization.tenantId ?? user.tenantId;
   const connectedAccountId = readStripeConnectedAccountId(center?.customFields);
+  const billingApproval = stripeSchoolBillingApproval({ customFields: center?.customFields, centerName: center?.name });
+  if (!billingApproval.approved) {
+    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
+  }
 
   if (action === "disable_autopay") {
     await prisma.billingAccount.update({

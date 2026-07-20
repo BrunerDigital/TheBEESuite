@@ -96,6 +96,26 @@ export type StripeConnectedAccountSnapshot = {
   raw?: unknown;
 };
 
+export type StripeBalanceTransactionSnapshot = {
+  id: string;
+  type: string;
+  amountCents: number;
+  feeCents: number;
+  netCents: number;
+  sourceId: string | null;
+  createdAt: string | null;
+  availableOn: string | null;
+};
+
+export type StripePayoutSnapshot = {
+  id: string;
+  amountCents: number;
+  status: string;
+  createdAt: string | null;
+  arrivalDate: string | null;
+  failureCode: string | null;
+};
+
 type TenantCredentialRuntimeInput = {
   tenantId?: string | null;
   credentials?: Record<string, string>;
@@ -580,6 +600,7 @@ export async function sendEmail({
     response = await sendWith(apiKey, from);
     const canRetryWithPlatformCredentials =
       (response.status === 401 || response.status === 403)
+      && process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK === "true"
       && Boolean(tenantApiKey)
       && Boolean(platformApiKey)
       && tenantApiKey !== platformApiKey
@@ -1957,6 +1978,96 @@ export async function retrieveStripeConnectedAccount(
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, account: normalizeStripeAccount(json) };
+}
+
+function stripeUnixDate(value: Date) {
+  return Math.floor(value.getTime() / 1000);
+}
+
+function stripeTimestamp(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? new Date(value * 1000).toISOString() : null;
+}
+
+export async function listStripeBalanceTransactions(input: {
+  connectedAccountId: string;
+  createdGte: Date;
+  createdLte: Date;
+  limit?: number;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { transactions: StripeBalanceTransactionSnapshot[]; hasMore: boolean }> {
+  const apiKey = await getStripeSecretKey(input);
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured.", transactions: [], hasMore: false };
+  if (!clean(input.connectedAccountId).startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A connected school account is required.", transactions: [], hasMore: false };
+  }
+  const params = new URLSearchParams({
+    "created[gte]": String(stripeUnixDate(input.createdGte)),
+    "created[lte]": String(stripeUnixDate(input.createdLte)),
+    limit: String(Math.min(Math.max(input.limit || 100, 1), 100)),
+  });
+  const response = await fetch(`https://api.stripe.com/v1/balance_transactions?${params}`, {
+    headers: connectedStripeHeaders(apiKey, "form", input.connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { data?: unknown[]; has_more?: boolean; error?: { message?: string } } | null;
+  if (!response.ok || !Array.isArray(json?.data)) {
+    return { ok: false, configured: true, provider: "stripe", error: clean(json?.error?.message) || `Payment processor returned ${response.status}.`, transactions: [], hasMore: false };
+  }
+  const transactions = json.data.map((item) => {
+    const row = asRecord(item);
+    return {
+      id: clean(row.id),
+      type: clean(row.type),
+      amountCents: typeof row.amount === "number" ? row.amount : 0,
+      feeCents: typeof row.fee === "number" ? row.fee : 0,
+      netCents: typeof row.net === "number" ? row.net : 0,
+      sourceId: clean(row.source) || null,
+      createdAt: stripeTimestamp(row.created),
+      availableOn: stripeTimestamp(row.available_on),
+    };
+  });
+  return { ok: true, configured: true, provider: "stripe", transactions, hasMore: json.has_more === true };
+}
+
+export async function listStripePayouts(input: {
+  connectedAccountId: string;
+  createdGte: Date;
+  createdLte: Date;
+  limit?: number;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { payouts: StripePayoutSnapshot[]; hasMore: boolean }> {
+  const apiKey = await getStripeSecretKey(input);
+  if (!apiKey) return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured.", payouts: [], hasMore: false };
+  if (!clean(input.connectedAccountId).startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "A connected school account is required.", payouts: [], hasMore: false };
+  }
+  const params = new URLSearchParams({
+    "created[gte]": String(stripeUnixDate(input.createdGte)),
+    "created[lte]": String(stripeUnixDate(input.createdLte)),
+    limit: String(Math.min(Math.max(input.limit || 100, 1), 100)),
+  });
+  const response = await fetch(`https://api.stripe.com/v1/payouts?${params}`, {
+    headers: connectedStripeHeaders(apiKey, "form", input.connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { data?: unknown[]; has_more?: boolean; error?: { message?: string } } | null;
+  if (!response.ok || !Array.isArray(json?.data)) {
+    return { ok: false, configured: true, provider: "stripe", error: clean(json?.error?.message) || `Payment processor returned ${response.status}.`, payouts: [], hasMore: false };
+  }
+  const payouts = json.data.map((item) => {
+    const row = asRecord(item);
+    return {
+      id: clean(row.id),
+      amountCents: typeof row.amount === "number" ? row.amount : 0,
+      status: clean(row.status),
+      createdAt: stripeTimestamp(row.created),
+      arrivalDate: stripeTimestamp(row.arrival_date),
+      failureCode: clean(row.failure_code) || null,
+    };
+  });
+  return { ok: true, configured: true, provider: "stripe", payouts, hasMore: json.has_more === true };
 }
 
 async function retrieveLegacyStripeConnectedAccount(

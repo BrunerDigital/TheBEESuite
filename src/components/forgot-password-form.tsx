@@ -127,7 +127,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
             </form>
             <Link
               href={next ? loginHrefForNextPath(next) : "/directors"}
-              className="mt-5 inline-flex items-center text-sm font-semibold text-slate-950 hover:underline"
+              className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
             >
               <ArrowLeft className="mr-1 size-3.5" />
               Back to login

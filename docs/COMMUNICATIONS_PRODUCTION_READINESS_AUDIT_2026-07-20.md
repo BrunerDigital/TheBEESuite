@@ -18,6 +18,10 @@ Communications are production-ready for a selected school only when its sender a
 - Failed provider submissions are recorded for bounded retry; `/api/cron/integration-retries` is scheduled daily and requires `CRON_SECRET`.
 - SendGrid submission acceptance is now stored as `accepted`, not `delivered`. A signed batched Event Webhook endpoint reconciles processed, deferred, delivered, bounce, dropped, and spam-report events.
 - The readiness endpoint now warns when the SendGrid Event Webhook verification key is absent.
+- Durable `sg_event_id` receipts prevent replayed batches from repeating delivery updates or future event-driven side effects.
+- Delivery health now separates accepted, accepted-stale, deferred, suppressed, bounced, and needs-follow-up counts.
+- Provider failure text and recipient data are excluded from stored webhook results; operational logging redacts signatures, emails, message/event identifiers, and free text.
+- Tenant credential failure now fails closed unless `SENDGRID_ALLOW_PLATFORM_FALLBACK=true` is explicitly approved.
 
 ## Findings
 
@@ -39,9 +43,7 @@ Communications are production-ready for a selected school only when its sender a
 
 ### FOLLOW-UP
 
-- Add provider-event deduplication storage keyed by `sg_event_id` if event-driven side effects extend beyond idempotent status updates. Owner: Brenden.
-- Add school-facing delivery health reporting for accepted-stale, deferred, bounced/dropped, suppressed, and needs-follow-up counts. Owner: Brenden.
-- Decide whether platform fallback credentials may send for a tenant whose own SendGrid key is rejected; document sender-brand and incident ownership. Owner: Brenden.
+- Add alert thresholds and routing for needs-follow-up counts after the operational owner and response targets are approved. Owner: Brenden.
 
 ## External decisions required
 
@@ -50,6 +52,9 @@ Communications are production-ready for a selected school only when its sender a
 - SendGrid domain-authentication, link-branding, signed-webhook, and suppression evidence.
 - Transactional-versus-marketing classification and legal approval of consent/unsubscribe language.
 - Named delivery/suppression/retry operator and response targets.
+- Explicit approval is required before enabling platform credential fallback for any tenant; fail closed is the implemented default.
+
+Provider configuration and retained evidence requirements are defined in `docs/SENDGRID_PROVIDER_CONFIGURATION_EVIDENCE_CHECKLIST.md`.
 
 ## Current decision
 

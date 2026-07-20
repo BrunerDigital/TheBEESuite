@@ -37,7 +37,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
-import { enrollmentStages, stageLabels } from "@/lib/crm";
+import { crmPipelineStageDisclosure, enrollmentStages, stageLabels } from "@/lib/crm";
 import { registrationHandoffHref } from "@/lib/registration-handoff";
 import { cn } from "@/lib/utils";
 
@@ -93,10 +93,18 @@ type LeadTour = {
   notes: string | null;
 };
 
+type LinkedEnrollment = {
+  id: string;
+  childId: string;
+  stage: EnrollmentStage;
+  updatedAt: string | Date;
+};
+
 type LeadDetails = CrmLead & {
   notes: LeadNote[];
   tasks: LeadTask[];
   tours: LeadTour[];
+  enrollments: LinkedEnrollment[];
 };
 
 type LeadTimelineItem = {
@@ -699,7 +707,8 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       });
       if (!response.ok) {
         setLeads(previous);
-        showError("Pipeline stage could not be updated.");
+        const json = await response.json().catch(() => null) as { error?: string } | null;
+        showError(json?.error || "Pipeline stage could not be updated.");
         return;
       }
       const json = (await response.json()) as { lead: CrmLead };
@@ -1694,6 +1703,12 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   </Button>
                   <div className="grid gap-2">
                     <Label>Move pipeline stage</Label>
+                    <p className="text-xs leading-5 text-muted-foreground">{crmPipelineStageDisclosure}</p>
+                    <div className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-3 py-2 text-xs leading-5">
+                      {selectedLeadDetails?.enrollments.length
+                        ? `${selectedLeadDetails.enrollments.length} director-approved linked enrollment record(s). Current onboarding record stage: ${stageLabels[selectedLeadDetails.enrollments[0].stage]}.`
+                        : "No director-approved linked enrollment record exists. The Enrolled CRM stage is blocked until registration approval creates one."}
+                    </div>
                     <Select
                       value={selectedLead.stage}
                       onValueChange={(stage) => updateLeadStage(selectedLead.id, stage as EnrollmentStage)}

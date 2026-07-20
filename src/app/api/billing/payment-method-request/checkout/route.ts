@@ -36,6 +36,7 @@ import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 
 export const runtime = "nodejs";
@@ -177,6 +178,10 @@ async function POSTHandler(request: NextRequest) {
 
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
   const allowPlatformOnlyPayments = process.env.STRIPE_ALLOW_PLATFORM_ONLY_PAYMENTS === "true";
+  const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
+  if (!billingApproval.approved) {
+    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
+  }
   if (!connectedAccountId && !allowPlatformOnlyPayments) {
     return NextResponse.json(
       { ok: false, error: "This school needs a payout account before parent payments can be accepted." },

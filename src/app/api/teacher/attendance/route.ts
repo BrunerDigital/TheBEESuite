@@ -33,6 +33,7 @@ async function POSTHandler(request: NextRequest) {
   const requestedStatus = clean(body.status) || "present";
   const pickupName = clean(body.pickupName);
   const absenceReason = clean(body.absenceReason);
+  const clientActionId = clean(body.clientActionId).slice(0, 100) || null;
   const parsedDate = parseOperationalDate(body.date, "Attendance date");
   if (!parsedDate.ok) {
     return NextResponse.json({ ok: false, error: parsedDate.error }, { status: parsedDate.status });
@@ -74,6 +75,10 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageChildInClassroom(user, child.classroom?.id)) {
     return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
   }
+  if (clientActionId) {
+    const existing = await prisma.attendanceRecord.findUnique({ where: { clientActionId } });
+    if (existing) return NextResponse.json({ ok: true, record: existing, replayed: true }, { status: 200 });
+  }
 
   const center = centerId
     ? await prisma.center.findUnique({ where: { id: centerId }, select: { name: true, email: true, city: true, state: true, postalCode: true, timezone: true, customFields: true } })
@@ -102,6 +107,7 @@ async function POSTHandler(request: NextRequest) {
       date,
       status,
       absenceReason: absenceReason || null,
+      clientActionId,
     },
   });
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EnrollmentStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { leadScore, parseLeadStage } from "@/lib/crm";
+import { crmStageApprovalBoundary, leadScore, parseLeadStage } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser, getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -115,7 +115,7 @@ async function GETHandler(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, leads });
+  return NextResponse.json({ ok: true, leads, stageSemantics: crmStageApprovalBoundary(EnrollmentStage.NEW_INQUIRY, 0) });
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -144,6 +144,15 @@ async function POSTHandler(request: NextRequest) {
   }
   if (requestedStage && !stage) {
     return NextResponse.json({ ok: false, errors: { stage: "Pipeline stage is invalid." } }, { status: 400 });
+  }
+  if (stage) {
+    const boundary = crmStageApprovalBoundary(stage, 0);
+    if (!boundary.allowed) {
+      return NextResponse.json(
+        { ok: false, error: boundary.message, code: boundary.code, stageSemantics: boundary },
+        { status: 409 },
+      );
+    }
   }
 
   let centerId: string;
@@ -210,7 +219,10 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, lead }, { status: 201 });
+  return NextResponse.json(
+    { ok: true, lead, stageSemantics: crmStageApprovalBoundary(lead.stage, 0) },
+    { status: 201 },
+  );
 }
 
 export const GET = withApiLogging("GET", GETHandler);

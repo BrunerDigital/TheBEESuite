@@ -27,6 +27,7 @@ ProCare remains the operational source of truth until every blocker below is com
 | Untouched export filename and timestamp | |
 | Export SHA-256 from import preview | |
 | Secure archive location and retention owner | |
+| Raw-row retention review date and deletion approver | |
 | No bank credentials or full payment details collected | |
 
 ## Mapping and dry-run approval
@@ -72,6 +73,8 @@ Spot-check at least 10 families, or every family when fewer than 10. Record only
 - [ ] ProCare write-freeze timing is approved; before that time ProCare remains writable and authoritative.
 - [ ] Stop conditions and support escalation are acknowledged.
 - [ ] Rollback owner will pause BEE Suite writes/invitations/billing, preserve post-import writes, return affected modules to ProCare, and reconcile both systems.
+- [ ] Rollback evidence includes batch ID, source SHA-256, backup, affected modules, stop/last-good times, post-import write log, reconciliation owner, and director/corporate decisions.
+- [ ] Automated reconciliation report is attached; every mismatch or unavailable measure has a named owner and approved exception or exact retest.
 - [ ] Parent invitations and payments remain separately gated.
 
 ## Written decision

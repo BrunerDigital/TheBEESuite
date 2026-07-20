@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createClassroomOfflineAction,
+  clearClassroomOfflineQueues,
+  decryptClassroomOfflineQueue,
+  encryptClassroomOfflineQueue,
   parseClassroomOfflineQueue,
   serializeClassroomOfflineQueue,
 } from "../src/lib/classroom-offline-queue";
@@ -9,7 +12,7 @@ import {
 test("classroom offline action captures endpoint body label and created time", () => {
   const action = createClassroomOfflineAction({
     endpoint: "/api/teacher/attendance",
-    body: { childId: "child_1", status: "present" },
+    body: { childId: "child_1", status: "present", clientActionId: "offline_1" },
     label: "Ava attendance",
     now: new Date("2026-06-05T12:00:00.000Z"),
     randomId: "offline_1",
@@ -23,6 +26,27 @@ test("classroom offline action captures endpoint body label and created time", (
     label: "Ava attendance",
     createdAt: "2026-06-05T12:00:00.000Z",
   });
+});
+
+test("classroom offline queue encrypts payloads and rejects account scope switching", async () => {
+  const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const actions = [createClassroomOfflineAction({ endpoint: "/api/teacher/incidents", body: { childId: "child_1", description: "Sensitive" }, label: "Incident", randomId: "action_1" })];
+  const envelope = await encryptClassroomOfflineQueue({ actions, key, scopeId: "scope_teacher_a", iv: new Uint8Array(12), now: new Date("2026-07-20T12:00:00.000Z") });
+
+  assert.equal(JSON.stringify(envelope).includes("Sensitive"), false);
+  assert.deepEqual(await decryptClassroomOfflineQueue({ envelope, key, scopeId: "scope_teacher_a" }), actions);
+  await assert.rejects(() => decryptClassroomOfflineQueue({ envelope, key, scopeId: "scope_teacher_b" }), /another account or classroom/);
+});
+
+test("logout cleanup removes legacy and scoped classroom queues only", () => {
+  const values = new Map<string, string>([["bee_suite_classroom_offline_queue_v1", "legacy"], ["bee_suite_classroom_offline_queue_v2:scope", "encrypted"], ["bee-suite-theme", "dark"]]);
+  const storage = {
+    get length() { return values.size; },
+    key(index: number) { return Array.from(values.keys())[index] ?? null; },
+    removeItem(key: string) { values.delete(key); },
+  };
+  assert.equal(clearClassroomOfflineQueues(storage), 2);
+  assert.deepEqual(Array.from(values.keys()), ["bee-suite-theme"]);
 });
 
 test("classroom offline queue parser ignores malformed records", () => {

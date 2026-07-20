@@ -831,9 +831,15 @@ export type IntegrationsData = {
   deliveryStats?: {
     total: number;
     delivered: number;
+    accepted: number;
     pending: number;
     failed: number;
     skipped: number;
+    acceptedStale: number;
+    deferred: number;
+    suppressed: number;
+    bounced: number;
+    needsFollowUp: number;
   };
   recentDeliveries?: Array<{
     id: string;
@@ -864,13 +870,29 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
         </p>
       </section>
       {data.deliveryStats ? (
-        <div className="grid gap-4 md:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
           <StatCard label="Deliveries" value={data.deliveryStats.total.toLocaleString()} detail="Email, SMS, and Sheets" />
           <StatCard label="Delivered" value={data.deliveryStats.delivered.toLocaleString()} />
+          <StatCard label="Accepted" value={data.deliveryStats.accepted.toLocaleString()} detail="Provider queued; not final delivery" />
           <StatCard label="Pending retry" value={data.deliveryStats.pending.toLocaleString()} />
           <StatCard label="Failed" value={data.deliveryStats.failed.toLocaleString()} />
           <StatCard label="Skipped" value={data.deliveryStats.skipped.toLocaleString()} detail="Not configured" />
         </div>
+      ) : null}
+      {data.deliveryStats ? (
+        <Card className="glass-panel">
+          <CardHeader>
+            <CardTitle>SendGrid Follow-up Queue</CardTitle>
+            <CardDescription>Accepted email older than 24 hours and final provider failure signals require human review. Deferred is shown separately because SendGrid is still retrying.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-5">
+            <StatCard label="Needs follow-up" value={data.deliveryStats.needsFollowUp.toLocaleString()} />
+            <StatCard label="Accepted stale" value={data.deliveryStats.acceptedStale.toLocaleString()} detail="No final event after 24 hours" />
+            <StatCard label="Deferred" value={data.deliveryStats.deferred.toLocaleString()} detail="Provider retrying" />
+            <StatCard label="Suppressed" value={data.deliveryStats.suppressed.toLocaleString()} detail="Dropped or spam report" />
+            <StatCard label="Bounced" value={data.deliveryStats.bounced.toLocaleString()} />
+          </CardContent>
+        </Card>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {data.integrations.map((integration) => (
@@ -904,7 +926,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           <CardHeader>
             <CardTitle>Integration Delivery Health</CardTitle>
             <CardDescription>
-              Recent outbound inquiry delivery attempts. Pending rows are retried by the daily cron job.
+              Recent outbound integration attempts. Pending rows are retried by the daily cron job; accepted email waits for a signed final provider event.
             </CardDescription>
           </CardHeader>
           <CardContent>

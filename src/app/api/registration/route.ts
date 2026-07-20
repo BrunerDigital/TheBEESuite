@@ -4,6 +4,7 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
 import { prisma } from "@/lib/prisma";
+import { registrationLeadLookupWhere } from "@/lib/registration-handoff";
 import {
   cleanText,
   kidCityRegistrationPacketSchema,
@@ -305,11 +306,7 @@ async function POSTHandler(request: NextRequest) {
 
     const [parentFirstName, parentLastName] = splitName(payload.primaryGuardianName);
     const existingLead = await prisma.lead.findFirst({
-      where: {
-        centerId: center.id,
-        email: payload.primaryGuardianEmail,
-        status: { not: "lost" },
-      },
+      where: registrationLeadLookupWhere(center.id, payload.primaryGuardianEmail),
       orderBy: { updatedAt: "desc" },
     });
 

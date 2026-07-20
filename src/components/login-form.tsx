@@ -226,7 +226,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                   <Label htmlFor="password">Password</Label>
                   <Link
                     href={`/forgot-password?next=${encodeURIComponent(next)}`}
-                    className="text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline"
+                    className="inline-flex min-h-11 items-center text-xs font-semibold text-slate-600 hover:text-slate-950 hover:underline"
                   >
                     Forgot password?
                   </Link>

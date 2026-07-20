@@ -1,29 +1,69 @@
-# Brenden's Tasks
+# Brenden's Recorded Wave Decisions, Accepted Owners, and Signoffs
 
-This is the consolidated list of production-readiness actions that require Brenden's decision, participation, explicit delegation, or approval. Codex workstreams should add only tasks that cannot be safely completed from the repository. Brenden remains accountable until a named human accepts a delegation.
+This file records facts after they occur. Do not add proposed tasks, default owners, recommendations, unsigned approvals, or Codex findings here. Open readiness work remains in the workstream audits, `SCHOOL_ROLLOUT_READINESS_CHECKLIST_2026-07-18.md`, and the reusable per-school control/evidence packets.
 
-The wider school wave remains **NO-GO**. Kokomo may continue normal production use. Completing an item here does not bypass its underlying readiness evidence or authorize parent invitations, billing, production data changes, deployment, or ProCare retirement.
+The wider school wave remains **NO-GO**. Kokomo may continue normal production use. No entry in this file authorizes a different module or bypasses its underlying evidence gate.
 
-## User and role permissions
+## Actual wave choices
 
-- [ ] **Authorize the two-school credentialed isolation test.** After selecting the wave, name the two approved schools or safe test tenants, approve the executive, director, billing, teacher, parent, authorized-pickup, and kiosk test accounts, define the test window and allowed synthetic mutations, and name the evidence reviewer. Do not provide passwords, PINs, reset links, tokens, or session cookies in the task document.
-- [ ] **Approve fail-closed executive grant policy and the account audit.** Confirm that every non-platform executive must have an active explicit grant and authorize a current-account/grant inventory before removal of the legacy role-only tenant fallback. `PLATFORM_OWNER` remains the explicit platform-wide exception.
-- [ ] **Choose the public trial policy.** Decide whether trial tenants remain self-service or require verified email plus invitation/staff approval before the trial `BRAND_ADMIN` becomes active.
-- [ ] **Choose the authorized-pickup account model.** Approve the recommended kiosk-credential-only default or define the exact child authorization and restricted authenticated workspace; do not route pickup users into full parent family data.
-- [ ] **Approve the privileged-role MFA policy.** Confirm covered roles, enforcement date, enrollment/recovery process, break-glass custodians, and evidence owner before the wider wave.
+No first-wave school, launch date, or module scope has been selected and recorded as of July 20, 2026.
 
-## Rollout and training
+When Brenden makes a decision, record only:
 
-- [ ] **Select the first wave and scope.** For each proposed school, record the school name, shared center/location ID in `ST | City` format, time zone, proposed launch window, intended live modules, and modules explicitly held off. Parent invitations/kiosk and billing/payments must be listed as separate gates.
-- [ ] **Assign and obtain acceptance from the rollout owners.** Name a primary and backup for corporate launch, director signoff, data/import reconciliation, billing/Stripe, technical release, training, first-week support, and stop/rollback authority. Record each person's acceptance and coverage window; Brenden retains the role wherever delegation is not accepted.
-- [ ] **Choose the parallel-operation policy.** Approve the minimum parallel period and confirm the authoritative system for attendance, roster/family changes, billing, payments, documents, communications, and reporting. ProCare remains the source of truth until written cutover approval.
-- [ ] **Approve the support operating model.** Choose the support intake method, published support hours and time zone, after-hours route, named contacts/backups, and who may declare a stop. The standard severity targets are already prefilled in `ROLLOUT_TRAINING_PER_SCHOOL_CONTROL_RECORD.md`.
-- [ ] **Schedule the human rollout events for each selected school.** Schedule role training and practical checks, prelaunch readiness, launch-day morning/midday/end-of-day reviews, day-1 director check-in, first-billing review when applicable, and week-1 review. Name the facilitator and evidence location for each.
-- [ ] **Arrange and evidence role training.** Ensure every person using an enabled module attends the applicable corporate, director, billing, teacher, front-desk/kiosk, or family-instruction session. Record attendance, practical-check results, missed-session remediation, and the exact guide revision used.
-- [ ] **Collect the independent activation decisions only after the underlying gates pass.** Record separate written `GO` or `NO-GO` decisions for operations/CRM, parent invitations, kiosk/PIN, billing/invoices, live payments/payouts, and ProCare retirement. Approval of one gate must not be reused for another.
-- [ ] **Collect final per-school acknowledgements and signatures.** Obtain director, corporate, billing/accounting, technical/release, and ProCare cutover decisions with names, dates, exact scope, and exceptions. Billing/accounting may record `NOT ENABLED` when billing/payments remain held off.
-- [ ] **Resolve the older Longmont sequencing assumption.** Explicitly confirm whether Longmont is still a candidate for controlled validation after its current data/access blockers are cleared, or choose a different school based on current evidence. The July 9 plan's recommendation is not a current launch decision.
+| Decision date/time | School and center ID | Launch window/time zone | Modules selected | Modules held off | Decision evidence |
+| --- | --- | --- | --- | --- | --- |
 
-## Rollout and training completion evidence
+### Director smoke selection and evidence
 
-When the items above are complete, create one copy of `ROLLOUT_TRAINING_PER_SCHOOL_CONTROL_RECORD.md` per selected school and attach or link all owner acceptances, schedules, attendance/practical checks, support coverage, review notes, stop/rollback acknowledgement, gate decisions, and signatures.
+No selected-school Director smoke authorization has been recorded as of July 20, 2026. Record only actual selections and approvals; never record credentials, PINs, tokens, session cookies, or full payment details.
+
+| Decision date/time | Selected school and center ID | Approved real Director/billing test accounts | Approved environment/devices/window | Approved financial evidence and test scope | Evidence reference |
+| --- | --- | --- | --- | --- | --- |
+
+## Accepted owners
+
+No delegation acceptance has been recorded as of July 20, 2026. Brenden remains accountable until a named person explicitly accepts a defined responsibility.
+
+Record only accepted delegations:
+
+| Acceptance date/time | School/scope | Responsibility | Accepted owner | Coverage window | Acceptance evidence |
+| --- | --- | --- | --- | --- | --- |
+
+For a Director smoke, accepted ownership must cover Director operations, data reconciliation, billing/accounting when in scope, technical retest, alert/support coverage, and stop/rollback authority. Do not infer acceptance from a name alone.
+
+## Signoffs
+
+No new-school go-live or module activation signoff has been recorded as of July 20, 2026.
+
+Record only completed written decisions:
+
+| Decision date/time | School and center ID | Gate/module | Approver and authority | GO / NO-GO / NOT ENABLED | Exact scope/exceptions | Evidence reference |
+| --- | --- | --- | --- | --- | --- | --- |
+
+Parent invitations, kiosk/PIN, billing/invoices, live payments/payouts, and ProCare cutover must each have separate entries when decided. ProCare remains the source of truth until a written ProCare cutover approval is recorded.
+
+## Pending communications actions requiring Brenden
+
+These are required external actions and legal classifications, not recorded decisions or authorization to send. Complete them using `SENDGRID_PROVIDER_CONFIGURATION_EVIDENCE_CHECKLIST.md`.
+
+- [ ] Approve and evidence each platform/school From identity, SPF, DKIM, DMARC alignment/policy, branded-link posture, monitored reply inbox, primary/backup reply owner, and response target.
+- [ ] Review redacted suppression counts and approve the hard-bounce, block, spam-report, invalid-address, global-unsubscribe, and ASM handling/removal policy; name the primary and backup suppression operator.
+- [ ] Authorize a provider administrator to configure the signed SendGrid Event Webhook and verification-key environment variable after the receipt migration is released; retain redacted signing, event-selection, replay, and accepted-to-final evidence.
+- [ ] Approve one non-family test inbox and one controlled invalid test address for the exact invitation/payment test sequence; this does not authorize broad invitations or live-family messaging.
+- [ ] Classify every email purpose as transactional, operational, or marketing and obtain legal/product approval for consent, preference-center, unsubscribe, physical-address, payment, receipt, and failed-payment language.
+- [ ] Decide whether any tenant may use shared platform SendGrid credentials. The implemented default is fail closed; any exception must document authentication alignment, branding, reply routing, suppression scope, legal classification, incident owner, and revocation condition.
+
+## Security and compliance actions requiring Brenden
+
+- [ ] **Authorize the pending RLS migration release.** Approve `20260720150000_complete_public_table_rls` for a separately controlled promotion and authorize the post-release read-only security audit. This entry is authorization only; it does not record the migration as applied.
+- [ ] **Approve and configure leaked-password protection and executive/admin MFA.** Record the covered roles, enrollment deadline, recovery and exception process, and completion evidence from Supabase. Do not record recovery codes or secrets here.
+- [ ] **Authorize and witness the database-plus-Storage restore drill.** Select the isolated environment, backup sources, Storage-object recovery method, RPO/RTO, operators, cleanup plan, and evidence location using `SECURITY_DATABASE_STORAGE_RESTORE_EVIDENCE_PACKET.md`.
+- [ ] **Obtain legal/privacy policy approvals.** Record final approval for privacy, terms, DPA/service-provider posture, consent, photo/media, e-signature, payment disclosures, custody/medical handling, retention/deletion exceptions, and incident/document policies.
+- [ ] **Provide the external security evidence.** Attach sanitized credential-rotation confirmation, Supabase advisor/settings evidence, credentialed role-isolation results, Storage privacy/signed-URL tests, monitoring/escalation tests, and completed retention/deletion drill evidence. Do not include passwords, tokens, PINs, full medical/custody notes, or payment details.
+
+## Teacher classroom decisions requiring Brenden
+
+- [ ] **Approve the health-check custody policy.** Name the required daily health fields, who may view/correct them, parent visibility, retention period, urgent escalation path, and whether a health check is a licensing record. Until approved, urgent health concerns remain direct-to-director communication and no new health record is collected.
+- [ ] **Approve temporary classroom coverage.** Decide whether a teacher may act for another classroom, who grants and expires that access, whether dual-classroom coverage is allowed, and what audit evidence directors review. The current implementation remains fail-closed to the teacher's assigned classroom.
+- [ ] **Name the supported classroom devices.** Record tablet/phone models, OS versions, managed/shared-device posture, browser or installed-app mode, camera policy, storage restrictions, and the minimum offline duration to support.
+- [ ] **Accept the classroom operating loop.** A named director and teacher must complete roster, attendance, the approved health workflow, location, daily report, incident, permission-aware media, messages, offline/reconnect, account switching, and cross-classroom denial on supported devices before school signoff.

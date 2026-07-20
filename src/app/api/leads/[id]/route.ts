@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseLeadStage, stageNurtureTask } from "@/lib/crm";
+import { crmStageApprovalBoundary, parseLeadStage, stageNurtureTask } from "@/lib/crm";
 import { canAccessCenter, canManageCrmLeads, canViewCrmLeads, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -73,6 +73,10 @@ async function GETHandler(_request: NextRequest, context: RouteContext) {
         orderBy: { startsAt: "desc" },
         take: 10,
       },
+      enrollments: {
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, stage: true, childId: true, updatedAt: true },
+      },
     },
   });
 
@@ -84,7 +88,11 @@ async function GETHandler(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
   }
 
-  return NextResponse.json({ ok: true, lead });
+  return NextResponse.json({
+    ok: true,
+    lead,
+    stageSemantics: crmStageApprovalBoundary(lead.stage, lead.enrollments.length),
+  });
 }
 
 async function PATCHHandler(request: NextRequest, context: RouteContext) {
@@ -125,6 +133,7 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
       stage: true,
       status: true,
       customFields: true,
+      _count: { select: { enrollments: true } },
     },
   });
 
@@ -134,6 +143,16 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
 
   if (!canAccessCenter(user, existing.centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
+  }
+
+  if (stage) {
+    const boundary = crmStageApprovalBoundary(stage, existing._count.enrollments);
+    if (!boundary.allowed) {
+      return NextResponse.json(
+        { ok: false, error: boundary.message, code: boundary.code, stageSemantics: boundary },
+        { status: 409 },
+      );
+    }
   }
 
   const data: Prisma.LeadUpdateInput = {};
@@ -317,7 +336,11 @@ async function PATCHHandler(request: NextRequest, context: RouteContext) {
     },
   });
 
-  return NextResponse.json({ ok: true, lead });
+  return NextResponse.json({
+    ok: true,
+    lead,
+    stageSemantics: crmStageApprovalBoundary(lead.stage, existing._count.enrollments),
+  });
 }
 
 export const GET = withApiLogging("GET", GETHandler);

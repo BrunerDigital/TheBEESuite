@@ -76,11 +76,13 @@ test("SendGrid email helper falls back to platform credentials when tenant key i
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.SENDGRID_API_KEY;
   const originalFrom = process.env.SENDGRID_FROM_EMAIL;
+  const originalFallback = process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
   const authorizations: string[] = [];
   const fromEmails: string[] = [];
 
   process.env.SENDGRID_API_KEY = "SG.platform";
   process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
+  process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = "true";
   globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
     authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
     const payload = JSON.parse(String(init?.body)) as { from?: { email?: string } };
@@ -115,5 +117,35 @@ test("SendGrid email helper falls back to platform credentials when tenant key i
     else process.env.SENDGRID_API_KEY = originalApiKey;
     if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL;
     else process.env.SENDGRID_FROM_EMAIL = originalFrom;
+    if (originalFallback === undefined) delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+    else process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = originalFallback;
+  }
+});
+
+test("SendGrid tenant credential failures fail closed unless platform fallback is explicitly approved", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SENDGRID_API_KEY;
+  const originalFrom = process.env.SENDGRID_FROM_EMAIL;
+  const originalFallback = process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+  const authorizations: string[] = [];
+  process.env.SENDGRID_API_KEY = "SG.platform";
+  process.env.SENDGRID_FROM_EMAIL = "noreply@thebeesuite.io";
+  delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK;
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    authorizations.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ""));
+    return new Response(null, { status: 401 });
+  }) as typeof fetch;
+  try {
+    const result = await sendEmail({
+      to: ["parent@example.com"], subject: "Payment setup", text: "Please set up payment.",
+      credentials: { SENDGRID_API_KEY: "SG.tenant-stale", SENDGRID_FROM_EMAIL: "school@example.com" },
+    });
+    assert.equal(result.ok, false);
+    assert.deepEqual(authorizations, ["Bearer SG.tenant-stale"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SENDGRID_API_KEY; else process.env.SENDGRID_API_KEY = originalApiKey;
+    if (originalFrom === undefined) delete process.env.SENDGRID_FROM_EMAIL; else process.env.SENDGRID_FROM_EMAIL = originalFrom;
+    if (originalFallback === undefined) delete process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK; else process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK = originalFallback;
   }
 });

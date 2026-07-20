@@ -65,5 +65,6 @@ test("critical public forms retain accessible labels, announcements, focus rings
   assert.match(button, /focus-visible:ring-3/);
   assert.match(sources, /<Label htmlFor=/);
   assert.match(sources, /className="h-11"/);
+  assert.match(sources, /min-h-11/);
   assert.match(sources, /aria-describedby=/);
 });

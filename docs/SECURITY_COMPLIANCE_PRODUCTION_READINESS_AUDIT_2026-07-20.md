@@ -37,6 +37,19 @@ This workstream is production-ready only when all of the following are evidenced
 - Tracked-source scan found no live-format Stripe secret, Stripe webhook secret, or Supabase secret-key token. This does not prove that credentials previously shared in chat, screenshots, tickets, local environment files, or vendor dashboards were rotated.
 - `npm audit --omit=dev` reported 0 vulnerabilities.
 - Focused security-adjacent tests passed: 17 passed, 0 failed.
+- Added `scripts/audit-supabase-security.ts`, a read-only metadata audit that fails on incomplete public-table RLS coverage, direct `anon`/`authenticated` grants, public `SECURITY DEFINER` functions, or public views without `security_invoker`.
+- Added machine-validatable credentialed-isolation evidence scaffolding covering executive, director, billing, teacher, parent, kiosk, custody, medical, document, and audit-log boundaries.
+- Added database-plus-Storage restore and retention/deletion drill packets with stop rules, sensitive-evidence handling, validation matrices, and named decisions.
+- Added regression coverage for secret-variable boundaries, operational log redaction, Stripe webhook signature verification and hosted payment collection, medical/custody authentication and audit events, and the explicitly deferred CSP gate.
+
+### Control audit conclusions
+
+- **Secret handling:** server secrets are not referenced through sensitive `NEXT_PUBLIC_*` names in the audited Supabase, Stripe, Storage, and environment-boundary files. A repository scan cannot prove external rotation or vendor-dashboard access control.
+- **Operational logging:** the centralized logger redacts identity, credentials, payment, medical, allergy, custody, incident, and provider-secret fields. Vendor log retention/access and production alert evidence remain external.
+- **Payments:** payment-method collection is delegated to Stripe-hosted flows; the webhook route reads `stripe-signature` and verifies events with `constructEvent`. Per-school connected-account, dispute, payout, and reconciliation evidence remains external.
+- **Medical/custody:** audited mutation paths authenticate, enforce center/role scope, and write audit events. Credentialed need-to-know visibility and imported-data accuracy remain BLOCKER evidence.
+- **Auditability:** sensitive administrative, family, document, compliance, access, and billing routes have durable audit calls. Audit-log access isolation and retention recovery must be proven in credentialed and restore drills.
+- **CSP:** baseline security headers exist, but no enforced CSP is present. This remains FOLLOW-UP until Stripe, Turnstile, Supabase media, white-label domains, and embeds are validated under a report-only allowlist.
 
 ### Backup limitation identified
 
@@ -88,6 +101,14 @@ Supabase documents that database backups include Storage metadata but not the st
 - `supabase/migrations/20260720150000_complete_public_table_rls.sql`
 - `tests/public-table-rls-migration.test.ts`
 - `docs/SECURITY_COMPLIANCE_PRODUCTION_READINESS_AUDIT_2026-07-20.md`
+- `src/lib/security-readiness.ts`
+- `scripts/audit-supabase-security.ts`
+- `scripts/validate-security-isolation-evidence.ts`
+- `tests/security-readiness.test.ts`
+- `docs/evidence/security-credentialed-isolation.template.json`
+- `docs/SECURITY_DATABASE_STORAGE_RESTORE_EVIDENCE_PACKET.md`
+- `docs/SECURITY_RETENTION_DELETION_DRILL_PACKET.md`
+- `docs/BRENDENS_TASKS.md`
 
 ## Tests run
 
@@ -99,3 +120,5 @@ Supabase documents that database backups include Storage metadata but not the st
 ## Exact next action
 
 Brenden reviews and approves the repo-only RLS migration for a separately authorized release. After it is promoted, rerun the live Supabase Security Advisor and the public-table RLS/grant inventory; the acceptance result is 86 of 86 public tables protected by RLS, zero unintended `anon`/`authenticated` grants, and no unresolved RLS advisor finding. This action does not make the wider wave GO: the credential, restore, role-isolation, and legal/privacy blockers above must also close with shared signoff.
+
+Separately authorized verification command after migration promotion: `npx tsx scripts/audit-supabase-security.ts`. Save its sanitized JSON output with the release evidence, then rerun Supabase Security Advisor and the credentialed isolation packet. Do not run it against production until the release owner authorizes the target and window.

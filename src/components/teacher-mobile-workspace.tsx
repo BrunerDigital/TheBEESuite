@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,9 +17,11 @@ import { UserAvatar } from "@/components/user-avatar";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
+  classroomOfflineQueueStorageKey,
   createClassroomOfflineAction,
-  parseClassroomOfflineQueue,
-  serializeClassroomOfflineQueue,
+  decryptClassroomOfflineQueue,
+  encryptClassroomOfflineQueue,
+  parseEncryptedClassroomOfflineQueue,
   type ClassroomOfflineAction,
 } from "@/lib/classroom-offline-queue";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -287,6 +289,7 @@ export function TeacherMobileWorkspace({
   const [incidentDescription, setIncidentDescription] = useState("");
   const [actionTaken, setActionTaken] = useState("");
   const [offlineQueue, setOfflineQueue] = useState<ClassroomOfflineAction[]>([]);
+  const offlineCredentialsRef = useRef<{ key: string; scopeId: string } | null>(null);
   const [isOnline, setIsOnline] = useState(true);
   const [isPending, startTransition] = useTransition();
 
@@ -319,41 +322,54 @@ export function TeacherMobileWorkspace({
     hasStaffKioskCode,
   );
 
-  useEffect(() => {
-    async function syncStoredQueue() {
-      const queued = parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY));
-      if (!queued.length) return;
+  async function getOfflineCredentials() {
+    if (offlineCredentialsRef.current) return offlineCredentialsRef.current;
+    const response = await fetch("/api/teacher/offline-queue-key", { cache: "no-store" });
+    const json = await response.json().catch(() => null) as { key?: string; scopeId?: string; error?: string } | null;
+    if (!response.ok || !json?.key || !json.scopeId) throw new Error(json?.error || "Offline recovery could not be initialized.");
+    offlineCredentialsRef.current = { key: json.key, scopeId: json.scopeId };
+    return offlineCredentialsRef.current;
+  }
 
-      const remaining: ClassroomOfflineAction[] = [];
-      let synced = 0;
-      for (const action of queued) {
-        try {
-          const response = await fetch(action.endpoint, {
-            method: action.method,
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(action.body),
-          });
-          if (response.ok) {
-            synced += 1;
-          } else {
-            remaining.push(action);
-          }
-        } catch {
-          remaining.push(action);
-        }
-      }
+  async function readOfflineQueue() {
+    const credentials = await getOfflineCredentials();
+    const envelope = parseEncryptedClassroomOfflineQueue(window.localStorage.getItem(classroomOfflineQueueStorageKey(credentials.scopeId)));
+    if (!envelope) return [];
+    return decryptClassroomOfflineQueue({ envelope, ...credentials });
+  }
 
-      window.localStorage.setItem(CLASSROOM_OFFLINE_QUEUE_KEY, serializeClassroomOfflineQueue(remaining));
-      setOfflineQueue(remaining);
-      if (!remaining.length) {
-        showStatus(`${synced} queued classroom action${synced === 1 ? "" : "s"} synced.`);
-      }
+  async function persistOfflineQueue(next: ClassroomOfflineAction[]) {
+    const credentials = await getOfflineCredentials();
+    const trimmed = next.slice(0, 50);
+    const storageKey = classroomOfflineQueueStorageKey(credentials.scopeId);
+    if (!trimmed.length) window.localStorage.removeItem(storageKey);
+    else window.localStorage.setItem(storageKey, JSON.stringify(await encryptClassroomOfflineQueue({ actions: trimmed, ...credentials })));
+    setOfflineQueue(trimmed);
+    return trimmed;
+  }
+
+  async function syncStoredQueue() {
+    const queued = await readOfflineQueue();
+    if (!queued.length) return;
+    const remaining: ClassroomOfflineAction[] = [];
+    let synced = 0;
+    for (const action of queued) {
+      try {
+        const response = await fetch(action.endpoint, { method: action.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(action.body) });
+        if (response.ok) synced += 1;
+        else if (response.status >= 500 || response.status === 409 || response.status === 429) remaining.push(action);
+      } catch { remaining.push(action); }
     }
+    await persistOfflineQueue(remaining);
+    if (!remaining.length) showStatus(`${synced} queued classroom action${synced === 1 ? "" : "s"} synced.`);
+    else showError(`${synced} queued action${synced === 1 ? "" : "s"} synced. ${remaining.length} need connection or director review.`);
+  }
 
+  useEffect(() => {
     const loadStoredState = window.setTimeout(() => {
       setIsOnline(navigator.onLine);
-      setOfflineQueue(parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY)));
-      if (navigator.onLine) void syncStoredQueue();
+      window.localStorage.removeItem(CLASSROOM_OFFLINE_QUEUE_KEY);
+      void readOfflineQueue().then(setOfflineQueue).then(() => { if (navigator.onLine) return syncStoredQueue(); }).catch((cause) => showError(cause instanceof Error ? cause.message : "Offline recovery could not be initialized."));
     }, 0);
 
     function updateOnlineState() {
@@ -370,22 +386,10 @@ export function TeacherMobileWorkspace({
     };
   }, []);
 
-  function persistOfflineQueue(next: ClassroomOfflineAction[]) {
-    const trimmed = next.slice(0, 50);
-    try {
-      window.localStorage.setItem(CLASSROOM_OFFLINE_QUEUE_KEY, serializeClassroomOfflineQueue(trimmed));
-    } catch {
-      showError("This tablet could not store the offline queue. Reconnect before submitting more classroom actions.");
-    }
-    setOfflineQueue(trimmed);
-    return trimmed;
-  }
-
-  function queueOfflineAction(input: { endpoint: string; body: unknown; label: string }) {
-    const action = createClassroomOfflineAction(input);
-    const currentStoredQueue = parseClassroomOfflineQueue(window.localStorage.getItem(CLASSROOM_OFFLINE_QUEUE_KEY));
-    persistOfflineQueue([...(currentStoredQueue.length ? currentStoredQueue : offlineQueue), action]);
-    showStatus(`${input.label} queued on this tablet and will sync when the connection is back.`);
+  async function queueOfflineAction(action: ClassroomOfflineAction) {
+    const currentStoredQueue = await readOfflineQueue();
+    await persistOfflineQueue([...(currentStoredQueue.length ? currentStoredQueue : offlineQueue), action]);
+    showStatus(`${action.label} queued securely for this account and classroom.`);
   }
 
   async function postJsonOrQueue({
@@ -401,8 +405,9 @@ export function TeacherMobileWorkspace({
     onSuccess: (json: Record<string, unknown> | null) => void;
     onQueued?: () => void;
   }) {
+    const action = createClassroomOfflineAction({ endpoint, body, label });
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      queueOfflineAction({ endpoint, body, label });
+      await queueOfflineAction(action);
       onQueued?.();
       return;
     }
@@ -412,10 +417,10 @@ export function TeacherMobileWorkspace({
       response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(action.body),
       });
     } catch {
-      queueOfflineAction({ endpoint, body, label });
+      await queueOfflineAction(action);
       onQueued?.();
       return;
     }
@@ -449,7 +454,7 @@ export function TeacherMobileWorkspace({
           remaining.push(action);
         }
       }
-      persistOfflineQueue(remaining);
+      await persistOfflineQueue(remaining);
       if (remaining.length) {
         showError(`${synced} queued action${synced === 1 ? "" : "s"} synced. ${remaining.length} still need connection or review.`);
       } else {

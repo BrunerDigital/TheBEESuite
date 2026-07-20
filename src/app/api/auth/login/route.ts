@@ -12,7 +12,6 @@ import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/ra
 import { verifySupabasePassword } from "@/lib/supabase-auth";
 import { resolveLoginIdentifier } from "@/lib/demo-accounts";
 import { resolvePortalPostLoginPath } from "@/lib/login-routing";
-import { ensureParentPortalDefaultLoginForEmail } from "@/lib/parent-portal-logins";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -46,11 +45,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  let verified = await verifySupabasePassword(email, password);
-  if (!verified) {
-    const parentLogin = await ensureParentPortalDefaultLoginForEmail({ email, password });
-    verified = parentLogin.ok;
-  }
+  const verified = await verifySupabasePassword(email, password);
   if (!verified) {
     return NextResponse.json(
       { ok: false, error: "Invalid email or password." },

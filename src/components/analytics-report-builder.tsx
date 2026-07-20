@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { AnalyticsReportData, ReportKind } from "@/lib/reporting-analytics";
+import { REPORT_DEFINITIONS, type AnalyticsReportData, type ReportKind } from "@/lib/reporting-analytics";
 
 export type AnalyticsReportBuilderFilters = {
   range: string;
@@ -86,6 +86,7 @@ export function AnalyticsReportBuilder({
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const exportState = { range, start, end, centerId, report };
+  const reportDefinition = REPORT_DEFINITIONS[report];
   const selectedCenterLabel = centerId === "all"
     ? "All accessible centers"
     : data.centers.find((center) => center.id === centerId)?.label ?? "Selected center";
@@ -427,6 +428,13 @@ export function AnalyticsReportBuilder({
               <div className="text-xs text-muted-foreground">Staff hours</div>
               <div className="mt-1 text-sm font-medium">{hours(data.totals.staffHoursMinutes)} decimal hours</div>
             </div>
+          </div>
+          <div className="rounded-xl border bg-background/40 p-3 text-sm">
+            <div className="font-medium">Definition and freshness</div>
+            <p className="mt-1 text-muted-foreground">{reportDefinition.definition}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Source: {reportDefinition.source}. Data queried as of {formatPrintDateTime(new Date(data.generatedAt))}.
+            </p>
           </div>
         </CardContent>
       </Card>

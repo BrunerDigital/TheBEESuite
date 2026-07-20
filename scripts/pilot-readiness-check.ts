@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
 import { prisma } from "@/lib/prisma";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
+import { readSchoolEin } from "@/lib/school-tax-id";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 type CheckStatus = "pass" | "warn" | "fail";
@@ -33,6 +34,7 @@ export type CenterRolloutGap = {
     tenantName: string;
     ownerGroupId: string | null;
     ownerGroupName: string | null;
+    taxIdConfigured: boolean;
   };
   classroomCount: number;
   staffCount: number;
@@ -319,6 +321,15 @@ function printReport(report: PilotReadinessReport, args: PilotReadinessArgs) {
   if (report.checks.pilotData.length) printSection("Pilot Data", report.checks.pilotData);
   printRolloutGaps(report.rolloutGaps, args.all);
 
+  console.log("\nSelected Module Gates");
+  for (const row of report.rolloutGaps) {
+    for (const module of report.selection.modules) {
+      const gate = row.moduleGates[module];
+      console.log(`- ${row.label}: ${module} = ${gate.status}${gate.automatedGaps.length ? ` (${gate.automatedGaps.join("; ")})` : ""}`);
+    }
+  }
+  console.log(`- CONTROL: ${report.selection.controls}`);
+
   if (report.childClassroomMismatches.length) {
     console.log("\nChild/classroom mismatches");
     for (const child of report.childClassroomMismatches.slice(0, 10)) {
@@ -384,8 +395,9 @@ async function main() {
     where: { organization: { tenant: liveTenantWhere } },
     select: { id: true, name: true, crmLocationId: true, locationId: true, status: true },
   });
-  const liveCenterIds = liveCenters.map((center) => center.id);
-  const activeLiveCenterIds = liveCenters.filter(isActivePublicSchoolCandidate).map((center) => center.id);
+  const activeLiveCenters = liveCenters.filter(isActivePublicSchoolCandidate);
+  const activeLiveCenterIds = selectSchoolIds(activeLiveCenters, args.schools);
+  const liveCenterIds = activeLiveCenterIds;
   const activeSchoolCenterCount = activeLiveCenterIds.length;
 
   const [
@@ -408,7 +420,7 @@ async function main() {
     prisma.child.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
     prisma.guardian.count({ where: { family: { centerId: { in: liveCenterIds } } } }),
     prisma.guardian.count({ where: { checkInPinHash: { not: null }, family: { centerId: { in: liveCenterIds } } } }),
-    prisma.family.count({ where: { centerId: null } }),
+    args.schools.length ? Promise.resolve(0) : prisma.family.count({ where: { centerId: null } }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, classrooms: { none: {} } } }),
     prisma.center.count({ where: { id: { in: activeLiveCenterIds }, staff: { none: {} } } }),
     prisma.invoice.count({ where: { status: "OPEN", billingAccount: { family: { centerId: { in: liveCenterIds } } } } }),
@@ -439,6 +451,8 @@ async function main() {
     rolloutFamilies,
     rolloutChildren,
     rolloutGuardians,
+    rolloutStaff,
+    rolloutPickups,
     rolloutAccessGrants,
   ] = await Promise.all([
     prisma.center.findMany({
@@ -449,7 +463,15 @@ async function main() {
         name: true,
         crmLocationId: true,
         locationId: true,
+        address: true,
+        phone: true,
         email: true,
+        timezone: true,
+        organizationId: true,
+        ownerGroupId: true,
+        customFields: true,
+        organization: { select: { name: true, tenant: { select: { id: true, name: true } } } },
+        ownerGroup: { select: { name: true } },
         _count: { select: { classrooms: true, staff: true } },
       },
     }),
@@ -464,6 +486,14 @@ async function main() {
     prisma.guardian.findMany({
       where: { family: { centerId: { in: activeLiveCenterIds } } },
       select: { userId: true, checkInPinHash: true, family: { select: { centerId: true } } },
+    }),
+    prisma.staffProfile.findMany({
+      where: { centerId: { in: activeLiveCenterIds } },
+      select: { centerId: true, classroomId: true },
+    }),
+    prisma.authorizedPickup.findMany({
+      where: { family: { centerId: { in: activeLiveCenterIds } } },
+      select: { family: { select: { centerId: true } } },
     }),
     prisma.userAccessGrant.findMany({
       where: {
@@ -503,6 +533,19 @@ async function main() {
     if (guardian.checkInPinHash) guardianPinCountByCenter.set(centerId, (guardianPinCountByCenter.get(centerId) ?? 0) + 1);
   }
 
+  const staffWithoutClassroomByCenter = new Map<string, number>();
+  for (const staff of rolloutStaff) {
+    if (!staff.classroomId) {
+      staffWithoutClassroomByCenter.set(staff.centerId, (staffWithoutClassroomByCenter.get(staff.centerId) ?? 0) + 1);
+    }
+  }
+
+  const authorizedPickupCountByCenter = new Map<string, number>();
+  for (const pickup of rolloutPickups) {
+    const centerId = pickup.family.centerId;
+    if (centerId) authorizedPickupCountByCenter.set(centerId, (authorizedPickupCountByCenter.get(centerId) ?? 0) + 1);
+  }
+
   const directorAccessCountByCenter = new Map<string, number>();
   for (const grant of rolloutAccessGrants) {
     if (!grant.centerId) continue;
@@ -513,44 +556,69 @@ async function main() {
   const rolloutGapRows: CenterRolloutGap[] = rolloutCenters.map((center) => {
     const classroomCount = center._count.classrooms;
     const staffCount = center._count.staff;
+    const staffWithoutClassroomCount = staffWithoutClassroomByCenter.get(center.id) ?? 0;
     const familyCount = familyCountByCenter.get(center.id) ?? 0;
     const childCount = childCountByCenter.get(center.id) ?? 0;
     const childrenWithoutClassroomCount = childrenWithoutClassroomByCenter.get(center.id) ?? 0;
     const guardianCount = guardianCountByCenter.get(center.id) ?? 0;
     const guardianLoginCount = guardianLoginCountByCenter.get(center.id) ?? 0;
     const guardianPinCount = guardianPinCountByCenter.get(center.id) ?? 0;
+    const authorizedPickupCount = authorizedPickupCountByCenter.get(center.id) ?? 0;
     const directorAccessCount = directorAccessCountByCenter.get(center.id) ?? 0;
-    const gaps: string[] = [];
+    const setupGaps: string[] = [];
 
-    if (!center.email) gaps.push("missing school notification email");
-    if (classroomCount === 0) gaps.push("no classrooms");
-    if (staffCount === 0) gaps.push("no staff/teacher profiles");
-    if (familyCount === 0) gaps.push("no imported families");
-    if (childCount === 0) gaps.push("no imported children");
-    if (childrenWithoutClassroomCount > 0) gaps.push(`${childrenWithoutClassroomCount} child(ren) without classroom assignment`);
-    if (guardianCount > 0 && guardianLoginCount === 0) gaps.push("no linked parent/guardian login users");
-    if (guardianCount > 0 && guardianPinCount === 0) gaps.push("no guardian kiosk PINs");
-    if (directorAccessCount === 0) gaps.push("no center director/billing access grant");
+    if (!center.address) setupGaps.push("missing school address");
+    if (!center.phone) setupGaps.push("missing school phone");
+    if (!center.email) setupGaps.push("missing school notification email");
+    if (!center.timezone) setupGaps.push("missing school timezone");
+    if (!center.locationId && !center.crmLocationId) setupGaps.push("missing school/CRM location ID");
+    if (!center.ownerGroupId) setupGaps.push("missing owner group");
+    if (classroomCount === 0) setupGaps.push("no classrooms");
+    if (staffCount === 0) setupGaps.push("no staff/teacher profiles");
+    if (familyCount === 0) setupGaps.push("no imported families");
+    if (childCount === 0) setupGaps.push("no imported children");
+    if (childrenWithoutClassroomCount > 0) setupGaps.push(`${childrenWithoutClassroomCount} child(ren) without classroom assignment`);
+    if (guardianCount === 0) setupGaps.push("no guardian records");
+    if (directorAccessCount === 0) setupGaps.push("no center director/billing access grant");
+
+    const moduleGates = buildModuleGates({ setupGaps, guardianCount, guardianLoginCount, guardianPinCount });
+    const gaps = Array.from(new Set(args.modules.flatMap((module) => moduleGates[module].automatedGaps)));
 
     return {
       centerId: center.id,
       label: center.name,
       locationId: center.locationId || center.crmLocationId || center.id,
+      identity: {
+        address: center.address,
+        phone: center.phone,
+        email: center.email,
+        timezone: center.timezone,
+        organizationId: center.organizationId,
+        organizationName: center.organization.name,
+        tenantId: center.organization.tenant.id,
+        tenantName: center.organization.tenant.name,
+        ownerGroupId: center.ownerGroupId,
+        ownerGroupName: center.ownerGroup?.name ?? null,
+        taxIdConfigured: Boolean(readSchoolEin(center.customFields)),
+      },
       classroomCount,
       staffCount,
+      staffWithoutClassroomCount,
       familyCount,
       childCount,
       childrenWithoutClassroomCount,
       guardianCount,
       guardianLoginCount,
       guardianPinCount,
+      authorizedPickupCount,
       directorAccessCount,
+      moduleGates,
       gaps,
     };
   });
 
-  const activeCentersWithoutGuardianLogins = rolloutGapRows.filter((row) => row.guardianCount > 0 && row.guardianLoginCount === 0).length;
-  const activeCentersWithoutGuardianPins = rolloutGapRows.filter((row) => row.guardianCount > 0 && row.guardianPinCount === 0).length;
+  const activeCentersWithoutGuardianLogins = rolloutGapRows.filter((row) => row.guardianLoginCount < row.guardianCount).length;
+  const activeCentersWithoutGuardianPins = rolloutGapRows.filter((row) => row.guardianPinCount < row.guardianCount).length;
   const activeCentersWithoutDirectorAccess = rolloutGapRows.filter((row) => row.directorAccessCount === 0).length;
   const activeCentersWithUnassignedChildren = rolloutGapRows.filter((row) => row.childrenWithoutClassroomCount > 0).length;
 
@@ -573,6 +641,15 @@ async function main() {
     check(openInvoices >= 0 ? "pass" : "warn", "Open invoices", `${openInvoices} open invoice(s).`),
     check(pendingIncidents === 0 ? "pass" : "warn", "Pending incident review", `${pendingIncidents} incident(s) need review.`),
     check(mediaReviewQueue === 0 ? "pass" : "warn", "Parent media review", `${mediaReviewQueue} photo(s) are waiting for permission review.`),
+    ...args.modules.map((module) => {
+      const blocked = rolloutGapRows.filter((row) => row.moduleGates[module].status === "blocked").length;
+      const manual = rolloutGapRows.filter((row) => row.moduleGates[module].status === "manual_approval_required").length;
+      return check(
+        blocked ? "warn" : "pass",
+        `Module gate: ${module}`,
+        `${blocked} selected school(s) blocked by automated data signals; ${manual} require separate manual approval. This check does not activate the module.`,
+      );
+    }),
   ];
 
   const failures = [...configChecks, ...databaseChecks, ...dataChecks].filter((item) => item.status === "fail");
@@ -583,6 +660,7 @@ async function main() {
     dataChecks,
     rolloutGapRows,
     childClassroomMismatches,
+    args,
   });
   printReport(report, args);
   if (args.outputPath) {

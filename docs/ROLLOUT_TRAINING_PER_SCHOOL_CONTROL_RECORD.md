@@ -24,7 +24,33 @@ Copy this file once per selected school. Keep `[ ]` items open until dated evide
 | Reports/FTE |  |  |  |  |
 | ProCare retirement | **FINAL CUTOVER GATE** |  |  |  |
 
-## 2. Accepted human ownership
+## 2. Consolidated workstream gate register
+
+Apply every row to this school. Preserve the source audit's owner and exact retest. `OPEN` means the source finding has not been evidenced closed for this school; copying this packet never changes that status.
+
+| # | Workstream and authoritative audit | BLOCKER — keep open until evidenced | REQUIRED BEFORE WAVE — keep open until evidenced | FOLLOW-UP — track without weakening launch gates | School status/evidence |
+| --- | --- | --- | --- | --- | --- |
+| 1 | User and role permissions — `USER_ROLE_PERMISSIONS_PRODUCTION_READINESS_2026-07-20.md` | Credentialed two-school/selected-school evidence; executive role-only tenant fallback policy and remediation | Persistent kiosk throttling deployment proof; public trial policy; authorized-pickup routing; executive/admin MFA | Repeat the credentialed matrix per school after material access changes | `OPEN` — |
+| 2 | User experience and flows — no dedicated July 20 audit present | Do not infer closure; shared role and critical-flow smoke remain open | Credentialed desktop/mobile recovery, accessibility, and no-dead-end evidence for enabled modules | Record UX defects, workarounds, owners, and retests | `OPEN` — |
+| 3 | School setup and onboarding — `SCHOOL_SETUP_ONBOARDING_READINESS_AUDIT_2026-07-20.md` | Wave/owners; structure/record reconciliation; school-specific data gaps; identity/configuration evidence; signoff packet | Invitation safeguard; credentialed access; reconciliation beyond notes; assignment/guardian/pickup evidence; independent approvals | Strict selected-school semantics; named people; partial guardian readiness | `OPEN` — |
+| 4 | ProCare migration — `PROCARE_MIGRATION_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Wave/owners; approved exports/mappings; dry-run/import/reconciliation; written approvals; safe large-import plan | Financial coverage; zero row errors or signed exceptions; sensitive-data/role checks; freeze/rollback window | Reconciliation download; reversal requirements; raw-row/backup retention | `OPEN` — |
+| 5 | Payments and Stripe Connect — `PAYMENTS_STRIPE_CONNECT_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Connected account; Stripe packet; business enablement gate; payout reconciliation; lifecycle evidence; billing preview/opening balances | Fail-safe overrides; webhooks/replay; responsibility model; owners; first-batch/payout reconciliation | Durable evidence; automated gates; future-requirements policy | `OPEN` / `HELD OFF` — |
+| 6 | Enrollment CRM — `ENROLLMENT_CRM_PRODUCTION_READINESS_2026-07-20.md` | Credentialed cross-school/role smoke; inquiry-to-enrollment handoff | Approved recipients/delivery; Sheets backup; final release gate; stage-label training | Route fixtures; delivery-health view | `OPEN` / `HELD OFF` — |
+| 7 | Parent experience — `PARENT_EXPERIENCE_PRODUCTION_READINESS_2026-07-20.md` | Safe parent credential transition; three-identity isolation; guardian/PIN readiness; payment lifecycle if enabled | Multi-family behavior; documents flag/copy; delivery; kiosk/PIN device evidence; receipt standard | Announcement policy; route fixtures | `OPEN` / `HELD OFF` — |
+| 8 | Teacher experience — no dedicated July 20 audit present | Do not infer closure; credentialed teacher/classroom isolation and operating-loop evidence remain open | Target-device roster, attendance, health, location, reports, incidents, media, messages, and recovery | Record retraining and device/process improvements | `OPEN` — |
+| 9 | Director experience — `DIRECTOR_EXPERIENCE_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Credentialed operating loop; setup/reconciliation; billing/refund reconciliation if enabled | Final typecheck/build; target devices; alert/cron ownership and delivery; lint | Training/reconciliation drills; catalog ownership | `OPEN` — |
+| 10 | Corporate dashboards — `CORPORATE_DASHBOARDS_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Tenant/center query scoping and two-tenant proof; credentialed smoke | Wave; KPI/freshness definitions; authenticated readiness; actionable paths; access/MFA; retained school evidence | Integration coverage; action queue; metric docs | `OPEN` — |
+| 11 | Communications — `COMMUNICATIONS_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Signed event delivery; sender/reply authentication; suppression policy; approved recipients | Webhook config; school delivery tests; operational owner; message classification; reminders/dunning; receipt/failure notices | Event dedupe; delivery health; fallback-sender policy | `OPEN` / `HELD OFF` — |
+| 12 | Reporting and analytics — `REPORTING_ANALYTICS_PRODUCTION_READINESS_2026-07-20.md` | Source reconciliation; credentialed scope/filter/deep-link/export tests | Truncation/completeness; AR and message definitions; traceability; freshness | Date validation; FTE source transition | `OPEN` — |
+| 13 | Apple and Google app readiness — `APPLE_GOOGLE_APP_READINESS_AUDIT_2026-07-20.md` | Legal; Apple signing/TestFlight/privacy/store/reviewer evidence; explicit Android/PWA decision and native prerequisites if chosen | Native target-device workflows; crash ownership; accurate PWA/no-push/deep-link copy | Universal/App Links; push; native-value roadmap | `OPEN` / `NOT IN SCHOOL CUTOVER SCOPE` — |
+| 14 | Security and compliance — `SECURITY_COMPLIANCE_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Credential rotation; database/Storage restore; credentialed isolation; legal/privacy | RLS release/retest; leaked-password protection; MFA; payment; retention/deletion; monitoring; Storage isolation | CSP; PITR/network/vendor posture; recurring cadence | `OPEN` — |
+| 15 | Performance and QA — `PERFORMANCE_QA_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Credentialed role smoke | Target devices; load model/results; final build; rendered recovery | Cross-browser matrix; browser evidence refresh | `OPEN` — |
+| 16 | Deployment and ops — `DEPLOYMENT_OPS_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Release ownership; monitoring/alerts; backup/restore and migration recovery | Build/deployment proof; Ready/health/readiness/logs/smoke; cron execution; migration recovery; escalation roster | CI optimization; probes; cron ledger | `OPEN` — |
+| 17 | Rollout and training — `ROLLOUT_TRAINING_PRODUCTION_READINESS_AUDIT_2026-07-20.md` | Wave/scope; owners; training; support; stop/rollback/re-entry; signatures | Launch reviews; module training; system-of-record; independent gates; school sequencing; retained evidence | Training versions; adoption/support trends; retrospective | `OPEN` — |
+
+Status rules: `PASS` requires the source audit's exact retest and linked evidence. `HELD OFF` means not enabled, not passed. `NOT APPLICABLE` requires a written scope reason and approval. A FOLLOW-UP may remain open only when it does not contradict a higher gate or enabled-module safety control.
+
+## 3. Accepted human ownership
 
 Brenden remains accountable until delegation is explicit and accepted.
 
@@ -39,7 +65,22 @@ Brenden remains accountable until delegation is explicit and accepted.
 | First-week support |  |  |  |  |
 | Stop/rollback authority |  |  |  |  |
 
-## 3. Role training evidence
+### Owner acceptance form
+
+Assignment without recorded acceptance is not delegation.
+
+| Responsibility | Acceptance statement | Owner name | Acceptance evidence/method | Accepted date/time | Backup confirmed? |
+| --- | --- | --- | --- | --- | --- |
+| Corporate launch | I accept this school's scope, coverage, escalation, and evidence obligations. |  |  |  |  |
+| Director signoff | I accept school validation, staff readiness, and the final Director decision. |  |  |  |  |
+| Data/import | I accept reconciliation, exceptions, freeze, rollback, and evidence ownership. |  |  |  |  |
+| Billing/Stripe | I accept billing preview, reconciliation, stop, refund, and dispute ownership. |  |  |  |  |
+| Technical release | I accept release gates, recovery, monitoring, smoke, and rollback ownership. |  |  |  |  |
+| Training | I accept curriculum, attendance, competency, remediation, and version evidence. |  |  |  |  |
+| First-week support | I accept coverage, response, issue intake, reviews, and handoff ownership. |  |  |  |  |
+| Stop/rollback authority | I accept authority to pause an affected module when a stop condition occurs. |  |  |  |  |
+
+## 4. Role training attendance and competency evidence
 
 Use approved test data; never expose another family's or school's data in training.
 
@@ -52,12 +93,16 @@ Use approved test data; never expose another family's or school's data in traini
 | Front desk/kiosk | credentials, authorization/custody warnings, duplicate prevention, fallback |  |  |  |  |  |
 | Parent/family instructions | setup, correct-family check, PIN, notifications, privacy, support |  |  |  |  |  |
 
+| Attendee | Role | School/location ID | Session/version | Date | Scenario | Result | Remediation owner/date | Retest evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |  |
+
 - [ ] Every role using an enabled module completed its practical check.
 - [ ] Failed or missed training has a named owner, scheduled remediation, and completed retest.
 - [ ] Staff know which workflows remain in ProCare.
 - [ ] Staff know the issue intake method and stop conditions.
 
-## 4. Support and launch-week coverage
+## 5. Support schedule and launch-week coverage
 
 - Support intake method/link/number:
 - Published support hours and time zone:
@@ -84,7 +129,13 @@ Use approved test data; never expose another family's or school's data in traini
 | First billing review, if enabled |  |  |  |  |
 | Week-1 review |  |  |  |  |
 
-## 5. Stop, rollback, and re-entry
+### Launch-week review record
+
+| Review date/time | Coverage/attendance | New issues by severity | Reconciliation result | Invitation/kiosk state | Billing/payment state | Stop/continue decision | Decision owner | Actions/owners/dates | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |  |  |  |  |
+
+## 6. Stop, rollback, and re-entry
 
 Default stop conditions include data mismatch, unauthorized access, incorrect payment routing/reconciliation, missing required training, unavailable support owner, and unresolved critical defect.
 
@@ -103,7 +154,7 @@ Default stop conditions include data mismatch, unauthorized access, incorrect pa
 - [ ] Staff communication identifies the authoritative system and effective time.
 - [ ] Re-entry requires defect resolution, reconciliation, retraining if needed, and written approval.
 
-## 6. Separate activation decisions
+## 7. Separate activation decisions
 
 | Gate | Decision and exact scope | Decision owner | Date/time | Evidence/conditions |
 | --- | --- | --- | --- | --- |
@@ -114,7 +165,7 @@ Default stop conditions include data mismatch, unauthorized access, incorrect pa
 | Live payments/payouts | `GO` / `NO-GO` |  |  |  |
 | ProCare retirement | `GO` / `NO-GO` |  |  |  |
 
-## 7. Final acknowledgements and signatures
+## 8. Final signoff packet
 
 - [ ] Underlying automated readiness report has no unresolved gap for this school.
 - [ ] Data/import reconciliation and exceptions are approved.

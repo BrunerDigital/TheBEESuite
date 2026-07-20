@@ -129,7 +129,7 @@ Send the location a written freeze notice:
 5. Confirm the selected center is the intended school.
 6. Review new, matched, warning, and error counts.
 7. Stop if the import maps rows to the wrong center or creates unexpected duplicate groups.
-8. Stop if database duplicate analysis was skipped; use approved smaller batches or enhance and retest the importer before cutover.
+8. Confirm database duplicate analysis completed for the entire export. Large exports are reviewed in bounded windows while preserving one full-export family/child/staff identity set; any warning or ambiguous duplicate remains fail-closed.
 
 ### 4. Commit Import
 
@@ -137,6 +137,7 @@ Send the location a written freeze notice:
 2. Record the final import batch ID.
 3. Export/download the committed import backup.
 4. Save source file, preview summary, final batch ID, and backup path in the evidence packet.
+5. Download the automated reconciliation report. Treat `needs_review` or `not_available` measures as open evidence; the report never grants cutover.
 
 ### 5. Post-Import Validation
 
@@ -211,6 +212,8 @@ Stop cutover and keep ProCare as source of truth if any of these happen:
 
 ## Rollback And Fallback
 
+Before rollback can be approved, retain the batch ID, source SHA-256, backup reference, affected center/modules, stop time, last-known-good time, post-import write log, reconciliation owner, and director/corporate decisions. Missing evidence is a stop condition. Do not delete the import batch or raw rows during an active investigation.
+
 ### Before Go-Live Approval
 
 - Do not switch source of truth.
@@ -245,6 +248,14 @@ Check these daily for the first five operating days:
 - FTE submission status, especially Friday before 8:00 AM ET and after the Friday noon deadline.
 - Notification delivery failures.
 - Import cleanup tasks and duplicate merges.
+
+## Raw Import And Backup Retention
+
+- Raw `ProcareImportRow` data and downloaded backups contain sensitive school data and must remain in approved restricted storage.
+- The application marks each batch for retention review 90 days after creation; this is a review date, not automatic deletion authorization.
+- Deletion requires an approved retention owner, confirmation that reconciliation/rollback/audit/legal needs are complete, and a separately authorized audited cleanup action.
+- Backup downloads use `Cache-Control: no-store`; the operator must record the secure storage reference and deletion owner in the evidence packet.
+- Never delete evidence for a batch with errors, an open mismatch, an active rollback, or missing cutover decisions.
 
 ## Location Signoff Template
 

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { logOperationalError } from "@/lib/request-response-logging";
+import { resolveRegistrationHandoffCenterId } from "@/lib/registration-handoff";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +40,7 @@ export default async function OnlineRegistrationPage({
 }) {
   const [centers, query] = await Promise.all([getRegistrationCenters(), searchParams]);
   const requestedCenterId = firstSearchParam(query.centerId).trim();
-  const initialCenterId = centers.some((center) => center.id === requestedCenterId)
-    ? requestedCenterId
-    : "";
+  const initialCenterId = resolveRegistrationHandoffCenterId(requestedCenterId, centers.map((center) => center.id));
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(245,181,27,0.16),transparent_28rem),linear-gradient(135deg,#05070a,#0a0f15_56%,#171104)] px-4 py-8 text-foreground sm:px-6 lg:px-8">

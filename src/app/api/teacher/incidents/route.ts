@@ -27,6 +27,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: parsedIncident.error }, { status: parsedIncident.status });
   }
   const incidentInput = parsedIncident.incident;
+  const clientActionId = typeof body.clientActionId === "string" ? body.clientActionId.trim().slice(0, 100) || null : null;
   const occurredAt = parseOperationalDate(incidentInput.occurredAt, "Incident time");
   if (!occurredAt.ok) {
     return NextResponse.json({ ok: false, error: occurredAt.error }, { status: occurredAt.status });
@@ -57,6 +58,10 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageChildInClassroom(user, child.classroom?.id)) {
     return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
   }
+  if (clientActionId) {
+    const existing = await prisma.incidentReport.findUnique({ where: { clientActionId } });
+    if (existing) return NextResponse.json({ ok: true, incident: existing, replayed: true }, { status: 200 });
+  }
 
   const incident = await prisma.incidentReport.create({
     data: {
@@ -71,6 +76,7 @@ async function POSTHandler(request: NextRequest) {
       photoAttachmentPlaceholder: incidentInput.photoAttachmentPlaceholder,
       adminReviewStatus: "pending",
       followUpTasks: incidentInput.followUpTask ? [incidentInput.followUpTask] : [],
+      clientActionId,
     },
   });
 

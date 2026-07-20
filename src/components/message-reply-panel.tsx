@@ -315,7 +315,7 @@ export function MessageReplyPanel({
           ? ` ${json.sms.sent}/${json.sms.attempted} SMS copies sent or queued.`
           : ` ${json?.sms?.error ?? "No SMS copy was sent."}`
         : "";
-      const pushDetail = sendPushCopy ? ` ${json?.push?.attempted ?? 0} push/in-app notifications queued.` : "";
+      const pushDetail = sendPushCopy ? ` ${json?.push?.attempted ?? 0} in-app notifications queued.` : "";
       setStatusMessage(targetMode === "staff"
         ? `Message sent to ${selectedStaffRecipient?.name ?? "the staff member"}.${pushDetail}`
         : targetMode === "broadcast"
@@ -604,7 +604,7 @@ export function MessageReplyPanel({
                 checked={sendPushCopy}
                 onChange={(event) => setSendPushCopy(event.target.checked)}
               />
-              Queue push/in-app notifications for linked portal users
+              Queue in-app notifications for linked portal users
             </label>
             <Button disabled={isPending || !canSubmit} onClick={submit}>
               <Send data-icon="inline-start" />

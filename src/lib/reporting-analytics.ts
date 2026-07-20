@@ -7,6 +7,14 @@ import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary } f
 export type ReportKind = "lead_funnel" | "attendance" | "billing" | "messages" | "staff_hours";
 export type ReportFormat = "csv" | "pdf";
 
+export const REPORT_DEFINITIONS: Record<ReportKind, { source: string; definition: string }> = {
+  lead_funnel: { source: "BEE Suite CRM records", definition: "Leads created in the selected range; conversion is the share whose current stage is Enrolled." },
+  attendance: { source: "Attendance records and check-in/out logs", definition: "Present and absent statuses dated in the selected range; check-in/out counts are event totals." },
+  billing: { source: "BEE Suite invoices and payments", definition: "Invoice activity selected by creation or due date; paid totals are successful payments paid in range. Open and overdue are not an all-time as-of AR balance." },
+  messages: { source: "BEE Suite family message threads", definition: "Parent messages created in range; response time uses the next non-parent reply in the same thread." },
+  staff_hours: { source: "Teacher time-clock history", definition: "Closed shifts plus elapsed open-shift time intersecting the selected center-local service-day range." },
+};
+
 export type ReportCenterOption = {
   id: string;
   name: string;
@@ -727,9 +735,17 @@ export async function buildAnalyticsReportData(
 }
 
 export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
+  const traceability = {
+    generatedAt: data.generatedAt,
+    startDate: data.range.startDate,
+    endDate: data.range.endDate,
+    centers: data.centers.map((center) => center.label),
+    ...REPORT_DEFINITIONS[kind],
+  };
   if (kind === "lead_funnel") {
     return {
       title: "Lead Source And Funnel Conversion",
+      traceability,
       headers: ["Center", "Source", "Leads", "Tours", "Applications", "Enrolled", "Waitlisted", "Conversion"],
       rows: data.leadSources.map((row) => [
         row.centerLabel,
@@ -746,6 +762,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
   if (kind === "attendance") {
     return {
       title: "Attendance And Absence Trends",
+      traceability,
       headers: ["Period", "Center", "Present", "Absent", "Check-ins", "Check-outs", "Attendance rate"],
       rows: data.attendanceTrends.map((row) => [
         row.date,
@@ -761,6 +778,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
   if (kind === "billing") {
     return {
       title: "Billing Revenue And AR",
+      traceability,
       headers: ["Period", "Center", "Invoices", "Invoice total", "Paid", "Open AR", "Overdue AR", "Payments"],
       rows: data.billing.map((row) => [
         row.period,
@@ -777,6 +795,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
   if (kind === "messages") {
     return {
       title: "Parent Response Time And Message Analytics",
+      traceability,
       headers: ["Center", "Parent messages", "Staff replies", "Unread", "Avg response hours", "Response rate"],
       rows: data.messages.map((row) => [
         row.centerLabel,
@@ -790,6 +809,7 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
   }
   return {
     title: "Staff Hours And Time Clock",
+    traceability,
     headers: [
       "Center",
       "Teacher",
@@ -823,9 +843,17 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
   };
 }
 
-export function reportRowsToCsv(input: { title: string; headers: string[]; rows: unknown[][] }) {
+export type ReportRows = ReturnType<typeof rowsForReportKind>;
+
+export function reportRowsToCsv(input: ReportRows) {
   return [
     [input.title],
+    ["Generated at", input.traceability.generatedAt],
+    ["Date range", input.traceability.startDate, input.traceability.endDate],
+    ["Centers", input.traceability.centers.join(" | ")],
+    ["Source", input.traceability.source],
+    ["Definition", input.traceability.definition],
+    [],
     input.headers,
     ...input.rows,
   ].map((row) => row.map(exportCell).join(",")).join("\r\n");
@@ -856,10 +884,14 @@ function wrapText(text: string, length = 92) {
   return lines.length ? lines : [""];
 }
 
-export function reportRowsToPdf(input: { title: string; headers: string[]; rows: unknown[][] }, generatedAt = new Date()) {
+export function reportRowsToPdf(input: ReportRows, generatedAt = new Date(input.traceability.generatedAt)) {
   const lines = [
     input.title,
     `Generated ${generatedAt.toISOString()}`,
+    `Range ${input.traceability.startDate} to ${input.traceability.endDate}`,
+    `Centers ${input.traceability.centers.join(" | ")}`,
+    `Source ${input.traceability.source}`,
+    `Definition ${input.traceability.definition}`,
     input.headers.join(" | "),
     ...input.rows.slice(0, 120).flatMap((row) => wrapText(row.map((cell) => String(cell ?? "")).join(" | "))),
   ];

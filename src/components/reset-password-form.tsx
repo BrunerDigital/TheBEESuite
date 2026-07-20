@@ -219,13 +219,13 @@ export function ResetPasswordForm() {
               </Button>
             </form>
             {forceReset ? (
-              <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline">
+              <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline">
                 Back to login
               </Link>
             ) : (
               <Link
                 href={parentPortalFlow ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password"}
-                className="mt-5 inline-flex text-sm font-semibold text-slate-950 hover:underline"
+                className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
               >
                 Request a fresh reset link
               </Link>

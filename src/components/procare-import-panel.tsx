@@ -45,6 +45,8 @@ type ImportPreview = {
   duplicateReviewRows?: number;
   duplicateScanSkipped?: boolean;
   duplicateScanRowLimit?: number;
+  duplicateReviewChunks?: number;
+  relationshipSafeReview?: boolean;
   existingMatchPreviewSkipped?: boolean;
   duplicateMatchesByEntity?: {
     families: number;
@@ -118,6 +120,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     window.location.href = `/api/imports/procare?${params.toString()}`;
   }
 
+  function downloadReconciliation(batchId: string) {
+    const params = new URLSearchParams({ batchId, report: "reconciliation" });
+    window.open(`/api/imports/procare?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+
   function submit(dryRun: boolean) {
     startTransition(async () => {
       setStatus("");
@@ -180,9 +187,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
   const commitNeedsDuplicateConfirmation = duplicateReviewRows > 0 && !duplicateReviewConfirmed;
   const busy = isPending || Boolean(progressMessage);
-  const duplicateScanSummary = preview?.duplicateScanSkipped
-    ? `Large-file duplicate scan skipped for this ${preview.rows}-row import. Existing records will still be matched during commit by ProCare IDs, family names, emails, and child names.`
-    : `Duplicate scan found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
+  const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const hasImportSource = Boolean(csv.trim() || selectedFileName);
   const noCentersAvailable = !centers.length;
   const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
@@ -194,8 +199,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       ? "Choose a CSV export or paste CSV text before submitting."
       : !preview?.reviewFingerprint
         ? "Submit this exact export for review before committing."
-        : preview.duplicateScanSkipped
-          ? `This export exceeds the ${preview.duplicateScanRowLimit ?? 500}-row duplicate-review safety limit. Use approved smaller batches or pause for an importer enhancement.`
       : preview && blockingWarningRows > 0
           ? "Resolve or remove non-duplicate warning rows before committing."
           : preview && commitNeedsDuplicateConfirmation
@@ -319,10 +322,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <AlertDescription className="space-y-3">
               <p>{status}</p>
               {lastBatchId ? (
-                <Button size="sm" variant="outline" onClick={() => downloadBackup(lastBatchId)}>
-                  <Download data-icon="inline-start" />
-                  Download Import Backup
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => downloadBackup(lastBatchId)}>
+                    <Download data-icon="inline-start" />
+                    Download Import Backup
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => downloadReconciliation(lastBatchId)}>
+                    <Download data-icon="inline-start" />
+                    Download Reconciliation Report
+                  </Button>
+                </div>
               ) : null}
             </AlertDescription>
           </Alert>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/auth";
+import { canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { visibleCenterIdFilter, visibleIncidentWhere } from "@/lib/corporate-view-scope";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -23,19 +24,13 @@ async function GETHandler() {
     return NextResponse.json({ ok: false, error: "Compliance exports are not allowed for this role." }, { status: 403 });
   }
 
-  const scopedCenterIds = user.centerIds.length ? { in: user.centerIds } : { in: ["__no_visible_centers__"] };
-  const allCenters = canAccessAllCenters(user);
-  const incidentWhere = allCenters
-    ? {}
-    : {
-        OR: [
-          { classroom: { is: { centerId: scopedCenterIds } } },
-          { child: { family: { is: { centerId: scopedCenterIds } } } },
-        ],
-      };
-  const childScopedWhere = allCenters ? {} : { child: { family: { is: { centerId: scopedCenterIds } } } };
-  const staffScopedWhere = allCenters ? {} : { staff: { centerId: scopedCenterIds } };
-  const centerScopedWhere = allCenters ? {} : { centerId: scopedCenterIds };
+  const centers = await prisma.center.findMany({ where: getLeadScopeWhere(user), select: { id: true } });
+  const visibleCenterIds = centers.map((center) => center.id);
+  const scopedCenterIds = visibleCenterIdFilter(visibleCenterIds);
+  const incidentWhere = visibleIncidentWhere(visibleCenterIds);
+  const childScopedWhere = { child: { family: { is: { centerId: scopedCenterIds } } } };
+  const staffScopedWhere = { staff: { centerId: scopedCenterIds } };
+  const centerScopedWhere = { centerId: scopedCenterIds };
 
   const [incidents, medications, allergies, certifications, drillLogs, complianceTasks] = await Promise.all([
     prisma.incidentReport.findMany({

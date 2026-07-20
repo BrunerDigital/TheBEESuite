@@ -25,6 +25,7 @@ async function POSTHandler(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const childId = clean(body.childId);
   const reason = clean(body.reason).slice(0, 180);
+  const clientActionId = clean(body.clientActionId).slice(0, 100) || null;
   const target = validateChildLocationTarget({
     classroomId: body.classroomId,
     areaName: body.areaName,
@@ -81,6 +82,13 @@ async function POSTHandler(request: NextRequest) {
   if (!canManageChildInClassroom(user, child.classroom?.id)) {
     return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
   }
+  if (clientActionId) {
+    const existing = await prisma.childLocationTransition.findUnique({ where: { clientActionId } });
+    if (existing) {
+      const liveLocation = await prisma.childLiveLocation.findUnique({ where: { childId }, include: { currentClassroom: { select: { id: true, name: true } }, movedBy: { select: { id: true, name: true } } } });
+      return NextResponse.json({ ok: true, child: { id: child.id, fullName: child.fullName, assignedClassroom: child.classroom }, liveLocation, replayed: true }, { status: 200 });
+    }
+  }
 
   if (assignedCenterId && centerId && assignedCenterId !== centerId) {
     return NextResponse.json(
@@ -130,6 +138,7 @@ async function POSTHandler(request: NextRequest) {
     const transition = await tx.childLocationTransition.create({
       data: {
         childId,
+        clientActionId,
         centerId,
         fromClassroomId,
         fromAreaName,

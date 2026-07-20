@@ -25,6 +25,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: parsedPayload.error }, { status: parsedPayload.status });
   }
   const dailyReport = parsedPayload.report;
+  const clientActionId = typeof body.clientActionId === "string" ? body.clientActionId.trim().slice(0, 100) || null : null;
 
   const children = await prisma.child.findMany({
     where: { id: { in: dailyReport.childIds }, ...currentlyEnrolledChildWhere() },
@@ -36,6 +37,16 @@ async function POSTHandler(request: NextRequest) {
 
   if (children.length !== dailyReport.childIds.length) {
     return NextResponse.json({ ok: false, error: "One or more children were not found." }, { status: 404 });
+  }
+
+  if (clientActionId) {
+    const existingReports = await prisma.dailyReport.findMany({
+      where: { childId: { in: dailyReport.childIds }, clientActionId },
+      include: { child: { select: { fullName: true } }, _count: { select: { meals: true, naps: true, diapers: true, activities: true } } },
+    });
+    if (existingReports.length === dailyReport.childIds.length) {
+      return NextResponse.json({ ok: true, report: existingReports[0], reports: existingReports, reportCount: existingReports.length, replayed: true }, { status: 200 });
+    }
   }
 
   const hasTenantWideAccess = canAccessAllCenters(user);
@@ -73,6 +84,7 @@ async function POSTHandler(request: NextRequest) {
           teacherNote: dailyReport.teacherNote,
           suppliesNeeded: dailyReport.suppliesNeeded,
           sentAt,
+          clientActionId,
           meals: dailyReport.meals.length ? { create: dailyReport.meals } : undefined,
           naps: dailyReport.naps.length ? { create: dailyReport.naps } : undefined,
           diapers: dailyReport.diapers.length ? { create: dailyReport.diapers } : undefined,

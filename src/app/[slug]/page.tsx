@@ -98,6 +98,21 @@ import {
 import { buildLedgerReconciliationReport } from "@/lib/billing-reconciliation";
 import { dashboardOptionsFromCustomFields, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import {
+  visibleAttendanceWhere,
+  visibleBillingAccountWhere,
+  visibleCenterIdFilter,
+  visibleCheckLogWhere,
+  visibleChildWhere,
+  visibleClassroomWhere,
+  visibleEnrollmentWhere,
+  visibleFamilyWhere,
+  visibleFormSubmissionWhere,
+  visibleIncidentWhere,
+  visibleInvoiceWhere,
+  visibleOrGlobalCenterWhere,
+  visiblePaymentWhere,
+} from "@/lib/corporate-view-scope";
+import {
   normalizeBillingCadence,
   defaultRecurringBillingPeriod,
   normalizeRecurringBillingDay,
@@ -165,10 +180,6 @@ export function generateStaticParams() {
     { slug: "forgot-password" },
     { slug: "parent-portal" },
   ];
-}
-
-function centerIdFilter(centerIds: string[]) {
-  return centerIds.length ? { in: centerIds } : { in: ["__no_visible_centers__"] };
 }
 
 function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
@@ -739,7 +750,7 @@ async function renderLivePage(
   const showDemoFallbackData = canViewDemoFallbackData(user);
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
-  const scopedCenterIds = centerIdFilter(visibleCenterIds);
+  const scopedCenterIds = visibleCenterIdFilter(visibleCenterIds);
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
   const today = new Date();
   const thirtyDays = new Date(today);
@@ -1131,17 +1142,8 @@ async function renderLivePage(
   }
 
   if (slug === "enrollment-pipeline") {
-    const registrationSubmissionWhere: Prisma.FormSubmissionWhereInput = allCenters
-      ? { form: { type: "online_registration" } }
-      : visibleCenterIds.length
-        ? {
-            form: { type: "online_registration" },
-            OR: visibleCenterIds.map((centerId) => ({ data: { path: ["centerId"], equals: centerId } })),
-          }
-        : { id: "__no_visible_registration_submissions__" };
-    const enrollmentWhere: Prisma.EnrollmentWhereInput = allCenters
-      ? {}
-      : { child: { is: { family: { is: { centerId: scopedCenterIds } } } } };
+    const registrationSubmissionWhere = visibleFormSubmissionWhere(visibleCenterIds, "online_registration");
+    const enrollmentWhere = visibleEnrollmentWhere(visibleCenterIds);
     const [pipelineCounts, highIntentCounts, recentLeads, applicationSubmissions, enrollmentRows] = await Promise.all([
       prisma.lead.groupBy({
         by: ["stage"],
@@ -1738,12 +1740,10 @@ async function renderLivePage(
   }
 
   if (slug === "child-profile") {
-    const childWhere: Prisma.ChildWhereInput = allCenters ? {} : visibleChildCenterWhere(scopedCenterIds);
+    const childWhere = visibleChildWhere(visibleCenterIds);
     const currentChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
     const graduatedChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, notCurrentlyEnrolledChildWhere()] };
-    const currentChildRelationWhere: Prisma.ChildWhereInput = allCenters
-      ? currentlyEnrolledChildWhere()
-      : { AND: [visibleChildCenterWhere(scopedCenterIds), currentlyEnrolledChildWhere()] };
+    const currentChildRelationWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
     const [children, allChildren, total, graduated, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: currentChildWhere,
@@ -1789,9 +1789,7 @@ async function renderLivePage(
     const family = await prisma.family.findFirst({
       where: user.role === "PARENT_GUARDIAN"
         ? { guardians: { some: { userId: user.id } }, children: { some: currentlyEnrolledChildWhere() } }
-        : allCenters
-          ? { children: { some: currentlyEnrolledChildWhere() } }
-          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
+        : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } },
       orderBy: { createdAt: "desc" },
       include: {
         guardians: {
@@ -2169,17 +2167,13 @@ async function renderLivePage(
         })
       : null;
     const teacherServiceDay = centerServiceDayWindow(today, teacherCenter);
-    const teacherChildScopeWhere: Prisma.ChildWhereInput = allCenters
-      ? {}
-      : staffProfile?.classroomId
+    const teacherChildScopeWhere: Prisma.ChildWhereInput = staffProfile?.classroomId
         ? { classroomId: staffProfile.classroomId }
         : staffProfile?.centerId
           ? { classroom: { is: { centerId: staffProfile.centerId } } }
           : { classroom: { is: { centerId: scopedCenterIds } } };
     const childWhereForTeacher: Prisma.ChildWhereInput = { AND: [teacherChildScopeWhere, currentlyEnrolledChildWhere()] };
-    const classroomWhereForTeacher: Prisma.ClassroomWhereInput = allCenters
-      ? {}
-      : staffProfile?.classroomId
+    const classroomWhereForTeacher: Prisma.ClassroomWhereInput = staffProfile?.classroomId
         ? { id: staffProfile.classroomId }
         : staffProfile?.centerId
           ? { centerId: staffProfile.centerId }
@@ -2358,16 +2352,15 @@ async function renderLivePage(
       ? teacherStaffProfile?.classroomId
         ? { children: { some: { AND: [{ classroomId: teacherStaffProfile.classroomId }, currentlyEnrolledChildWhere()] } } }
         : { id: "__no_teacher_classroom__" }
-      : allCenters
-        ? { children: { some: currentlyEnrolledChildWhere() } }
-        : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } };
+      : { ...visibleFamilyWhere(visibleCenterIds), children: { some: currentlyEnrolledChildWhere() } };
     const messageWhere = buildVisibleMessageWhere({
       userId: user.id,
       familyScopeWhere,
       allCenters,
       teacherMessageScope,
+      tenantId: user.tenantId,
     });
-    const classroomWhere: Prisma.ClassroomWhereInput = allCenters ? {} : { centerId: scopedCenterIds };
+    const classroomWhere = visibleClassroomWhere(visibleCenterIds);
     const [messages, families, templates, staffUsers, classrooms, notificationPreferenceUsers, total, unread, priority, aiReview] = await Promise.all([
       prisma.message.findMany({
         where: messageWhere,
@@ -2424,7 +2417,7 @@ async function renderLivePage(
         where: {
           tenantId: user.tenantId,
           isActive: true,
-          ...(allCenters ? {} : { OR: [{ centerId: null }, { centerId: scopedCenterIds }] }),
+          ...visibleOrGlobalCenterWhere(visibleCenterIds),
         },
         orderBy: [{ centerId: "asc" }, { category: "asc" }, { name: "asc" }],
         take: 100,
@@ -2837,12 +2830,8 @@ async function renderLivePage(
   }
 
   if (slug === "billing-invoices") {
-    const billingAccountWhere: Prisma.BillingAccountWhereInput = allCenters
-      ? {}
-      : { family: { is: { centerId: scopedCenterIds } } };
-    const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
-      ? {}
-      : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
+    const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
+    const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
     const workbenchFamilyWhere: Prisma.FamilyWhereInput = {
       centerId: scopedCenterIds,
       children: { some: currentlyEnrolledChildWhere() },
@@ -3169,15 +3158,9 @@ async function renderLivePage(
   }
 
   if (slug === "payments") {
-    const billingAccountWhere: Prisma.BillingAccountWhereInput = allCenters
-      ? {}
-      : { family: { is: { centerId: scopedCenterIds } } };
-    const paymentWhere: Prisma.PaymentWhereInput = allCenters
-      ? {}
-      : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
-      ? {}
-      : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
+    const billingAccountWhere = visibleBillingAccountWhere(visibleCenterIds);
+    const paymentWhere = visiblePaymentWhere(visibleCenterIds);
+    const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
     const [paymentRows, total, paid, failed, draft, payoutCenters, paymentMethodAccounts, dueOpenInvoices] = await Promise.all([
       prisma.payment.findMany({
         where: paymentWhere,
@@ -3360,21 +3343,11 @@ async function renderLivePage(
       end: requestedEnd,
       centerId: requestedCenterId,
     }, today);
-    const messageWhere: Prisma.MessageWhereInput = allCenters
-      ? {}
-      : { family: { is: { centerId: scopedCenterIds } } };
-    const invoiceWhere: Prisma.InvoiceWhereInput = allCenters
-      ? {}
-      : { billingAccount: { family: { is: { centerId: scopedCenterIds } } } };
-    const incidentWhere: Prisma.IncidentReportWhereInput = allCenters
-      ? { adminReviewStatus: "pending" }
-      : {
-          adminReviewStatus: "pending",
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { child: { family: { is: { centerId: scopedCenterIds } } } },
-          ],
-        };
+    const messageWhere: Prisma.MessageWhereInput = { family: { is: visibleFamilyWhere(visibleCenterIds) } };
+    const invoiceWhere = visibleInvoiceWhere(visibleCenterIds);
+    const incidentWhere: Prisma.IncidentReportWhereInput = {
+      AND: [visibleIncidentWhere(visibleCenterIds), { adminReviewStatus: "pending" }],
+    };
     const [leads, enrolled, waitlisted, tours, openInvoices, openRows, incidentsPending, unreadMessages, stageCounts, fte, reports] = await Promise.all([
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, stage: EnrollmentStage.ENROLLED } }),
@@ -4398,12 +4371,22 @@ async function renderLivePage(
       : tenantWide
         ? { tenantId: user.tenantId }
         : { centerId: scopedCenterIds };
-    const [totalDeliveries, deliveredDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, recentDeliveries, integrationRecords, integrationCredentials] = await Promise.all([
+    const acceptedStaleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sendGridWhere: Prisma.IntegrationDeliveryWhereInput = { ...deliveryWhere, provider: "sendgrid" };
+    const [totalDeliveries, deliveredDeliveries, acceptedDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, acceptedStaleDeliveries, deferredDeliveries, suppressedDeliveries, bouncedDeliveries, recentDeliveries, integrationRecords, integrationCredentials] = await Promise.all([
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
+      prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "accepted" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "pending" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "failed" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "skipped" } }),
+      prisma.integrationDelivery.count({ where: { ...sendGridWhere, status: "accepted", updatedAt: { lte: acceptedStaleBefore } } }),
+      prisma.integrationDelivery.count({ where: { ...sendGridWhere, lastResult: { path: ["event"], equals: "deferred" } } }),
+      prisma.integrationDelivery.count({ where: { ...sendGridWhere, OR: [
+        { lastResult: { path: ["event"], equals: "dropped" } },
+        { lastResult: { path: ["event"], equals: "spamreport" } },
+      ] } }),
+      prisma.integrationDelivery.count({ where: { ...sendGridWhere, lastResult: { path: ["event"], equals: "bounce" } } }),
       prisma.integrationDelivery.findMany({
         where: deliveryWhere,
         orderBy: { createdAt: "desc" },
@@ -4445,9 +4428,15 @@ async function renderLivePage(
           deliveryStats: {
             total: totalDeliveries,
             delivered: deliveredDeliveries,
+            accepted: acceptedDeliveries,
             pending: pendingDeliveries,
             failed: failedDeliveries,
             skipped: skippedDeliveries,
+            acceptedStale: acceptedStaleDeliveries,
+            deferred: deferredDeliveries,
+            suppressed: suppressedDeliveries,
+            bounced: bouncedDeliveries,
+            needsFollowUp: acceptedStaleDeliveries + suppressedDeliveries + bouncedDeliveries,
           },
           recentDeliveries,
           setupIntegrations,
@@ -4715,21 +4704,17 @@ async function renderLivePage(
     const attendanceDay = attendanceCenter
       ? centerServiceDayWindow(today, attendanceCenter)
       : { start: startOfDay, end: endOfDay };
-    const attendanceWhere: Prisma.AttendanceRecordWhereInput = allCenters
-      ? {}
-      : { classroom: { is: { centerId: scopedCenterIds } } };
-    const attendanceClassroomWhere: Prisma.ClassroomWhereInput = allCenters
-      ? {}
-      : { centerId: scopedCenterIds };
+    const attendanceWhere = visibleAttendanceWhere(visibleCenterIds);
+    const attendanceClassroomWhere = visibleClassroomWhere(visibleCenterIds);
     const attendanceLiveChildWhere: Prisma.ChildWhereInput = {
       AND: [
         currentlyEnrolledChildWhere(),
-        allCenters ? {} : { classroom: { is: attendanceClassroomWhere } },
+        { classroom: { is: attendanceClassroomWhere } },
       ],
     };
     const checkLogWhere: Prisma.CheckInOutLogWhereInput = {
       occurredAt: { gte: attendanceDay.start, lt: attendanceDay.end },
-      ...(allCenters ? {} : { centerId: scopedCenterIds }),
+      ...visibleCheckLogWhere(visibleCenterIds),
     };
     const [records, total, present, absent, checkLogs, classrooms, liveChildren] = await Promise.all([
       prisma.attendanceRecord.findMany({
@@ -4883,14 +4868,12 @@ async function renderLivePage(
   }
 
   if (slug === "daily-reports") {
-    const dailyReportWhere: Prisma.DailyReportWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { child: { family: { is: { centerId: scopedCenterIds } } } },
-          ],
-        };
+    const dailyReportWhere: Prisma.DailyReportWhereInput = {
+      OR: [
+        { classroom: { is: { centerId: scopedCenterIds } } },
+        { child: { family: { is: { centerId: scopedCenterIds } } } },
+      ],
+    };
     const [reports, total, sent, needsSupplies] = await Promise.all([
       prisma.dailyReport.findMany({
         where: dailyReportWhere,
@@ -4936,14 +4919,12 @@ async function renderLivePage(
   if (slug === "parent-media-review") {
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
-    const mediaScopeWhere: Prisma.ChildMediaWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { child: { family: { is: { centerId: scopedCenterIds } } } },
-          ],
-        };
+    const mediaScopeWhere: Prisma.ChildMediaWhereInput = {
+      OR: [
+        { classroom: { is: { centerId: scopedCenterIds } } },
+        { child: { family: { is: { centerId: scopedCenterIds } } } },
+      ],
+    };
     const scopedMediaWhere = (where: Prisma.ChildMediaWhereInput): Prisma.ChildMediaWhereInput =>
       Object.keys(mediaScopeWhere).length ? { AND: [mediaScopeWhere, where] } : where;
 
@@ -5012,14 +4993,7 @@ async function renderLivePage(
   }
 
   if (slug === "incident-reports") {
-    const incidentWhere: Prisma.IncidentReportWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { classroom: { is: { centerId: scopedCenterIds } } },
-            { child: { family: { is: { centerId: scopedCenterIds } } } },
-          ],
-        };
+    const incidentWhere = visibleIncidentWhere(visibleCenterIds);
     const [incidents, total, pending, parentNotified, acknowledged] = await Promise.all([
       prisma.incidentReport.findMany({
         where: incidentWhere,
@@ -5123,11 +5097,7 @@ async function renderLivePage(
   }
 
   if (slug === "forms") {
-    const submissionWhere: Prisma.FormSubmissionWhereInput = allCenters
-      ? {}
-      : visibleCenterIds.length
-        ? { OR: visibleCenterIds.map((centerId) => ({ data: { path: ["centerId"], equals: centerId } })) }
-        : { id: "__no_visible_submissions__" };
+    const submissionWhere = visibleFormSubmissionWhere(visibleCenterIds);
     const [forms, submissions] = await Promise.all([
       prisma.form.findMany({
         orderBy: [{ status: "asc" }, { name: "asc" }],
@@ -5233,14 +5203,12 @@ async function renderLivePage(
       );
     }
 
-    const documentWhere: Prisma.DocumentWhereInput = allCenters
-      ? {}
-      : {
-          OR: [
-            { family: { is: { centerId: scopedCenterIds } } },
-            { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
-          ],
-        };
+    const documentWhere: Prisma.DocumentWhereInput = {
+      OR: [
+        { family: { is: { centerId: scopedCenterIds } } },
+        { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
+      ],
+    };
     const [documents, total, expiring, restricted, pending, signatureFamilies, checklistFamilies, checklistStaff] = await Promise.all([
       prisma.document.findMany({
         where: documentWhere,
@@ -5256,9 +5224,7 @@ async function renderLivePage(
       prisma.document.count({ where: { ...documentWhere, restricted: true } }),
       prisma.document.count({ where: { ...documentWhere, status: DocumentStatus.REQUESTED } }),
       prisma.family.findMany({
-        where: allCenters
-          ? { children: { some: currentlyEnrolledChildWhere() } }
-          : { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
+        where: { centerId: scopedCenterIds, children: { some: currentlyEnrolledChildWhere() } },
         orderBy: { name: "asc" },
         take: 250,
         select: {
@@ -5344,25 +5310,13 @@ async function renderLivePage(
             { child: { is: { family: { is: { centerId: scopedCenterIds } } } } },
           ],
         };
-    const allergyWhere: Prisma.AllergyWhereInput = allCenters
-      ? { child: currentlyEnrolledChildWhere() }
-      : { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
-    const medicalWhere: Prisma.ChildMedicalNoteWhereInput = allCenters
-      ? { restricted: true, child: currentlyEnrolledChildWhere() }
-      : { restricted: true, child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
+    const allergyWhere: Prisma.AllergyWhereInput = { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
+    const medicalWhere: Prisma.ChildMedicalNoteWhereInput = { restricted: true, child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
 
-    const medicationWhere: Prisma.MedicationLogWhereInput = allCenters
-      ? { child: currentlyEnrolledChildWhere() }
-      : { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
-    const childWhere: Prisma.ChildWhereInput = allCenters
-      ? currentlyEnrolledChildWhere()
-      : { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } };
-    const emergencyDrillWhere: Prisma.EmergencyDrillLogWhereInput = allCenters
-      ? {}
-      : { centerId: scopedCenterIds };
-    const complianceTaskWhere: Prisma.ComplianceTaskWhereInput = allCenters
-      ? {}
-      : { centerId: scopedCenterIds };
+    const medicationWhere: Prisma.MedicationLogWhereInput = { child: { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } } };
+    const childWhere: Prisma.ChildWhereInput = { ...currentlyEnrolledChildWhere(), family: { is: { centerId: scopedCenterIds } } };
+    const emergencyDrillWhere: Prisma.EmergencyDrillLogWhereInput = { centerId: scopedCenterIds };
+    const complianceTaskWhere: Prisma.ComplianceTaskWhereInput = { centerId: scopedCenterIds };
     const openComplianceTaskWhere: Prisma.ComplianceTaskWhereInput = {
       ...complianceTaskWhere,
       status: { notIn: ["completed", "canceled"] },

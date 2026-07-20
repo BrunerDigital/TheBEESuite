@@ -23,6 +23,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
+    "mobile:store:check": "node scripts/mobile-store-readiness-check.mjs",
     "ops:check": "node scripts/deployment-ops-check.mjs",
     "ios:parent:add": "npx cap add ios",
     "ios:parent:sync": "npx cap sync ios",

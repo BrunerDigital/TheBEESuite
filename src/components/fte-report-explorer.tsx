@@ -446,7 +446,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
               Historical FTE Explorer
             </CardTitle>
             <CardDescription>
-              Filter executive FTE history by school, state/region, owner group, week, status, and search terms.
+              Filter executive FTE history by school, state/region, owner group, week, status, and search terms. FTE is the submitted weekly value; when derived, full-time counts as 1.0 and part-time as 0.5. Each row’s Updated value is its data-as-of time.
             </CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">

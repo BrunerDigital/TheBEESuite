@@ -712,6 +712,9 @@ async function previewImportRows({
     unmappedRows,
     familyRows,
     staffRows,
+    sourceFamilyGroups: importFamilyKeys.size,
+    sourceChildGroups: importChildKeys.size,
+    sourceStaffGroups: importStaffKeys.size,
     matchedFamilies,
     newFamilies,
     matchedChildren,
@@ -813,6 +816,7 @@ async function GETHandler(request: NextRequest) {
 
   const requestedBatchId = clean(request.nextUrl.searchParams.get("batchId") || request.nextUrl.searchParams.get("id"));
   const requestedCenterId = clean(request.nextUrl.searchParams.get("centerId"));
+  const reportType = clean(request.nextUrl.searchParams.get("report"));
   const wantsLatest = !requestedBatchId || requestedBatchId.toLowerCase() === "latest";
 
   const batch = wantsLatest
@@ -847,6 +851,53 @@ async function GETHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
   }
 
+  if (reportType === "reconciliation") {
+    const familyIds = [...new Set(batch.rows.map((row) => row.createdFamilyId).filter((id): id is string => Boolean(id)))];
+    const childIds = [...new Set(batch.rows.map((row) => row.createdChildId).filter((id): id is string => Boolean(id)))];
+    const sourceBalanceCents = batch.rows.reduce((sum, row) => {
+      const raw = row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
+        ? row.rawData as Record<string, unknown>
+        : {};
+      return sum + cents(value(raw, ["balance", "account balance", "ledger balance", "amount due"]));
+    }, 0);
+    const [families, children, guardians, ledger] = await Promise.all([
+      prisma.family.count({ where: { id: { in: familyIds }, centerId: batch.centerId } }),
+      prisma.child.count({ where: { id: { in: childIds }, family: { centerId: batch.centerId } } }),
+      prisma.guardian.count({ where: { familyId: { in: familyIds }, family: { centerId: batch.centerId } } }),
+      prisma.ledgerEntry.aggregate({
+        where: { sourceSystem: "procare", externalId: { startsWith: `${batch.id}:` }, billingAccount: { family: { centerId: batch.centerId } } },
+        _sum: { amountCents: true },
+      }),
+    ]);
+    const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
+      ? batch.summary as Record<string, unknown>
+      : {};
+    const report = buildProcareReconciliationReport({
+      batchId: batch.id,
+      sourceSha256: typeof summary.sourceSha256 === "string" ? summary.sourceSha256 : undefined,
+      batchStatus: batch.status,
+      importedRows: batch.rows.filter((row) => row.status === "imported").length,
+      errorRows: batch.rows.filter((row) => row.status === "error").length,
+      source: { families: familyIds.length, children: childIds.length, guardians: null, staff: null, classrooms: null, balanceCents: sourceBalanceCents, creditsCents: null, openInvoicesCents: null },
+      target: { families, children, guardians, staff: null, classrooms: null, balanceCents: ledger._sum.amountCents ?? 0, creditsCents: null, openInvoicesCents: null },
+    });
+    await writeAuditLog(user, {
+      centerId: batch.centerId,
+      action: "procare.import.reconciliation_exported",
+      resource: "ProcareImportBatch",
+      resourceId: batch.id,
+      metadata: { decision: report.decision, sourceSha256: report.sourceSha256 },
+    });
+    return NextResponse.json({
+      ok: true,
+      report,
+      retention: {
+        rawRowsReviewDue: procareRetentionReviewDue(batch.createdAt).toISOString(),
+        enforcementPoint: "Deletion requires approved retention ownership and a separately authorized audited cleanup action.",
+      },
+    }, { headers: { "Cache-Control": "no-store" } });
+  }
+
   const exportPayload = {
     exportType: "procare_import_backup",
     exportedAt: new Date().toISOString(),
@@ -862,6 +913,7 @@ async function GETHandler(request: NextRequest) {
       status: batch.status,
       summary: batch.summary,
       createdAt: batch.createdAt,
+      rawRowsRetentionReviewDue: procareRetentionReviewDue(batch.createdAt),
       center: batch.center,
       uploadedBy: batch.uploadedBy,
     },
@@ -989,16 +1041,6 @@ async function POSTHandler(request: NextRequest) {
     duplicateMode,
   });
   const blockingWarningRows = Math.max(validationPreview.warningRows - validationPreview.duplicateReviewRows, 0);
-  if (validationPreview.duplicateScanSkipped) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: `This ${validationPreview.rows}-row export exceeds the ${validationPreview.duplicateScanRowLimit}-row duplicate-review safety limit. Split it into approved batches or complete a reviewed importer enhancement before cutover.`,
-        summary: { ...validationPreview, sourceSha256 },
-      },
-      { status: 400 },
-    );
-  }
   if (blockingWarningRows > 0) {
     return NextResponse.json(
       { ok: false, error: `${blockingWarningRows} ProCare row(s) still need cleanup before import. Run Preview Import and fix the warning rows first.`, summary: validationPreview },

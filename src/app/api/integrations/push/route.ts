@@ -17,7 +17,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
   if (!canManageOperations(user)) {
-    return NextResponse.json({ ok: false, error: "Push notifications are not allowed for this role." }, { status: 403 });
+    return NextResponse.json({ ok: false, error: "In-app notifications are not allowed for this role." }, { status: 403 });
   }
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;

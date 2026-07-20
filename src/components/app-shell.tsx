@@ -43,6 +43,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { clearClassroomOfflineQueues } from "@/lib/classroom-offline-queue";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -489,6 +490,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   }, [showWorkspaceTools]);
 
   async function logout() {
+    clearClassroomOfflineQueues(window.localStorage);
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
     router.refresh();

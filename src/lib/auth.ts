@@ -40,7 +40,7 @@ export type CurrentUser = {
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
-  return user.mustResetPassword && user.role !== UserRole.TEACHER && user.role !== UserRole.PARENT_GUARDIAN;
+  return user.mustResetPassword && user.role !== UserRole.TEACHER;
 }
 
 const tenantWideAccessRoles = new Set<UserRole>([
@@ -431,6 +431,13 @@ export function getLeadScopeWhere(user: CurrentUser) {
   }
   if (!user.centerIds.length) return { id: "__no_authorized_center__" };
   return { id: { in: user.centerIds } };
+}
+
+export function deriveClassroomOfflineQueueCredentials(user: Pick<CurrentUser, "id" | "tenantId" | "assignedClassroomId">) {
+  const scope = `${user.tenantId}:${user.id}:${user.assignedClassroomId ?? "unassigned"}`;
+  const key = createHmac("sha256", getAuthSecret()).update(`classroom-offline-key:${scope}`).digest("base64url");
+  const scopeId = createHmac("sha256", getAuthSecret()).update(`classroom-offline-scope:${scope}`).digest("hex").slice(0, 24);
+  return { key, scopeId };
 }
 
 export function getDashboardCenterScopeWhere(user: CurrentUser) {

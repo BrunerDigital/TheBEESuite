@@ -269,7 +269,7 @@ export function NotificationPreferencesPanel({
           <span className="font-medium text-foreground">Bulk channel:</span>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("emailEnabled", true)}>Email on</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", true)}>SMS on</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("pushEnabled", true)}>Push on</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("pushEnabled", true)}>In-app on</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", false)}>SMS off</Button>
           <span>
             {targetMode === "role"
@@ -284,7 +284,7 @@ export function NotificationPreferencesPanel({
               <TableHead>Resolved from</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>SMS</TableHead>
-              <TableHead>Push</TableHead>
+              <TableHead>In-app</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

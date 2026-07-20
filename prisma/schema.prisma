@@ -543,6 +543,7 @@ model ChildLocationTransition {
   movedById       String?
   movedAt         DateTime @default(now())
   createdAt       DateTime @default(now())
+  clientActionId  String?  @unique
 
   child         Child      @relation(fields: [childId], references: [id])
   center        Center?    @relation(fields: [centerId], references: [id])
@@ -895,7 +896,8 @@ model AttendanceRecord {
   absenceReason String?
   sourceSystem  String?
   externalId    String?
-  metadata      Json?
+  metadata       Json?
+  clientActionId String? @unique
 
   child     Child?     @relation(fields: [childId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
@@ -941,6 +943,7 @@ model DailyReport {
   teacherNote    String?
   suppliesNeeded String?
   sentAt         DateTime?
+  clientActionId String?
 
   child      Child            @relation(fields: [childId], references: [id])
   classroom  Classroom?       @relation(fields: [classroomId], references: [id])
@@ -949,6 +952,8 @@ model DailyReport {
   diapers    DiaperPottyLog[]
   activities ActivityLog[]
   media      ChildMedia[]
+
+  @@unique([childId, clientActionId])
 }
 
 model ChildMedia {
@@ -1027,6 +1032,7 @@ model IncidentReport {
   photoAttachmentPlaceholder Boolean   @default(false)
   adminReviewStatus          String    @default("pending")
   followUpTasks              Json?
+  clientActionId             String?   @unique
 
   child     Child      @relation(fields: [childId], references: [id])
   classroom Classroom? @relation(fields: [classroomId], references: [id])
@@ -1572,6 +1578,45 @@ model IntegrationDelivery {
   @@index([centerId, createdAt])
   @@index([leadId])
   @@index([messageId])
+}
+
+model ParentPortalSetupToken {
+  id             String    @id @default(cuid())
+  tenantId       String
+  centerId       String
+  familyId       String
+  guardianId     String
+  userId         String
+  email          String
+  tokenHash      String    @unique
+  status         String    @default("issued")
+  deliveryStatus String    @default("pending")
+  reason         String
+  expiresAt      DateTime
+  claimedAt      DateTime?
+  usedAt         DateTime?
+  revokedAt      DateTime?
+  issuedById     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([guardianId, status])
+  @@index([tenantId, centerId, createdAt])
+  @@index([expiresAt, status])
+}
+
+model SendGridEventReceipt {
+  id                String   @id @default(cuid())
+  eventId           String   @unique
+  providerMessageId String
+  eventType         String
+  matchedDeliveries Int      @default(0)
+  occurredAt        DateTime?
+  processedAt       DateTime @default(now())
+
+  @@index([providerMessageId])
+  @@index([eventType, processedAt])
 }
 
 model StripeWebhookEvent {

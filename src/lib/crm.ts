@@ -30,6 +30,24 @@ export const stageLabels: Record<EnrollmentStage, string> = {
   LOST_NOT_A_FIT: "Lost / Not a Fit",
 };
 
+export const crmPipelineStageDisclosure =
+  "CRM stages track follow-up progress only. They do not create or approve family, child, guardian, or enrollment records.";
+
+export function crmStageApprovalBoundary(stage: EnrollmentStage, approvedEnrollmentRecordCount: number) {
+  const approvedRecordExists = approvedEnrollmentRecordCount > 0;
+  const allowed = stage !== EnrollmentStage.ENROLLED || approvedRecordExists;
+  return {
+    allowed,
+    code: allowed ? null : "approved_enrollment_required",
+    approvedEnrollmentRecordCount,
+    approvedRecordExists,
+    disclosure: crmPipelineStageDisclosure,
+    message: allowed
+      ? crmPipelineStageDisclosure
+      : "The CRM stage cannot be moved to Enrolled until director registration approval has created a linked enrollment record.",
+  };
+}
+
 export function isEnrollmentStage(value: string): value is EnrollmentStage {
   return enrollmentStages.includes(value as EnrollmentStage);
 }

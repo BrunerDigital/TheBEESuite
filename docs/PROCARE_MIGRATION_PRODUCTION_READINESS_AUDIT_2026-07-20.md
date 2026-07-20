@@ -27,7 +27,6 @@ A selected school is ready for ProCare cutover only when its approved secure exp
 2. **Approved secure ProCare exports and exact report/column mappings have not been supplied for each selected school.** Owner: Brenden. Exact retest: preview each export through the approved safe environment and retain filename, export timestamp, SHA-256, mapping/exclusion review, warnings, and duplicate decisions.
 3. **No per-school dry-run/import/reconciliation evidence exists for the selected wave.** Owner: Brenden. Exact retest: use the evidence packet to reconcile families, children, guardians, staff, classrooms, balances, credits, and open invoices; spot-check at least 10 families; retain all batch IDs and backups.
 4. **No written director, corporate, technical, and ProCare cutover approvals exist.** Owner: Brenden. Exact retest: record all four decisions after reconciliation, role isolation, training, rollback, and support gates pass.
-5. **Current large-file duplicate review is intentionally capped at 500 rows.** The importer now fails closed rather than allowing an unreviewed large file to commit. Owner: Brenden. Exact retest: approve a safe batching plan that preserves record relationships, or authorize an importer enhancement and prove duplicate review on a representative full-size export.
 
 ### REQUIRED BEFORE WAVE
 
@@ -41,6 +40,13 @@ A selected school is ready for ProCare cutover only when its approved secure exp
 1. Add a dedicated reconciliation report/download that calculates source-versus-target counts and financial totals from retained import evidence. Owner: Brenden.
 2. Add a first-class reversal workflow only after product, accounting, and audit requirements define how post-import writes and externally visible records must be handled. Owner: Brenden.
 3. Confirm and document retention/deletion requirements for raw ProCare rows and downloaded backups. Owner: Brenden.
+
+## Continuation safeguards completed
+
+- Large exports now receive complete database duplicate analysis across bounded review windows while one full-export identity set preserves family, child, and staff relationships. Ambiguous duplicates and cleanup warnings remain commit blockers.
+- Authorized operators can download a read-only source-versus-target reconciliation report for a retained batch. It verifies linked families/children and batch opening-balance ledger totals; unsupported guardian/staff/classroom/credit/open-invoice source totals remain explicitly `not_available` and therefore fail closed for cutover.
+- Rollback evidence has a tested minimum set covering source identity, backup, scope, timing, post-import writes, ownership, and human decisions.
+- Raw rows receive a 90-day retention-review date. Deletion is not automatic and requires separately authorized, audited cleanup after reconciliation, rollback, audit, and legal needs are closed.
 
 ## External decisions required
 

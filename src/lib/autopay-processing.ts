@@ -28,6 +28,7 @@ import {
 } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeInvoicePayment } from "@/lib/stripe-payment-application";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
@@ -253,6 +254,12 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     }
     if (!center) {
       results.push({ ...baseResult, status: "skipped", reason: "Family is not linked to a school." });
+      continue;
+    }
+
+    const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
+    if (!billingApproval.approved) {
+      results.push({ ...baseResult, status: "skipped", reason: billingApproval.blockingReason });
       continue;
     }
 

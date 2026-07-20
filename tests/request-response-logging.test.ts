@@ -150,6 +150,32 @@ test("large or unsupported bodies are summarized instead of read", async () => {
   });
 });
 
+test("SendGrid webhook logs redact signatures, recipients, ids, and provider failure text", async () => {
+  const request = new Request("https://app.test/api/sendgrid/events", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Twilio-Email-Event-Webhook-Signature": "secret-signature",
+      "X-Twilio-Email-Event-Webhook-Timestamp": "1784556000",
+    },
+    body: JSON.stringify([{
+      email: "parent@example.com",
+      event: "bounce",
+      sg_event_id: "event-secret",
+      sg_message_id: "message-secret",
+      reason: "Mailbox for parent@example.com does not exist",
+    }]),
+  });
+  const payload = await buildApiLogPayload(request, "POST", Response.json({ ok: false, status: "failed" }), Date.now());
+  const serialized = JSON.stringify(payload);
+  assert.equal(serialized.includes("parent@example.com"), false);
+  assert.equal(serialized.includes("event-secret"), false);
+  assert.equal(serialized.includes("message-secret"), false);
+  assert.equal(serialized.includes("secret-signature"), false);
+  assert.equal(serialized.includes("Mailbox"), false);
+  assert.equal(serialized.includes('"event":"bounce"'), true);
+});
+
 test("operational error logs redact messages and metadata", () => {
   const original = console.error;
   const lines: string[] = [];

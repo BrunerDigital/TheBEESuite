@@ -37,7 +37,7 @@ function InvalidLink({ message }: { message: string }) {
             else.
           </AlertDescription>
         </Alert>
-        <Link href="/parents" className="w-fit text-sm font-semibold text-amber-300 underline underline-offset-4 hover:text-amber-200">
+        <Link href="/parents" className="inline-flex min-h-11 w-fit items-center text-sm font-semibold text-amber-300 underline underline-offset-4 hover:text-amber-200">
           Return to parent portal sign in
         </Link>
       </div>

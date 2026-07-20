@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -35,4 +36,23 @@ test("parent iOS privacy and permission metadata is present", () => {
   assert.match(infoPlist, /ITSAppUsesNonExemptEncryption/);
   assert.match(privacyManifest, /NSPrivacyTracking/);
   assert.match(privacyManifest, /NSPrivacyCollectedDataTypes/);
+});
+
+test("mobile store configuration audit passes", () => {
+  const output = execFileSync(process.execPath, ["scripts/mobile-store-readiness-check.mjs"], { encoding: "utf8" });
+
+  assert.match(output, /PASS mobile store repository configuration/);
+  assert.match(output, /PASS iOS 1024px no-alpha icon and 2732px no-alpha splash assets/);
+  assert.match(output, /DEFERRED Android native target is not present/);
+});
+
+test("v1 UI describes database alerts as in-app notifications, not native push", () => {
+  const messagePanel = readFileSync("src/components/message-reply-panel.tsx", "utf8");
+  const preferencePanel = readFileSync("src/components/notification-preferences-panel.tsx", "utf8");
+
+  assert.doesNotMatch(messagePanel, /push\/in-app notifications/i);
+  assert.doesNotMatch(messagePanel, /Queue push\/in-app/i);
+  assert.match(messagePanel, /in-app notifications queued/i);
+  assert.match(preferencePanel, /In-app on/);
+  assert.match(preferencePanel, /<TableHead>In-app<\/TableHead>/);
 });

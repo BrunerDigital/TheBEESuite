@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -112,6 +113,11 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!center || center.organization.tenantId !== payload.tenantId) {
     return NextResponse.json({ ok: false, error: "Payment setup link could not be matched to this school." }, { status: 404 });
+  }
+
+  const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
+  if (!billingApproval.approved) {
+    return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
   }
 
   const allowedEmails = new Set(paymentMethodRequestRecipientOptions({

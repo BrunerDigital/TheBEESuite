@@ -27,6 +27,22 @@ test("database drift evaluation fails missing RLS and browser grants", () => {
   ]);
 });
 
+test("parent setup tokens remain server-only in both migration ledgers", async () => {
+  const prismaMigration = await readFile(
+    "prisma/migrations/20260720201430_enable_rls_parent_portal_setup_token/migration.sql",
+    "utf8",
+  );
+  const supabaseMigration = await readFile(
+    "supabase/migrations/20260720201430_enable_rls_parent_portal_setup_token.sql",
+    "utf8",
+  );
+
+  assert.equal(supabaseMigration, prismaMigration);
+  assert.match(prismaMigration, /REVOKE ALL ON TABLE public\."ParentPortalSetupToken" FROM anon, authenticated/);
+  assert.match(prismaMigration, /ALTER TABLE public\."ParentPortalSetupToken" ENABLE ROW LEVEL SECURITY/);
+  assert.match(prismaMigration, /FOR ALL\s+TO service_role\s+USING \(true\)\s+WITH CHECK \(true\)/);
+});
+
 test("credentialed isolation evidence remains incomplete until every case passes", () => {
   const records = requiredIsolationCases.map((caseId) => ({
     caseId,

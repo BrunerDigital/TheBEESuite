@@ -1,8 +1,7 @@
-import { randomBytes } from "node:crypto";
 import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { isEmail } from "@/lib/integrations";
-import { PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
+import { DEFAULT_PARENT_INITIAL_PASSWORD, PARENT_PORTAL_INVITE_MODE } from "@/lib/parent-portal-invitations";
 import { prisma } from "@/lib/prisma";
 import { upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 
@@ -97,11 +96,13 @@ export async function ensureParentPortalLoginForGuardian({
   linkedBy,
   linkedReason,
   registrationApproval = false,
+  resetToInitialPassword = false,
 }: {
   guardianId: string;
   linkedBy?: string | null;
   linkedReason?: string;
   registrationApproval?: boolean;
+  resetToInitialPassword?: boolean;
 }): Promise<ParentPortalProvisionResult> {
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
@@ -145,10 +146,10 @@ export async function ensureParentPortalLoginForGuardian({
   const authUser = await upsertSupabaseAuthUserWithPassword({
     email,
     name: guardian.fullName,
-    password: randomBytes(48).toString("base64url"),
+    password: DEFAULT_PARENT_INITIAL_PASSWORD,
     role: UserRole.PARENT_GUARDIAN,
     source: PARENT_PORTAL_INVITE_MODE,
-    updateExistingPassword: false,
+    updateExistingPassword: resetToInitialPassword,
   });
   const credentialCreated = !("alreadyExisted" in authUser && authUser.alreadyExisted);
 
@@ -159,7 +160,7 @@ export async function ensureParentPortalLoginForGuardian({
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
-      ...(credentialCreated || (existingUser && !existingUser.isActive) ? { mustResetPassword: true } : {}),
+      ...(credentialCreated || resetToInitialPassword || (existingUser && !existingUser.isActive) ? { mustResetPassword: true } : {}),
       sessionVersion: { increment: 1 },
     },
     create: {

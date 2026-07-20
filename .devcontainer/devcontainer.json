@@ -1,0 +1,40 @@
+{
+  "name": "The BEE Suite",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "moby": true
+    }
+  },
+  "forwardPorts": [3000, 54321, 54323],
+  "portsAttributes": {
+    "3000": {
+      "label": "The BEE Suite",
+      "onAutoForward": "openPreview"
+    },
+    "54321": {
+      "label": "Supabase API",
+      "onAutoForward": "silent"
+    },
+    "54323": {
+      "label": "Supabase Studio",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "npm ci",
+  "postStartCommand": "npm run codespace:setup",
+  "remoteEnv": {
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "Prisma.prisma",
+        "ms-playwright.playwright"
+      ]
+    }
+  }
+}

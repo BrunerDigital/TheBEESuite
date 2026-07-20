@@ -33,6 +33,7 @@ import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/
 import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import {
+  buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
   buildParentPortalUrl,
   PARENT_PORTAL_PATH,
@@ -444,24 +445,40 @@ test("external payment session callbacks use the branded app base URL", () => {
   }
 });
 
-test("parent portal invite copy uses a private expiring one-time setup link", () => {
-  const setupUrl = "https://thebeesuite.io/reset-password?token_hash=secret&type=recovery&next=%2Fparent-portal%2Fsetup";
+test("parent portal invite copy explains the app login, kiosk PIN, ACH, and family tools", () => {
+  const loginUrl = "https://thebeesuite.io/parents";
   const text = buildParentPortalInvitationText({
     guardianName: "Taylor Parent",
     centerLabel: "Kid City Kokomo",
     email: "taylor@example.com",
-    setupUrl,
-    expiresAt: new Date("2026-07-20T21:00:00.000Z"),
+    loginUrl,
   });
 
   assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
-  assert.match(text, /private one-time link/);
-  assert.match(text, /Create a password for taylor@example\.com/);
-  assert.match(text, /expires at 2026-07-20T21:00:00\.000Z/);
-  assert.match(text, /stops working after it is used/);
-  assert.match(text, /child records and classroom connections/);
-  assert.doesNotMatch(text, /BusyBees|default password/i);
+  assert.match(text, /Email: taylor@example\.com/);
+  assert.match(text, /First-login password: BusyBees/);
+  assert.match(text, /required to choose a private password immediately/);
+  assert.match(text, /last 4 digits of your phone number/);
+  assert.match(text, /bank account for ACH payments/);
+  assert.match(text, /reports, incidents, photos/);
   assert.doesNotMatch(text, /vercel\.app/i);
+
+  const html = buildParentPortalInvitationHtml({
+    guardianName: "Taylor Parent",
+    centerLabel: "Kid City Kokomo",
+    email: "taylor@example.com",
+    loginUrl,
+    branding: {
+      name: "Kid City USA",
+      tagline: "Where Kids Can BEE Kids",
+      logoSrc: "/brand/kid-city-usa/logo-horizontal.png",
+      logoAlt: "Kid City USA logo",
+    },
+  });
+  assert.match(html, /https:\/\/thebeesuite\.io\/brand\/kid-city-usa\/logo-horizontal\.png/);
+  assert.match(html, /Open the Parent App/);
+  assert.match(html, /BusyBees/);
+  assert.match(html, /required to choose a private password immediately/);
 });
 
 test("parent document request emails use guardian personal emails and private password copy", () => {

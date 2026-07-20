@@ -39,7 +39,13 @@ No delegation acceptance has been recorded as of July 20, 2026. Brenden remains 
 
 | Acceptance date/time | School/scope | Responsibility | Accepted owner | Coverage window | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- |
-| 2026-07-20T14:20:13-04:00 | Platform production release/database readiness; no school-wave or business/legal approval implied | Technical release/database ownership, including stop and rollback authority | Brenden Bruner | Effective immediately and continuing until replaced or revoked; response target and backup owner remain unrecorded | Brenden stated: “I, Brenden, accept technical release/database ownership, including stop and rollback authority.” |
+| 2026-07-20T14:20:13-04:00 | Platform production release/database readiness; no school-wave or business/legal approval implied | Technical release/database ownership, including stop and rollback authority | Brenden Bruner | Effective immediately; P0 acknowledge 15m, decision 30m, recovery start 60m; P1 acknowledge 30m and plan 60m; backup owner/after-hours coverage still unaccepted | Brenden stated: “I, Brenden, accept technical release/database ownership, including stop and rollback authority.” Brenden's later request to fix the response target authorized recording the technical targets. |
+
+## Database and Storage recovery decision
+
+| Decision date | Scope | Decision/result | Remaining boundary | Evidence reference |
+| --- | --- | --- | --- | --- |
+| 2026-07-20 | No-production-data database and Storage recovery method and drill | Implemented a hash-addressed private-bucket archive/verify/restore tool and completed a destructive synthetic relationship-plus-child-media restore with zero fixture loss, matching database/object hashes, private signed access, unauthenticated denial, and complete branch/archive cleanup. | Production Storage backup remains non-operational until a company-approved encrypted/versioned off-platform destination and nightly runner are configured. A second human backup technical owner has not accepted. The drill does not certify full E7 or a wider-school wave. | `SUPABASE_DATABASE_STORAGE_RECOVERY_RUNBOOK.md`; `SECURITY_DATABASE_STORAGE_RESTORE_EVIDENCE_PACKET.md` |
 
 ## Completed signoffs
 

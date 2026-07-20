@@ -50,6 +50,7 @@
     "demo:seed": "tsx -r tsconfig-paths/register scripts/seed-demo-accounts.ts",
     "demo:complete-presentation": "tsx -r tsconfig-paths/register scripts/complete-demo-school.ts",
     "kidcity:ensure-school-logins": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-school-logins.ts",
+    "users:set-management-profile-photos": "tsx -r tsconfig-paths/register scripts/set-management-profile-photos.ts",
     "kidcity:seed-communications-kit": "tsx -r tsconfig-paths/register scripts/seed-kidcity-communications-kit.ts",
     "app-review:parent:ensure": "tsx -r tsconfig-paths/register scripts/ensure-app-review-parent.ts",
     "tenant:backfill-access": "tsx -r tsconfig-paths/register scripts/backfill-tenant-access-branding.ts",

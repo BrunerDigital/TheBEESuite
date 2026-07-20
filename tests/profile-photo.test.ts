@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   DEFAULT_PROFILE_PHOTO_URL,
+  MANAGEMENT_PROFILE_PHOTO_ROLES,
   contentTypeForProfilePhotoFile,
   mergeProfilePhotoCustomFields,
   readProfilePhotoFields,
   readProfilePhotoStorageKey,
+  usesManagementProfilePhoto,
   validateProfilePhotoFile,
 } from "../src/lib/profile-photo";
 
@@ -38,6 +40,19 @@ test("profile photo fields preserve existing custom metadata", () => {
   assert.equal(readProfilePhotoFields(merged).bucket, "child-media");
 });
 
-test("default profile photo uses the Mr. Bee silhouette asset", () => {
-  assert.equal(DEFAULT_PROFILE_PHOTO_URL, "/brand/the-bee-suite/mr-bee-profile-silhouette.svg");
+test("default profile photo uses the supplied Mr. Bee artwork", () => {
+  assert.equal(DEFAULT_PROFILE_PHOTO_URL, "/brand/the-bee-suite/mr-bee-profile.png");
+});
+
+test("management profile photo roles cover admins, executives, and directors", () => {
+  assert.deepEqual(MANAGEMENT_PROFILE_PHOTO_ROLES, [
+    "PLATFORM_OWNER",
+    "BRAND_ADMIN",
+    "REGIONAL_MANAGER",
+    "CENTER_DIRECTOR",
+    "ASSISTANT_DIRECTOR",
+    "BILLING_ADMIN",
+  ]);
+  assert.equal(usesManagementProfilePhoto("CENTER_DIRECTOR"), true);
+  assert.equal(usesManagementProfilePhoto("TEACHER"), false);
 });

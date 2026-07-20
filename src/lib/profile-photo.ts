@@ -1,5 +1,18 @@
-export const DEFAULT_PROFILE_PHOTO_URL = "/brand/the-bee-suite/mr-bee-profile-silhouette.svg";
+export const DEFAULT_PROFILE_PHOTO_URL = "/brand/the-bee-suite/mr-bee-profile.png";
 export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+export const MANAGEMENT_PROFILE_PHOTO_ROLES = [
+  "PLATFORM_OWNER",
+  "BRAND_ADMIN",
+  "REGIONAL_MANAGER",
+  "CENTER_DIRECTOR",
+  "ASSISTANT_DIRECTOR",
+  "BILLING_ADMIN",
+] as const;
+
+export function usesManagementProfilePhoto(role: string) {
+  return (MANAGEMENT_PROFILE_PHOTO_ROLES as readonly string[]).includes(role);
+}
 
 const allowedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 

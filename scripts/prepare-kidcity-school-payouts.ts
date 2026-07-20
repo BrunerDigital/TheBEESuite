@@ -96,6 +96,7 @@ async function assertConnectedAccountReadPreflight(
 
 export async function prepareKidCitySchoolPayouts() {
   const apply = hasFlag("--apply");
+  const createAccounts = hasFlag("--create-accounts");
   const createLinks = hasFlag("--create-links");
   const acknowledgeStripeState = hasFlag("--acknowledge-stripe-state");
   const skipPreflight = hasFlag("--skip-stripe-read-preflight");
@@ -104,11 +105,11 @@ export async function prepareKidCitySchoolPayouts() {
   const selectedLocationIds = argValues("--location-id");
   const selectedStates = new Set(argValues("--state").map((state) => state.toUpperCase()));
 
-  if (createLinks && !apply) {
-    throw new Error("--create-links requires --apply because it creates Stripe state and stores connected account IDs.");
+  if ((createAccounts || createLinks) && !apply) {
+    throw new Error("--create-accounts/--create-links requires --apply because it creates Stripe state and stores connected account IDs.");
   }
-  if (createLinks && !acknowledgeStripeState) {
-    throw new Error("--create-links requires --acknowledge-stripe-state.");
+  if ((createAccounts || createLinks) && !acknowledgeStripeState) {
+    throw new Error("--create-accounts/--create-links requires --acknowledge-stripe-state.");
   }
 
   const centers = await prisma.center.findMany({
@@ -148,7 +149,7 @@ export async function prepareKidCitySchoolPayouts() {
   }
   if (limit) activeCenters = activeCenters.slice(0, limit);
 
-  if (createLinks && !skipPreflight) {
+  if ((createAccounts || createLinks) && !skipPreflight) {
     await assertConnectedAccountReadPreflight(activeCenters);
   }
 
@@ -181,7 +182,7 @@ export async function prepareKidCitySchoolPayouts() {
     let onboardingUrl: string | null = null;
     let status: BulkResult["status"] = apply ? "profile_ready" : "dry_run";
 
-    if (createLinks) {
+    if (createAccounts || createLinks) {
       const stripeConfigured = Boolean(await getStripeSecretKey({ tenantId: center.organization.tenantId }));
       if (!stripeConfigured) {
         results.push({
@@ -210,6 +211,7 @@ export async function prepareKidCitySchoolPayouts() {
           postalCode: setup.details.postalCode,
           businessUrl: setup.details.businessUrl,
           productDescription: setup.details.productDescription,
+          idempotencyKey: `kidcity-connect-account-${center.id}`,
           tenantId: center.organization.tenantId,
         });
         if (!created.ok || !created.id) {
@@ -237,39 +239,41 @@ export async function prepareKidCitySchoolPayouts() {
         status = "account_created";
       }
 
-      const link = await createStripeAccountLink({
-        accountId,
-        refreshUrl: `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`,
-        returnUrl: `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`,
-        tenantId: center.organization.tenantId,
-      });
-      if (!link.ok || !link.url) {
-        results.push({
-          centerId: center.id,
-          centerName: center.name,
-          locationId,
-          status: "stripe_failed",
-          stripeConnectedAccountId: maskAccountId(accountId),
-          error: link.error || "Stripe onboarding link could not be created.",
+      if (createLinks) {
+        const link = await createStripeAccountLink({
+          accountId,
+          refreshUrl: `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`,
+          returnUrl: `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`,
+          tenantId: center.organization.tenantId,
         });
-        if (accountId && apply) {
-          await prisma.center.update({
-            where: { id: center.id },
-            data: { customFields: jsonInput(customFields) },
+        if (!link.ok || !link.url) {
+          results.push({
+            centerId: center.id,
+            centerName: center.name,
+            locationId,
+            status: "stripe_failed",
+            stripeConnectedAccountId: maskAccountId(accountId),
+            error: link.error || "Stripe onboarding link could not be created.",
           });
+          if (accountId && apply) {
+            await prisma.center.update({
+              where: { id: center.id },
+              data: { customFields: jsonInput(customFields) },
+            });
+          }
+          continue;
         }
-        continue;
+        onboardingUrl = link.url;
+        status = "onboarding_link_created";
+        customFields = {
+          ...customFields,
+          stripeConnectAccountId: accountId,
+          stripeConnectDashboard: "express",
+          stripeConnectApi: "accounts_v2",
+          stripeConnectLastOnboardingAt: new Date().toISOString(),
+          stripePayoutStatus: "onboarding_started",
+        };
       }
-      onboardingUrl = link.url;
-      status = "onboarding_link_created";
-      customFields = {
-        ...customFields,
-        stripeConnectAccountId: accountId,
-        stripeConnectDashboard: "express",
-        stripeConnectApi: "accounts_v2",
-        stripeConnectLastOnboardingAt: new Date().toISOString(),
-        stripePayoutStatus: "onboarding_started",
-      };
     }
 
     if (apply) {
@@ -292,6 +296,7 @@ export async function prepareKidCitySchoolPayouts() {
   const summary = {
     ok: results.every((result) => result.status !== "validation_failed" && result.status !== "stripe_failed"),
     apply,
+    createAccounts,
     createLinks,
     activeSchools: activeCenters.length,
     profileReady: results.filter((result) => result.status === "profile_ready" || result.status === "dry_run").length,

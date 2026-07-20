@@ -1712,6 +1712,7 @@ export async function createStripeConnectedAccount({
   addressLine2,
   businessUrl,
   productDescription,
+  idempotencyKey,
   tenantId,
   credentials,
 }: {
@@ -1728,6 +1729,7 @@ export async function createStripeConnectedAccount({
   addressLine2?: string | null;
   businessUrl?: string | null;
   productDescription?: string | null;
+  idempotencyKey?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
 }): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
@@ -1802,7 +1804,10 @@ export async function createStripeConnectedAccount({
 
   const response = await fetch("https://api.stripe.com/v2/core/accounts", {
     method: "POST",
-    headers: stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
+    headers: {
+      ...stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
+      ...(clean(idempotencyKey) ? { "Idempotency-Key": clean(idempotencyKey) } : {}),
+    },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(10_000),
   });

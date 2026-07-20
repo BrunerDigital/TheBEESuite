@@ -19,7 +19,7 @@ Status: Draft for Product, Legal, QA, and Release Manager review before App Stor
 | Made for Kids | No |
 | Target devices | iPhone only for v1 |
 | Minimum iOS | iOS 16.0 |
-| Version | `1.0.0` |
+| Version | `1.0` |
 | Initial build | `1` |
 | Copyright | `2026 BrunerDigital` or exact Apple Developer legal name |
 

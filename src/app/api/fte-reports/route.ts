@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
-import { canAccessCenter, canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
+import { canManageOperations, getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import {
   ageGroupTotal,
   calculateFteCount,
   defaultFteWeekEnd,
   isExecutiveFteManager,
+  isFteCenterInVisibleScope,
   normalizeFteStatus,
   resolveFteCenterId,
   validateFtePeriod,
@@ -237,7 +238,7 @@ async function GETHandler(request: NextRequest) {
   if (!visibleCenterIds.length) {
     return NextResponse.json({ ok: false, error: "No assigned center found for this account." }, { status: 403 });
   }
-  if (requestedCenterId && !canAccessCenter(user, requestedCenterId)) {
+  if (requestedCenterId && !isFteCenterInVisibleScope(visibleCenterIds, requestedCenterId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
 
@@ -343,7 +344,12 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: periodValidation.error }, { status: periodValidation.status });
   }
   if (!weekStart) return NextResponse.json({ ok: false, error: "Week start is required." }, { status: 400 });
-  if (!canAccessCenter(user, centerId)) {
+  const visibleCenters = await prisma.center.findMany({
+    where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
+    select: { id: true },
+  });
+  const visibleCenterIds = visibleCenters.map((center) => center.id);
+  if (!isFteCenterInVisibleScope(visibleCenterIds, centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
   }
 
@@ -360,7 +366,7 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!center) return NextResponse.json({ ok: false, error: "Center not found." }, { status: 404 });
 
-  if (existingById && !canAccessCenter(user, existingById.centerId)) {
+  if (existingById && !isFteCenterInVisibleScope(visibleCenterIds, existingById.centerId)) {
     return NextResponse.json({ ok: false, error: "You do not have access to this report." }, { status: 403 });
   }
 

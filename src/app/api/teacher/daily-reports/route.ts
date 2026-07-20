@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
@@ -42,7 +42,10 @@ async function POSTHandler(request: NextRequest) {
   const childById = new Map(children.map((child) => [child.id, child]));
   for (const childId of dailyReport.childIds) {
     const child = childById.get(childId);
-    const centerId = child?.classroom?.centerId ?? child?.family.centerId ?? null;
+    if (!child) {
+      return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
+    }
+    const centerId = child.classroom?.centerId ?? child.family.centerId ?? null;
     const accessGuard = centerScopedAccessGuard({
       centerId,
       hasTenantWideAccess,
@@ -51,6 +54,9 @@ async function POSTHandler(request: NextRequest) {
     });
     if (!accessGuard.ok) {
       return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
+    }
+    if (!canManageChildInClassroom(user, child.classroom?.id)) {
+      return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
     }
   }
 

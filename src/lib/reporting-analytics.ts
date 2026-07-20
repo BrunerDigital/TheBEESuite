@@ -169,7 +169,7 @@ export function normalizeReportFilters(input: {
   if (!startDate && range && range !== "all") {
     const days = Math.max(1, Math.min(Number(range) || 90, 366));
     startDate = startOfDay(new Date(endDate));
-    startDate.setDate(startDate.getDate() - days);
+    startDate.setDate(startDate.getDate() - (days - 1));
   }
   return {
     startDate: startDate ? startOfDay(startDate) : undefined,

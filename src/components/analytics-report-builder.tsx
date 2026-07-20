@@ -409,6 +409,7 @@ export function AnalyticsReportBuilder({
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Loaded range</div>
               <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Generated {formatDate(data.generatedAt)}</div>
             </div>
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Lead conversion</div>

@@ -47,6 +47,7 @@ Create one evidence packet per location and keep it with the support/cutover rec
 - Cutover date, cutover window, and timezone.
 - ProCare source file names and export timestamps.
 - Import preview summary and final committed `ProcareImportBatch` IDs.
+- Source-file SHA-256 shown by the preview, proving the committed file is the reviewed file.
 - Post-import backup/export file names.
 - Count comparison table.
 - Director validation notes.
@@ -124,9 +125,11 @@ Send the location a written freeze notice:
 1. Open the ProCare import page for the correct location.
 2. Upload the final file or choose the approved source.
 3. Run preview/diff.
-4. Confirm the selected center is the intended school.
-5. Review new, matched, warning, and error counts.
-6. Stop if the import maps rows to the wrong center or creates unexpected duplicate groups.
+4. Record the source SHA-256 and confirm the commit control identifies this exact reviewed export.
+5. Confirm the selected center is the intended school.
+6. Review new, matched, warning, and error counts.
+7. Stop if the import maps rows to the wrong center or creates unexpected duplicate groups.
+8. Stop if database duplicate analysis was skipped; use approved smaller batches or enhance and retest the importer before cutover.
 
 ### 4. Commit Import
 
@@ -266,6 +269,7 @@ Go-live decision: GO / NO-GO
 ## Related Docs
 
 - `docs/PROCARE_FIELD_COVERAGE.md`
+- `docs/PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`
 - `docs/KIDCITY_CUTOVER_OWNER_CHECKLIST.md`
 - `docs/SCHOOL_FULL_FEATURE_ROLLOUT_CHECKLIST_2026-06-08.md`
 - `docs/in-school-testing-runbook.md`

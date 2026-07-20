@@ -8,6 +8,16 @@ The wider school wave is **NO-GO** until the per-school blockers in `SCHOOL_ROLL
 
 Every open item has one accountable human. Until Brenden delegates a workstream to a named teammate, **Brenden is the accountable owner**. The Codex thread is the execution owner, not the business signoff authority.
 
+## Execution priority
+
+Payment and onboarding readiness lead the queue. Priority controls execution order, not the production signoff standard; every applicable exit gate still must pass before the wider school wave can launch.
+
+- **P0 — Payment and onboarding critical path:** Payments and Stripe Connect; School setup and onboarding; Parent experience.
+- **P1 — Dependencies that unblock safe onboarding and billing:** ProCare migration; User and role permissions; Communications; Enrollment CRM; Director experience; User experience and flows; Security and compliance.
+- **P2 — Broader operational and release readiness:** Teacher experience; Corporate dashboards; Reporting and analytics; Apple and Google app readiness; Performance and QA; Deployment and ops; Rollout and training.
+
+Within each priority, work the items in the order shown. A lower-priority workstream may audit in parallel, but it must not enable parent invitations, live billing, production data changes, or deployment ahead of the P0 gates and required human approvals.
+
 Each thread must:
 
 1. Audit current code, data, documentation, and tests before changing anything.

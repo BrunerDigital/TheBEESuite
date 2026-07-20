@@ -2,6 +2,10 @@ import { INTERNAL_SIGNATURE_PENDING_KEY } from "@/lib/signature-capture";
 
 export type RegistrationReviewStatus = "submitted" | "approved" | "rejected";
 
+export function shouldInviteParentOnRegistrationApproval(value: unknown) {
+  return value === true;
+}
+
 export type RegistrationPacketPayload = {
   centerId: string;
   primaryGuardianName: string;

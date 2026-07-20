@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
@@ -15,6 +16,7 @@ import {
   FileCheck2,
   FileText,
   KeyRound,
+  LifeBuoy,
   MessageSquare,
   Minus,
   Paperclip,
@@ -1802,6 +1804,18 @@ export function ParentPortalWorkspace({
             <KeyRound data-icon="inline-start" />
             Update Password
           </Button>
+          <div className="flex flex-col gap-3 rounded-xl border bg-background/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="font-medium">Need help with access, payments, or documents?</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Use the support page for recovery steps and safe contact guidance. Call your school directly for urgent child, pickup, medical, or custody concerns.
+              </p>
+            </div>
+            <Button className="w-full shrink-0 sm:w-auto" variant="outline" nativeButton={false} render={<Link href="/support" />}>
+              <LifeBuoy data-icon="inline-start" />
+              Open Support
+            </Button>
+          </div>
           <div className="space-y-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>

@@ -7,7 +7,16 @@ import {
   fteDueAtForWeek,
   fteExternalEscalationWindow,
   getFteDueState,
+  isFteCenterInVisibleScope,
 } from "../src/lib/fte-report-guardrails";
+
+test("FTE center filters must be present in the database-derived visible scope", () => {
+  const visibleCenterIds = ["tenant_a_center_1", "tenant_a_center_2"];
+
+  assert.equal(isFteCenterInVisibleScope(visibleCenterIds, "tenant_a_center_2"), true);
+  assert.equal(isFteCenterInVisibleScope(visibleCenterIds, "tenant_b_center_1"), false);
+  assert.equal(isFteCenterInVisibleScope(visibleCenterIds, ""), false);
+});
 
 test("FTE weekly deadline is Friday by noon Eastern for Kid City USA operations", () => {
   assert.equal(FTE_REPORTING_DEADLINE_LABEL, "Friday by 12:00 PM ET");

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus } from "@prisma/client";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { buildKioskTuitionBalanceSummary, buildKioskTuitionBalanceWarning } from "@/lib/kiosk-billing-reminders";
 import { prisma } from "@/lib/prisma";
@@ -114,7 +114,7 @@ async function POSTHandler(request: NextRequest) {
   const pin = normalizePin(body.pin);
   const qrToken = normalizeGuardianQrToken(body.qrToken);
   const ip = requestIp(request.headers);
-  const limited = checkRateLimit({ key: `kiosk-lookup:${centerId}:${ip}`, limit: 12, windowMs: 60_000 });
+  const limited = await checkPersistentRateLimit({ key: `kiosk-lookup:${centerId}:${ip}`, limit: 12, windowMs: 60_000 });
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many kiosk attempts. Please ask the front desk for help." },

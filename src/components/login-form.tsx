@@ -116,28 +116,32 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
     event.preventDefault();
     setError("");
     startTransition(async () => {
-      const deviceLabel = window.localStorage.getItem("bee-suite-device-label") ?? "";
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel }),
-      });
+      try {
+        const deviceLabel = window.localStorage.getItem("bee-suite-device-label") ?? "";
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, next, loginPortal: portal, appMode: appModeFromPath(next), deviceLabel }),
+        });
 
-      const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean; nextPath?: string } | null;
-      if (!response.ok) {
-        setError(data?.error ?? "Unable to sign in.");
-        return;
-      }
+        const data = (await response.json().catch(() => null)) as { error?: string; requiresPasswordReset?: boolean; nextPath?: string } | null;
+        if (!response.ok) {
+          setError(data?.error ?? "Unable to sign in.");
+          return;
+        }
 
-      const destination = safeLoginNextPath(data?.nextPath ?? next);
-      if (data?.requiresPasswordReset) {
-        router.push(`/reset-password?force=1&next=${encodeURIComponent(destination)}`);
+        const destination = safeLoginNextPath(data?.nextPath ?? next);
+        if (data?.requiresPasswordReset) {
+          router.push(`/reset-password?force=1&next=${encodeURIComponent(destination)}`);
+          router.refresh();
+          return;
+        }
+
+        router.push(destination);
         router.refresh();
-        return;
+      } catch {
+        setError("We could not reach the sign-in service. Check your connection and try again.");
       }
-
-      router.push(destination);
-      router.refresh();
     });
   }
 
@@ -208,6 +212,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 <Label htmlFor="email">{copy.emailLabel}</Label>
                 <Input
                   id="email"
+                  className="h-11"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder={copy.emailPlaceholder}
@@ -228,6 +233,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                 </div>
                 <Input
                   id="password"
+                  className="h-11"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder={copy.passwordPlaceholder}
@@ -236,7 +242,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
                   required
                 />
               </div>
-              <button className={buttonVariants({ size: "lg" })} type="submit" disabled={isPending}>
+              <button className={buttonVariants({ size: "lg", className: "h-11" })} type="submit" disabled={isPending}>
                 {isPending ? "Signing in..." : "Sign in"}
                 <LogIn data-icon="inline-end" />
               </button>

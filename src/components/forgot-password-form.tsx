@@ -36,19 +36,23 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
     setMessage("");
 
     startTransition(async () => {
-      const response = await fetch("/api/auth/forgot-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, next }),
-      });
-      const data = (await response.json().catch(() => null)) as ResetResponse | null;
+      try {
+        const response = await fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, next }),
+        });
+        const data = (await response.json().catch(() => null)) as ResetResponse | null;
 
-      if (!response.ok) {
-        setError(data?.error ?? "Unable to send a reset link right now.");
-        return;
+        if (!response.ok) {
+          setError(data?.error ?? "Unable to send a reset link right now.");
+          return;
+        }
+
+        setMessage(data?.message ?? "If that email is active, a password reset link will be sent shortly.");
+      } catch {
+        setError("We could not reach the password reset service. Check your connection and try again. Your email is still here.");
       }
-
-      setMessage(data?.message ?? "If that email is active, a password reset link will be sent shortly.");
     });
   }
 
@@ -108,6 +112,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  className="h-11"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder={parentPortalFlow ? "parent@example.com" : "school@kidcityusa.com"}
@@ -116,7 +121,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                   required
                 />
               </div>
-              <Button size="lg" type="submit" disabled={isPending}>
+              <Button className="h-11" size="lg" type="submit" disabled={isPending}>
                 {isPending ? "Sending reset link..." : "Send reset link"}
               </Button>
             </form>

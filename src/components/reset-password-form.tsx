@@ -92,23 +92,27 @@ export function ResetPasswordForm() {
     }
 
     startTransition(async () => {
-      const endpoint = forceReset ? "/api/auth/force-password-reset" : "/api/auth/reset-password";
-      const credential = credentialRef.current;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(forceReset ? { currentPassword, password } : { ...credential, password }),
-      });
-      const data = (await response.json().catch(() => null)) as ResetResponse | null;
+      try {
+        const endpoint = forceReset ? "/api/auth/force-password-reset" : "/api/auth/reset-password";
+        const credential = credentialRef.current;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(forceReset ? { currentPassword, password } : { ...credential, password }),
+        });
+        const data = (await response.json().catch(() => null)) as ResetResponse | null;
 
-      if (!response.ok) {
-        setError(data?.error ?? "Unable to update your password.");
-        return;
+        if (!response.ok) {
+          setError(data?.error ?? "Unable to update your password.");
+          return;
+        }
+
+        setMessage(data?.message ?? (parentPortalFlow ? "Password updated. Sign in to open your parent portal." : "Password updated. You can now sign in."));
+        const loginNext = `${loginHrefForNextPath(next)}&reset=complete`;
+        setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
+      } catch {
+        setError("We could not reach the password reset service. Check your connection and try again. Your entries are still here.");
       }
-
-      setMessage(data?.message ?? (parentPortalFlow ? "Password updated. Sign in to open your parent portal." : "Password updated. You can now sign in."));
-      const loginNext = `${loginHrefForNextPath(next)}&reset=complete`;
-      setTimeout(() => router.push(forceReset ? next : loginNext), 1200);
     });
   }
 
@@ -175,6 +179,7 @@ export function ResetPasswordForm() {
                   <Label htmlFor="currentPassword">Current password</Label>
                   <Input
                     id="currentPassword"
+                    className="h-11"
                     value={currentPassword}
                     onChange={(event) => setCurrentPassword(event.target.value)}
                     type="password"
@@ -187,6 +192,7 @@ export function ResetPasswordForm() {
                 <Label htmlFor="password">New password</Label>
                 <Input
                   id="password"
+                  className="h-11"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
@@ -199,6 +205,7 @@ export function ResetPasswordForm() {
                 <Label htmlFor="confirmPassword">Confirm password</Label>
                 <Input
                   id="confirmPassword"
+                  className="h-11"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   type="password"
@@ -207,7 +214,7 @@ export function ResetPasswordForm() {
                   required
                 />
               </div>
-              <Button size="lg" type="submit" disabled={isPending}>
+              <Button className="h-11" size="lg" type="submit" disabled={isPending}>
                 {isPending ? "Updating password..." : "Update password"}
               </Button>
             </form>

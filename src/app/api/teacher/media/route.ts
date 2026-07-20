@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { getCenterLeadershipUsers } from "@/lib/location-users";
@@ -96,6 +96,9 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!accessGuard.ok) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
+  }
+  if (!canManageChildInClassroom(user, child.classroom?.id)) {
+    return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
   }
 
   if (dailyReportId) {

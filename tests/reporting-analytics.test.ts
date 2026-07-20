@@ -81,7 +81,8 @@ test("report filters normalize quick ranges and center ids", () => {
   assert.equal(filters.endDate.getHours(), 23);
   assert.equal(filters.endDate.getMinutes(), 59);
   assert.equal(filters.startDate.getHours(), 0);
-  assert.equal(Math.round((filters.endDate.getTime() - filters.startDate.getTime()) / 86_400_000), 31);
+  assert.equal(Math.round((filters.endDate.getTime() - filters.startDate.getTime()) / 86_400_000), 30);
+  assert.equal(filters.startDate.getDate(), 10);
 });
 
 test("report date parser keeps date-only values on the selected local day", () => {

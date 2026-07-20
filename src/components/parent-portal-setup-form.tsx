@@ -130,30 +130,34 @@ export function ParentPortalSetupForm({ guardians }: Props) {
     setError("");
 
     startTransition(async () => {
-      const response = await fetch("/api/parent/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          guardianId: selectedGuardian.id,
-          fullName,
-          phone,
-          relation,
-          preferredCommunication,
-          pin,
-        }),
-      });
-      const data = (await response.json().catch(() => null)) as SetupResponse | null;
+      try {
+        const response = await fetch("/api/parent/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            guardianId: selectedGuardian.id,
+            fullName,
+            phone,
+            relation,
+            preferredCommunication,
+            pin,
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as SetupResponse | null;
 
-      if (!response.ok) {
-        setError(data?.error ?? "Parent portal setup could not be saved.");
-        return;
+        if (!response.ok) {
+          setError(data?.error ?? "Parent portal setup could not be saved.");
+          return;
+        }
+
+        setStatus("Your parent portal setup is complete.");
+        setTimeout(() => {
+          router.push("/parent-portal");
+          router.refresh();
+        }, 900);
+      } catch {
+        setError("We could not reach the setup service. Check your connection and try again. Your entries are still here.");
       }
-
-      setStatus("Your parent portal setup is complete.");
-      setTimeout(() => {
-        router.push("/parent-portal");
-        router.refresh();
-      }, 900);
     });
   }
 
@@ -328,20 +332,21 @@ export function ParentPortalSetupForm({ guardians }: Props) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-name">Full name</Label>
-                  <Input id="parent-setup-name" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
+                  <Input id="parent-setup-name" className="h-11" value={fullName} onChange={(event) => setFullName(event.target.value)} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-phone">Mobile phone</Label>
-                  <Input id="parent-setup-phone" value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" />
+                  <Input id="parent-setup-phone" className="h-11" value={phone} onChange={(event) => setPhone(event.target.value)} inputMode="tel" autoComplete="tel" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-relation">Relationship</Label>
-                  <Input id="parent-setup-relation" value={relation} onChange={(event) => setRelation(event.target.value)} required />
+                  <Input id="parent-setup-relation" className="h-11" value={relation} onChange={(event) => setRelation(event.target.value)} required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="parent-setup-communication">Preferred communication</Label>
                   <Input
                     id="parent-setup-communication"
+                    className="h-11"
                     value={preferredCommunication}
                     onChange={(event) => setPreferredCommunication(event.target.value)}
                     placeholder="email, sms, or portal"
@@ -356,7 +361,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 </Label>
                 <Input
                   id="parent-setup-pin"
-                  className="mt-2 max-w-xs"
+                  className="mt-2 h-11 max-w-xs"
                   value={pin}
                   onChange={(event) => setPin(pinDigits(event.target.value))}
                   inputMode="numeric"
@@ -376,7 +381,7 @@ export function ParentPortalSetupForm({ guardians }: Props) {
                 </p>
               </div>
 
-              <Button type="submit" disabled={isPending}>
+              <Button className="h-11" type="submit" disabled={isPending}>
                 {isPending ? "Saving..." : "Finish setup and open portal"}
                 <ArrowRight data-icon="inline-end" />
               </Button>

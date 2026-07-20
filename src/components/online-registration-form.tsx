@@ -30,6 +30,7 @@ type CenterOption = {
 
 type RegistrationFormProps = {
   centers: CenterOption[];
+  initialCenterId?: string;
 };
 
 type SubmitResult = {
@@ -408,7 +409,7 @@ function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { l
   );
 }
 
-export function OnlineRegistrationForm({ centers }: RegistrationFormProps) {
+export function OnlineRegistrationForm({ centers, initialCenterId = "" }: RegistrationFormProps) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SubmitResult | null>(null);
 
@@ -481,7 +482,7 @@ export function OnlineRegistrationForm({ centers }: RegistrationFormProps) {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="centerId">School</Label>
-            <Select name="centerId" required>
+            <Select name="centerId" defaultValue={initialCenterId} required>
               <SelectTrigger id="centerId" className={registrationSelectTriggerClassName}>
                 <SelectValue placeholder="Choose a school" />
               </SelectTrigger>

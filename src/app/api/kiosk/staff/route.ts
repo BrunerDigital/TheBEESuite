@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { readCenterTimeZone } from "@/lib/attendance-state";
 import { normalizePin } from "@/lib/kiosk";
@@ -46,7 +46,7 @@ async function POSTHandler(request: NextRequest) {
   const action = requestedAction === "lookup" ? null : normalizeStaffClockAction(requestedAction);
   const ip = requestIp(request.headers);
 
-  const limited = checkRateLimit({ key: `staff-kiosk:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
+  const limited = await checkPersistentRateLimit({ key: `staff-kiosk:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many staff kiosk attempts. Please ask the front desk for help." },

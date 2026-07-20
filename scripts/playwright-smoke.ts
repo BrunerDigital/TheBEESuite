@@ -158,10 +158,15 @@ async function run() {
     });
 
     for (const route of smokeRoutes) {
-      const response = await page.goto(`${baseUrl}${route.path}`, { waitUntil: "domcontentloaded" });
+      const requestedUrl = `${baseUrl}${route.path}`;
+      const response = await page.goto(requestedUrl, { waitUntil: "domcontentloaded" });
       const status = response?.status() ?? 0;
       if (status >= 500) throw new Error(`${route.name} returned ${status}.`);
-      const bodyText = await page.locator("body").innerText();
+      let bodyText = await page.locator("body").innerText();
+      if (route.expectedText && !route.expectedText.test(bodyText)) {
+        await page.waitForURL((url) => url.href !== requestedUrl, { timeout: 3_000 }).catch(() => undefined);
+        bodyText = await page.locator("body").innerText();
+      }
       if (route.expectedText && !route.expectedText.test(bodyText)) {
         throw new Error(`${route.name} did not render expected text.`);
       }

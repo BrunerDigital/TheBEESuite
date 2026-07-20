@@ -54,12 +54,11 @@ export function deriveStripeConnectStatus(input: {
   requirementFields?: string[] | null;
 }): StripeConnectRequirementStatus {
   if (!input.accountId) return "not_started";
-  if (input.chargesEnabled === true && input.payoutsEnabled === true) return "ready";
   if (input.requirementFields?.length) return "requirements_due";
+  if (input.detailsSubmitted !== true) return "requirements_due";
   if (input.chargesEnabled !== true) return "charges_pending";
   if (input.payoutsEnabled !== true) return "payouts_pending";
-  if (input.detailsSubmitted !== true) return "requirements_due";
-  return "requirements_due";
+  return "ready";
 }
 
 export function stripeConnectStatusLabel(status: StripeConnectRequirementStatus) {

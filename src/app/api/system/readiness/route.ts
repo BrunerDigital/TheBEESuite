@@ -137,6 +137,13 @@ async function GETHandler() {
       "Inquiry, onboarding, and reviewed lead emails can be sent by server routes.",
     ),
     check(
+      "SendGrid delivery events",
+      env("SENDGRID_EVENT_WEBHOOK_VERIFICATION_KEY") ? "ready" : "warning",
+      env("SENDGRID_EVENT_WEBHOOK_VERIFICATION_KEY")
+        ? "Signed SendGrid delivery events can be authenticated and reconciled."
+        : "Set the signed Event Webhook verification key before relying on delivered, bounced, dropped, or spam-report states.",
+    ),
+    check(
       "Payout processing",
       hasStripeBillingConfig(process.env) ? "ready" : "warning",
       "Parent checkout stays blocked until platform keys, webhook secret, and school connected payout accounts are ready.",

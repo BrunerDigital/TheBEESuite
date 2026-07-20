@@ -16,6 +16,7 @@ import {
   familyNameFromGuardian,
   normalizeEmailText,
   parsePacketContactLines,
+  shouldInviteParentOnRegistrationApproval,
   type RegistrationPacketPayload,
 } from "@/lib/registration-packet";
 import {
@@ -546,7 +547,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const action = reviewAction(body.status || body.action);
   const note = cleanText(body.note);
-  const inviteParent = body.inviteParent !== false;
+  const inviteParent = shouldInviteParentOnRegistrationApproval(body.inviteParent);
   if (!action) {
     return NextResponse.json({ ok: false, error: "Review status must be approved or rejected." }, { status: 400 });
   }

@@ -16,7 +16,7 @@ type Props = {
 export function RegistrationReviewActions({ submissionId, status, reviewStatus }: Props) {
   const router = useRouter();
   const [note, setNote] = useState("");
-  const [inviteParent, setInviteParent] = useState(true);
+  const [inviteParent, setInviteParent] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -72,7 +72,7 @@ export function RegistrationReviewActions({ submissionId, status, reviewStatus }
               onChange={(event) => setInviteParent(event.target.checked)}
               type="checkbox"
             />
-            Create parent portal logins on approval
+            Send parent portal setup now (only after school launch approval)
           </label>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={isPending} onClick={() => review("APPROVED")}>

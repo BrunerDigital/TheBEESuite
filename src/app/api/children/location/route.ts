@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAllCenters, canAccessCenter, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
+import { canAccessAllCenters, canAccessCenter, canManageChildInClassroom, canManageClassroomTasks, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { childLocationStatusForTarget, validateChildLocationTarget } from "@/lib/child-location";
 import { custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
@@ -77,6 +77,9 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!accessGuard.ok) {
     return NextResponse.json({ ok: false, error: accessGuard.error }, { status: accessGuard.status });
+  }
+  if (!canManageChildInClassroom(user, child.classroom?.id)) {
+    return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
   }
 
   if (assignedCenterId && centerId && assignedCenterId !== centerId) {

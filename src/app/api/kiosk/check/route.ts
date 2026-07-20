@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { centerServiceDayWindow, isLatePickup, latestLogMap, normalizeCheckAction, readLatePickupCutoff, validateNextCheckAction, validateSelectedChildren } from "@/lib/attendance-state";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { normalizeGuardianQrToken, normalizePin, parseGuardianQrToken, verifyGuardianPin, verifyGuardianQrToken } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
@@ -89,7 +89,7 @@ async function POSTHandler(request: NextRequest) {
   const rawChildIds: unknown[] = Array.isArray(body.childIds) ? body.childIds : [];
   const childIds = Array.from(new Set(rawChildIds.map((item) => clean(item)).filter(Boolean)));
   const ip = requestIp(request.headers);
-  const limited = checkRateLimit({ key: `kiosk-check:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
+  const limited = await checkPersistentRateLimit({ key: `kiosk-check:${centerId}:${ip}`, limit: 18, windowMs: 60_000 });
   if (!limited.ok) {
     return NextResponse.json(
       { ok: false, error: "Too many kiosk attempts. Please ask the front desk for help." },

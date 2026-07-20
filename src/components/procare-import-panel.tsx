@@ -66,6 +66,8 @@ type ImportPreview = {
       reasons: string[];
     }>;
   }>;
+  sourceSha256?: string;
+  reviewFingerprint?: string;
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -127,6 +129,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("dryRun", String(dryRun));
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
+        if (!dryRun && preview?.reviewFingerprint) {
+          formData.set("reviewedFingerprint", preview.reviewFingerprint);
+        }
         if (csv.trim()) formData.set("csv", csv);
         const file = fileRef.current?.files?.[0];
         if (file) formData.set("file", file);
@@ -185,8 +190,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? "This account needs an active school assignment before importing."
     : !centerId
     ? "Choose a center before importing."
-    : !hasImportSource
+      : !hasImportSource
       ? "Choose a CSV export or paste CSV text before submitting."
+      : !preview?.reviewFingerprint
+        ? "Submit this exact export for review before committing."
+        : preview.duplicateScanSkipped
+          ? `This export exceeds the ${preview.duplicateScanRowLimit ?? 500}-row duplicate-review safety limit. Use approved smaller batches or pause for an importer enhancement.`
       : preview && blockingWarningRows > 0
           ? "Resolve or remove non-duplicate warning rows before committing."
           : preview && commitNeedsDuplicateConfirmation
@@ -232,6 +241,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 </div>
                 <div className="px-5 text-xs leading-5 text-muted-foreground">
                   {duplicateScanSummary} Showing {reviewRowsShown.toLocaleString()} mapped row(s) in this table{preview.rows > reviewRowsShown ? `, capped from ${preview.rows.toLocaleString()} total rows for browser performance` : ""}.
+                  {preview.sourceSha256 ? ` Source SHA-256: ${preview.sourceSha256}` : ""}
                 </div>
                 <div className="min-h-0 max-h-[48vh] overflow-auto border-y">
                   <Table>
@@ -503,7 +513,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           ) : null}
           <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {progressMessage === "Committing ProCare import..." ? "Committing..." : preview ? "Commit Reviewed Import" : "Commit Import"}
+            {progressMessage === "Committing ProCare import..." ? "Committing..." : "Commit Reviewed Import"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />

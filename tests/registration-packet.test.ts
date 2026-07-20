@@ -9,7 +9,15 @@ import {
   registrationReviewFromData,
   registrationSubmissionSummary,
   summarizeEnrollmentChecklist,
+  shouldInviteParentOnRegistrationApproval,
 } from "../src/lib/registration-packet";
+
+test("registration approval requires an explicit parent invitation opt-in", () => {
+  assert.equal(shouldInviteParentOnRegistrationApproval(true), true);
+  assert.equal(shouldInviteParentOnRegistrationApproval(false), false);
+  assert.equal(shouldInviteParentOnRegistrationApproval(undefined), false);
+  assert.equal(shouldInviteParentOnRegistrationApproval("true"), false);
+});
 import { INTERNAL_SIGNATURE_PENDING_KEY } from "../src/lib/signature-capture";
 
 test("Kid City registration packet schema includes final operational sections", () => {

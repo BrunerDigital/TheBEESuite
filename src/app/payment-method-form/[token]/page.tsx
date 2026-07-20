@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PaymentStatus } from "@prisma/client";
 import { AlertCircle } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
@@ -31,8 +32,14 @@ function InvalidLink({ message }: { message: string }) {
         <Alert variant="destructive" className="bg-red-950/40">
           <AlertCircle className="size-4" />
           <AlertTitle>Payment setup link unavailable</AlertTitle>
-          <AlertDescription>{message}</AlertDescription>
+          <AlertDescription>
+            {message} Ask your school office to send a new secure payment setup link. Do not enter payment details anywhere
+            else.
+          </AlertDescription>
         </Alert>
+        <Link href="/parents" className="w-fit text-sm font-semibold text-amber-300 underline underline-offset-4 hover:text-amber-200">
+          Return to parent portal sign in
+        </Link>
       </div>
     </main>
   );

@@ -24,6 +24,12 @@ import {
 } from "@/lib/procare-duplicate-matching";
 import { hasSupabaseAdminAuthConfig, upsertSupabaseAuthUserWithPassword } from "@/lib/supabase-auth";
 import { generateTeacherLoginCredentials } from "@/lib/teacher-login";
+import {
+  PROCARE_DUPLICATE_REVIEW_ROW_LIMIT,
+  procareImportReviewFingerprint,
+  procareSourceSha256,
+} from "@/lib/procare-import-review";
+import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -297,8 +303,6 @@ async function findExistingImportedStaffProfile(input: {
 
 type DuplicateMatchMode = "review" | "strict" | "auto";
 
-const PREVIEW_DATABASE_LOOKUP_ROW_LIMIT = 500;
-
 function duplicateMatchMode(input: string): DuplicateMatchMode {
   return input === "strict" || input === "auto" ? input : "review";
 }
@@ -531,7 +535,7 @@ async function previewImportRows({
   duplicateMode: DuplicateMatchMode;
 }) {
   const importRowCount = Math.max(rows.length - 1, 0);
-  const runDatabasePreviewLookups = importRowCount <= PREVIEW_DATABASE_LOOKUP_ROW_LIMIT;
+  const runDatabasePreviewLookups = true;
   let familyRows = 0;
   let staffRows = 0;
   let matchedFamilies = 0;
@@ -698,12 +702,6 @@ async function previewImportRows({
     });
   }
 
-  if (!runDatabasePreviewLookups) {
-    newFamilies = importFamilyKeys.size;
-    newChildren = importChildKeys.size;
-    newStaff = importStaffKeys.size;
-  }
-
   return {
     center: autoMap ? "Auto-mapped from ProCare export" : defaultCenter.crmLocationId ?? defaultCenter.name,
     sourceType,
@@ -727,9 +725,11 @@ async function previewImportRows({
     centersTouched: centersTouched.size,
     duplicateMatches: duplicateMatches.length,
     duplicateReviewRows: duplicateReviewRows.size,
-    duplicateScanSkipped: !runDatabasePreviewLookups,
-    duplicateScanRowLimit: PREVIEW_DATABASE_LOOKUP_ROW_LIMIT,
-    existingMatchPreviewSkipped: !runDatabasePreviewLookups,
+    duplicateScanSkipped: false,
+    duplicateScanRowLimit: PROCARE_DUPLICATE_REVIEW_ROW_LIMIT,
+    duplicateReviewChunks: Math.max(Math.ceil(importRowCount / PROCARE_DUPLICATE_REVIEW_ROW_LIMIT), 1),
+    relationshipSafeReview: true,
+    existingMatchPreviewSkipped: false,
     duplicateMatchesByEntity: {
       families: duplicateMatches.filter((match) => match.entity === "family").length,
       children: duplicateMatches.filter((match) => match.entity === "child").length,
@@ -905,6 +905,7 @@ async function POSTHandler(request: NextRequest) {
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
+  const reviewedFingerprint = clean(formData.get("reviewedFingerprint"));
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
@@ -944,6 +945,14 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "No import rows found." }, { status: 400 });
   }
 
+  const sourceSha256 = procareSourceSha256(text);
+  const reviewFingerprint = procareImportReviewFingerprint({
+    text,
+    requestedCenterId,
+    duplicateMode,
+    secret: process.env.AUTH_SECRET || "development-procare-import-review",
+  });
+
   if (dryRun) {
     const preview = await previewImportRows({
       rows,
@@ -955,7 +964,18 @@ async function POSTHandler(request: NextRequest) {
       filename: importPayload.filename,
       duplicateMode,
     });
-    return NextResponse.json({ ok: true, dryRun: true, summary: preview });
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      summary: { ...preview, sourceSha256, reviewFingerprint },
+    });
+  }
+
+  if (!reviewedFingerprint || reviewedFingerprint !== reviewFingerprint) {
+    return NextResponse.json(
+      { ok: false, error: "Preview and approve this exact ProCare export before committing it." },
+      { status: 409 },
+    );
   }
 
   const validationPreview = await previewImportRows({
@@ -969,6 +989,16 @@ async function POSTHandler(request: NextRequest) {
     duplicateMode,
   });
   const blockingWarningRows = Math.max(validationPreview.warningRows - validationPreview.duplicateReviewRows, 0);
+  if (validationPreview.duplicateScanSkipped) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: `This ${validationPreview.rows}-row export exceeds the ${validationPreview.duplicateScanRowLimit}-row duplicate-review safety limit. Split it into approved batches or complete a reviewed importer enhancement before cutover.`,
+        summary: { ...validationPreview, sourceSha256 },
+      },
+      { status: 400 },
+    );
+  }
   if (blockingWarningRows > 0) {
     return NextResponse.json(
       { ok: false, error: `${blockingWarningRows} ProCare row(s) still need cleanup before import. Run Preview Import and fix the warning rows first.`, summary: validationPreview },
@@ -1005,7 +1035,7 @@ async function POSTHandler(request: NextRequest) {
       uploadedById: user.id,
       filename: importPayload.filename,
       status: "processing",
-      summary: { sourceType: importPayload.sourceType },
+      summary: { sourceType: importPayload.sourceType, sourceSha256, reviewFingerprint },
     },
   });
 
@@ -1677,6 +1707,8 @@ async function POSTHandler(request: NextRequest) {
     center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
     sourceType: importPayload.sourceType,
     filename: importPayload.filename,
+    sourceSha256,
+    reviewFingerprint,
     rows: rowResults.length,
     imported: rowResults.filter((row) => row.status === "imported").length,
     errors: rowResults.filter((row) => row.status === "error").length,

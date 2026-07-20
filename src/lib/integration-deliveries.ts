@@ -31,7 +31,7 @@ export type IntegrationDeliveryPurpose =
 type IntegrationAttemptResult = InquiryIntegrationResult | (IntegrationSendResult & { skipped?: boolean });
 
 type DeliveryState = {
-  status: "delivered" | "failed" | "pending" | "skipped";
+  status: "accepted" | "delivered" | "failed" | "pending" | "skipped";
   nextAttemptAt: Date | null;
   deliveredAt: Date | null;
 };
@@ -240,6 +240,12 @@ export async function recordEmailDeliveryAttempt({
     attempts,
     maxAttempts,
   });
+  // SendGrid's 202 response only confirms queue acceptance. Delivery is
+  // established later by the signed Event Webhook.
+  if (deliveryResult.ok) {
+    state.status = "accepted";
+    state.deliveredAt = null;
+  }
 
   return prisma.integrationDelivery.create({
     data: {
@@ -400,6 +406,10 @@ export async function retryPendingIntegrationDeliveries({
       attempts: nextAttempts,
       maxAttempts: delivery.maxAttempts,
     });
+    if (delivery.provider === "sendgrid" && result.ok) {
+      state.status = "accepted";
+      state.deliveredAt = null;
+    }
 
     await prisma.integrationDelivery.update({
       where: { id: delivery.id },

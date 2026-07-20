@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
@@ -37,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
+import { registrationHandoffHref } from "@/lib/registration-handoff";
 import { cn } from "@/lib/utils";
 
 type CenterOption = {
@@ -1547,6 +1549,23 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       </Button>
                     </div>
                   </div>
+                  <Button
+                    variant="outline"
+                    nativeButton={false}
+                    render={(
+                      <Link
+                        href={registrationHandoffHref(selectedLead.center.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                      />
+                    )}
+                  >
+                    Open school application
+                    <ArrowRight data-icon="inline-end" />
+                  </Button>
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    Opens the public registration packet with this lead&apos;s school preselected. Enrollment still requires director review and approval.
+                  </p>
                   {duplicateCandidates.length ? (
                     <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 p-3">
                       <div className="flex items-start gap-2">

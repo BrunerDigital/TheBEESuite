@@ -118,6 +118,7 @@ This is a point-in-time setup signal, not final school signoff. Re-run `npm run 
 
 - [ ] Verify school sender/from/reply-to details and delivery for parent invitations, password reset, daily reports, documents, billing, incidents, announcements, and CRM follow-up.
 - [ ] Verify email domain authentication, bounce handling, suppression handling, and the school support reply path.
+- [ ] Configure SendGrid's signed Event Webhook to `POST /api/sendgrid/events`, set `SENDGRID_EVENT_WEBHOOK_VERIFICATION_KEY`, subscribe to processed, deferred, delivered, bounce, dropped, and spam-report events, and verify accepted/delivered/failed transitions with approved test recipients. A Mail Send `202` is queue acceptance, not delivery.
 - [ ] Verify SMS consent, opt-out, inbound routing, delivery status, and school-specific sender setup if SMS is enabled.
 - [ ] Verify storage upload/download permissions for child photos, family/staff documents, exports, and signed URLs.
 - [ ] Verify required calendar, Google Sheets, signature, webhook, social, or other school-specific integrations.

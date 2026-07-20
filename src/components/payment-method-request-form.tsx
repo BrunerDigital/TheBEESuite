@@ -62,46 +62,54 @@ export function PaymentMethodRequestForm({
 
     startTransition(async () => {
       setErrorMessage("");
-      const response = await fetch("/api/billing/payment-method-request/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          paymentMethodCategory,
-          processingRecoveryAccepted: paymentMethodCategory === "card",
-        }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
-      if (!response.ok) {
-        setErrorMessage(json?.error || "Payment setup could not be opened.");
-        return;
+      try {
+        const response = await fetch("/api/billing/payment-method-request/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            paymentMethodCategory,
+            processingRecoveryAccepted: paymentMethodCategory === "card",
+          }),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+        if (!response.ok) {
+          setErrorMessage(json?.error || "Payment setup could not be opened.");
+          return;
+        }
+        if (json?.url) {
+          window.location.href = json.url;
+          return;
+        }
+        setErrorMessage("Payment setup did not return a secure form link.");
+      } catch {
+        setErrorMessage("We could not reach the secure payment service. Check your connection and try again. No payment was started.");
       }
-      if (json?.url) {
-        window.location.href = json.url;
-        return;
-      }
-      setErrorMessage("Payment setup did not return a secure form link.");
     });
   }
 
   function startPayment(invoiceId: string, paymentMethodCategory: "link_bank" | "card") {
     startTransition(async () => {
       setErrorMessage("");
-      const response = await fetch("/api/billing/payment-method-request/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, invoiceId, paymentMethodCategory }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
-      if (!response.ok) {
-        setErrorMessage(json?.error || "Payment checkout could not be opened.");
-        return;
+      try {
+        const response = await fetch("/api/billing/payment-method-request/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, invoiceId, paymentMethodCategory }),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+        if (!response.ok) {
+          setErrorMessage(json?.error || "Payment checkout could not be opened.");
+          return;
+        }
+        if (json?.url) {
+          window.location.href = json.url;
+          return;
+        }
+        setErrorMessage("Payment checkout did not return a secure form link.");
+      } catch {
+        setErrorMessage("We could not reach the secure payment service. Check your connection and try again. No payment was started.");
       }
-      if (json?.url) {
-        window.location.href = json.url;
-        return;
-      }
-      setErrorMessage("Payment checkout did not return a secure form link.");
     });
   }
 
@@ -145,6 +153,15 @@ export function PaymentMethodRequestForm({
             <AlertTitle>Payment was cancelled</AlertTitle>
             <AlertDescription className="text-amber-100">
               No payment was submitted. You can reopen checkout whenever you are ready.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {paymentStatus === "failed" ? (
+          <Alert variant="destructive" className="bg-red-950/40">
+            <AlertCircle className="size-4" />
+            <AlertTitle>Payment was not completed</AlertTitle>
+            <AlertDescription>
+              No completed payment was recorded. Review the invoice below and retry with Instant Bank Login or Debit/Credit Card.
             </AlertDescription>
           </Alert>
         ) : null}

@@ -1,6 +1,6 @@
 # Stripe Connect Setup
 
-The BEE Suite is configured as the Stripe platform. Parents pay through platform-owned Checkout Sessions, and each school receives funds through its connected payout account.
+The BEE Suite is configured as the Stripe platform. Parent Checkout Sessions and off-session PaymentIntents are created as direct charges on the school's connected account, with any configured application fee retained by the platform.
 
 ## Vercel Environment Variables
 
@@ -95,7 +95,7 @@ Copy the signing secret into `STRIPE_WEBHOOK_SECRET`, then redeploy.
 5. Return to The BEE Suite. The payout table auto-syncs after return.
 6. Use `Check` to refresh payout status later.
 
-Parent checkout is blocked until Stripe platform keys, webhook reconciliation, and the selected school connected account are ready. A school account is ready only when Stripe reports both charges and payouts enabled.
+Parent checkout is blocked until Stripe platform keys, webhook reconciliation, and the selected school connected account are ready. A school account is ready only when Stripe reports completed details, no outstanding requirement fields, charges enabled, and payouts enabled.
 
 ## Test Mode Checklist
 

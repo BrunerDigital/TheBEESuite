@@ -46,7 +46,7 @@ Use these unless there is already an Apple Developer identifier reserved for thi
 | Device display name | `BEE Suite` |
 | Bundle ID | `com.brunerdigital.thebeesuite.parent` |
 | SKU | `BEE-SUITE-PARENT-IOS` |
-| Initial version | `1.0.0` |
+| Initial version | `1.0` |
 | Initial build number | `1` |
 | Primary language | English (U.S.) |
 | Primary category | Education |
@@ -117,10 +117,9 @@ Suggested `Info.plist` purpose strings:
 ```text
 NSCameraUsageDescription = Parents can take photos of requested documents or attach images to messages for their school.
 NSPhotoLibraryUsageDescription = Parents can choose photos and files to send to their school through the parent portal.
-NSFaceIDUsageDescription = BEE Suite can use Face ID to help protect access to family records on this device.
 ```
 
-Do not request location, microphone, contacts, calendar, Bluetooth, or tracking permissions for v1 unless the native app actually uses them.
+Do not request Face ID, location, microphone, contacts, calendar, Bluetooth, tracking, or push permissions for v1 unless the native app actually uses them and the workflow has passed device testing.
 
 ## App Store Metadata
 

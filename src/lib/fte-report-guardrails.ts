@@ -17,6 +17,11 @@ export function isExecutiveFteManager(role?: string | null) {
   return Boolean(role && executiveFteRoles.has(role));
 }
 
+export function isFteCenterInVisibleScope(visibleCenterIds: readonly string[], centerId?: string | null) {
+  const requestedCenterId = centerId?.trim();
+  return Boolean(requestedCenterId && visibleCenterIds.includes(requestedCenterId));
+}
+
 export function calculateFteCount(fullTimeCount: number, partTimeCount: number) {
   return Math.max(0, Math.round((fullTimeCount + partTimeCount * 0.5) * 100) / 100);
 }

@@ -31,6 +31,7 @@ export type CurrentUser = {
   mustResetPassword: boolean;
   centerIds: string[];
   primaryCenterId: string | null;
+  assignedClassroomId: string | null;
   deviceSessionId: string | null;
   accessScope: "platform" | "tenant" | "scoped" | "center" | "none";
   accessGrantCount: number;
@@ -265,7 +266,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
         },
       },
       staffProfile: {
-        select: { centerId: true },
+        select: { centerId: true, classroomId: true },
       },
       accessGrants: {
         where: {
@@ -334,6 +335,7 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     mustResetPassword: user.mustResetPassword,
     centerIds,
     primaryCenterId: centerIds[0] ?? null,
+    assignedClassroomId: user.staffProfile?.classroomId ?? null,
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
@@ -467,6 +469,14 @@ export function canManageStaffCompensation(user: Pick<CurrentUser, "role">) {
 
 export function canManageClassroomTasks(user: Pick<CurrentUser, "role">) {
   return teacherWriteRoles.has(user.role);
+}
+
+export function canManageChildInClassroom(
+  user: Pick<CurrentUser, "role"> & Partial<Pick<CurrentUser, "assignedClassroomId">>,
+  classroomId: string | null | undefined,
+) {
+  if (user.role !== UserRole.TEACHER) return true;
+  return Boolean(classroomId && user.assignedClassroomId === classroomId);
 }
 
 export function canManageBilling(user: Pick<CurrentUser, "role">) {

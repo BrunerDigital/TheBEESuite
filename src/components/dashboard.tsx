@@ -30,6 +30,7 @@ import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
+import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
 import { cn } from "@/lib/utils";
@@ -195,6 +196,7 @@ function ExecutiveLensDashboard({
   const sortedByOccupancy = [...metrics.schoolComparisons].sort((left, right) => right.occupancy - left.occupancy).slice(0, 10);
   const sortedByRevenue = [...metrics.schoolComparisons].sort((left, right) => right.revenueDollars - left.revenueDollars).slice(0, 8);
   const sortedByLeads = [...metrics.schoolComparisons].sort((left, right) => right.leads - left.leads).slice(0, 8);
+  const fteFollowUpSchools = prioritizeFteFollowUp(metrics.schoolComparisons);
   const maxRevenueDollars = Math.max(...sortedByRevenue.map((school) => school.revenueDollars), 1);
   const maxLeadCount = Math.max(...sortedByLeads.map((school) => school.leads), 1);
   const maxFteTotal = Math.max(...metrics.weeklyFteTrend.map((week) => week.fteTotal), 1);
@@ -293,7 +295,8 @@ function ExecutiveLensDashboard({
           title="Current-week FTE by school"
           description="Schools missing this week are highlighted for follow-up."
         >
-          {metrics.schoolComparisons.slice(0, 12).map((school) => (
+          <div className="grid max-h-[36rem] gap-3 overflow-auto pr-1">
+          {fteFollowUpSchools.map((school) => (
             <div key={school.id} className="rounded-xl border bg-background/50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
@@ -315,6 +318,7 @@ function ExecutiveLensDashboard({
               </div>
             </div>
           ))}
+          </div>
         </CollapsibleCard>
       ),
     },

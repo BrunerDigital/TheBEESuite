@@ -28,8 +28,20 @@ async function getRegistrationCenters() {
   }
 }
 
-export default async function OnlineRegistrationPage() {
-  const centers = await getRegistrationCenters();
+function firstSearchParam(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+export default async function OnlineRegistrationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ centerId?: string | string[] }>;
+}) {
+  const [centers, query] = await Promise.all([getRegistrationCenters(), searchParams]);
+  const requestedCenterId = firstSearchParam(query.centerId).trim();
+  const initialCenterId = centers.some((center) => center.id === requestedCenterId)
+    ? requestedCenterId
+    : "";
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(245,181,27,0.16),transparent_28rem),linear-gradient(135deg,#05070a,#0a0f15_56%,#171104)] px-4 py-8 text-foreground sm:px-6 lg:px-8">
@@ -84,7 +96,7 @@ export default async function OnlineRegistrationPage() {
             </div>
           </div>
 
-          <OnlineRegistrationForm centers={centers} />
+          <OnlineRegistrationForm centers={centers} initialCenterId={initialCenterId} />
         </section>
       </div>
     </main>

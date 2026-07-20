@@ -9,7 +9,7 @@ import {
   type SchoolOnboardingSetupInput,
 } from "@/lib/onboarding-setup";
 import { prisma } from "@/lib/prisma";
-import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { getCenterInquiryEmbedCode } from "@/lib/inquiry-embed";
 import {
   ensureSupabaseAuthUser,
@@ -607,7 +607,7 @@ async function createTrialWorkspace(payload: NormalizedPayload, requestUrl: stri
 }
 
 async function POSTHandler(request: NextRequest) {
-  const rate = checkRateLimit({
+  const rate = await checkPersistentRateLimit({
     key: `onboarding:${requestIp(request.headers)}`,
     limit: 10,
     windowMs: 60 * 60 * 1000,

@@ -59,7 +59,7 @@ import {
   safePasswordResetNextPath,
 } from "../src/lib/supabase-auth";
 import { canAccessModule } from "../src/lib/rbac";
-import { canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
+import { canManageChildInClassroom, canManageStaffCompensation, canViewDemoFallbackData, readSessionVersion, requiresPasswordResetGate, sessionMatchesCurrentVersion } from "../src/lib/auth";
 import { appModeFromPath, buildDeviceSessionLabel, inferDeviceType, normalizeDeviceAppMode } from "../src/lib/device-sessions";
 import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath, safeLoginNextPath } from "../src/lib/login-routing";
 import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
@@ -954,6 +954,15 @@ test("RBAC keeps teacher workflows separate from staff management", () => {
   assert.equal(canAccessModule(teacher, "calendar"), false);
   assert.equal(canManageStaffCompensation({ role: UserRole.TEACHER }), false);
   assert.equal(canManageStaffCompensation({ role: UserRole.CENTER_DIRECTOR }), true);
+});
+
+test("teacher child mutations stay within the assigned classroom", () => {
+  const teacher = { role: UserRole.TEACHER, assignedClassroomId: "classroom_1" };
+
+  assert.equal(canManageChildInClassroom(teacher, "classroom_1"), true);
+  assert.equal(canManageChildInClassroom(teacher, "classroom_2"), false);
+  assert.equal(canManageChildInClassroom(teacher, null), false);
+  assert.equal(canManageChildInClassroom({ role: UserRole.CENTER_DIRECTOR }, "classroom_2"), true);
 });
 
 test("executive user edits replace stale access grants with the target grant", () => {

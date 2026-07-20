@@ -9,6 +9,8 @@ import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
 
 type CheckStatus = "pass" | "warn" | "fail";
 type ReadinessStatus = "ready" | "ready_with_warnings" | "blocked";
+export type RolloutModule = "setup" | "parent-invitations" | "kiosk" | "billing";
+type ModuleGateStatus = "data_ready" | "blocked" | "manual_approval_required";
 
 export type Check = {
   status: CheckStatus;
@@ -20,15 +22,35 @@ export type CenterRolloutGap = {
   centerId: string;
   label: string;
   locationId: string;
+  identity: {
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    timezone: string;
+    organizationId: string;
+    organizationName: string;
+    tenantId: string;
+    tenantName: string;
+    ownerGroupId: string | null;
+    ownerGroupName: string | null;
+  };
   classroomCount: number;
   staffCount: number;
+  staffWithoutClassroomCount: number;
   familyCount: number;
   childCount: number;
   childrenWithoutClassroomCount: number;
   guardianCount: number;
   guardianLoginCount: number;
   guardianPinCount: number;
+  authorizedPickupCount: number;
   directorAccessCount: number;
+  moduleGates: Record<RolloutModule, {
+    status: ModuleGateStatus;
+    automatedGaps: string[];
+    separateApprovalRequired: boolean;
+    detail: string;
+  }>;
   gaps: string[];
 };
 
@@ -43,11 +65,19 @@ export type PilotReadinessArgs = {
   all: boolean;
   json: boolean;
   failOnWarn: boolean;
+  schools: string[];
+  modules: RolloutModule[];
   outputPath?: string;
 };
 
 type PilotReadinessReport = {
   generatedAt: string;
+  selection: {
+    requestedSchools: string[];
+    selectedCenterCount: number;
+    modules: RolloutModule[];
+    controls: string;
+  };
   summary: {
     status: ReadinessStatus;
     label: string;
@@ -74,9 +104,26 @@ function envPresent(name: string) {
 }
 
 const DEMO_TENANT_SLUGS = ["bee-suite-demo", "bee-suite-isolated-demo"];
+export const rolloutModules: RolloutModule[] = ["setup", "parent-invitations", "kiosk", "billing"];
+
+function optionValue(argv: string[], index: number, option: string) {
+  const value = argv[index + 1]?.trim();
+  if (!value || value.startsWith("-")) throw new Error(`${option} requires a value.`);
+  return value;
+}
+
+function addModules(args: PilotReadinessArgs, value: string) {
+  for (const raw of value.split(",")) {
+    const module = raw.trim() as RolloutModule;
+    if (!rolloutModules.includes(module)) {
+      throw new Error(`Unknown rollout module: ${raw.trim()}. Choose from ${rolloutModules.join(", ")}.`);
+    }
+    if (!args.modules.includes(module)) args.modules.push(module);
+  }
+}
 
 export function parsePilotReadinessArgs(argv = process.argv.slice(2)): PilotReadinessArgs {
-  const args: PilotReadinessArgs = { all: false, json: false, failOnWarn: false };
+  const args: PilotReadinessArgs = { all: false, json: false, failOnWarn: false, schools: [], modules: [] };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -86,6 +133,20 @@ export function parsePilotReadinessArgs(argv = process.argv.slice(2)): PilotRead
       args.json = true;
     } else if (arg === "--fail-on-warn") {
       args.failOnWarn = true;
+    } else if (arg === "--school") {
+      args.schools.push(optionValue(argv, index, arg));
+      index += 1;
+    } else if (arg.startsWith("--school=")) {
+      const value = arg.slice("--school=".length).trim();
+      if (!value) throw new Error("--school requires a value.");
+      args.schools.push(value);
+    } else if (arg === "--module") {
+      addModules(args, optionValue(argv, index, arg));
+      index += 1;
+    } else if (arg.startsWith("--module=")) {
+      const value = arg.slice("--module=".length).trim();
+      if (!value) throw new Error("--module requires a value.");
+      addModules(args, value);
     } else if (arg === "--output" || arg === "-o") {
       const value = argv[index + 1]?.trim();
       if (!value || value.startsWith("-")) throw new Error(`${arg} requires a file path.`);
@@ -100,7 +161,71 @@ export function parsePilotReadinessArgs(argv = process.argv.slice(2)): PilotRead
     }
   }
 
+  if (!args.modules.length) args.modules.push("setup");
+
   return args;
+}
+
+type SchoolSelectorCandidate = { id: string; name: string; locationId: string | null; crmLocationId: string | null };
+
+export function selectSchoolIds(candidates: SchoolSelectorCandidate[], selectors: string[]) {
+  if (!selectors.length) return candidates.map((center) => center.id);
+  const selected = new Set<string>();
+  for (const selector of selectors) {
+    const normalized = selector.trim().toLocaleLowerCase();
+    const matches = candidates.filter((center) =>
+      [center.id, center.name, center.locationId, center.crmLocationId]
+        .some((value) => value?.trim().toLocaleLowerCase() === normalized));
+    if (!matches.length) throw new Error(`Selected school was not found among active centers: ${selector}`);
+    if (matches.length > 1) throw new Error(`Selected school is ambiguous; use the center ID: ${selector}`);
+    selected.add(matches[0].id);
+  }
+  return [...selected];
+}
+
+export function buildModuleGates(input: {
+  setupGaps: string[];
+  guardianCount: number;
+  guardianLoginCount: number;
+  guardianPinCount: number;
+}): CenterRolloutGap["moduleGates"] {
+  const invitationGaps = [...input.setupGaps];
+  if (input.guardianCount === 0) invitationGaps.push("no guardians available for invitation review");
+  if (input.guardianLoginCount < input.guardianCount) {
+    invitationGaps.push(`${input.guardianCount - input.guardianLoginCount} guardian(s) are not linked to login users`);
+  }
+  const kioskGaps = [...input.setupGaps];
+  if (input.guardianCount === 0) kioskGaps.push("no guardians available for kiosk credential review");
+  if (input.guardianPinCount < input.guardianCount) {
+    kioskGaps.push(`${input.guardianCount - input.guardianPinCount} guardian(s) do not have kiosk PINs`);
+  }
+
+  return {
+    setup: {
+      status: input.setupGaps.length ? "blocked" : "data_ready",
+      automatedGaps: input.setupGaps,
+      separateApprovalRequired: false,
+      detail: "Setup readiness covers identity, structure, records, assignments, and access signals; reconciliation and written cutover approval remain external.",
+    },
+    "parent-invitations": {
+      status: invitationGaps.length ? "blocked" : "manual_approval_required",
+      automatedGaps: invitationGaps,
+      separateApprovalRequired: true,
+      detail: "Invitation readiness never sends invitations and requires a separate director/corporate activation decision.",
+    },
+    kiosk: {
+      status: kioskGaps.length ? "blocked" : "manual_approval_required",
+      automatedGaps: kioskGaps,
+      separateApprovalRequired: true,
+      detail: "Kiosk readiness never creates or activates PINs and requires separate custody, pickup, device, and workflow approval.",
+    },
+    billing: {
+      status: input.setupGaps.length ? "blocked" : "manual_approval_required",
+      automatedGaps: input.setupGaps,
+      separateApprovalRequired: true,
+      detail: "This report does not prove Stripe, balances, billing preview, payments, or payouts and never enables billing.",
+    },
+  };
 }
 
 export function readinessStatus(failures: number, warnings: number): ReadinessStatus {
@@ -150,6 +275,7 @@ function buildReport(input: {
   dataChecks: Check[];
   rolloutGapRows: CenterRolloutGap[];
   childClassroomMismatches: ChildClassroomMismatch[];
+  args: PilotReadinessArgs;
 }): PilotReadinessReport {
   const allChecks = [...input.configChecks, ...input.databaseChecks, ...input.dataChecks];
   const failures = allChecks.filter((item) => item.status === "fail").length;
@@ -158,6 +284,12 @@ function buildReport(input: {
 
   return {
     generatedAt: new Date().toISOString(),
+    selection: {
+      requestedSchools: input.args.schools,
+      selectedCenterCount: input.rolloutGapRows.length,
+      modules: input.args.modules,
+      controls: "Automated gates are read-only. Parent invitations, kiosk activation, billing, and ProCare cutover require separate written approvals.",
+    },
     summary: {
       status,
       label: readinessLabel(status),
@@ -236,6 +368,7 @@ async function main() {
       dataChecks,
       rolloutGapRows: [],
       childClassroomMismatches: [],
+      args,
     });
     printReport(report, args);
     if (args.outputPath) {

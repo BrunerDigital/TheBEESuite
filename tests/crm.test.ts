@@ -35,6 +35,7 @@ test("location CRM lead scope limits dashboard leads to the user's assigned cent
     accessScope: "center",
     accessGrantCount: 1,
     profilePhotoUrl: null,
+    assignedClassroomId: null,
     branding: KID_CITY_USA_BRANDING,
   } satisfies CurrentUser;
 

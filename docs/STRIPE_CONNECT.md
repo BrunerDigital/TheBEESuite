@@ -1,6 +1,6 @@
 # Stripe Connect Setup
 
-The BEE Suite uses Stripe Checkout with Connect destination charges for parent tuition payments.
+The BEE Suite uses Stripe Checkout and PaymentIntents with Connect direct charges for parent tuition payments. Stripe API requests are scoped to the school's connected account, and the platform can retain the configured application fee.
 
 ## Flow
 
@@ -8,7 +8,7 @@ The BEE Suite uses Stripe Checkout with Connect destination charges for parent t
 2. They start Stripe Connect onboarding for a school.
 3. Stripe collects payout, identity, and bank information directly from the school.
 4. Parent portal invoice payments create a Checkout Session only after Stripe platform keys, webhook reconciliation, and the school connected account are ready.
-5. The Checkout Session charges the parent, routes funds to the school connected account, and retains the configured BEE Suite application fee.
+5. The Checkout Session creates the charge on the school's connected account and retains the configured BEE Suite application fee.
 6. The webhook at `/api/billing/stripe-webhook` marks payments paid, closes invoices, writes ledger credits, and stores processed Stripe event IDs for idempotency.
 
 ## Required Stripe Settings

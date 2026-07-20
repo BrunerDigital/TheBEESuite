@@ -4,6 +4,14 @@ This file is primarily a factual ledger for actual wave choices, accepted owners
 
 The wider school wave remains **NO-GO**. Kokomo may continue normal production use. No entry authorizes a different module or bypasses its evidence gate.
 
+## Read-only production inspection approvals
+
+| Decision date/time | Approved target/scope | Decision | Limits | Evidence reference |
+| --- | --- | --- | --- | --- |
+| 2026-07-20T13:26:38-04:00 | Currently configured production database for TheBEESuite Supabase project `nqjrlktoewiueiwrubas`; existing authorized launch-owner browser session | Brenden approved Codex to perform the R4 read-only production inspection and authenticated `/api/system/readiness` capture needed by the master task. | No migration apply/repair/reverse, deployment, production-data mutation, account creation, credential/provider change, school/family contact, module activation, billing/payment/payout action, or business/legal/cutover approval. Existing independent gates and stop conditions remain in force. | `PRODUCTION_READINESS_MASTER_EXECUTION_TASK_2026-07-20.md`, R3/R4 execution records |
+
+Connected evidence: Brenden completed Supabase dashboard sign-in. The production project showed eight daily physical database restore points dated July 13-20, latest `2026-07-20T08:04:24Z`; PITR is not enabled and Storage objects are excluded from database backups. This is backup evidence, not restore-drill completion or Storage recovery approval.
+
 ## Actual wave choices
 
 No first-wave school, launch date, or module scope has been selected and recorded as of July 20, 2026.
@@ -17,6 +25,7 @@ No delegation acceptance has been recorded as of July 20, 2026. Brenden remains 
 
 | Acceptance date/time | School/scope | Responsibility | Accepted owner | Coverage window | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- |
+| 2026-07-20T14:20:13-04:00 | Platform production release/database readiness; no school-wave or business/legal approval implied | Technical release/database ownership, including stop and rollback authority | Brenden Bruner | Effective immediately and continuing until replaced or revoked; response target and backup owner remain unrecorded | Brenden stated: “I, Brenden, accept technical release/database ownership, including stop and rollback authority.” |
 
 ## Completed signoffs
 

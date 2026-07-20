@@ -12,6 +12,18 @@ The wider school wave remains **NO-GO**. Kokomo may continue normal production u
 
 Connected evidence: Brenden completed Supabase dashboard sign-in. The production project showed eight daily physical database restore points dated July 13-20, latest `2026-07-20T08:04:24Z`; PITR is not enabled and Storage objects are excluded from database backups. This is backup evidence, not restore-drill completion or Storage recovery approval.
 
+## Production release approvals
+
+| Decision date | Release scope | Decision | Result | Limits |
+| --- | --- | --- | --- | --- |
+| 2026-07-20 | GitHub PR `#8`, `Sync Supabase migration history for readiness smoke` | Brenden stated: “Authorize PR #8 merge and production verification.” | Merged at `2026-07-20T19:05:03Z` as `93cf5c7f`; Vercel production became `READY`, Supabase protected-main migration check reported current, and health/log verification passed. | This exact approval did not authorize later production migrations, real-customer test writes, credential rotation, provider changes, or wider-school activation. |
+
+## Production security configuration evidence
+
+| Evidence date/time | Target | Change | Verification | Remaining boundary |
+| --- | --- | --- | --- | --- |
+| 2026-07-20T20:38:32Z | Supabase project `nqjrlktoewiueiwrubas`, production Auth email provider | Enabled **Prevent use of leaked passwords**. | Dashboard showed the setting enabled after save; a fresh Security Advisor run returned zero errors, zero warnings, and no leaked-password finding. | No existing password was changed. MFA policy/enrollment, credential rotation, and the isolated teacher regression remain separate gates. |
+
 ## Actual wave choices
 
 No first-wave school, launch date, or module scope has been selected and recorded as of July 20, 2026.

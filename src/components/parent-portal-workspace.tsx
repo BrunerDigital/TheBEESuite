@@ -37,6 +37,7 @@ import { InfoTip } from "@/components/ui/info-tip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
 import {
@@ -177,6 +178,27 @@ type PortalFamily = {
   children: Child[];
 };
 
+type ParentMedia = {
+  id: string;
+  url: string;
+  caption: string | null;
+  createdAt: string | Date;
+  child: { fullName: string };
+};
+
+type DailyUpdateActivity = NonNullable<DailyReport["activities"]>[number] & {
+  childName: string;
+};
+
+type DailyUpdateDay = {
+  key: string;
+  date: string | Date;
+  reports: DailyReport[];
+  activities: DailyUpdateActivity[];
+  media: ParentMedia[];
+  totalItems: number;
+};
+
 type NotificationPreferences = {
   portal: boolean;
   email: boolean;
@@ -226,7 +248,7 @@ type Props = {
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date; attachments?: MessageAttachmentView[] }>;
   documents: Array<{ id: string; name: string; type: string; status: string; expiresAt: string | Date | null; storageKey?: string | null; downloadUrl?: string | null }>;
-  media?: Array<{ id: string; url: string; caption: string | null; createdAt: string | Date; child: { fullName: string } }>;
+  media?: ParentMedia[];
   announcements?: Array<{ id: string; title: string; body: string; sendAt: string | Date | null }>;
   uniformProducts?: UniformProductOption[];
   currentGuardianId?: string | null;
@@ -387,6 +409,22 @@ function estimatedAchRecovery(cents: number) {
   return 0;
 }
 
+function localDateKey(value: string | Date | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateTimestamp(value: string | Date | null | undefined) {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
 function estimatedCardRecovery(cents: number) {
   return Math.max(0, Math.ceil((cents + 30) / (1 - 0.029) - cents));
 }
@@ -447,6 +485,7 @@ export function ParentPortalWorkspace({
   const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
   const [uniformQuantity, setUniformQuantity] = useState(1);
+  const [selectedUpdateDayKey, setSelectedUpdateDayKey] = useState("");
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
@@ -457,7 +496,6 @@ export function ParentPortalWorkspace({
     [payableOpenInvoices],
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
-  const unacknowledged = useMemo(() => incidents.filter((incident) => !incident.parentAcknowledgedAt), [incidents]);
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
@@ -492,19 +530,41 @@ export function ParentPortalWorkspace({
   const uniformOrderTotalCents = selectedUniformProduct?.amountCents
     ? selectedUniformProduct.amountCents * uniformQuantity
     : 0;
-  const latestReport = dailyReports[0] ?? null;
-  const activityHighlights = useMemo(
-    () => dailyReports
-      .flatMap((report) =>
-        (report.activities ?? []).map((activity) => ({
-          ...activity,
-          childName: report.child.fullName,
-          date: report.date,
-        })),
-      )
-      .slice(0, 8),
-    [dailyReports],
-  );
+  const dailyUpdateDays = useMemo<DailyUpdateDay[]>(() => {
+    const days = new Map<string, Omit<DailyUpdateDay, "totalItems">>();
+    const ensureDay = (value: string | Date) => {
+      const key = localDateKey(value);
+      if (!key) return null;
+      const existing = days.get(key);
+      if (existing) return existing;
+      const created = { key, date: value, reports: [], activities: [], media: [] };
+      days.set(key, created);
+      return created;
+    };
+
+    for (const report of dailyReports) {
+      const day = ensureDay(report.date);
+      if (!day) continue;
+      day.reports.push(report);
+      for (const activity of report.activities ?? []) {
+        day.activities.push({ ...activity, childName: report.child.fullName });
+      }
+    }
+    for (const item of media) {
+      ensureDay(item.createdAt)?.media.push(item);
+    }
+
+    return Array.from(days.values())
+      .map((day) => ({
+        ...day,
+        reports: day.reports.toSorted((left, right) => dateTimestamp(right.date) - dateTimestamp(left.date)),
+        media: day.media.toSorted((left, right) => dateTimestamp(right.createdAt) - dateTimestamp(left.createdAt)),
+        totalItems: day.reports.length + day.activities.length + day.media.length,
+      }))
+      .toSorted((left, right) => right.key.localeCompare(left.key));
+  }, [dailyReports, media]);
+  const selectedUpdateDay = dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ?? dailyUpdateDays[0] ?? null;
+  const latestReport = selectedUpdateDay?.reports[0] ?? dailyReports[0] ?? null;
 
   function showStatus(next: string) {
     setError("");
@@ -940,26 +1000,26 @@ export function ParentPortalWorkspace({
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="glass-panel">
           <CardHeader>
-            <CardDescription>Latest report</CardDescription>
+            <CardDescription>Selected day</CardDescription>
             <CardTitle>{latestReport ? formatDate(latestReport.date) : "None yet"}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="glass-panel">
           <CardHeader>
             <CardDescription>Shared photos</CardDescription>
-            <CardTitle>{media.length}</CardTitle>
+            <CardTitle>{selectedUpdateDay?.media.length ?? 0}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardDescription>Recent activities</CardDescription>
-            <CardTitle>{activityHighlights.length}</CardTitle>
+            <CardDescription>Activities</CardDescription>
+            <CardTitle>{selectedUpdateDay?.activities.length ?? 0}</CardTitle>
           </CardHeader>
         </Card>
         <Card className="glass-panel">
           <CardHeader>
-            <CardDescription>Need acknowledgment</CardDescription>
-            <CardTitle>{unacknowledged.length}</CardTitle>
+            <CardDescription>Daily reports</CardDescription>
+            <CardTitle>{selectedUpdateDay?.reports.length ?? 0}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -969,12 +1029,28 @@ export function ParentPortalWorkspace({
           <div>
             <Badge className="mb-3">
               <Sparkles data-icon="inline-start" />
-              Today at school
+              Daily updates
             </Badge>
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Daily Reports, Activities, and Photos</h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Recent teacher notes, classroom activities, and photo moments for this family.
+              Choose a date to see the reports, classroom activities, and photo moments shared for that day.
             </p>
+          </div>
+          <div className="w-full sm:w-80">
+            <Label className="sr-only" htmlFor="parent-update-day">Choose update day</Label>
+            <Select value={selectedUpdateDay?.key ?? ""} onValueChange={(value) => setSelectedUpdateDayKey(value ?? "")}>
+              <SelectTrigger id="parent-update-day" className="w-full" aria-label="Choose update day">
+                <CalendarDays data-icon="inline-start" />
+                <SelectValue placeholder="No updates yet" />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {dailyUpdateDays.map((day) => (
+                  <SelectItem key={day.key} value={day.key}>
+                    {formatDate(day.date)} · {day.totalItems} update{day.totalItems === 1 ? "" : "s"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <a
@@ -1004,7 +1080,7 @@ export function ParentPortalWorkspace({
               <CardDescription>Recent teacher notes and care details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {dailyReports.slice(0, 5).map((report, index) => (
+              {(selectedUpdateDay?.reports ?? []).map((report, index) => (
                 <div
                   key={report.id}
                   className={`rounded-xl border p-4 ${index === 0 ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
@@ -1037,8 +1113,8 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
               ))}
-              {!dailyReports.length ? (
-                <p className="text-sm text-muted-foreground">No daily reports have been shared recently.</p>
+              {!selectedUpdateDay?.reports.length ? (
+                <p className="text-sm text-muted-foreground">No daily report was shared for this day.</p>
               ) : null}
             </CardContent>
           </Card>
@@ -1053,7 +1129,7 @@ export function ParentPortalWorkspace({
                 <CardDescription>Teacher-shared classroom photos for this family.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {media.slice(0, 1).map((item) => {
+                {(selectedUpdateDay?.media ?? []).slice(0, 1).map((item) => {
                   const imageSrc = renderableImageSrc(item.url);
                   return (
                     <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
@@ -1081,7 +1157,7 @@ export function ParentPortalWorkspace({
                   );
                 })}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {media.slice(1, 5).map((item) => {
+                  {(selectedUpdateDay?.media ?? []).slice(1, 5).map((item) => {
                     const imageSrc = renderableImageSrc(item.url);
                     return (
                       <div key={item.id} className="overflow-hidden rounded-xl border bg-background/40">
@@ -1109,7 +1185,7 @@ export function ParentPortalWorkspace({
                     );
                   })}
                 </div>
-                {!media.length ? <p className="text-sm text-muted-foreground">No shared photos have been added yet.</p> : null}
+                {!selectedUpdateDay?.media.length ? <p className="text-sm text-muted-foreground">No shared photos were added for this day.</p> : null}
               </CardContent>
             </Card>
 
@@ -1122,15 +1198,15 @@ export function ParentPortalWorkspace({
                 <CardDescription>Classroom activity highlights from recent reports.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {activityHighlights.map((activity) => (
+                {(selectedUpdateDay?.activities ?? []).map((activity) => (
                   <div key={`${activity.id}-${activity.childName}`} className="rounded-xl border bg-background/40 p-3">
                     <div className="text-sm font-medium">{activity.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{activity.childName} · {formatDate(activity.date)}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{activity.childName}</div>
                     {activity.notes ? <p className="mt-2 text-sm text-muted-foreground">{activity.notes}</p> : null}
                   </div>
                 ))}
-                {!activityHighlights.length ? (
-                  <p className="text-sm text-muted-foreground">No classroom activities have been shared recently.</p>
+                {!selectedUpdateDay?.activities.length ? (
+                  <p className="text-sm text-muted-foreground">No classroom activities were logged for this day.</p>
                 ) : null}
               </CardContent>
             </Card>

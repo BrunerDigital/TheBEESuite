@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -320,6 +320,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
   const [cardRecoveryAccepted, setCardRecoveryAccepted] = useState(false);
@@ -623,6 +624,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      setManualPaymentEmailCopies([]);
       const response = await fetch("/api/billing/payment-method-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -637,7 +639,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         emailsSent?: number;
         notificationsCreated?: number;
         results?: Array<{ email: string; ok: boolean; error?: string }>;
+        manualCopies?: Array<{ clipboardText: string }>;
       } | null;
+      setManualPaymentEmailCopies(json?.manualCopies ?? []);
       if (!response.ok) {
         const firstFailure = json?.results?.find((result) => !result.ok);
         setErrorMessage(json?.error || firstFailure?.error || "Payment form could not be sent.");
@@ -649,6 +653,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         `${json?.emailsSent ?? 0} ${label}${json?.emailsSent === 1 ? "" : "s"} sent and ${json?.notificationsCreated ?? 0} profile notification${json?.notificationsCreated === 1 ? "" : "s"} created.${failed.length ? ` ${failed.length} email${failed.length === 1 ? "" : "s"} need attention.` : ""}`,
       );
     });
+  }
+
+  async function copyPaymentEmails() {
+    if (!manualPaymentEmailCopies.length) return;
+    try {
+      await navigator.clipboard.writeText(manualPaymentEmailCopies.map((copy) => copy.clipboardText).join("\n\n---\n\n"));
+      setStatusMessage(`${manualPaymentEmailCopies.length} payment email${manualPaymentEmailCopies.length === 1 ? "" : "s"} copied for manual sending.`);
+      setErrorMessage("");
+    } catch {
+      setErrorMessage("The payment email copy is ready, but the browser blocked clipboard access.");
+    }
   }
 
   function chargePayload() {
@@ -1363,6 +1378,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   <Send data-icon="inline-start" />
                   Send Payment Link
                 </Button>
+                {manualPaymentEmailCopies.length ? (
+                  <Button type="button" disabled={isPending} onClick={copyPaymentEmails} variant="outline">
+                    <Copy data-icon="inline-start" />
+                    Copy Email{manualPaymentEmailCopies.length === 1 ? "" : "s"}
+                  </Button>
+                ) : null}
               </div>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">

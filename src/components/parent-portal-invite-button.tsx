@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,21 +14,26 @@ type Props = {
   linked: boolean;
 };
 
+type ManualEmailCopy = { clipboardText: string };
+
 export function ParentPortalInviteButton({ guardianId, guardianName, email, linked }: Props) {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [manualCopy, setManualCopy] = useState<ManualEmailCopy | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function submit() {
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      setManualCopy(null);
       const response = await fetch("/api/parent/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ guardianId }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean } } | null;
+      const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean }; manualCopy?: ManualEmailCopy } | null;
+      setManualCopy(json?.manualCopy ?? null);
       if (!response.ok) {
         setErrorMessage(json?.error || "Parent portal access could not be created.");
         return;
@@ -39,6 +44,17 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           : "The branded parent app invitation was resent and the first-login password was refreshed.",
       );
     });
+  }
+
+  async function copyInvitation() {
+    if (!manualCopy) return;
+    try {
+      await navigator.clipboard.writeText(manualCopy.clipboardText);
+      setStatusMessage("Invitation copied. Paste it into your approved school email account and send it to the guardian email shown above.");
+      setErrorMessage("");
+    } catch {
+      setErrorMessage("The invitation is ready, but the browser blocked clipboard access. Try again from a secure browser window.");
+    }
   }
 
   return (
@@ -75,6 +91,12 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           <Send data-icon="inline-start" />
           {linked ? "Resend Parent App Invite" : "Send Parent App Invite"}
         </Button>
+        {manualCopy ? (
+          <Button type="button" variant="outline" onClick={copyInvitation} className="w-full">
+            <Copy data-icon="inline-start" />
+            Copy Invitation for Manual Email
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );

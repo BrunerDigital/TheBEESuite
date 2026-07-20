@@ -35,8 +35,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       }
       setStatusMessage(
         json?.auth?.credentialCreated
-          ? "Parent portal access was created and a private one-time setup link was sent. The parent creates a password before finishing setup."
-          : "Parent portal access was linked and a fresh private setup link was sent. The prior unused setup link is no longer valid.",
+          ? "The branded parent app invitation was sent with the login email, first-login password, kiosk PIN guidance, and portal overview."
+          : "The branded parent app invitation was resent and the first-login password was refreshed.",
       );
     });
   }
@@ -68,12 +68,12 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email becomes the parent login. Parents create a private password from the one-time setup link and can change it
-          later from the login screen. The setup screen confirms contact details and the check-in PIN.
+          The guardian email is the login. The invitation explains the BusyBees first-login password, the phone-based kiosk PIN, ACH setup,
+          and the family tools available in the parent portal.
         </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">
           <Send data-icon="inline-start" />
-          {linked ? "Send Parent Login" : "Invite Parent"}
+          {linked ? "Resend Parent App Invite" : "Send Parent App Invite"}
         </Button>
       </CardContent>
     </Card>

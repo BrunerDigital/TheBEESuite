@@ -86,6 +86,7 @@ type RecordEmailDeliveryInput = {
   to: string[];
   subject: string;
   text: string;
+  html?: string;
   replyTo?: string | null;
   fromName?: string;
   result: IntegrationSendResult;
@@ -225,6 +226,7 @@ export async function recordEmailDeliveryAttempt({
   to,
   subject,
   text,
+  html,
   replyTo,
   fromName = "The BEE Suite",
   result,
@@ -266,6 +268,7 @@ export async function recordEmailDeliveryAttempt({
         to,
         subject,
         text,
+        html: html ?? null,
         replyTo: replyTo ?? null,
         fromName,
         centerId: centerId ?? null,
@@ -324,6 +327,7 @@ async function sendDelivery(provider: string, purpose: string, payload: Record<s
       to: stringArray(payload.to),
       subject: stringValue(payload.subject),
       text: stringValue(payload.text),
+      html: stringValue(payload.html) || undefined,
       replyTo: stringValue(payload.replyTo) || null,
       fromName: stringValue(payload.fromName) || "The BEE Suite",
       categories: [purpose],

@@ -52,7 +52,7 @@ function pinDigits(value: string) {
 const setupSteps = [
   {
     title: "Use your school login",
-    body: "Open the private one-time setup link from your school, create a password, and then sign in with your guardian email.",
+    body: "Sign in with your guardian email and the BusyBees first-login password from your school invitation, then choose a private password when prompted.",
   },
   {
     title: "Confirm this profile",
@@ -60,7 +60,7 @@ const setupSteps = [
   },
   {
     title: "Set your PIN",
-    body: "Create the 4 digit PIN used at the lobby kiosk for child sign-in and sign-out.",
+    body: "Your first kiosk PIN is the last 4 digits of your phone number. You can replace it here or later in the portal.",
   },
 ];
 

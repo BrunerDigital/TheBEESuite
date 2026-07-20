@@ -4,12 +4,16 @@ import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
+  buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
+  buildParentLoginUrl,
   PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
-import { issueParentPortalSetupLink, recordParentPortalSetupLinkDelivery } from "@/lib/parent-portal-setup-links";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
+import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
+import { resolveWorkspaceBranding } from "@/lib/brand-assets";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -67,6 +71,9 @@ async function POSTHandler(request: NextRequest) {
       organization: {
         select: {
           tenantId: true,
+          name: true,
+          brand: { select: { name: true, slug: true } },
+          tenant: { select: { name: true, slug: true } },
         },
       },
     },
@@ -96,59 +103,73 @@ async function POSTHandler(request: NextRequest) {
   }
 
   try {
+    const defaultPinData = !guardian.checkInPinHash
+      ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
+      : null;
+    if (!guardian.checkInPinHash && !defaultPinData) {
+      return NextResponse.json({ ok: false, error: "Add a phone number with at least 4 digits before sending the parent app invite." }, { status: 400 });
+    }
+
     const provisioned = await ensureParentPortalLoginForGuardian({
       guardianId: guardian.id,
       linkedBy: user.email,
       linkedReason: "direct_parent_invitation",
+      resetToInitialPassword: true,
     });
     if (!provisioned.ok) {
       return NextResponse.json({ ok: false, error: provisioned.reason }, { status: provisioned.status ?? 502 });
     }
 
-    const setupLink = await issueParentPortalSetupLink({
-      requestUrl: request.url,
-      user,
-      parentUserId: provisioned.userId,
-      guardianId: guardian.id,
-      email,
-      centerId: center.id,
-      familyId: guardian.familyId,
-      reason: "direct_parent_invitation",
-    });
-    if (!setupLink.ok) {
-      return NextResponse.json({ ok: false, error: setupLink.error }, { status: 502 });
+    if (defaultPinData) {
+      await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData });
     }
 
     const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
+    const appBaseUrl = getAppBaseUrl(request.url);
+    const loginUrl = buildParentLoginUrl(appBaseUrl);
+    const branding = resolveWorkspaceBranding({
+      tenantName: center.organization.tenant.name,
+      tenantSlug: center.organization.tenant.slug,
+      brandName: center.organization.brand?.name,
+      brandSlug: center.organization.brand?.slug,
+      organizationName: center.organization.name,
+    });
     const invitationText = buildParentPortalInvitationText({
       guardianName: guardian.fullName,
       centerLabel: center.crmLocationId ?? center.name,
       email,
-      setupUrl: setupLink.setupUrl,
-      expiresAt: setupLink.expiresAt,
+      loginUrl,
     });
-    const deliveryAuditText = invitationText.replace(setupLink.setupUrl, "[private setup link redacted]");
+    const invitationHtml = buildParentPortalInvitationHtml({
+      guardianName: guardian.fullName,
+      centerLabel: center.crmLocationId ?? center.name,
+      email,
+      loginUrl,
+      branding,
+    });
+    const subject = `${center.crmLocationId ?? center.name}: your parent app is ready`;
     const emailCopy = await sendEmail({
       to: [email],
-      subject: "Create your The BEE Suite parent portal password",
+      subject,
       text: invitationText,
-      fromName: "The BEE Suite",
+      html: invitationHtml,
+      fromName: branding.name,
       disableClickTracking: true,
       categories: ["parent_invitation_email"],
-      customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id, setupTokenId: setupLink.tokenId },
+      customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
       tenantId: user.tenantId,
     });
-    await recordParentPortalSetupLinkDelivery({ tokenId: setupLink.tokenId, delivered: emailCopy.ok });
     await recordEmailDeliveryAttempt({
       tenantId: user.tenantId,
       centerId: center.id,
       purpose: "parent_invitation_email",
       to: [email],
-      subject: "Create your The BEE Suite parent portal password",
-      text: deliveryAuditText,
-      fromName: "The BEE Suite",
+      subject,
+      text: invitationText,
+      html: invitationHtml,
+      fromName: branding.name,
       result: emailCopy,
-      metadata: { guardianId: guardian.id, familyId: guardian.familyId, setupTokenId: setupLink.tokenId },
+      metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
     });
 
     await writeAuditLog(user, {
@@ -162,8 +183,9 @@ async function POSTHandler(request: NextRequest) {
         email,
         authMode: PARENT_PORTAL_INVITE_MODE,
         credentialCreated: provisioned.credentialCreated,
-        setupTokenId: setupLink.tokenId,
-        setupLinkExpiresAt: setupLink.expiresAt.toISOString(),
+        initialPasswordIssued: true,
+        kioskPinDefaultedFromPhone: Boolean(defaultPinData),
+        emailBrand: branding.kind,
         emailCopySent: emailCopy.ok,
       },
     });
@@ -189,7 +211,6 @@ async function POSTHandler(request: NextRequest) {
         userId: provisioned.userId,
       },
       auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: true },
-      setupLink: { expiresAt: setupLink.expiresAt },
       emailCopy,
     });
   } catch (error) {

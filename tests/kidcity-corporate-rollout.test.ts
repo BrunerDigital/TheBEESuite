@@ -10,6 +10,10 @@ import {
 test("corporate rollout list includes the requested school set and Longmont pilot", () => {
   assert.equal(kidCityCorporateRolloutSchools.length, 13);
   assert.equal(kidCityCorporateRolloutSchools.find((school) => school.location === "Longmont")?.pilot, true);
+  assert.equal(
+    kidCityCorporateRolloutSchools.find((school) => school.location === "Canton NC")?.canonicalEmail,
+    "cantonnc@kidcityusa.com",
+  );
 });
 
 test("corporate rollout aliases cover known requested email mismatches", () => {
@@ -24,11 +28,6 @@ test("corporate rollout aliases cover known requested email mismatches", () => {
       location: "Granbury",
       requestedEmail: "granbury1@kidcityusa.com",
       canonicalEmail: "granbury@kidcityusa.com",
-    },
-    {
-      location: "Canton NC",
-      requestedEmail: "cantonnc@kidcityusa.com",
-      canonicalEmail: "canton@kidcityusa.com",
     },
   ]);
 });

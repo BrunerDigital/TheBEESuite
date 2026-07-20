@@ -29,7 +29,7 @@ export const kidCityCorporateRolloutSchools = [
   {
     location: "Canton NC",
     requestedEmail: "cantonnc@kidcityusa.com",
-    canonicalEmail: "canton@kidcityusa.com",
+    canonicalEmail: "cantonnc@kidcityusa.com",
   },
   {
     location: "Pisgah Forest",

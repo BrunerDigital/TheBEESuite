@@ -400,7 +400,7 @@ export function StaffManagementPanel({
     ? `${formatShortDate(payrollStart)} to ${formatShortDate(payrollEnd)}`
     : "Select a valid pay period";
   const staffHoursRows = useMemo(() => {
-    return allTeacherRows
+    return activeStaff
       .map((teacher) => {
         const clock = readStaffClockState(teacher.customFields);
         const summary = readStaffClockSummary(teacher.customFields, {
@@ -447,7 +447,7 @@ export function StaffManagementPanel({
         };
       })
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
-  }, [allTeacherRows, centerNameById, payrollEnd, payrollStart, summaryNow]);
+  }, [activeStaff, centerNameById, payrollEnd, payrollStart, summaryNow]);
   const staffHoursTotalMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.totalMinutes, 0);
   const staffHoursRegularMinutes = staffHoursRows.reduce((sum, row) => sum + row.regularMinutes, 0);
   const staffHoursOvertimeMinutes = staffHoursRows.reduce((sum, row) => sum + row.overtimeMinutes, 0);

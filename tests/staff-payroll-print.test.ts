@@ -35,3 +35,10 @@ test("payroll print CSS excludes summaries and collapses non-print layout", asyn
   assert.match(source, /not\(:has\(\.staff-payroll-print-area\)\)/);
   assert.doesNotMatch(source, /body:has\(\.staff-payroll-print-area\) \* \{\s*visibility: hidden/);
 });
+
+test("payroll rows exclude previous employees", async () => {
+  const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
+  const payrollRows = source.slice(source.indexOf("const staffHoursRows"), source.indexOf("const staffHoursTotalMinutes"));
+  assert.match(payrollRows, /return activeStaff/);
+  assert.doesNotMatch(payrollRows, /return allTeacherRows/);
+});

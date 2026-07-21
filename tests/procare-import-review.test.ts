@@ -48,4 +48,7 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.doesNotMatch(route, /Preview and approve this exact ProCare export/);
   assert.doesNotMatch(panel, /Submit this exact export for review before committing/);
   assert.match(panel, /Import ProCare Data/);
+  assert.match(route, /status: "needs_resolution"/);
+  assert.match(route, /procare\.import\.rows_disposed/);
+  assert.match(panel, /Unresolved imported data/);
 });

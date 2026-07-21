@@ -733,6 +733,8 @@ async function previewImportRows({
     centersTouched: centersTouched.size,
     duplicateMatches: duplicateMatches.length,
     duplicateReviewRows: duplicateReviewRows.size,
+    warningRowNumbers: [...new Set(warnings.map((warning) => warning.rowNumber))],
+    duplicateReviewRowNumbers: [...duplicateReviewRows],
     duplicateScanSkipped: false,
     duplicateScanRowLimit: PROCARE_DUPLICATE_REVIEW_ROW_LIMIT,
     duplicateReviewChunks: Math.max(Math.ceil(importRowCount / PROCARE_DUPLICATE_REVIEW_ROW_LIMIT), 1),
@@ -1051,26 +1053,13 @@ async function POSTHandler(request: NextRequest) {
     filename: importPayload.filename,
     duplicateMode,
   });
-  const validationSummary = {
-    ...validationPreview,
-    sourceSha256,
-    reviewFingerprint,
-    headerAnalysis,
-    fieldOptions: PROCARE_FIELD_OPTIONS,
-  };
-  const blockingWarningRows = Math.max(validationPreview.warningRows - validationPreview.duplicateReviewRows, 0);
-  if (blockingWarningRows > 0) {
-    return NextResponse.json(
-      { ok: false, error: `${blockingWarningRows} ProCare row(s) need a field match or corrected source value before they can be imported.`, summary: validationSummary },
-      { status: 400 },
-    );
-  }
-  if (validationPreview.duplicateReviewRows > 0 && !duplicateReviewConfirmed) {
-    return NextResponse.json(
-      { ok: false, error: `${validationPreview.duplicateReviewRows} row(s) have ambiguous family, child, or guardian matches. Confirm those matches before importing to avoid duplicate or incorrectly connected records.`, summary: validationSummary },
-      { status: 400 },
-    );
-  }
+  const duplicateWarningRows = new Set(validationPreview.duplicateReviewRowNumbers);
+  const stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
+    !duplicateReviewConfirmed || !duplicateWarningRows.has(rowNumber)
+  )));
+  const disposedRowNumbers = new Set(
+    clean(formData.get("disposedRowNumbers")).split(",").map(Number).filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1),
+  );
 
   let createdFamilies = 0;
   let updatedFamilies = 0;
@@ -1101,6 +1090,16 @@ async function POSTHandler(request: NextRequest) {
 
   for (let index = 1; index < rows.length; index += 1) {
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
+    const rowNumber = index + 1;
+    if (disposedRowNumbers.has(rowNumber)) {
+      rowResults.push({ rowNumber, status: "disposed", message: "Disposed by the user during import reconciliation.", rawData });
+      continue;
+    }
+    if (stagedRowNumbers.has(rowNumber)) {
+      const warning = validationPreview.warnings.find((item) => item.rowNumber === rowNumber)?.message ?? "This row needs a field match or disposition.";
+      rowResults.push({ rowNumber, status: "needs_resolution", message: warning, rawData });
+      continue;
+    }
     try {
       const rowCenterValue = value(rawData, [
         "location id",
@@ -1748,7 +1747,7 @@ async function POSTHandler(request: NextRequest) {
         createdChildId: childId,
       });
     } catch (error) {
-      rowResults.push({ rowNumber: index + 1, status: "error", message: error instanceof Error ? error.message : "Import failed", rawData });
+      rowResults.push({ rowNumber: index + 1, status: "needs_resolution", message: error instanceof Error ? error.message : "This row needs mapping or disposal.", rawData });
     }
   }
 
@@ -1773,6 +1772,8 @@ async function POSTHandler(request: NextRequest) {
     rows: rowResults.length,
     imported: rowResults.filter((row) => row.status === "imported").length,
     errors: rowResults.filter((row) => row.status === "error").length,
+    unresolved: rowResults.filter((row) => row.status === "needs_resolution").length,
+    disposed: rowResults.filter((row) => row.status === "disposed").length,
     createdFamilies,
     updatedFamilies,
     createdChildren,
@@ -1788,11 +1789,23 @@ async function POSTHandler(request: NextRequest) {
     invoiceRows,
     ledgerRows,
     centersTouched: centersTouched.size,
+    headerAnalysis,
+    fieldOptions: PROCARE_FIELD_OPTIONS,
+    warningRows: rowResults.filter((row) => row.status === "needs_resolution").length,
+    duplicateReviewRows: validationPreview.duplicateReviewRows,
+    rowResults: rowResults.filter((row) => row.status === "needs_resolution").slice(0, 500).map((row) => ({
+      rowNumber: row.rowNumber,
+      status: "warning",
+      entity: "unknown",
+      center: autoMap ? "Unresolved" : center.crmLocationId ?? center.name,
+      action: "Map or dispose",
+      message: row.message,
+    })),
   };
 
   await prisma.procareImportBatch.update({
     where: { id: batch.id },
-    data: { status: summary.errors ? "completed_with_errors" : "completed", summary },
+    data: { status: summary.errors || summary.unresolved ? "completed_with_errors" : "completed", summary },
   });
 
   await writeAuditLog(user, {
@@ -1806,5 +1819,24 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({ ok: true, batchId: batch.id, summary, rowResults });
 }
 
+async function PATCHHandler(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "ProCare import reconciliation is not allowed for this role." }, { status: 403 });
+  const body = await request.json().catch(() => null) as { batchId?: string; rowNumbers?: number[]; action?: string } | null;
+  const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({ where: { id: body.batchId }, select: { id: true, centerId: true } }) : null;
+  if (!batch || !canAccessCenter(user, batch.centerId)) return NextResponse.json({ ok: false, error: "Import batch not found." }, { status: 404 });
+  const rowNumbers = [...new Set((body?.rowNumbers ?? []).filter((value) => Number.isInteger(value) && value > 1))];
+  const disposeAll = body?.action === "dispose_all";
+  if ((!disposeAll && body?.action !== "dispose") || (!disposeAll && !rowNumbers.length)) return NextResponse.json({ ok: false, error: "Choose unresolved rows to dispose." }, { status: 400 });
+  const result = await prisma.procareImportRow.updateMany({
+    where: { batchId: batch.id, ...(disposeAll ? {} : { rowNumber: { in: rowNumbers } }), status: "needs_resolution" },
+    data: { status: "disposed", message: "Disposed by the user during import reconciliation." },
+  });
+  await writeAuditLog(user, { centerId: batch.centerId, action: "procare.import.rows_disposed", resource: "ProcareImportBatch", resourceId: batch.id, metadata: { rowNumbers: disposeAll ? "all_unresolved" : rowNumbers, count: result.count } });
+  return NextResponse.json({ ok: true, disposed: result.count });
+}
+
 export const GET = withApiLogging("GET", GETHandler);
 export const POST = withApiLogging("POST", POSTHandler);
+export const PATCH = withApiLogging("PATCH", PATCHHandler);

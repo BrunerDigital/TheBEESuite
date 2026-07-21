@@ -36,6 +36,9 @@ type ImportPreview = {
   createdStaff?: number;
   createdStaffLogins?: number;
   invoiceRows?: number;
+  imported?: number;
+  unresolved?: number;
+  disposed?: number;
   classroomsReferenced: number;
   balanceRows: number;
   attendanceRows: number;
@@ -107,6 +110,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [lastBatchId, setLastBatchId] = useState("");
+  const [disposedRowNumbers, setDisposedRowNumbers] = useState<number[]>([]);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -140,6 +144,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
+        formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (csv.trim()) formData.set("csv", csv);
         const file = fileRef.current?.files?.[0];
         if (file) formData.set("file", file);
@@ -165,22 +170,54 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setLastBatchId("");
           return;
         }
-        setCsv("");
-        setPreview(null);
-        setPreviewDialogOpen(false);
+        const summary = json?.summary;
+        const unresolved = Number(summary?.unresolved ?? 0);
+        if (!unresolved) {
+          setCsv("");
+          setPreview(null);
+          setPreviewDialogOpen(false);
+          setDisposedRowNumbers([]);
+          if (fileRef.current) fileRef.current.value = "";
+          setSelectedFileName("");
+        } else {
+          setPreview(summary ?? null);
+          setPreviewDialogOpen(false);
+        }
         setDuplicateReviewConfirmed(false);
         setLastBatchId(json?.batchId ?? "");
-        if (fileRef.current) fileRef.current.value = "";
-        setSelectedFileName("");
-        const summary = json?.summary;
         setStatus(
-          `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.`,
+          `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
       } catch {
         setError(dryRun ? "Import review could not be prepared. Check the file and try again." : "ProCare import could not be committed. Check the file and try again.");
       } finally {
         setProgressMessage("");
       }
+    });
+  }
+
+  function disposeRows(rowNumbers: number[], disposeAll = false) {
+    if (!lastBatchId || (!disposeAll && !rowNumbers.length)) return;
+    startTransition(async () => {
+      setError("");
+      const response = await fetch("/api/imports/procare", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId: lastBatchId, rowNumbers, action: disposeAll ? "dispose_all" : "dispose" }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; disposed?: number } | null;
+      if (!response.ok) {
+        setError(json?.error || "The unresolved ProCare data could not be disposed.");
+        return;
+      }
+      if (!disposeAll) setDisposedRowNumbers((current) => [...new Set([...current, ...rowNumbers])]);
+      setPreview((current) => current ? {
+        ...current,
+        unresolved: Math.max((current.unresolved ?? 0) - (json?.disposed ?? rowNumbers.length), 0),
+        warningRows: Math.max(current.warningRows - (json?.disposed ?? rowNumbers.length), 0),
+        rowResults: disposeAll ? [] : current.rowResults?.filter((row) => !rowNumbers.includes(row.rowNumber)),
+      } : current);
+      setStatus(`${json?.disposed ?? rowNumbers.length} unresolved ProCare row(s) were disposed with an audit record.`);
     });
   }
 
@@ -520,6 +557,27 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <div key={`${warning.rowNumber}-${warning.message}`}>Row {warning.rowNumber}: {warning.message}</div>
               ))}
             </div>
+          </div>
+        ) : null}
+        {preview?.unresolved ? (
+          <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+            <div>
+              <div className="text-sm font-medium">Unresolved imported data</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                These rows are stored in the import batch but were not written into family, child, or staff records. Match differently named columns above and import again, or dispose of rows that should not enter The BEE Suite.
+              </p>
+            </div>
+            <div className="space-y-2">
+              {preview.rowResults?.map((row) => (
+                <div key={`unresolved-${row.rowNumber}`} className="flex flex-col gap-2 rounded-lg border bg-background p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs"><span className="font-medium">Row {row.rowNumber}</span>: {row.message ?? previewRecordLabel(row)}</div>
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => disposeRows([row.rowNumber])}>Dispose row</Button>
+                </div>
+              ))}
+            </div>
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => disposeRows([], true)}>
+              Dispose all unresolved rows
+            </Button>
           </div>
         ) : null}
         {preview?.rowResults?.length ? (

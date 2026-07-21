@@ -33,9 +33,9 @@ function uploadImport(formData: FormData, onProgress: (percent: number, uploaded
     const request = new XMLHttpRequest();
     request.open("POST", "/api/imports/procare");
     request.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable) onProgress(Math.max(5, Math.round((event.loaded / event.total) * 45)), false);
+      if (event.lengthComputable) onProgress(Math.max(1, Math.round((event.loaded / event.total) * 10)), false);
     });
-    request.upload.addEventListener("load", () => onProgress(60, true));
+    request.upload.addEventListener("load", () => onProgress(10, true));
     request.addEventListener("load", () => {
       let json: ImportResponse | null = null;
       try { json = JSON.parse(request.responseText) as ImportResponse; } catch { /* Use the standard fallback message. */ }
@@ -127,6 +127,10 @@ function previewStatusVariant(status: "ready" | "warning") {
   return status === "ready" ? "default" : "destructive";
 }
 
+function normalizedSelectedFileName(filename: string) {
+  return filename.toLowerCase().replace(/\s+\(\d+\)(?=\.[^.]+$)/, "");
+}
+
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
@@ -145,6 +149,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [disposedRowNumbers, setDisposedRowNumbers] = useState<number[]>([]);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const submitLockedRef = useRef(false);
 
   function clearPreview() {
     setPreview(null);
@@ -165,6 +170,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   }
 
   function submit(dryRun: boolean) {
+    if (submitLockedRef.current) return;
+    submitLockedRef.current = true;
     startTransition(async () => {
       setStatus("");
       setError("");
@@ -204,7 +211,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           nextRow = json.nextRow ?? nextRow;
           const totalRows = Math.max(json.totalRows ?? 1, 1);
           const completedRows = Number(json.summary?.rows ?? Math.max(nextRow - 1, 0));
-          setProgressPercent(Math.min(95, 60 + Math.round((completedRows / totalRows) * 35)));
+          setProgressPercent(Math.min(95, 10 + Math.round((completedRows / totalRows) * 85)));
           setProgressMessage(`Imported ${completedRows.toLocaleString()} of ${totalRows.toLocaleString()} records. Continuing automatically...`);
         } while (json?.partial);
         if (!response.ok) {
@@ -254,6 +261,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setProgressPhase("idle");
         setProgressPercent(0);
         setError(dryRun ? "Import review could not be prepared. Check the file and try again." : "ProCare import could not be committed. Check the file and try again.");
+      } finally {
+        submitLockedRef.current = false;
       }
     });
   }
@@ -488,8 +497,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               onChange={(event) => {
                 const addedFiles = Array.from(event.target.files ?? []);
                 setSelectedFiles((current) => {
-                  const merged = new Map(current.map((file) => [file.name.toLowerCase(), file]));
-                  for (const file of addedFiles) merged.set(file.name.toLowerCase(), file);
+                  const merged = new Map(current.map((file) => [normalizedSelectedFileName(file.name), file]));
+                  for (const file of addedFiles) merged.set(normalizedSelectedFileName(file.name), file);
                   return [...merged.values()];
                 });
                 event.target.value = "";

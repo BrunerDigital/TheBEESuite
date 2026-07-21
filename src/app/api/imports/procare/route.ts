@@ -763,6 +763,11 @@ function isZipBuffer(buffer: Buffer) {
   return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
 }
 
+function normalizedUploadName(filename: string) {
+  return (filename.toLowerCase().split(/[\\/]/).pop() ?? filename.toLowerCase())
+    .replace(/\s+\(\d+\)(?=\.[^.]+$)/, "");
+}
+
 async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (!uploadedFiles.length) {
@@ -770,7 +775,7 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   }
 
   const standardReportNames = new Set(["enrollment.csv", "parentinfo.csv", "relationships.csv", "childinfo.csv"]);
-  const uploadedNames = uploadedFiles.map((file) => file.name.toLowerCase().split(/[\\/]/).pop() ?? file.name.toLowerCase());
+  const uploadedNames = uploadedFiles.map((file) => normalizedUploadName(file.name));
   const isStandardReportSet = uploadedNames.some((name) => standardReportNames.has(name));
   if (uploadedFiles.length > 1 || isStandardReportSet) {
     const entries = new Map<string, Buffer>();

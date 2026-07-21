@@ -66,6 +66,11 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(panel, /Upload and import complete/);
   assert.match(panel, /chunkSize", "5"/);
   assert.match(panel, /Continuing automatically/);
+  assert.match(panel, /\(completedRows \/ totalRows\) \* 85/);
+  assert.doesNotMatch(panel, /onProgress\(60, true\)/);
+  assert.match(panel, /submitLockedRef/);
+  assert.match(panel, /normalizedSelectedFileName/);
+  assert.match(route, /normalizedUploadName/);
   assert.match(route, /partial: true/);
   assert.match(route, /resumable ProCare import batch/);
   assert.match(route, /This import page is out of date/);

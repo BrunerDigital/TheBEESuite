@@ -1,13 +1,14 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Download, Eye, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,32 @@ type CenterOption = {
   id: string;
   name: string;
 };
+
+type ImportResponse = {
+  dryRun?: boolean;
+  error?: string;
+  batchId?: string;
+  summary?: ImportPreview & Record<string, number | string | unknown>;
+};
+
+function uploadImport(formData: FormData, onProgress: (percent: number, uploaded: boolean) => void) {
+  return new Promise<{ ok: boolean; json: ImportResponse | null }>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", "/api/imports/procare");
+    request.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable) onProgress(Math.max(5, Math.round((event.loaded / event.total) * 45)), false);
+    });
+    request.upload.addEventListener("load", () => onProgress(60, true));
+    request.addEventListener("load", () => {
+      let json: ImportResponse | null = null;
+      try { json = JSON.parse(request.responseText) as ImportResponse; } catch { /* Use the standard fallback message. */ }
+      resolve({ ok: request.status >= 200 && request.status < 300, json });
+    });
+    request.addEventListener("error", () => reject(new Error("The upload connection failed.")));
+    request.addEventListener("abort", () => reject(new Error("The upload was cancelled.")));
+    request.send(formData);
+  });
+}
 
 type ImportPreview = {
   rows: number;
@@ -106,6 +133,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [progressPhase, setProgressPhase] = useState<"idle" | "uploading" | "processing" | "complete">("idle");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -136,7 +165,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     startTransition(async () => {
       setStatus("");
       setError("");
-      setProgressMessage(dryRun ? "Preparing import review..." : "Committing ProCare import...");
+      setProgressPhase("uploading");
+      setProgressPercent(5);
+      setProgressMessage(dryRun ? "Uploading ProCare data for analysis..." : "Uploading ProCare data...");
       try {
         const formData = new FormData();
         formData.set("centerId", centerId);
@@ -147,14 +178,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (csv.trim()) formData.set("csv", csv);
         for (const file of selectedFiles) formData.append("file", file);
-        const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
-        const json = await response.json().catch(() => null) as {
-          dryRun?: boolean;
-          error?: string;
-          batchId?: string;
-          summary?: ImportPreview & Record<string, number | string | unknown>;
-        } | null;
+        const response = await uploadImport(formData, (percent, uploaded) => {
+          setProgressPercent(percent);
+          if (uploaded) {
+            setProgressPhase("processing");
+            setProgressMessage(dryRun ? "Analyzing records and preparing the review..." : "Upload complete. Matching and importing records...");
+          }
+        });
+        const json = response.json;
         if (!response.ok) {
+          setProgressPhase("idle");
+          setProgressPercent(0);
           setError(json?.error || "ProCare import could not be processed.");
           if (json?.summary) {
             setPreview(json.summary);
@@ -163,6 +197,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           return;
         }
         if (json?.dryRun) {
+          setProgressPhase("complete");
+          setProgressPercent(100);
+          setProgressMessage("Upload complete. Import review is ready.");
           setPreview(json.summary ?? null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
@@ -184,13 +221,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         }
         setDuplicateReviewConfirmed(false);
         setLastBatchId(json?.batchId ?? "");
+        setProgressPhase("complete");
+        setProgressPercent(100);
+        setProgressMessage("Upload and import complete.");
         setStatus(
           `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
       } catch {
+        setProgressPhase("idle");
+        setProgressPercent(0);
         setError(dryRun ? "Import review could not be prepared. Check the file and try again." : "ProCare import could not be committed. Check the file and try again.");
-      } finally {
-        setProgressMessage("");
       }
     });
   }
@@ -222,7 +262,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   const duplicateReviewRows = preview?.duplicateReviewRows ?? 0;
   const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
-  const busy = isPending || Boolean(progressMessage);
+  const importWorking = progressPhase === "uploading" || progressPhase === "processing";
+  const busy = isPending || importWorking;
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const hasImportSource = Boolean(csv.trim() || selectedFiles.length);
   const noCentersAvailable = !centers.length;
@@ -334,16 +375,23 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </Button>
               <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
                 <Upload data-icon="inline-start" />
-                {progressMessage ? "Working..." : "Commit Import"}
+                {importWorking ? "Working..." : "Commit Import"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {progressMessage ? (
-          <Alert>
-            <Upload className="size-4" />
-            <AlertTitle>Working</AlertTitle>
-            <AlertDescription>{progressMessage}</AlertDescription>
+        {progressPhase !== "idle" ? (
+          <Alert aria-live="polite">
+            {progressPhase === "complete" ? <CheckCircle2 className="size-4" /> : <LoaderCircle className="size-4 animate-spin" />}
+            <AlertTitle>{progressPhase === "uploading" ? "Uploading" : progressPhase === "processing" ? "Processing import" : "Complete"}</AlertTitle>
+            <AlertDescription className="space-y-3">
+              <p>{progressMessage}</p>
+              <Progress value={progressPercent} aria-label="ProCare import progress">
+                <ProgressLabel>{progressPhase === "uploading" ? "File upload" : progressPhase === "processing" ? "Matching and saving" : "Finished"}</ProgressLabel>
+                <ProgressValue>{(_formattedValue, value) => `${value ?? 0}%`}</ProgressValue>
+              </Progress>
+              {progressPhase === "processing" ? <p className="text-xs">Keep this page open while BEE Suite connects families, children, guardians, and classroom records.</p> : null}
+            </AlertDescription>
           </Alert>
         ) : null}
         {status ? (
@@ -615,7 +663,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button disabled={!canPreview} onClick={() => submit(true)} variant="outline">
             <Eye data-icon="inline-start" />
-            {progressMessage === "Preparing import review..." ? "Preparing Review..." : "Submit for Review"}
+            {importWorking ? "Preparing Review..." : "Submit for Review"}
           </Button>
           {preview ? (
             <Button disabled={busy} onClick={() => setPreviewDialogOpen(true)} variant="outline">
@@ -625,7 +673,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           ) : null}
           <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {progressMessage === "Committing ProCare import..." ? "Importing..." : "Import ProCare Data"}
+            {importWorking ? "Importing..." : "Import ProCare Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />

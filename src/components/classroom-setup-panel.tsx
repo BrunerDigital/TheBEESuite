@@ -349,7 +349,7 @@ export function ClassroomSetupPanel({ centers, classrooms, staff, ageGroups: con
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button disabled={demoMode || isPending || !centerId || !name.trim()}>
+            <Button type="submit" disabled={demoMode || isPending || !centerId || !name.trim()}>
               <Save data-icon="inline-start" />
               Save classroom
             </Button>

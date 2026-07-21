@@ -91,3 +91,16 @@ test("director setup edits are included in the main save and reconciled after pe
   assert.match(checklistRoute, /updatedAt: existingUser\.updatedAt/);
   assert.match(checklistRoute, /status: 409/);
 });
+
+test("classroom saves submit the shared form for every director-scoped school", () => {
+  const classroomSetup = readFileSync("src/components/classroom-setup-panel.tsx", "utf8");
+  const operationsRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+
+  assert.match(
+    classroomSetup,
+    /<form[^>]+onSubmit=\{saveClassroom\}[\s\S]*?<Button type="submit"[^>]*>[\s\S]*?Save classroom/,
+  );
+  assert.match(classroomSetup, /entity: "classroom"/);
+  assert.match(operationsRoute, /entity === "classroom"/);
+  assert.match(operationsRoute, /prisma\.classroom\.create/);
+});

@@ -29,7 +29,7 @@ type ImportResponse = {
 };
 
 function uploadImport(formData: FormData, onProgress: (percent: number, uploaded: boolean) => void) {
-  return new Promise<{ ok: boolean; json: ImportResponse | null }>((resolve, reject) => {
+  return new Promise<{ ok: boolean; status: number; json: ImportResponse | null }>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", "/api/imports/procare");
     request.upload.addEventListener("progress", (event) => {
@@ -39,7 +39,7 @@ function uploadImport(formData: FormData, onProgress: (percent: number, uploaded
     request.addEventListener("load", () => {
       let json: ImportResponse | null = null;
       try { json = JSON.parse(request.responseText) as ImportResponse; } catch { /* Use the standard fallback message. */ }
-      resolve({ ok: request.status >= 200 && request.status < 300, json });
+      resolve({ ok: request.status >= 200 && request.status < 300, status: request.status, json });
     });
     request.addEventListener("error", () => reject(new Error("The upload connection failed.")));
     request.addEventListener("abort", () => reject(new Error("The upload was cancelled.")));
@@ -210,7 +210,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         if (!response.ok) {
           setProgressPhase("idle");
           setProgressPercent(0);
-          setError(json?.error || "ProCare import could not be processed.");
+          setError(json?.error || (response.status === 504
+            ? "The import request timed out before completing. Refresh the page before trying again."
+            : `ProCare import could not be processed${response.status ? ` (error ${response.status})` : ""}.`));
           if (json?.summary) {
             setPreview(json.summary);
             setPreviewDialogOpen(true);

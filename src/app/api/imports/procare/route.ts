@@ -1007,10 +1007,14 @@ async function POSTHandler(request: NextRequest) {
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
   const requestedBatchId = clean(formData.get("batchId"));
   const requestedChunkStart = Math.max(Number.parseInt(clean(formData.get("chunkStart")), 10) || 1, 1);
-  const parsedChunkSize = Number.parseInt(clean(formData.get("chunkSize")), 10);
+  const chunkSizeInput = clean(formData.get("chunkSize"));
+  const parsedChunkSize = Number.parseInt(chunkSizeInput, 10);
   const requestedChunkSize = Number.isInteger(parsedChunkSize) && parsedChunkSize > 0
     ? Math.min(parsedChunkSize, 10)
     : Number.MAX_SAFE_INTEGER;
+  if (!dryRun && !chunkSizeInput) {
+    return NextResponse.json({ ok: false, error: "This import page is out of date. Refresh the page, select the ProCare export again, and restart the import." }, { status: 409 });
+  }
   let fieldMapping: ProcareFieldMapping = {};
   try {
     const mappingJson = clean(formData.get("fieldMapping"));

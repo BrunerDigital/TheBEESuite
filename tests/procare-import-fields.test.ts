@@ -38,6 +38,8 @@ test("ProCare enrollment statuses are normalized for app display and filtering",
   assert.equal(normalizeProcareEnrollmentStatus("Summer Break"), "summer_break");
   assert.equal(normalizeProcareEnrollmentStatus("Withdrawn"), "withdrawn");
   assert.equal(normalizeProcareEnrollmentStatus("Active"), "enrolled");
+  assert.equal(normalizeProcareEnrollmentStatus("Waiting List"), "waitlisted");
+  assert.equal(normalizeProcareEnrollmentStatus("Pre-Registered"), "pending");
   assert.equal(isActiveProcareEnrollmentStatus("Active"), true);
   assert.equal(isActiveProcareEnrollmentStatus("Terminated"), false);
 });

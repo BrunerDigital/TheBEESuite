@@ -246,7 +246,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import ProCare Family Accounts</CardTitle>
         <CardDescription>
-          Upload an unencrypted ProCare CSV export to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
+          Upload a ProCare CSV or the standard multi-report ZIP export to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -413,7 +413,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               ref={fileRef}
               id="procare-file"
               type="file"
-              accept=".csv,.txt,text/csv,text/plain"
+              accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
               onChange={(event) => {
                 setSelectedFileName(event.target.files?.[0]?.name ?? "");
                 clearPreview();

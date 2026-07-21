@@ -169,7 +169,7 @@ export function normalizeProcareEnrollmentStatus(input: string, fallback = "enro
   if (/graduat/.test(value)) return "graduated";
   if (/wait/.test(value)) return "waitlisted";
   if (/tour/.test(value)) return "tour_scheduled";
-  if (/pend|prospect|pre[-\s]?enroll/.test(value)) return "pending";
+  if (/pend|prospect|pre[-\s]?(?:enroll|regist)/.test(value)) return "pending";
   if (/active|enroll|current/.test(value)) return "enrolled";
   return value.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || fallback;
 }

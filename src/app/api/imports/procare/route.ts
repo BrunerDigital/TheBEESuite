@@ -35,6 +35,7 @@ import {
   procareSourceSha256,
 } from "@/lib/procare-import-review";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
+import { buildProcareMultiReportRows } from "@/lib/procare-multi-report-import";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -599,6 +600,12 @@ async function previewImportRows({
     }
 
     centersTouched.add(targetCenter.id);
+    const importWarning = value(rawData, ["import warning"]);
+    if (importWarning) {
+      warnings.push({ rowNumber, message: importWarning });
+      rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Resolve account relationship", message: importWarning });
+      continue;
+    }
     const employeeName = procareStaffName(rawData);
     const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
     const employeeExternalId = externalValue(rawData, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
@@ -763,6 +770,16 @@ async function readImportText(file: FormDataEntryValue | null, pastedCsv: string
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileName = file.name.toLowerCase();
+  if (fileName.endsWith(".zip") && isZipBuffer(buffer)) {
+    const records = await buildProcareMultiReportRows(buffer);
+    const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
+    return {
+      text: JSON.stringify(records),
+      filename: file.name,
+      sourceType: "procare_multi_report_zip",
+      parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
+    };
+  }
   const supportedExtension = fileName.endsWith(".csv") || fileName.endsWith(".txt");
   if (!supportedExtension || isZipBuffer(buffer)) {
     throw new Error("Only unencrypted ProCare CSV or text exports are supported.");
@@ -1004,7 +1021,7 @@ async function POSTHandler(request: NextRequest) {
   const text = importPayload.text;
   if (!text) return NextResponse.json({ ok: false, error: "Upload a CSV export or paste CSV text." }, { status: 400 });
 
-  const rows = parseImportRows(text);
+  const rows = importPayload.parsedRows ?? parseImportRows(text);
   const sourceHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
   const headerAnalysis = analyzeProcareHeaders(sourceHeaders);
   const headers = applyProcareFieldMapping(sourceHeaders, fieldMapping);
@@ -1587,6 +1604,42 @@ async function POSTHandler(request: NextRequest) {
               },
             });
             checkLogRows += 1;
+          }
+        }
+      }
+
+      const relationshipRecords = (() => {
+        try {
+          const parsed = JSON.parse(value(rawData, ["procare relationship records"]) || "[]") as unknown;
+          return Array.isArray(parsed) ? parsed.filter((item): item is { externalId?: string; name?: string; relation?: string; email?: string; phone?: string; livesWith?: boolean; emergency?: boolean; authorizedPickup?: boolean } => Boolean(item && typeof item === "object")) : [];
+        } catch { return []; }
+      })();
+      for (const relationship of relationshipRecords) {
+        const name = clean(relationship.name);
+        if (!name) continue;
+        await syncGuardian({
+          name,
+          guardianEmail: clean(relationship.email).toLowerCase(),
+          guardianPhone: clean(relationship.phone),
+          externalId: clean(relationship.externalId) || null,
+          relation: clean(relationship.relation) || "Guardian",
+          billingContact: false,
+          employer: "",
+        });
+        if (relationship.emergency) {
+          const contactPhone = clean(relationship.phone) || "Not imported";
+          const existingContact = await prisma.emergencyContact.findFirst({ where: { familyId: family.id, fullName: name, phone: contactPhone }, select: { id: true } });
+          if (!existingContact) {
+            await prisma.emergencyContact.create({ data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: clean(relationship.externalId) || null, customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId, livesWith: Boolean(relationship.livesWith) }) } });
+            emergencyContacts += 1;
+          }
+        }
+        if (relationship.authorizedPickup) {
+          const pickupPhone = clean(relationship.phone) || null;
+          const existingPickup = await prisma.authorizedPickup.findFirst({ where: { familyId: family.id, fullName: name, phone: pickupPhone }, select: { id: true } });
+          if (!existingPickup) {
+            await prisma.authorizedPickup.create({ data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: clean(relationship.externalId) || null, customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }) } });
+            authorizedPickups += 1;
           }
         }
       }

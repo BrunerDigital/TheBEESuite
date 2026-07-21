@@ -33,6 +33,7 @@ import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-wid
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
+import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
@@ -147,6 +148,22 @@ export type LiveDashboardData = {
       submittedBy: string;
       submittedAt: string;
       updatedAt: string;
+    }>;
+    payrollSummaries: Array<{
+      id: string;
+      submissionId: string;
+      centerId: string;
+      schoolName: string;
+      periodStart: string;
+      periodEnd: string;
+      employeeCount: number;
+      totalMinutes: number;
+      regularMinutes: number;
+      overtimeMinutes: number;
+      openMinutes: number;
+      estimatedGrossCents: number | null;
+      submittedBy: string;
+      submittedAt: string;
     }>;
   };
 };
@@ -401,6 +418,57 @@ function ExecutiveLensDashboard({
             </div>
           ) : (
             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No school FTE submissions are visible yet.</p>
+          )}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "payroll-summary-submissions",
+      title: "Payroll summaries",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-payroll-summary-submissions`}
+          className="glass-panel"
+          title="Payroll summaries"
+          description="Payroll summaries sent by directors for executive review. Individual employee timecards remain in the staff workspace."
+        >
+          {metrics.payrollSummaries.length ? (
+            <div className="max-h-[30rem] overflow-auto rounded-xl border bg-background/40">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead>School</TableHead>
+                    <TableHead>Pay period</TableHead>
+                    <TableHead className="text-right">Employees</TableHead>
+                    <TableHead className="text-right">Regular / OT</TableHead>
+                    <TableHead className="text-right">Total / open</TableHead>
+                    <TableHead>Submitted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {metrics.payrollSummaries.map((summary) => (
+                    <TableRow key={summary.id}>
+                      <TableCell className="font-medium">{compactSchoolName(summary.schoolName)}</TableCell>
+                      <TableCell>{summary.periodStart} to {summary.periodEnd}</TableCell>
+                      <TableCell className="text-right">{summary.employeeCount.toLocaleString()}</TableCell>
+                      <TableCell className="text-right">
+                        {formatStaffDecimalHours(summary.regularMinutes)} / {formatStaffDecimalHours(summary.overtimeMinutes)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatStaffDecimalHours(summary.totalMinutes)} / {formatStaffDecimalHours(summary.openMinutes)}
+                      </TableCell>
+                      <TableCell>
+                        <div>{summary.submittedBy}</div>
+                        <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt)}</div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No payroll summaries have been sent yet.</p>
           )}
         </CollapsibleCard>
       ),

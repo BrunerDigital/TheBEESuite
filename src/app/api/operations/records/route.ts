@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -313,6 +314,60 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!["product", "tuitionPlan", "invoice", "ledgerEntry"].includes(entity) && !canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Record management is not allowed for this role." }, { status: 403 });
+  }
+
+  if (entity === "staffPayrollSummary") {
+    const rawSummaries: unknown[] = Array.isArray(body.centerSummaries) ? body.centerSummaries : [];
+    if (!rawSummaries.length || rawSummaries.length > 250) {
+      return NextResponse.json({ ok: false, error: "At least one center payroll summary is required." }, { status: 400 });
+    }
+    const summaries = rawSummaries.map((value: unknown) => {
+      const row = jsonObject(value);
+      return {
+        centerId: clean(row.centerId),
+        periodStart: clean(row.periodStart),
+        periodEnd: clean(row.periodEnd),
+        employeeCount: Math.max(0, intValue(row.employeeCount)),
+        totalMinutes: Math.max(0, intValue(row.totalMinutes)),
+        regularMinutes: Math.max(0, intValue(row.regularMinutes)),
+        overtimeMinutes: Math.max(0, intValue(row.overtimeMinutes)),
+        openMinutes: Math.max(0, intValue(row.openMinutes)),
+        estimatedGrossCents: row.estimatedGrossCents === null || row.estimatedGrossCents === undefined
+          ? null
+          : Math.max(0, intValue(row.estimatedGrossCents)),
+      };
+    });
+    if (summaries.some((summary) => {
+      const periodStart = parseDate(summary.periodStart);
+      const periodEnd = parseDate(summary.periodEnd);
+      return !summary.centerId || !periodStart || !periodEnd || periodStart > periodEnd;
+    })) {
+      return NextResponse.json({ ok: false, error: "Each payroll summary needs a center and valid pay-period dates." }, { status: 400 });
+    }
+    if (summaries.some((summary) => !canAccessCenter(user, summary.centerId))) {
+      return NextResponse.json({ ok: false, error: "You do not have access to one of the submitted centers." }, { status: 403 });
+    }
+    const uniqueCenterIds = [...new Set(summaries.map((summary) => summary.centerId))];
+    const centerCount = await prisma.center.count({
+      where: { id: { in: uniqueCenterIds }, organization: { tenantId: user.tenantId } },
+    });
+    if (centerCount !== uniqueCenterIds.length) {
+      return NextResponse.json({ ok: false, error: "One of the submitted centers could not be found." }, { status: 404 });
+    }
+    const submittedAt = new Date();
+    const submissionId = randomUUID();
+    await Promise.all(summaries.map((summary) => writeAuditLog(user, {
+      centerId: summary.centerId,
+      action: "staff.payroll_summary.submitted",
+      resource: "StaffPayrollSummary",
+      resourceId: submissionId,
+      metadata: {
+        ...summary,
+        submittedAt: submittedAt.toISOString(),
+        submittedBy: user.name || user.email,
+      } as Prisma.InputJsonObject,
+    })));
+    return NextResponse.json({ ok: true, entity, mode: "submitted", submissionId, submittedAt }, { status: 201 });
   }
 
   let result: unknown;

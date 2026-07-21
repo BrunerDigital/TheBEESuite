@@ -32,6 +32,10 @@ function metadataNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function metadataString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 function dateKey(value: Date | null | undefined) {
   return value ? value.toISOString().slice(0, 10) : null;
 }
@@ -509,6 +513,7 @@ export default async function DashboardPage() {
     executiveTourRows,
     executiveInvoiceRows,
     executiveFteRows,
+    executivePayrollSummaryRows,
     executiveExpiringDocumentRows,
     executivePendingIncidentRows,
   ] = await Promise.all([
@@ -570,6 +575,17 @@ export default async function DashboardPage() {
         updatedAt: true,
         submittedBy: { select: { name: true, email: true } },
       },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.auditLog.findMany({
+      where: {
+        tenantId: user.tenantId,
+        centerId: scopedCenterFilter,
+        action: "staff.payroll_summary.submitted",
+        resource: "StaffPayrollSummary",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 250,
+      select: { id: true, centerId: true, resourceId: true, metadata: true, createdAt: true },
     }) : Promise.resolve([]),
     canSeeExecutiveMetrics ? prisma.document.findMany({
       where: {
@@ -715,6 +731,26 @@ export default async function DashboardPage() {
       submittedBy: report.submittedBy?.name ?? report.submittedBy?.email ?? "Unknown",
       submittedAt: report.createdAt.toISOString(),
       updatedAt: report.updatedAt.toISOString(),
+    };
+  });
+  const payrollSummaries = executivePayrollSummaryRows.map((row) => {
+    const metadata = recordFromJson(row.metadata);
+    const center = row.centerId ? executiveCenterById.get(row.centerId) : null;
+    return {
+      id: row.id,
+      submissionId: row.resourceId ?? row.id,
+      centerId: row.centerId ?? "",
+      schoolName: center?.crmLocationId ?? center?.name ?? "Unknown school",
+      periodStart: metadataString(metadata.periodStart),
+      periodEnd: metadataString(metadata.periodEnd),
+      employeeCount: metadataNumber(metadata.employeeCount) ?? 0,
+      totalMinutes: metadataNumber(metadata.totalMinutes) ?? 0,
+      regularMinutes: metadataNumber(metadata.regularMinutes) ?? 0,
+      overtimeMinutes: metadataNumber(metadata.overtimeMinutes) ?? 0,
+      openMinutes: metadataNumber(metadata.openMinutes) ?? 0,
+      estimatedGrossCents: metadataNumber(metadata.estimatedGrossCents),
+      submittedBy: metadataString(metadata.submittedBy) || "Unknown",
+      submittedAt: metadataString(metadata.submittedAt) || row.createdAt.toISOString(),
     };
   });
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
@@ -873,6 +909,7 @@ export default async function DashboardPage() {
           schoolComparisons: executiveSchoolComparisons,
           weeklyFteTrend,
           fteSubmissions,
+          payrollSummaries,
         }
       : undefined,
   };

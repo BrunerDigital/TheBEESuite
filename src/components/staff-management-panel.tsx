@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, FileSpreadsheet, KeyRound, Pencil, Printer, Save, Trash2, UserRoundCog } from "lucide-react";
+import { AlertCircle, Archive, CalendarClock, CheckCircle2, Clock, Copy, FileSpreadsheet, KeyRound, Pencil, Printer, Save, Send, Trash2, UserRoundCog } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,17 @@ type PayCodeSummaryRow = {
   totalMinutes: number;
   regularMinutes: number;
   overtimeMinutes: number;
+};
+
+type PayrollDayRow = {
+  dateKey: string;
+  dateLabel: string;
+  clockInLabel: string;
+  clockOutLabel: string;
+  statusLabel: string;
+  regularMinutes: number;
+  overtimeMinutes: number;
+  totalMinutes: number;
 };
 
 function toDateTimeLocal(value: Date | string) {
@@ -259,6 +270,45 @@ function buildPayCodeSummaries(input: {
   return [summary];
 }
 
+export function buildPayrollDayRows(input: {
+  startDate: Date | null;
+  endDate: Date | null;
+  shifts: PayrollShiftRow[];
+}): PayrollDayRow[] {
+  if (!input.startDate || !input.endDate || input.startDate > input.endDate) return [];
+  const shiftsByDate = new Map<string, PayrollShiftRow[]>();
+  for (const shift of input.shifts) {
+    const clockIn = new Date(shift.clockInAt);
+    if (Number.isNaN(clockIn.getTime())) continue;
+    const key = dateInputValue(clockIn);
+    shiftsByDate.set(key, [...(shiftsByDate.get(key) ?? []), shift]);
+  }
+
+  const rows: PayrollDayRow[] = [];
+  const cursor = new Date(input.startDate);
+  cursor.setHours(0, 0, 0, 0);
+  const finalDay = new Date(input.endDate);
+  finalDay.setHours(0, 0, 0, 0);
+  while (cursor <= finalDay) {
+    const dateKey = dateInputValue(cursor);
+    const shifts = shiftsByDate.get(dateKey) ?? [];
+    const regularMinutes = shifts.reduce((sum, shift) => sum + shift.regularMinutes, 0);
+    const overtimeMinutes = shifts.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
+    rows.push({
+      dateKey,
+      dateLabel: new Intl.DateTimeFormat("en-US", { weekday: "short", month: "2-digit", day: "2-digit", year: "numeric" }).format(cursor),
+      clockInLabel: shifts.length ? shifts.map((shift) => shift.clockInLabel).join(", ") : "—",
+      clockOutLabel: shifts.length ? shifts.map((shift) => shift.clockOutLabel).join(", ") : "—",
+      statusLabel: !shifts.length ? "No time" : shifts.some((shift) => shift.status === "open") ? "Open - review" : "Closed",
+      regularMinutes,
+      overtimeMinutes,
+      totalMinutes: shifts.reduce((sum, shift) => sum + shift.minutes, 0),
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return rows;
+}
+
 export function StaffManagementPanel({
   centers,
   classrooms,
@@ -376,6 +426,7 @@ export function StaffManagementPanel({
         });
         return {
           id: teacher.id,
+          centerId: teacher.centerId,
           name: teacher.user.name,
           email: teacher.user.email,
           title: teacher.title || "Teacher",
@@ -385,6 +436,7 @@ export function StaffManagementPanel({
           clock,
           summary,
           shiftRows,
+          dayRows: buildPayrollDayRows({ startDate: payrollStart, endDate: payrollEnd, shifts: shiftRows }),
           payCodeSummaries,
           payrollPayCode,
           payrollDepartment,
@@ -643,6 +695,41 @@ export function StaffManagementPanel({
 
   function printTimeCards() {
     window.print();
+  }
+
+  function sendPayrollSummary() {
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const centerSummaries = centers.map((center) => {
+        const rows = staffHoursRows.filter((row) => row.centerId === center.id);
+        return {
+          centerId: center.id,
+          periodStart: payrollStartDate,
+          periodEnd: payrollEndDate,
+          employeeCount: rows.length,
+          totalMinutes: rows.reduce((sum, row) => sum + row.summary.totalMinutes, 0),
+          regularMinutes: rows.reduce((sum, row) => sum + row.regularMinutes, 0),
+          overtimeMinutes: rows.reduce((sum, row) => sum + row.overtimeMinutes, 0),
+          openMinutes: rows.reduce((sum, row) => sum + row.summary.openShiftMinutes, 0),
+          estimatedGrossCents: canManageCompensation
+            ? rows.reduce((sum, row) => sum + (row.estimatedGrossPayCents ?? 0), 0)
+            : null,
+        };
+      }).filter((summary) => summary.employeeCount > 0);
+      const response = await fetch("/api/operations/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entity: "staffPayrollSummary", centerSummaries }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Payroll summary could not be sent.");
+        return;
+      }
+      setStatusMessage("Payroll summary sent to the executive dashboard.");
+      router.refresh();
+    });
   }
 
   function saveTeacher(event: FormEvent<HTMLFormElement>) {
@@ -1140,32 +1227,87 @@ export function StaffManagementPanel({
           <section className="rounded-xl border bg-background/40 p-4">
             <style>{`
               @media print {
-                body:has(.staff-payroll-print-area) * {
-                  visibility: hidden !important;
+                @page {
+                  size: landscape;
+                  margin: 0.25in;
                 }
 
-                body:has(.staff-payroll-print-area) .staff-payroll-print-area,
-                body:has(.staff-payroll-print-area) .staff-payroll-print-area * {
-                  visibility: visible !important;
+                body:has(.staff-payroll-print-area) *:has(.staff-payroll-print-area) > *:not(:has(.staff-payroll-print-area)):not(.staff-payroll-print-area) {
+                  display: none !important;
+                }
+
+                body:has(.staff-payroll-print-area),
+                body:has(.staff-payroll-print-area) *:has(.staff-payroll-print-area) {
+                  width: 100% !important;
+                  height: auto !important;
+                  min-height: 0 !important;
+                  max-height: none !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  overflow: visible !important;
+                  background: #ffffff !important;
                 }
 
                 body:has(.staff-payroll-print-area) .staff-payroll-print-area {
-                  position: absolute !important;
-                  inset: 0 auto auto 0 !important;
+                  display: block !important;
+                  position: static !important;
                   width: 100% !important;
-                  min-height: 100% !important;
-                  padding: 0.25in !important;
+                  max-height: none !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  border: 0 !important;
+                  overflow: visible !important;
                   background: #ffffff !important;
                   color: #111827 !important;
+                  font-size: 8px !important;
+                  line-height: 1.15 !important;
                 }
 
                 body:has(.staff-payroll-print-area) .staff-payroll-print-area table {
+                  width: 100% !important;
+                  min-width: 0 !important;
+                  table-layout: fixed !important;
                   border-collapse: collapse !important;
                 }
 
+                body:has(.staff-payroll-print-area) .staff-payroll-print-summary {
+                  display: none !important;
+                }
+
                 body:has(.staff-payroll-print-area) .staff-time-card {
+                  width: 100% !important;
+                  margin: 0 !important;
+                  padding: 0.12in !important;
+                  break-inside: avoid-page;
+                  page-break-inside: avoid;
                   break-after: page;
                   page-break-after: always;
+                  box-sizing: border-box !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card th,
+                body:has(.staff-payroll-print-area) .staff-time-card td {
+                  padding: 2px 3px !important;
+                  overflow-wrap: anywhere;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card .payroll-card-metrics {
+                  margin: 5px 0 !important;
+                  gap: 4px !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card .payroll-card-footer {
+                  margin-top: 6px !important;
+                  gap: 8px !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card .payroll-signatures {
+                  margin-top: 8px !important;
+                  gap: 12px !important;
+                }
+
+                body:has(.staff-payroll-print-area) .staff-time-card .payroll-signatures > div > div:first-child {
+                  height: 14px !important;
                 }
 
                 body:has(.staff-payroll-print-area) .staff-time-card:last-child {
@@ -1190,7 +1332,7 @@ export function StaffManagementPanel({
               </div>
             </div>
 
-            <div className="grid gap-3 rounded-lg border bg-card/40 p-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto] md:items-end">
+            <div className="grid gap-3 rounded-lg border bg-card/40 p-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto] md:items-end">
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <FileSpreadsheet className="size-4" />
@@ -1211,6 +1353,10 @@ export function StaffManagementPanel({
               <Button type="button" variant="outline" disabled={!payrollRangeIsValid || !staffHoursRows.length} onClick={printTimeCards}>
                 <Printer data-icon="inline-start" />
                 Print time cards
+              </Button>
+              <Button type="button" disabled={isPending || !payrollRangeIsValid || !staffHoursRows.length} onClick={sendPayrollSummary}>
+                <Send data-icon="inline-start" />
+                Send summary
               </Button>
             </div>
 
@@ -1278,6 +1424,7 @@ export function StaffManagementPanel({
             </div>
 
             <div className="staff-payroll-print-area mt-4 max-h-[70vh] space-y-4 overflow-y-auto rounded-lg border bg-card/30 p-4 text-sm print:mt-0 print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-white print:p-0 print:text-black">
+              <div className="staff-payroll-print-summary space-y-4">
               <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-3 print:border-black">
                 <div>
                   <div className="text-lg font-semibold">Employee Time Card Summary</div>
@@ -1334,6 +1481,7 @@ export function StaffManagementPanel({
                   </table>
                 </div>
               </section>
+              </div>
 
               {staffHoursRows.map((row) => (
                 <article key={`${row.id}-time-card`} className="staff-time-card rounded-lg border bg-background p-4 print:rounded-none print:border-black print:bg-white print:p-3">
@@ -1352,7 +1500,7 @@ export function StaffManagementPanel({
                     </div>
                   </header>
 
-                  <div className="my-3 grid gap-2 sm:grid-cols-6 print:grid-cols-6">
+                  <div className="payroll-card-metrics my-3 grid gap-2 sm:grid-cols-6 print:grid-cols-6">
                     {[
                       ["Total decimal", staffHoursRows.length ? formatStaffDecimalHours(row.summary.totalMinutes) : "0.00"],
                       ["Regular", formatStaffDecimalHours(row.regularMinutes)],
@@ -1373,7 +1521,6 @@ export function StaffManagementPanel({
                       <thead>
                         <tr className="border-y bg-muted/40 print:border-black print:bg-white">
                           <th className="px-2 py-1 text-left font-medium">Date</th>
-                          <th className="px-2 py-1 text-left font-medium">Week</th>
                           <th className="px-2 py-1 text-left font-medium">Pay code</th>
                           <th className="px-2 py-1 text-left font-medium">Department</th>
                           <th className="px-2 py-1 text-left font-medium">Clock in</th>
@@ -1385,24 +1532,23 @@ export function StaffManagementPanel({
                         </tr>
                       </thead>
                       <tbody>
-                        {row.shiftRows.map((shift, index) => (
-                          <tr key={`${shift.clockInAt}-${shift.clockOutAt ?? "open"}-${index}`} className="border-b print:border-black">
-                            <td className="px-2 py-1">{shift.dateLabel}</td>
-                            <td className="px-2 py-1">{shift.weekLabel}</td>
+                        {row.dayRows.map((day) => (
+                          <tr key={day.dateKey} className="border-b print:border-black">
+                            <td className="px-2 py-1">{day.dateLabel}</td>
                             <td className="px-2 py-1">{row.payrollPayCode}</td>
                             <td className="px-2 py-1">{row.payrollDepartment}</td>
-                            <td className="px-2 py-1">{shift.clockInLabel}</td>
-                            <td className="px-2 py-1">{shift.clockOutLabel}</td>
-                            <td className="px-2 py-1">{shift.status === "open" ? "Open - review before payroll" : "Closed"}</td>
-                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(shift.regularMinutes)}</td>
-                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(shift.overtimeMinutes)}</td>
-                            <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(shift.minutes)}</td>
+                            <td className="px-2 py-1">{day.clockInLabel}</td>
+                            <td className="px-2 py-1">{day.clockOutLabel}</td>
+                            <td className="px-2 py-1">{day.statusLabel}</td>
+                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(day.regularMinutes)}</td>
+                            <td className="px-2 py-1 text-right">{formatStaffDecimalHours(day.overtimeMinutes)}</td>
+                            <td className="px-2 py-1 text-right font-medium">{formatStaffDecimalHours(day.totalMinutes)}</td>
                           </tr>
                         ))}
-                        {!row.shiftRows.length ? (
+                        {!row.dayRows.length ? (
                           <tr>
-                            <td colSpan={10} className="px-2 py-3 text-muted-foreground print:text-black">
-                              No clocked shifts recorded in this pay period.
+                            <td colSpan={9} className="px-2 py-3 text-muted-foreground print:text-black">
+                              Select a valid pay period to display each day.
                             </td>
                           </tr>
                         ) : null}
@@ -1410,7 +1556,7 @@ export function StaffManagementPanel({
                     </table>
                   </div>
 
-                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] print:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)]">
+                  <div className="payroll-card-footer mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)] print:grid-cols-[minmax(0,1fr)_minmax(0,0.75fr)]">
                     <div>
                       <div className="mb-2 text-xs font-semibold uppercase">Pay Code Summary</div>
                       <table className="w-full text-xs">
@@ -1441,7 +1587,7 @@ export function StaffManagementPanel({
                     </div>
                   </div>
 
-                  <div className="mt-8 grid gap-6 sm:grid-cols-3 print:grid-cols-3">
+                  <div className="payroll-signatures mt-8 grid gap-6 sm:grid-cols-3 print:grid-cols-3">
                     <div>
                       <div className="h-8 border-b border-foreground/60 print:border-black" />
                       <div className="mt-1 text-xs">Employee signature</div>

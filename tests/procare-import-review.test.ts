@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   PROCARE_DUPLICATE_REVIEW_ROW_LIMIT,
@@ -38,4 +39,13 @@ test("ProCare review fingerprints bind the export, center, and duplicate mode", 
     procareImportReviewFingerprint({ ...reviewed, secret: "different-secret" }),
   );
   assert.equal(PROCARE_DUPLICATE_REVIEW_ROW_LIMIT, 500);
+});
+
+test("ProCare imports can commit without a separate preview request", () => {
+  const route = readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
+  const panel = readFileSync(new URL("../src/components/procare-import-panel.tsx", import.meta.url), "utf8");
+
+  assert.doesNotMatch(route, /Preview and approve this exact ProCare export/);
+  assert.doesNotMatch(panel, /Submit this exact export for review before committing/);
+  assert.match(panel, /Import ProCare Data/);
 });

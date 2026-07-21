@@ -962,7 +962,6 @@ async function POSTHandler(request: NextRequest) {
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
-  const reviewedFingerprint = clean(formData.get("reviewedFingerprint"));
   let fieldMapping: ProcareFieldMapping = {};
   try {
     const mappingJson = clean(formData.get("fieldMapping"));
@@ -1042,13 +1041,6 @@ async function POSTHandler(request: NextRequest) {
     });
   }
 
-  if (!reviewedFingerprint || reviewedFingerprint !== reviewFingerprint) {
-    return NextResponse.json(
-      { ok: false, error: "Preview and approve this exact ProCare export before committing it." },
-      { status: 409 },
-    );
-  }
-
   const validationPreview = await previewImportRows({
     rows,
     headers,
@@ -1059,16 +1051,23 @@ async function POSTHandler(request: NextRequest) {
     filename: importPayload.filename,
     duplicateMode,
   });
+  const validationSummary = {
+    ...validationPreview,
+    sourceSha256,
+    reviewFingerprint,
+    headerAnalysis,
+    fieldOptions: PROCARE_FIELD_OPTIONS,
+  };
   const blockingWarningRows = Math.max(validationPreview.warningRows - validationPreview.duplicateReviewRows, 0);
   if (blockingWarningRows > 0) {
     return NextResponse.json(
-      { ok: false, error: `${blockingWarningRows} ProCare row(s) still need cleanup before import. Run Preview Import and fix the warning rows first.`, summary: validationPreview },
+      { ok: false, error: `${blockingWarningRows} ProCare row(s) need a field match or corrected source value before they can be imported.`, summary: validationSummary },
       { status: 400 },
     );
   }
   if (validationPreview.duplicateReviewRows > 0 && !duplicateReviewConfirmed) {
     return NextResponse.json(
-      { ok: false, error: `${validationPreview.duplicateReviewRows} row(s) have possible duplicate family, child, or guardian matches. Review and confirm the duplicate matching controls before committing.`, summary: validationPreview },
+      { ok: false, error: `${validationPreview.duplicateReviewRows} row(s) have ambiguous family, child, or guardian matches. Confirm those matches before importing to avoid duplicate or incorrectly connected records.`, summary: validationSummary },
       { status: 400 },
     );
   }

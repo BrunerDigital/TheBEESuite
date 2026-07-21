@@ -101,7 +101,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
-  const [mappingDirty, setMappingDirty] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
   const [status, setStatus] = useState("");
@@ -141,9 +140,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
-        if (!dryRun && preview?.reviewFingerprint) {
-          formData.set("reviewedFingerprint", preview.reviewFingerprint);
-        }
         if (csv.trim()) formData.set("csv", csv);
         const file = fileRef.current?.files?.[0];
         if (file) formData.set("file", file);
@@ -166,7 +162,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setPreview(json.summary ?? null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
-          setMappingDirty(false);
           setLastBatchId("");
           return;
         }
@@ -191,7 +186,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   const duplicateReviewRows = preview?.duplicateReviewRows ?? 0;
   const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
-  const commitNeedsDuplicateConfirmation = duplicateReviewRows > 0 && !duplicateReviewConfirmed;
   const busy = isPending || Boolean(progressMessage);
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const hasImportSource = Boolean(csv.trim() || selectedFileName);
@@ -203,15 +197,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? "Choose a center before importing."
       : !hasImportSource
       ? "Choose a CSV export or paste CSV text before submitting."
-      : !preview?.reviewFingerprint
-        ? "Submit this exact export for review before committing."
-      : mappingDirty
-        ? "Submit the updated field matches for review before committing."
-      : preview && blockingWarningRows > 0
-          ? "Resolve or remove non-duplicate warning rows before committing."
-          : preview && commitNeedsDuplicateConfirmation
-            ? "Review and confirm the duplicate match candidates before committing."
-            : "";
+      : "";
   const reviewRows = preview?.rowResults ?? [];
   const reviewRowsShown = reviewRows.length;
   const readyReviewRows = reviewRows.filter((row) => row.status === "ready").length;
@@ -465,7 +451,6 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                     onValueChange={(selected) => {
                       const mappedField = selected && selected !== "ignore" ? selected : "";
                       setFieldMapping((current) => ({ ...current, [header.source]: mappedField }));
-                      setMappingDirty(true);
                       setDuplicateReviewConfirmed(false);
                     }}
                   >
@@ -570,7 +555,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           ) : null}
           <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {progressMessage === "Committing ProCare import..." ? "Committing..." : "Commit Reviewed Import"}
+            {progressMessage === "Committing ProCare import..." ? "Importing..." : "Import ProCare Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />

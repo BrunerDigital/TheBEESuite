@@ -37,6 +37,15 @@ function cleanSections(value: unknown) {
   ) as SchoolOnboardingSetupInput;
 }
 
+function responseSections(setup: ReturnType<typeof normalizeSchoolOnboardingSetup>) {
+  return Object.fromEntries(
+    schoolOnboardingSetupSections.map((section) => [
+      section.field,
+      setup.sections[section.storageKey].value,
+    ]),
+  );
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -55,66 +64,89 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to that school." }, { status: 403 });
   }
 
-  const center = await prisma.center.findFirst({
-    where: {
-      id: requestedCenterId,
-      organization: { tenantId: user.tenantId },
-    },
-    select: { id: true, customFields: true },
-  });
-  if (!center) {
-    return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
-  }
-
   const sectionsProvided = hasOwn(body, "sections");
   const setup = sectionsProvided ? normalizeSchoolOnboardingSetup(cleanSections(body?.sections)) : null;
   const savedAt = new Date().toISOString();
-  let customFields: Record<string, unknown> = {
-    ...record(center.customFields),
-  };
-  if (setup) {
-    customFields.schoolOnboardingSetup = {
-      ...setup,
-      capturedAt: savedAt,
-      capturedByEmail: user.email,
-      capturedByUserId: user.id,
-      expectedOwner: "school_director",
-    };
-  }
-  if (hasOwn(body, "schoolEin")) {
-    if (!isValidEinInput(body?.schoolEin)) {
-      return NextResponse.json({ ok: false, error: "School EIN must be 9 digits." }, { status: 400 });
-    }
-    customFields = schoolEinCustomFields(customFields, body?.schoolEin, {
-      savedAt,
-      savedByEmail: user.email,
-      savedByUserId: user.id,
-    });
+  const schoolEinProvided = hasOwn(body, "schoolEin");
+  if (schoolEinProvided && !isValidEinInput(body?.schoolEin)) {
+    return NextResponse.json({ ok: false, error: "School EIN must be 9 digits." }, { status: 400 });
   }
 
-  await prisma.center.update({
-    where: { id: center.id },
-    data: {
-      customFields: customFields as Prisma.InputJsonValue,
-    },
-  });
+  let savedCenterId: string | null = null;
+  let savedCustomFields: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const center = await prisma.center.findFirst({
+      where: {
+        id: requestedCenterId,
+        organization: { tenantId: user.tenantId },
+      },
+      select: { id: true, customFields: true, updatedAt: true },
+    });
+    if (!center) {
+      return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
+    }
+
+    let customFields: Record<string, unknown> = {
+      ...record(center.customFields),
+    };
+    if (setup) {
+      customFields.schoolOnboardingSetup = {
+        ...setup,
+        capturedAt: savedAt,
+        capturedByEmail: user.email,
+        capturedByUserId: user.id,
+        expectedOwner: "school_director",
+      };
+    }
+    if (schoolEinProvided) {
+      customFields = schoolEinCustomFields(customFields, body?.schoolEin, {
+        savedAt,
+        savedByEmail: user.email,
+        savedByUserId: user.id,
+      });
+    }
+
+    const update = await prisma.center.updateMany({
+      where: { id: center.id, updatedAt: center.updatedAt },
+      data: { customFields: customFields as Prisma.InputJsonValue },
+    });
+    if (update.count === 1) {
+      savedCenterId = center.id;
+      savedCustomFields = customFields;
+      break;
+    }
+  }
+
+  if (!savedCenterId || !savedCustomFields) {
+    return NextResponse.json(
+      { ok: false, error: "This school changed while you were saving. Review the latest values and try again." },
+      { status: 409 },
+    );
+  }
 
   await writeAuditLog(user, {
     action: "school_setup.director_input.saved",
     resource: "Center",
-    resourceId: center.id,
-    centerId: center.id,
+    resourceId: savedCenterId,
+    centerId: savedCenterId,
     metadata: {
       status: setup?.status ?? null,
       completedSections: setup?.completedSections ?? [],
       missingSections: setup?.missingSections ?? [],
       sectionsUpdated: sectionsProvided,
-      schoolEinUpdated: hasOwn(body, "schoolEin"),
+      schoolEinUpdated: schoolEinProvided,
       savedAt,
     },
   });
 
-  return NextResponse.json({ ok: true, setup, schoolEin: normalizeEin(customFields.schoolEin) });
+  return NextResponse.json({
+    ok: true,
+    centerId: savedCenterId,
+    setup,
+    sections: setup ? responseSections(setup) : undefined,
+    schoolEin: normalizeEin(savedCustomFields.schoolEin),
+    savedAt,
+  });
 }
 
 export const POST = withApiLogging("POST", POSTHandler);

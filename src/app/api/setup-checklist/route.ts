@@ -31,34 +31,48 @@ async function PATCHHandler(request: NextRequest) {
     ? Array.from(new Set(body.completedIds.filter((value): value is string => typeof value === "string" && allowedTaskIds.has(value))))
     : [];
 
-  const existingUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { customFields: true },
-  });
-  if (!existingUser) {
-    return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
+  const savedAt = new Date().toISOString();
+  let saved = false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const existingUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { customFields: true, updatedAt: true },
+    });
+    if (!existingUser) {
+      return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
+    }
+
+    const customFields = record(existingUser.customFields);
+    const setupChecklists = record(customFields.setupChecklists);
+    const nextCustomFields = {
+      ...customFields,
+      setupChecklists: {
+        ...setupChecklists,
+        [key]: {
+          completedIds,
+          completedCount: completedIds.length,
+          totalCount: allowedTaskIds.size,
+          updatedAt: savedAt,
+        },
+      },
+    };
+
+    const update = await prisma.user.updateMany({
+      where: { id: user.id, updatedAt: existingUser.updatedAt },
+      data: { customFields: nextCustomFields as Prisma.InputJsonValue },
+    });
+    if (update.count === 1) {
+      saved = true;
+      break;
+    }
   }
 
-  const customFields = record(existingUser.customFields);
-  const setupChecklists = record(customFields.setupChecklists);
-  const savedAt = new Date().toISOString();
-  const nextCustomFields = {
-    ...customFields,
-    setupChecklists: {
-      ...setupChecklists,
-      [key]: {
-        completedIds,
-        completedCount: completedIds.length,
-        totalCount: allowedTaskIds.size,
-        updatedAt: savedAt,
-      },
-    },
-  };
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { customFields: nextCustomFields as Prisma.InputJsonValue },
-  });
+  if (!saved) {
+    return NextResponse.json(
+      { ok: false, error: "Your profile changed while this checklist was saving. Try that step again." },
+      { status: 409 },
+    );
+  }
 
   return NextResponse.json({
     ok: true,

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import {
   AlertTriangle,
@@ -80,6 +81,7 @@ function statusIcon(status: SchoolSetupStatus) {
 }
 
 export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCenterData }) {
+  const router = useRouter();
   const sections = data.sections ?? emptySections;
   const firstActionNeeded = sections.find((section) => section.status !== "complete") ?? sections[0];
   const [activeId, setActiveId] = useState(firstActionNeeded?.id ?? "");
@@ -87,15 +89,21 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
     Object.fromEntries(sections.map((section) => [section.field, section.value])),
   );
   const [schoolEin, setSchoolEin] = useState(data.schoolEin ?? "");
+  const [savedValues, setSavedValues] = useState(() =>
+    Object.fromEntries(sections.map((section) => [section.field, section.value])),
+  );
+  const [savedSchoolEin, setSavedSchoolEin] = useState(data.schoolEin ?? "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const activeSection = sections.find((section) => section.id === activeId) ?? sections[0];
   const groups = useMemo(() => Array.from(new Set(sections.map((section) => section.group))), [sections]);
+  const hasUnsavedChanges = schoolEin !== savedSchoolEin
+    || sections.some((section) => (values[section.field] ?? "") !== (savedValues[section.field] ?? ""));
 
   function displayedStatus(section: SchoolSetupCommandSection): SchoolSetupStatus {
     if (section.status === "complete") return "complete";
-    return values[section.field]?.trim() ? "in_progress" : section.status;
+    return values[section.field]?.trim() ? "in_progress" : "missing";
   }
 
   function updateValue(field: string, value: string) {
@@ -116,11 +124,24 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             schoolEin,
           }),
         });
-        const json = await response.json().catch(() => null);
+        const json = await response.json().catch(() => null) as {
+          ok?: boolean;
+          error?: string;
+          sections?: Record<string, string>;
+          schoolEin?: string | null;
+          savedAt?: string;
+        } | null;
         if (!response.ok || !json?.ok) {
           throw new Error(json?.error || "School setup could not be saved.");
         }
-        setMessage("Director setup input saved.");
+        const canonicalValues = json.sections ?? values;
+        const canonicalEin = json.schoolEin ?? "";
+        setValues(canonicalValues);
+        setSavedValues(canonicalValues);
+        setSchoolEin(canonicalEin);
+        setSavedSchoolEin(canonicalEin);
+        setMessage("Director setup input saved and verified.");
+        router.refresh();
       } catch (saveError) {
         setError(saveError instanceof Error ? saveError.message : "School setup could not be saved.");
       }
@@ -139,7 +160,10 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
             </p>
           </div>
           <div className="rounded-lg border bg-background/60 p-3 text-sm">
-            <div className="font-medium">{statusLabel(data.blockingSections ? "missing" : "complete")}</div>
+            <div className="flex flex-wrap items-center gap-2 font-medium">
+              {statusLabel(data.blockingSections ? "missing" : "complete")}
+              {hasUnsavedChanges ? <Badge variant="secondary">Unsaved changes</Badge> : null}
+            </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {data.lastCapturedAt ? `Last saved ${data.lastCapturedAt}` : "No director setup save yet"}
             </div>
@@ -266,7 +290,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                   </ul>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button onClick={saveSetup} disabled={isPending || !data.centerId}>
+                  <Button onClick={saveSetup} disabled={isPending || !data.centerId || !hasUnsavedChanges}>
                     {isPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Save data-icon="inline-start" />}
                     Save setup input
                   </Button>
@@ -275,8 +299,8 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
                     {activeSection.actionLabel}
                   </Button>
                 </div>
-                {message ? <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
-                {error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
+                {message ? <div role="status" aria-live="polite" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700">{message}</div> : null}
+                {error ? <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
             </CollapsibleCard>
           ) : null}
 

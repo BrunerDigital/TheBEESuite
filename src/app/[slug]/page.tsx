@@ -1041,7 +1041,7 @@ async function renderLivePage(
       directorChecklistAutomaticCompletedIds,
     };
 
-    return <SchoolSetupCommandCenter data={data} />;
+    return <SchoolSetupCommandCenter key={data.centerId ?? "no-school"} data={data} />;
   }
 
   if (slug === "multi-location-dashboard") {

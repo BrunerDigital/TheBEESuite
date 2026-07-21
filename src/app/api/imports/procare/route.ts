@@ -769,11 +769,15 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text" };
   }
 
-  if (uploadedFiles.length > 1) {
+  const standardReportNames = new Set(["enrollment.csv", "parentinfo.csv", "relationships.csv", "childinfo.csv"]);
+  const uploadedNames = uploadedFiles.map((file) => file.name.toLowerCase().split(/[\\/]/).pop() ?? file.name.toLowerCase());
+  const isStandardReportSet = uploadedNames.some((name) => standardReportNames.has(name));
+  if (uploadedFiles.length > 1 || isStandardReportSet) {
     const entries = new Map<string, Buffer>();
-    for (const file of uploadedFiles) {
-      const fileName = file.name.toLowerCase().split(/[\\/]/).pop() ?? file.name.toLowerCase();
+    for (const [index, file] of uploadedFiles.entries()) {
+      const fileName = uploadedNames[index];
       if (!fileName.endsWith(".csv")) throw new Error("Select the four ProCare CSV reports together, or upload one ZIP file.");
+      if (!standardReportNames.has(fileName)) throw new Error(`${file.name} is not one of the four standard ProCare reports. Choose only enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv, or upload a consolidated CSV by itself.`);
       if (entries.has(fileName)) throw new Error(`More than one uploaded file is named ${fileName}.`);
       entries.set(fileName, Buffer.from(await file.arrayBuffer()));
     }
@@ -1523,8 +1527,16 @@ async function POSTHandler(request: NextRequest) {
         }
 
         const allergyText = value(rawData, ["allergies", "allergy", "allergy notes", "medical allergy"]);
-        if (allergyText && childId) {
-          const allergen = allergyText.slice(0, 120);
+        const allergyRecords = (() => {
+          try {
+            const parsed = JSON.parse(value(rawData, ["procare allergy records"]) || "[]") as unknown;
+            if (Array.isArray(parsed)) return parsed.map(clean).filter(Boolean);
+          } catch { /* Fall back to the standard single allergy field. */ }
+          return allergyText ? [allergyText] : [];
+        })();
+        for (const allergyRecord of [...new Set(allergyRecords)]) {
+          if (!childId) break;
+          const allergen = allergyRecord.slice(0, 120);
           const existingAllergy = await prisma.allergy.findFirst({ where: { childId, allergen }, select: { id: true } });
           if (!existingAllergy) {
             await prisma.allergy.create({
@@ -1631,21 +1643,23 @@ async function POSTHandler(request: NextRequest) {
       const relationshipRecords = (() => {
         try {
           const parsed = JSON.parse(value(rawData, ["procare relationship records"]) || "[]") as unknown;
-          return Array.isArray(parsed) ? parsed.filter((item): item is { externalId?: string; name?: string; relation?: string; email?: string; phone?: string; livesWith?: boolean; emergency?: boolean; authorizedPickup?: boolean } => Boolean(item && typeof item === "object")) : [];
+          return Array.isArray(parsed) ? parsed.filter((item): item is { externalId?: string; name?: string; relation?: string; email?: string; phone?: string; livesWith?: boolean; emergency?: boolean; authorizedPickup?: boolean; guardian?: boolean } => Boolean(item && typeof item === "object")) : [];
         } catch { return []; }
       })();
       for (const relationship of relationshipRecords) {
         const name = clean(relationship.name);
         if (!name) continue;
-        await syncGuardian({
-          name,
-          guardianEmail: clean(relationship.email).toLowerCase(),
-          guardianPhone: clean(relationship.phone),
-          externalId: clean(relationship.externalId) || null,
-          relation: clean(relationship.relation) || "Guardian",
-          billingContact: false,
-          employer: "",
-        });
+        if (relationship.guardian) {
+          await syncGuardian({
+            name,
+            guardianEmail: clean(relationship.email).toLowerCase(),
+            guardianPhone: clean(relationship.phone),
+            externalId: clean(relationship.externalId) || null,
+            relation: clean(relationship.relation) || "Guardian",
+            billingContact: false,
+            employer: "",
+          });
+        }
         if (relationship.emergency) {
           const contactPhone = clean(relationship.phone) || "Not imported";
           const existingContact = await prisma.emergencyContact.findFirst({ where: { familyId: family.id, fullName: name, phone: contactPhone }, select: { id: true } });

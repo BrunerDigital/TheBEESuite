@@ -44,6 +44,7 @@ export type ChildProfileVisibilityRecord = {
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "Not set";
+  if (new Date(value).getUTCFullYear() === 1900) return "Missing DOB";
   return new Intl.DateTimeFormat("en", {
     month: "short",
     day: "numeric",
@@ -75,14 +76,14 @@ function EnrollmentVisibilityToggle({
     <Card className="glass-panel">
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm font-medium">Graduated</div>
+          <div className="text-sm font-medium">Other enrollment statuses</div>
           <div className="text-xs text-muted-foreground">
-            {hiddenCount.toLocaleString()} {label} no longer enrolled {hiddenCount === 1 ? "is" : "are"} hidden from the main lists.
+            {hiddenCount.toLocaleString()} {label} marked withdrawn, graduated, waiting, pending, summer break, or otherwise not actively enrolled {hiddenCount === 1 ? "is" : "are"} hidden from the active lists.
           </div>
         </div>
         <Button type="button" variant={showGraduated ? "default" : "outline"} onClick={() => setShowGraduated(!showGraduated)}>
           {showGraduated ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-          {showGraduated ? "Hide Graduated" : "Show Graduated"}
+          {showGraduated ? "Show Active Only" : "Show Other Statuses"}
         </Button>
       </CardContent>
     </Card>
@@ -147,7 +148,7 @@ export function FamilyProfilesEnrollmentPanel({
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Family Directory</CardTitle>
-          <CardDescription>{showGraduated ? "Current and graduated family profile snapshot" : "Currently enrolled family profile snapshot"}</CardDescription>
+          <CardDescription>{showGraduated ? "Families across all enrollment statuses" : "Currently enrolled family profile snapshot"}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -299,7 +300,7 @@ export function ChildProfilesEnrollmentPanel({
         <CardHeader>
           <CardTitle>Children</CardTitle>
           <CardDescription>
-            {showGraduated ? "Current and graduated student records" : "Currently enrolled student records"}
+            {showGraduated ? "Students across all enrollment statuses" : "Currently enrolled student records"}
           </CardDescription>
         </CardHeader>
         <CardContent>

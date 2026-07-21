@@ -6,6 +6,7 @@ import {
   procareImportReviewFingerprint,
   procareSourceSha256,
 } from "@/lib/procare-import-review";
+import { buildProcareMultiReportRowsFromFiles } from "@/lib/procare-multi-report-import";
 
 test("ProCare source hashes identify the exact reviewed export", () => {
   const source = "Family Name,Child Name\nRivera Family,Avery Rivera\n";
@@ -57,5 +58,30 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(route, /procare_multi_report_zip/);
   assert.match(route, /procare_multi_report_files/);
   assert.match(route, /formData\.getAll\("file"\)/);
+  assert.match(route, /isStandardReportSet/);
+  assert.match(panel, /setSelectedFiles/);
+  assert.match(panel, /add the four standard reports one at a time/);
   assert.match(route, /buildProcareMultiReportRows/);
+});
+
+test("ProCare multi-report rows distinguish guardians from pickup contacts and preserve separate allergies", async () => {
+  const csv = (headers: string[], rows: string[][]) => Buffer.from([headers, ...rows].map((row) => row.join(",")).join("\n"));
+  const files = new Map<string, Buffer>([
+    ["enrollment.csv", csv(["Child ID", "First Name", "Last Name", "Enrollment Status", "Primary Classroom"], [["child-1", "Avery", "Rivera", "Enrolled", "Preschool"]])],
+    ["parentinfo.csv", csv(["Person ID", "Account ID", "Person Type", "First Name", "Last Name", "Email", "Phone 1"], [["parent-1", "account-1", "Payer", "Jordan", "Rivera", "parent@example.test", "5551112222"]])],
+    ["relationships.csv", csv(["Child ID", "Person ID", "Person Type", "First Name", "Last Name", "Relationship Type", "Lives With", "Emergency", "Authorized Pickup", "Email", "Phone 1", "Phone 2"], [
+      ["child-1", "parent-1", "Relationship", "Jordan", "Rivera", "Mom", "Checked", "Checked", "Checked", "parent@example.test", "5551112222", ""],
+      ["child-1", "friend-1", "Relationship", "Taylor", "Friend", "Family Friend", "", "Checked", "Checked", "", "5553334444", ""],
+    ])],
+    ["childinfo.csv", csv(["Child ID", "Category Description", "Item Is Active", "Item Description"], [
+      ["child-1", "Allergies", "Checked", "Peanuts"],
+      ["child-1", "Allergies", "Checked", "Tree nuts"],
+    ])],
+  ]);
+
+  const [row] = await buildProcareMultiReportRowsFromFiles(files);
+  const relationships = JSON.parse(row["procare relationship records"]) as Array<{ relation: string; guardian: boolean }>;
+  assert.equal(relationships.find((relationship) => relationship.relation === "Mom")?.guardian, true);
+  assert.equal(relationships.find((relationship) => relationship.relation === "Family Friend")?.guardian, false);
+  assert.deepEqual(JSON.parse(row["procare allergy records"]), ["Peanuts", "Tree nuts"]);
 });

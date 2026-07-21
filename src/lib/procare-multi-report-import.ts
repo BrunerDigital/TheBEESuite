@@ -95,15 +95,18 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     for (const relationship of related) for (const accountId of accountsByPerson.get(relationship["Person ID"]) ?? []) accountIds.add(accountId);
     const accountId = accountIds.size === 1 ? [...accountIds][0] : "";
     const payers = (peopleByAccount.get(accountId) ?? []).filter((row) => row["Person Type"] === "Payer");
+    const payerPersonIds = new Set(payers.map((row) => row["Person ID"]).filter(Boolean));
     const primary = payers[0];
     const secondary = payers[1];
-    const allergies = (childDetails.get(child["Child ID"]) ?? [])
+    const allergyRecords = (childDetails.get(child["Child ID"]) ?? [])
       .filter((row) => row["Category Description"].toLowerCase() === "allergies" && row["Item Is Active"] === "Checked")
-      .map((row) => row["Item Description"]).filter(Boolean).join("; ");
+      .map((row) => row["Item Description"]).filter(Boolean);
+    const allergies = allergyRecords.join("; ");
     const relationshipRecords = related.map((row) => ({
       externalId: row["Person ID"], name: fullName(row), relation: row["Relationship Type"] || "Guardian",
       email: row["Email"], phone: row["Phone 1"] || row["Phone 2"], livesWith: row["Lives With"] === "Checked",
       emergency: row["Emergency"] === "Checked", authorizedPickup: row["Authorized Pickup"] === "Checked",
+      guardian: payerPersonIds.has(row["Person ID"]) || row["Lives With"] === "Checked" || /^(mom|dad|mother|father|parent|foster parent)$/i.test(row["Relationship Type"]),
     }));
     return {
       "row type": "cordera_multi_report_child",
@@ -117,7 +120,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       "guardian phone": primary?.["Phone 1"] ?? "", "address": address(primary),
       "secondary guardian id": secondary?.["Person ID"] ?? "", "secondary guardian": secondary ? fullName(secondary) : "",
       "secondary email": secondary?.["Email"] ?? "", "secondary phone": secondary?.["Phone 1"] ?? "",
-      "allergies": allergies, "procare relationship records": JSON.stringify(relationshipRecords),
+      "allergies": allergies, "procare allergy records": JSON.stringify(allergyRecords), "procare relationship records": JSON.stringify(relationshipRecords),
       "import warning": accountIds.size === 0 ? "No reliable ProCare account link was found." : accountIds.size > 1 ? "Multiple ProCare account links were found." : "",
     };
   });

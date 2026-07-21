@@ -179,6 +179,7 @@ function toDateInput(value: Date | string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  if (date.getUTCFullYear() === 1900) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 }
@@ -231,6 +232,7 @@ function formatActivityDate(value: string | Date | null | undefined) {
   if (!value) return "Not set";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not set";
+  if (date.getUTCFullYear() === 1900) return "Missing DOB";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",

@@ -100,7 +100,7 @@ function previewStatusVariant(status: "ready" | "warning") {
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
-  const [selectedFileName, setSelectedFileName] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
@@ -146,7 +146,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (csv.trim()) formData.set("csv", csv);
-        for (const file of Array.from(fileRef.current?.files ?? [])) formData.append("file", file);
+        for (const file of selectedFiles) formData.append("file", file);
         const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
         const json = await response.json().catch(() => null) as {
           dryRun?: boolean;
@@ -177,7 +177,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setPreviewDialogOpen(false);
           setDisposedRowNumbers([]);
           if (fileRef.current) fileRef.current.value = "";
-          setSelectedFileName("");
+          setSelectedFiles([]);
         } else {
           setPreview(summary ?? null);
           setPreviewDialogOpen(false);
@@ -224,7 +224,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const blockingWarningRows = preview ? Math.max(preview.warningRows - duplicateReviewRows, 0) : 0;
   const busy = isPending || Boolean(progressMessage);
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
-  const hasImportSource = Boolean(csv.trim() || selectedFileName);
+  const hasImportSource = Boolean(csv.trim() || selectedFiles.length);
   const noCentersAvailable = !centers.length;
   const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
   const commitBlockedReason = noCentersAvailable
@@ -415,17 +415,25 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               multiple
               accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
               onChange={(event) => {
-                const names = Array.from(event.target.files ?? []).map((file) => file.name);
-                setSelectedFileName(names.join(", "));
+                const addedFiles = Array.from(event.target.files ?? []);
+                setSelectedFiles((current) => {
+                  const merged = new Map(current.map((file) => [file.name.toLowerCase(), file]));
+                  for (const file of addedFiles) merged.set(file.name.toLowerCase(), file);
+                  return [...merged.values()];
+                });
+                event.target.value = "";
                 clearPreview();
               }}
               className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
-            {selectedFileName ? (
-              <p className="text-xs text-muted-foreground">Selected: {selectedFileName}</p>
+            {selectedFiles.length ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Selected: {selectedFiles.map((file) => file.name).join(", ")}</span>
+                <Button type="button" size="sm" variant="ghost" onClick={() => { setSelectedFiles([]); clearPreview(); }}>Clear files</Button>
+              </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              For the standard multi-report export, select enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv together, or choose the ZIP containing them.
+              You may add the four standard reports one at a time or select them together. The importer waits for enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv before processing. You can also choose the ZIP containing them.
             </p>
           </div>
         </div>

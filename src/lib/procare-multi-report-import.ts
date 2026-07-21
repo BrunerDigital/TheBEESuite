@@ -64,11 +64,10 @@ function address(row?: CsvRow) {
   return [row["Add 1, Line 1"], row["Add 1, Line 2"], locality].filter(Boolean).join("\n");
 }
 
-export async function buildProcareMultiReportRows(buffer: Buffer) {
-  const entries = await zipEntries(buffer);
+export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, Buffer>) {
   const required = ["enrollment.csv", "parentinfo.csv", "relationships.csv", "childinfo.csv"];
   const missing = required.filter((name) => !entries.has(name));
-  if (missing.length) throw new Error(`This ProCare ZIP is missing: ${missing.join(", ")}.`);
+  if (missing.length) throw new Error(`The ProCare export is missing: ${missing.join(", ")}. Select all four CSV reports together or upload their ZIP.`);
   const read = (name: string) => parseCsv(entries.get(name)!.toString("utf8"));
   const enrollment = read("enrollment.csv");
   const parents = read("parentinfo.csv");
@@ -122,4 +121,8 @@ export async function buildProcareMultiReportRows(buffer: Buffer) {
       "import warning": accountIds.size === 0 ? "No reliable ProCare account link was found." : accountIds.size > 1 ? "Multiple ProCare account links were found." : "",
     };
   });
+}
+
+export async function buildProcareMultiReportRows(buffer: Buffer) {
+  return buildProcareMultiReportRowsFromFiles(await zipEntries(buffer));
 }

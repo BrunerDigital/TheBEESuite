@@ -146,8 +146,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (csv.trim()) formData.set("csv", csv);
-        const file = fileRef.current?.files?.[0];
-        if (file) formData.set("file", file);
+        for (const file of Array.from(fileRef.current?.files ?? [])) formData.append("file", file);
         const response = await fetch("/api/imports/procare", { method: "POST", body: formData });
         const json = await response.json().catch(() => null) as {
           dryRun?: boolean;
@@ -246,7 +245,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import ProCare Family Accounts</CardTitle>
         <CardDescription>
-          Upload a ProCare CSV or the standard multi-report ZIP export to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
+          Upload one ProCare CSV, select the four standard report CSVs together, or upload their ZIP to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -408,14 +407,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="procare-file">CSV export</Label>
+            <Label htmlFor="procare-file">ProCare export files</Label>
             <input
               ref={fileRef}
               id="procare-file"
               type="file"
+              multiple
               accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
               onChange={(event) => {
-                setSelectedFileName(event.target.files?.[0]?.name ?? "");
+                const names = Array.from(event.target.files ?? []).map((file) => file.name);
+                setSelectedFileName(names.join(", "));
                 clearPreview();
               }}
               className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -423,6 +424,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             {selectedFileName ? (
               <p className="text-xs text-muted-foreground">Selected: {selectedFileName}</p>
             ) : null}
+            <p className="text-xs leading-5 text-muted-foreground">
+              For the standard multi-report export, select enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv together, or choose the ZIP containing them.
+            </p>
           </div>
         </div>
         <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[18rem_1fr]">

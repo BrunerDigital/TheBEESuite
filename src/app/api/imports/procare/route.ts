@@ -35,7 +35,7 @@ import {
   procareSourceSha256,
 } from "@/lib/procare-import-review";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
-import { buildProcareMultiReportRows } from "@/lib/procare-multi-report-import";
+import { buildProcareMultiReportRows, buildProcareMultiReportRowsFromFiles } from "@/lib/procare-multi-report-import";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -763,11 +763,31 @@ function isZipBuffer(buffer: Buffer) {
   return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
 }
 
-async function readImportText(file: FormDataEntryValue | null, pastedCsv: string) {
-  if (!(file instanceof File) || file.size <= 0) {
+async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
+  const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (!uploadedFiles.length) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text" };
   }
 
+  if (uploadedFiles.length > 1) {
+    const entries = new Map<string, Buffer>();
+    for (const file of uploadedFiles) {
+      const fileName = file.name.toLowerCase().split(/[\\/]/).pop() ?? file.name.toLowerCase();
+      if (!fileName.endsWith(".csv")) throw new Error("Select the four ProCare CSV reports together, or upload one ZIP file.");
+      if (entries.has(fileName)) throw new Error(`More than one uploaded file is named ${fileName}.`);
+      entries.set(fileName, Buffer.from(await file.arrayBuffer()));
+    }
+    const records = await buildProcareMultiReportRowsFromFiles(entries);
+    const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
+    return {
+      text: JSON.stringify(records),
+      filename: uploadedFiles.map((file) => file.name).join(", "),
+      sourceType: "procare_multi_report_files",
+      parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
+    };
+  }
+
+  const file = uploadedFiles[0];
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileName = file.name.toLowerCase();
   if (fileName.endsWith(".zip") && isZipBuffer(buffer)) {
@@ -990,7 +1010,7 @@ async function POSTHandler(request: NextRequest) {
   }
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
-  const file = formData.get("file");
+  const files = formData.getAll("file");
   const pastedCsv = clean(formData.get("csv"));
   if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
   if (centerId && !canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
@@ -1011,7 +1031,7 @@ async function POSTHandler(request: NextRequest) {
 
   let importPayload: Awaited<ReturnType<typeof readImportText>>;
   try {
-    importPayload = await readImportText(file, pastedCsv);
+    importPayload = await readImportText(files, pastedCsv);
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "ProCare export could not be read." },
@@ -1019,7 +1039,7 @@ async function POSTHandler(request: NextRequest) {
     );
   }
   const text = importPayload.text;
-  if (!text) return NextResponse.json({ ok: false, error: "Upload a CSV export or paste CSV text." }, { status: 400 });
+  if (!text) return NextResponse.json({ ok: false, error: "Upload ProCare CSV files, a ZIP export, or paste CSV text." }, { status: 400 });
 
   const rows = importPayload.parsedRows ?? parseImportRows(text);
   const sourceHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];

@@ -52,6 +52,10 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(route, /procare\.import\.rows_disposed/);
   assert.match(panel, /Unresolved imported data/);
   assert.match(panel, /\.zip/);
+  assert.match(panel, /multiple/);
+  assert.match(panel, /enrollment\.csv, parentinfo\.csv, relationships\.csv, and childinfo\.csv/);
   assert.match(route, /procare_multi_report_zip/);
+  assert.match(route, /procare_multi_report_files/);
+  assert.match(route, /formData\.getAll\("file"\)/);
   assert.match(route, /buildProcareMultiReportRows/);
 });

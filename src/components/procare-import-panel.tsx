@@ -20,8 +20,11 @@ type CenterOption = {
 
 type ImportResponse = {
   dryRun?: boolean;
+  partial?: boolean;
   error?: string;
   batchId?: string;
+  nextRow?: number;
+  totalRows?: number;
   summary?: ImportPreview & Record<string, number | string | unknown>;
 };
 
@@ -178,14 +181,32 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (csv.trim()) formData.set("csv", csv);
         for (const file of selectedFiles) formData.append("file", file);
-        const response = await uploadImport(formData, (percent, uploaded) => {
-          setProgressPercent(percent);
-          if (uploaded) {
-            setProgressPhase("processing");
-            setProgressMessage(dryRun ? "Analyzing records and preparing the review..." : "Upload complete. Matching and importing records...");
+        let response: Awaited<ReturnType<typeof uploadImport>>;
+        let json: ImportResponse | null;
+        let resumeBatchId = "";
+        let nextRow = 1;
+        do {
+          if (!dryRun) {
+            formData.set("chunkStart", String(nextRow));
+            formData.set("chunkSize", "5");
+            if (resumeBatchId) formData.set("batchId", resumeBatchId);
           }
-        });
-        const json = response.json;
+          response = await uploadImport(formData, (percent, uploaded) => {
+            setProgressPercent((current) => Math.max(current, percent));
+            if (uploaded) {
+              setProgressPhase("processing");
+              setProgressMessage(dryRun ? "Analyzing records and preparing the review..." : "Upload complete. Matching and importing records...");
+            }
+          });
+          json = response.json;
+          if (!response.ok || !json?.partial) break;
+          resumeBatchId = json.batchId ?? resumeBatchId;
+          nextRow = json.nextRow ?? nextRow;
+          const totalRows = Math.max(json.totalRows ?? 1, 1);
+          const completedRows = Number(json.summary?.rows ?? Math.max(nextRow - 1, 0));
+          setProgressPercent(Math.min(95, 60 + Math.round((completedRows / totalRows) * 35)));
+          setProgressMessage(`Imported ${completedRows.toLocaleString()} of ${totalRows.toLocaleString()} records. Continuing automatically...`);
+        } while (json?.partial);
         if (!response.ok) {
           setProgressPhase("idle");
           setProgressPercent(0);

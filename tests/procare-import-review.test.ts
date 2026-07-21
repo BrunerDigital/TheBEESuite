@@ -64,6 +64,10 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(panel, /XMLHttpRequest/);
   assert.match(panel, /ProCare import progress/);
   assert.match(panel, /Upload and import complete/);
+  assert.match(panel, /chunkSize", "5"/);
+  assert.match(panel, /Continuing automatically/);
+  assert.match(route, /partial: true/);
+  assert.match(route, /resumable ProCare import batch/);
   assert.match(route, /buildProcareMultiReportRows/);
 });
 

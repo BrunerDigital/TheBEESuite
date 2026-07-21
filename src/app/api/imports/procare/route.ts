@@ -1005,6 +1005,12 @@ async function POSTHandler(request: NextRequest) {
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
+  const requestedBatchId = clean(formData.get("batchId"));
+  const requestedChunkStart = Math.max(Number.parseInt(clean(formData.get("chunkStart")), 10) || 1, 1);
+  const parsedChunkSize = Number.parseInt(clean(formData.get("chunkSize")), 10);
+  const requestedChunkSize = Number.isInteger(parsedChunkSize) && parsedChunkSize > 0
+    ? Math.min(parsedChunkSize, 10)
+    : Number.MAX_SAFE_INTEGER;
   let fieldMapping: ProcareFieldMapping = {};
   try {
     const mappingJson = clean(formData.get("fieldMapping"));
@@ -1095,7 +1101,7 @@ async function POSTHandler(request: NextRequest) {
     duplicateMode,
   });
   const duplicateWarningRows = new Set(validationPreview.duplicateReviewRowNumbers);
-  const stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
+  let stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
     !duplicateReviewConfirmed || !duplicateWarningRows.has(rowNumber)
   )));
   const disposedRowNumbers = new Set(
@@ -1119,17 +1125,32 @@ async function POSTHandler(request: NextRequest) {
   const centersTouched = new Set<string>();
   const rowResults: Array<{ rowNumber: number; status: string; message?: string; rawData: Record<string, string>; createdFamilyId?: string; createdChildId?: string }> = [];
 
-  const batch = await prisma.procareImportBatch.create({
+  const existingBatch = requestedBatchId
+    ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id, status: "processing" } })
+    : null;
+  if (requestedBatchId && !existingBatch) return NextResponse.json({ ok: false, error: "The resumable ProCare import batch could not be found." }, { status: 409 });
+  const existingSummary = existingBatch?.summary && typeof existingBatch.summary === "object" && !Array.isArray(existingBatch.summary)
+    ? existingBatch.summary as Record<string, unknown>
+    : {};
+  if (existingBatch && existingSummary.sourceSha256 !== sourceSha256) {
+    return NextResponse.json({ ok: false, error: "The selected files changed while the import was running. Start a new import with one unchanged export." }, { status: 409 });
+  }
+  if (existingBatch && Array.isArray(existingSummary.stagedRowNumbers)) {
+    stagedRowNumbers = new Set(existingSummary.stagedRowNumbers.filter((value): value is number => Number.isInteger(value)));
+  }
+  const batch = existingBatch ?? await prisma.procareImportBatch.create({
     data: {
       centerId: center.id,
       uploadedById: user.id,
       filename: importPayload.filename,
       status: "processing",
-      summary: { sourceType: importPayload.sourceType, sourceSha256, reviewFingerprint },
+      summary: { sourceType: importPayload.sourceType, sourceSha256, reviewFingerprint, stagedRowNumbers: [...stagedRowNumbers] },
     },
   });
+  const chunkStart = Math.min(requestedChunkStart, rows.length);
+  const chunkEnd = Math.min(chunkStart + requestedChunkSize, rows.length);
 
-  for (let index = 1; index < rows.length; index += 1) {
+  for (let index = chunkStart; index < chunkEnd; index += 1) {
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
     const rowNumber = index + 1;
     if (disposedRowNumbers.has(rowNumber)) {
@@ -1850,37 +1871,49 @@ async function POSTHandler(request: NextRequest) {
     })),
   });
 
+  const cumulativeNumber = (key: string, current: number) => Number(existingSummary[key] ?? 0) + current;
+  const progress = await prisma.procareImportRow.groupBy({ by: ["status"], where: { batchId: batch.id }, _count: { _all: true } });
+  const progressCounts = Object.fromEntries(progress.map((item) => [item.status, item._count._all]));
+  const isPartial = chunkEnd < rows.length;
+  const unresolvedRows = isPartial ? [] : await prisma.procareImportRow.findMany({
+    where: { batchId: batch.id, status: "needs_resolution" },
+    orderBy: { rowNumber: "asc" },
+    take: 500,
+    select: { rowNumber: true, message: true },
+  });
   const summary = {
     center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
     sourceType: importPayload.sourceType,
     filename: importPayload.filename,
     sourceSha256,
     reviewFingerprint,
-    rows: rowResults.length,
-    imported: rowResults.filter((row) => row.status === "imported").length,
-    errors: rowResults.filter((row) => row.status === "error").length,
-    unresolved: rowResults.filter((row) => row.status === "needs_resolution").length,
-    disposed: rowResults.filter((row) => row.status === "disposed").length,
-    createdFamilies,
-    updatedFamilies,
-    createdChildren,
-    createdClassrooms,
-    createdStaff,
-    updatedStaff,
-    createdStaffLogins,
-    emergencyContacts,
-    authorizedPickups,
-    medicalRows,
-    attendanceRows,
-    checkLogRows,
-    invoiceRows,
-    ledgerRows,
-    centersTouched: centersTouched.size,
+    rows: Object.values(progressCounts).reduce((total, count) => total + count, 0),
+    totalRows: rows.length - 1,
+    imported: progressCounts.imported ?? 0,
+    errors: progressCounts.error ?? 0,
+    unresolved: progressCounts.needs_resolution ?? 0,
+    disposed: progressCounts.disposed ?? 0,
+    createdFamilies: cumulativeNumber("createdFamilies", createdFamilies),
+    updatedFamilies: cumulativeNumber("updatedFamilies", updatedFamilies),
+    createdChildren: cumulativeNumber("createdChildren", createdChildren),
+    createdClassrooms: cumulativeNumber("createdClassrooms", createdClassrooms),
+    createdStaff: cumulativeNumber("createdStaff", createdStaff),
+    updatedStaff: cumulativeNumber("updatedStaff", updatedStaff),
+    createdStaffLogins: cumulativeNumber("createdStaffLogins", createdStaffLogins),
+    emergencyContacts: cumulativeNumber("emergencyContacts", emergencyContacts),
+    authorizedPickups: cumulativeNumber("authorizedPickups", authorizedPickups),
+    medicalRows: cumulativeNumber("medicalRows", medicalRows),
+    attendanceRows: cumulativeNumber("attendanceRows", attendanceRows),
+    checkLogRows: cumulativeNumber("checkLogRows", checkLogRows),
+    invoiceRows: cumulativeNumber("invoiceRows", invoiceRows),
+    ledgerRows: cumulativeNumber("ledgerRows", ledgerRows),
+    centersTouched: Math.max(Number(existingSummary.centersTouched ?? 0), centersTouched.size),
+    stagedRowNumbers: [...stagedRowNumbers],
     headerAnalysis,
     fieldOptions: PROCARE_FIELD_OPTIONS,
-    warningRows: rowResults.filter((row) => row.status === "needs_resolution").length,
+    warningRows: progressCounts.needs_resolution ?? 0,
     duplicateReviewRows: validationPreview.duplicateReviewRows,
-    rowResults: rowResults.filter((row) => row.status === "needs_resolution").slice(0, 500).map((row) => ({
+    rowResults: unresolvedRows.map((row) => ({
       rowNumber: row.rowNumber,
       status: "warning",
       entity: "unknown",
@@ -1892,8 +1925,12 @@ async function POSTHandler(request: NextRequest) {
 
   await prisma.procareImportBatch.update({
     where: { id: batch.id },
-    data: { status: summary.errors || summary.unresolved ? "completed_with_errors" : "completed", summary },
+    data: { status: isPartial ? "processing" : summary.errors || summary.unresolved ? "completed_with_errors" : "completed", summary },
   });
+
+  if (isPartial) {
+    return NextResponse.json({ ok: true, partial: true, batchId: batch.id, nextRow: chunkEnd, totalRows: rows.length - 1, summary });
+  }
 
   await writeAuditLog(user, {
     centerId: center.id,

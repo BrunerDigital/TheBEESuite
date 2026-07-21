@@ -160,7 +160,7 @@ export async function ensureParentPortalLoginForGuardian({
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
-      ...(credentialCreated || resetToInitialPassword || (existingUser && !existingUser.isActive) ? { mustResetPassword: true } : {}),
+      mustResetPassword: false,
       sessionVersion: { increment: 1 },
     },
     create: {
@@ -170,7 +170,7 @@ export async function ensureParentPortalLoginForGuardian({
       name: guardian.fullName,
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
-      mustResetPassword: true,
+      mustResetPassword: false,
     },
     select: { id: true },
   });

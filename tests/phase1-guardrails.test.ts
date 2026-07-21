@@ -65,9 +65,9 @@ import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath,
 import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
 import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
-test("password reset gate blocks parent credential transitions but keeps teacher PIN accounts separate", () => {
+test("password reset gate remains mandatory for staff roles but optional for parents and teachers", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
-  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), true);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), false);
   assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
 });
@@ -457,7 +457,7 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
   assert.match(text, /Email: taylor@example\.com/);
   assert.match(text, /First-login password: BusyBees/);
-  assert.match(text, /required to choose a private password immediately/);
+  assert.match(text, /can keep this password or choose a private password anytime/);
   assert.match(text, /last 4 digits of your phone number/);
   assert.match(text, /bank account for ACH payments/);
   assert.match(text, /reports, incidents, photos/);
@@ -478,7 +478,7 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.match(html, /https:\/\/thebeesuite\.io\/brand\/kid-city-usa\/logo-horizontal\.png/);
   assert.match(html, /Open the Parent App/);
   assert.match(html, /BusyBees/);
-  assert.match(html, /required to choose a private password immediately/);
+  assert.match(html, /can keep this password or choose a private password anytime/);
 });
 
 test("parent document request emails use guardian personal emails and private password copy", () => {

@@ -53,11 +53,11 @@ const loginCopy: Record<LoginPortal, {
     heroFooter: "Family data remains connected to the school records already assigned to your account.",
     heroItems: ["Child updates", "Messages", "Tuition"],
     cardTitle: "Log in to your parent portal",
-    cardDescription: "Use the parent or guardian email on file. For your first login, use the BusyBees password in your school invitation, then choose a private password.",
+    cardDescription: "Use the parent or guardian email on file. For your first login, use the BusyBees password in your school invitation. You can change it later in Parent Portal settings.",
     emailLabel: "Parent login email",
     emailPlaceholder: "parent@example.com",
     passwordPlaceholder: "BusyBees for first login",
-    helpText: "First visit: sign in with your guardian email and BusyBees. You will be required to choose a private password immediately. If you already changed it or forgot it, use Forgot password.",
+    helpText: "First visit: sign in with your guardian email and BusyBees. You can change it anytime in Parent Portal settings. If you already changed it or forgot it, use Forgot password.",
   },
   teachers: {
     heroTitle: "Open your teacher workspace.",

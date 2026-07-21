@@ -31,7 +31,7 @@ test("only unclaimed issued parent setup tokens before expiry are usable", () =>
   assert.deepEqual(parentSetupTokenUsable({ status: "claimed", expiresAt: new Date(now.getTime() + 60_000), claimedAt: now }, now), { ok: false, reason: "claimed" });
 });
 
-test("parents marked for credential transition cannot enter the portal before reset", () => {
-  assert.equal(requiresPasswordResetGate({ mustResetPassword: true, role: UserRole.PARENT_GUARDIAN }), true);
+test("parent password changes remain optional even when legacy reset metadata is present", () => {
+  assert.equal(requiresPasswordResetGate({ mustResetPassword: true, role: UserRole.PARENT_GUARDIAN }), false);
   assert.equal(requiresPasswordResetGate({ mustResetPassword: false, role: UserRole.PARENT_GUARDIAN }), false);
 });

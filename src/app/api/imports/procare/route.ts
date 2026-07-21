@@ -5,6 +5,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import {
   isActiveProcareStaffStatus,
+  isActiveProcareEnrollmentStatus,
+  analyzeProcareHeaders,
+  applyProcareFieldMapping,
+  PROCARE_FIELD_OPTIONS,
   normalizeProcareEnrollmentStatus,
   procareAgeGroup,
   procareChildFullName,
@@ -14,6 +18,7 @@ import {
   procareSourceFields,
   procareStaffName,
   procareValue as value,
+  type ProcareFieldMapping,
 } from "@/lib/procare-import-fields";
 import { prisma } from "@/lib/prisma";
 import { buildCenterAliasMap, resolveImportCenter, type CenterAliasMap } from "@/lib/import-center-mapping";
@@ -958,6 +963,13 @@ async function POSTHandler(request: NextRequest) {
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
   const reviewedFingerprint = clean(formData.get("reviewedFingerprint"));
+  let fieldMapping: ProcareFieldMapping = {};
+  try {
+    const mappingJson = clean(formData.get("fieldMapping"));
+    fieldMapping = mappingJson ? JSON.parse(mappingJson) as ProcareFieldMapping : {};
+  } catch {
+    return NextResponse.json({ ok: false, error: "The ProCare field mapping is invalid. Review the column matches and try again." }, { status: 400 });
+  }
   const autoMap = ["auto", "all", "bulk", ""].includes(requestedCenterId.toLowerCase()) && canAccessAllCenters(user);
   const centerId = autoMap ? "" : requestedCenterId || user.primaryCenterId;
   const file = formData.get("file");
@@ -992,14 +1004,21 @@ async function POSTHandler(request: NextRequest) {
   if (!text) return NextResponse.json({ ok: false, error: "Upload a CSV export or paste CSV text." }, { status: 400 });
 
   const rows = parseImportRows(text);
-  const headers = rows[0]?.map((header) => header.trim().toLowerCase()) ?? [];
+  const sourceHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
+  const headerAnalysis = analyzeProcareHeaders(sourceHeaders);
+  const headers = applyProcareFieldMapping(sourceHeaders, fieldMapping);
   if (rows.length < 2 || !headers.length) {
     return NextResponse.json({ ok: false, error: "No import rows found." }, { status: 400 });
   }
 
+  const duplicateTargets = headers.filter((header, index) => header && headers.indexOf(header) !== index);
+  if (duplicateTargets.length) {
+    return NextResponse.json({ ok: false, error: `Each ProCare column must map to a different BEE Suite field. Duplicate mapping: ${[...new Set(duplicateTargets)].join(", ")}.` }, { status: 400 });
+  }
+  const mappingSignature = JSON.stringify(Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)));
   const sourceSha256 = procareSourceSha256(text);
   const reviewFingerprint = procareImportReviewFingerprint({
-    text,
+    text: `${text}\n#field-mapping:${mappingSignature}`,
     requestedCenterId,
     duplicateMode,
     secret: process.env.AUTH_SECRET || "development-procare-import-review",
@@ -1019,7 +1038,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
-      summary: { ...preview, sourceSha256, reviewFingerprint },
+      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS },
     });
   }
 
@@ -1244,6 +1263,7 @@ async function POSTHandler(request: NextRequest) {
       const classroomName = procareClassroomName(rawData);
       const ageGroup = procareAgeGroup(rawData, "Unassigned");
       const enrollmentStatus = normalizeProcareEnrollmentStatus(value(rawData, ["child status", "status", "enrollment status", "student status"]));
+      const familyDisplayName = familyName || (accountExternalId ? `${accountExternalId} Household` : childName || email);
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
       const familyMatchers = [
@@ -1270,7 +1290,7 @@ async function POSTHandler(request: NextRequest) {
         ? await prisma.family.update({
             where: { id: existing.id },
             data: {
-              name: familyName || childName || email,
+              ...(familyName ? { name: familyName } : {}),
               billingEmail: email || undefined,
               address: address || undefined,
               sourceSystem: "procare",
@@ -1281,7 +1301,7 @@ async function POSTHandler(request: NextRequest) {
         : await prisma.family.create({
             data: {
               centerId: targetCenter.id,
-              name: familyName || childName || email,
+              name: familyDisplayName,
               billingEmail: email || null,
               address: address || null,
               notes: "Imported from ProCare export.",
@@ -1394,7 +1414,7 @@ async function POSTHandler(request: NextRequest) {
             ageGroup,
             rawData,
           });
-          classroomId = classroom.id;
+          classroomId = isActiveProcareEnrollmentStatus(enrollmentStatus) ? classroom.id : null;
           if (classroom.created) createdClassrooms += 1;
         }
         const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
@@ -1451,7 +1471,7 @@ async function POSTHandler(request: NextRequest) {
           await prisma.child.update({
             where: { id: existingChild.id },
             data: {
-              classroomId: classroomId || undefined,
+              classroomId,
               ageGroup,
               enrollmentStatus,
               startDate: parseDate(value(rawData, ["start date", "enrollment date", "begin date", "first day"])) || undefined,

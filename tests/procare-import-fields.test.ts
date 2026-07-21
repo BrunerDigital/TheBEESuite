@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   cleanProcareImportValue,
+  analyzeProcareHeaders,
+  applyProcareFieldMapping,
+  isActiveProcareEnrollmentStatus,
   normalizeProcareEnrollmentStatus,
   procareAgeGroup,
   procareChildFullName,
@@ -35,6 +38,18 @@ test("ProCare enrollment statuses are normalized for app display and filtering",
   assert.equal(normalizeProcareEnrollmentStatus("Summer Break"), "summer_break");
   assert.equal(normalizeProcareEnrollmentStatus("Withdrawn"), "withdrawn");
   assert.equal(normalizeProcareEnrollmentStatus("Active"), "enrolled");
+  assert.equal(isActiveProcareEnrollmentStatus("Active"), true);
+  assert.equal(isActiveProcareEnrollmentStatus("Terminated"), false);
+});
+
+test("custom ProCare headings can be reviewed and mapped to BEE Suite fields", () => {
+  const headers = ["AcctKey", "Kid Full Name", "Current / Former"];
+  assert.equal(analyzeProcareHeaders(headers).every((header) => !header.recognized), true);
+  assert.deepEqual(applyProcareFieldMapping(headers, {
+    AcctKey: "account id",
+    "Kid Full Name": "child name",
+    "Current / Former": "child status",
+  }), ["account id", "child name", "child status"]);
 });
 
 test("ProCare source fields preserve Longmont-style import labels", () => {

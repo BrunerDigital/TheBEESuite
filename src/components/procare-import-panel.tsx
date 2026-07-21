@@ -70,6 +70,8 @@ type ImportPreview = {
   }>;
   sourceSha256?: string;
   reviewFingerprint?: string;
+  headerAnalysis?: Array<{ source: string; normalized: string; suggestedField: string; recognized: boolean }>;
+  fieldOptions?: Array<{ key: string; label: string }>;
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -98,6 +100,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [selectedFileName, setSelectedFileName] = useState("");
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [mappingDirty, setMappingDirty] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
   const [status, setStatus] = useState("");
@@ -136,6 +140,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("dryRun", String(dryRun));
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
+        formData.set("fieldMapping", JSON.stringify(fieldMapping));
         if (!dryRun && preview?.reviewFingerprint) {
           formData.set("reviewedFingerprint", preview.reviewFingerprint);
         }
@@ -161,6 +166,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setPreview(json.summary ?? null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
+          setMappingDirty(false);
           setLastBatchId("");
           return;
         }
@@ -199,6 +205,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       ? "Choose a CSV export or paste CSV text before submitting."
       : !preview?.reviewFingerprint
         ? "Submit this exact export for review before committing."
+      : mappingDirty
+        ? "Submit the updated field matches for review before committing."
       : preview && blockingWarningRows > 0
           ? "Resolve or remove non-duplicate warning rows before committing."
           : preview && commitNeedsDuplicateConfirmation
@@ -208,6 +216,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const reviewRowsShown = reviewRows.length;
   const readyReviewRows = reviewRows.filter((row) => row.status === "ready").length;
   const warningReviewRows = reviewRows.filter((row) => row.status === "warning").length;
+  const unknownHeaders = preview?.headerAnalysis?.filter((header) => !header.recognized && !fieldMapping[header.source]) ?? [];
 
   return (
     <Card className="glass-panel">
@@ -439,6 +448,45 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             placeholder="Family Name,Child Name,Guardian Name,Email,Phone,Balance..."
           />
         </div>
+        {preview?.headerAnalysis?.length ? (
+          <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+            <div>
+              <div className="text-sm font-medium">Match ProCare columns to BEE Suite fields</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                Known ProCare headings are matched automatically. Use these controls when your export names a field differently, then submit the updated mapping for review. Leave report-only columns ignored.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {preview.headerAnalysis.map((header) => (
+                <div key={header.source} className="grid gap-1 rounded-lg border bg-background p-3">
+                  <Label className="text-xs">{header.source}</Label>
+                  <Select
+                    value={fieldMapping[header.source] || header.suggestedField || "ignore"}
+                    onValueChange={(selected) => {
+                      const mappedField = selected && selected !== "ignore" ? selected : "";
+                      setFieldMapping((current) => ({ ...current, [header.source]: mappedField }));
+                      setMappingDirty(true);
+                      setDuplicateReviewConfirmed(false);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ignore">Ignore this column</SelectItem>
+                      {preview.fieldOptions?.map((option) => (
+                        <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {unknownHeaders.length
+                ? `${unknownHeaders.length} column(s) are currently ignored because they do not match a known BEE Suite field.`
+                : "Every selected source column has a reviewed destination or is a recognized ProCare heading."}
+            </p>
+          </div>
+        ) : null}
         {preview ? (
           <Alert>
             <CheckCircle2 className="size-4" />

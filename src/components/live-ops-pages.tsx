@@ -985,7 +985,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
 
 export type DeveloperDashboardPageData = {
   canManageOperations: boolean;
-  centers: Array<{ id: string; name: string }>;
+  centers: Array<{ id: string; name: string; city?: string | null; state?: string | null; postalCode?: string | null; timezone?: string | null; customFields?: unknown }>;
   stats: {
     auditEvents: number;
     operationMutations: number;

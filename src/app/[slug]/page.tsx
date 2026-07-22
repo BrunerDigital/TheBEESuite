@@ -1513,7 +1513,15 @@ async function renderLivePage(
     return (
       <CalendarPage
         data={{
-          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          centers: centers.map((center) => ({
+            id: center.id,
+            name: formatCenterName(center),
+            city: center.city,
+            state: center.state,
+            postalCode: center.postalCode,
+            timezone: center.timezone,
+            customFields: center.customFields,
+          })),
           events,
           generatedAt: today.toISOString(),
           canManageCalendar: canManageOperations(user),

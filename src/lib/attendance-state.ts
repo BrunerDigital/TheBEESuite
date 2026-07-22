@@ -235,6 +235,11 @@ export function readCenterTimeZone(input: unknown) {
   return inferred;
 }
 
+export function readCenterLocationTimeZone(input: unknown) {
+  const record = asRecord(input);
+  return stringValue(record.state) ? inferTimeZoneFromLocation(record) : readCenterTimeZone(record);
+}
+
 export function centerServiceDayWindow(date = new Date(), center: unknown) {
   const timeZone = readCenterTimeZone(center);
   const start = startOfServiceDay(date, timeZone);

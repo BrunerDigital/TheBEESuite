@@ -24,8 +24,10 @@ import {
 } from "@/lib/staff-compensation";
 import { summarizeClassroomCoverage } from "@/lib/staff-scheduling";
 import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary, type StaffClockAction, type StaffClockEvent, type StaffClockShift } from "@/lib/staff-kiosk";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
+import { zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
-type CenterOption = { id: string; name: string };
+type CenterOption = { id: string; name: string; city?: string | null; state?: string | null; postalCode?: string | null; timezone?: string | null; customFields?: unknown };
 type ClassroomOption = { id: string; centerId: string; name: string; ageGroup: string };
 type TeacherRecord = {
   id: string;
@@ -127,48 +129,33 @@ function dateInputValue(date = new Date()) {
   return `${date.getFullYear()}-${month}-${day}`;
 }
 
-function addLocalDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
+function defaultPayrollStartDate(value: string, timeZone: string) {
+  const dateKey = zonedDateKey(value, timeZone) || zonedDateKey(new Date(), timeZone);
+  const date = new Date(`${dateKey}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() - 13);
+  return date.toISOString().slice(0, 10);
 }
 
-function parseDateInput(value: string, endOfDay = false) {
-  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!parts) return null;
-  const [, year, month, day] = parts;
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  if (Number.isNaN(date.getTime())) return null;
-  if (endOfDay) date.setHours(23, 59, 59, 999);
-  return date;
+function defaultPayrollEndDate(value: string, timeZone: string) {
+  return zonedDateKey(value, timeZone) || zonedDateKey(new Date(), timeZone);
 }
 
-function defaultPayrollStartDate(value: string) {
-  const date = new Date(value);
-  return dateInputValue(addLocalDays(Number.isNaN(date.getTime()) ? new Date() : date, -13));
-}
-
-function defaultPayrollEndDate(value: string) {
-  const date = new Date(value);
-  return dateInputValue(Number.isNaN(date.getTime()) ? new Date() : date);
-}
-
-function formatShortDate(value: Date | string) {
+function formatShortDate(value: Date | string, timeZone?: string) {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime())
     ? "Not set"
-    : new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }).format(date);
+    : new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric", ...(timeZone ? { timeZone } : {}) }).format(date);
 }
 
-function formatShortTime(value: Date | string | null) {
+function formatShortTime(value: Date | string | null, timeZone: string) {
   if (!value) return "Open";
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime())
     ? "Open"
-    : new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+    : new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone }).format(date);
 }
 
-function formatDateTime(value: Date | string | null) {
+function formatDateTime(value: Date | string | null, timeZone: string) {
   if (!value) return "No history";
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime())
@@ -179,6 +166,8 @@ function formatDateTime(value: Date | string | null) {
         year: "numeric",
         hour: "numeric",
         minute: "2-digit",
+        timeZone,
+        timeZoneName: "short",
       }).format(date);
 }
 
@@ -194,13 +183,13 @@ function sortClockEditRows(rows: ClockEditRow[]) {
   });
 }
 
-function clockEditRowsFromEvents(events: StaffClockEvent[]): ClockEditRow[] {
+function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): ClockEditRow[] {
   return [...events]
     .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
-      occurredAt: toDateTimeLocal(event.occurredAt),
+      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
       notes: event.notes ?? "",
     }));
 }
@@ -211,39 +200,34 @@ function nextClockEditAction(rows: ClockEditRow[]): StaffClockAction {
   return last?.action === "clock_in" ? "clock_out" : "clock_in";
 }
 
-function payrollWeekStart(date: Date) {
-  const start = new Date(date);
-  start.setHours(0, 0, 0, 0);
-  const day = start.getDay();
-  start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
-  return start;
-}
-
-function payrollWeekLabel(value: Date | string) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown week";
-  const start = payrollWeekStart(date);
-  const end = addLocalDays(start, 6);
+function payrollWeekLabel(value: Date | string, timeZone: string) {
+  const dateKey = zonedDateKey(value, timeZone);
+  const start = new Date(`${dateKey}T12:00:00Z`);
+  if (Number.isNaN(start.getTime())) return "Unknown week";
+  const day = start.getUTCDay();
+  start.setUTCDate(start.getUTCDate() - (day === 0 ? 6 : day - 1));
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
   return `${formatShortDate(start)} - ${formatShortDate(end)}`;
 }
 
-function buildPayrollShiftRows(shifts: StaffClockShift[]): PayrollShiftRow[] {
+function buildPayrollShiftRows(shifts: StaffClockShift[], timeZone: string): PayrollShiftRow[] {
   const weeklyMinutes = new Map<string, number>();
   return [...shifts]
     .sort((left, right) => new Date(left.clockInAt).getTime() - new Date(right.clockInAt).getTime())
     .map((shift) => {
       const clockIn = new Date(shift.clockInAt);
-      const weekLabel = payrollWeekLabel(clockIn);
+      const weekLabel = payrollWeekLabel(clockIn, timeZone);
       const usedMinutes = weeklyMinutes.get(weekLabel) ?? 0;
       const regularMinutes = Math.max(0, Math.min(shift.minutes, overtimeWeeklyThresholdMinutes - usedMinutes));
       const overtimeMinutes = Math.max(0, shift.minutes - regularMinutes);
       weeklyMinutes.set(weekLabel, usedMinutes + shift.minutes);
       return {
         ...shift,
-        dateLabel: formatShortDate(clockIn),
+        dateLabel: formatShortDate(clockIn, timeZone),
         weekLabel,
-        clockInLabel: formatShortTime(shift.clockInAt),
-        clockOutLabel: shift.clockOutAt ? formatShortTime(shift.clockOutAt) : "Open",
+        clockInLabel: formatShortTime(shift.clockInAt, timeZone),
+        clockOutLabel: shift.clockOutAt ? formatShortTime(shift.clockOutAt, timeZone) : "Open",
         regularMinutes,
         overtimeMinutes,
       };
@@ -271,26 +255,25 @@ function buildPayCodeSummaries(input: {
 }
 
 export function buildPayrollDayRows(input: {
-  startDate: Date | null;
-  endDate: Date | null;
+  startDate: string;
+  endDate: string;
   shifts: PayrollShiftRow[];
+  timeZone: string;
 }): PayrollDayRow[] {
-  if (!input.startDate || !input.endDate || input.startDate > input.endDate) return [];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(input.endDate) || input.startDate > input.endDate) return [];
   const shiftsByDate = new Map<string, PayrollShiftRow[]>();
   for (const shift of input.shifts) {
     const clockIn = new Date(shift.clockInAt);
     if (Number.isNaN(clockIn.getTime())) continue;
-    const key = dateInputValue(clockIn);
+    const key = zonedDateKey(clockIn, input.timeZone);
     shiftsByDate.set(key, [...(shiftsByDate.get(key) ?? []), shift]);
   }
 
   const rows: PayrollDayRow[] = [];
-  const cursor = new Date(input.startDate);
-  cursor.setHours(0, 0, 0, 0);
-  const finalDay = new Date(input.endDate);
-  finalDay.setHours(0, 0, 0, 0);
+  const cursor = new Date(`${input.startDate}T12:00:00Z`);
+  const finalDay = new Date(`${input.endDate}T12:00:00Z`);
   while (cursor <= finalDay) {
-    const dateKey = dateInputValue(cursor);
+    const dateKey = cursor.toISOString().slice(0, 10);
     const shifts = shiftsByDate.get(dateKey) ?? [];
     const regularMinutes = shifts.reduce((sum, shift) => sum + shift.regularMinutes, 0);
     const overtimeMinutes = shifts.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
@@ -304,7 +287,7 @@ export function buildPayrollDayRows(input: {
       overtimeMinutes,
       totalMinutes: shifts.reduce((sum, shift) => sum + shift.minutes, 0),
     });
-    cursor.setDate(cursor.getDate() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return rows;
 }
@@ -322,6 +305,7 @@ export function StaffManagementPanel({
   const activeStaff = useMemo(() => staff.filter((teacher) => teacher.user.isActive), [staff]);
   const previousStaffRows = useMemo(() => previousStaff.filter((teacher) => !teacher.user.isActive), [previousStaff]);
   const allTeacherRows = useMemo(() => [...activeStaff, ...previousStaffRows], [activeStaff, previousStaffRows]);
+  const centerById = useMemo(() => new Map(centers.map((center) => [center.id, center])), [centers]);
   const [selectedStaffId, setSelectedStaffId] = useState("new");
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
   const [classroomId, setClassroomId] = useState("none");
@@ -361,10 +345,11 @@ export function StaffManagementPanel({
   const [clockStaffId, setClockStaffId] = useState(allTeacherRows[0]?.id ?? "");
   const [clockNotes, setClockNotes] = useState("");
   const [clockEditRows, setClockEditRows] = useState<ClockEditRow[]>(() =>
-    clockEditRowsFromEvents(readStaffClockState(allTeacherRows[0]?.customFields).events),
+    clockEditRowsFromEvents(readStaffClockState(allTeacherRows[0]?.customFields).events, readCenterLocationTimeZone(centerById.get(allTeacherRows[0]?.centerId ?? ""))),
   );
-  const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt));
-  const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt));
+  const defaultPayrollTimeZone = readCenterLocationTimeZone(centers[0]);
+  const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
+  const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -387,28 +372,30 @@ export function StaffManagementPanel({
     [activeStaff, weeklyClassroomId],
   );
   const clockTeacher = allTeacherRows.find((teacher) => teacher.id === clockStaffId) ?? allTeacherRows[0] ?? null;
+  const clockTimeZone = readCenterLocationTimeZone(centerById.get(clockTeacher?.centerId ?? ""));
   const clockState = readStaffClockState(clockTeacher?.customFields);
   const clockAction = clockState.status === "clocked_in" ? "clock_out" : "clock_in";
   const selectedTeacher = allTeacherRows.find((teacher) => teacher.id === selectedStaffId) ?? null;
   const selectedPreviousTeacher = selectedTeacher?.user.isActive === false ? selectedTeacher : null;
   const centerNameById = useMemo(() => new Map(centers.map((center) => [center.id, center.name])), [centers]);
   const summaryNow = useMemo(() => new Date(timeClockSummaryGeneratedAt), [timeClockSummaryGeneratedAt]);
-  const payrollStart = useMemo(() => parseDateInput(payrollStartDate), [payrollStartDate]);
-  const payrollEnd = useMemo(() => parseDateInput(payrollEndDate, true), [payrollEndDate]);
-  const payrollRangeIsValid = Boolean(payrollStart && payrollEnd && payrollStart.getTime() <= payrollEnd.getTime());
-  const payrollPeriodLabel = payrollRangeIsValid && payrollStart && payrollEnd
-    ? `${formatShortDate(payrollStart)} to ${formatShortDate(payrollEnd)}`
+  const payrollRangeIsValid = /^\d{4}-\d{2}-\d{2}$/.test(payrollStartDate) && /^\d{4}-\d{2}-\d{2}$/.test(payrollEndDate) && payrollStartDate <= payrollEndDate;
+  const payrollPeriodLabel = payrollRangeIsValid
+    ? `${formatShortDate(`${payrollStartDate}T12:00:00Z`, "UTC")} to ${formatShortDate(`${payrollEndDate}T12:00:00Z`, "UTC")}`
     : "Select a valid pay period";
   const staffHoursRows = useMemo(() => {
     return activeStaff
       .map((teacher) => {
+        const timeZone = readCenterLocationTimeZone(centerById.get(teacher.centerId));
+        const payrollStart = zonedDateInputToUtc(payrollStartDate, timeZone);
+        const payrollEnd = zonedDateInputToUtc(payrollEndDate, timeZone, true);
         const clock = readStaffClockState(teacher.customFields);
         const summary = readStaffClockSummary(teacher.customFields, {
           now: summaryNow,
           startDate: payrollStart,
           endDate: payrollEnd,
         });
-        const shiftRows = buildPayrollShiftRows(summary.shifts);
+        const shiftRows = buildPayrollShiftRows(summary.shifts, timeZone);
         const regularMinutes = shiftRows.reduce((sum, shift) => sum + shift.regularMinutes, 0);
         const overtimeMinutes = shiftRows.reduce((sum, shift) => sum + shift.overtimeMinutes, 0);
         const compensation = readStaffCompensation(teacher.customFields);
@@ -431,12 +418,13 @@ export function StaffManagementPanel({
           email: teacher.user.email,
           title: teacher.title || "Teacher",
           centerName: centerNameById.get(teacher.centerId) ?? "Unknown center",
+          timeZone,
           classroomName: teacher.classroom?.name ?? "Unassigned",
           active: teacher.user.isActive,
           clock,
           summary,
           shiftRows,
-          dayRows: buildPayrollDayRows({ startDate: payrollStart, endDate: payrollEnd, shifts: shiftRows }),
+          dayRows: buildPayrollDayRows({ startDate: payrollStartDate, endDate: payrollEndDate, shifts: shiftRows, timeZone }),
           payCodeSummaries,
           payrollPayCode,
           payrollDepartment,
@@ -447,7 +435,7 @@ export function StaffManagementPanel({
         };
       })
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
-  }, [activeStaff, centerNameById, payrollEnd, payrollStart, summaryNow]);
+  }, [activeStaff, centerById, centerNameById, payrollEndDate, payrollStartDate, summaryNow]);
   const staffHoursTotalMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.totalMinutes, 0);
   const staffHoursRegularMinutes = staffHoursRows.reduce((sum, row) => sum + row.regularMinutes, 0);
   const staffHoursOvertimeMinutes = staffHoursRows.reduce((sum, row) => sum + row.overtimeMinutes, 0);
@@ -611,7 +599,7 @@ export function StaffManagementPanel({
       setStatusMessage(`${clockTeacher.user.name} ${clockAction === "clock_in" ? "clocked in" : "clocked out"}.`);
       setClockNotes("");
       if (json?.record?.customFields !== undefined) {
-        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events));
+        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
       }
       router.refresh();
     });
@@ -629,7 +617,7 @@ export function StaffManagementPanel({
       {
         id: clockEditRowId(),
         action: nextClockEditAction(current),
-        occurredAt: toDateTimeLocal(new Date()),
+        occurredAt: zonedDateTimeLocalValue(new Date(), clockTimeZone),
         notes: "",
       },
     ]);
@@ -642,7 +630,7 @@ export function StaffManagementPanel({
   function selectClockStaffForEdit(staffId: string) {
     setClockStaffId(staffId);
     const teacher = allTeacherRows.find((row) => row.id === staffId);
-    setClockEditRows(clockEditRowsFromEvents(readStaffClockState(teacher?.customFields).events));
+    setClockEditRows(clockEditRowsFromEvents(readStaffClockState(teacher?.customFields).events, readCenterLocationTimeZone(centerById.get(teacher?.centerId ?? ""))));
   }
 
   function saveTimeCardEdits() {
@@ -653,8 +641,8 @@ export function StaffManagementPanel({
 
     const events: { action: StaffClockAction; occurredAt: string; notes: string | null }[] = [];
     for (const row of clockEditRows) {
-      const occurredAt = new Date(row.occurredAt);
-      if (!row.occurredAt || Number.isNaN(occurredAt.getTime())) {
+      const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, clockTimeZone);
+      if (!occurredAt) {
         setErrorMessage("Every punch needs a valid date and time.");
         return;
       }
@@ -685,7 +673,7 @@ export function StaffManagementPanel({
       }
       setStatusMessage(`${clockTeacher.user.name}'s time card was saved.`);
       if (json?.record?.customFields !== undefined) {
-        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events));
+        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
       } else {
         setClockEditRows(sortClockEditRows(clockEditRows));
       }
@@ -1411,7 +1399,7 @@ export function StaffManagementPanel({
                       <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.overtimeMinutes)}</td>
                       {canManageCompensation ? <td className="px-3 py-2 text-right">{formatMoneyCents(row.estimatedGrossPayCents)}</td> : null}
                       <td className="px-3 py-2 text-right">{formatStaffDecimalHours(row.summary.openShiftMinutes)}</td>
-                      <td className="px-3 py-2">{formatDateTime(row.clock.lastActionAt)}</td>
+                      <td className="px-3 py-2">{formatDateTime(row.clock.lastActionAt, row.timeZone)}</td>
                     </tr>
                   ))}
                   {!staffHoursRows.length ? (
@@ -1429,7 +1417,7 @@ export function StaffManagementPanel({
                 <div>
                   <div className="text-lg font-semibold">Employee Time Card Summary</div>
                   <div className="text-sm">Pay period: {payrollPeriodLabel}</div>
-                  <div className="text-xs text-muted-foreground print:text-black">Generated: {formatDateTime(timeClockSummaryGeneratedAt)}</div>
+                  <div className="text-xs text-muted-foreground print:text-black">Times shown in each school&apos;s local timezone</div>
                 </div>
                 <div className="text-right text-xs">
                   <div>The BEE Suite</div>
@@ -1493,6 +1481,7 @@ export function StaffManagementPanel({
                     </div>
                     <div className="text-right text-xs">
                       <div>{row.centerName}</div>
+                      <div>Timezone: {row.timeZone}</div>
                       <div>Pay period: {payrollPeriodLabel}</div>
                       {canManageCompensation ? <div>Pay basis: {formatStaffPayRate(row.compensation)}</div> : null}
                       {canManageCompensation && row.compensation.payrollId ? <div>Payroll ID: {row.compensation.payrollId}</div> : null}

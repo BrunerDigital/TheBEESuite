@@ -818,6 +818,78 @@ async function previewImportRows({
     message?: string;
   }> = [];
 
+  // Standard ProCare exports carry stable family, child, and guardian IDs. Load
+  // those exact identities once so a large director review does not make the
+  // same three-to-five database round trips for every row. Rows without stable
+  // IDs (and any ambiguous exact IDs) still use the complete duplicate matcher
+  // below, so the faster path does not weaken review safeguards.
+  const previewExactIdentities = rows.slice(1).map((row) => {
+    const rawData = Object.fromEntries(headers.map((header, column) => [header, row[column] ?? ""]));
+    const rowCenterValue = value(rawData, [
+      "location id",
+      "crm location id",
+      "school id",
+      "school",
+      "school name",
+      "center",
+      "center name",
+      "location",
+      "site",
+    ]);
+    const targetCenter = autoMap
+      ? resolveImportCenter(centerByAlias, rowCenterValue)
+      : defaultCenter;
+    return {
+      targetCenter,
+      familyExternalId: externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]),
+      childExternalId: externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]),
+      guardianExternalIds: procareGuardianImports(rawData)
+        .map((guardian) => guardian.externalId)
+        .filter((externalId): externalId is string => Boolean(externalId)),
+    };
+  });
+  const previewCenterIds = [...new Set(previewExactIdentities.map((item) => item.targetCenter?.id).filter((id): id is string => Boolean(id)))];
+  const previewFamilyExternalIds = [...new Set(previewExactIdentities.map((item) => item.familyExternalId).filter((id): id is string => Boolean(id)))];
+  const previewChildExternalIds = [...new Set(previewExactIdentities.map((item) => item.childExternalId).filter((id): id is string => Boolean(id)))];
+  const previewGuardianExternalIds = [...new Set(previewExactIdentities.flatMap((item) => item.guardianExternalIds))];
+  const previewExactIdentityLookupResults = await Promise.all([
+    previewCenterIds.length && previewFamilyExternalIds.length
+      ? prisma.family.findMany({
+          where: { centerId: { in: previewCenterIds }, sourceSystem: "procare", externalId: { in: previewFamilyExternalIds } },
+          select: { id: true, centerId: true, externalId: true },
+        })
+      : Promise.resolve([]),
+    previewCenterIds.length && previewChildExternalIds.length
+      ? prisma.child.findMany({
+          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem: "procare", externalId: { in: previewChildExternalIds } },
+          select: { id: true, externalId: true, family: { select: { centerId: true } } },
+        })
+      : Promise.resolve([]),
+    previewCenterIds.length && previewGuardianExternalIds.length
+      ? prisma.guardian.findMany({
+          where: { family: { centerId: { in: previewCenterIds } }, sourceSystem: "procare", externalId: { in: previewGuardianExternalIds } },
+          select: { id: true, externalId: true, family: { select: { centerId: true } } },
+        })
+      : Promise.resolve([]),
+  ]);
+  const previewFamiliesByExternalId = previewExactIdentityLookupResults[0] as unknown as Array<{ id: string; centerId: string | null; externalId: string | null }>;
+  const previewChildrenByExternalId = previewExactIdentityLookupResults[1] as unknown as Array<{ id: string; externalId: string | null; family: { centerId: string | null } }>;
+  const previewGuardiansByExternalId = previewExactIdentityLookupResults[2] as unknown as Array<{ id: string; externalId: string | null; family: { centerId: string | null } }>;
+  const exactIdentityKey = (centerId: string, externalId: string) => `${centerId}:${externalId}`;
+  const indexExactIdentities = <T extends { id: string; centerId: string | null; externalId: string | null }>(items: T[]) => {
+    const index = new Map<string, { id: string; count: number }>();
+    for (const item of items) {
+      if (!item.centerId || !item.externalId) continue;
+      const key = exactIdentityKey(item.centerId, item.externalId);
+      const existing = index.get(key);
+      index.set(key, { id: existing?.id ?? item.id, count: (existing?.count ?? 0) + 1 });
+    }
+    return index;
+  };
+  const exactFamilyMatches = indexExactIdentities(previewFamiliesByExternalId);
+  const exactChildMatches = indexExactIdentities(previewChildrenByExternalId.map((child) => ({ ...child, centerId: child.family.centerId })));
+  const exactGuardianMatches = indexExactIdentities(previewGuardiansByExternalId.map((guardian) => ({ ...guardian, centerId: guardian.family.centerId })));
+
   await forEachWithConcurrency(rows.slice(1), 10, async (_row, rowIndex) => {
     const index = rowIndex + 1;
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
@@ -936,13 +1008,13 @@ async function previewImportRows({
       familyName ? { name: familyName } : undefined,
       email ? { billingEmail: email } : undefined,
     ].filter(Boolean) as Array<{ name?: string; billingEmail?: string }>;
+    const exactFamilyMatch = accountExternalId
+      ? exactFamilyMatches.get(exactIdentityKey(targetCenter.id, accountExternalId))
+      : undefined;
     const existingFamily = !runDatabasePreviewLookups
       ? null
       : accountExternalId
-        ? await prisma.family.findFirst({
-            where: { centerId: targetCenter.id, sourceSystem: "procare", externalId: accountExternalId },
-            select: { id: true },
-          })
+        ? exactFamilyMatch ? { id: exactFamilyMatch.id } : null
         : fallbackFamilyMatchers.length
           ? await prisma.family.findFirst({
               where: { centerId: targetCenter.id, OR: fallbackFamilyMatchers },
@@ -955,11 +1027,11 @@ async function previewImportRows({
 
     let existingChild: { id: string } | null = null;
     if (runDatabasePreviewLookups && childName) {
+      const exactChildMatch = childExternalId
+        ? exactChildMatches.get(exactIdentityKey(targetCenter.id, childExternalId))
+        : undefined;
       existingChild = childExternalId
-        ? await prisma.child.findFirst({
-            where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: childExternalId },
-            select: { id: true },
-          })
+        ? exactChildMatch ? { id: exactChildMatch.id } : null
         : existingFamily
           ? await prisma.child.findFirst({
               where: { familyId: existingFamily.id, fullName: childName },
@@ -970,7 +1042,19 @@ async function previewImportRows({
     if (runDatabasePreviewLookups && childName) {
       if (existingChild) matchedChildren += 1; else newChildren += 1;
     }
-    const rowDuplicateMatches = runDatabasePreviewLookups
+    const exactFamilyIdentityIsSafe = Boolean(accountExternalId) && (exactFamilyMatch?.count ?? 0) <= 1;
+    const exactChildIdentityIsSafe = !childName || (childExternalId
+      ? (exactChildMatches.get(exactIdentityKey(targetCenter.id, childExternalId))?.count ?? 0) <= 1
+      : false);
+    const exactGuardianIdentitiesAreSafe = guardianImports.every((guardian) => {
+      if (!guardian.externalId) return false;
+      return (exactGuardianMatches.get(exactIdentityKey(targetCenter.id, guardian.externalId))?.count ?? 0) <= 1;
+    });
+    const canUseExactIdentityFastPath = duplicateMode !== "strict"
+      && exactFamilyIdentityIsSafe
+      && exactChildIdentityIsSafe
+      && exactGuardianIdentitiesAreSafe;
+    const rowDuplicateMatches = runDatabasePreviewLookups && !canUseExactIdentityFastPath
       ? await findProcareDuplicateMatches({ rowNumber, targetCenterId: targetCenter.id, rawData })
       : [];
     const rowDuplicateWarnings = rowDuplicateMatches.filter((match) => duplicateMatchNeedsReview(match, duplicateMode));
@@ -1037,6 +1121,7 @@ async function previewImportRows({
     warningRowNumbers: [...new Set(warnings.map((warning) => warning.rowNumber))],
     duplicateReviewRowNumbers: [...duplicateReviewRows],
     duplicateScanSkipped: false,
+    exactIdentityLookupsBatched: true,
     duplicateScanRowLimit: PROCARE_DUPLICATE_REVIEW_ROW_LIMIT,
     duplicateReviewChunks: Math.max(Math.ceil(importRowCount / PROCARE_DUPLICATE_REVIEW_ROW_LIMIT), 1),
     relationshipSafeReview: true,

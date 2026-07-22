@@ -18,7 +18,7 @@ type ProcareImportDiagnostic = {
     | "parent_account_id_missing"
     | "relationship_child_id_missing"
     | "child_info_child_id_missing";
-  severity: "warning";
+  severity: "warning" | "info";
   candidateAccountCount?: number;
   relationshipPersonCount?: number;
   linkedPersonCount?: number;
@@ -414,7 +414,10 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const related = [...(relationshipsByChild.get(childId) ?? [])].sort(comparePeople);
     const relationshipSourceRows = relationshipSourceRowsByChild.get(childId) ?? [];
     const details = childDetails.get(childId) ?? [];
-    const child = details[0] ?? { "Child ID": childId };
+    const childSource = details[0]
+      ?? relationshipSourceRows.find((row) => personType(row) === "child")
+      ?? { "Child ID": childId };
+    const child = { ...childSource, "Child ID": childId, "Enrollment Status": "Withdrawn" };
     const resolution = accountResolution({ child, related, accountsByPerson });
     return { childId, child, related, relationshipSourceRows, details, resolution };
   });
@@ -574,7 +577,10 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       "procare child info source records": JSON.stringify(details),
       "procare import diagnostics": JSON.stringify(diagnostics),
       "procare coverage manifest": JSON.stringify(coverage),
-      "import warning": diagnostics.map((diagnostic) => diagnostic.message).join(" "),
+      "import warning": diagnostics
+        .filter((diagnostic) => diagnostic.severity === "warning")
+        .map((diagnostic) => diagnostic.message)
+        .join(" "),
     };
   };
 
@@ -604,7 +610,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       resolution: context.resolution,
       additionalDiagnostics: [{
         code: "source_child_without_enrollment",
-        severity: "warning",
+        severity: "info",
         sourceRowCount: context.relationshipSourceRows.length + context.details.length,
         relationshipRowCount: context.relationshipSourceRows.length,
         childInfoRowCount: context.details.length,
@@ -622,7 +628,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       resolutionMethod: "source_account_identifier_without_enrollment",
       additionalDiagnostics: [{
         code: "account_without_enrollment",
-        severity: "warning",
+        severity: "info",
         sourceRowCount: accountPeople.length,
         message: "A ProCare account has no linked enrollment row and is retained as a family-only source record for review.",
       }],

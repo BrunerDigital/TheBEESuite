@@ -73,7 +73,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
   assert.match(panel, /same selected files; they are still selected/);
-  assert.match(panel, /chunkSize", "5"/);
+  assert.match(panel, /chunkSize", "10"/);
   assert.match(panel, /Continuing automatically/);
   assert.match(panel, /\(completedRows \/ totalRows\) \* 85/);
   assert.doesNotMatch(panel, /onProgress\(60, true\)/);

@@ -7,6 +7,7 @@ import {
   isActiveProcareEnrollmentStatus,
   analyzeProcareHeaders,
   applyProcareFieldMapping,
+  buildProcareCorrelationReview,
   PROCARE_FIELD_OPTIONS,
   normalizeProcareEnrollmentStatus,
   procareAgeGroup,
@@ -1502,6 +1503,9 @@ async function POSTHandler(request: NextRequest) {
   const submittedReviewFingerprint = clean(formData.get("reviewFingerprint"));
   const submittedWarningRowNumbers = parseImportRowNumbers(clean(formData.get("reviewWarningRowNumbers")));
   const submittedDuplicateReviewRowNumbers = parseImportRowNumbers(clean(formData.get("reviewDuplicateWarningRowNumbers")));
+  const submittedCorrelationConfirmations = new Set(
+    clean(formData.get("correlationConfirmations")).split(",").map(clean).filter(Boolean),
+  );
   const requestedBatchId = clean(formData.get("batchId"));
   const chunkSizeInput = clean(formData.get("chunkSize"));
   const parsedChunkSize = Number.parseInt(chunkSizeInput, 10);
@@ -1568,6 +1572,7 @@ async function POSTHandler(request: NextRequest) {
   const sourceHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
   const headerAnalysis = analyzeProcareHeaders(sourceHeaders);
   const headers = applyProcareFieldMapping(sourceHeaders, fieldMapping);
+  const correlationReview = buildProcareCorrelationReview(sourceHeaders, fieldMapping, importPayload.sourceType);
   if (rows.length < 2 || !headers.length) {
     return NextResponse.json({ ok: false, error: "No import rows found." }, { status: 400 });
   }
@@ -1602,8 +1607,18 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
-      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS },
+      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview },
     });
+  }
+
+  const missingCorrelationConfirmations = correlationReview
+    .filter((section) => section.required && !submittedCorrelationConfirmations.has(section.id))
+    .map((section) => section.title);
+  if (missingCorrelationConfirmations.length) {
+    return NextResponse.json({
+      ok: false,
+      error: `Confirm the reviewed ProCare correlations in order before importing: ${missingCorrelationConfirmations.join(", ")}.`,
+    }, { status: 409 });
   }
 
   const reviewFingerprint = buildReviewFingerprint(submittedWarningRowNumbers, submittedDuplicateReviewRowNumbers);
@@ -2806,6 +2821,7 @@ async function POSTHandler(request: NextRequest) {
     validationWarnings: Object.fromEntries(validationWarningMessages),
     headerAnalysis,
     fieldOptions: PROCARE_FIELD_OPTIONS,
+    correlationReview,
     warningRows: progressCounts.needs_resolution ?? 0,
     duplicateReviewRows,
     rowResults: unresolvedRows.map((row) => ({

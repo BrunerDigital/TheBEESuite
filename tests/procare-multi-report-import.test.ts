@@ -238,6 +238,9 @@ test("multi-report normalization retains accounts and child source rows that hav
   assert.equal(datasetCoverage.normalizedRows.byKind.procare_multi_report_source_child_without_enrollment, 2);
   assert.ok(familyOnlyRows.every((row) => JSON.parse(row["procare import diagnostics"])[0].code === "account_without_enrollment"));
   assert.ok(sourceChildRows.every((row) => JSON.parse(row["procare import diagnostics"])[0].code === "source_child_without_enrollment"));
+  assert.ok(familyOnlyRows.every((row) => row["import warning"] === ""));
+  assert.ok(sourceChildRows.every((row) => row["child status"] === "Withdrawn"));
+  assert.ok(sourceChildRows.filter((row) => row["account id"]).every((row) => row["import warning"] === ""));
 
   const nonPiiSummaries = rows.map((row) => `${row["procare import diagnostics"]} ${row["procare coverage manifest"]} ${row["procare dataset coverage manifest"]}`).join(" ");
   assert.doesNotMatch(nonPiiSummaries, /Linked Adult|Orphan Adult|Family Only Adult|example\.test|account-linked|person-orphan|child-without-enrollment/);

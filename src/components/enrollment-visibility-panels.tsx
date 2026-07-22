@@ -86,14 +86,14 @@ function EnrollmentVisibilityToggle({
     <Card className="glass-panel">
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="text-sm font-medium">Other enrollment statuses</div>
+          <div className="text-sm font-medium">Past students and other enrollment statuses</div>
           <div className="text-xs text-muted-foreground">
             {hiddenCount.toLocaleString()} {label} {hiddenCount === 1 ? "is" : "are"} hidden from the active lists. {statusBreakdown}.
           </div>
         </div>
         <Button type="button" variant={showOtherStatuses ? "default" : "outline"} onClick={() => setShowOtherStatuses(!showOtherStatuses)}>
           {showOtherStatuses ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-          {showOtherStatuses ? "Show Active Only" : "Show Other Statuses"}
+          {showOtherStatuses ? "Show Active Only" : "Show Past & Other"}
         </Button>
       </CardContent>
     </Card>

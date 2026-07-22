@@ -112,6 +112,13 @@ type ImportPreview = {
   duplicateReviewRowNumbers?: number[];
   headerAnalysis?: Array<{ source: string; normalized: string; suggestedField: string; recognized: boolean }>;
   fieldOptions?: Array<{ key: string; label: string }>;
+  correlationReview?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    required: boolean;
+    correlations: Array<{ source: string; destination: string; label: string; recognized: boolean }>;
+  }>;
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -147,6 +154,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [correlationConfirmations, setCorrelationConfirmations] = useState<string[]>([]);
+  const [reviewStale, setReviewStale] = useState(false);
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false);
   const [progressMessage, setProgressMessage] = useState("");
   const [progressPercent, setProgressPercent] = useState(0);
@@ -164,6 +173,14 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     setPreview(null);
     setPreviewDialogOpen(false);
     setDuplicateReviewConfirmed(false);
+    setCorrelationConfirmations([]);
+    setReviewStale(false);
+  }
+
+  function markReviewStale() {
+    setDuplicateReviewConfirmed(false);
+    setCorrelationConfirmations([]);
+    setReviewStale(true);
   }
 
   function downloadBackup(batchId: string) {
@@ -203,6 +220,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
+        formData.set("correlationConfirmations", correlationConfirmations.join(","));
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
         if (!dryRun && preview) {
           formData.set("sourceSha256", preview.sourceSha256 ?? "");
@@ -219,7 +237,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         do {
           if (!dryRun) {
             formData.set("chunkStart", String(nextRow));
-            formData.set("chunkSize", "5");
+            formData.set("chunkSize", "10");
             if (resumeBatchId) formData.set("batchId", resumeBatchId);
           }
           response = await uploadImport(formData, (percent, uploaded) => {
@@ -257,6 +275,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setPreview(json.summary ?? null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
+          setCorrelationConfirmations([]);
+          setReviewStale(false);
           setLastBatchId("");
           return;
         }
@@ -267,6 +287,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setPreview(null);
           setPreviewDialogOpen(false);
           setDisposedRowNumbers([]);
+          setCorrelationConfirmations([]);
+          setReviewStale(false);
           if (fileRef.current) fileRef.current.value = "";
           setSelectedFiles([]);
         } else {
@@ -327,12 +349,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const hasImportSource = Boolean(csv.trim() || selectedFiles.length);
   const noCentersAvailable = !centers.length;
   const hasCompletedPreview = Boolean(
+    !reviewStale
+    &&
     preview?.sourceSha256
     && preview.reviewFingerprint
     && Array.isArray(preview.warningRowNumbers)
     && Array.isArray(preview.duplicateReviewRowNumbers),
   );
   const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
+  const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
+  const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
   const commitBlockedReason = noCentersAvailable
     ? "This account needs an active school assignment before importing."
     : !centerId
@@ -341,12 +367,19 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       ? "Choose a CSV export or paste CSV text before submitting."
       : !hasCompletedPreview
       ? "Submit this exact ProCare export for review before committing it."
+      : missingCorrelationSections.length
+      ? `Confirm each correlation step in order before importing: ${missingCorrelationSections.map((section) => section.title).join(", ")}.`
       : "";
   const reviewRows = preview?.rowResults ?? [];
   const reviewRowsShown = reviewRows.length;
   const readyReviewRows = reviewRows.filter((row) => row.status === "ready").length;
   const warningReviewRows = reviewRows.filter((row) => row.status === "warning").length;
-  const unknownHeaders = preview?.headerAnalysis?.filter((header) => !header.recognized && !fieldMapping[header.source]) ?? [];
+  const unknownHeaders = preview?.headerAnalysis?.filter((header) => (
+    !header.recognized
+    && !fieldMapping[header.source]
+    && !/^procare\s/.test(header.normalized)
+    && !["row type", "import warning"].includes(header.normalized)
+  )) ?? [];
 
   return (
     <Card className="glass-panel">
@@ -601,37 +634,86 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             placeholder="Family Name,Child Name,Guardian Name,Email,Phone,Balance..."
           />
         </div>
-        {preview?.headerAnalysis?.length ? (
+        {preview?.correlationReview?.length ? (
           <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
             <div>
-              <div className="text-sm font-medium">Match ProCare columns to BEE Suite fields</div>
+              <div className="text-sm font-medium">Confirm ProCare correlations in order</div>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Known ProCare headings are matched automatically. Use these controls when your export names a field differently, then submit the updated mapping for review. Leave report-only columns ignored.
+                Review every group from family identity through pickup relationships. You can change several field matches before submitting one updated review.
               </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {preview.headerAnalysis.map((header) => (
-                <div key={header.source} className="grid gap-1 rounded-lg border bg-background p-3">
-                  <Label className="text-xs">{header.source}</Label>
-                  <Select
-                    value={fieldMapping[header.source] || header.suggestedField || "ignore"}
-                    onValueChange={(selected) => {
-                      const mappedField = selected && selected !== "ignore" ? selected : "";
-                      setFieldMapping((current) => ({ ...current, [header.source]: mappedField }));
-                      clearPreview();
-                    }}
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ignore">Ignore this column</SelectItem>
-                      {preview.fieldOptions?.map((option) => (
-                        <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+            <div className="space-y-3">
+              {preview.correlationReview.map((section, sectionIndex) => {
+                const previousRequiredSections = preview.correlationReview?.slice(0, sectionIndex).filter((item) => item.required) ?? [];
+                const canConfirmSection = previousRequiredSections.every((item) => correlationConfirmations.includes(item.id));
+                return (
+                  <div key={section.id} className="space-y-3 rounded-lg border bg-background p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">{sectionIndex + 1}</div>
+                      <div>
+                        <div className="text-sm font-medium">{section.title}</div>
+                        <p className="text-xs leading-5 text-muted-foreground">{section.description}</p>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {section.correlations.map((correlation) => {
+                        const editable = preview.fieldOptions?.some((option) => option.key === correlation.destination);
+                        const header = preview.headerAnalysis?.find((item) => item.source === correlation.source);
+                        return (
+                          <div key={`${section.id}-${correlation.source}`} className="grid gap-1 rounded-md border bg-muted/20 p-2">
+                            <Label className="text-xs">{correlation.source}</Label>
+                            {editable ? (
+                              <Select
+                                value={fieldMapping[correlation.source] || header?.suggestedField || correlation.destination || "ignore"}
+                                onValueChange={(selected) => {
+                                  const mappedField = selected && selected !== "ignore" ? selected : "";
+                                  setFieldMapping((current) => ({ ...current, [correlation.source]: mappedField }));
+                                  markReviewStale();
+                                }}
+                              >
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ignore">Ignore this column</SelectItem>
+                                  {preview.fieldOptions?.map((option) => (
+                                    <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="text-xs font-medium text-foreground">{correlation.label} · linked automatically</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {!section.correlations.length ? (
+                        <div className="text-xs text-muted-foreground">The four standard ProCare reports supply this relationship automatically.</div>
+                      ) : null}
+                    </div>
+                    {section.required ? (
+                      <label className="flex items-start gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={correlationConfirmations.includes(section.id)}
+                          disabled={!canConfirmSection}
+                          onChange={(event) => setCorrelationConfirmations((current) => event.target.checked
+                            ? [...new Set([...current, section.id])]
+                            : current.filter((id) => id !== section.id))}
+                          className="mt-0.5 size-4"
+                        />
+                        <span>I confirm these {section.title.toLowerCase()} correlations.</span>
+                      </label>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
+            {reviewStale ? (
+              <Alert>
+                <AlertCircle className="size-4" />
+                <AlertTitle>Correlation changes need a fresh review</AlertTitle>
+                <AlertDescription>Finish all field changes, then select Submit for Review once to refresh counts and confirmations.</AlertDescription>
+              </Alert>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               {unknownHeaders.length
                 ? `${unknownHeaders.length} column(s) are currently ignored because they do not match a known BEE Suite field.`

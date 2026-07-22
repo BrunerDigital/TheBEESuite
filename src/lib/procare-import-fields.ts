@@ -19,6 +19,7 @@ export const PROCARE_FIELD_OPTIONS = [
   { key: "guardian email", label: "Primary guardian email", aliases: ["parent email", "primary email", "payer email", "payer 1 email", "primary payer email"] },
   { key: "guardian phone", label: "Primary guardian phone", aliases: ["parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"] },
   { key: "secondary guardian", label: "Secondary guardian name", aliases: ["secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"] },
+  { key: "secondary guardian id", label: "Secondary guardian ID", aliases: ["secondary payer id", "secondary parent id", "parent 2 id", "payer 2 id"] },
   { key: "secondary email", label: "Secondary guardian email", aliases: ["secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"] },
   { key: "secondary phone", label: "Secondary guardian phone", aliases: ["secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"] },
   { key: "employee id", label: "Staff / teacher ID", aliases: ["staff id", "teacher id", "employee key"] },
@@ -40,6 +41,94 @@ const recognizedHeaderMap = new Map(
 );
 
 export type ProcareFieldMapping = Record<string, string>;
+
+export const PROCARE_CORRELATION_GROUPS = [
+  {
+    id: "families",
+    title: "Family identity",
+    description: "Confirm the ProCare account ID and household name before matching people.",
+    fields: ["location", "account id", "family name"],
+  },
+  {
+    id: "children",
+    title: "Children and enrollment",
+    description: "Confirm child identity, enrollment status, dates, and classroom placement. Closed enrollment stays out of active classrooms.",
+    fields: ["child id", "child name", "child first name", "child middle name", "child last name", "date of birth", "child status", "start date", "end date", "classroom", "age group"],
+  },
+  {
+    id: "parents",
+    title: "Parents and guardians",
+    description: "Confirm parent identities and contact fields before creating their family profiles.",
+    fields: ["guardian id", "guardian name", "guardian email", "guardian phone", "secondary guardian id", "secondary guardian", "secondary email", "secondary phone"],
+  },
+  {
+    id: "relationships",
+    title: "Family and pickup relationships",
+    description: "Confirm the source records that connect children, parents, emergency contacts, and authorized pickups to the family.",
+    fields: ["allergies"],
+  },
+  {
+    id: "optional",
+    title: "Other editable data",
+    description: "Confirm optional schedule, balance, and staff fields. Unmapped report-only columns remain retained in the import backup.",
+    fields: ["balance", "schedule", "employee id", "employee name", "employee email", "employee status"],
+  },
+] as const;
+
+export type ProcareCorrelationSection = {
+  id: string;
+  title: string;
+  description: string;
+  required: boolean;
+  correlations: Array<{
+    source: string;
+    destination: string;
+    label: string;
+    recognized: boolean;
+  }>;
+};
+
+const fieldLabelByKey = new Map<string, string>(PROCARE_FIELD_OPTIONS.map((field) => [field.key, field.label]));
+
+function procareCorrelationGroup(destination: string, source: string) {
+  const normalizedSource = normalizedHeader(source);
+  if (/^procare (relationship|account person)/.test(normalizedSource)) {
+    return normalizedSource.includes("account person") ? "parents" : "relationships";
+  }
+  if (/^procare (allergy|child info|enrollment source)/.test(normalizedSource)) return "relationships";
+  return PROCARE_CORRELATION_GROUPS.find((group) => (group.fields as readonly string[]).includes(destination))?.id ?? "";
+}
+
+export function buildProcareCorrelationReview(
+  headers: string[],
+  mapping: ProcareFieldMapping,
+  sourceType: string,
+): ProcareCorrelationSection[] {
+  const analysis = analyzeProcareHeaders(headers);
+  const destinations = applyProcareFieldMapping(headers, mapping);
+  const standardReports = sourceType.startsWith("procare_multi_report_");
+
+  return PROCARE_CORRELATION_GROUPS.flatMap((group) => {
+    const correlations = headers.flatMap((source, index) => {
+      const destination = destinations[index];
+      if (procareCorrelationGroup(destination, source) !== group.id) return [];
+      return [{
+        source,
+        destination,
+        label: fieldLabelByKey.get(destination) ?? destination.replaceAll("_", " "),
+        recognized: analysis[index]?.recognized ?? false,
+      }];
+    });
+    if (!correlations.length && !(standardReports && group.id !== "optional")) return [];
+    return [{
+      id: group.id,
+      title: group.title,
+      description: group.description,
+      required: group.id !== "optional",
+      correlations,
+    }];
+  });
+}
 
 export function analyzeProcareHeaders(headers: string[]) {
   return headers.map((header) => {

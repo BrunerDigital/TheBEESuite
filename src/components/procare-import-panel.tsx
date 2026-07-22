@@ -207,12 +207,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       return;
     }
     submitLockedRef.current = true;
+    setStatus("");
+    setError("");
+    setProgressPhase("uploading");
+    setProgressPercent(5);
+    setProgressMessage(dryRun ? "Uploading ProCare data for analysis..." : "Uploading ProCare data...");
     startTransition(async () => {
-      setStatus("");
-      setError("");
-      setProgressPhase("uploading");
-      setProgressPercent(5);
-      setProgressMessage(dryRun ? "Uploading ProCare data for analysis..." : "Uploading ProCare data...");
       try {
         const formData = new FormData();
         formData.set("centerId", centerId);
@@ -237,14 +237,18 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         do {
           if (!dryRun) {
             formData.set("chunkStart", String(nextRow));
-            formData.set("chunkSize", "10");
+            formData.set("chunkSize", "20");
             if (resumeBatchId) formData.set("batchId", resumeBatchId);
           }
           response = await uploadImport(formData, (percent, uploaded) => {
             setProgressPercent((current) => Math.max(current, percent));
             if (uploaded) {
               setProgressPhase("processing");
-              setProgressMessage(dryRun ? "Analyzing records and preparing the review..." : "Upload complete. Matching and importing records...");
+              setProgressMessage(dryRun
+                ? "Analyzing records and preparing the review..."
+                : resumeBatchId
+                  ? `Continuing the resumable import from row ${nextRow.toLocaleString()}...`
+                  : "Upload complete. Matching and importing records...");
             }
           });
           json = response.json;

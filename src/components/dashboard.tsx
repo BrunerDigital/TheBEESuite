@@ -15,6 +15,8 @@ import {
   Users,
 } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -192,11 +194,8 @@ function formatDashboardNumber(value: number | null | undefined) {
   return value === null || value === undefined ? "Not set" : value.toLocaleString();
 }
 
-function formatDashboardDateTime(value: string | null | undefined) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
-  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+function formatDashboardDateTime(value: string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function ExecutiveLensDashboard({
@@ -210,6 +209,7 @@ function ExecutiveLensDashboard({
   trendData: typeof analytics;
   actionQueue: DashboardNotification[];
 }) {
+  const timeZone = useSchoolTimeZone();
   const sortedByOccupancy = [...metrics.schoolComparisons].sort((left, right) => right.occupancy - left.occupancy).slice(0, 10);
   const sortedByRevenue = [...metrics.schoolComparisons].sort((left, right) => right.revenueDollars - left.revenueDollars).slice(0, 8);
   const sortedByLeads = [...metrics.schoolComparisons].sort((left, right) => right.leads - left.leads).slice(0, 8);
@@ -408,7 +408,7 @@ function ExecutiveLensDashboard({
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">{submission.submittedBy}</div>
-                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(submission.updatedAt)}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(submission.updatedAt, timeZone)}</div>
                         </TableCell>
                       </TableRow>
                     );
@@ -460,7 +460,7 @@ function ExecutiveLensDashboard({
                       </TableCell>
                       <TableCell>
                         <div>{summary.submittedBy}</div>
-                        <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt)}</div>
+                        <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt, timeZone)}</div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -727,6 +727,7 @@ function AttendanceSnapshotCard({
 }
 
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
+  const timeZone = useSchoolTimeZone();
   const dashboardKpis = live?.kpis ?? kpis;
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
   const dashboardCenters = live?.centers ?? centers;
@@ -944,7 +945,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <h1>The BEE Suite Dashboard Snapshot</h1>
           <p>Scope: {dashboardPrintScope}</p>
           <p>As of: {asOfLabel}</p>
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
         <h2>KPI Summary</h2>
         <table>
@@ -1056,7 +1057,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{formatDashboardNumber(submission.newStarts)}</td>
                     <td>{formatDashboardNumber(submission.withdrawals)}</td>
                     <td>{submission.status}</td>
-                    <td>{formatDashboardDateTime(submission.updatedAt)}</td>
+                    <td>{formatDashboardDateTime(submission.updatedAt, timeZone)}</td>
                   </tr>
                 ))}
                 {!live.executiveMetrics.fteSubmissions.length ? <tr><td colSpan={10}>No FTE submissions are visible.</td></tr> : null}

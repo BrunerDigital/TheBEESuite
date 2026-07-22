@@ -60,3 +60,26 @@ export function zonedDateTimeLocalToUtc(value: string, timeZone: string) {
     hour: Number(match[4]), minute: Number(match[5]), second: Number(match[6] ?? 0),
   }, timeZone);
 }
+
+export function formatZonedDateTime(
+  value: Date | string | null | undefined,
+  timeZone: string,
+  options: Intl.DateTimeFormatOptions = {},
+  fallback = "Not set",
+) {
+  if (!value) return fallback;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat("en-US", { ...options, timeZone }).format(date);
+}
+
+export function formatZonedTimestamp(value: Date | string | null | undefined, timeZone: string, fallback = "Not set") {
+  return formatZonedDateTime(value, timeZone, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }, fallback);
+}

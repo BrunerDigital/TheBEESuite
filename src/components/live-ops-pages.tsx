@@ -165,6 +165,7 @@ import { formatStaffPayRate, formatStaffPayrollStatus, readStaffCompensation } f
 import { formatStaffHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
 import type { TerminalStoreItem } from "@/lib/terminal-store";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
+import { SchoolDateTime } from "@/components/school-time-zone-context";
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "Not set";
@@ -185,14 +186,19 @@ function formatUtcDate(value: Date | string | null | undefined) {
   }).format(new Date(value));
 }
 
-function formatDateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function timestampCenterId(value: unknown): string | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.centerId === "string") return record.centerId;
+  for (const key of ["center", "classroom", "family", "billingAccount", "staff"] as const) {
+    const nested = timestampCenterId(record[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function formatDateTime(value: Date | string | null | undefined, scope?: unknown) {
+  return <SchoolDateTime value={value} centerId={timestampCenterId(scope)} options={{ month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }} />;
 }
 
 function registrationPaymentLabel(payment: RegistrationPaymentStatus) {
@@ -945,7 +951,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
               <TableBody>
                 {data.recentDeliveries.map((delivery) => (
                   <TableRow key={delivery.id}>
-                    <TableCell>{formatDateTime(delivery.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(delivery.createdAt, delivery)}</TableCell>
                     <TableCell>
                       <div className="font-medium">{delivery.provider.replaceAll("_", " ")}</div>
                       <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
@@ -963,7 +969,7 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
                       {delivery.attempts}/{delivery.maxAttempts}
                     </TableCell>
                     <TableCell>
-                      {delivery.nextAttemptAt ? formatDateTime(delivery.nextAttemptAt) : delivery.deliveredAt ? "Delivered" : "Not scheduled"}
+                      {delivery.nextAttemptAt ? formatDateTime(delivery.nextAttemptAt, delivery) : delivery.deliveredAt ? "Delivered" : "Not scheduled"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1301,7 +1307,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                     <TableCell>
                       <Badge variant={integration.status === "failed" ? "destructive" : "outline"}>{integration.status}</Badge>
                     </TableCell>
-                    <TableCell>{formatDateTime(integration.lastSyncAt)}</TableCell>
+                    <TableCell>{formatDateTime(integration.lastSyncAt, integration)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.integrations.length ? (
@@ -1340,7 +1346,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                       <Badge variant={webhook.error || webhook.status === "failed" ? "destructive" : "outline"}>{webhook.status}</Badge>
                     </TableCell>
                     <TableCell>{webhook.objectId ?? "Not set"}</TableCell>
-                    <TableCell>{webhook.processedAt ? formatDateTime(webhook.processedAt) : formatDateTime(webhook.createdAt)}</TableCell>
+                    <TableCell>{webhook.processedAt ? formatDateTime(webhook.processedAt, webhook) : formatDateTime(webhook.createdAt, webhook)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.webhooks.length ? (
@@ -1373,7 +1379,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
             <TableBody>
               {data.deliveries.map((delivery) => (
                 <TableRow key={delivery.id}>
-                  <TableCell>{formatDateTime(delivery.createdAt)}</TableCell>
+                  <TableCell>{formatDateTime(delivery.createdAt, delivery)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{delivery.provider.replaceAll("_", " ")}</div>
                     <div className="text-xs text-muted-foreground">{delivery.purpose.replaceAll("_", " ")}</div>
@@ -1419,7 +1425,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                   <TableRow key={batch.id}>
                     <TableCell>
                       <div className="font-medium">{batch.filename}</div>
-                      <div className="text-xs text-muted-foreground">{formatDateTime(batch.createdAt)} · {batch.uploadedBy?.email ?? "System"}</div>
+                      <div className="text-xs text-muted-foreground">{formatDateTime(batch.createdAt, batch)} · {batch.uploadedBy?.email ?? "System"}</div>
                     </TableCell>
                     <TableCell>{batch.center.crmLocationId ?? batch.center.name}</TableCell>
                     <TableCell><Badge variant={batch.status === "failed" ? "destructive" : "outline"}>{batch.status}</Badge></TableCell>
@@ -1460,7 +1466,7 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
                     </TableCell>
                     <TableCell>{log.user?.email ?? "System"}</TableCell>
                     <TableCell>{log.center?.crmLocationId ?? log.center?.name ?? "Tenant-wide"}</TableCell>
-                    <TableCell>{formatDateTime(log.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(log.createdAt, log)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.auditLogs.length ? (
@@ -1594,7 +1600,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                     <TableCell>
                       <Badge variant={notification.priority === "high" ? "destructive" : "outline"}>{notification.priority}</Badge>
                     </TableCell>
-                    <TableCell>{formatDateTime(notification.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(notification.createdAt, notification)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.notifications.length ? (
@@ -1631,7 +1637,7 @@ export function HelpPage({ data }: { data: HelpPageData }) {
                     </TableCell>
                     <TableCell>{event.user?.email ?? "System"}</TableCell>
                     <TableCell>{event.center?.crmLocationId ?? event.center?.name ?? "Tenant-wide"}</TableCell>
-                    <TableCell>{formatDateTime(event.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(event.createdAt, event)}</TableCell>
                   </TableRow>
                 ))}
                 {!data.supportEvents.length ? (
@@ -1915,7 +1921,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
             <TableBody>
               {data.applicationSubmissions.map((submission) => (
                 <TableRow key={submission.id}>
-                  <TableCell>{formatDateTime(submission.submittedAt)}</TableCell>
+                  <TableCell>{formatDateTime(submission.submittedAt, submission)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{submission.childFullName}</div>
                     <div className="text-xs text-muted-foreground">{submission.guardianName} · {submission.centerName}</div>
@@ -2119,7 +2125,7 @@ export function ToursPage({ data }: { data: ToursPageData }) {
             <TableBody>
               {data.tours.map((tour) => (
                 <TableRow key={tour.id} className="group">
-                  <TableCell>{formatDateTime(tour.startsAt)}</TableCell>
+                  <TableCell>{formatDateTime(tour.startsAt, tour)}</TableCell>
                   <TableCell>
                     {tour.lead?.familyName ? (
                       <Link
@@ -2462,7 +2468,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                 <div>
                   <div className="font-medium">{thread.familyName}</div>
                   <div className="text-xs text-muted-foreground">
-                    {thread.centerLabel ?? "All centers"} · last reply {formatDateTime(thread.lastMessageAt)}
+                    {thread.centerLabel ?? "All centers"} · last reply {formatDateTime(thread.lastMessageAt, thread)}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -2476,7 +2482,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
                   <div key={message.id} className="rounded-md border bg-card/70 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>{message.sender?.name ?? "System"} · {message.channel}</span>
-                      <span>{formatDateTime(message.createdAt)}</span>
+                      <span>{formatDateTime(message.createdAt, message)}</span>
                     </div>
                     <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
                     <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
@@ -2519,7 +2525,7 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
             <TableBody>
               {data.messages.map((message) => (
                 <TableRow key={message.id}>
-                  <TableCell>{formatDateTime(message.createdAt)}</TableCell>
+                  <TableCell>{formatDateTime(message.createdAt, message)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{message.subject ?? message.family?.name ?? "Untitled message"}</div>
                     <div className="text-xs text-muted-foreground">
@@ -2627,7 +2633,7 @@ export function AnnouncementsPage({ data }: { data: AnnouncementsPageData }) {
                   <TableCell>{announcement.center?.crmLocationId ?? announcement.center?.name ?? "All centers"}</TableCell>
                   <TableCell>{jsonSummary(announcement.audience)}</TableCell>
                   <TableCell><Badge variant={announcement.status === "sent" ? "default" : "outline"}>{announcement.status}</Badge></TableCell>
-                  <TableCell>{formatDateTime(announcement.sendAt)}</TableCell>
+                  <TableCell>{formatDateTime(announcement.sendAt, announcement)}</TableCell>
                   <TableCell>
                     <CommunicationSendButton endpoint={`/api/communications/announcements/${announcement.id}/send`} />
                   </TableCell>
@@ -2910,7 +2916,7 @@ export function AttendancePage({ data }: { data: AttendancePageData }) {
                   const verificationVerified = log.verificationStatus === "qr_verified" || log.pinVerified;
                   return (
                   <TableRow key={log.id}>
-                    <TableCell>{formatDateTime(log.occurredAt)}</TableCell>
+                    <TableCell>{formatDateTime(log.occurredAt, log)}</TableCell>
                     <TableCell>
                       <div className="font-medium">{log.child?.fullName ?? "Unlinked child"}</div>
                       <div className="text-xs text-muted-foreground">{log.classroom?.name ?? log.child?.ageGroup ?? ""}</div>
@@ -3235,7 +3241,7 @@ export function ParentMediaReviewPage({ data }: { data: ParentMediaReviewPageDat
                       </div>
                       <div>
                         <div className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Submitted</div>
-                        <div className="mt-1 font-medium">{formatDateTime(item.createdAt)}</div>
+                        <div className="mt-1 font-medium">{formatDateTime(item.createdAt, item)}</div>
                         <div className="text-xs text-muted-foreground">Taken {formatDate(item.takenAt)}</div>
                       </div>
                     </div>
@@ -3357,14 +3363,14 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
                 <tbody>
                   {data.incidents.map((incident) => (
                     <tr key={incident.id}>
-                      <td>{formatDateTime(incident.occurredAt)}</td>
+                      <td>{formatDateTime(incident.occurredAt, incident)}</td>
                       <td>{incident.child.fullName}</td>
                       <td>{incident.classroom?.name ?? "No classroom"}</td>
                       <td>{incident.classroom?.center.crmLocationId ?? incident.classroom?.center.name ?? "No school"}</td>
                       <td>{incident.type}</td>
                       <td>{incident.adminReviewStatus}</td>
                       <td>
-                        {incident.parentNotified ? "Parent notified" : "Parent not notified"}; {incident.parentAcknowledgedAt ? `Acknowledged ${formatDateTime(incident.parentAcknowledgedAt)}` : "Awaiting acknowledgment"}
+                        {incident.parentNotified ? "Parent notified" : "Parent not notified"}; {incident.parentAcknowledgedAt ? <>Acknowledged {formatDateTime(incident.parentAcknowledgedAt, incident)}</> : "Awaiting acknowledgment"}
                       </td>
                       <td>
                         {incident.description} Action: {incident.actionTaken}
@@ -3395,7 +3401,7 @@ export function IncidentReportsPage({ data }: { data: IncidentReportsPageData })
             <TableBody>
               {data.incidents.map((incident) => (
                 <TableRow key={incident.id}>
-                  <TableCell>{formatDateTime(incident.occurredAt)}</TableCell>
+                  <TableCell>{formatDateTime(incident.occurredAt, incident)}</TableCell>
                   <TableCell className="font-medium">{incident.child.fullName}</TableCell>
                   <TableCell>{incident.classroom?.name ?? "No classroom"}</TableCell>
                   <TableCell>{incident.type}</TableCell>
@@ -3489,7 +3495,7 @@ function staffClockBadge(customFields: unknown, now: Date) {
   const summary = readStaffClockSummary(customFields, { now });
   return {
     label: state.status === "clocked_in" ? "Clocked in" : "Clocked out",
-    detail: state.lastActionAt ? formatDateTime(state.lastActionAt) : "No staff kiosk event",
+    detail: state.lastActionAt ? <SchoolDateTime value={state.lastActionAt} timeZone={state.timeZone} options={{ month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }} /> : "No staff kiosk event",
     variant: state.status === "clocked_in" ? "default" as const : "outline" as const,
     hours: formatStaffHours(summary.totalMinutes),
     openHours: summary.openShiftMinutes ? formatStaffHours(summary.openShiftMinutes) : null,
@@ -3613,8 +3619,8 @@ export function StaffPage({ data }: { data: StaffPageData }) {
                 <TableRow key={schedule.id}>
                   <TableCell className="font-medium">{schedule.staff.user.name}</TableCell>
                   <TableCell>{schedule.center.crmLocationId ?? schedule.center.name}</TableCell>
-                  <TableCell>{formatDateTime(schedule.startsAt)}</TableCell>
-                  <TableCell>{formatDateTime(schedule.endsAt)}</TableCell>
+                  <TableCell>{formatDateTime(schedule.startsAt, schedule)}</TableCell>
+                  <TableCell>{formatDateTime(schedule.endsAt, schedule)}</TableCell>
                   <TableCell><Badge variant="outline">{schedule.status}</Badge></TableCell>
                 </TableRow>
               ))}
@@ -3748,7 +3754,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
             <TableBody>
               {data.submissions.map((submission) => (
                 <TableRow key={submission.id}>
-                  <TableCell>{formatDateTime(submission.submittedAt)}</TableCell>
+                  <TableCell>{formatDateTime(submission.submittedAt, submission)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{submission.form.name}</div>
                     <div className="text-xs text-muted-foreground">{submission.form.type}</div>
@@ -4239,7 +4245,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
             <TableBody>
               {data.medicationLogs.map((log) => (
                 <TableRow key={log.id}>
-                  <TableCell>{formatDateTime(log.administeredAt)}</TableCell>
+                  <TableCell>{formatDateTime(log.administeredAt, log)}</TableCell>
                   <TableCell className="font-medium">{log.child.fullName}</TableCell>
                   <TableCell>
                     <div>{log.medicationName} · {log.dosage}{log.route ? ` · ${log.route}` : ""}</div>
@@ -4865,7 +4871,7 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
               <TableBody>
                 {data.guardianChangeRequests.map((request) => (
                   <TableRow key={request.id}>
-                    <TableCell>{formatDateTime(request.createdAt)}</TableCell>
+                    <TableCell>{formatDateTime(request.createdAt, request)}</TableCell>
                     <TableCell>
                       <div className="font-medium">{request.familyName}</div>
                       <div className="text-xs text-muted-foreground">{request.submittedBy}</div>
@@ -5398,7 +5404,7 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                   <TableCell>{payment.provider}</TableCell>
                   <TableCell><Badge variant={payment.status === "PAID" ? "default" : "outline"}>{payment.status}</Badge></TableCell>
                   <TableCell>{money(payment.amountCents)}</TableCell>
-                  <TableCell>{formatDateTime(payment.paidAt)}</TableCell>
+                  <TableCell>{formatDateTime(payment.paidAt, payment)}</TableCell>
                   <TableCell>
                     <Badge variant={payment.dunningStatus === "ready" || payment.dunningStatus === "maxed" ? "destructive" : "outline"}>
                       {payment.dunningStatus}
@@ -5411,13 +5417,13 @@ export function PaymentsPage({ data }: { data: PaymentsPageData }) {
                     <div>{payment.failureMessage ?? "No failure detail from provider"}</div>
                     <div className="mt-1">
                       {payment.dunningStatus === "waiting"
-                        ? `Next reminder: ${formatDateTime(payment.dunningNextAttemptAt)}`
+                        ? <>Next reminder: {formatDateTime(payment.dunningNextAttemptAt, payment)}</>
                         : payment.dunningStatus === "maxed"
                           ? "Manual office follow-up needed"
                           : payment.paymentReferenceLabel}
                     </div>
                     {payment.dunningLastAttemptAt ? (
-                      <div className="mt-1">Last reminder: {formatDateTime(payment.dunningLastAttemptAt)}</div>
+                      <div className="mt-1">Last reminder: {formatDateTime(payment.dunningLastAttemptAt, payment)}</div>
                     ) : null}
                   </TableCell>
                   <TableCell className="max-w-xs truncate">{payment.externalIdPlaceholder ?? ""}</TableCell>

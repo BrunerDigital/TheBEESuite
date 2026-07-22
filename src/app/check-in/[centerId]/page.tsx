@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { KioskCheckIn } from "@/components/kiosk-check-in";
 import { prisma } from "@/lib/prisma";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,9 @@ export default async function CheckInKioskPage({
       crmLocationId: true,
       city: true,
       state: true,
+      postalCode: true,
+      timezone: true,
+      customFields: true,
     },
   });
 
@@ -34,6 +38,7 @@ export default async function CheckInKioskPage({
         id: center.id,
         name: center.crmLocationId ?? center.name,
         place: [center.city, center.state].filter(Boolean).join(", "),
+        timeZone: readCenterLocationTimeZone(center),
       }}
     />
   );

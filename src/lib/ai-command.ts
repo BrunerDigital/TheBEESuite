@@ -16,6 +16,7 @@ export type AiCommandSummaryMetrics = {
   pendingIncidents: number;
   unreadMessages: number;
   unsentDailyReports: number;
+  timeZone?: string;
 };
 
 export type AiSuggestionEntry = {
@@ -51,7 +52,7 @@ export function buildAiOperationsSummary(metrics: AiCommandSummaryMetrics) {
     `Enrollment shows ${countLabel(metrics.leadCount, "open lead")} with ${countLabel(metrics.highIntentLeadCount, "high-intent lead")} and ${countLabel(metrics.toursToday, "tour")} scheduled today.`,
     `Family operations show ${countLabel(metrics.openInvoices, "open invoice")}, ${countLabel(metrics.overdueInvoices, "overdue invoice")}, ${countLabel(metrics.unreadMessages, "unread family message")}, and ${countLabel(metrics.unsentDailyReports, "daily report")} not sent for today.`,
     urgentItems.length ? `Suggested focus: ${urgentItems.join("; ")}.` : "Suggested focus: no urgent AI-prioritized work is visible in this scope right now.",
-    `Generated ${Number.isNaN(generatedAt.getTime()) ? "now" : generatedAt.toLocaleString("en-US")}.`,
+    `Generated ${Number.isNaN(generatedAt.getTime()) ? "now" : new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", timeZone: metrics.timeZone || "America/New_York", timeZoneName: "short" }).format(generatedAt)}.`,
   ].join(" ");
 
   return { title, body };

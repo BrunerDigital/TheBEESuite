@@ -835,6 +835,8 @@ export function StaffManagementPanel({
 
   function saveSchedule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const scheduleTeacher = activeStaff.find((teacher) => teacher.id === scheduleStaffId);
+    const scheduleTimeZone = readCenterLocationTimeZone(centerById.get(scheduleTeacher?.centerId ?? ""));
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -845,8 +847,8 @@ export function StaffManagementPanel({
           entity: "staffSchedule",
           id: scheduleId === "new" ? undefined : scheduleId,
           staffId: scheduleStaffId,
-          startsAt: scheduleStartsAt,
-          endsAt: scheduleEndsAt,
+          startsAt: zonedDateTimeLocalToUtc(scheduleStartsAt, scheduleTimeZone)?.toISOString(),
+          endsAt: zonedDateTimeLocalToUtc(scheduleEndsAt, scheduleTimeZone)?.toISOString(),
           status: scheduleStatus,
         }),
       });
@@ -1122,7 +1124,7 @@ export function StaffManagementPanel({
                   ))}
                 </select>
                 <p className="text-xs text-muted-foreground">
-                  Last action: {clockState.lastActionAt ? new Date(clockState.lastActionAt).toLocaleString() : "No clock history"}
+                  Last action: {clockState.lastActionAt ? formatDateTime(clockState.lastActionAt, clockTimeZone) : "No clock history"}
                 </p>
               </div>
               <div className="space-y-1">
@@ -1883,7 +1885,7 @@ export function StaffManagementPanel({
                 <option value="new">New schedule</option>
                 {schedules.map((schedule) => (
                   <option key={schedule.id} value={schedule.id}>
-                    {schedule.staff.user.name} - {new Date(schedule.startsAt).toLocaleDateString()}
+                    {schedule.staff.user.name} - {formatShortDate(schedule.startsAt, readCenterLocationTimeZone(centerById.get(allTeacherRows.find((teacher) => teacher.id === schedule.staff.id)?.centerId ?? "")))}
                   </option>
                 ))}
               </select>

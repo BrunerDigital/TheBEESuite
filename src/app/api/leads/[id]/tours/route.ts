@@ -3,6 +3,8 @@ import { EnrollmentStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessCenter, canManageCrmLeads, getCurrentUser } from "@/lib/auth";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -47,6 +49,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       stage: true,
       familyName: true,
       email: true,
+      center: { select: { city: true, state: true, postalCode: true, timezone: true, customFields: true } },
     },
   });
 
@@ -92,7 +95,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     data: {
       leadId: lead.id,
       userId: user.id,
-      body: `Tour scheduled for ${startsAt.toLocaleString("en-US")}.${notes ? ` Notes: ${notes}` : ""}`,
+      body: `Tour scheduled for ${formatZonedTimestamp(startsAt, readCenterLocationTimeZone(lead.center))}.${notes ? ` Notes: ${notes}` : ""}`,
     },
   });
 

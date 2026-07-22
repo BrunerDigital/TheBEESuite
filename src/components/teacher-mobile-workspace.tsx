@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from "@/components/ui/textarea";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { UserAvatar } from "@/components/user-avatar";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import {
   CLASSROOM_OFFLINE_QUEUE_KEY,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/classroom-offline-queue";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, custodyWarningSummary, hasCustodyWarning } from "@/lib/custody-visibility";
 import { teacherProfileChecklistTasks } from "@/lib/setup-checklists";
+import { formatZonedDateTime, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 type ChildOption = {
   id: string;
@@ -160,18 +162,8 @@ function draftId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function dateInputValue(date = new Date()) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function dateTimeInputValue(date = new Date()) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}T${hour}:${minute}`;
+function dateInputValue(date = new Date(), timeZone = "America/New_York") {
+  return zonedDateKey(date, timeZone);
 }
 
 function timeInputValue(date = new Date()) {
@@ -187,9 +179,8 @@ function normalizeReportTime(reportDate: string, value: string) {
   return trimmed;
 }
 
-function formatTime(value: string | Date | null) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function formatTime(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "");
 }
 
 function formatHours(minutes: number) {
@@ -204,8 +195,8 @@ function attendanceLabel(snapshot: AttendanceSnapshot) {
   return "Not marked";
 }
 
-function attendanceDetail(snapshot: AttendanceSnapshot) {
-  const time = formatTime(snapshot.latestLogAt ?? snapshot.lastMarkedAt);
+function attendanceDetail(snapshot: AttendanceSnapshot, timeZone: string) {
+  const time = formatTime(snapshot.latestLogAt ?? snapshot.lastMarkedAt, timeZone);
   if (!time) return "No time logged";
   if (snapshot.latestLogType === "check_in") return `In at ${time}`;
   if (snapshot.latestLogType === "check_out") return `Out at ${time}`;
@@ -219,9 +210,9 @@ function dailyReportLabel(snapshot: DailyReportSnapshot) {
   return "No report";
 }
 
-function dailyReportDetail(snapshot: DailyReportSnapshot) {
+function dailyReportDetail(snapshot: DailyReportSnapshot, timeZone: string) {
   const entryCount = snapshot.entries.meals + snapshot.entries.naps + snapshot.entries.diapers + snapshot.entries.activities;
-  const time = formatTime(snapshot.sentAt ?? snapshot.latestReportAt);
+  const time = formatTime(snapshot.sentAt ?? snapshot.latestReportAt, timeZone);
   const entryLabel = `${entryCount} care entr${entryCount === 1 ? "y" : "ies"}`;
   return time ? `${entryLabel} · ${time}` : entryLabel;
 }
@@ -241,8 +232,8 @@ function createNapDraft(): NapDraft {
   return { id: draftId("nap"), startsAt: "", endsAt: "" };
 }
 
-function createDiaperDraft(): DiaperDraft {
-  return { id: draftId("diaper"), type: "", occurredAt: dateTimeInputValue(), notes: "" };
+function createDiaperDraft(timeZone = "America/New_York"): DiaperDraft {
+  return { id: draftId("diaper"), type: "", occurredAt: zonedDateTimeLocalValue(new Date(), timeZone), notes: "" };
 }
 
 function createActivityDraft(): ActivityDraft {
@@ -258,6 +249,7 @@ export function TeacherMobileWorkspace({
   classroomRatios = [],
   teacherChecklistCompletedIds = [],
 }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstChild = roster[0]?.id ?? "";
   const [profileName, setProfileName] = useState(teacherProfile?.name ?? teacherName);
@@ -277,12 +269,12 @@ export function TeacherMobileWorkspace({
   const [logType, setLogType] = useState("check_in");
   const [mood, setMood] = useState("Happy");
   const [teacherNote, setTeacherNote] = useState("");
-  const [reportDate, setReportDate] = useState(() => dateInputValue());
+  const [reportDate, setReportDate] = useState(() => zonedDateKey(new Date(), timeZone));
   const [sendToParent, setSendToParent] = useState(true);
   const [mealRows, setMealRows] = useState<MealDraft[]>(() => [createMealDraft()]);
   const [napRows, setNapRows] = useState<NapDraft[]>(() => [createNapDraft()]);
   const [noNap, setNoNap] = useState(false);
-  const [diaperRows, setDiaperRows] = useState<DiaperDraft[]>(() => [createDiaperDraft()]);
+  const [diaperRows, setDiaperRows] = useState<DiaperDraft[]>(() => [createDiaperDraft(timeZone)]);
   const [activityRows, setActivityRows] = useState<ActivityDraft[]>(() => [createActivityDraft()]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoCaption, setPhotoCaption] = useState("");
@@ -629,7 +621,7 @@ export function TeacherMobileWorkspace({
   }
 
   function removeDiaper(id: string) {
-    setDiaperRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createDiaperDraft()]);
+    setDiaperRows((current) => current.length > 1 ? current.filter((row) => row.id !== id) : [createDiaperDraft(timeZone)]);
   }
 
   function removeActivity(id: string) {
@@ -642,12 +634,12 @@ export function TeacherMobileWorkspace({
     setMealRows([createMealDraft()]);
     setNapRows([createNapDraft()]);
     setNoNap(false);
-    setDiaperRows([createDiaperDraft()]);
+    setDiaperRows([createDiaperDraft(timeZone)]);
     setActivityRows([createActivityDraft()]);
   }
 
   function buildDailyReportEntries() {
-    const activeReportDate = reportDate || dateInputValue();
+    const activeReportDate = reportDate || dateInputValue(new Date(), timeZone);
     const meals = mealRows
       .filter((row) => row.food.trim() || row.amount.trim() || row.quickLog || row.touched)
       .map((row) => ({
@@ -661,12 +653,12 @@ export function TeacherMobileWorkspace({
       .filter(() => !noNap)
       .filter((row) => row.startsAt.trim() || row.endsAt.trim())
       .map((row) => ({
-        startsAt: normalizeReportTime(activeReportDate, row.startsAt),
-        endsAt: normalizeReportTime(activeReportDate, row.endsAt),
+        startsAt: zonedDateTimeLocalToUtc(normalizeReportTime(activeReportDate, row.startsAt), timeZone)?.toISOString() ?? "",
+        endsAt: zonedDateTimeLocalToUtc(normalizeReportTime(activeReportDate, row.endsAt), timeZone)?.toISOString() ?? "",
       }));
     const diapers = diaperRows
       .filter((row) => row.type.trim() || row.notes.trim() || row.touched)
-      .map((row) => ({ type: row.type, occurredAt: row.occurredAt, notes: row.notes.trim(), touched: row.touched === true }));
+      .map((row) => ({ type: row.type, occurredAt: zonedDateTimeLocalToUtc(row.occurredAt, timeZone)?.toISOString() ?? "", notes: row.notes.trim(), touched: row.touched === true }));
     const activities = activityRows
       .filter((row) => row.title.trim() || row.notes.trim() || row.touched)
       .map((row) => ({ title: row.title.trim(), notes: row.notes.trim(), touched: row.touched === true }));
@@ -688,7 +680,7 @@ export function TeacherMobileWorkspace({
       for (const childId of childIds) {
         next[childId] = {
           status,
-          latestReportAt: `${reportDate || dateInputValue()}T12:00:00`,
+          latestReportAt: `${reportDate || dateInputValue(new Date(), timeZone)}T12:00:00`,
           sentAt: status === "sent" ? now : null,
           entries: entryCounts,
         };
@@ -703,7 +695,7 @@ export function TeacherMobileWorkspace({
   }
 
   function addDiaperPreset(type: string) {
-    const nextRow = { ...createDiaperDraft(), type, touched: true };
+    const nextRow = { ...createDiaperDraft(timeZone), type, touched: true };
     setDiaperRows((current) => current.length === 1 && !current[0].type.trim() && !current[0].notes.trim() ? [nextRow] : [...current, nextRow]);
   }
 
@@ -795,7 +787,7 @@ export function TeacherMobileWorkspace({
         body: {
           childId: targetChildIds[0],
           childIds: targetChildIds,
-          date: `${reportDate || dateInputValue()}T12:00:00`,
+          date: `${reportDate || dateInputValue(new Date(), timeZone)}T12:00:00`,
           mood,
           teacherNote,
           meals: entries.meals,
@@ -1104,7 +1096,7 @@ export function TeacherMobileWorkspace({
                   {kioskAccess.clockStatus === "clocked_in" ? "Clocked in" : "Clocked out"}
                 </Badge>
                 {kioskAccess.lastActionAt ? (
-                  <Badge variant="secondary">Last action {formatTime(kioskAccess.lastActionAt)}</Badge>
+                  <Badge variant="secondary">Last action {formatTime(kioskAccess.lastActionAt, timeZone)}</Badge>
                 ) : null}
                 <Badge variant="outline">
                   <KeyRound data-icon="inline-start" />
@@ -1252,11 +1244,11 @@ export function TeacherMobileWorkspace({
                         <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                           <span className="flex min-w-0 items-center gap-1">
                             <Clock className="size-3" />
-                            {attendanceDetail(attendance)}
+                            {attendanceDetail(attendance, timeZone)}
                           </span>
                           <span className="flex min-w-0 items-center gap-1">
                             <BookOpen className="size-3" />
-                            {dailyReportDetail(dailyReport)}
+                            {dailyReportDetail(dailyReport, timeZone)}
                           </span>
                         </span>
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1658,7 +1650,7 @@ export function TeacherMobileWorkspace({
                     <Baby className="size-4" />
                     Diaper / Potty
                   </div>
-                  <Button type="button" size="xs" variant="outline" onClick={() => setDiaperRows((current) => [...current, createDiaperDraft()])}>
+                  <Button type="button" size="xs" variant="outline" onClick={() => setDiaperRows((current) => [...current, createDiaperDraft(timeZone)])}>
                     <Plus data-icon="inline-start" />
                     Add
                   </Button>

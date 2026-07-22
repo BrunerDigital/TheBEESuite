@@ -158,7 +158,8 @@ import {
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createAssetHubSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
-import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -409,14 +410,15 @@ function safeAuthNextPath(value: string | string[] | undefined) {
   return path;
 }
 
-function formatSavedAt(value: string | null) {
+function formatSavedAt(value: string | null, timeZone: string) {
   if (!value) return null;
-  return new Intl.DateTimeFormat("en", {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZoneName: "short",
+  });
 }
 
 function serializeFteReport(report: {
@@ -1023,7 +1025,7 @@ async function renderLivePage(
       completedSections,
       totalSections: sections.length,
       blockingSections,
-      lastCapturedAt: formatSavedAt(schoolSetup.capturedAt),
+      lastCapturedAt: formatSavedAt(schoolSetup.capturedAt, readCenterLocationTimeZone(selectedCenter)),
       schoolEin: selectedCenter ? readSchoolEin(selectedCenter.customFields) : null,
       stats: [
         { label: "Classrooms", value: String(classroomCount), detail: `${selectedCenter?.licensedCapacity ?? 0} licensed capacity` },

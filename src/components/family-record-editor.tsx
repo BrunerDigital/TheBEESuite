@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -228,18 +230,19 @@ function formatDate(value: string | Date | null | undefined) {
   }).format(date);
 }
 
-function formatActivityDate(value: string | Date | null | undefined) {
+function formatActivityDate(value: string | Date | null | undefined, timeZone: string) {
   if (!value) return "Not set";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not set";
   if (date.getUTCFullYear() === 1900) return "Missing DOB";
-  return new Intl.DateTimeFormat("en-US", {
+  return formatZonedDateTime(date, timeZone, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+    timeZoneName: "short",
+  });
 }
 
 function money(cents: number) {
@@ -372,6 +375,7 @@ function familyBillingHref(family: EditableFamilyRecord | null | undefined) {
 }
 
 export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups, initialFamilyId, initialChildId, searchQuery }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const availableAgeGroups = useMemo(
     () => mergeAgeGroupOptions(
@@ -1974,7 +1978,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                         <Badge variant={note.restricted ? "secondary" : "outline"}>{note.restricted ? "Restricted" : "General"}</Badge>
                       </div>
                       <p className="leading-6 text-muted-foreground">{note.body}</p>
-                      <div className="mt-2 text-xs text-muted-foreground">{formatActivityDate(note.createdAt)}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{formatActivityDate(note.createdAt, timeZone)}</div>
                     </div>
                   ))}
                 </div>
@@ -1992,7 +1996,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     <div key={item.id} className="grid gap-1 rounded-lg border bg-card/45 p-3 text-sm">
                       <div className="font-medium">{item.title}</div>
                       <div className="text-muted-foreground">{item.detail}</div>
-                      <div className="text-xs text-muted-foreground">{formatActivityDate(item.date)}</div>
+                      <div className="text-xs text-muted-foreground">{formatActivityDate(item.date, timeZone)}</div>
                     </div>
                   ))}
                 </div>

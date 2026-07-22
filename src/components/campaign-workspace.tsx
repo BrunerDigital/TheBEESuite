@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 import { ArrowRight, BarChart3, CalendarClock, CheckCircle2, CopyCheck, Library, LineChart, Link2, Save, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,19 +64,8 @@ function textValue(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
-function formatDate(value: Date | string | null) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Not set"
-    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
-}
-
-function localDateTimeValue(value: Date | string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+function formatDate(value: Date | string | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Not set");
 }
 
 function reportMetric(metrics: unknown, key: string) {
@@ -102,6 +93,7 @@ function currency(value: number) {
 }
 
 export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstCampaign = data.campaigns[0] ?? null;
   const [selectedId, setSelectedId] = useState(firstCampaign?.id ?? "");
@@ -112,7 +104,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   const [subject, setSubject] = useState(firstCampaign?.subject ?? campaignTemplates[0]?.subject ?? "");
   const [body, setBody] = useState(firstCampaign?.body ?? campaignTemplates[0]?.body ?? "");
   const [status, setStatus] = useState(firstCampaign?.status ?? "draft");
-  const [scheduledAt, setScheduledAt] = useState(localDateTimeValue(firstCampaign?.scheduledAt ?? null));
+  const [scheduledAt, setScheduledAt] = useState(firstCampaign?.scheduledAt ? zonedDateTimeLocalValue(firstCampaign.scheduledAt, timeZone) : "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -138,7 +130,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
     setSubject(campaign.subject ?? "");
     setBody(campaign.body ?? "");
     setStatus(campaign.status);
-    setScheduledAt(localDateTimeValue(campaign.scheduledAt));
+    setScheduledAt(campaign.scheduledAt ? zonedDateTimeLocalValue(campaign.scheduledAt, timeZone) : "");
     setMessage("");
     setError("");
   }
@@ -171,7 +163,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         subject,
         body,
         status: nextStatus,
-        scheduledAt: scheduledAt || undefined,
+        scheduledAt: scheduledAt ? zonedDateTimeLocalToUtc(scheduledAt, timeZone)?.toISOString() : undefined,
       }),
     });
     const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
@@ -432,7 +424,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   Last Delivery
                 </div>
                 <div className="space-y-1 text-muted-foreground">
-                  <div>Sent: {formatDate(selectedCampaign?.sentAt ?? null)}</div>
+                  <div>Sent: {formatDate(selectedCampaign?.sentAt ?? null, timeZone)}</div>
                   <div>Recipients: {reportMetric(selectedCampaign?.metrics, "lastRecipientCount")}</div>
                   <div>Status: {reportMetric(selectedCampaign?.metrics, "lastDeliveryStatus")}</div>
                 </div>
@@ -494,8 +486,8 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                         <div className="text-xs text-muted-foreground">{campaign.brand?.name ?? "Tenant-wide"} · {campaign.type}</div>
                       </TableCell>
                       <TableCell>{textValue(asRecord(campaign.audience).label) || "All eligible"}</TableCell>
-                      <TableCell>{formatDate(campaign.scheduledAt)}</TableCell>
-                      <TableCell>{formatDate(campaign.sentAt)}</TableCell>
+                      <TableCell>{formatDate(campaign.scheduledAt, timeZone)}</TableCell>
+                      <TableCell>{formatDate(campaign.sentAt, timeZone)}</TableCell>
                       <TableCell>{reportMetric(campaign.metrics, "platform") === "None" ? campaign.type : reportMetric(campaign.metrics, "platform")}</TableCell>
                       <TableCell>{currency(numericMetric(campaign.metrics, ["spend", "amountSpent", "cost"]))}</TableCell>
                       <TableCell>

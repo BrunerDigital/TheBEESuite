@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 import {
   ArrowRight,
   Bot,
@@ -180,21 +182,22 @@ const createdRangeLabels: Record<CreatedRangeFilter, string> = {
   "90": "Last 90 days",
 };
 
-function safeDate(value: string | Date) {
-  return new Intl.DateTimeFormat("en", {
+function safeDate(value: string | Date, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  });
 }
 
-function formatTourDate(value: string | Date) {
-  return new Intl.DateTimeFormat("en", {
+function formatTourDate(value: string | Date, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZoneName: "short",
+  });
 }
 
 function dateInputValue(value: string | Date | null | undefined) {
@@ -356,7 +359,7 @@ function leadTimeline(details: LeadDetails | null): LeadTimelineItem[] {
   });
 }
 
-function makeCsvRows(leads: CrmLead[]) {
+function makeCsvRows(leads: CrmLead[], timeZone: string) {
   const headers = [
     "Family Name",
     "Child Name",
@@ -389,7 +392,7 @@ function makeCsvRows(leads: CrmLead[]) {
     getLeadOwner(lead),
     lead.leadSource,
     dateInputValue(lead.desiredStartDate),
-    safeDate(lead.createdAt),
+    safeDate(lead.createdAt, timeZone),
     lead.center.name,
     lead.center.crmLocationId,
     lead.center.city,
@@ -452,6 +455,7 @@ function subscribeCrmSavedViews(callback: () => void) {
 }
 
 export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
+  const timeZone = useSchoolTimeZone();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.get("q") ?? "";
   const [leads, setLeads] = useState(initialLeads);
@@ -664,7 +668,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       showError("No visible leads to export.");
       return;
     }
-    const csv = makeCsvRows(filteredLeads);
+    const csv = makeCsvRows(filteredLeads, timeZone);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -843,7 +847,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const response = await fetch(`/api/leads/${selectedLead.id}/tours`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt: tourStartsAt, notes: tourNotes }),
+        body: JSON.stringify({ startsAt: zonedDateTimeLocalToUtc(tourStartsAt, timeZone)?.toISOString(), notes: tourNotes }),
       });
 
       if (!response.ok) {
@@ -1025,7 +1029,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
               <p className="mt-1 text-xs">{printFilterSummary}</p>
             </div>
             <div className="text-right text-xs">
-              <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+              <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
               <p>{filteredLeads.length.toLocaleString()} inquiries</p>
               <p>Printed by: {currentUser.name}</p>
             </div>
@@ -1062,7 +1066,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   <td>{lead.score}</td>
                   <td>{lead.leadSource || "Unknown"}</td>
                   <td>{dateInputValue(lead.desiredStartDate) || "Not set"}</td>
-                  <td>{safeDate(lead.createdAt)}</td>
+                  <td>{safeDate(lead.createdAt, timeZone)}</td>
                   <td>{getCenterLabel(lead.center)}</td>
                 </tr>
               ))}
@@ -1417,7 +1421,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                         <span>{lead.leadSource ?? "Unknown source"}</span>
-                        <span>{safeDate(lead.createdAt)}</span>
+                        <span>{safeDate(lead.createdAt, timeZone)}</span>
                       </div>
                     </button>
                   ))}
@@ -1783,7 +1787,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                     <div className="mt-3 flex flex-col gap-2">
                       {(selectedLeadDetails?.tours ?? []).slice(0, 4).map((tour) => (
                         <div key={tour.id} className="rounded-lg border bg-card/60 p-2">
-                          <div className="text-xs font-medium">{formatTourDate(tour.startsAt)}</div>
+                          <div className="text-xs font-medium">{formatTourDate(tour.startsAt, timeZone)}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
                             {tour.status}{tour.notes ? ` - ${tour.notes}` : ""}
                           </div>
@@ -1804,7 +1808,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                         <div key={task.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs font-medium">{task.title}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {task.dueAt ? safeDate(task.dueAt) : "No due date"} · {task.status}
+                            {task.dueAt ? safeDate(task.dueAt, timeZone) : "No due date"} · {task.status}
                           </div>
                         </div>
                       ))}
@@ -1831,7 +1835,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                             {item.body}
                           </div>
                           <div className="mt-1 text-[0.65rem] text-muted-foreground">
-                            {item.at ? (item.kind === "tour" ? formatTourDate(item.at) : safeDate(item.at)) : "No date"}
+                            {item.at ? (item.kind === "tour" ? formatTourDate(item.at, timeZone) : safeDate(item.at, timeZone)) : "No date"}
                           </div>
                         </div>
                       ))}
@@ -1850,7 +1854,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                         <div key={note.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs leading-5">{note.body}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {note.user?.name ?? "System"} · {safeDate(note.createdAt)}
+                            {note.user?.name ?? "System"} · {safeDate(note.createdAt, timeZone)}
                           </div>
                         </div>
                       ))}

@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { Bot, GitBranch, History, Save, ShieldCheck, Workflow } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,11 +46,8 @@ function stringValue(value: unknown, fallback = "") {
   return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : fallback;
 }
 
-function formatDate(value: Date | string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Unknown"
-    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+function formatDate(value: Date | string, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Unknown");
 }
 
 function jsonSummary(value: unknown) {
@@ -61,6 +60,7 @@ function jsonSummary(value: unknown) {
 }
 
 export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBuilderData }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstAutomation = data.automations[0] ?? null;
   const firstCondition = asRecord(firstAutomation?.condition);
@@ -334,7 +334,7 @@ export function AutomationWorkflowBuilder({ data }: { data: AutomationWorkflowBu
                       <div className="text-xs text-muted-foreground">{jsonSummary(automation.action)}</div>
                     </TableCell>
                     <TableCell><Badge variant={automation.status === "active" ? "default" : "outline"}>{automation.status}</Badge></TableCell>
-                    <TableCell>{automation.runs[0] ? `${automation.runs[0].status} · ${formatDate(automation.runs[0].createdAt)}` : "No runs"}</TableCell>
+                    <TableCell>{automation.runs[0] ? `${automation.runs[0].status} · ${formatDate(automation.runs[0].createdAt, timeZone)}` : "No runs"}</TableCell>
                   </TableRow>
                 ))}
                 {!data.automations.length ? (

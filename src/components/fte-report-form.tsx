@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { ageGroupTotal, calculateFteCount, dateInputString, defaultFteWeekEnd, startOfFteWeek } from "@/lib/fte-report-guardrails";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 
 export type FteReportCenterOption = {
   id: string;
@@ -208,6 +209,7 @@ export function FteReportForm({
   allowCenterSelect = false,
   mode = allowCenterSelect ? "executive" : "director",
 }: Props) {
+  const timeZone = useSchoolTimeZone();
   const defaultCenterId = centers[0]?.id ?? "";
   const defaultCenter = centers[0];
   const [form, setForm] = useState<FormState>(() => emptyForm(defaultCenterId, defaultValuesForCenter(defaultCenterId, prefills), defaultCenter));
@@ -359,7 +361,7 @@ export function FteReportForm({
           <h1>{title}</h1>
           <p>Scope: {centers.length === 1 ? centers[0].name : `${centers.length.toLocaleString()} visible schools`}</p>
           <p>Selected school: {selectedCenter?.name ?? "Choose school"}</p>
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
         <h2>Current Entry Summary</h2>
         <table>

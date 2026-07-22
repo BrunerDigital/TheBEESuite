@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 export type AuditLogViewerRow = {
   id: string;
@@ -29,15 +31,8 @@ const dateRangeLabels: Record<DateRange, string> = {
   "90": "Last 90 days",
 };
 
-function formatDateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-  }).format(new Date(value));
+function formatDateTime(value: Date | string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function centerLabel(log: AuditLogViewerRow) {
@@ -57,10 +52,10 @@ function safeCsvCell(value: unknown) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function makeCsvRows(logs: AuditLogViewerRow[]) {
+function makeCsvRows(logs: AuditLogViewerRow[], timeZone: string) {
   const headers = ["When", "Actor Name", "Actor Email", "Action", "Center", "Resource", "Resource ID"];
   const rows = logs.map((log) => [
-    formatDateTime(log.createdAt),
+    formatDateTime(log.createdAt, timeZone),
     log.user?.name ?? "System",
     log.user?.email ?? "system",
     log.action,
@@ -72,6 +67,7 @@ function makeCsvRows(logs: AuditLogViewerRow[]) {
 }
 
 export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
+  const timeZone = useSchoolTimeZone();
   const [query, setQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("all");
   const [resourceFilter, setResourceFilter] = useState("all");
@@ -109,7 +105,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
       return;
     }
 
-    const blob = new Blob([makeCsvRows(filteredLogs)], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([makeCsvRows(filteredLogs, timeZone)], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -131,7 +127,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
             Action: {actionFilter === "all" ? "All actions" : actionFilter} | Resource: {resourceFilter === "all" ? "All resources" : resourceFilter} | Center: {centerFilter === "all" ? "All centers" : centerFilter} | Date: {dateRangeLabels[dateRange]}
           </p>
           {query.trim() ? <p>Search: {query.trim()}</p> : null}
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
           <p>{filteredLogs.length.toLocaleString()} visible events of {logs.length.toLocaleString()} loaded</p>
         </header>
         <table>
@@ -149,7 +145,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
           <tbody>
             {filteredLogs.map((log) => (
               <tr key={log.id}>
-                <td>{formatDateTime(log.createdAt)}</td>
+                <td>{formatDateTime(log.createdAt, timeZone)}</td>
                 <td>{log.user?.name ?? "System"}</td>
                 <td>{log.user?.email ?? "system"}</td>
                 <td>{log.action}</td>
@@ -263,7 +259,7 @@ export function AuditLogViewer({ logs }: { logs: AuditLogViewerRow[] }) {
           <TableBody>
             {filteredLogs.map((log) => (
               <TableRow key={log.id}>
-                <TableCell>{formatDateTime(log.createdAt)}</TableCell>
+                <TableCell>{formatDateTime(log.createdAt, timeZone)}</TableCell>
                 <TableCell>
                   <div className="font-medium">{log.user?.name ?? "System"}</div>
                   <div className="text-xs text-muted-foreground">{log.user?.email ?? "system"}</div>

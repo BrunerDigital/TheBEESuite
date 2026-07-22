@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -264,6 +266,7 @@ function formatShortDate(value: Date | string | null | undefined) {
 }
 
 export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, searchQuery }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const initialFamily = useMemo(
     () => pickInitialBillingFamily(families, initialFamilyId, searchQuery),
@@ -1242,7 +1245,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                     : "No saved payment method"}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${new Date(selectedPaymentMethod.lastUpdatedAt).toLocaleDateString()}` : "Families can also update this from the parent portal."}
+                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">

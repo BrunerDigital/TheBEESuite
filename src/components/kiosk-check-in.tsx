@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { IScannerControls } from "@zxing/browser";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 type VerificationMethod = "pin" | "qr";
 type KioskMode = "family" | "staff";
@@ -69,6 +70,7 @@ type Props = {
     id: string;
     name: string;
     place: string;
+    timeZone: string;
   };
 };
 
@@ -80,9 +82,8 @@ function actionLabel(type?: string) {
   return "No kiosk action today";
 }
 
-function clockLabel(value?: string | null) {
-  if (!value) return "No staff clock event today";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function clockLabel(value: string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "No staff clock event today");
 }
 
 function money(cents: number) {
@@ -418,7 +419,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                 Today
               </div>
               <div className="text-xl font-semibold">
-                {new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}
+                {formatZonedDateTime(new Date(), center.timeZone, { weekday: "short", month: "short", day: "numeric" })}
               </div>
               <Badge variant="outline" className="justify-center">
                 Auto-reset {idleSecondsRemaining}s
@@ -645,7 +646,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                           </Badge>
                         </div>
                         <div className="mt-2 text-sm text-muted-foreground">
-                          Last event: {clockLabel(staffLookup.staff.clock.lastActionAt)}
+                          Last event: {clockLabel(staffLookup.staff.clock.lastActionAt, center.timeZone)}
                         </div>
                       </div>
                     </div>

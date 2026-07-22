@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
   BellRing,
@@ -302,9 +304,8 @@ function requiresDocumentSignature(document: { storageKey?: string | null }) {
   return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
 }
 
-function formatDate(value: string | Date | null) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+function formatDateInTimeZone(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function money(cents: number) {
@@ -353,13 +354,13 @@ function isProcessingPayment(payment: Payment) {
   return payment.status === "DRAFT" && (status === "checkout_created" || status === "checkout_pending");
 }
 
-function paymentListLabel(payment: Payment) {
+function paymentListLabel(payment: Payment, timeZone: string) {
   if (isProcessingPayment(payment)) {
     const fields = paymentFields(payment);
     const category = textField(fields.paymentMethodCategory) || textField(fields.requestedPaymentMethodCategory);
     return `${paymentMethodCategoryLabel(category)} processing`;
   }
-  if (payment.status === "PAID") return `Paid · ${formatDate(payment.paidAt)}`;
+  if (payment.status === "PAID") return `Paid · ${formatDateInTimeZone(payment.paidAt, timeZone)}`;
   return payment.status.toLowerCase();
 }
 
@@ -376,9 +377,8 @@ function clampUniformQuantity(value: number) {
   return Math.min(MAX_UNIFORM_PURCHASE_QUANTITY, Math.max(1, Math.round(value)));
 }
 
-function formatTime(value: string | Date | null) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function formatTimeInTimeZone(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function renderableImageSrc(value: string | null | undefined) {
@@ -451,6 +451,9 @@ export function ParentPortalWorkspace({
   availableFamilies = [],
   demoMode,
 }: Props) {
+  const timeZone = useSchoolTimeZone();
+  const formatDate = (value: string | Date | null) => formatDateInTimeZone(value, timeZone);
+  const formatTime = (value: string | Date | null) => formatTimeInTimeZone(value, timeZone);
   const router = useRouter();
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -1581,7 +1584,7 @@ export function ParentPortalWorkspace({
                 {payments.slice(0, 5).map((payment) => (
                   <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
                     <span className="text-muted-foreground">
-                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · {paymentListLabel(payment)}
+                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · {paymentListLabel(payment, timeZone)}
                     </span>
                     <span className="font-medium">{money(payment.amountCents)}</span>
                   </div>

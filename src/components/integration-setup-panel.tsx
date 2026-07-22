@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { IntegrationProvider, IntegrationSetupField, IntegrationSetupStatus } from "@/lib/integration-setup";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 type IntegrationSetupRow = {
   id: string | null;
@@ -45,14 +47,8 @@ const setupStatuses: Array<{ value: IntegrationSetupStatus; label: string }> = [
   { value: "verified", label: "Verified" },
 ];
 
-function formatDateTime(value: Date | string | null) {
-  if (!value) return "Not checked";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function formatDateTime(value: Date | string | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Not checked");
 }
 
 function setupStatusLabel(value: IntegrationSetupStatus) {
@@ -85,6 +81,7 @@ function credentialMap(integrations: IntegrationSetupRow[]) {
 }
 
 export function IntegrationSetupPanel({ integrations, canManage, manageableProviders }: Props) {
+  const timeZone = useSchoolTimeZone();
   const searchParams = useSearchParams();
   const requestedProvider = searchParams.get("provider") as IntegrationProvider | null;
   const initialProvider = integrations.some((integration) => integration.provider === requestedProvider)
@@ -216,7 +213,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
             </div>
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="text-sm text-muted-foreground">Last checked</div>
-              <div className="mt-1 font-semibold">{formatDateTime(active.lastSyncAt)}</div>
+              <div className="mt-1 font-semibold">{formatDateTime(active.lastSyncAt, timeZone)}</div>
             </div>
           </div>
 

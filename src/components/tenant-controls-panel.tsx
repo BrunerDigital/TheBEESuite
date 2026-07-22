@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { SchoolDateTime } from "@/components/school-time-zone-context";
 
 export type TenantCustomizationControl = {
   id: string;
@@ -616,7 +617,7 @@ export function TenantControlsPanel({ canManage, customizations, assets, brands,
                   const summary = supportSummary(request.metadata);
                   return (
                     <TableRow key={request.id}>
-                      <TableCell>{new Date(request.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell><SchoolDateTime value={request.createdAt} options={{ month: "short", day: "numeric", year: "numeric" }} /></TableCell>
                       <TableCell>{request.actor}</TableCell>
                       <TableCell>{summary.targetLabel}</TableCell>
                       <TableCell className="max-w-md whitespace-normal text-xs text-muted-foreground">{summary.reason}</TableCell>

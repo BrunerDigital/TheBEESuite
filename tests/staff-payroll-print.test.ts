@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { buildPayrollDayRows } from "@/components/staff-management-panel";
-import { zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
+import { formatZonedTimestamp, zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 test("payroll timecards include every calendar day in the selected period", () => {
   const rows = buildPayrollDayRows({
@@ -40,6 +40,35 @@ test("Kokomo payroll uses Eastern school-local dates and edit times", () => {
   assert.equal(zonedDateTimeLocalToUtc("2026-07-07T00:30", timeZone)?.toISOString(), instant);
   assert.equal(zonedDateInputToUtc("2026-07-07", timeZone)?.toISOString(), "2026-07-07T04:00:00.000Z");
   assert.equal(zonedDateInputToUtc("2026-07-07", timeZone, true)?.toISOString(), "2026-07-08T03:59:59.999Z");
+  assert.match(formatZonedTimestamp(instant, timeZone), /Jul 7, 2026, 12:30 AM EDT/);
+});
+
+test("school-local datetime inputs round trip across daylight saving changes", () => {
+  assert.equal(
+    zonedDateTimeLocalToUtc("2026-01-15T08:00", "America/Indiana/Indianapolis")?.toISOString(),
+    "2026-01-15T13:00:00.000Z",
+  );
+  assert.equal(
+    zonedDateTimeLocalToUtc("2026-07-15T08:00", "America/Indiana/Indianapolis")?.toISOString(),
+    "2026-07-15T12:00:00.000Z",
+  );
+});
+
+test("timestamp entry points use school-local conversion rather than browser-local parsing", async () => {
+  const files = [
+    "src/components/campaign-workspace.tsx",
+    "src/components/crm/crm-workspace.tsx",
+    "src/components/emergency-drill-log-panel.tsx",
+    "src/components/medication-log-panel.tsx",
+    "src/components/reputation-workspace.tsx",
+    "src/components/social-publishing-studio.tsx",
+    "src/components/staff-management-panel.tsx",
+    "src/components/teacher-mobile-workspace.tsx",
+  ];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    assert.match(source, /zonedDateTimeLocalToUtc/, `${file} should convert school-local datetime inputs`);
+  }
 });
 
 test("payroll print CSS excludes summaries and collapses non-print layout", async () => {

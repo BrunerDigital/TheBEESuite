@@ -4,16 +4,11 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_SCHOOL_TIME_ZONE, useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 
-export function formatPrintDateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+export function formatPrintDateTime(value: Date | string | null | undefined, timeZone = DEFAULT_SCHOOL_TIME_ZONE) {
+  return formatZonedTimestamp(value, timeZone);
 }
 
 export function ReportPrintStyles() {
@@ -147,6 +142,7 @@ export function ReportPrintAction({
   disabled?: boolean;
   children: ReactNode;
 }) {
+  const timeZone = useSchoolTimeZone();
   const { active, generatedAt, print } = usePrintableReport();
 
   return (
@@ -160,7 +156,7 @@ export function ReportPrintAction({
         <header>
           <h1>{reportTitle}</h1>
           {meta.flatMap((item) => (item ? [item] : [])).map((item) => <p key={item}>{item}</p>)}
-          <p>Generated: {formatPrintDateTime(generatedAt)}</p>
+          <p>Generated: {formatPrintDateTime(generatedAt, timeZone)}</p>
         </header>
         {children}
       </PrintableReport>

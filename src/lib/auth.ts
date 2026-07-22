@@ -8,6 +8,7 @@ import { loginHrefForNextPath } from "@/lib/login-routing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 
 export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -37,6 +38,8 @@ export type CurrentUser = {
   accessGrantCount: number;
   profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
+  timeZone?: string;
+  timeZonesByCenterId?: Record<string, string>;
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
@@ -326,6 +329,14 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     accessScope = "tenant";
   }
 
+  const timeZoneCenters = centerIds.length
+    ? await prisma.center.findMany({
+        where: { id: { in: centerIds } },
+        select: { id: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+      })
+    : [];
+  const timeZonesByCenterId = Object.fromEntries(timeZoneCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
+
   return {
     id: user.id,
     tenantId: user.tenantId,
@@ -349,6 +360,8 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
       organizationName: user.organization?.name,
       email: user.email,
     }),
+    timeZone: timeZonesByCenterId[centerIds[0] ?? ""] || "America/New_York",
+    timeZonesByCenterId,
   };
 }
 

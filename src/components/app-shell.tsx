@@ -51,6 +51,7 @@ import { modules, navGroups } from "@/lib/demo-data";
 import { canAccessModule } from "@/lib/rbac";
 import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
+import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
 type ShellUser = {
   name: string;
@@ -60,6 +61,8 @@ type ShellUser = {
   centerIds?: string[];
   profilePhotoUrl?: string | null;
   branding?: WorkspaceBranding;
+  timeZone?: string;
+  timeZonesByCenterId?: Record<string, string>;
 };
 
 type NotificationSummary = {
@@ -517,6 +520,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   }
 
   return (
+    <SchoolTimeZoneProvider timeZone={currentUser?.timeZone} timeZonesByCenterId={currentUser?.timeZonesByCenterId}>
     <div className="min-h-screen">
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
@@ -713,5 +717,6 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>
+    </SchoolTimeZoneProvider>
   );
 }

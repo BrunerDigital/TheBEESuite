@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 import {
   Activity,
   AlertTriangle,
@@ -102,17 +104,8 @@ export type AiCommandCenterData = {
 
 type MessageMode = "family" | "broadcast";
 
-function formatDate(value: Date | string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Recently" : new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
+function formatDate(value: Date | string, timeZone: string) {
+  return formatZonedTimestamp(value, timeZone, "Recently");
 }
 
 function formatMoney(cents: number) {
@@ -142,6 +135,7 @@ async function jsonRequest<T>(url: string, init: RequestInit) {
 }
 
 export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
+  const timeZone = useSchoolTimeZone();
   const initialCenterId = data.centers.length === 1 ? data.centers[0].id : "all";
   const [centerId, setCenterId] = useState(initialCenterId);
   const [summaries, setSummaries] = useState(data.summaries);
@@ -650,7 +644,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                         <TableCell className="align-top">
                           <Badge variant={statusVariant(suggestion.status)}>{suggestion.status.replaceAll("_", " ")}</Badge>
                         </TableCell>
-                        <TableCell className="min-w-36 align-top text-xs text-muted-foreground">{formatDate(suggestion.createdAt)}</TableCell>
+                        <TableCell className="min-w-36 align-top text-xs text-muted-foreground">{formatDate(suggestion.createdAt, timeZone)}</TableCell>
                         <TableCell className="min-w-52 align-top">
                           <div className="flex flex-wrap gap-2">
                             <Button variant="outline" size="icon-sm" onClick={() => copySuggestion(suggestion)} title="Copy suggestion">
@@ -691,7 +685,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium">{summary.title}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{formatDate(summary.createdAt)}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{formatDate(summary.createdAt, timeZone)}</div>
                   </div>
                   <Badge variant={summary.requiresReview ? "outline" : "default"}>{summary.scope}</Badge>
                 </div>

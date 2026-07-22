@@ -6,6 +6,7 @@ import { CheckCircle2, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SchoolDateTime } from "@/components/school-time-zone-context";
 
 export function IncidentReviewActions({
   incidentId,
@@ -59,7 +60,7 @@ export function IncidentReviewActions({
         Parent notified
       </label>
       <div className="text-xs text-muted-foreground">
-        {parentAcknowledgedAt ? `Parent acknowledged ${new Date(parentAcknowledgedAt).toLocaleDateString()}` : "Parent acknowledgement pending"}
+        {parentAcknowledgedAt ? <>Parent acknowledged <SchoolDateTime value={parentAcknowledgedAt} options={{ month: "short", day: "numeric", year: "numeric" }} /></> : "Parent acknowledgement pending"}
       </div>
       <Button size="sm" disabled={isPending} onClick={save}>
         {status === "closed" ? <CheckCircle2 data-icon="inline-start" /> : <ClipboardCheck data-icon="inline-start" />}

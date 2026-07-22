@@ -4,6 +4,7 @@ import { getCurrentUser, getLeadScopeWhere } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 
 export const runtime = "nodejs";
 
@@ -285,7 +286,7 @@ async function GETHandler(request: NextRequest) {
       id: `tour:${tour.id}`,
       type: "tour" as const,
       label: tour.lead?.familyName ?? "Unlinked tour",
-      detail: `${centerLabel(centerNames, tour.centerId)} · ${formatDate(tour.startsAt)} · ${tour.status}`,
+      detail: `${centerLabel(centerNames, tour.centerId)} · ${formatZonedTimestamp(tour.startsAt, user.timeZone || "America/New_York")} · ${tour.status}`,
       href: `/tours?q=${encodeURIComponent(tour.lead?.familyName ?? query)}`,
       badge: "Tour",
     })),
@@ -301,7 +302,7 @@ async function GETHandler(request: NextRequest) {
       id: `payment:${payment.id}`,
       type: "payment" as const,
       label: `${payment.billingAccount.family.name} payment`,
-      detail: `${payment.provider} · ${money(payment.amountCents)} · ${formatDate(payment.paidAt)}`,
+      detail: `${payment.provider} · ${money(payment.amountCents)} · ${formatZonedTimestamp(payment.paidAt, user.timeZone || "America/New_York")}`,
       href: billingFamilyHref(payment.billingAccount.family),
       badge: payment.status,
     })),

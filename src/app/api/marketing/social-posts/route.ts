@@ -7,6 +7,7 @@ import { readIntegrationConfig } from "@/lib/integration-setup";
 import { prisma } from "@/lib/prisma";
 import { providerForSocialChannel, publishSocialPost, SOCIAL_CHANNELS, type SocialChannel } from "@/lib/social-publishing";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,7 +71,7 @@ async function POSTHandler(request: NextRequest) {
     data: {
       tenantId: user.tenantId,
       brandId: brand?.id ?? null,
-      name: title || `Social post · ${new Date().toLocaleDateString("en-US")}`,
+      name: title || `Social post · ${formatZonedDateTime(new Date(), user.timeZone || "America/New_York", { month: "numeric", day: "numeric", year: "numeric" })}`,
       type: "social_post",
       body: text,
       audience: { label: channels.join(", "), channels, centerId: user.primaryCenterId ?? null, mediaUrl: mediaUrl || null, linkUrl: linkUrl || null } as Prisma.InputJsonObject,

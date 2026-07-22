@@ -87,10 +87,25 @@ test("classrooms without a ProCare room ID reuse the same school classroom name"
 
 test("all resolved ProCare payer records are synchronized as guardians", () => {
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
-  assert.match(postHandler, /procare account person records/);
-  assert.match(postHandler, /person type/);
-  assert.match(postHandler, /syncedPayerIds/);
-  assert.match(postHandler, /await syncGuardian\(\{/);
+  assert.match(route, /procare account person records/);
+  assert.match(route, /person type/);
+  assert.match(postHandler, /procareGuardianImports\(rawData\)/);
+  assert.match(postHandler, /await syncGuardian\(guardian\)/);
+});
+
+test("review and commit use the same parent plan and verify family links before completing a row", () => {
+  const preview = section(route, "async function previewImportRows", "async function importPayloadFromFiles");
+  const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
+
+  assert.match(preview, /const guardianImports = procareGuardianImports\(rawData\)/);
+  assert.match(preview, /sourceGuardianGroups: importGuardianKeys\.size/);
+  assert.match(preview, /familyChildLinks: familyChildLinkKeys\.size/);
+  assert.match(preview, /familyGuardianLinks: familyGuardianLinkKeys\.size/);
+  assert.match(postHandler, /linkedChildCount[\s\S]*?familyId: family\.id/);
+  assert.match(postHandler, /linkedGuardianCount[\s\S]*?familyId: family\.id/);
+  assert.match(postHandler, /This row was rolled back safely/);
+  assert.match(panel, /Parent profiles/);
+  assert.match(panel, /Family profile links/);
 });
 
 test("sparse staff exports do not reactivate or erase existing staff fields", () => {

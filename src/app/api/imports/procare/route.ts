@@ -203,6 +203,16 @@ type ProcareRelationshipRecord = {
   guardian?: boolean;
 };
 
+type ProcareGuardianImport = {
+  name: string;
+  guardianEmail: string;
+  guardianPhone: string;
+  externalId: string | null;
+  relation: string;
+  billingContact: boolean;
+  employer: string;
+};
+
 function procareRelationshipRecords(rawData: Record<string, string>): ProcareRelationshipRecord[] {
   try {
     const parsed = JSON.parse(value(rawData, ["procare relationship records"]) || "[]") as unknown;
@@ -212,6 +222,90 @@ function procareRelationshipRecords(rawData: Record<string, string>): ProcareRel
   } catch {
     return [];
   }
+}
+
+function procareGuardianImports(rawData: Record<string, string>): ProcareGuardianImport[] {
+  const guardianImports: ProcareGuardianImport[] = [
+    {
+      name: value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]),
+      guardianEmail: value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase(),
+      guardianPhone: value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]),
+      externalId: externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]),
+      relation: value(rawData, ["guardian relation", "parent relation", "payer relation"]) || "Guardian",
+      billingContact: true,
+      employer: value(rawData, ["employer", "guardian employer", "parent employer", "payer employer"]),
+    },
+    {
+      name: value(rawData, ["secondary guardian", "secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"]),
+      guardianEmail: value(rawData, ["secondary email", "secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"]).toLowerCase(),
+      guardianPhone: value(rawData, ["secondary phone", "secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"]),
+      externalId: externalValue(rawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
+      relation: value(rawData, ["secondary relation", "secondary guardian relation", "parent 2 relation"]) || "Secondary Guardian",
+      billingContact: false,
+      employer: value(rawData, ["secondary employer", "secondary guardian employer", "secondary payer employer", "parent 2 employer"]),
+    },
+  ];
+
+  try {
+    const accountPeople = JSON.parse(value(rawData, ["procare account person records"]) || "[]") as unknown;
+    if (Array.isArray(accountPeople)) {
+      for (const person of accountPeople) {
+        const fields = embeddedImportRecord(person);
+        if (!/payer/i.test(value(fields, ["person type", "type"]))) continue;
+        guardianImports.push({
+          name: procareChildFullName(fields),
+          guardianEmail: value(fields, ["email", "email address"]).toLowerCase(),
+          guardianPhone: value(fields, ["phone 1", "phone 2", "phone 3", "phone 4", "phone 5", "phone"]),
+          externalId: externalValue(fields, ["person id", "payer id", "parent id"]),
+          relation: value(fields, ["relation", "relationship"]) || "Guardian",
+          billingContact: false,
+          employer: value(fields, ["employer", "company", "workplace"]),
+        });
+      }
+    }
+  } catch {
+    // The raw record remains reviewable; malformed embedded JSON cannot create a parent profile.
+  }
+
+  for (const relationship of procareRelationshipRecords(rawData)) {
+    if (!relationship.guardian) continue;
+    guardianImports.push({
+      name: clean(relationship.name),
+      guardianEmail: clean(relationship.email).toLowerCase(),
+      guardianPhone: clean(relationship.phone),
+      externalId: clean(relationship.externalId) || null,
+      relation: clean(relationship.relation) || "Guardian",
+      billingContact: false,
+      employer: "",
+    });
+  }
+
+  const uniqueGuardians = new Map<string, ProcareGuardianImport>();
+  for (const guardian of guardianImports) {
+    if (!guardian.name && !guardian.guardianEmail && !guardian.guardianPhone) continue;
+    const identity = guardian.externalId
+      ? `id:${guardian.externalId.toLowerCase()}`
+      : guardian.guardianEmail
+        ? `email:${guardian.guardianEmail}`
+        : guardian.guardianPhone
+          ? `phone:${guardian.guardianPhone.replace(/\D/g, "") || guardian.guardianPhone.toLowerCase()}`
+          : `name:${guardian.name.toLowerCase()}`;
+    const existing = uniqueGuardians.get(identity);
+    if (!existing) {
+      uniqueGuardians.set(identity, guardian);
+      continue;
+    }
+    uniqueGuardians.set(identity, {
+      name: existing.name || guardian.name,
+      guardianEmail: existing.guardianEmail || guardian.guardianEmail,
+      guardianPhone: existing.guardianPhone || guardian.guardianPhone,
+      externalId: existing.externalId || guardian.externalId,
+      relation: /^(secondary\s+)?guardian$/i.test(existing.relation) && guardian.relation ? guardian.relation : existing.relation,
+      billingContact: existing.billingContact || guardian.billingContact,
+      employer: existing.employer || guardian.employer,
+    });
+  }
+  return [...uniqueGuardians.values()];
 }
 
 function splitPeopleList(input: string) {
@@ -490,12 +584,10 @@ async function findProcareDuplicateMatches({
   const childName = procareChildFullName(rawData);
   const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
   const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
-  const guardianExternalId = externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]);
   const guardianName = value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]);
   const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
   const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]);
   const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
-  const relation = value(rawData, ["guardian relation", "parent relation", "payer relation"]) || "Guardian";
   const matches: ProcareDuplicateMatch[] = [];
 
   const familyWhere: Prisma.FamilyWhereInput[] = accountExternalId
@@ -600,46 +692,43 @@ async function findProcareDuplicateMatches({
     }
   }
 
-  const guardianImports = [
-    {
-      externalId: guardianExternalId,
-      name: guardianName,
-      email,
-      phone,
-      relation,
-    },
-    {
-      externalId: externalValue(rawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
-      name: value(rawData, ["secondary guardian", "secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"]),
-      email: value(rawData, ["secondary email", "secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"]).toLowerCase(),
-      phone: value(rawData, ["secondary phone", "secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"]),
-      relation: value(rawData, ["secondary relation", "secondary guardian relation", "parent 2 relation"]) || "Secondary Guardian",
-    },
-  ].filter((guardian) => guardian.externalId || guardian.name || guardian.email || guardian.phone);
+  const guardianImports = procareGuardianImports(rawData);
 
-  for (const guardianImport of guardianImports) {
-    const guardianWhere: Prisma.GuardianWhereInput[] = guardianImport.externalId
+  const guardianLookupWhere = guardianImports.flatMap((guardianImport): Prisma.GuardianWhereInput[] => (
+    guardianImport.externalId
       ? [{ sourceSystem: "procare", externalId: guardianImport.externalId }]
       : [
-          guardianImport.email ? { email: guardianImport.email } : undefined,
-          guardianImport.phone ? { phone: guardianImport.phone } : undefined,
+          guardianImport.guardianEmail ? { email: guardianImport.guardianEmail } : undefined,
+          guardianImport.guardianPhone ? { phone: guardianImport.guardianPhone } : undefined,
           guardianImport.name ? { fullName: guardianImport.name } : undefined,
-        ].filter(Boolean) as Prisma.GuardianWhereInput[];
-    const guardianCandidates = guardianWhere.length
-      ? await prisma.guardian.findMany({
-          where: { family: { centerId: targetCenterId }, OR: guardianWhere },
-          take: 8,
-          include: { family: { select: { name: true } } },
-        })
-      : [];
-    const scoredGuardians = guardianCandidates
+        ].filter(Boolean) as Prisma.GuardianWhereInput[]
+  ));
+  const guardianCandidates = guardianLookupWhere.length
+    ? await prisma.guardian.findMany({
+        where: { family: { centerId: targetCenterId }, OR: guardianLookupWhere },
+        take: Math.min(Math.max(guardianImports.length * 8, 8), 40),
+        include: { family: { select: { name: true } } },
+      })
+    : [];
+
+  for (const guardianImport of guardianImports) {
+    const matchingGuardianCandidates = guardianCandidates.filter((candidate) => (
+      guardianImport.externalId
+        ? candidate.sourceSystem === "procare" && candidate.externalId === guardianImport.externalId
+        : Boolean(
+            (guardianImport.guardianEmail && candidate.email === guardianImport.guardianEmail)
+            || (guardianImport.guardianPhone && candidate.phone === guardianImport.guardianPhone)
+            || (guardianImport.name && candidate.fullName === guardianImport.name)
+          )
+    ));
+    const scoredGuardians = matchingGuardianCandidates
       .map((candidate) => scoreProcareDuplicateCandidate(
         {
           entity: "guardian",
           externalId: guardianImport.externalId,
           name: guardianImport.name,
-          email: guardianImport.email,
-          phone: guardianImport.phone,
+          email: guardianImport.guardianEmail,
+          phone: guardianImport.guardianPhone,
           familyName,
           relation: guardianImport.relation,
         },
@@ -660,7 +749,7 @@ async function findProcareDuplicateMatches({
       matches.push(buildProcareDuplicateMatch({
         rowNumber,
         entity: "guardian",
-        importLabel: guardianImport.name || guardianImport.email || guardianImport.phone,
+        importLabel: guardianImport.name || guardianImport.guardianEmail || guardianImport.guardianPhone,
         candidates: scoredGuardians,
       }));
     }
@@ -706,6 +795,11 @@ async function previewImportRows({
   const classroomsReferenced = new Set<string>();
   const importFamilyKeys = new Set<string>();
   const importChildKeys = new Set<string>();
+  const importGuardianKeys = new Set<string>();
+  const familyChildLinkKeys = new Set<string>();
+  const familyGuardianLinkKeys = new Set<string>();
+  const familiesWithChildren = new Set<string>();
+  const familiesWithGuardians = new Set<string>();
   const importStaffKeys = new Set<string>();
   const duplicateReviewRows = new Set<number>();
   const duplicateMatches: ProcareDuplicateMatch[] = [];
@@ -719,6 +813,7 @@ async function previewImportRows({
     familyName?: string;
     childName?: string;
     staffName?: string;
+    relationshipSummary?: string;
     message?: string;
   }> = [];
 
@@ -812,6 +907,26 @@ async function previewImportRows({
     if (familyKey) importFamilyKeys.add(familyKey);
     const childKey = childName ? previewImportKey(targetCenter.id, familyIdentity, childExternalId || childName) : "";
     if (childKey) importChildKeys.add(childKey);
+    const guardianImports = procareGuardianImports(rawData);
+    if (familyKey && childKey) {
+      familyChildLinkKeys.add(previewImportKey(familyKey, childKey));
+      familiesWithChildren.add(familyKey);
+    }
+    for (const guardian of guardianImports) {
+      const guardianKey = previewImportIdentityKey(
+        targetCenter.id,
+        guardian.externalId,
+        guardian.guardianEmail,
+        guardian.guardianPhone,
+        guardian.name,
+      );
+      if (!guardianKey) continue;
+      importGuardianKeys.add(guardianKey);
+      if (familyKey) {
+        familyGuardianLinkKeys.add(previewImportKey(familyKey, guardianKey));
+        familiesWithGuardians.add(familyKey);
+      }
+    }
     if (value(rawData, ["balance", "account balance", "ledger balance", "amount due"])) balanceRows += 1;
     if (value(rawData, ["attendance date", "date", "absence date", "attendance status", "attendance"])) attendanceRows += 1;
     if (value(rawData, ["check in", "check-in", "time in", "check out", "check-out", "time out"])) checkLogRows += 1;
@@ -872,10 +987,14 @@ async function previewImportRows({
       action: rowDuplicateWarnings.length
         ? "Review duplicate matches"
         : runDatabasePreviewLookups
-          ? existingFamily ? "Update family" : "Create family"
+          ? existingFamily ? "Update and link profiles" : "Create and link profiles"
           : "Ready to import family",
       familyName: familyName || email || childName,
       childName: childName || undefined,
+      relationshipSummary: [
+        childName ? "1 child" : "",
+        guardianImports.length ? `${guardianImports.length} parent profile${guardianImports.length === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(" + ") || "Family profile",
       message: rowDuplicateWarnings.length ? rowDuplicateWarnings.map((match) => `${match.entity}: ${match.importLabel}`).join("; ") : undefined,
     });
   });
@@ -896,6 +1015,10 @@ async function previewImportRows({
     staffRows,
     sourceFamilyGroups: importFamilyKeys.size,
     sourceChildGroups: importChildKeys.size,
+    sourceGuardianGroups: importGuardianKeys.size,
+    familyChildLinks: familyChildLinkKeys.size,
+    familyGuardianLinks: familyGuardianLinkKeys.size,
+    familiesWithCompleteProfileLinks: [...familiesWithChildren].filter((familyKey) => familiesWithGuardians.has(familyKey)).length,
     sourceStaffGroups: importStaffKeys.size,
     matchedFamilies,
     newFamilies,
@@ -1856,11 +1979,9 @@ async function POSTHandler(request: NextRequest) {
       const familyName = procareFamilyName(rawData);
       const childName = procareChildFullName(rawData);
       const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
-      const guardianExternalId = externalValue(rawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]);
-      const guardianName = value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]);
       const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
-      const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]);
       const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
+      const guardianImports = procareGuardianImports(rawData);
       const balanceValue = value(rawData, ["balance", "account balance", "ledger balance", "amount due"]);
       const parsedBalance = parseCurrencyCents(balanceValue);
       if (parsedBalance.present && !parsedBalance.valid) {
@@ -1963,7 +2084,7 @@ async function POSTHandler(request: NextRequest) {
         billingContact: boolean;
         employer: string;
       }) => {
-        if (!name && !guardianEmail && !guardianPhone) return;
+        if (!name && !guardianEmail && !guardianPhone) return null;
         const fallbackGuardianMatchers = [
           guardianEmail ? { email: guardianEmail } : undefined,
           guardianPhone ? { phone: guardianPhone } : undefined,
@@ -1992,7 +2113,7 @@ async function POSTHandler(request: NextRequest) {
           : fallbackGuardians[0] ?? null;
         const guardianMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
         if (!existingGuardian) {
-          await prisma.guardian.create({
+          const createdGuardian = await prisma.guardian.create({
             data: {
               familyId: family.id,
               fullName: name || familyName || guardianEmail || guardianPhone,
@@ -2006,9 +2127,11 @@ async function POSTHandler(request: NextRequest) {
               externalId,
               customFields: guardianMetadata,
             },
+            select: { id: true },
           });
+          return createdGuardian.id;
         } else {
-          await prisma.guardian.update({
+          const updatedGuardian = await prisma.guardian.update({
             where: { id: existingGuardian.id },
             data: {
               familyId: family.id,
@@ -2023,51 +2146,16 @@ async function POSTHandler(request: NextRequest) {
               externalId: externalId || undefined,
               customFields: mergeCustomFields(existingGuardian.customFields, guardianMetadata),
             },
+            select: { id: true },
           });
+          return updatedGuardian.id;
         }
       };
 
-      await syncGuardian({
-        name: guardianName,
-        guardianEmail: email,
-        guardianPhone: phone,
-        externalId: guardianExternalId,
-        relation: value(rawData, ["guardian relation", "parent relation", "payer relation"]) || "Guardian",
-        billingContact: true,
-        employer: value(rawData, ["employer", "guardian employer", "parent employer", "payer employer"]) || "",
-      });
-
-      await syncGuardian({
-        name: value(rawData, ["secondary guardian", "secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"]),
-        guardianEmail: value(rawData, ["secondary email", "secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"]).toLowerCase(),
-        guardianPhone: value(rawData, ["secondary phone", "secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"]),
-        externalId: externalValue(rawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
-        relation: value(rawData, ["secondary relation", "secondary guardian relation", "parent 2 relation"]) || "Secondary Guardian",
-        billingContact: false,
-        employer: value(rawData, ["secondary employer", "secondary guardian employer", "secondary payer employer", "parent 2 employer"]) || "",
-      });
-
-      const accountPersonRecords = (() => {
-        try {
-          const parsed = JSON.parse(value(rawData, ["procare account person records"]) || "[]") as unknown;
-          return Array.isArray(parsed) ? parsed.map(embeddedImportRecord) : [];
-        } catch { return []; }
-      })();
-      const syncedPayerIds = new Set<string>();
-      for (const payer of accountPersonRecords) {
-        if (!/payer/i.test(value(payer, ["person type", "type"]))) continue;
-        const payerExternalId = externalValue(payer, ["person id", "payer id", "parent id"]);
-        if (!payerExternalId || syncedPayerIds.has(payerExternalId)) continue;
-        syncedPayerIds.add(payerExternalId);
-        await syncGuardian({
-          name: procareChildFullName(payer),
-          guardianEmail: value(payer, ["email", "email address"]).toLowerCase(),
-          guardianPhone: value(payer, ["phone 1", "phone 2", "phone 3", "phone 4", "phone 5", "phone"]),
-          externalId: payerExternalId,
-          relation: value(payer, ["relation", "relationship"]) || "Guardian",
-          billingContact: payerExternalId === guardianExternalId,
-          employer: value(payer, ["employer", "company", "workplace"]),
-        });
+      const linkedGuardianRecordIds = new Set<string>();
+      for (const guardian of guardianImports) {
+        const guardianRecordId = await syncGuardian(guardian);
+        if (guardianRecordId) linkedGuardianRecordIds.add(guardianRecordId);
       }
 
       let childId: string | undefined;
@@ -2299,17 +2387,6 @@ async function POSTHandler(request: NextRequest) {
       for (const relationship of relationshipRecords) {
         const name = clean(relationship.name);
         if (!name) continue;
-        if (relationship.guardian) {
-          await syncGuardian({
-            name,
-            guardianEmail: clean(relationship.email).toLowerCase(),
-            guardianPhone: clean(relationship.phone),
-            externalId: clean(relationship.externalId) || null,
-            relation: clean(relationship.relation) || "Guardian",
-            billingContact: false,
-            employer: "",
-          });
-        }
         if (relationship.emergency) {
           const contactPhone = clean(relationship.phone) || "Not imported";
           const contactExternalId = clean(relationship.externalId) || null;
@@ -2623,6 +2700,21 @@ async function POSTHandler(request: NextRequest) {
           },
         });
         ledgerRows += 1;
+      }
+
+      if (childId) {
+        const linkedChildCount = await prisma.child.count({ where: { id: childId, familyId: family.id } });
+        if (linkedChildCount !== 1) {
+          throw new Error("The child profile was not linked to its ProCare family. This row was rolled back safely.");
+        }
+      }
+      if (guardianImports.length) {
+        const linkedGuardianCount = await prisma.guardian.count({
+          where: { familyId: family.id, id: { in: [...linkedGuardianRecordIds] } },
+        });
+        if (linkedGuardianRecordIds.size !== guardianImports.length || linkedGuardianCount !== linkedGuardianRecordIds.size) {
+          throw new Error("One or more parent profiles were not linked to the correct ProCare family. This row was rolled back safely.");
+        }
       }
 
       return { familyId: family.id, childId };

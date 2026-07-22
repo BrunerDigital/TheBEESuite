@@ -55,6 +55,10 @@ type ImportPreview = {
   unmappedRows: number;
   familyRows: number;
   staffRows: number;
+  sourceGuardianGroups?: number;
+  familyChildLinks?: number;
+  familyGuardianLinks?: number;
+  familiesWithCompleteProfileLinks?: number;
   matchedFamilies: number;
   newFamilies: number;
   matchedChildren: number;
@@ -118,6 +122,7 @@ type ImportPreview = {
     familyName?: string;
     childName?: string;
     staffName?: string;
+    relationshipSummary?: string;
     message?: string;
   }>;
 };
@@ -362,13 +367,14 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             </DialogHeader>
             {preview ? (
               <div className="grid min-h-0 gap-4">
-                <div className="grid gap-2 px-5 sm:grid-cols-2 lg:grid-cols-5">
+                <div className="grid gap-2 px-5 sm:grid-cols-2 lg:grid-cols-6">
                   {[
                     ["Rows", preview.rows],
                     ["Ready", preview.readyRows],
                     ["Warnings", preview.warningRows],
-                    ["Families", preview.familyRows],
-                    ["Staff", preview.staffRows],
+                    ["Families", preview.newFamilies + preview.matchedFamilies],
+                    ["Children", preview.newChildren + preview.matchedChildren],
+                    ["Parent profiles", preview.sourceGuardianGroups ?? 0],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-lg border bg-background/60 p-3">
                       <div className="text-xs text-muted-foreground">{label}</div>
@@ -389,6 +395,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                         <TableHead>Center</TableHead>
                         <TableHead>Action</TableHead>
                         <TableHead>Record</TableHead>
+                        <TableHead>Relationships</TableHead>
                         <TableHead>Message</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -404,12 +411,13 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                           <TableCell className="max-w-48 whitespace-normal">{row.center}</TableCell>
                           <TableCell className="max-w-52 whitespace-normal">{row.action}</TableCell>
                           <TableCell className="max-w-64 whitespace-normal font-medium">{previewRecordLabel(row)}</TableCell>
+                          <TableCell className="max-w-52 whitespace-normal">{row.relationshipSummary ?? ""}</TableCell>
                           <TableCell className="max-w-72 whitespace-normal text-muted-foreground">{row.message ?? ""}</TableCell>
                         </TableRow>
                       ))}
                       {!reviewRows.length ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-muted-foreground">No mapped rows were returned for this preview.</TableCell>
+                          <TableCell colSpan={7} className="text-muted-foreground">No mapped rows were returned for this preview.</TableCell>
                         </TableRow>
                       ) : null}
                     </TableBody>
@@ -421,12 +429,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                     <div className="mt-1 font-semibold">{readyReviewRows.toLocaleString()} ready / {warningReviewRows.toLocaleString()} warnings</div>
                   </div>
                   <div className="rounded-lg border bg-background/60 p-3 text-sm">
-                    <div className="text-xs text-muted-foreground">Expected creates</div>
-                    <div className="mt-1 font-semibold">{preview.newFamilies.toLocaleString()} families / {preview.newChildren.toLocaleString()} children</div>
+                    <div className="text-xs text-muted-foreground">Family profile links</div>
+                    <div className="mt-1 font-semibold">{(preview.familyChildLinks ?? 0).toLocaleString()} child / {(preview.familyGuardianLinks ?? 0).toLocaleString()} parent</div>
                   </div>
                   <div className="rounded-lg border bg-background/60 p-3 text-sm">
-                    <div className="text-xs text-muted-foreground">Classrooms and balances</div>
-                    <div className="mt-1 font-semibold">{preview.classroomsReferenced.toLocaleString()} classrooms / {preview.balanceRows.toLocaleString()} balances</div>
+                    <div className="text-xs text-muted-foreground">Complete family groups</div>
+                    <div className="mt-1 font-semibold">{(preview.familiesWithCompleteProfileLinks ?? 0).toLocaleString()} with child + parent links</div>
                   </div>
                 </div>
               </div>
@@ -636,7 +644,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             <CheckCircle2 className="size-4" />
             <AlertTitle>Preview ready</AlertTitle>
             <AlertDescription>
-              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. {duplicateScanSummary}
+              {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.sourceGuardianGroups ?? 0} parent profiles, {preview.familyChildLinks ?? 0} family-child links, {preview.familyGuardianLinks ?? 0} family-parent links, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. {duplicateScanSummary}
             </AlertDescription>
           </Alert>
         ) : null}

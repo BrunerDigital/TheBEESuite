@@ -1,23 +1,23 @@
 export type ProcareImportRecord = Record<string, string>;
 
 export const PROCARE_FIELD_OPTIONS = [
-  { key: "account id", label: "Family / account ID", aliases: ["account key", "account number", "account no", "family id", "family key", "procare account id"] },
+  { key: "account id", label: "Family / account ID", aliases: ["account key", "account number", "account no", "account #", "family id", "family key", "family number", "household id", "procare account id"] },
   { key: "family name", label: "Family / household name", aliases: ["account name", "account", "family", "payer family", "household"] },
-  { key: "child id", label: "Child ID", aliases: ["child key", "student id", "student key", "procare child id"] },
-  { key: "child name", label: "Child full name", aliases: ["student name", "student", "child"] },
+  { key: "child id", label: "Child ID", aliases: ["child key", "child number", "child no", "child #", "student id", "student key", "student number", "student no", "student #", "procare child id"] },
+  { key: "child name", label: "Child full name", aliases: ["child full name", "student name", "student full name", "student", "child"] },
   { key: "child first name", label: "Child first name", aliases: ["student first name"] },
   { key: "child middle name", label: "Child middle name / initial", aliases: ["child middle initial", "student middle name", "middle initial"] },
   { key: "child last name", label: "Child last name", aliases: ["student last name"] },
   { key: "date of birth", label: "Child date of birth", aliases: ["dob", "birth date", "birthday", "birthdate"] },
-  { key: "child status", label: "Child enrollment status", aliases: ["enrollment status", "student status"] },
-  { key: "start date", label: "Enrollment start date", aliases: ["enrollment date", "begin date", "first day"] },
-  { key: "end date", label: "Enrollment end / withdrawal date", aliases: ["withdrawal date", "termination date"] },
-  { key: "classroom", label: "Classroom / room", aliases: ["classroom name", "room", "room name", "assigned classroom", "assigned room"] },
+  { key: "child status", label: "Child enrollment status", aliases: ["enrollment status", "student status", "enrollment state", "current enrollment status"] },
+  { key: "start date", label: "Enrollment start date", aliases: ["status start date", "enrollment date", "enrollment start date", "begin date", "first day"] },
+  { key: "end date", label: "Enrollment end / withdrawal date", aliases: ["status end date", "withdrawal date", "termination date", "last day"] },
+  { key: "classroom", label: "Classroom / room", aliases: ["primary classroom", "classroom name", "classroom description", "room", "room name", "assigned classroom", "assigned room", "program room"] },
   { key: "age group", label: "Age group / program", aliases: ["program"] },
-  { key: "guardian id", label: "Primary guardian ID", aliases: ["payer id", "primary payer id", "parent id", "payer 1 id", "primary parent id"] },
-  { key: "guardian name", label: "Primary guardian name", aliases: ["parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent"] },
-  { key: "guardian email", label: "Primary guardian email", aliases: ["parent email", "primary email", "payer email", "payer 1 email", "primary payer email"] },
-  { key: "guardian phone", label: "Primary guardian phone", aliases: ["parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"] },
+  { key: "guardian id", label: "Primary guardian ID", aliases: ["payer id", "primary payer id", "parent id", "guardian person id", "payer 1 id", "primary parent id"] },
+  { key: "guardian name", label: "Primary guardian name", aliases: ["parent/guardian", "parent guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent"] },
+  { key: "guardian email", label: "Primary guardian email", aliases: ["parent email", "guardian email address", "primary email", "payer email", "payer 1 email", "primary payer email"] },
+  { key: "guardian phone", label: "Primary guardian phone", aliases: ["parent phone", "guardian phone number", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"] },
   { key: "secondary guardian", label: "Secondary guardian name", aliases: ["secondary payer", "secondary parent", "parent 2", "payer 2", "spouse"] },
   { key: "secondary guardian id", label: "Secondary guardian ID", aliases: ["secondary payer id", "secondary parent id", "parent 2 id", "payer 2 id"] },
   { key: "secondary email", label: "Secondary guardian email", aliases: ["secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email"] },
@@ -33,7 +33,7 @@ export const PROCARE_FIELD_OPTIONS = [
 ] as const;
 
 function normalizedHeader(value: string) {
-  return value.toLowerCase().replace(/^\ufeff/, "").replace(/[_./\\-]+/g, " ").replace(/\s+/g, " ").trim();
+  return value.toLowerCase().replace(/^\ufeff/, "").replace(/#/g, " number ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 const recognizedHeaderMap = new Map(

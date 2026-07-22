@@ -143,8 +143,8 @@ function previewStatusVariant(status: "ready" | "warning") {
   return status === "ready" ? "default" : "destructive";
 }
 
-function normalizedSelectedFileName(filename: string) {
-  return filename.toLowerCase().replace(/\s+\(\d+\)(?=\.[^.]+$)/, "");
+function selectedFileIdentity(file: File) {
+  return `${file.name}\0${file.size}\0${file.lastModified}`;
 }
 
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
@@ -578,12 +578,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               id="procare-file"
               type="file"
               multiple
-              accept=".csv,.txt,.zip,text/csv,text/plain,application/zip"
               onChange={(event) => {
                 const addedFiles = Array.from(event.target.files ?? []);
                 setSelectedFiles((current) => {
-                  const merged = new Map(current.map((file) => [normalizedSelectedFileName(file.name), file]));
-                  for (const file of addedFiles) merged.set(normalizedSelectedFileName(file.name), file);
+                  const merged = new Map(current.map((file) => [selectedFileIdentity(file), file]));
+                  for (const file of addedFiles) merged.set(selectedFileIdentity(file), file);
                   return [...merged.values()];
                 });
                 event.target.value = "";
@@ -598,7 +597,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              You may add the four standard reports one at a time or select them together. The importer waits for enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv before processing. You can also choose the ZIP containing them.
+              File names and extensions do not matter. Select the four ProCare reports together, or choose the ZIP containing them. The importer identifies enrollment, parent, relationship, and child-information data from each file&apos;s columns, then asks you to review the correlations before importing.
             </p>
           </div>
         </div>

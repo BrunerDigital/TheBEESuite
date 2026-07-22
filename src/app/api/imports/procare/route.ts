@@ -36,7 +36,11 @@ import {
   procareSourceSha256,
 } from "@/lib/procare-import-review";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
-import { buildProcareMultiReportRows, buildProcareMultiReportRowsFromFiles } from "@/lib/procare-multi-report-import";
+import {
+  buildProcareMultiReportRows,
+  buildProcareMultiReportRowsFromFiles,
+  decodeProcareTabularBuffer,
+} from "@/lib/procare-multi-report-import";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -45,7 +49,7 @@ function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function parseDelimited(text: string, delimiter: "," | "\t" | "|") {
+function parseDelimited(text: string, delimiter: "," | "\t" | ";" | "|") {
   const rows: string[][] = [];
   let current = "";
   let row: string[] = [];
@@ -77,7 +81,7 @@ function parseDelimited(text: string, delimiter: "," | "\t" | "|") {
 }
 
 function parseImportRows(text: string) {
-  const candidates = [",", "\t", "|"] as const;
+  const candidates = [",", "\t", ";", "|"] as const;
   const parsed = candidates.map((delimiter) => {
     const rows = parseDelimited(text, delimiter);
     const score = rows.slice(0, 20).reduce((sum, row) => sum + row.length, 0);
@@ -1153,28 +1157,16 @@ function isZipBuffer(buffer: Buffer) {
   return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
 }
 
-function normalizedUploadName(filename: string) {
-  return (filename.toLowerCase().split(/[\\/]/).pop() ?? filename.toLowerCase())
-    .replace(/\s+\(\d+\)(?=\.[^.]+$)/, "");
-}
-
 async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
   if (!uploadedFiles.length) {
     return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text" };
   }
 
-  const standardReportNames = new Set(["enrollment.csv", "parentinfo.csv", "relationships.csv", "childinfo.csv"]);
-  const uploadedNames = uploadedFiles.map((file) => normalizedUploadName(file.name));
-  const isStandardReportSet = uploadedNames.some((name) => standardReportNames.has(name));
-  if (uploadedFiles.length > 1 || isStandardReportSet) {
+  if (uploadedFiles.length > 1) {
     const entries = new Map<string, Buffer>();
     for (const [index, file] of uploadedFiles.entries()) {
-      const fileName = uploadedNames[index];
-      if (!fileName.endsWith(".csv")) throw new Error("Select the four ProCare CSV reports together, or upload one ZIP file.");
-      if (!standardReportNames.has(fileName)) throw new Error(`${file.name} is not one of the four standard ProCare reports. Choose only enrollment.csv, parentinfo.csv, relationships.csv, and childinfo.csv, or upload a consolidated CSV by itself.`);
-      if (entries.has(fileName)) throw new Error(`More than one uploaded file is named ${fileName}.`);
-      entries.set(fileName, Buffer.from(await file.arrayBuffer()));
+      entries.set(`upload-${index + 1}:${file.name || "unnamed"}`, Buffer.from(await file.arrayBuffer()));
     }
     const records = await buildProcareMultiReportRowsFromFiles(entries);
     const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
@@ -1188,8 +1180,7 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
 
   const file = uploadedFiles[0];
   const buffer = Buffer.from(await file.arrayBuffer());
-  const fileName = file.name.toLowerCase();
-  if (fileName.endsWith(".zip") && isZipBuffer(buffer)) {
+  if (isZipBuffer(buffer)) {
     const records = await buildProcareMultiReportRows(buffer);
     const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
     return {
@@ -1199,12 +1190,7 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
       parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
     };
   }
-  const supportedExtension = fileName.endsWith(".csv") || fileName.endsWith(".txt");
-  if (!supportedExtension || isZipBuffer(buffer)) {
-    throw new Error("Only unencrypted ProCare CSV or text exports are supported.");
-  }
-
-  return { text: buffer.toString("utf8"), filename: file.name, sourceType: "csv_file" };
+  return { text: decodeProcareTabularBuffer(buffer), filename: file.name || "unnamed-procare-export", sourceType: "csv_file" };
 }
 
 const importBackupInclude = {

@@ -7,6 +7,15 @@ type ParsedCsv = {
   rows: CsvRow[];
 };
 
+type ProcareReportKind = keyof typeof PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports;
+
+type DetectedProcareReport = {
+  sourceName: string;
+  parsed: ParsedCsv;
+  score: number;
+  aliasMatches: number;
+};
+
 type ProcareImportDiagnostic = {
   code:
     | "account_link_missing"
@@ -31,7 +40,7 @@ type ProcareImportDiagnostic = {
 };
 
 export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
-  version: 3,
+  version: 4,
   reports: {
     enrollment: {
       requiredColumns: ["Child ID"],
@@ -67,8 +76,97 @@ export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
 } as const;
 
 function normalizeColumnName(value: string) {
-  return value.replace(/^\ufeff/, "").trim().toLowerCase().replace(/\s+/g, " ");
+  return value.replace(/^\ufeff/, "").trim().toLowerCase().replace(/#/g, " number ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
+
+const REPORT_COLUMN_ALIASES: Record<ProcareReportKind, Record<string, readonly string[]>> = {
+  enrollment: {
+    "Child ID": ["child id", "child key", "child number", "child no", "child #", "student id", "student key", "student number", "student no", "student #"],
+    "Person ID": ["person id", "person key", "child person id", "student person id"],
+    "Person Type": ["person type", "record type", "member type"],
+    "Full Name": ["full name", "child name", "child full name", "student name", "student full name"],
+    "First Name": ["first name", "child first name", "student first name", "given name"],
+    "Middle Initial": ["middle initial", "middle name", "child middle name", "student middle name"],
+    "Last Name": ["last name", "child last name", "student last name", "surname"],
+    "Date of Birth": ["date of birth", "dob", "birth date", "birthdate", "birthday"],
+    Gender: ["gender", "sex"],
+    "Primary Classroom": ["primary classroom", "classroom", "classroom name", "room", "room name", "assigned classroom", "assigned room", "program room"],
+    "Classroom ID": ["classroom id", "class id", "room id", "room key", "classroom key"],
+    "Enrollment Status": ["enrollment status", "child status", "student status", "enrollment state", "current enrollment status"],
+    "Status Start Date": ["status start date", "start date", "enrollment start date", "enrollment date", "begin date", "first day"],
+    "Status End Date": ["status end date", "end date", "withdrawal date", "termination date", "last day"],
+    "Relationship 1 Id": ["relationship 1 id", "relationship 1 person id", "related person 1 id", "contact 1 id"],
+    "Relationship 2 Id": ["relationship 2 id", "relationship 2 person id", "related person 2 id", "contact 2 id"],
+    "Relationship 3 Id": ["relationship 3 id", "relationship 3 person id", "related person 3 id", "contact 3 id"],
+    "Row ID": ["row id", "record id", "enrollment row id"],
+  },
+  parentinfo: {
+    "Account ID": ["account id", "account key", "account number", "account no", "account #", "family id", "family key", "family number", "household id"],
+    "Person ID": ["person id", "person key", "contact id", "parent id", "guardian id", "payer id"],
+    "Person Type": ["person type", "contact type", "member type", "role", "account person type"],
+    "Person Sort ID": ["person sort id", "person sort order", "sort id", "sort order"],
+    "Full Name": ["full name", "person name", "contact name", "parent name", "guardian name", "payer name"],
+    "First Name": ["first name", "given name"],
+    "Middle Initial": ["middle initial", "middle name"],
+    "Last Name": ["last name", "surname", "family name"],
+    Email: ["email", "email address", "e mail", "primary email"],
+    "Add 1, Line 1": ["add 1 line 1", "address 1", "address line 1", "street address", "street"],
+    "Add 1, Line 2": ["add 1 line 2", "address 2", "address line 2", "unit", "suite"],
+    "Add 1, City": ["add 1 city", "city"],
+    "Add 1, Region": ["add 1 region", "state", "province", "region"],
+    "Add 1, Postal Code": ["add 1 postal code", "postal code", "zip", "zip code"],
+    "Phone 1": ["phone 1", "primary phone", "phone", "phone number", "mobile phone", "cell phone"],
+    "Phone 2": ["phone 2", "secondary phone", "home phone"],
+  },
+  relationships: {
+    "Child ID": ["child id", "child key", "child number", "child no", "child #", "student id", "student key", "student number", "student no", "student #"],
+    "Row ID": ["row id", "record id", "relationship id", "relationship row id"],
+    "Person ID": ["person id", "person key", "contact id", "related person id", "parent id", "guardian id"],
+    "Person Type": ["person type", "contact type", "member type", "role", "relationship person type"],
+    "Person Sort Order": ["person sort order", "person sort id", "sort order", "sort id"],
+    "Full Name": ["full name", "person name", "contact name", "parent name", "guardian name"],
+    "First Name": ["first name", "given name"],
+    "Middle Initial": ["middle initial", "middle name"],
+    "Last Name": ["last name", "surname", "family name"],
+    Email: ["email", "email address", "e mail", "primary email"],
+    "Relationship Type": ["relationship type", "relationship", "relation", "relation type", "relationship description"],
+    "Lives With": ["lives with", "liveswith", "resides with", "household member"],
+    Emergency: ["emergency", "emergency contact", "is emergency contact"],
+    "Authorized Pickup": ["authorized pickup", "authorised pickup", "pickup authorized", "can pickup", "pickup permission"],
+    "Add 1, Line 1": ["add 1 line 1", "address 1", "address line 1", "street address", "street"],
+    "Add 1, Line 2": ["add 1 line 2", "address 2", "address line 2", "unit", "suite"],
+    "Add 1, City": ["add 1 city", "city"],
+    "Add 1, Region": ["add 1 region", "state", "province", "region"],
+    "Add 1, Postal Code": ["add 1 postal code", "postal code", "zip", "zip code"],
+    "Phone 1": ["phone 1", "primary phone", "phone", "phone number", "mobile phone", "cell phone"],
+    "Phone 2": ["phone 2", "secondary phone", "home phone"],
+    "Phone 3": ["phone 3", "work phone"],
+    "Phone 4": ["phone 4"],
+    "Phone 5": ["phone 5"],
+  },
+  childinfo: {
+    "Child ID": ["child id", "child key", "child number", "child no", "child #", "student id", "student key", "student number", "student no", "student #"],
+    "Person ID": ["person id", "person key", "child person id", "student person id"],
+    "Full Name": ["full name", "child name", "child full name", "student name", "student full name"],
+    "Category Description": ["category description", "category", "information category", "child info category", "item category"],
+    "Category Sort ID": ["category sort id", "category sort order", "category order"],
+    "Item Description": ["item description", "item", "information item", "detail", "description"],
+    "Item Sort ID": ["item sort id", "item sort order", "item order"],
+    "Item Is Active": ["item is active", "is active", "active", "item active", "active item"],
+  },
+};
+
+const REPORT_KINDS = Object.keys(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports) as ProcareReportKind[];
+
+function aliasesForReport(reportKind: ProcareReportKind) {
+  return new Map(Object.entries(REPORT_COLUMN_ALIASES[reportKind]).flatMap(([canonical, aliases]) => (
+    [canonical, ...aliases].map((alias) => [normalizeColumnName(alias), canonical] as const)
+  )));
+}
+
+const REPORT_ALIAS_LOOKUPS = Object.fromEntries(
+  REPORT_KINDS.map((reportKind) => [reportKind, aliasesForReport(reportKind)]),
+) as Record<ProcareReportKind, Map<string, string>>;
 
 const rowLookupCache = new WeakMap<CsvRow, Map<string, string>>();
 
@@ -94,7 +192,7 @@ function checked(value: string) {
   return /^(checked|yes|true|1|x)$/i.test(value.trim());
 }
 
-function decodeCsvBuffer(buffer: Buffer) {
+export function decodeProcareTabularBuffer(buffer: Buffer) {
   if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) return buffer.subarray(2).toString("utf16le");
   if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
     return new TextDecoder("utf-16be").decode(buffer.subarray(2));
@@ -108,7 +206,26 @@ function decodeCsvBuffer(buffer: Buffer) {
   }
 }
 
+function detectDelimiter(text: string) {
+  const sample = text.split(/\r?\n/).find((line) => line.trim()) ?? "";
+  const candidates = [",", "\t", ";", "|"] as const;
+  const counts = candidates.map((delimiter) => {
+    let count = 0;
+    let quoted = false;
+    for (let index = 0; index < sample.length; index += 1) {
+      const char = sample[index];
+      if (char === '"' && quoted && sample[index + 1] === '"') index += 1;
+      else if (char === '"') quoted = !quoted;
+      else if (char === delimiter && !quoted) count += 1;
+    }
+    return { delimiter, count };
+  }).sort((left, right) => right.count - left.count);
+  if (!counts[0]?.count) throw new Error("The uploaded report does not contain recognizable tabular columns.");
+  return counts[0].delimiter;
+}
+
 function parseCsv(text: string, reportName: string): ParsedCsv {
+  const delimiter = detectDelimiter(text);
   const values: string[][] = [];
   let fieldValue = "";
   let row: string[] = [];
@@ -121,7 +238,7 @@ function parseCsv(text: string, reportName: string): ParsedCsv {
       index += 1;
     } else if (char === '"') {
       quoted = !quoted;
-    } else if (char === "," && !quoted) {
+    } else if (char === delimiter && !quoted) {
       row.push(fieldValue.trim());
       fieldValue = "";
     } else if ((char === "\n" || char === "\r") && !quoted) {
@@ -157,6 +274,119 @@ function parseCsv(text: string, reportName: string): ParsedCsv {
   };
 }
 
+function canonicalizeReport(parsed: ParsedCsv, reportKind: ProcareReportKind): ParsedCsv & { aliasMatches: number } {
+  const lookup = REPORT_ALIAS_LOOKUPS[reportKind];
+  const canonicalNames = new Map(Object.keys(REPORT_COLUMN_ALIASES[reportKind]).map((name) => [normalizeColumnName(name), name]));
+  const exactTargets = new Set(parsed.headers.map(normalizeColumnName).filter((header) => canonicalNames.has(header)));
+  const usedTargets = new Set(exactTargets);
+  const canonicalHeaders = parsed.headers.map((header) => {
+    const normalized = normalizeColumnName(header);
+    const exactCanonical = canonicalNames.get(normalized);
+    if (exactCanonical) {
+      return exactCanonical;
+    }
+    const suggested = lookup.get(normalized);
+    if (!suggested || usedTargets.has(normalizeColumnName(suggested))) return header;
+    usedTargets.add(normalizeColumnName(suggested));
+    return suggested;
+  });
+  const duplicateCanonicalHeaders = canonicalHeaders
+    .map(normalizeColumnName)
+    .filter((header, index, headers) => header && headers.indexOf(header) !== index);
+  if (duplicateCanonicalHeaders.length) {
+    throw new Error(`Multiple uploaded columns resolve to the same ${reportKind} field: ${[...new Set(duplicateCanonicalHeaders)].join(", ")}. Review the export's duplicate headings.`);
+  }
+  const aliasMatches = parsed.headers.filter((header, index) => canonicalHeaders[index] !== header).length;
+  return {
+    headers: canonicalHeaders,
+    aliasMatches,
+    rows: parsed.rows.map((row) => Object.fromEntries(parsed.headers.flatMap((sourceHeader, index) => {
+      const canonicalHeader = canonicalHeaders[index];
+      const sourceValue = row[sourceHeader] ?? "";
+      return canonicalHeader === sourceHeader
+        ? [[sourceHeader, sourceValue]]
+        : [[sourceHeader, sourceValue], [canonicalHeader, sourceValue]];
+    }))),
+  };
+}
+
+const REPORT_DISTINCTIVE_COLUMNS: Record<ProcareReportKind, readonly string[]> = {
+  enrollment: ["Enrollment Status", "Primary Classroom", "Date of Birth", "Relationship 1 Id", "Status Start Date"],
+  parentinfo: ["Account ID", "Account Key", "Person Sort ID", "Email", "Phone 1"],
+  relationships: ["Relationship Type", "Lives With", "Emergency", "Authorized Pickup", "Person Sort Order"],
+  childinfo: ["Category Description", "Item Description", "Item Is Active", "Category Sort ID"],
+};
+
+function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: ProcareReportKind): DetectedProcareReport | null {
+  const canonicalized = canonicalizeReport(parsed, reportKind);
+  const available = new Set(canonicalized.headers.map(normalizeColumnName));
+  const required = PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports[reportKind].requiredColumns;
+  if (!required.every((column) => available.has(normalizeColumnName(column)))) return null;
+  const distinctiveMatches = REPORT_DISTINCTIVE_COLUMNS[reportKind]
+    .filter((column) => available.has(normalizeColumnName(column))).length;
+  if (!distinctiveMatches) return null;
+  return {
+    sourceName,
+    parsed: canonicalized,
+    score: required.length * 100 + distinctiveMatches * 10 + canonicalized.aliasMatches,
+    aliasMatches: canonicalized.aliasMatches,
+  };
+}
+
+function detectReports(entries: Map<string, Buffer>) {
+  const parsedEntries = [...entries].flatMap(([sourceName, buffer]) => {
+    try {
+      return [{ sourceName, parsed: parseCsv(decodeProcareTabularBuffer(buffer), sourceName) }];
+    } catch {
+      return [];
+    }
+  });
+  const candidates = Object.fromEntries(REPORT_KINDS.map((reportKind) => [
+    reportKind,
+    parsedEntries.flatMap((entry) => {
+      try {
+        const candidate = reportCandidate(entry.sourceName, entry.parsed, reportKind);
+        return candidate ? [candidate] : [];
+      } catch {
+        return [];
+      }
+    }).sort((left, right) => right.score - left.score || left.sourceName.localeCompare(right.sourceName)),
+  ])) as Record<ProcareReportKind, DetectedProcareReport[]>;
+
+  const best: { score: number; reports?: Record<ProcareReportKind, DetectedProcareReport> } = { score: Number.NEGATIVE_INFINITY };
+  const choose = (
+    index: number,
+    usedNames: Set<string>,
+    selected: Partial<Record<ProcareReportKind, DetectedProcareReport>>,
+    score: number,
+  ) => {
+    if (index === REPORT_KINDS.length) {
+      const reports = { ...selected } as Record<ProcareReportKind, DetectedProcareReport>;
+      if (score > best.score) {
+        best.score = score;
+        best.reports = reports;
+      }
+      return;
+    }
+    const reportKind = REPORT_KINDS[index];
+    for (const candidate of candidates[reportKind]) {
+      if (usedNames.has(candidate.sourceName)) continue;
+      usedNames.add(candidate.sourceName);
+      selected[reportKind] = candidate;
+      choose(index + 1, usedNames, selected, score + candidate.score);
+      delete selected[reportKind];
+      usedNames.delete(candidate.sourceName);
+    }
+  };
+  choose(0, new Set(), {}, 0);
+  if (!best.reports) {
+    const missing = REPORT_KINDS.filter((reportKind) => !candidates[reportKind].length);
+    const missingLabels = missing.length ? missing.join(", ") : "a unique set of enrollment, parent, relationship, and child-information reports";
+    throw new Error(`The uploaded files could not be identified safely by their columns. Missing or ambiguous report data: ${missingLabels}. Filenames do not matter; include all four ProCare reports and keep their header rows.`);
+  }
+  return best.reports;
+}
+
 function requireColumns(reportName: string, parsed: ParsedCsv, requiredColumns: readonly string[]) {
   const available = new Set(parsed.headers.map(normalizeColumnName));
   const missing = requiredColumns.filter((column) => !available.has(normalizeColumnName(column)));
@@ -183,7 +413,7 @@ function zipEntries(buffer: Buffer) {
           stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
           stream.on("error", reject);
           stream.on("end", () => {
-            const filename = entry.fileName.toLowerCase().split("/").pop() ?? entry.fileName.toLowerCase();
+            const filename = entry.fileName.replaceAll("\\", "/");
             if (entries.has(filename)) {
               zip.close();
               return reject(new Error(`The ProCare ZIP contains more than one file named ${filename}.`));
@@ -380,19 +610,16 @@ function diagnosticForResolution(
 }
 
 export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, Buffer>): Promise<Array<Record<string, string>>> {
-  const required = ["enrollment.csv", "parentinfo.csv", "relationships.csv", "childinfo.csv"];
-  const missing = required.filter((name) => !entries.has(name));
-  if (missing.length) throw new Error(`The ProCare export is missing: ${missing.join(", ")}. Select all four CSV reports together or upload their ZIP.`);
-
-  const parsedReports = Object.fromEntries(required.map((name) => [name, parseCsv(decodeCsvBuffer(entries.get(name)!), name)])) as Record<string, ParsedCsv>;
+  const detectedReports = detectReports(entries);
+  const parsedReports = Object.fromEntries(REPORT_KINDS.map((reportKind) => [reportKind, detectedReports[reportKind].parsed])) as Record<ProcareReportKind, ParsedCsv>;
   for (const [reportName, coverage] of Object.entries(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports)) {
-    requireColumns(`${reportName}.csv`, parsedReports[`${reportName}.csv`], coverage.requiredColumns);
+    requireColumns(reportName, parsedReports[reportName as ProcareReportKind], coverage.requiredColumns);
   }
 
-  const enrollment = parsedReports["enrollment.csv"].rows;
-  const parents = parsedReports["parentinfo.csv"].rows;
-  const relationships = parsedReports["relationships.csv"].rows;
-  const childInfo = parsedReports["childinfo.csv"].rows;
+  const enrollment = parsedReports.enrollment.rows;
+  const parents = parsedReports.parentinfo.rows;
+  const relationships = parsedReports.relationships.rows;
+  const childInfo = parsedReports.childinfo.rows;
 
   const accountsByPerson = new Map<string, Set<string>>();
   const peopleByAccount = new Map<string, CsvRow[]>();
@@ -754,6 +981,10 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
   );
   const datasetCoverage = {
     version: PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version,
+    reportDetection: Object.fromEntries(REPORT_KINDS.map((reportKind) => [reportKind, {
+      sourceName: detectedReports[reportKind].sourceName,
+      matchedHeaderAliases: detectedReports[reportKind].aliasMatches,
+    }])),
     sourceRows: {
       enrollment: enrollment.length,
       accountPeople: parents.length,

@@ -160,7 +160,7 @@ test("multi-report account joins merge parents for a child shared by two account
   assert.equal(relationships[0].guardian, false);
   assert.equal(relationships[0].emergency, false);
   assert.equal(relationships[0].authorizedPickup, false);
-  assert.equal(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version, 3);
+  assert.equal(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version, 4);
 });
 
 test("multi-report rows retain complete relationship, allergy, and child-info source records with coverage", async () => {
@@ -336,6 +336,41 @@ test("multi-report CSV parsing accepts UTF-16LE exports and rejects missing iden
   invalid.set("relationships.csv", csv(["Child ID", "Row ID", "Person Type"], [["child-1", "rel-1", "Relationship"]]));
   await assert.rejects(
     buildProcareMultiReportRowsFromFiles(invalid),
-    /relationships\.csv is missing required columns: Person ID/,
+    /Missing or ambiguous report data: relationships/,
   );
+});
+
+test("multi-report detection ignores filenames and canonicalizes common header variations", async () => {
+  const files = new Map<string, Buffer>([
+    ["July roster from office.dat", csv(
+      ["Student Number", "Child Person ID", "Child Full Name", "Given Name", "Surname", "Birthdate", "Room Name", "Room Key", "Enrollment State", "First Day", "Contact 1 ID"],
+      [["child-1", "child-person-1", "Avery Rivera", "Avery", "Rivera", "2022-03-04", "Preschool", "room-1", "Active", "2026-01-01", "person-1"]],
+    )],
+    ["contacts export without extension", csv(
+      ["Family Number", "Contact ID", "Role", "Sort Order", "Contact Name", "Given Name", "Surname", "Email Address", "Phone Number"],
+      [["account-1", "person-1", "Payer", "1", "Jordan Rivera", "Jordan", "Rivera", "parent@example.test", "5551112222"]],
+    )],
+    ["permissions report.txt", csv(
+      ["Student Number", "Relationship ID", "Related Person ID", "Relationship Person Type", "Contact Name", "Relation", "Resides With", "Is Emergency Contact", "Can Pickup", "Phone Number"],
+      [["child-1", "rel-1", "person-1", "Relationship", "Jordan Rivera", "Parent", "Yes", "Yes", "Yes", "5551112222"]],
+    )],
+    ["health details.anything", Buffer.from([
+      ["Student Number", "Information Category", "Information Item", "Active Item"],
+      ["child-1", "Allergy", "Peanuts", "Yes"],
+    ].map((row) => row.join("\t")).join("\r\n"))],
+  ]);
+
+  const [row] = await buildProcareMultiReportRowsFromFiles(files);
+  const coverage = JSON.parse(row["procare dataset coverage manifest"]);
+
+  assert.equal(row["account id"], "account-1");
+  assert.equal(row["child id"], "child-1");
+  assert.equal(row["child name"], "Avery Rivera");
+  assert.equal(row["guardian id"], "person-1");
+  assert.equal(row["classroom"], "Preschool");
+  assert.equal(row["child status"], "Active");
+  assert.equal(row["allergies"], "Peanuts");
+  assert.equal(JSON.parse(row["procare relationship records"])[0].authorizedPickup, true);
+  assert.equal(coverage.reportDetection.enrollment.sourceName, "July roster from office.dat");
+  assert.ok(coverage.reportDetection.enrollment.matchedHeaderAliases > 0);
 });

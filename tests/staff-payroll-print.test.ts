@@ -85,3 +85,11 @@ test("payroll rows exclude previous employees", async () => {
   assert.match(payrollRows, /return activeStaff/);
   assert.doesNotMatch(payrollRows, /return allTeacherRows/);
 });
+
+test("manual payroll edits cannot be lost by switching staff before saving", async () => {
+  const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
+  assert.match(source, /disabled=\{clockEditsDirty\}/);
+  assert.match(source, /Save or reload the current employee's punches/);
+  assert.match(source, /Not saved:/);
+  assert.match(source, /punches are saved/);
+});

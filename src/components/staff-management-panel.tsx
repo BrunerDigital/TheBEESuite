@@ -347,6 +347,8 @@ export function StaffManagementPanel({
   const [clockEditRows, setClockEditRows] = useState<ClockEditRow[]>(() =>
     clockEditRowsFromEvents(readStaffClockState(allTeacherRows[0]?.customFields).events, readCenterLocationTimeZone(centerById.get(allTeacherRows[0]?.centerId ?? ""))),
   );
+  const [clockEditsDirty, setClockEditsDirty] = useState(false);
+  const [clockEditMessage, setClockEditMessage] = useState("");
   const defaultPayrollTimeZone = readCenterLocationTimeZone(centers[0]);
   const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
   const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
@@ -606,12 +608,16 @@ export function StaffManagementPanel({
   }
 
   function updateClockEditRow(rowId: string, patch: Partial<ClockEditRow>) {
+    setClockEditsDirty(true);
+    setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) =>
       current.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
     );
   }
 
   function addClockEditRow() {
+    setClockEditsDirty(true);
+    setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) => [
       ...current,
       {
@@ -624,13 +630,27 @@ export function StaffManagementPanel({
   }
 
   function removeClockEditRow(rowId: string) {
+    setClockEditsDirty(true);
+    setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) => current.filter((row) => row.id !== rowId));
   }
 
   function selectClockStaffForEdit(staffId: string) {
+    if (clockEditsDirty) {
+      setClockEditMessage("Save or reload the current employee's punches before selecting another employee.");
+      return;
+    }
     setClockStaffId(staffId);
     const teacher = allTeacherRows.find((row) => row.id === staffId);
     setClockEditRows(clockEditRowsFromEvents(readStaffClockState(teacher?.customFields).events, readCenterLocationTimeZone(centerById.get(teacher?.centerId ?? ""))));
+    setClockEditMessage("");
+  }
+
+  function reloadSavedClockEdits() {
+    if (!clockTeacher) return;
+    setClockEditRows(clockEditRowsFromEvents(clockState.events, clockTimeZone));
+    setClockEditsDirty(false);
+    setClockEditMessage("Reloaded the saved punches.");
   }
 
   function saveTimeCardEdits() {
@@ -644,6 +664,7 @@ export function StaffManagementPanel({
       const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, clockTimeZone);
       if (!occurredAt) {
         setErrorMessage("Every punch needs a valid date and time.");
+        setClockEditMessage("Not saved: every punch needs a valid date and time.");
         return;
       }
       events.push({
@@ -669,9 +690,12 @@ export function StaffManagementPanel({
       const json = await response.json().catch(() => null) as { error?: string; record?: { customFields?: unknown } } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Time card edits could not be saved.");
+        setClockEditMessage(`Not saved: ${json?.error || "Time card edits could not be saved."}`);
         return;
       }
       setStatusMessage(`${clockTeacher.user.name}'s time card was saved.`);
+      setClockEditsDirty(false);
+      setClockEditMessage(`${clockTeacher.user.name}'s punches are saved.`);
       if (json?.record?.customFields !== undefined) {
         setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
       } else {
@@ -1115,6 +1139,7 @@ export function StaffManagementPanel({
                 <select
                   className={nativeSelectClassName}
                   value={clockTeacher?.id ?? ""}
+                  disabled={clockEditsDirty}
                   onChange={(event) => selectClockStaffForEdit(event.target.value)}
                 >
                   {allTeacherRows.map((teacher) => (
@@ -1205,11 +1230,19 @@ export function StaffManagementPanel({
               </div>
 
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">{clockEditRows.length} punch{clockEditRows.length === 1 ? "" : "es"} ready to save</div>
-                <Button type="button" disabled={isPending || !clockTeacher} onClick={saveTimeCardEdits}>
-                  <Save data-icon="inline-start" />
-                  Save time card
-                </Button>
+                <div className="space-y-1 text-xs">
+                  <div className={clockEditsDirty ? "font-medium text-amber-700 dark:text-amber-300" : "text-muted-foreground"}>
+                    {clockEditRows.length} punch{clockEditRows.length === 1 ? "" : "es"} · {clockEditsDirty ? "Unsaved changes" : "No unsaved changes"}
+                  </div>
+                  {clockEditMessage ? <div role="status" aria-live="polite">{clockEditMessage}</div> : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {clockEditsDirty ? <Button type="button" variant="outline" disabled={isPending} onClick={reloadSavedClockEdits}>Reload saved punches</Button> : null}
+                  <Button type="button" disabled={isPending || !clockTeacher || !clockEditsDirty} onClick={saveTimeCardEdits}>
+                    <Save data-icon="inline-start" />
+                    {isPending ? "Saving..." : clockEditsDirty ? "Save time card" : "Saved"}
+                  </Button>
+                </div>
               </div>
             </div>
           </section>

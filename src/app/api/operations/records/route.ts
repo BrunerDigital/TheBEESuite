@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { readCenterTimeZone } from "@/lib/attendance-state";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
@@ -1302,7 +1302,7 @@ async function POSTHandler(request: NextRequest) {
     if (staff.user.role !== UserRole.TEACHER) {
       return NextResponse.json({ ok: false, error: "Only teacher profiles can use staff time clock actions." }, { status: 400 });
     }
-    const timeZone = readCenterTimeZone(staff.center);
+    const timeZone = readCenterLocationTimeZone(staff.center);
     centerId = staff.centerId;
 
     if (hasEventEditPayload) {

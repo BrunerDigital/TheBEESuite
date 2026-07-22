@@ -125,6 +125,44 @@ test("multi-report account joins retain non-PII diagnostics instead of guessing 
   assert.doesNotMatch(diagnosticText, /Private Adult|private@example|account-secret|person-shared/);
 });
 
+test("multi-report account joins merge parents for a child shared by two accounts when one unique sibling household exists", async () => {
+  const files = standardFiles({
+    enrollment: [
+      ["child-shared", "person-child-shared", "Child", "Harley Example", "Example", "Harley", "", "2022-01-01", "F", "PreK", "room-1", "Enrolled", "", "", "person-child-shared", "", "", "child-row-shared"],
+      ["child-sibling", "person-child-sibling", "Child", "Alayna Example", "Example", "Alayna", "", "2025-01-01", "F", "Infants", "room-2", "Enrolled", "", "", "person-parent-b", "", "", "child-row-sibling"],
+    ],
+    parents: [
+      ["account-a", "example", "person-child-shared", "Payer", "0", "Harley Example", "Example", "Harley", "", "", "", "", "", "", "", "", "duplicate child payer row"],
+      ["account-a", "example", "person-parent-a", "Payer", "1", "Garrett Example", "Example", "Garrett", "", "garrett@example.test", "", "", "", "", "", "", "first household parent"],
+      ["account-a", "example", "person-child-shared", "Child", "1001", "Harley Example", "Example", "Harley", "", "", "", "", "", "", "", "", "shared child"],
+      ["account-b", "example", "person-parent-b", "Payer", "0", "Jeyden Example", "Example", "Jeyden", "", "jeyden@example.test", "", "", "", "", "", "", "sibling household parent"],
+      ["account-b", "example", "person-child-shared", "Child", "1001", "Harley Example", "Example", "Harley", "", "", "", "", "", "", "", "", "shared child"],
+      ["account-b", "example", "person-child-sibling", "Child", "1002", "Alayna Example", "Example", "Alayna", "", "", "", "", "", "", "", "", "sibling"],
+    ],
+    relationships: [
+      ["child-shared", "rel-self", "person-child-shared", "Relationship", "1", "Harley Example", "Example", "Harley", "", "", "self source row", "Unknown", "Checked", "Checked", "Checked", "", "", "", "", "", "", "", "", ""],
+      ["child-sibling", "rel-parent-b", "person-parent-b", "Relationship", "1", "Jeyden Example", "Example", "Jeyden", "", "jeyden@example.test", "parent", "Parent", "Checked", "Checked", "Checked", "", "", "", "", "", "", "", "", ""],
+    ],
+  });
+
+  const rows = await buildProcareMultiReportRowsFromFiles(files);
+  const shared = rows.find((row) => row["child id"] === "child-shared")!;
+  const diagnostics = JSON.parse(shared["procare import diagnostics"]);
+  const accountPeople = JSON.parse(shared["procare account person records"]);
+  const relationships = JSON.parse(shared["procare relationship records"]);
+
+  assert.equal(shared["account id"], "account-b");
+  assert.equal(shared["guardian id"], "person-parent-b");
+  assert.equal(shared["secondary guardian id"], "person-parent-a");
+  assert.equal(shared["import warning"], "");
+  assert.equal(diagnostics[0].code, "shared_child_accounts_merged");
+  assert.equal(accountPeople.length, 6);
+  assert.equal(relationships[0].guardian, false);
+  assert.equal(relationships[0].emergency, false);
+  assert.equal(relationships[0].authorizedPickup, false);
+  assert.equal(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version, 3);
+});
+
 test("multi-report rows retain complete relationship, allergy, and child-info source records with coverage", async () => {
   const files = standardFiles({
     enrollment: [

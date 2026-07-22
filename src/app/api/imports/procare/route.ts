@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -225,7 +226,7 @@ function procareRelationshipRecords(rawData: Record<string, string>): ProcareRel
   }
 }
 
-function procareGuardianImports(rawData: Record<string, string>): ProcareGuardianImport[] {
+function procareGuardianImports(rawData: Record<string, string>, childPersonExternalId = ""): ProcareGuardianImport[] {
   const guardianImports: ProcareGuardianImport[] = [
     {
       name: value(rawData, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father"]),
@@ -253,6 +254,7 @@ function procareGuardianImports(rawData: Record<string, string>): ProcareGuardia
       for (const person of accountPeople) {
         const fields = embeddedImportRecord(person);
         if (!/payer/i.test(value(fields, ["person type", "type"]))) continue;
+        if (childPersonExternalId && externalValue(fields, ["person id"]) === childPersonExternalId) continue;
         guardianImports.push({
           name: procareChildFullName(fields),
           guardianEmail: value(fields, ["email", "email address"]).toLowerCase(),
@@ -693,7 +695,10 @@ async function findProcareDuplicateMatches({
     }
   }
 
-  const guardianImports = procareGuardianImports(rawData);
+  const guardianImports = procareGuardianImports(
+    rawData,
+    externalValue(rawData, ["child person id"]) ?? "",
+  );
 
   const guardianLookupWhere = guardianImports.flatMap((guardianImport): Prisma.GuardianWhereInput[] => (
     guardianImport.externalId
@@ -843,7 +848,10 @@ async function previewImportRows({
       targetCenter,
       familyExternalId: externalValue(rawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]),
       childExternalId: externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]),
-      guardianExternalIds: procareGuardianImports(rawData)
+      guardianExternalIds: procareGuardianImports(
+        rawData,
+        externalValue(rawData, ["child person id"]) ?? "",
+      )
         .map((guardian) => guardian.externalId)
         .filter((externalId): externalId is string => Boolean(externalId)),
     };
@@ -980,7 +988,10 @@ async function previewImportRows({
     if (familyKey) importFamilyKeys.add(familyKey);
     const childKey = childName ? previewImportKey(targetCenter.id, familyIdentity, childExternalId || childName) : "";
     if (childKey) importChildKeys.add(childKey);
-    const guardianImports = procareGuardianImports(rawData);
+    const guardianImports = procareGuardianImports(
+      rawData,
+      externalValue(rawData, ["child person id"]) ?? "",
+    );
     if (familyKey && childKey) {
       familyChildLinkKeys.add(previewImportKey(familyKey, childKey));
       familiesWithChildren.add(familyKey);
@@ -1346,6 +1357,7 @@ async function GETHandler(request: NextRequest) {
       const employeeName = procareStaffName(raw);
       const accountExternalId = externalValue(raw, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
       const childExternalId = externalValue(raw, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+      const childPersonExternalId = externalValue(raw, ["child person id"]) ?? "";
       const isStaffRow = Boolean(employeeName && !childName && !familyName);
       if (isStaffRow) {
         hasStaffRows = true;
@@ -1387,6 +1399,7 @@ async function GETHandler(request: NextRequest) {
             if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) continue;
             const record = relationship as ProcareRelationshipRecord;
             const relationshipId = clean(record.externalId);
+            if (relationshipId && relationshipId === childPersonExternalId) continue;
             if (record.guardian) guardianCandidates.push({ id: relationshipId || null, present: true });
             if (record.emergency) {
               if (relationshipId) emergencyContactExternalIds.add(scopedIdentity(mappedCenterId, relationshipId));
@@ -1410,12 +1423,15 @@ async function GETHandler(request: NextRequest) {
             if (!person || typeof person !== "object") continue;
             const fields = embeddedImportRecord(person);
             if (value(fields, ["person type", "type"]).toLowerCase() !== "payer") continue;
-            guardianCandidates.push({ id: externalValue(fields, ["person id", "payer id", "parent id"]), present: true });
+            const guardianExternalId = externalValue(fields, ["person id", "payer id", "parent id"]);
+            if (guardianExternalId && guardianExternalId === childPersonExternalId) continue;
+            guardianCandidates.push({ id: guardianExternalId, present: true });
           }
         }
       } catch { /* Invalid account-person JSON is already retained in the reviewed source row. */ }
       for (const guardian of guardianCandidates) {
         if (!guardian.present) continue;
+        if (guardian.id && guardian.id === childPersonExternalId) continue;
         hasGuardianRows = true;
         if (guardian.id) guardianExternalIds.add(scopedIdentity(mappedCenterId, guardian.id)); else guardiansComplete = false;
       }
@@ -1825,6 +1841,7 @@ async function POSTHandler(request: NextRequest) {
     if (!hasImportField(sourceRawData, ["procare relationship records"])) continue;
     const sourceAccountExternalId = externalValue(sourceRawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
     if (!sourceAccountExternalId) continue;
+    const sourceChildPersonExternalId = externalValue(sourceRawData, ["child person id"]) ?? "";
     const sourceCenterValue = value(sourceRawData, [
       "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site",
     ]);
@@ -1839,7 +1856,7 @@ async function POSTHandler(request: NextRequest) {
         externalValue(sourceRawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]),
         externalValue(sourceRawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
       ]) {
-        if (guardianId) desired.guardians.add(guardianId);
+        if (guardianId && guardianId !== sourceChildPersonExternalId) desired.guardians.add(guardianId);
       }
       try {
         const accountPeople = JSON.parse(value(sourceRawData, ["procare account person records"]) || "[]") as unknown;
@@ -1848,7 +1865,7 @@ async function POSTHandler(request: NextRequest) {
             const fields = embeddedImportRecord(person);
             if (value(fields, ["person type", "type"]).toLowerCase() !== "payer") continue;
             const guardianId = externalValue(fields, ["person id", "payer id", "parent id"]);
-            if (guardianId) desired.guardians.add(guardianId);
+            if (guardianId && guardianId !== sourceChildPersonExternalId) desired.guardians.add(guardianId);
           }
         }
       } catch {
@@ -1857,6 +1874,7 @@ async function POSTHandler(request: NextRequest) {
       for (const relationship of procareRelationshipRecords(sourceRawData)) {
         const relationshipExternalId = clean(relationship.externalId);
         if (!relationshipExternalId) continue;
+        if (relationshipExternalId === sourceChildPersonExternalId) continue;
         if (relationship.guardian) desired.guardians.add(relationshipExternalId);
         if (relationship.emergency) desired.emergency.add(relationshipExternalId);
         if (relationship.authorizedPickup) desired.pickup.add(relationshipExternalId);
@@ -2081,7 +2099,8 @@ async function POSTHandler(request: NextRequest) {
       const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
       const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
       const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
-      const guardianImports = procareGuardianImports(rawData);
+      const childPersonExternalId = externalValue(rawData, ["child person id"]) ?? "";
+      const guardianImports = procareGuardianImports(rawData, childPersonExternalId);
       const balanceValue = value(rawData, ["balance", "account balance", "ledger balance", "amount due"]);
       const parsedBalance = parseCurrencyCents(balanceValue);
       if (parsedBalance.present && !parsedBalance.valid) {
@@ -2923,6 +2942,10 @@ async function POSTHandler(request: NextRequest) {
     where: { id: batch.id },
     data: { status: isPartial ? "processing" : summary.errors || summary.unresolved ? "completed_with_errors" : "completed", summary },
   });
+
+  if (rowResults.some((row) => row.status === "imported")) {
+    revalidatePath("/", "layout");
+  }
 
   if (isPartial) {
     return NextResponse.json({ ok: true, partial: true, batchId: batch.id, nextRow, totalRows: rows.length - 1, summary });

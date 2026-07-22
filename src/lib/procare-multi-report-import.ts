@@ -11,6 +11,7 @@ type ProcareImportDiagnostic = {
   code:
     | "account_link_missing"
     | "account_link_ambiguous"
+    | "shared_child_accounts_merged"
     | "account_has_no_payer"
     | "account_without_enrollment"
     | "source_child_without_enrollment"
@@ -30,7 +31,7 @@ type ProcareImportDiagnostic = {
 };
 
 export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
-  version: 2,
+  version: 3,
   reports: {
     enrollment: {
       requiredColumns: ["Child ID"],
@@ -55,7 +56,8 @@ export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
   },
   accountResolution: {
     method: "nonblank relationship/enrollment person identifiers joined to nonblank parentinfo account identifiers",
-    ambiguousBehavior: "retain diagnostics and source rows without selecting an account",
+    ambiguousBehavior: "retain diagnostics without selecting an account unless the same child is explicitly listed in every candidate account and exactly one account contains another child",
+    sharedChildBehavior: "select the unique sibling household as canonical and merge payer records from every explicitly linked child account",
   },
   sourceOnlyRetention: {
     accountWithoutEnrollment: "procare_multi_report_family_only",
@@ -236,10 +238,12 @@ function accountResolution({
   child,
   related,
   accountsByPerson,
+  peopleByAccount,
 }: {
   child: CsvRow;
   related: CsvRow[];
   accountsByPerson: Map<string, Set<string>>;
+  peopleByAccount: Map<string, CsvRow[]>;
 }) {
   const relationshipPersonIds = new Set(
     related.map((row) => field(row, "Person ID")).filter(Boolean),
@@ -260,22 +264,48 @@ function accountResolution({
 
   const sortedCandidateAccountIds = [...candidateAccountIds].sort((left, right) => left.localeCompare(right));
   const candidateAccountCount = sortedCandidateAccountIds.length;
-  const status = candidateAccountCount === 1 ? "resolved" : candidateAccountCount === 0 ? "missing" : "ambiguous";
+  const childPersonId = field(child, "Person ID");
+  const sharedChildCandidates = childPersonId && candidateAccountCount > 1
+    ? sortedCandidateAccountIds.map((accountId) => {
+        const accountPeople = peopleByAccount.get(accountId) ?? [];
+        const explicitlyContainsChild = accountPeople.some((person) => (
+          field(person, "Person ID") === childPersonId && personType(person) === "child"
+        ));
+        const otherChildPersonIds = new Set(accountPeople
+          .filter((person) => personType(person) === "child" && field(person, "Person ID") !== childPersonId)
+          .map((person) => field(person, "Person ID"))
+          .filter(Boolean));
+        return { accountId, explicitlyContainsChild, otherChildCount: otherChildPersonIds.size };
+      })
+    : [];
+  const highestSiblingCount = Math.max(0, ...sharedChildCandidates.map((candidate) => candidate.otherChildCount));
+  const uniqueSiblingHousehold = highestSiblingCount > 0
+    && sharedChildCandidates.every((candidate) => candidate.explicitlyContainsChild)
+    ? sharedChildCandidates.filter((candidate) => candidate.otherChildCount === highestSiblingCount)
+    : [];
+  const mergedAccountIds = uniqueSiblingHousehold.length === 1 ? sortedCandidateAccountIds : [];
+  const status = candidateAccountCount === 1 || mergedAccountIds.length
+    ? "resolved"
+    : candidateAccountCount === 0 ? "missing" : "ambiguous";
   return {
     status,
-    accountId: status === "resolved" ? sortedCandidateAccountIds[0] ?? "" : "",
+    accountId: mergedAccountIds.length
+      ? uniqueSiblingHousehold[0]?.accountId ?? ""
+      : status === "resolved" ? sortedCandidateAccountIds[0] ?? "" : "",
     candidateAccountIds: sortedCandidateAccountIds,
     candidateAccountCount,
+    mergedAccountIds,
     relationshipPersonCount: relationshipPersonIds.size,
     linkedPersonCount,
     unlinkedPersonCount: relationshipPersonIds.size - linkedPersonCount,
   } as const;
 }
 
-function relationshipRecord(row: CsvRow, payerPersonIds: Set<string>) {
+function relationshipRecord(row: CsvRow, payerPersonIds: Set<string>, childPersonId: string) {
   const personId = field(row, "Person ID");
   const relationshipType = field(row, "Relationship Type") || "Guardian";
   const livesWith = checked(field(row, "Lives With"));
+  const isChildSelf = Boolean(childPersonId && personId === childPersonId);
   return {
     externalId: personId,
     personId,
@@ -288,12 +318,12 @@ function relationshipRecord(row: CsvRow, payerPersonIds: Set<string>) {
     phone: field(row, "Phone 1", "Phone 2", "Phone 3", "Phone 4", "Phone 5"),
     phones: ["Phone 1", "Phone 2", "Phone 3", "Phone 4", "Phone 5"].map((name) => field(row, name)).filter(Boolean),
     address: address(row),
-    livesWith,
-    emergency: checked(field(row, "Emergency")),
-    authorizedPickup: checked(field(row, "Authorized Pickup")),
-    guardian: payerPersonIds.has(personId)
+    livesWith: !isChildSelf && livesWith,
+    emergency: !isChildSelf && checked(field(row, "Emergency")),
+    authorizedPickup: !isChildSelf && checked(field(row, "Authorized Pickup")),
+    guardian: !isChildSelf && (payerPersonIds.has(personId)
       || livesWith
-      || /\b(mom|mother|dad|father|parent|guardian|foster|stepmother|stepfather)\b/i.test(relationshipType),
+      || /\b(mom|mother|dad|father|parent|guardian|foster|stepmother|stepfather)\b/i.test(relationshipType)),
     sourceFields: row,
   };
 }
@@ -322,6 +352,17 @@ function diagnosticForResolution(
       linkedPersonCount: resolution.linkedPersonCount,
       unlinkedPersonCount: resolution.unlinkedPersonCount,
       message: `More than one ProCare account matched the row's relationship identifiers (${resolution.candidateAccountCount} candidates).`,
+    }];
+  }
+  if (resolution.mergedAccountIds.length) {
+    return [{
+      code: "shared_child_accounts_merged",
+      severity: "info",
+      candidateAccountCount: resolution.candidateAccountCount,
+      relationshipPersonCount: resolution.relationshipPersonCount,
+      linkedPersonCount: resolution.linkedPersonCount,
+      unlinkedPersonCount: resolution.unlinkedPersonCount,
+      message: "The child is explicitly listed in multiple ProCare accounts. The unique sibling household was selected and payer records from the linked accounts were merged.",
     }];
   }
   if (payerCount === 0) {
@@ -401,7 +442,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     const childId = field(child, "Child ID");
     const related = [...(relationshipsByChild.get(childId) ?? [])].sort(comparePeople);
     const relationshipSourceRows = relationshipSourceRowsByChild.get(childId) ?? [];
-    const resolution = accountResolution({ child, related, accountsByPerson });
+    const resolution = accountResolution({ child, related, accountsByPerson, peopleByAccount });
     return { child, childId, related, relationshipSourceRows, details: childDetails.get(childId) ?? [], resolution };
   });
   const enrollmentChildIds = new Set(enrollmentContexts.map((context) => context.childId).filter(Boolean));
@@ -418,7 +459,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       ?? relationshipSourceRows.find((row) => personType(row) === "child")
       ?? { "Child ID": childId };
     const child = { ...childSource, "Child ID": childId, "Enrollment Status": "Withdrawn" };
-    const resolution = accountResolution({ child, related, accountsByPerson });
+    const resolution = accountResolution({ child, related, accountsByPerson, peopleByAccount });
     return { childId, child, related, relationshipSourceRows, details, resolution };
   });
   const sourceOnlyLinkedAccountIds = new Set(sourceOnlyChildContexts.flatMap((context) => context.resolution.candidateAccountIds));
@@ -434,6 +475,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     accountId,
     candidateAccountIds: [accountId],
     candidateAccountCount: 1,
+    mergedAccountIds: [],
     relationshipPersonCount: 0,
     linkedPersonCount: 0,
     unlinkedPersonCount: 0,
@@ -443,6 +485,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     accountId: "",
     candidateAccountIds: [],
     candidateAccountCount: 0,
+    mergedAccountIds: [],
     relationshipPersonCount: 0,
     linkedPersonCount: 0,
     unlinkedPersonCount: 0,
@@ -475,22 +518,29 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
   }): Record<string, string> => {
     const retainedRelationshipSourceRows = relationshipSourceRows ?? related;
     const accountPeople = accountPeopleOverride
-      ?? (resolution.accountId ? [...(peopleByAccount.get(resolution.accountId) ?? [])].sort(comparePeople) : []);
+      ?? (resolution.mergedAccountIds.length
+        ? resolution.mergedAccountIds.flatMap((accountId) => [...(peopleByAccount.get(accountId) ?? [])].sort(comparePeople))
+        : resolution.accountId ? [...(peopleByAccount.get(resolution.accountId) ?? [])].sort(comparePeople) : []);
     const candidateAccountPeople = resolution.status === "ambiguous"
       ? resolution.candidateAccountIds.flatMap((accountId) => (
           [...(peopleByAccount.get(accountId) ?? [])]
             .sort(comparePeople)
         ))
       : [];
-    const payers = uniquePeople(accountPeople.filter((row) => personType(row) === "payer"));
-    const candidatePayers = uniquePeople(candidateAccountPeople.filter((row) => personType(row) === "payer"));
+    const childPersonId = field(child, "Person ID");
+    const payers = uniquePeople(accountPeople.filter((row) => (
+      personType(row) === "payer" && field(row, "Person ID") !== childPersonId
+    )));
+    const candidatePayers = uniquePeople(candidateAccountPeople.filter((row) => (
+      personType(row) === "payer" && field(row, "Person ID") !== childPersonId
+    )));
     const payerPersonIds = new Set([...payers, ...candidatePayers].map((row) => field(row, "Person ID")).filter(Boolean));
     const primary = payers[0];
     const secondary = payers[1];
     const allergySourceRecords = details.filter((row) => /allerg/i.test(field(row, "Category Description")));
     const activeAllergySourceRecords = allergySourceRecords.filter((row) => checked(field(row, "Item Is Active")));
     const allergyRecords = activeAllergySourceRecords.map((row) => field(row, "Item Description")).filter(Boolean);
-    const relationshipRecords = related.map((row) => relationshipRecord(row, payerPersonIds));
+    const relationshipRecords = related.map((row) => relationshipRecord(row, payerPersonIds, childPersonId));
     const diagnostics = [
       ...additionalDiagnostics,
       ...(includeResolutionDiagnostics ? diagnosticForResolution(resolution, payers.length) : []),
@@ -502,7 +552,9 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       accountResolution: {
         status: resolution.status,
         method: resolutionMethod === undefined
-          ? resolution.status === "resolved" ? "person_identifier_to_unique_account_identifier" : null
+          ? resolution.mergedAccountIds.length
+            ? "shared_child_unique_sibling_household"
+            : resolution.status === "resolved" ? "person_identifier_to_unique_account_identifier" : null
           : resolutionMethod,
         candidateAccountCount: resolution.candidateAccountCount,
         relationshipPersonCount: resolution.relationshipPersonCount,
@@ -653,7 +705,7 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
 
   for (const relationship of relationshipsWithoutChild) {
     const related = personType(relationship) === "relationship" ? [relationship] : [];
-    const resolution = accountResolution({ child: {}, related, accountsByPerson });
+    const resolution = accountResolution({ child: {}, related, accountsByPerson, peopleByAccount });
     normalizedRows.push(buildNormalizedRow({
       rowType: "procare_multi_report_relationship_without_child_id",
       related,

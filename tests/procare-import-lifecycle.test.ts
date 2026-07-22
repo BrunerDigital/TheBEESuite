@@ -89,7 +89,7 @@ test("all resolved ProCare payer records are synchronized as guardians", () => {
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
   assert.match(route, /procare account person records/);
   assert.match(route, /person type/);
-  assert.match(postHandler, /procareGuardianImports\(rawData\)/);
+  assert.match(postHandler, /procareGuardianImports\(\s*rawData,\s*childPersonExternalId/);
   assert.match(postHandler, /await syncGuardian\(guardian\)/);
 });
 
@@ -97,7 +97,7 @@ test("review and commit use the same parent plan and verify family links before 
   const preview = section(route, "async function previewImportRows", "async function importPayloadFromFiles");
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
 
-  assert.match(preview, /const guardianImports = procareGuardianImports\(rawData\)/);
+  assert.match(preview, /const guardianImports = procareGuardianImports\(\s*rawData,/);
   assert.match(preview, /sourceGuardianGroups: importGuardianKeys\.size/);
   assert.match(preview, /familyChildLinks: familyChildLinkKeys\.size/);
   assert.match(preview, /familyGuardianLinks: familyGuardianLinkKeys\.size/);
@@ -106,6 +106,14 @@ test("review and commit use the same parent plan and verify family links before 
   assert.match(postHandler, /This row was rolled back safely/);
   assert.match(panel, /Parent profiles/);
   assert.match(panel, /Family profile links/);
+});
+
+test("successful ProCare chunks invalidate school data across the app", () => {
+  const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
+
+  assert.match(route, /import \{ revalidatePath \} from "next\/cache"/);
+  assert.match(postHandler, /rowResults\.some\(\(row\) => row\.status === "imported"\)/);
+  assert.match(postHandler, /revalidatePath\("\/", "layout"\)/);
 });
 
 test("sparse staff exports do not reactivate or erase existing staff fields", () => {

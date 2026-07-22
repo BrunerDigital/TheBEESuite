@@ -71,6 +71,9 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(panel, /submitLockedRef/);
   assert.match(panel, /normalizedSelectedFileName/);
   assert.match(route, /normalizedUploadName/);
+  assert.match(route, /resumableCandidates/);
+  assert.match(route, /savedCheckpoint/);
+  assert.match(route, /existingBatch && Array\.isArray\(existingSummary\.stagedRowNumbers\)/);
   assert.match(route, /partial: true/);
   assert.match(route, /resumable ProCare import batch/);
   assert.match(route, /This import page is out of date/);

@@ -1099,20 +1099,54 @@ async function POSTHandler(request: NextRequest) {
     });
   }
 
-  const validationPreview = await previewImportRows({
-    rows,
-    headers,
-    autoMap,
-    defaultCenter: center,
-    centerByAlias,
-    sourceType: importPayload.sourceType,
-    filename: importPayload.filename,
-    duplicateMode,
+  const requestedBatch = requestedBatchId
+    ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id, status: "processing" }, include: { _count: { select: { rows: true } } } })
+    : null;
+  if (requestedBatchId && !requestedBatch) return NextResponse.json({ ok: false, error: "The resumable ProCare import batch could not be found." }, { status: 409 });
+  const resumableCandidates = requestedBatch ? [] : await prisma.procareImportBatch.findMany({
+    where: { centerId: center.id, uploadedById: user.id, status: "processing" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    include: { _count: { select: { rows: true } } },
   });
-  const duplicateWarningRows = new Set(validationPreview.duplicateReviewRowNumbers);
-  let stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
-    !duplicateReviewConfirmed || !duplicateWarningRows.has(rowNumber)
-  )));
+  const existingBatch = requestedBatch ?? resumableCandidates
+    .filter((candidate) => {
+      const summary = candidate.summary && typeof candidate.summary === "object" && !Array.isArray(candidate.summary)
+        ? candidate.summary as Record<string, unknown>
+        : {};
+      return summary.sourceSha256 === sourceSha256 && summary.reviewFingerprint === reviewFingerprint;
+    })
+    .sort((left, right) => right._count.rows - left._count.rows)[0] ?? null;
+  const existingSummary = existingBatch?.summary && typeof existingBatch.summary === "object" && !Array.isArray(existingBatch.summary)
+    ? existingBatch.summary as Record<string, unknown>
+    : {};
+  if (existingBatch && existingSummary.sourceSha256 !== sourceSha256) {
+    return NextResponse.json({ ok: false, error: "The selected files changed while the import was running. Start a new import with one unchanged export." }, { status: 409 });
+  }
+
+  let stagedRowNumbers = new Set<number>();
+  let duplicateReviewRows = Number(existingSummary.duplicateReviewRows ?? 0);
+  const validationWarningMessages = new Map<number, string>();
+  if (existingBatch && Array.isArray(existingSummary.stagedRowNumbers)) {
+    stagedRowNumbers = new Set(existingSummary.stagedRowNumbers.filter((value): value is number => Number.isInteger(value)));
+  } else {
+    const validationPreview = await previewImportRows({
+      rows,
+      headers,
+      autoMap,
+      defaultCenter: center,
+      centerByAlias,
+      sourceType: importPayload.sourceType,
+      filename: importPayload.filename,
+      duplicateMode,
+    });
+    const duplicateWarningRows = new Set(validationPreview.duplicateReviewRowNumbers);
+    stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
+      !duplicateReviewConfirmed || !duplicateWarningRows.has(rowNumber)
+    )));
+    duplicateReviewRows = validationPreview.duplicateReviewRows;
+    for (const warning of validationPreview.warnings) validationWarningMessages.set(warning.rowNumber, warning.message);
+  }
   const disposedRowNumbers = new Set(
     clean(formData.get("disposedRowNumbers")).split(",").map(Number).filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1),
   );
@@ -1134,19 +1168,6 @@ async function POSTHandler(request: NextRequest) {
   const centersTouched = new Set<string>();
   const rowResults: Array<{ rowNumber: number; status: string; message?: string; rawData: Record<string, string>; createdFamilyId?: string; createdChildId?: string }> = [];
 
-  const existingBatch = requestedBatchId
-    ? await prisma.procareImportBatch.findFirst({ where: { id: requestedBatchId, centerId: center.id, uploadedById: user.id, status: "processing" } })
-    : null;
-  if (requestedBatchId && !existingBatch) return NextResponse.json({ ok: false, error: "The resumable ProCare import batch could not be found." }, { status: 409 });
-  const existingSummary = existingBatch?.summary && typeof existingBatch.summary === "object" && !Array.isArray(existingBatch.summary)
-    ? existingBatch.summary as Record<string, unknown>
-    : {};
-  if (existingBatch && existingSummary.sourceSha256 !== sourceSha256) {
-    return NextResponse.json({ ok: false, error: "The selected files changed while the import was running. Start a new import with one unchanged export." }, { status: 409 });
-  }
-  if (existingBatch && Array.isArray(existingSummary.stagedRowNumbers)) {
-    stagedRowNumbers = new Set(existingSummary.stagedRowNumbers.filter((value): value is number => Number.isInteger(value)));
-  }
   const batch = existingBatch ?? await prisma.procareImportBatch.create({
     data: {
       centerId: center.id,
@@ -1156,7 +1177,10 @@ async function POSTHandler(request: NextRequest) {
       summary: { sourceType: importPayload.sourceType, sourceSha256, reviewFingerprint, stagedRowNumbers: [...stagedRowNumbers] },
     },
   });
-  const chunkStart = Math.min(requestedChunkStart, rows.length);
+  const savedCheckpoint = existingBatch
+    ? await prisma.procareImportRow.aggregate({ where: { batchId: existingBatch.id }, _max: { rowNumber: true } })
+    : null;
+  const chunkStart = Math.min(Math.max(requestedChunkStart, savedCheckpoint?._max.rowNumber ?? 1), rows.length);
   const chunkEnd = Math.min(chunkStart + requestedChunkSize, rows.length);
 
   for (let index = chunkStart; index < chunkEnd; index += 1) {
@@ -1167,7 +1191,7 @@ async function POSTHandler(request: NextRequest) {
       continue;
     }
     if (stagedRowNumbers.has(rowNumber)) {
-      const warning = validationPreview.warnings.find((item) => item.rowNumber === rowNumber)?.message ?? "This row needs a field match or disposition.";
+      const warning = validationWarningMessages.get(rowNumber) ?? "This row needs a field match or disposition.";
       rowResults.push({ rowNumber, status: "needs_resolution", message: warning, rawData });
       continue;
     }
@@ -1921,7 +1945,7 @@ async function POSTHandler(request: NextRequest) {
     headerAnalysis,
     fieldOptions: PROCARE_FIELD_OPTIONS,
     warningRows: progressCounts.needs_resolution ?? 0,
-    duplicateReviewRows: validationPreview.duplicateReviewRows,
+    duplicateReviewRows,
     rowResults: unresolvedRows.map((row) => ({
       rowNumber: row.rowNumber,
       status: "warning",

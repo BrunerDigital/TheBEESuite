@@ -218,7 +218,7 @@ export default async function DashboardPage() {
     prisma.staffProfile.count({
       where: {
         centerId: scopedCenterFilter,
-        user: { role: UserRole.TEACHER },
+        user: { role: UserRole.TEACHER, isActive: true },
       },
     }),
     prisma.billingAccount.aggregate({
@@ -252,7 +252,7 @@ export default async function DashboardPage() {
         _count: {
           select: {
             children: { where: currentEnrollmentWhere },
-            staff: { where: { user: { role: UserRole.TEACHER } } },
+            staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           },
         },
       },
@@ -527,7 +527,7 @@ export default async function DashboardPage() {
     }),
     prisma.staffProfile.groupBy({
       by: ["centerId"],
-      where: { centerId: scopedCenterFilter, user: { role: UserRole.TEACHER } },
+      where: { centerId: scopedCenterFilter, user: { role: UserRole.TEACHER, isActive: true } },
       _count: { _all: true },
     }),
     canSeeExecutiveMetrics ? prisma.lead.groupBy({
@@ -854,7 +854,7 @@ export default async function DashboardPage() {
       compliance: center.compliance,
     })),
     classroomSnapshots: classroomSnapshotRows.map((classroom) => {
-      const staffAssigned = classroom._count.staff || 1;
+      const staffAssigned = classroom._count.staff;
       return {
         name: classroom.name,
         ageGroup: classroom.ageGroup,

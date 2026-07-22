@@ -64,11 +64,13 @@ import {
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
 import {
+  closedEnrollmentChildWhere,
   currentlyEnrolledChildWhere,
-  currentlyEnrolledStatusValues,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
+  summarizeEnrollmentLifecycleCounts,
 } from "@/lib/enrollment-status";
+import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
@@ -186,10 +188,6 @@ export function generateStaticParams() {
   ];
 }
 
-function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
-  return { enrollmentStatus: { notIn: currentlyEnrolledStatusValues() } };
-}
-
 function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
   return { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } };
 }
@@ -221,7 +219,7 @@ async function getVisibleCenters(user: CurrentUser) {
       _count: {
         select: {
           leads: true,
-          staff: { where: { user: { role: UserRole.TEACHER } } },
+          staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           classrooms: true,
           calendarEvents: true,
         },
@@ -804,8 +802,8 @@ async function renderLivePage(
       prisma.child.count({ where: { ...currentlyEnrolledChildWhere(), family: { centerId: selectedCenter.id } } }),
       prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } } }),
       prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
-      prisma.staffProfile.count({ where: { centerId: selectedCenter.id } }),
-      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id } }),
+      prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
+      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
       prisma.tuitionPlan.count(),
       prisma.product.count(),
       prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
@@ -1049,7 +1047,7 @@ async function renderLivePage(
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
-      prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } } }),
+      prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } } }),
       getKidCityFteSnapshot(centers),
       getFteReports(visibleCenterIds, executiveFteReportTake(visibleCenterIds.length)),
       buildFtePrefills(centers),
@@ -1567,13 +1565,13 @@ async function renderLivePage(
     const requestedFamilyId = firstSearchParam(searchParams.familyId) || "";
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
     const currentChildWhere = currentlyEnrolledChildWhere();
-    const graduatedChildWhere = notCurrentlyEnrolledChildWhere();
+    const closedChildWhere = closedEnrollmentChildWhere();
     const currentFamilyWhere: Prisma.FamilyWhereInput = { ...familyWhere, children: { some: currentChildWhere } };
-    const graduatedFamilyWhere: Prisma.FamilyWhereInput = {
+    const closedFamilyWhere: Prisma.FamilyWhereInput = {
       AND: [
         familyWhere,
         { children: { none: currentChildWhere } },
-        { children: { some: graduatedChildWhere } },
+        { children: { some: closedChildWhere } },
       ],
     };
     const familyInclude = {
@@ -1604,25 +1602,30 @@ async function renderLivePage(
       },
       _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
     } satisfies Prisma.FamilyInclude;
-    const [families, allFamilies, total, withCustodyNotes, children, guardians, graduated, graduatedFamilies, intakeCenters, requestNotes] = await Promise.all([
+    const [families, allFamilies, total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentStatusRows, intakeCenters, requestNotes] = await Promise.all([
       prisma.family.findMany({
         where: currentFamilyWhere,
         orderBy: { createdAt: "desc" },
-        take: 100,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
       prisma.family.findMany({
         where: familyWhere,
         orderBy: { createdAt: "desc" },
-        take: 250,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
       prisma.family.count({ where: currentFamilyWhere }),
+      prisma.family.count({ where: familyWhere }),
       prisma.family.count({ where: { ...currentFamilyWhere, custodyNotes: { not: null } } }),
       prisma.child.count({ where: { ...currentChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
       prisma.guardian.count({ where: { family: { is: currentFamilyWhere } } }),
-      prisma.child.count({ where: { ...graduatedChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
-      prisma.family.count({ where: graduatedFamilyWhere }),
+      prisma.family.count({ where: closedFamilyWhere }),
+      prisma.child.groupBy({
+        by: ["enrollmentStatus"],
+        where: { family: { is: { centerId: scopedCenterIds } } },
+        _count: { _all: true },
+      }),
       getFamilyIntakeCenters(user),
       prisma.note.findMany({
         where: {
@@ -1717,6 +1720,7 @@ async function renderLivePage(
       allFamiliesWithRequested.flatMap((family) => family.children.map((child) => child.ageGroup)),
       intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
     );
+    const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, children);
 
     return (
       <FamilyProfilesPage
@@ -1728,7 +1732,7 @@ async function renderLivePage(
           intakeCenters,
           ageGroups: familyAgeGroups,
           guardianChangeRequests,
-          stats: { total, withCustodyNotes, children, guardians, graduated, graduatedFamilies },
+          stats: { total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentLifecycle },
         }}
       />
     );
@@ -1737,13 +1741,12 @@ async function renderLivePage(
   if (slug === "child-profile") {
     const childWhere = visibleChildWhere(visibleCenterIds);
     const currentChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
-    const graduatedChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, notCurrentlyEnrolledChildWhere()] };
     const currentChildRelationWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
-    const [children, allChildren, total, graduated, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
+    const [children, allChildren, total, allTotal, enrollmentStatusRows, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: currentChildWhere,
         orderBy: { fullName: "asc" },
-        take: 150,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
           family: { select: { name: true, centerId: true, custodyNotes: true } },
           classroom: {
@@ -1758,7 +1761,7 @@ async function renderLivePage(
       prisma.child.findMany({
         where: childWhere,
         orderBy: { fullName: "asc" },
-        take: 300,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
           family: { select: { name: true, centerId: true, custodyNotes: true } },
           classroom: {
@@ -1771,13 +1774,19 @@ async function renderLivePage(
         },
       }),
       prisma.child.count({ where: currentChildWhere }),
-      prisma.child.count({ where: graduatedChildWhere }),
+      prisma.child.count({ where: childWhere }),
+      prisma.child.groupBy({
+        by: ["enrollmentStatus"],
+        where: childWhere,
+        _count: { _all: true },
+      }),
       prisma.allergy.count({ where: { child: currentChildRelationWhere } }),
       prisma.childMedicalNote.count({ where: { restricted: true, child: currentChildRelationWhere } }),
       getFamilyIntakeCenters(user),
     ]);
+    const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, total);
 
-    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, graduated, allergies, restrictedMedicalNotes } }} />;
+    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {
@@ -2232,7 +2241,7 @@ async function renderLivePage(
         center: { select: { state: true, licensedCapacity: true, customFields: true } },
         _count: {
           select: {
-            staff: { where: { user: { role: UserRole.TEACHER } } },
+            staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           },
         },
       },
@@ -3542,7 +3551,7 @@ async function renderLivePage(
         select: { childId: true, type: true, occurredAt: true },
       }),
       prisma.staffProfile.findMany({
-        where: { centerId: scopedCenterIds },
+        where: { centerId: scopedCenterIds, user: { isActive: true } },
         select: { customFields: true },
       }),
       prisma.classroom.aggregate({
@@ -4163,7 +4172,7 @@ async function renderLivePage(
           licensedCapacity: true,
           ownerGroupId: true,
           ownerGroup: { select: { name: true, ownerType: true } },
-          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER } } }, classrooms: true } },
+          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, classrooms: true } },
         },
       }),
       prisma.user.findMany({
@@ -4486,7 +4495,7 @@ async function renderLivePage(
     const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills, staffClockProfiles] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
-      center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER } } }) : 0,
+      center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER, isActive: true } } }) : 0,
       center ? prisma.classroom.count({ where: { centerId: center.id } }) : 0,
       center
         ? prisma.tour.count({

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import {
   isActiveProcareStaffStatus,
   isActiveProcareEnrollmentStatus,
@@ -86,14 +85,35 @@ function parseImportRows(text: string) {
   return parsed[0]?.rows ?? [];
 }
 
-function cents(input: string) {
-  const normalized = input.replace(/[$,]/g, "");
-  const number = Number(normalized);
-  return Number.isFinite(number) ? Math.round(number * 100) : 0;
+function parseCurrencyCents(input: string) {
+  const source = input.trim();
+  if (!source) return { present: false, valid: true, cents: 0 };
+  const accountingNegative = source.startsWith("(") && source.endsWith(")");
+  const normalized = (accountingNegative ? source.slice(1, -1) : source)
+    .replace(/[$,\s]/g, "");
+  if ((accountingNegative && /^[+-]/.test(normalized)) || !/^[+-]?(?:\d+(?:\.\d{1,2})?|\.\d{1,2})$/.test(normalized)) {
+    return { present: true, valid: false, cents: 0 };
+  }
+  const amount = Number(normalized);
+  if (!Number.isFinite(amount)) return { present: true, valid: false, cents: 0 };
+  return { present: true, valid: true, cents: Math.round(amount * 100) * (accountingNegative ? -1 : 1) };
 }
 
 function boolValue(input: string) {
-  return /^(yes|y|true|1|allowed|permission|granted)$/i.test(input.trim());
+  return /^(yes|y|true|1|allowed|permission|granted|checked|on)$/i.test(input.trim());
+}
+
+function jsonObject(value: Prisma.JsonValue | null | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, Prisma.JsonValue>
+    : {};
+}
+
+function mergeCustomFields(
+  existing: Prisma.JsonValue | null | undefined,
+  imported: Record<string, unknown>,
+) {
+  return { ...jsonObject(existing), ...imported } as Prisma.InputJsonValue;
 }
 
 function parseDate(input: string) {
@@ -156,6 +176,44 @@ function externalValue(rawData: Record<string, string>, aliases: string[]) {
   return found || null;
 }
 
+function hasImportField(rawData: Record<string, string>, aliases: string[]) {
+  const keys = new Set(Object.keys(rawData).map((key) => key.toLowerCase().replace(/^\ufeff/, "").replace(/[_./\\-]+/g, " ").replace(/\s+/g, " ").trim()));
+  return aliases.some((alias) => keys.has(alias.toLowerCase().replace(/[_./\\-]+/g, " ").replace(/\s+/g, " ").trim()));
+}
+
+function embeddedImportRecord(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  return Object.fromEntries(
+    Object.entries(input).map(([key, field]) => [
+      key.toLowerCase().replace(/^\ufeff/, "").replace(/[_./\\-]+/g, " ").replace(/\s+/g, " ").trim(),
+      typeof field === "string" ? field.trim() : "",
+    ]),
+  );
+}
+
+type ProcareRelationshipRecord = {
+  externalId?: string;
+  name?: string;
+  relation?: string;
+  email?: string;
+  phone?: string;
+  livesWith?: boolean;
+  emergency?: boolean;
+  authorizedPickup?: boolean;
+  guardian?: boolean;
+};
+
+function procareRelationshipRecords(rawData: Record<string, string>): ProcareRelationshipRecord[] {
+  try {
+    const parsed = JSON.parse(value(rawData, ["procare relationship records"]) || "[]") as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is ProcareRelationshipRecord => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function splitPeopleList(input: string) {
   return input
     .split(/\r?\n|;|\|/)
@@ -168,6 +226,24 @@ function intValue(input: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+async function forEachWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  task: (item: T, index: number) => Promise<void>,
+) {
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(Math.max(concurrency, 1), items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await task(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+}
+
+type ProcareClassroomDb = Pick<Prisma.TransactionClient, "classroom">;
+
 async function findOrCreateClassroom({
   centerId,
   name,
@@ -178,38 +254,77 @@ async function findOrCreateClassroom({
   name: string;
   ageGroup: string;
   rawData: Record<string, string>;
-}) {
-  const classroomExternalId = externalValue(rawData, ["classroom id", "room id", "class id", "classroom key", "room key"]) || name;
-  const existing = await prisma.classroom.findFirst({
-    where: {
-      centerId,
-      OR: [{ name }, { sourceSystem: "procare", externalId: classroomExternalId }],
-    },
-    select: { id: true },
-  });
+}, db: ProcareClassroomDb = prisma) {
+  const providedClassroomExternalId = externalValue(rawData, ["classroom id", "room id", "class id", "classroom key", "room key"]);
+  const classroomExternalId = providedClassroomExternalId || name;
+  const matches = providedClassroomExternalId
+    ? await db.classroom.findMany({
+        where: { centerId, sourceSystem: "procare", externalId: classroomExternalId },
+        take: 2,
+        select: { id: true, capacity: true, ratioRule: true, customFields: true },
+      })
+    : await db.classroom.findMany({
+        where: { centerId, name },
+        take: 2,
+        select: { id: true, capacity: true, ratioRule: true, customFields: true },
+      });
+  if (matches.length > 1) {
+    throw new Error("Multiple classrooms match this ProCare room. Resolve the duplicate classrooms before importing.");
+  }
+  const existing = matches[0] ?? null;
+  const capacity = value(rawData, ["capacity", "licensed capacity", "room capacity"]);
+  const ratioRule = value(rawData, ["ratio", "ratio rule", "staff ratio"]);
+  const importedCapacity = capacity ? intValue(capacity, -1) : null;
+  if (importedCapacity !== null && importedCapacity < 0) {
+    throw new Error("The ProCare classroom capacity is invalid. Correct the source value before importing this row.");
+  }
   if (existing) {
-    await prisma.classroom.update({
+    const legacyUnverifiedClassroom = existing.capacity === 12
+      && /Imported from ProCare; verify capacity and ratio\./i.test(existing.ratioRule ?? "");
+    const nextCapacity = importedCapacity ?? (legacyUnverifiedClassroom ? 0 : existing.capacity);
+    const nextRatioRule = ratioRule || (legacyUnverifiedClassroom
+      ? "Imported from ProCare; capacity and ratio need director verification."
+      : existing.ratioRule);
+    await db.classroom.update({
       where: { id: existing.id },
       data: {
+        name,
         ageGroup,
+        capacity: nextCapacity,
+        ratioRule: nextRatioRule,
         sourceSystem: "procare",
         externalId: classroomExternalId,
-        customFields: metadataFromRow(rawData, { mappedCenterId: centerId, importedFromColumn: "classroom" }),
+        customFields: mergeCustomFields(
+          existing.customFields,
+          metadataFromRow(rawData, {
+            mappedCenterId: centerId,
+            importedFromColumn: "classroom",
+            capacityImported: Boolean(capacity),
+            ratioRuleImported: Boolean(ratioRule),
+            setupVerificationRequired: nextCapacity <= 0 || !nextRatioRule,
+          }),
+        ),
       },
     });
     return { id: existing.id, created: false };
   }
 
-  const classroom = await prisma.classroom.create({
+  const classroom = await db.classroom.create({
     data: {
       centerId,
       name,
       ageGroup,
-      capacity: intValue(value(rawData, ["capacity", "licensed capacity", "room capacity"]), 12),
-      ratioRule: value(rawData, ["ratio", "ratio rule", "staff ratio"]) || "Imported from ProCare; verify capacity and ratio.",
+      capacity: importedCapacity ?? 0,
+      ratioRule: ratioRule || "Imported from ProCare; capacity and ratio need director verification.",
       sourceSystem: "procare",
       externalId: classroomExternalId,
-      customFields: metadataFromRow(rawData, { mappedCenterId: centerId, importedFromColumn: "classroom" }),
+      customFields: metadataFromRow(rawData, {
+        mappedCenterId: centerId,
+        importedFromColumn: "classroom",
+        capacityImported: Boolean(capacity),
+        ratioRuleImported: Boolean(ratioRule),
+        setupVerificationRequired: !capacity || !ratioRule,
+      }),
     },
     select: { id: true },
   });
@@ -218,6 +333,8 @@ async function findOrCreateClassroom({
 
 type ImportCenter = {
   id: string;
+  tenantId: string;
+  organizationId: string;
   name: string;
   crmLocationId: string | null;
   locationId: string | null;
@@ -287,24 +404,29 @@ async function findExistingImportedStaffProfile(input: {
   centerId: string;
   externalId: string | null;
   contactEmail: string;
+  rejectAmbiguous?: boolean;
 }) {
-  const matchers: Prisma.StaffProfileWhereInput[] = [];
-  if (input.externalId) matchers.push({ sourceSystem: "procare", externalId: input.externalId });
-  if (input.contactEmail) matchers.push({ customFields: { path: ["staffContactEmail"], equals: input.contactEmail } });
-  if (!matchers.length) return null;
+  const identityWhere: Prisma.StaffProfileWhereInput | null = input.externalId
+    ? { sourceSystem: "procare", externalId: input.externalId }
+    : input.contactEmail
+      ? { customFields: { path: ["staffContactEmail"], equals: input.contactEmail } }
+      : null;
+  if (!identityWhere) return null;
 
-  return prisma.staffProfile.findFirst({
-    where: {
-      centerId: input.centerId,
-      OR: matchers,
-    },
+  const matches = await prisma.staffProfile.findMany({
+    where: { centerId: input.centerId, ...identityWhere },
+    take: 2,
     select: {
       id: true,
       userId: true,
       customFields: true,
-      user: { select: { id: true, email: true } },
+      user: { select: { id: true, email: true, tenantId: true, organizationId: true, role: true } },
     },
   });
+  if (input.rejectAmbiguous && matches.length > 1) {
+    throw new Error("Multiple staff profiles use this ProCare identity. Resolve the duplicate staff records before importing.");
+  }
+  return matches[0] ?? null;
 }
 
 type DuplicateMatchMode = "review" | "strict" | "auto";
@@ -331,6 +453,29 @@ function previewImportIdentityKey(scope: string, ...candidates: Array<string | n
   return identity ? previewImportKey(scope, identity) : "";
 }
 
+function parseImportRowNumbers(input: string) {
+  return [...new Set(
+    input
+      .split(",")
+      .map((item) => Number.parseInt(item.trim(), 10))
+      .filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1),
+  )].sort((left, right) => left - right);
+}
+
+function importReviewEvidence(input: {
+  sourceSha256: string;
+  mappingSignature: string;
+  warningRowNumbers: number[];
+  duplicateReviewRowNumbers: number[];
+}) {
+  return JSON.stringify({
+    sourceSha256: input.sourceSha256,
+    mappingSignature: input.mappingSignature,
+    warningRowNumbers: [...input.warningRowNumbers].sort((left, right) => left - right),
+    duplicateReviewRowNumbers: [...input.duplicateReviewRowNumbers].sort((left, right) => left - right),
+  });
+}
+
 async function findProcareDuplicateMatches({
   rowNumber,
   targetCenterId,
@@ -353,16 +498,17 @@ async function findProcareDuplicateMatches({
   const relation = value(rawData, ["guardian relation", "parent relation", "payer relation"]) || "Guardian";
   const matches: ProcareDuplicateMatch[] = [];
 
-  const familyWhere: Prisma.FamilyWhereInput[] = [
-    accountExternalId ? { sourceSystem: "procare", externalId: accountExternalId } : undefined,
-    familyName ? { name: familyName } : undefined,
-    email ? { billingEmail: email } : undefined,
-    address ? { address } : undefined,
-    childName ? { children: { some: { fullName: childName } } } : undefined,
-    guardianName ? { guardians: { some: { fullName: guardianName } } } : undefined,
-    email ? { guardians: { some: { email } } } : undefined,
-    phone ? { guardians: { some: { phone } } } : undefined,
-  ].filter(Boolean) as Prisma.FamilyWhereInput[];
+  const familyWhere: Prisma.FamilyWhereInput[] = accountExternalId
+    ? [{ sourceSystem: "procare", externalId: accountExternalId }]
+    : [
+        familyName ? { name: familyName } : undefined,
+        email ? { billingEmail: email } : undefined,
+        address ? { address } : undefined,
+        childName ? { children: { some: { fullName: childName } } } : undefined,
+        guardianName ? { guardians: { some: { fullName: guardianName } } } : undefined,
+        email ? { guardians: { some: { email } } } : undefined,
+        phone ? { guardians: { some: { phone } } } : undefined,
+      ].filter(Boolean) as Prisma.FamilyWhereInput[];
   if (familyName || childName || email || phone || accountExternalId) {
     const familyCandidates = familyWhere.length
       ? await prisma.family.findMany({
@@ -413,10 +559,11 @@ async function findProcareDuplicateMatches({
     }
   }
 
-  const childWhere: Prisma.ChildWhereInput[] = [
-    childExternalId ? { sourceSystem: "procare", externalId: childExternalId } : undefined,
-    childName ? { fullName: childName } : undefined,
-  ].filter(Boolean) as Prisma.ChildWhereInput[];
+  const childWhere: Prisma.ChildWhereInput[] = childExternalId
+    ? [{ sourceSystem: "procare", externalId: childExternalId }]
+    : childName
+      ? [{ fullName: childName }]
+      : [];
   if (childName && childWhere.length) {
     const childCandidates = await prisma.child.findMany({
       where: { family: { centerId: targetCenterId }, OR: childWhere },
@@ -471,12 +618,13 @@ async function findProcareDuplicateMatches({
   ].filter((guardian) => guardian.externalId || guardian.name || guardian.email || guardian.phone);
 
   for (const guardianImport of guardianImports) {
-    const guardianWhere: Prisma.GuardianWhereInput[] = [
-      guardianImport.externalId ? { sourceSystem: "procare", externalId: guardianImport.externalId } : undefined,
-      guardianImport.email ? { email: guardianImport.email } : undefined,
-      guardianImport.phone ? { phone: guardianImport.phone } : undefined,
-      guardianImport.name ? { fullName: guardianImport.name } : undefined,
-    ].filter(Boolean) as Prisma.GuardianWhereInput[];
+    const guardianWhere: Prisma.GuardianWhereInput[] = guardianImport.externalId
+      ? [{ sourceSystem: "procare", externalId: guardianImport.externalId }]
+      : [
+          guardianImport.email ? { email: guardianImport.email } : undefined,
+          guardianImport.phone ? { phone: guardianImport.phone } : undefined,
+          guardianImport.name ? { fullName: guardianImport.name } : undefined,
+        ].filter(Boolean) as Prisma.GuardianWhereInput[];
     const guardianCandidates = guardianWhere.length
       ? await prisma.guardian.findMany({
           where: { family: { centerId: targetCenterId }, OR: guardianWhere },
@@ -574,7 +722,8 @@ async function previewImportRows({
     message?: string;
   }> = [];
 
-  for (let index = 1; index < rows.length; index += 1) {
+  await forEachWithConcurrency(rows.slice(1), 10, async (_row, rowIndex) => {
+    const index = rowIndex + 1;
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
     const rowNumber = index + 1;
     const rowCenterValue = value(rawData, [
@@ -596,7 +745,7 @@ async function previewImportRows({
       const message = `Could not map row to a center from "${rowCenterValue || "blank location"}".`;
       warnings.push({ rowNumber, message });
       rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: "Unmapped", action: "Skipped until mapped", message });
-      continue;
+      return;
     }
 
     centersTouched.add(targetCenter.id);
@@ -604,7 +753,7 @@ async function previewImportRows({
     if (importWarning) {
       warnings.push({ rowNumber, message: importWarning });
       rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Resolve account relationship", message: importWarning });
-      continue;
+      return;
     }
     const employeeName = procareStaffName(rawData);
     const employeeEmail = value(rawData, ["employee email", "staff email", "teacher email", "work email", "email"]);
@@ -616,6 +765,13 @@ async function previewImportRows({
     const childExternalId = externalValue(rawData, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
     const classroomName = procareClassroomName(rawData);
     if (classroomName) classroomsReferenced.add(`${targetCenter.id}:${classroomName}`);
+    const previewEnrollmentStatusValue = value(rawData, ["child status", "status", "enrollment status", "student status"]);
+    if (childName && previewEnrollmentStatusValue && normalizeProcareEnrollmentStatus(previewEnrollmentStatusValue) === "enrolled" && !classroomName) {
+      const message = "An enrolled child is missing a classroom assignment.";
+      warnings.push({ rowNumber, message });
+      rowResults.push({ rowNumber, status: "warning", entity: "family_child", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Assign a classroom", familyName: familyName || undefined, childName, message });
+      return;
+    }
 
     if (employeeName && !childName && !familyName) {
       staffRows += 1;
@@ -640,14 +796,14 @@ async function previewImportRows({
         action: runDatabasePreviewLookups ? existingStaff ? "Update staff" : "Create staff" : "Ready to import staff",
         staffName: employeeName,
       });
-      continue;
+      return;
     }
 
     if (!familyName && !childName && !email) {
       const message = "Missing family, child, or email fields.";
       warnings.push({ rowNumber, message });
       rowResults.push({ rowNumber, status: "warning", entity: "unknown", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Needs cleanup", message });
-      continue;
+      return;
     }
 
     familyRows += 1;
@@ -656,34 +812,44 @@ async function previewImportRows({
     if (familyKey) importFamilyKeys.add(familyKey);
     const childKey = childName ? previewImportKey(targetCenter.id, familyIdentity, childExternalId || childName) : "";
     if (childKey) importChildKeys.add(childKey);
-    if (cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]))) balanceRows += 1;
+    if (value(rawData, ["balance", "account balance", "ledger balance", "amount due"])) balanceRows += 1;
     if (value(rawData, ["attendance date", "date", "absence date", "attendance status", "attendance"])) attendanceRows += 1;
     if (value(rawData, ["check in", "check-in", "time in", "check out", "check-out", "time out"])) checkLogRows += 1;
 
-    const familyMatchers = [
-      accountExternalId ? { sourceSystem: "procare", externalId: accountExternalId } : undefined,
+    const fallbackFamilyMatchers = [
       familyName ? { name: familyName } : undefined,
       email ? { billingEmail: email } : undefined,
-    ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; name?: string; billingEmail?: string }>;
-    const existingFamily = runDatabasePreviewLookups && familyMatchers.length
-      ? await prisma.family.findFirst({ where: { centerId: targetCenter.id, OR: familyMatchers }, select: { id: true } })
-      : null;
+    ].filter(Boolean) as Array<{ name?: string; billingEmail?: string }>;
+    const existingFamily = !runDatabasePreviewLookups
+      ? null
+      : accountExternalId
+        ? await prisma.family.findFirst({
+            where: { centerId: targetCenter.id, sourceSystem: "procare", externalId: accountExternalId },
+            select: { id: true },
+          })
+        : fallbackFamilyMatchers.length
+          ? await prisma.family.findFirst({
+              where: { centerId: targetCenter.id, OR: fallbackFamilyMatchers },
+              select: { id: true },
+            })
+          : null;
     if (runDatabasePreviewLookups) {
       if (existingFamily) matchedFamilies += 1; else newFamilies += 1;
     }
 
     let existingChild: { id: string } | null = null;
-    if (runDatabasePreviewLookups && existingFamily && childName) {
-      existingChild = await prisma.child.findFirst({
-        where: {
-          familyId: existingFamily.id,
-          OR: [
-            childExternalId ? { sourceSystem: "procare", externalId: childExternalId } : undefined,
-            { fullName: childName },
-          ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; fullName?: string }>,
-        },
-        select: { id: true },
-      });
+    if (runDatabasePreviewLookups && childName) {
+      existingChild = childExternalId
+        ? await prisma.child.findFirst({
+            where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: childExternalId },
+            select: { id: true },
+          })
+        : existingFamily
+          ? await prisma.child.findFirst({
+              where: { familyId: existingFamily.id, fullName: childName },
+              select: { id: true },
+            })
+          : null;
     }
     if (runDatabasePreviewLookups && childName) {
       if (existingChild) matchedChildren += 1; else newChildren += 1;
@@ -712,7 +878,11 @@ async function previewImportRows({
       childName: childName || undefined,
       message: rowDuplicateWarnings.length ? rowDuplicateWarnings.map((match) => `${match.entity}: ${match.importLabel}`).join("; ") : undefined,
     });
-  }
+  });
+
+  warnings.sort((a, b) => a.rowNumber - b.rowNumber);
+  rowResults.sort((a, b) => a.rowNumber - b.rowNumber);
+  duplicateMatches.sort((a, b) => a.rowNumber - b.rowNumber || a.entity.localeCompare(b.entity));
 
   return {
     center: autoMap ? "Auto-mapped from ProCare export" : defaultCenter.crmLocationId ?? defaultCenter.name,
@@ -845,10 +1015,29 @@ const importBackupInclude = {
       rawData: true,
       createdFamilyId: true,
       createdChildId: true,
-      createdAt: true,
     },
   },
 } as const;
+
+function importBatchCenterIds(batch: {
+  centerId: string;
+  summary?: Prisma.JsonValue | null;
+  rows?: Array<{ rawData: Prisma.JsonValue }>;
+}) {
+  const centerIds = new Set([batch.centerId]);
+  if (batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)) {
+    const savedCenterIds = (batch.summary as Record<string, Prisma.JsonValue>)["centerIdsTouched"];
+    if (Array.isArray(savedCenterIds)) {
+      for (const centerId of savedCenterIds) if (typeof centerId === "string" && centerId) centerIds.add(centerId);
+    }
+  }
+  for (const row of batch.rows ?? []) {
+    if (!row.rawData || typeof row.rawData !== "object" || Array.isArray(row.rawData)) continue;
+    const mappedCenterId = (row.rawData as Record<string, Prisma.JsonValue>)["mappedCenterId"];
+    if (typeof mappedCenterId === "string" && mappedCenterId) centerIds.add(mappedCenterId);
+  }
+  return [...centerIds];
+}
 
 function safeBackupFilename(input: string) {
   return input
@@ -900,27 +1089,178 @@ async function GETHandler(request: NextRequest) {
   if (!batch) {
     return NextResponse.json({ ok: false, error: "ProCare import batch not found." }, { status: 404 });
   }
-  if (!canAccessCenter(user, batch.centerId)) {
+  if (importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) {
     return NextResponse.json({ ok: false, error: "You do not have access to this import batch." }, { status: 403 });
   }
 
   if (reportType === "reconciliation") {
-    const familyIds = [...new Set(batch.rows.map((row) => row.createdFamilyId).filter((id): id is string => Boolean(id)))];
-    const childIds = [...new Set(batch.rows.map((row) => row.createdChildId).filter((id): id is string => Boolean(id)))];
-    const sourceBalanceCents = batch.rows.reduce((sum, row) => {
-      const raw = row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
-        ? Object.fromEntries(Object.entries(row.rawData).map(([key, field]) => [key, typeof field === "string" ? field : ""]))
-        : {};
-      return sum + cents(value(raw, ["balance", "account balance", "ledger balance", "amount due"]));
-    }, 0);
-    const [families, children, guardians, ledger] = await Promise.all([
-      prisma.family.count({ where: { id: { in: familyIds }, centerId: batch.centerId } }),
-      prisma.child.count({ where: { id: { in: childIds }, family: { centerId: batch.centerId } } }),
-      prisma.guardian.count({ where: { familyId: { in: familyIds }, family: { centerId: batch.centerId } } }),
-      prisma.ledgerEntry.aggregate({
-        where: { sourceSystem: "procare", externalId: { startsWith: `${batch.id}:` }, billingAccount: { family: { centerId: batch.centerId } } },
-        _sum: { amountCents: true },
-      }),
+    const importedRecords = batch.rows
+      .filter((row) => row.status === "imported")
+      .map((row) => {
+        const raw = row.rawData && typeof row.rawData === "object" && !Array.isArray(row.rawData)
+          ? Object.fromEntries(Object.entries(row.rawData).map(([key, field]) => [key, typeof field === "string" ? field : ""]))
+          : {};
+        return { raw, centerId: clean(raw.mappedCenterId) || batch.centerId };
+      });
+    const scopedIdentity = (centerId: string, externalId: string) => `${centerId}\0${externalId}`;
+    const scopedIdentityParts = (identity: string) => {
+      const separator = identity.indexOf("\0");
+      return { centerId: identity.slice(0, separator), externalId: identity.slice(separator + 1) };
+    };
+    const familyExternalIds = new Set<string>();
+    const childExternalIds = new Set<string>();
+    const guardianExternalIds = new Set<string>();
+    const emergencyContactExternalIds = new Set<string>();
+    const authorizedPickupExternalIds = new Set<string>();
+    const staffExternalIds = new Set<string>();
+    const classroomExternalIds = new Set<string>();
+    const balancesByFamily = new Map<string, number>();
+    let familiesComplete = true;
+    let childrenComplete = true;
+    let guardiansComplete = true;
+    let emergencyContactsComplete = true;
+    let authorizedPickupsComplete = true;
+    let staffComplete = true;
+    let balancesComplete = true;
+    let hasFamilyRows = false;
+    let hasChildRows = false;
+    let hasGuardianRows = false;
+    let hasEmergencyContactRows = false;
+    let hasAuthorizedPickupRows = false;
+    let hasStaffRows = false;
+    let hasClassroomRows = false;
+    let hasBalanceRows = false;
+
+    for (const { raw, centerId: mappedCenterId } of importedRecords) {
+      const familyName = procareFamilyName(raw);
+      const childName = procareChildFullName(raw);
+      const employeeName = procareStaffName(raw);
+      const accountExternalId = externalValue(raw, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+      const childExternalId = externalValue(raw, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+      const isStaffRow = Boolean(employeeName && !childName && !familyName);
+      if (isStaffRow) {
+        hasStaffRows = true;
+        const staffExternalId = externalValue(raw, ["employee id", "staff id", "teacher id", "employee key", "person id"]);
+        if (staffExternalId) staffExternalIds.add(scopedIdentity(mappedCenterId, staffExternalId)); else staffComplete = false;
+        continue;
+      }
+
+      hasFamilyRows = true;
+      if (accountExternalId) familyExternalIds.add(scopedIdentity(mappedCenterId, accountExternalId)); else familiesComplete = false;
+      if (childName) {
+        hasChildRows = true;
+        if (childExternalId) childExternalIds.add(scopedIdentity(mappedCenterId, childExternalId)); else childrenComplete = false;
+      }
+      const classroomName = procareClassroomName(raw);
+      if (classroomName) {
+        hasClassroomRows = true;
+        classroomExternalIds.add(scopedIdentity(mappedCenterId, externalValue(raw, ["classroom id", "room id", "class id", "classroom key", "room key"]) || classroomName));
+      }
+
+      const guardianCandidates = [
+        {
+          id: externalValue(raw, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]),
+          present: Boolean(value(raw, ["guardian name", "parent/guardian", "parent name", "primary guardian", "primary payer", "payer", "payer 1", "primary parent", "mother", "father", "email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email", "phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"])),
+        },
+        {
+          id: externalValue(raw, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
+          present: Boolean(value(raw, ["secondary guardian", "secondary payer", "secondary parent", "parent 2", "payer 2", "spouse", "secondary email", "secondary guardian email", "secondary payer email", "parent 2 email", "payer 2 email", "secondary phone", "secondary guardian phone", "secondary payer phone", "parent 2 phone", "payer 2 phone"])),
+        },
+      ];
+      if (hasImportField(raw, ["procare relationship records"])) {
+        hasGuardianRows = true;
+        hasEmergencyContactRows = true;
+        hasAuthorizedPickupRows = true;
+        try {
+          const relationships = JSON.parse(value(raw, ["procare relationship records"]) || "[]") as unknown;
+          if (!Array.isArray(relationships)) throw new Error("ProCare relationship records must be an array.");
+          for (const relationship of relationships) {
+            if (!relationship || typeof relationship !== "object" || Array.isArray(relationship)) continue;
+            const record = relationship as ProcareRelationshipRecord;
+            const relationshipId = clean(record.externalId);
+            if (record.guardian) guardianCandidates.push({ id: relationshipId || null, present: true });
+            if (record.emergency) {
+              if (relationshipId) emergencyContactExternalIds.add(scopedIdentity(mappedCenterId, relationshipId));
+              else emergencyContactsComplete = false;
+            }
+            if (record.authorizedPickup) {
+              if (relationshipId) authorizedPickupExternalIds.add(scopedIdentity(mappedCenterId, relationshipId));
+              else authorizedPickupsComplete = false;
+            }
+          }
+        } catch {
+          guardiansComplete = false;
+          emergencyContactsComplete = false;
+          authorizedPickupsComplete = false;
+        }
+      }
+      try {
+        const accountPeople = JSON.parse(value(raw, ["procare account person records"]) || "[]") as unknown;
+        if (Array.isArray(accountPeople)) {
+          for (const person of accountPeople) {
+            if (!person || typeof person !== "object") continue;
+            const fields = embeddedImportRecord(person);
+            if (value(fields, ["person type", "type"]).toLowerCase() !== "payer") continue;
+            guardianCandidates.push({ id: externalValue(fields, ["person id", "payer id", "parent id"]), present: true });
+          }
+        }
+      } catch { /* Invalid account-person JSON is already retained in the reviewed source row. */ }
+      for (const guardian of guardianCandidates) {
+        if (!guardian.present) continue;
+        hasGuardianRows = true;
+        if (guardian.id) guardianExternalIds.add(scopedIdentity(mappedCenterId, guardian.id)); else guardiansComplete = false;
+      }
+      if (!accountExternalId) {
+        if (hasGuardianRows) guardiansComplete = false;
+        if (hasEmergencyContactRows) emergencyContactsComplete = false;
+        if (hasAuthorizedPickupRows) authorizedPickupsComplete = false;
+      }
+
+      const balanceAliases = ["balance", "account balance", "ledger balance", "amount due"];
+      const balanceSourceValue = value(raw, balanceAliases);
+      if (hasImportField(raw, balanceAliases) && balanceSourceValue) {
+        hasBalanceRows = true;
+        if (!accountExternalId) {
+          balancesComplete = false;
+        } else {
+          const parsedBalance = parseCurrencyCents(balanceSourceValue);
+          if (!parsedBalance.valid) {
+            balancesComplete = false;
+            continue;
+          }
+          const importedBalance = parsedBalance.cents;
+          const balanceIdentity = scopedIdentity(mappedCenterId, accountExternalId);
+          const priorBalance = balancesByFamily.get(balanceIdentity);
+          if (priorBalance !== undefined && priorBalance !== importedBalance) balancesComplete = false;
+          balancesByFamily.set(balanceIdentity, importedBalance);
+        }
+      }
+    }
+
+    const familyScopes = [...familyExternalIds].map(scopedIdentityParts);
+    const childScopes = [...childExternalIds].map(scopedIdentityParts);
+    const staffScopes = [...staffExternalIds].map(scopedIdentityParts);
+    const classroomScopes = [...classroomExternalIds].map(scopedIdentityParts);
+    const balanceScopes = [...balancesByFamily.keys()].map(scopedIdentityParts);
+    const procareRelationshipRowsAcrossSourceFamilies = familyScopes.map(({ centerId, externalId }) => ({
+      family: { centerId, sourceSystem: "procare", externalId },
+      sourceSystem: "procare",
+      externalId: { not: null },
+    }));
+    const [families, children, guardians, emergencyContacts, authorizedPickups, staff, classrooms, billingBalances] = await Promise.all([
+      familyScopes.length ? prisma.family.count({ where: { OR: familyScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      childScopes.length ? prisma.child.count({ where: { OR: childScopes.map(({ centerId, externalId }) => ({ family: { centerId }, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      procareRelationshipRowsAcrossSourceFamilies.length ? prisma.guardian.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
+      procareRelationshipRowsAcrossSourceFamilies.length ? prisma.emergencyContact.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
+      procareRelationshipRowsAcrossSourceFamilies.length ? prisma.authorizedPickup.count({ where: { OR: procareRelationshipRowsAcrossSourceFamilies } }) : Promise.resolve(0),
+      staffScopes.length ? prisma.staffProfile.count({ where: { OR: staffScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      classroomScopes.length ? prisma.classroom.count({ where: { OR: classroomScopes.map(({ centerId, externalId }) => ({ centerId, sourceSystem: "procare", externalId })) } }) : Promise.resolve(0),
+      balanceScopes.length
+        ? prisma.billingAccount.aggregate({
+            where: { OR: balanceScopes.map(({ centerId, externalId }) => ({ family: { centerId, sourceSystem: "procare", externalId } })) },
+            _sum: { balanceCents: true },
+          })
+        : Promise.resolve({ _sum: { balanceCents: null } }),
     ]);
     const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
       ? batch.summary as Record<string, unknown>
@@ -930,9 +1270,34 @@ async function GETHandler(request: NextRequest) {
       sourceSha256: typeof summary.sourceSha256 === "string" ? summary.sourceSha256 : undefined,
       batchStatus: batch.status,
       importedRows: batch.rows.filter((row) => row.status === "imported").length,
-      errorRows: batch.rows.filter((row) => row.status === "error").length,
-      source: { families: familyIds.length, children: childIds.length, guardians: null, staff: null, classrooms: null, balanceCents: sourceBalanceCents, creditsCents: null, openInvoicesCents: null },
-      target: { families, children, guardians, staff: null, classrooms: null, balanceCents: ledger._sum.amountCents ?? 0, creditsCents: null, openInvoicesCents: null },
+      errorRows: batch.rows.filter((row) => row.status !== "imported").length,
+      reviewedRows: batch.rows.length,
+      disposedRows: batch.rows.filter((row) => row.status === "disposed").length,
+      unresolvedRows: batch.rows.filter((row) => row.status === "needs_resolution").length,
+      source: {
+        families: hasFamilyRows && familiesComplete ? familyExternalIds.size : null,
+        children: hasChildRows && childrenComplete ? childExternalIds.size : null,
+        guardians: hasGuardianRows && guardiansComplete ? guardianExternalIds.size : null,
+        emergencyContacts: hasEmergencyContactRows && emergencyContactsComplete ? emergencyContactExternalIds.size : null,
+        authorizedPickups: hasAuthorizedPickupRows && authorizedPickupsComplete ? authorizedPickupExternalIds.size : null,
+        staff: hasStaffRows && staffComplete ? staffExternalIds.size : null,
+        classrooms: hasClassroomRows ? classroomExternalIds.size : null,
+        balanceCents: hasBalanceRows && balancesComplete ? [...balancesByFamily.values()].reduce((sum, amount) => sum + amount, 0) : null,
+        creditsCents: null,
+        openInvoicesCents: null,
+      },
+      target: {
+        families: hasFamilyRows && familiesComplete ? families : null,
+        children: hasChildRows && childrenComplete ? children : null,
+        guardians: hasGuardianRows && guardiansComplete ? guardians : null,
+        emergencyContacts: hasEmergencyContactRows && emergencyContactsComplete ? emergencyContacts : null,
+        authorizedPickups: hasAuthorizedPickupRows && authorizedPickupsComplete ? authorizedPickups : null,
+        staff: hasStaffRows && staffComplete ? staff : null,
+        classrooms: hasClassroomRows ? classrooms : null,
+        balanceCents: hasBalanceRows && balancesComplete ? billingBalances._sum.balanceCents ?? 0 : null,
+        creditsCents: null,
+        openInvoicesCents: null,
+      },
     });
     await writeAuditLog(user, {
       centerId: batch.centerId,
@@ -1010,8 +1375,11 @@ async function POSTHandler(request: NextRequest) {
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
+  const submittedSourceSha256 = clean(formData.get("sourceSha256"));
+  const submittedReviewFingerprint = clean(formData.get("reviewFingerprint"));
+  const submittedWarningRowNumbers = parseImportRowNumbers(clean(formData.get("reviewWarningRowNumbers")));
+  const submittedDuplicateReviewRowNumbers = parseImportRowNumbers(clean(formData.get("reviewDuplicateWarningRowNumbers")));
   const requestedBatchId = clean(formData.get("batchId"));
-  const requestedChunkStart = Math.max(Number.parseInt(clean(formData.get("chunkStart")), 10) || 1, 1);
   const chunkSizeInput = clean(formData.get("chunkSize"));
   const parsedChunkSize = Number.parseInt(chunkSizeInput, 10);
   const requestedChunkSize = Number.isInteger(parsedChunkSize) && parsedChunkSize > 0
@@ -1034,14 +1402,27 @@ async function POSTHandler(request: NextRequest) {
   if (!centerId && !autoMap) return NextResponse.json({ ok: false, error: "Center ID is required." }, { status: 400 });
   if (centerId && !canAccessCenter(user, centerId)) return NextResponse.json({ ok: false, error: "You do not have access to this center." }, { status: 403 });
 
-  const visibleCenters = await prisma.center.findMany({
+  const visibleCenterRows = await prisma.center.findMany({
     where: {
       status: { not: "closed" },
       ...(user.role === "PLATFORM_OWNER" ? {} : { id: { in: user.centerIds.length ? user.centerIds : ["__none__"] } }),
     },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, crmLocationId: true, locationId: true, city: true, state: true },
+    select: {
+      id: true,
+      organizationId: true,
+      organization: { select: { tenantId: true } },
+      name: true,
+      crmLocationId: true,
+      locationId: true,
+      city: true,
+      state: true,
+    },
   });
+  const visibleCenters: ImportCenter[] = visibleCenterRows.map(({ organization, ...item }) => ({
+    ...item,
+    tenantId: organization.tenantId,
+  }));
   const center = autoMap
     ? visibleCenters[0] ?? null
     : visibleCenters.find((item) => item.id === centerId) ?? null;
@@ -1074,12 +1455,14 @@ async function POSTHandler(request: NextRequest) {
   }
   const mappingSignature = JSON.stringify(Object.entries(fieldMapping).sort(([a], [b]) => a.localeCompare(b)));
   const sourceSha256 = procareSourceSha256(text);
-  const reviewFingerprint = procareImportReviewFingerprint({
-    text: `${text}\n#field-mapping:${mappingSignature}`,
-    requestedCenterId,
-    duplicateMode,
-    secret: process.env.AUTH_SECRET || "development-procare-import-review",
-  });
+  const buildReviewFingerprint = (warningRowNumbers: number[], duplicateReviewRowNumbers: number[]) => (
+    procareImportReviewFingerprint({
+      text: importReviewEvidence({ sourceSha256, mappingSignature, warningRowNumbers, duplicateReviewRowNumbers }),
+      requestedCenterId,
+      duplicateMode,
+      secret: process.env.AUTH_SECRET || "development-procare-import-review",
+    })
+  );
 
   if (dryRun) {
     const preview = await previewImportRows({
@@ -1092,11 +1475,20 @@ async function POSTHandler(request: NextRequest) {
       filename: importPayload.filename,
       duplicateMode,
     });
+    const reviewFingerprint = buildReviewFingerprint(preview.warningRowNumbers, preview.duplicateReviewRowNumbers);
     return NextResponse.json({
       ok: true,
       dryRun: true,
       summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS },
     });
+  }
+
+  const reviewFingerprint = buildReviewFingerprint(submittedWarningRowNumbers, submittedDuplicateReviewRowNumbers);
+  if (submittedSourceSha256 !== sourceSha256 || submittedReviewFingerprint !== reviewFingerprint) {
+    return NextResponse.json(
+      { ok: false, error: "Submit this unchanged ProCare export for review before importing it." },
+      { status: 409 },
+    );
   }
 
   const requestedBatch = requestedBatchId
@@ -1120,8 +1512,11 @@ async function POSTHandler(request: NextRequest) {
   const existingSummary = existingBatch?.summary && typeof existingBatch.summary === "object" && !Array.isArray(existingBatch.summary)
     ? existingBatch.summary as Record<string, unknown>
     : {};
-  if (existingBatch && existingSummary.sourceSha256 !== sourceSha256) {
-    return NextResponse.json({ ok: false, error: "The selected files changed while the import was running. Start a new import with one unchanged export." }, { status: 409 });
+  if (existingBatch && (
+    existingSummary.sourceSha256 !== sourceSha256
+    || existingSummary.reviewFingerprint !== reviewFingerprint
+  )) {
+    return NextResponse.json({ ok: false, error: "The reviewed files, field mapping, or duplicate mode changed while the import was running. Start a new import with one unchanged review." }, { status: 409 });
   }
 
   let stagedRowNumbers = new Set<number>();
@@ -1129,23 +1524,21 @@ async function POSTHandler(request: NextRequest) {
   const validationWarningMessages = new Map<number, string>();
   if (existingBatch && Array.isArray(existingSummary.stagedRowNumbers)) {
     stagedRowNumbers = new Set(existingSummary.stagedRowNumbers.filter((value): value is number => Number.isInteger(value)));
+    const savedWarnings = existingSummary.validationWarnings && typeof existingSummary.validationWarnings === "object" && !Array.isArray(existingSummary.validationWarnings)
+      ? existingSummary.validationWarnings as Record<string, unknown>
+      : {};
+    for (const [rowNumber, message] of Object.entries(savedWarnings)) {
+      if (typeof message === "string") validationWarningMessages.set(Number(rowNumber), message);
+    }
   } else {
-    const validationPreview = await previewImportRows({
-      rows,
-      headers,
-      autoMap,
-      defaultCenter: center,
-      centerByAlias,
-      sourceType: importPayload.sourceType,
-      filename: importPayload.filename,
-      duplicateMode,
-    });
-    const duplicateWarningRows = new Set(validationPreview.duplicateReviewRowNumbers);
-    stagedRowNumbers = new Set(validationPreview.warningRowNumbers.filter((rowNumber) => (
+    const duplicateWarningRows = new Set(submittedDuplicateReviewRowNumbers);
+    stagedRowNumbers = new Set(submittedWarningRowNumbers.filter((rowNumber) => (
       !duplicateReviewConfirmed || !duplicateWarningRows.has(rowNumber)
     )));
-    duplicateReviewRows = validationPreview.duplicateReviewRows;
-    for (const warning of validationPreview.warnings) validationWarningMessages.set(warning.rowNumber, warning.message);
+    duplicateReviewRows = submittedDuplicateReviewRowNumbers.length;
+    for (const rowNumber of stagedRowNumbers) {
+      validationWarningMessages.set(rowNumber, "This reviewed row needs a field match or disposition before it can be imported.");
+    }
   }
   const disposedRowNumbers = new Set(
     clean(formData.get("disposedRowNumbers")).split(",").map(Number).filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1),
@@ -1165,7 +1558,11 @@ async function POSTHandler(request: NextRequest) {
   let attendanceRows = 0;
   let checkLogRows = 0;
   let invoiceRows = 0;
-  const centersTouched = new Set<string>();
+  const centersTouched = new Set(
+    Array.isArray(existingSummary.centerIdsTouched)
+      ? existingSummary.centerIdsTouched.filter((centerId): centerId is string => typeof centerId === "string")
+      : [],
+  );
   const rowResults: Array<{ rowNumber: number; status: string; message?: string; rawData: Record<string, string>; createdFamilyId?: string; createdChildId?: string }> = [];
 
   const batch = existingBatch ?? await prisma.procareImportBatch.create({
@@ -1174,18 +1571,91 @@ async function POSTHandler(request: NextRequest) {
       uploadedById: user.id,
       filename: importPayload.filename,
       status: "processing",
-      summary: { sourceType: importPayload.sourceType, sourceSha256, reviewFingerprint, stagedRowNumbers: [...stagedRowNumbers] },
+      summary: {
+        sourceType: importPayload.sourceType,
+        sourceSha256,
+        reviewFingerprint,
+        mappingSignature,
+        stagedRowNumbers: [...stagedRowNumbers],
+        duplicateReviewRows,
+        validationWarnings: Object.fromEntries(validationWarningMessages),
+      },
     },
   });
-  const savedCheckpoint = existingBatch
-    ? await prisma.procareImportRow.aggregate({ where: { batchId: existingBatch.id }, _max: { rowNumber: true } })
-    : null;
-  const chunkStart = Math.min(Math.max(requestedChunkStart, savedCheckpoint?._max.rowNumber ?? 1), rows.length);
+  const savedRowNumbers = existingBatch
+    ? await prisma.procareImportRow.findMany({
+        where: { batchId: existingBatch.id },
+        orderBy: { rowNumber: "asc" },
+        select: { rowNumber: true },
+      })
+    : [];
+  let chunkStart = 1;
+  for (const savedRow of savedRowNumbers) {
+    if (savedRow.rowNumber === chunkStart + 1) chunkStart += 1;
+    else if (savedRow.rowNumber > chunkStart + 1) break;
+  }
+  chunkStart = Math.min(chunkStart, rows.length);
   const chunkEnd = Math.min(chunkStart + requestedChunkSize, rows.length);
+  const completeRelationshipIdsByAccount = new Map<string, { guardians: Set<string>; emergency: Set<string>; pickup: Set<string> }>();
+  for (let sourceIndex = 1; sourceIndex < rows.length; sourceIndex += 1) {
+    const sourceRawData = Object.fromEntries(headers.map((header, column) => [header, rows[sourceIndex]?.[column] ?? ""]));
+    if (!hasImportField(sourceRawData, ["procare relationship records"])) continue;
+    const sourceAccountExternalId = externalValue(sourceRawData, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+    if (!sourceAccountExternalId) continue;
+    const sourceCenterValue = value(sourceRawData, [
+      "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site",
+    ]);
+    const sourceCenter = autoMap ? resolveImportCenter(centerByAlias, sourceCenterValue) : center;
+    if (!sourceCenter) continue;
+    try {
+      const parsed = JSON.parse(value(sourceRawData, ["procare relationship records"]) || "[]") as unknown;
+      if (!Array.isArray(parsed)) continue;
+      const key = `${sourceCenter.id}\0${sourceAccountExternalId}`;
+      const desired = completeRelationshipIdsByAccount.get(key) ?? { guardians: new Set<string>(), emergency: new Set<string>(), pickup: new Set<string>() };
+      for (const guardianId of [
+        externalValue(sourceRawData, ["payer id", "primary payer id", "guardian id", "parent id", "payer 1 id", "primary parent id"]),
+        externalValue(sourceRawData, ["secondary guardian id", "secondary payer id", "parent 2 id", "payer 2 id"]),
+      ]) {
+        if (guardianId) desired.guardians.add(guardianId);
+      }
+      try {
+        const accountPeople = JSON.parse(value(sourceRawData, ["procare account person records"]) || "[]") as unknown;
+        if (Array.isArray(accountPeople)) {
+          for (const person of accountPeople) {
+            const fields = embeddedImportRecord(person);
+            if (value(fields, ["person type", "type"]).toLowerCase() !== "payer") continue;
+            const guardianId = externalValue(fields, ["person id", "payer id", "parent id"]);
+            if (guardianId) desired.guardians.add(guardianId);
+          }
+        }
+      } catch {
+        continue;
+      }
+      for (const relationship of procareRelationshipRecords(sourceRawData)) {
+        const relationshipExternalId = clean(relationship.externalId);
+        if (!relationshipExternalId) continue;
+        if (relationship.guardian) desired.guardians.add(relationshipExternalId);
+        if (relationship.emergency) desired.emergency.add(relationshipExternalId);
+        if (relationship.authorizedPickup) desired.pickup.add(relationshipExternalId);
+      }
+      completeRelationshipIdsByAccount.set(key, desired);
+    } catch {
+      // Malformed relationship JSON is retained for review and never drives destructive reconciliation.
+    }
+  }
 
   for (let index = chunkStart; index < chunkEnd; index += 1) {
     const rawData = Object.fromEntries(headers.map((header, column) => [header, rows[index]?.[column] ?? ""]));
     const rowNumber = index + 1;
+    const checkpointCenterValue = value(rawData, [
+      "location id", "crm location id", "school id", "school", "school name", "center", "center name", "location", "site",
+    ]);
+    const checkpointCenter = autoMap ? resolveImportCenter(centerByAlias, checkpointCenterValue) : center;
+    if (checkpointCenter) {
+      centersTouched.add(checkpointCenter.id);
+      rawData.mappedCenterId = checkpointCenter.id;
+      rawData.mappedCenter = checkpointCenter.crmLocationId ?? checkpointCenter.name;
+    }
     if (disposedRowNumbers.has(rowNumber)) {
       rowResults.push({ rowNumber, status: "disposed", message: "Disposed by the user during import reconciliation.", rawData });
       continue;
@@ -1195,6 +1665,22 @@ async function POSTHandler(request: NextRequest) {
       rowResults.push({ rowNumber, status: "needs_resolution", message: warning, rawData });
       continue;
     }
+    const rowCounterSnapshot = {
+      createdFamilies,
+      updatedFamilies,
+      createdChildren,
+      ledgerRows,
+      createdClassrooms,
+      createdStaff,
+      updatedStaff,
+      createdStaffLogins,
+      emergencyContacts,
+      authorizedPickups,
+      medicalRows,
+      attendanceRows,
+      checkLogRows,
+      invoiceRows,
+    };
     try {
       const rowCenterValue = value(rawData, [
         "location id",
@@ -1223,7 +1709,11 @@ async function POSTHandler(request: NextRequest) {
           centerId: targetCenter.id,
           externalId: employeeExternalId,
           contactEmail: staffContactEmail,
+          rejectAmbiguous: true,
         });
+        if (existingStaff && existingStaff.user.tenantId !== targetCenter.tenantId) {
+          throw new Error("The matched staff login belongs to a different tenant than the mapped school.");
+        }
         const generatedLogin = existingStaff
           ? undefined
           : await generateTeacherLoginCredentials({
@@ -1242,50 +1732,56 @@ async function POSTHandler(request: NextRequest) {
           createdStaffLogins += 1;
         }
         const staffClassroomName = procareClassroomName(rawData);
-        let staffClassroomId: string | null = null;
-        if (staffClassroomName) {
-          const classroom = await findOrCreateClassroom({
-            centerId: targetCenter.id,
-            name: staffClassroomName,
-            ageGroup: procareAgeGroup(rawData, "Staff assignment"),
-            rawData,
-          });
-          staffClassroomId = classroom.id;
-          if (classroom.created) createdClassrooms += 1;
-        }
         const employeeStatus = value(rawData, ["employee status", "staff status", "teacher status"]);
+        const employeeStatusProvided = Boolean(employeeStatus);
         const employeeIsActive = isActiveProcareStaffStatus(employeeStatus);
+        const staffTitle = value(rawData, ["title", "position", "job title", "role"]);
+        const staffPhone = value(rawData, ["employee phone", "staff phone", "teacher phone", "phone"]);
+        const backgroundCheckStatus = value(rawData, ["background check", "background check status"]);
         const staffWrite = await prisma.$transaction(async (tx) => {
+          let staffClassroomId: string | null = null;
+          let createdStaffClassroom = false;
+          if (staffClassroomName) {
+            const classroom = await findOrCreateClassroom({
+              centerId: targetCenter.id,
+              name: staffClassroomName,
+              ageGroup: procareAgeGroup(rawData, "Staff assignment"),
+              rawData,
+            }, tx);
+            staffClassroomId = classroom.id;
+            createdStaffClassroom = classroom.created;
+          }
           const staffUser = existingStaff
             ? await tx.user.update({
                 where: { id: existingStaff.userId },
                 data: {
                   name: employeeName,
-                  role: UserRole.TEACHER,
-                  isActive: employeeIsActive,
-                  organizationId: user.organizationId,
+                  ...(employeeStatusProvided ? { isActive: employeeIsActive } : {}),
+                  organizationId: targetCenter.organizationId,
                 },
                 select: { id: true },
               })
             : await tx.user.create({
                 data: {
-                  tenantId: user.tenantId,
-                  organizationId: user.organizationId,
+                  tenantId: targetCenter.tenantId,
+                  organizationId: targetCenter.organizationId,
                   email: generatedLogin!.email,
                   name: employeeName,
                   role: UserRole.TEACHER,
                   isActive: employeeIsActive,
-                  mustResetPassword: false,
+                  mustResetPassword: true,
                 },
                 select: { id: true },
               });
-          await ensureTeacherCenterGrant({
-            userId: staffUser.id,
-            tenantId: user.tenantId,
-            organizationId: user.organizationId,
-            centerId: targetCenter.id,
-          }, tx);
-          const customFields = metadataFromRow(rawData, {
+          if (!existingStaff || existingStaff.user.role === UserRole.TEACHER) {
+            await ensureTeacherCenterGrant({
+              userId: staffUser.id,
+              tenantId: targetCenter.tenantId,
+              organizationId: targetCenter.organizationId,
+              centerId: targetCenter.id,
+            }, tx);
+          }
+          const importedCustomFields = metadataFromRow(rawData, {
             mappedCenterId: targetCenter.id,
             ...(staffContactEmail ? { staffContactEmail } : {}),
             employeeStatus,
@@ -1293,42 +1789,55 @@ async function POSTHandler(request: NextRequest) {
             primaryWorkArea: value(rawData, ["primary work area", "work area"]),
             ...(generatedLogin ? { generatedTeacherLoginEmail: generatedLogin.email, supabaseAuthUserCreated: canCreateSupabaseStaffAuth } : {}),
           });
-          const data = {
-            centerId: targetCenter.id,
-            classroomId: staffClassroomId || undefined,
-            title: value(rawData, ["title", "position", "job title", "role"]) || "Teacher",
-            phone: value(rawData, ["employee phone", "staff phone", "teacher phone", "phone"]) || null,
-            backgroundCheckStatus: value(rawData, ["background check", "background check status"]) || null,
-            sourceSystem: "procare",
-            externalId: employeeExternalId,
-            customFields,
-          };
           if (existingStaff) {
-            await tx.staffProfile.update({ where: { id: existingStaff.id }, data });
+            await tx.staffProfile.update({
+              where: { id: existingStaff.id },
+              data: {
+                centerId: targetCenter.id,
+                ...(staffClassroomName ? { classroomId: staffClassroomId } : {}),
+                ...(staffTitle ? { title: staffTitle } : {}),
+                ...(staffPhone ? { phone: staffPhone } : {}),
+                ...(backgroundCheckStatus ? { backgroundCheckStatus } : {}),
+                sourceSystem: "procare",
+                ...(employeeExternalId ? { externalId: employeeExternalId } : {}),
+                customFields: mergeCustomFields(existingStaff.customFields, importedCustomFields),
+              },
+            });
           } else {
             await tx.staffProfile.create({
               data: {
                 userId: staffUser.id,
-                ...data,
+                centerId: targetCenter.id,
                 classroomId: staffClassroomId,
+                title: staffTitle || "Teacher",
+                phone: staffPhone || null,
+                backgroundCheckStatus: backgroundCheckStatus || null,
+                sourceSystem: "procare",
+                externalId: employeeExternalId,
+                customFields: importedCustomFields,
               },
             });
           }
-          return { staffUserId: staffUser.id };
-        });
-        if (generatedLogin) {
-          await writeAuditLog(user, {
-            centerId: targetCenter.id,
-            action: "teacher_user_created",
-            resource: "User",
-            resourceId: staffWrite.staffUserId,
-            metadata: {
-              email: generatedLogin.email,
-              source: "procare_import",
-              batchId: batch.id,
-            },
-          });
-        }
+          if (generatedLogin) {
+            await tx.auditLog.create({
+              data: {
+                tenantId: user.tenantId,
+                centerId: targetCenter.id,
+                userId: user.id,
+                action: "teacher_user_created",
+                resource: "User",
+                resourceId: staffUser.id,
+                metadata: {
+                  email: generatedLogin.email,
+                  source: "procare_import",
+                  batchId: batch.id,
+                },
+              },
+            });
+          }
+          return { staffUserId: staffUser.id, createdStaffClassroom };
+        }, { maxWait: 10_000, timeout: 60_000 });
+        if (staffWrite.createdStaffClassroom) createdClassrooms += 1;
         if (existingStaff) updatedStaff += 1; else createdStaff += 1;
         rowResults.push({
           rowNumber: index + 1,
@@ -1352,32 +1861,58 @@ async function POSTHandler(request: NextRequest) {
       const email = value(rawData, ["email", "guardian email", "parent email", "primary email", "payer email", "payer 1 email", "primary payer email"]).toLowerCase();
       const phone = value(rawData, ["phone", "guardian phone", "parent phone", "primary phone", "payer phone", "payer 1 phone", "primary payer phone"]);
       const address = value(rawData, ["address", "street address", "home address", "mailing address", "primary address", "payer address"]);
-      const balanceCents = cents(value(rawData, ["balance", "account balance", "ledger balance", "amount due"]));
+      const balanceValue = value(rawData, ["balance", "account balance", "ledger balance", "amount due"]);
+      const parsedBalance = parseCurrencyCents(balanceValue);
+      if (parsedBalance.present && !parsedBalance.valid) {
+        throw new Error("The ProCare balance is not a valid currency amount. Correct the source value before importing this row.");
+      }
+      const balanceCents = parsedBalance.cents;
+      const classroomAliases = ["classroom", "classroom name", "room", "room name", "class", "assigned classroom", "assigned room"];
+      const enrollmentStatusAliases = ["child status", "status", "enrollment status", "student status"];
+      const ageGroupAliases = ["age group", "program", "class", "room", ...classroomAliases];
+      const preferredNameAliases = ["preferred name", "nickname", "goes by", "first name", "child first name", "student first name"];
       const classroomName = procareClassroomName(rawData);
       const ageGroup = procareAgeGroup(rawData, "Unassigned");
-      const enrollmentStatus = normalizeProcareEnrollmentStatus(value(rawData, ["child status", "status", "enrollment status", "student status"]));
+      const enrollmentStatusValue = value(rawData, enrollmentStatusAliases);
+      const enrollmentStatusProvided = Boolean(enrollmentStatusValue);
+      const enrollmentStatus = normalizeProcareEnrollmentStatus(enrollmentStatusValue, "review_needed");
       const familyDisplayName = familyName || (accountExternalId ? `${accountExternalId} Household` : childName || email);
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
-      const familyMatchers = [
-        accountExternalId ? { sourceSystem: "procare", externalId: accountExternalId } : undefined,
+      const familyWrite = await prisma.$transaction(async (prisma) => {
+      const fallbackFamilyMatchers = [
         familyName ? { name: familyName } : undefined,
         email ? { billingEmail: email } : undefined,
-      ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; name?: string; billingEmail?: string }>;
+      ].filter(Boolean) as Array<{ name?: string; billingEmail?: string }>;
+      const fallbackFamilies = accountExternalId || !fallbackFamilyMatchers.length
+        ? []
+        : await prisma.family.findMany({
+            where: { centerId: targetCenter.id, OR: fallbackFamilyMatchers },
+            take: 2,
+            select: { id: true, customFields: true },
+          });
+      const externalFamilies = accountExternalId
+        ? await prisma.family.findMany({
+            where: { centerId: targetCenter.id, sourceSystem: "procare", externalId: accountExternalId },
+            take: 2,
+            select: { id: true, customFields: true },
+          })
+        : [];
+      if (externalFamilies.length > 1) {
+        throw new Error("Multiple existing families use this ProCare Account ID. Resolve the duplicate records before importing.");
+      }
+      if (fallbackFamilies.length > 1) {
+        throw new Error("Multiple existing families match this row without a ProCare Account ID. Add the account relationship before importing.");
+      }
       const familyMetadata = metadataFromRow(rawData, {
         mappedCenterId: targetCenter.id,
         procareAccountKey: accountExternalId,
         accountTracking: value(rawData, ["tracking", "account tracking", "family tracking"]),
       });
-      const existing = familyMatchers.length
-        ? await prisma.family.findFirst({
-            where: {
-              centerId: targetCenter.id,
-              OR: familyMatchers,
-            },
-            select: { id: true },
-          })
-        : null;
+      const existing = accountExternalId
+        ? externalFamilies[0] ?? null
+        : fallbackFamilies[0] ?? null;
+      const custodyNotes = value(rawData, ["custody notes", "custody", "legal custody", "court order", "court orders"]);
 
       const family = existing
         ? await prisma.family.update({
@@ -1386,9 +1921,10 @@ async function POSTHandler(request: NextRequest) {
               ...(familyName ? { name: familyName } : {}),
               billingEmail: email || undefined,
               address: address || undefined,
+              custodyNotes: custodyNotes || undefined,
               sourceSystem: "procare",
               externalId: accountExternalId || undefined,
-              customFields: familyMetadata,
+              customFields: mergeCustomFields(existing.customFields, familyMetadata),
             },
           })
         : await prisma.family.create({
@@ -1398,6 +1934,7 @@ async function POSTHandler(request: NextRequest) {
               billingEmail: email || null,
               address: address || null,
               notes: "Imported from ProCare export.",
+              custodyNotes: custodyNotes || null,
               sourceSystem: "procare",
               externalId: accountExternalId,
               customFields: familyMetadata,
@@ -1427,21 +1964,35 @@ async function POSTHandler(request: NextRequest) {
         employer: string;
       }) => {
         if (!name && !guardianEmail && !guardianPhone) return;
-        const guardianMatchers = [
-          externalId ? { sourceSystem: "procare", externalId } : undefined,
+        const fallbackGuardianMatchers = [
           guardianEmail ? { email: guardianEmail } : undefined,
+          guardianPhone ? { phone: guardianPhone } : undefined,
           name ? { fullName: name } : undefined,
-        ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; email?: string; fullName?: string }>;
-        const existingGuardian = guardianMatchers.length
-          ? await prisma.guardian.findFirst({
-              where: {
-                familyId: family.id,
-                OR: guardianMatchers,
-              },
+        ].filter(Boolean) as Array<{ email?: string; phone?: string; fullName?: string }>;
+        const fallbackGuardians = externalId || !fallbackGuardianMatchers.length
+          ? []
+          : await prisma.guardian.findMany({
+              where: { familyId: family.id, OR: fallbackGuardianMatchers },
+              take: 2,
+            });
+        const externalGuardians = externalId
+          ? await prisma.guardian.findMany({
+              where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId },
+              take: 2,
             })
-          : null;
-        const guardian = !existingGuardian
-          ? await prisma.guardian.create({
+          : [];
+        if (externalGuardians.length > 1) {
+          throw new Error("Multiple existing guardians use this ProCare Person ID. Resolve the duplicate records before importing.");
+        }
+        if (fallbackGuardians.length > 1) {
+          throw new Error("Multiple guardians match this row without a ProCare Person ID. Add the relationship ID before importing.");
+        }
+        const existingGuardian = externalId
+          ? externalGuardians[0] ?? null
+          : fallbackGuardians[0] ?? null;
+        const guardianMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        if (!existingGuardian) {
+          await prisma.guardian.create({
             data: {
               familyId: family.id,
               fullName: name || familyName || guardianEmail || guardianPhone,
@@ -1453,27 +2004,26 @@ async function POSTHandler(request: NextRequest) {
               isBillingContact: billingContact,
               sourceSystem: "procare",
               externalId,
-              customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+              customFields: guardianMetadata,
             },
-          })
-          : await prisma.guardian.update({
+          });
+        } else {
+          await prisma.guardian.update({
             where: { id: existingGuardian.id },
             data: {
+              familyId: family.id,
+              fullName: name || undefined,
               email: guardianEmail || undefined,
               phone: guardianPhone || undefined,
               employer: employer || undefined,
               relation,
+              preferredCommunication: guardianEmail ? "email" : guardianPhone ? "phone" : undefined,
               isBillingContact: billingContact || existingGuardian.isBillingContact,
               sourceSystem: "procare",
               externalId: externalId || undefined,
-              customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+              customFields: mergeCustomFields(existingGuardian.customFields, guardianMetadata),
             },
           });
-        if (!guardian.checkInPinHash) {
-          const defaultPinData = defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id });
-          if (defaultPinData) {
-            await prisma.guardian.update({ where: { id: guardian.id }, data: defaultPinData });
-          }
         }
       };
 
@@ -1497,6 +2047,29 @@ async function POSTHandler(request: NextRequest) {
         employer: value(rawData, ["secondary employer", "secondary guardian employer", "secondary payer employer", "parent 2 employer"]) || "",
       });
 
+      const accountPersonRecords = (() => {
+        try {
+          const parsed = JSON.parse(value(rawData, ["procare account person records"]) || "[]") as unknown;
+          return Array.isArray(parsed) ? parsed.map(embeddedImportRecord) : [];
+        } catch { return []; }
+      })();
+      const syncedPayerIds = new Set<string>();
+      for (const payer of accountPersonRecords) {
+        if (!/payer/i.test(value(payer, ["person type", "type"]))) continue;
+        const payerExternalId = externalValue(payer, ["person id", "payer id", "parent id"]);
+        if (!payerExternalId || syncedPayerIds.has(payerExternalId)) continue;
+        syncedPayerIds.add(payerExternalId);
+        await syncGuardian({
+          name: procareChildFullName(payer),
+          guardianEmail: value(payer, ["email", "email address"]).toLowerCase(),
+          guardianPhone: value(payer, ["phone 1", "phone 2", "phone 3", "phone 4", "phone 5", "phone"]),
+          externalId: payerExternalId,
+          relation: value(payer, ["relation", "relationship"]) || "Guardian",
+          billingContact: payerExternalId === guardianExternalId,
+          employer: value(payer, ["employer", "company", "workplace"]),
+        });
+      }
+
       let childId: string | undefined;
       if (childName) {
         let classroomId: string | null = null;
@@ -1506,11 +2079,16 @@ async function POSTHandler(request: NextRequest) {
             name: classroomName,
             ageGroup,
             rawData,
-          });
-          classroomId = isActiveProcareEnrollmentStatus(enrollmentStatus) ? classroom.id : null;
+          }, prisma);
+          classroomId = !enrollmentStatusProvided || isActiveProcareEnrollmentStatus(enrollmentStatus) ? classroom.id : null;
           if (classroom.created) createdClassrooms += 1;
         }
         const childDob = parseDate(value(rawData, ["dob", "birth date", "date of birth", "birthday", "birthdate"]));
+        const preferredName = procareChildPreferredName(rawData);
+        const photoPermissionAliases = ["photo permission", "photo/video permission", "media permission", "photo release"];
+        const fieldTripPermissionAliases = ["field trip permission", "trip permission", "transportation permission"];
+        const photoPermissionValue = value(rawData, photoPermissionAliases);
+        const fieldTripPermissionValue = value(rawData, fieldTripPermissionAliases);
         const childMetadata = metadataFromRow(rawData, {
           mappedCenterId: targetCenter.id,
           accountExternalId,
@@ -1524,30 +2102,43 @@ async function POSTHandler(request: NextRequest) {
           enrollmentStatus,
           enrollmentEndDate: value(rawData, ["end date", "withdrawal date", "termination date"]),
         });
-        const existingChild = await prisma.child.findFirst({
-          where: {
-            familyId: family.id,
-            OR: [
-              childExternalId ? { sourceSystem: "procare", externalId: childExternalId } : undefined,
-              { fullName: childName },
-            ].filter(Boolean) as Array<{ sourceSystem?: string; externalId?: string; fullName?: string }>,
-          },
-          select: { id: true },
-        });
+        const fallbackChildren = childExternalId
+          ? []
+          : await prisma.child.findMany({
+            where: { familyId: family.id, fullName: childName },
+            take: 2,
+            select: { id: true, dateOfBirth: true, customFields: true },
+          });
+        const externalChildren = childExternalId
+          ? await prisma.child.findMany({
+            where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: childExternalId },
+            take: 2,
+            select: { id: true, dateOfBirth: true, customFields: true },
+          })
+          : [];
+        if (fallbackChildren.length > 1) {
+          throw new Error("Multiple children match this name without a ProCare Child ID. Add the child ID before importing.");
+        }
+        if (externalChildren.length > 1) {
+          throw new Error("Multiple existing children use this ProCare Child ID. Resolve the duplicate records before importing.");
+        }
+        const existingChild = childExternalId
+          ? externalChildren[0] ?? null
+          : fallbackChildren[0] ?? null;
         if (!existingChild) {
           const child = await prisma.child.create({
             data: {
               familyId: family.id,
               classroomId,
               fullName: childName,
-              preferredName: procareChildPreferredName(rawData) || null,
+              preferredName: preferredName || null,
               dateOfBirth: childDob ?? new Date("1900-01-01T12:00:00.000Z"),
               ageGroup,
               enrollmentStatus,
               startDate: parseDate(value(rawData, ["start date", "enrollment date", "begin date", "first day"])),
               schedule: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) ? { notes: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) } : undefined,
-              photoVideoPermission: boolValue(value(rawData, ["photo permission", "photo/video permission", "media permission", "photo release"])),
-              fieldTripPermission: boolValue(value(rawData, ["field trip permission", "trip permission", "transportation permission"])),
+              photoVideoPermission: boolValue(photoPermissionValue),
+              fieldTripPermission: boolValue(fieldTripPermissionValue),
               napNotes: value(rawData, ["nap notes", "sleep notes"]) || null,
               feedingNotes: value(rawData, ["feeding notes", "dietary notes", "food notes"]) || null,
               pottyNotes: value(rawData, ["potty notes", "toilet notes", "diaper notes"]) || null,
@@ -1564,18 +2155,28 @@ async function POSTHandler(request: NextRequest) {
           await prisma.child.update({
             where: { id: existingChild.id },
             data: {
-              classroomId,
-              ageGroup,
-              enrollmentStatus,
+              familyId: family.id,
+              ...(classroomName
+                ? { classroomId }
+                : enrollmentStatusProvided && !isActiveProcareEnrollmentStatus(enrollmentStatus)
+                  ? { classroomId: null }
+                  : {}),
+              fullName: childName,
+              ...(hasImportField(rawData, preferredNameAliases) ? { preferredName: preferredName || null } : {}),
+              dateOfBirth: childDob ?? existingChild.dateOfBirth,
+              ...(hasImportField(rawData, ageGroupAliases) && (classroomName || ageGroup !== "Unassigned") ? { ageGroup } : {}),
+              ...(enrollmentStatusProvided ? { enrollmentStatus } : {}),
               startDate: parseDate(value(rawData, ["start date", "enrollment date", "begin date", "first day"])) || undefined,
               schedule: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) ? { notes: value(rawData, ["schedule", "schedule template", "contract schedule", "contract", "days"]) } : undefined,
               napNotes: value(rawData, ["nap notes", "sleep notes"]) || undefined,
               feedingNotes: value(rawData, ["feeding notes", "dietary notes", "food notes"]) || undefined,
               pottyNotes: value(rawData, ["potty notes", "toilet notes", "diaper notes"]) || undefined,
               developmentalNotes: value(rawData, ["developmental notes", "behavior notes", "observation notes"]) || undefined,
+              ...(hasImportField(rawData, photoPermissionAliases) ? { photoVideoPermission: boolValue(photoPermissionValue) } : {}),
+              ...(hasImportField(rawData, fieldTripPermissionAliases) ? { fieldTripPermission: boolValue(fieldTripPermissionValue) } : {}),
               sourceSystem: "procare",
               externalId: childExternalId || undefined,
-              customFields: childMetadata,
+              customFields: mergeCustomFields(existingChild.customFields, childMetadata),
             },
           });
         }
@@ -1694,12 +2295,7 @@ async function POSTHandler(request: NextRequest) {
         }
       }
 
-      const relationshipRecords = (() => {
-        try {
-          const parsed = JSON.parse(value(rawData, ["procare relationship records"]) || "[]") as unknown;
-          return Array.isArray(parsed) ? parsed.filter((item): item is { externalId?: string; name?: string; relation?: string; email?: string; phone?: string; livesWith?: boolean; emergency?: boolean; authorizedPickup?: boolean; guardian?: boolean } => Boolean(item && typeof item === "object")) : [];
-        } catch { return []; }
-      })();
+      const relationshipRecords = procareRelationshipRecords(rawData);
       for (const relationship of relationshipRecords) {
         const name = clean(relationship.name);
         if (!name) continue;
@@ -1716,17 +2312,51 @@ async function POSTHandler(request: NextRequest) {
         }
         if (relationship.emergency) {
           const contactPhone = clean(relationship.phone) || "Not imported";
-          const existingContact = await prisma.emergencyContact.findFirst({ where: { familyId: family.id, fullName: name, phone: contactPhone }, select: { id: true } });
-          if (!existingContact) {
-            await prisma.emergencyContact.create({ data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: clean(relationship.externalId) || null, customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId, livesWith: Boolean(relationship.livesWith) }) } });
+          const contactExternalId = clean(relationship.externalId) || null;
+          const existingContacts = await prisma.emergencyContact.findMany({
+            where: contactExternalId
+              ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: contactExternalId }
+              : { familyId: family.id, fullName: name, phone: contactPhone },
+            take: 2,
+            select: { id: true, customFields: true },
+          });
+          if (existingContacts.length > 1) {
+            throw new Error("Multiple emergency contacts use this ProCare Person ID. Resolve the duplicate records before importing.");
+          }
+          const existingContact = existingContacts[0] ?? null;
+          const contactMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId, livesWith: Boolean(relationship.livesWith) });
+          if (existingContact) {
+            await prisma.emergencyContact.update({
+              where: { id: existingContact.id },
+              data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: contactExternalId || undefined, customFields: mergeCustomFields(existingContact.customFields, contactMetadata) },
+            });
+          } else {
+            await prisma.emergencyContact.create({ data: { familyId: family.id, fullName: name, phone: contactPhone, relation: clean(relationship.relation) || "Emergency Contact", sourceSystem: "procare", externalId: contactExternalId, customFields: contactMetadata } });
             emergencyContacts += 1;
           }
         }
         if (relationship.authorizedPickup) {
           const pickupPhone = clean(relationship.phone) || null;
-          const existingPickup = await prisma.authorizedPickup.findFirst({ where: { familyId: family.id, fullName: name, phone: pickupPhone }, select: { id: true } });
-          if (!existingPickup) {
-            await prisma.authorizedPickup.create({ data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: clean(relationship.externalId) || null, customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }) } });
+          const pickupExternalId = clean(relationship.externalId) || null;
+          const existingPickups = await prisma.authorizedPickup.findMany({
+            where: pickupExternalId
+              ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: pickupExternalId }
+              : { familyId: family.id, fullName: name, phone: pickupPhone },
+            take: 2,
+            select: { id: true, customFields: true },
+          });
+          if (existingPickups.length > 1) {
+            throw new Error("Multiple authorized pickups use this ProCare Person ID. Resolve the duplicate records before importing.");
+          }
+          const existingPickup = existingPickups[0] ?? null;
+          const pickupMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+          if (existingPickup) {
+            await prisma.authorizedPickup.update({
+              where: { id: existingPickup.id },
+              data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: pickupExternalId || undefined, customFields: mergeCustomFields(existingPickup.customFields, pickupMetadata) },
+            });
+          } else {
+            await prisma.authorizedPickup.create({ data: { familyId: family.id, fullName: name, phone: pickupPhone, relation: clean(relationship.relation) || null, verificationNotes: "Imported from ProCare; director should verify identity requirements.", sourceSystem: "procare", externalId: pickupExternalId, customFields: pickupMetadata } });
             authorizedPickups += 1;
           }
         }
@@ -1734,21 +2364,33 @@ async function POSTHandler(request: NextRequest) {
 
       const emergencyName = value(rawData, ["emergency contact", "emergency contact name", "emergency name"]);
       const emergencyPhone = value(rawData, ["emergency phone", "emergency contact phone"]);
+      const emergencyExternalId = externalValue(rawData, ["emergency contact id", "emergency id"]);
       for (const contact of splitPeopleList(emergencyName || value(rawData, ["emergency contacts"]))) {
         const contactPhone = emergencyPhone || "Not imported";
         const contactRelation = value(rawData, ["emergency relation", "emergency contact relation"]) || "Emergency Contact";
-        const existingEmergencyContact = await prisma.emergencyContact.findFirst({
-          where: { familyId: family.id, fullName: contact, phone: contactPhone },
-          select: { id: true },
+        const existingEmergencyContacts = await prisma.emergencyContact.findMany({
+          where: emergencyExternalId
+            ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: emergencyExternalId }
+            : { familyId: family.id, fullName: contact, phone: contactPhone },
+          take: 2,
+          select: { id: true, customFields: true },
         });
+        if (existingEmergencyContacts.length > 1) {
+          throw new Error("Multiple emergency contacts use this ProCare ID. Resolve the duplicate records before importing.");
+        }
+        const existingEmergencyContact = existingEmergencyContacts[0] ?? null;
+        const emergencyMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
         if (existingEmergencyContact) {
           await prisma.emergencyContact.update({
             where: { id: existingEmergencyContact.id },
             data: {
+              familyId: family.id,
+              fullName: contact,
+              phone: contactPhone,
               relation: contactRelation,
               sourceSystem: "procare",
-              externalId: externalValue(rawData, ["emergency contact id", "emergency id"]) || undefined,
-              customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+              externalId: emergencyExternalId || undefined,
+              customFields: mergeCustomFields(existingEmergencyContact.customFields, emergencyMetadata),
             },
           });
         } else {
@@ -1759,8 +2401,8 @@ async function POSTHandler(request: NextRequest) {
             phone: contactPhone,
             relation: contactRelation,
             sourceSystem: "procare",
-            externalId: externalValue(rawData, ["emergency contact id", "emergency id"]),
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+            externalId: emergencyExternalId,
+            customFields: emergencyMetadata,
             },
           });
           emergencyContacts += 1;
@@ -1769,21 +2411,33 @@ async function POSTHandler(request: NextRequest) {
 
       const pickupName = value(rawData, ["authorized pickup", "pickup name", "pickup"]);
       const pickupPhone = value(rawData, ["pickup phone", "authorized pickup phone"]);
+      const pickupExternalId = externalValue(rawData, ["pickup id", "authorized pickup id"]);
       for (const pickup of splitPeopleList(pickupName || value(rawData, ["authorized pickups"]))) {
         const pickupRelation = value(rawData, ["pickup relation", "authorized pickup relation"]) || null;
-        const existingPickup = await prisma.authorizedPickup.findFirst({
-          where: { familyId: family.id, fullName: pickup, phone: pickupPhone || null },
-          select: { id: true },
+        const existingPickups = await prisma.authorizedPickup.findMany({
+          where: pickupExternalId
+            ? { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId: pickupExternalId }
+            : { familyId: family.id, fullName: pickup, phone: pickupPhone || null },
+          take: 2,
+          select: { id: true, customFields: true },
         });
+        if (existingPickups.length > 1) {
+          throw new Error("Multiple authorized pickups use this ProCare ID. Resolve the duplicate records before importing.");
+        }
+        const existingPickup = existingPickups[0] ?? null;
+        const pickupMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
         if (existingPickup) {
           await prisma.authorizedPickup.update({
             where: { id: existingPickup.id },
             data: {
+              familyId: family.id,
+              fullName: pickup,
+              phone: pickupPhone || null,
               relation: pickupRelation,
               verificationNotes: "Imported from ProCare export; director should verify identity requirements.",
               sourceSystem: "procare",
-              externalId: externalValue(rawData, ["pickup id", "authorized pickup id"]) || undefined,
-              customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+              externalId: pickupExternalId || undefined,
+              customFields: mergeCustomFields(existingPickup.customFields, pickupMetadata),
             },
           });
         } else {
@@ -1795,46 +2449,112 @@ async function POSTHandler(request: NextRequest) {
             relation: pickupRelation,
             verificationNotes: "Imported from ProCare export; director should verify identity requirements.",
             sourceSystem: "procare",
-            externalId: externalValue(rawData, ["pickup id", "authorized pickup id"]),
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+            externalId: pickupExternalId,
+            customFields: pickupMetadata,
             },
           });
           authorizedPickups += 1;
         }
       }
 
-      if (balanceCents) {
+      if (accountExternalId) {
+        const desiredRelationships = completeRelationshipIdsByAccount.get(`${targetCenter.id}\0${accountExternalId}`);
+        if (desiredRelationships) {
+          const staleGuardianExternalIds: Prisma.StringNullableFilter = desiredRelationships.guardians.size
+            ? { notIn: [...desiredRelationships.guardians] }
+            : { not: null };
+          const linkedStaleGuardian = await prisma.guardian.findFirst({
+            where: {
+              familyId: family.id,
+              sourceSystem: "procare",
+              externalId: staleGuardianExternalIds,
+              OR: [
+                { checkLogs: { some: {} } },
+                { dataDeletionRequests: { some: {} } },
+              ],
+            },
+            select: { id: true },
+          });
+          if (linkedStaleGuardian) {
+            throw new Error("A stale ProCare guardian has retained check-in or privacy-request history. Resolve that historical relationship before importing this family.");
+          }
+          await prisma.guardian.deleteMany({
+            where: {
+              familyId: family.id,
+              sourceSystem: "procare",
+              externalId: staleGuardianExternalIds,
+            },
+          });
+          await prisma.emergencyContact.deleteMany({
+            where: {
+              familyId: family.id,
+              sourceSystem: "procare",
+              externalId: desiredRelationships.emergency.size
+                ? { notIn: [...desiredRelationships.emergency] }
+                : { not: null },
+            },
+          });
+          await prisma.authorizedPickup.deleteMany({
+            where: {
+              familyId: family.id,
+              sourceSystem: "procare",
+              externalId: desiredRelationships.pickup.size
+                ? { notIn: [...desiredRelationships.pickup] }
+                : { not: null },
+            },
+          });
+        }
+      }
+
+      if (parsedBalance.present) {
+        const importedBillingFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id });
+        const existingBillingAccount = await prisma.billingAccount.findUnique({
+          where: { familyId: family.id },
+          select: { customFields: true },
+        });
         const account = await prisma.billingAccount.upsert({
           where: { familyId: family.id },
           update: {
             balanceCents,
             sourceSystem: "procare",
             externalId: accountExternalId || undefined,
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id }),
+            customFields: mergeCustomFields(existingBillingAccount?.customFields, importedBillingFields),
           },
           create: {
             familyId: family.id,
             balanceCents,
             sourceSystem: "procare",
             externalId: accountExternalId,
-            customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id }),
+            customFields: importedBillingFields,
           },
         });
         let importedInvoiceId: string | null = null;
+        const legacyInvoiceExternalId = `procare-opening-balance:${accountExternalId || family.id}`;
+        const invoiceExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
+        const importedInvoiceFields = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
+        const existingInvoice = await prisma.invoice.findFirst({
+          where: {
+            billingAccount: { family: { centerId: targetCenter.id } },
+            sourceSystem: "procare",
+            externalId: { in: [invoiceExternalId, legacyInvoiceExternalId] },
+          },
+          select: { id: true, customFields: true },
+        });
         if (balanceCents > 0) {
-          const invoiceExternalId = `procare-opening-balance:${accountExternalId || family.id}`;
           const invoiceNumberKey = (accountExternalId || family.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").slice(0, 40);
-          const existingInvoice = await prisma.invoice.findFirst({
-            where: { sourceSystem: "procare", externalId: invoiceExternalId },
-            select: { id: true },
-          });
           if (existingInvoice) {
             await prisma.invoice.update({
               where: { id: existingInvoice.id },
               data: {
+                billingAccountId: account.id,
                 status: PaymentStatus.OPEN,
                 totalCents: balanceCents,
-                customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+                externalId: invoiceExternalId,
+                customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
+                items: {
+                  deleteMany: {},
+                  create: [{ description: "Imported ProCare opening balance", amountCents: balanceCents }],
+                },
               },
             });
             importedInvoiceId = existingInvoice.id;
@@ -1848,7 +2568,7 @@ async function POSTHandler(request: NextRequest) {
                 totalCents: balanceCents,
                 sourceSystem: "procare",
                 externalId: invoiceExternalId,
-                customFields: metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId }),
+                customFields: importedInvoiceFields,
                 items: {
                   create: [
                     {
@@ -1863,9 +2583,34 @@ async function POSTHandler(request: NextRequest) {
             importedInvoiceId = invoice.id;
             invoiceRows += 1;
           }
+        } else if (existingInvoice) {
+          await prisma.invoice.update({
+            where: { id: existingInvoice.id },
+            data: {
+              billingAccountId: account.id,
+              status: balanceCents === 0 ? PaymentStatus.PAID : PaymentStatus.VOID,
+              totalCents: 0,
+              externalId: invoiceExternalId,
+              customFields: mergeCustomFields(existingInvoice.customFields, importedInvoiceFields),
+              items: {
+                deleteMany: {},
+                create: [{ description: "Imported ProCare opening balance", amountCents: 0 }],
+              },
+            },
+          });
+          importedInvoiceId = existingInvoice.id;
         }
-        await prisma.ledgerEntry.create({
-          data: {
+        const ledgerExternalId = `procare-opening-balance:${targetCenter.id}:${accountExternalId || family.id}`;
+        await prisma.ledgerEntry.upsert({
+          where: { sourceSystem_externalId: { sourceSystem: "procare", externalId: ledgerExternalId } },
+          update: {
+            billingAccountId: account.id,
+            invoiceId: importedInvoiceId,
+            amountCents: balanceCents,
+            balanceAfterCents: balanceCents,
+            metadata: { ...rawData, mappedCenterId: targetCenter.id },
+          },
+          create: {
             billingAccountId: account.id,
             invoiceId: importedInvoiceId,
             type: "procare_balance",
@@ -1873,21 +2618,40 @@ async function POSTHandler(request: NextRequest) {
             amountCents: balanceCents,
             balanceAfterCents: balanceCents,
             sourceSystem: "procare",
-            externalId: `${batch.id}:${index}`,
+            externalId: ledgerExternalId,
             metadata: { ...rawData, mappedCenterId: targetCenter.id },
           },
         });
         ledgerRows += 1;
       }
 
+      return { familyId: family.id, childId };
+      }, { maxWait: 10_000, timeout: 60_000 });
+
       rowResults.push({
         rowNumber: index + 1,
         status: "imported",
         rawData: { ...rawData, mappedCenterId: targetCenter.id, mappedCenter: targetCenter.crmLocationId ?? targetCenter.name },
-        createdFamilyId: family.id,
-        createdChildId: childId,
+        createdFamilyId: familyWrite.familyId,
+        createdChildId: familyWrite.childId,
       });
     } catch (error) {
+      ({
+        createdFamilies,
+        updatedFamilies,
+        createdChildren,
+        ledgerRows,
+        createdClassrooms,
+        createdStaff,
+        updatedStaff,
+        createdStaffLogins,
+        emergencyContacts,
+        authorizedPickups,
+        medicalRows,
+        attendanceRows,
+        checkLogRows,
+        invoiceRows,
+      } = rowCounterSnapshot);
       rowResults.push({ rowNumber: index + 1, status: "needs_resolution", message: error instanceof Error ? error.message : "This row needs mapping or disposal.", rawData });
     }
   }
@@ -1902,12 +2666,15 @@ async function POSTHandler(request: NextRequest) {
       createdFamilyId: row.createdFamilyId || null,
       createdChildId: row.createdChildId || null,
     })),
+    skipDuplicates: true,
   });
 
   const cumulativeNumber = (key: string, current: number) => Number(existingSummary[key] ?? 0) + current;
   const progress = await prisma.procareImportRow.groupBy({ by: ["status"], where: { batchId: batch.id }, _count: { _all: true } });
   const progressCounts = Object.fromEntries(progress.map((item) => [item.status, item._count._all]));
-  const isPartial = chunkEnd < rows.length;
+  const persistedRows = Object.values(progressCounts).reduce((total, count) => total + count, 0);
+  const isPartial = persistedRows < rows.length - 1;
+  const nextRow = Math.min(chunkStart + rowResults.length, rows.length);
   const unresolvedRows = isPartial ? [] : await prisma.procareImportRow.findMany({
     where: { batchId: batch.id, status: "needs_resolution" },
     orderBy: { rowNumber: "asc" },
@@ -1920,7 +2687,8 @@ async function POSTHandler(request: NextRequest) {
     filename: importPayload.filename,
     sourceSha256,
     reviewFingerprint,
-    rows: Object.values(progressCounts).reduce((total, count) => total + count, 0),
+    mappingSignature,
+    rows: persistedRows,
     totalRows: rows.length - 1,
     imported: progressCounts.imported ?? 0,
     errors: progressCounts.error ?? 0,
@@ -1940,8 +2708,10 @@ async function POSTHandler(request: NextRequest) {
     checkLogRows: cumulativeNumber("checkLogRows", checkLogRows),
     invoiceRows: cumulativeNumber("invoiceRows", invoiceRows),
     ledgerRows: cumulativeNumber("ledgerRows", ledgerRows),
-    centersTouched: Math.max(Number(existingSummary.centersTouched ?? 0), centersTouched.size),
+    centersTouched: centersTouched.size,
+    centerIdsTouched: [...centersTouched],
     stagedRowNumbers: [...stagedRowNumbers],
+    validationWarnings: Object.fromEntries(validationWarningMessages),
     headerAnalysis,
     fieldOptions: PROCARE_FIELD_OPTIONS,
     warningRows: progressCounts.needs_resolution ?? 0,
@@ -1962,7 +2732,7 @@ async function POSTHandler(request: NextRequest) {
   });
 
   if (isPartial) {
-    return NextResponse.json({ ok: true, partial: true, batchId: batch.id, nextRow: chunkEnd, totalRows: rows.length - 1, summary });
+    return NextResponse.json({ ok: true, partial: true, batchId: batch.id, nextRow, totalRows: rows.length - 1, summary });
   }
 
   await writeAuditLog(user, {
@@ -1981,8 +2751,11 @@ async function PATCHHandler(request: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canManageOperations(user)) return NextResponse.json({ ok: false, error: "ProCare import reconciliation is not allowed for this role." }, { status: 403 });
   const body = await request.json().catch(() => null) as { batchId?: string; rowNumbers?: number[]; action?: string } | null;
-  const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({ where: { id: body.batchId }, select: { id: true, centerId: true } }) : null;
-  if (!batch || !canAccessCenter(user, batch.centerId)) return NextResponse.json({ ok: false, error: "Import batch not found." }, { status: 404 });
+  const batch = body?.batchId ? await prisma.procareImportBatch.findUnique({
+    where: { id: body.batchId },
+    select: { id: true, centerId: true, summary: true, rows: { select: { rawData: true } } },
+  }) : null;
+  if (!batch || importBatchCenterIds(batch).some((centerId) => !canAccessCenter(user, centerId))) return NextResponse.json({ ok: false, error: "Import batch not found." }, { status: 404 });
   const rowNumbers = [...new Set((body?.rowNumbers ?? []).filter((value) => Number.isInteger(value) && value > 1))];
   const disposeAll = body?.action === "dispose_all";
   if ((!disposeAll && body?.action !== "dispose") || (!disposeAll && !rowNumbers.length)) return NextResponse.json({ ok: false, error: "Choose unresolved rows to dispose." }, { status: 400 });

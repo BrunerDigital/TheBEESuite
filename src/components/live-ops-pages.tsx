@@ -154,6 +154,7 @@ import {
 } from "@/components/tenant-controls-panel";
 import { evaluateClassroomRatio } from "@/lib/classroom-ratios";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
+import type { EnrollmentLifecycleCounts } from "@/lib/enrollment-status";
 import type { FteSnapshot } from "@/lib/fte-reports";
 import type { IntegrationProvider, IntegrationSetupView } from "@/lib/integration-setup";
 import type { RequiredChecklistItem, RequiredChecklistSummary } from "@/lib/required-document-checklist";
@@ -4798,11 +4799,12 @@ export type FamilyProfilesPageData = {
   }>;
   stats: {
     total: number;
+    allFamilyTotal: number;
     withCustodyNotes: number;
     children: number;
     guardians: number;
-    graduated: number;
-    graduatedFamilies: number;
+    closedFamilies: number;
+    enrollmentLifecycle: EnrollmentLifecycleCounts;
   };
 };
 
@@ -4819,11 +4821,16 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
           Guardian, child, document, pickup, emergency contact, billing email, and restricted custody-note visibility.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-5">
-        <StatCard label="Families" value={data.stats.total} />
-        <StatCard label="Children" value={data.stats.children} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard label="Current families" value={data.stats.total} />
+        <StatCard label="Currently enrolled" value={data.stats.children} />
         <StatCard label="Guardians" value={data.stats.guardians} />
-        <StatCard label="Graduated" value={data.stats.graduated} detail={`${data.stats.graduatedFamilies.toLocaleString()} families hidden`} />
+        <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
+        <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
+        <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
+        <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
+        <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} detail={`${data.stats.closedFamilies.toLocaleString()} families with no current enrollment`} />
+        <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
         <StatCard label="Restricted custody notes" value={data.stats.withCustodyNotes} />
       </div>
       <FamilyStudentIntakeForm centers={data.intakeCenters} />
@@ -4831,7 +4838,9 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         currentFamilies={data.families}
         allFamilies={data.allFamilies}
         centers={data.intakeCenters}
-        graduatedChildren={data.stats.graduated}
+        enrollmentLifecycle={data.stats.enrollmentLifecycle}
+        currentFamilyCount={data.stats.total}
+        allFamilyCount={data.stats.allFamilyTotal}
         ageGroups={data.ageGroups}
       />
       <Card className="glass-panel">
@@ -4897,7 +4906,8 @@ export type ChildProfilesPageData = {
   intakeCenters: Array<{ id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> }>;
   stats: {
     total: number;
-    graduated: number;
+    allTotal: number;
+    enrollmentLifecycle: EnrollmentLifecycleCounts;
     allergies: number;
     restrictedMedicalNotes: number;
   };
@@ -4916,9 +4926,14 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
           Child enrollment, classroom, allergy, medical note, document, incident, permission, and daily activity profile.
         </p>
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Children" value={data.stats.total} />
-        <StatCard label="Graduated" value={data.stats.graduated} detail="hidden by default" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <StatCard label="Currently enrolled" value={data.stats.total} />
+        <StatCard label="Pending" value={data.stats.enrollmentLifecycle.pending} />
+        <StatCard label="Waitlisted" value={data.stats.enrollmentLifecycle.waitlisted} />
+        <StatCard label="Tours scheduled" value={data.stats.enrollmentLifecycle.tourScheduled} />
+        <StatCard label="Summer break" value={data.stats.enrollmentLifecycle.summerBreak} />
+        <StatCard label="Closed enrollment" value={data.stats.enrollmentLifecycle.closed} />
+        <StatCard label="Needs review" value={data.stats.enrollmentLifecycle.needsReview} detail="Unassigned or unrecognized status" />
         <StatCard label="Allergy records" value={data.stats.allergies} />
         <StatCard label="Medical notes" value={data.stats.restrictedMedicalNotes} />
       </div>
@@ -4926,7 +4941,9 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
       <ChildProfilesEnrollmentPanel
         currentChildren={data.children}
         allChildren={data.allChildren}
-        graduatedChildren={data.stats.graduated}
+        enrollmentLifecycle={data.stats.enrollmentLifecycle}
+        currentChildCount={data.stats.total}
+        allChildCount={data.stats.allTotal}
       />
       <OperationsActionHub title="Create or Edit Child Profile" defaultEntity="child" compact />
     </div>

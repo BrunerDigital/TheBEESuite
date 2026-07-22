@@ -42,12 +42,11 @@ test("ProCare review fingerprints bind the export, center, and duplicate mode", 
   assert.equal(PROCARE_DUPLICATE_REVIEW_ROW_LIMIT, 500);
 });
 
-test("ProCare imports can commit without a separate preview request", () => {
+test("ProCare imports require the exact completed review before commit", () => {
   const route = readFileSync(new URL("../src/app/api/imports/procare/route.ts", import.meta.url), "utf8");
   const panel = readFileSync(new URL("../src/components/procare-import-panel.tsx", import.meta.url), "utf8");
 
-  assert.doesNotMatch(route, /Preview and approve this exact ProCare export/);
-  assert.doesNotMatch(panel, /Submit this exact export for review before committing/);
+  assert.match(panel, /Submit this exact ProCare export for review before committing it/);
   assert.match(panel, /Import ProCare Data/);
   assert.match(route, /status: "needs_resolution"/);
   assert.match(route, /procare\.import\.rows_disposed/);
@@ -64,6 +63,16 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(panel, /XMLHttpRequest/);
   assert.match(panel, /ProCare import progress/);
   assert.match(panel, /Upload and import complete/);
+  assert.match(panel, /useRouter/);
+  assert.match(panel, /router\.refresh\(\)/);
+  assert.match(panel, /hasCompletedPreview/);
+  assert.match(panel, /sourceSha256", preview\.sourceSha256/);
+  assert.match(panel, /reviewFingerprint", preview\.reviewFingerprint/);
+  assert.match(panel, /reviewWarningRowNumbers/);
+  assert.match(panel, /reviewDuplicateWarningRowNumbers/);
+  assert.match(panel, /warningRowNumbers \?\? \[\]\)\.join\(","\)/);
+  assert.match(panel, /duplicateReviewRowNumbers \?\? \[\]\)\.join\(","\)/);
+  assert.match(panel, /same selected files; they are still selected/);
   assert.match(panel, /chunkSize", "5"/);
   assert.match(panel, /Continuing automatically/);
   assert.match(panel, /\(completedRows \/ totalRows\) \* 85/);
@@ -72,7 +81,10 @@ test("ProCare imports can commit without a separate preview request", () => {
   assert.match(panel, /normalizedSelectedFileName/);
   assert.match(route, /normalizedUploadName/);
   assert.match(route, /resumableCandidates/);
-  assert.match(route, /savedCheckpoint/);
+  assert.match(route, /savedRowNumbers/);
+  assert.match(route, /savedRow\.rowNumber === chunkStart \+ 1/);
+  assert.match(route, /persistedRows < rows\.length - 1/);
+  assert.doesNotMatch(route, /requestedChunkStart/);
   assert.match(route, /existingBatch && Array\.isArray\(existingSummary\.stagedRowNumbers\)/);
   assert.match(route, /partial: true/);
   assert.match(route, /resumable ProCare import batch/);

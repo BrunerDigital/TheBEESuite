@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +104,8 @@ type ImportPreview = {
   }>;
   sourceSha256?: string;
   reviewFingerprint?: string;
+  warningRowNumbers?: number[];
+  duplicateReviewRowNumbers?: number[];
   headerAnalysis?: Array<{ source: string; normalized: string; suggestedField: string; recognized: boolean }>;
   fieldOptions?: Array<{ key: string; label: string }>;
   warnings?: Array<{ rowNumber: number; message: string }>;
@@ -132,6 +135,7 @@ function normalizedSelectedFileName(filename: string) {
 }
 
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
+  const router = useRouter();
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
   const [csv, setCsv] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -171,6 +175,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function submit(dryRun: boolean) {
     if (submitLockedRef.current) return;
+    if (!dryRun && (
+      !preview?.sourceSha256
+      || !preview.reviewFingerprint
+      || !Array.isArray(preview.warningRowNumbers)
+      || !Array.isArray(preview.duplicateReviewRowNumbers)
+    )) {
+      setError("Submit this exact ProCare export for review before committing it.");
+      return;
+    }
     submitLockedRef.current = true;
     startTransition(async () => {
       setStatus("");
@@ -186,6 +199,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
+        if (!dryRun && preview) {
+          formData.set("sourceSha256", preview.sourceSha256 ?? "");
+          formData.set("reviewFingerprint", preview.reviewFingerprint ?? "");
+          formData.set("reviewWarningRowNumbers", (preview.warningRowNumbers ?? []).join(","));
+          formData.set("reviewDuplicateWarningRowNumbers", (preview.duplicateReviewRowNumbers ?? []).join(","));
+        }
         if (csv.trim()) formData.set("csv", csv);
         for (const file of selectedFiles) formData.append("file", file);
         let response: Awaited<ReturnType<typeof uploadImport>>;
@@ -217,10 +236,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         if (!response.ok) {
           setProgressPhase("idle");
           setProgressPercent(0);
-          setError(json?.error || (response.status === 504
-            ? "The import request timed out before completing. Refresh the page before trying again."
-            : `ProCare import could not be processed${response.status ? ` (error ${response.status})` : ""}.`));
-          if (json?.summary) {
+          setError(response.status === 504
+            ? "The import request timed out before completing. Keep this page open and retry with the same selected files; they are still selected."
+            : json?.error || `ProCare import could not be processed${response.status ? ` (error ${response.status})` : ""}.`);
+          if (dryRun && json?.summary) {
             setPreview(json.summary);
             setPreviewDialogOpen(true);
           }
@@ -257,10 +276,13 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         setStatus(
           `Imported ${summary?.imported ?? 0} rows from ${summary?.sourceType ?? "ProCare"} across ${summary?.centersTouched ?? 1} center(s), created ${summary?.createdFamilies ?? 0} families, ${summary?.createdChildren ?? 0} children, ${summary?.createdClassrooms ?? 0} classrooms, ${summary?.createdStaff ?? 0} staff, ${summary?.createdStaffLogins ?? 0} staff logins, ${summary?.invoiceRows ?? 0} invoices, and ${summary?.checkLogRows ?? 0} check logs.${unresolved ? ` ${unresolved} row(s) were safely retained below for mapping or disposal.` : ""}`,
         );
+        router.refresh();
       } catch {
         setProgressPhase("idle");
         setProgressPercent(0);
-        setError(dryRun ? "Import review could not be prepared. Check the file and try again." : "ProCare import could not be committed. Check the file and try again.");
+        setError(dryRun
+          ? "Import review could not be prepared. Check the file and try again; the selected files remain attached."
+          : "ProCare import could not be committed. Keep this page open and retry with the same selected files; they remain attached.");
       } finally {
         submitLockedRef.current = false;
       }
@@ -299,6 +321,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
   const hasImportSource = Boolean(csv.trim() || selectedFiles.length);
   const noCentersAvailable = !centers.length;
+  const hasCompletedPreview = Boolean(
+    preview?.sourceSha256
+    && preview.reviewFingerprint
+    && Array.isArray(preview.warningRowNumbers)
+    && Array.isArray(preview.duplicateReviewRowNumbers),
+  );
   const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
   const commitBlockedReason = noCentersAvailable
     ? "This account needs an active school assignment before importing."
@@ -306,6 +334,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     ? "Choose a center before importing."
       : !hasImportSource
       ? "Choose a CSV export or paste CSV text before submitting."
+      : !hasCompletedPreview
+      ? "Submit this exact ProCare export for review before committing it."
       : "";
   const reviewRows = preview?.rowResults ?? [];
   const reviewRowsShown = reviewRows.length;
@@ -318,7 +348,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import ProCare Family Accounts</CardTitle>
         <CardDescription>
-          Upload one ProCare CSV, select the four standard report CSVs together, or upload their ZIP to create or update families, guardians, children, classrooms, staff, pickups, emergency contacts, medical notes, attendance, check logs, billing accounts, invoices, and starting ledger balances.
+          The four standard reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. A consolidated ProCare CSV can also populate supported staff, attendance, check-log, medical, and opening-balance fields when those columns are present.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -580,7 +610,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                     onValueChange={(selected) => {
                       const mappedField = selected && selected !== "ignore" ? selected : "";
                       setFieldMapping((current) => ({ ...current, [header.source]: mappedField }));
-                      setDuplicateReviewConfirmed(false);
+                      clearPreview();
                     }}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>

@@ -672,7 +672,7 @@ export async function buildAnalyticsReportData(
     prisma.staffProfile.findMany({
       where: {
         centerId: selectedCenterFilter,
-        user: { role: UserRole.TEACHER },
+        user: { role: UserRole.TEACHER, isActive: true },
       },
       orderBy: [{ center: { state: "asc" } }, { center: { city: "asc" } }, { user: { name: "asc" } }],
       take: 5000,

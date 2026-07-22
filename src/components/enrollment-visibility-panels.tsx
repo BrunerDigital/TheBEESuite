@@ -12,6 +12,7 @@ import { FamilyRecordEditor, type EditableFamilyRecord } from "@/components/fami
 import { GuardianPinManager } from "@/components/guardian-pin-manager";
 import { ParentPortalInviteButton } from "@/components/parent-portal-invite-button";
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
+import type { EnrollmentLifecycleCounts } from "@/lib/enrollment-status";
 
 type IntakeCenter = { id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> };
 
@@ -58,19 +59,28 @@ function formatRecordLabel(value: string | null | undefined) {
 }
 
 function EnrollmentVisibilityToggle({
-  showGraduated,
-  setShowGraduated,
-  hiddenCount,
+  showOtherStatuses,
+  setShowOtherStatuses,
+  lifecycle,
   noun,
   pluralNoun,
 }: {
-  showGraduated: boolean;
-  setShowGraduated: (value: boolean) => void;
-  hiddenCount: number;
+  showOtherStatuses: boolean;
+  setShowOtherStatuses: (value: boolean) => void;
+  lifecycle: EnrollmentLifecycleCounts;
   noun: string;
   pluralNoun: string;
 }) {
+  const hiddenCount = lifecycle.other;
   const label = hiddenCount === 1 ? noun : pluralNoun;
+  const statusBreakdown = [
+    `${lifecycle.pending.toLocaleString()} pending`,
+    `${lifecycle.waitlisted.toLocaleString()} waitlisted`,
+    `${lifecycle.tourScheduled.toLocaleString()} tour scheduled`,
+    `${lifecycle.summerBreak.toLocaleString()} summer break`,
+    `${lifecycle.closed.toLocaleString()} closed`,
+    `${lifecycle.needsReview.toLocaleString()} needing status or classroom review`,
+  ].join(" · ");
 
   return (
     <Card className="glass-panel">
@@ -78,12 +88,12 @@ function EnrollmentVisibilityToggle({
         <div>
           <div className="text-sm font-medium">Other enrollment statuses</div>
           <div className="text-xs text-muted-foreground">
-            {hiddenCount.toLocaleString()} {label} marked withdrawn, graduated, waiting, pending, summer break, or otherwise not actively enrolled {hiddenCount === 1 ? "is" : "are"} hidden from the active lists.
+            {hiddenCount.toLocaleString()} {label} {hiddenCount === 1 ? "is" : "are"} hidden from the active lists. {statusBreakdown}.
           </div>
         </div>
-        <Button type="button" variant={showGraduated ? "default" : "outline"} onClick={() => setShowGraduated(!showGraduated)}>
-          {showGraduated ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
-          {showGraduated ? "Show Active Only" : "Show Other Statuses"}
+        <Button type="button" variant={showOtherStatuses ? "default" : "outline"} onClick={() => setShowOtherStatuses(!showOtherStatuses)}>
+          {showOtherStatuses ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+          {showOtherStatuses ? "Show Active Only" : "Show Other Statuses"}
         </Button>
       </CardContent>
     </Card>
@@ -94,42 +104,47 @@ export function FamilyProfilesEnrollmentPanel({
   currentFamilies,
   allFamilies,
   centers,
-  graduatedChildren,
+  enrollmentLifecycle,
+  currentFamilyCount,
+  allFamilyCount,
   ageGroups,
 }: {
   currentFamilies: FamilyProfileVisibilityRecord[];
   allFamilies: FamilyProfileVisibilityRecord[];
   centers: IntakeCenter[];
-  graduatedChildren: number;
+  enrollmentLifecycle: EnrollmentLifecycleCounts;
+  currentFamilyCount: number;
+  allFamilyCount: number;
   ageGroups?: string[];
 }) {
   const searchParams = useSearchParams();
   const requestedFamilyId = searchParams.get("familyId") ?? "";
   const requestedChildId = searchParams.get("childId") ?? "";
   const requestedSearchQuery = searchParams.get("q") ?? "";
-  const requestedFamilyIsGraduated = Boolean(
+  const requestedFamilyHasOtherStatus = Boolean(
     requestedFamilyId &&
     !currentFamilies.some((family) => family.id === requestedFamilyId) &&
     allFamilies.some((family) => family.id === requestedFamilyId),
   );
-  const [showGraduated, setShowGraduated] = useState(requestedFamilyIsGraduated);
-  const effectiveShowGraduated = showGraduated || requestedFamilyIsGraduated;
-  const visibleFamilies = effectiveShowGraduated ? allFamilies : currentFamilies;
+  const [showOtherStatuses, setShowOtherStatuses] = useState(requestedFamilyHasOtherStatus);
+  const effectiveShowOtherStatuses = showOtherStatuses || requestedFamilyHasOtherStatus;
+  const visibleFamilies = effectiveShowOtherStatuses ? allFamilies : currentFamilies;
+  const visibleFamilyCount = effectiveShowOtherStatuses ? allFamilyCount : currentFamilyCount;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);
 
   return (
     <div className="flex flex-col gap-6">
       <EnrollmentVisibilityToggle
-        showGraduated={effectiveShowGraduated}
-        setShowGraduated={setShowGraduated}
-        hiddenCount={graduatedChildren}
+        showOtherStatuses={effectiveShowOtherStatuses}
+        setShowOtherStatuses={setShowOtherStatuses}
+        lifecycle={enrollmentLifecycle}
         noun="student record"
         pluralNoun="student records"
       />
 
       {visibleFamilies.length ? (
         <FamilyRecordEditor
-          key={`${effectiveShowGraduated ? "all-families" : "current-families"}-${requestedFamilyId}-${requestedChildId}-${requestedSearchQuery}`}
+          key={`${effectiveShowOtherStatuses ? "all-families" : "current-families"}-${requestedFamilyId}-${requestedChildId}-${requestedSearchQuery}`}
           families={visibleFamilies}
           centers={centers}
           ageGroups={ageGroups}
@@ -145,10 +160,18 @@ export function FamilyProfilesEnrollmentPanel({
         </Card>
       )}
 
+      {visibleFamilies.length < visibleFamilyCount ? (
+        <Card className="glass-panel">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            Showing the first {visibleFamilies.length.toLocaleString()} of {visibleFamilyCount.toLocaleString()} families in this view.
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Family Directory</CardTitle>
-          <CardDescription>{showGraduated ? "Families across all enrollment statuses" : "Currently enrolled family profile snapshot"}</CardDescription>
+          <CardDescription>{effectiveShowOtherStatuses ? "Families across all enrollment statuses" : "Currently enrolled family profile snapshot"}</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -274,33 +297,46 @@ export function FamilyProfilesEnrollmentPanel({
 export function ChildProfilesEnrollmentPanel({
   currentChildren,
   allChildren,
-  graduatedChildren,
+  enrollmentLifecycle,
+  currentChildCount,
+  allChildCount,
 }: {
   currentChildren: ChildProfileVisibilityRecord[];
   allChildren: ChildProfileVisibilityRecord[];
-  graduatedChildren: number;
+  enrollmentLifecycle: EnrollmentLifecycleCounts;
+  currentChildCount: number;
+  allChildCount: number;
 }) {
-  const [showGraduated, setShowGraduated] = useState(false);
+  const [showOtherStatuses, setShowOtherStatuses] = useState(false);
   const visibleChildren = useMemo(
-    () => showGraduated ? allChildren : currentChildren,
-    [allChildren, currentChildren, showGraduated],
+    () => showOtherStatuses ? allChildren : currentChildren,
+    [allChildren, currentChildren, showOtherStatuses],
   );
+  const visibleChildCount = showOtherStatuses ? allChildCount : currentChildCount;
 
   return (
     <div className="flex flex-col gap-6">
       <EnrollmentVisibilityToggle
-        showGraduated={showGraduated}
-        setShowGraduated={setShowGraduated}
-        hiddenCount={graduatedChildren}
+        showOtherStatuses={showOtherStatuses}
+        setShowOtherStatuses={setShowOtherStatuses}
+        lifecycle={enrollmentLifecycle}
         noun="student record"
         pluralNoun="student records"
       />
+
+      {visibleChildren.length < visibleChildCount ? (
+        <Card className="glass-panel">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            Showing the first {visibleChildren.length.toLocaleString()} of {visibleChildCount.toLocaleString()} children in this view.
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Children</CardTitle>
           <CardDescription>
-            {showGraduated ? "Students across all enrollment statuses" : "Currently enrolled student records"}
+            {showOtherStatuses ? "Students across all enrollment statuses" : "Currently enrolled student records"}
           </CardDescription>
         </CardHeader>
         <CardContent>

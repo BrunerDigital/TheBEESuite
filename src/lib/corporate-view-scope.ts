@@ -41,7 +41,13 @@ export function visibleClassroomWhere(centerIds: readonly string[]): Prisma.Clas
 }
 
 export function visibleAttendanceWhere(centerIds: readonly string[]): Prisma.AttendanceRecordWhereInput {
-  return { classroom: { is: visibleClassroomWhere(centerIds) } };
+  const centerId = visibleCenterIdFilter(centerIds);
+  return {
+    OR: [
+      { classroom: { is: { centerId } } },
+      { classroomId: null, child: { is: { family: { is: { centerId } } } } },
+    ],
+  };
 }
 
 export function visibleCheckLogWhere(centerIds: readonly string[]): Prisma.CheckInOutLogWhereInput {

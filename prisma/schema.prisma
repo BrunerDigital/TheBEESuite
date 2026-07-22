@@ -1668,6 +1668,7 @@ model ProcareImportRow {
 
   batch ProcareImportBatch @relation(fields: [batchId], references: [id])
 
+  @@unique([batchId, rowNumber])
   @@index([batchId, status])
 }
 

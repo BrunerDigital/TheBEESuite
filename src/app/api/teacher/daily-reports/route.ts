@@ -24,7 +24,7 @@ async function POSTHandler(request: NextRequest) {
   if (!parsedPayload.ok) {
     return NextResponse.json({ ok: false, error: parsedPayload.error }, { status: parsedPayload.status });
   }
-  const dailyReport = parsedPayload.report;
+  let dailyReport = parsedPayload.report;
   const clientActionId = typeof body.clientActionId === "string" ? body.clientActionId.trim().slice(0, 100) || null : null;
 
   const children = await prisma.child.findMany({
@@ -60,6 +60,14 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Child is outside your assigned classroom." }, { status: 403 });
     }
   }
+
+  const primaryCenterId = children[0]?.classroom?.centerId ?? children[0]?.family.centerId ?? null;
+  const schoolTimeZone = (primaryCenterId ? user.timeZonesByCenterId?.[primaryCenterId] : null) ?? user.timeZone;
+  const schoolLocalPayload = parseTeacherDailyReportPayload(body, { timeZone: schoolTimeZone });
+  if (!schoolLocalPayload.ok) {
+    return NextResponse.json({ ok: false, error: schoolLocalPayload.error }, { status: schoolLocalPayload.status });
+  }
+  dailyReport = schoolLocalPayload.report;
 
   if (clientActionId) {
     const existingReports = await prisma.dailyReport.findMany({

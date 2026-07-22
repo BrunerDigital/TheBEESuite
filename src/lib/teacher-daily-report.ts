@@ -1,4 +1,5 @@
 import { parseOperationalDate } from "@/lib/date-guardrails";
+import { zonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 
 const MAX_CARE_ENTRIES = 12;
 const MAX_CHILDREN_PER_REPORT_BATCH = 40;
@@ -58,10 +59,10 @@ function parseBoolean(value: unknown) {
   return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-function parseOptionalDateField(value: unknown, fieldLabel: string, fallback?: Date) {
+function parseOptionalDateField(value: unknown, fieldLabel: string, fallback?: Date, timeZone?: string) {
   const raw = clean(value);
   if (!raw) return null;
-  const parsed = parseDateField(raw, fieldLabel, fallback);
+  const parsed = parseDateField(raw, fieldLabel, fallback, timeZone);
   return parsed.ok ? parsed.date : null;
 }
 
@@ -117,8 +118,13 @@ function normalizeDateTimeInput(value: unknown, fallback?: Date) {
   return normalizeDateInput(value);
 }
 
-function parseDateField(value: unknown, fieldLabel: string, fallback?: Date) {
-  return parseOperationalDate(normalizeDateTimeInput(value, fallback), fieldLabel, fallback);
+function parseDateField(value: unknown, fieldLabel: string, fallback?: Date, timeZone?: string) {
+  const normalized = normalizeDateTimeInput(value, fallback);
+  if (timeZone && typeof normalized === "string") {
+    const zoned = zonedDateTimeLocalToUtc(normalized, timeZone);
+    if (zoned) return { ok: true as const, date: zoned };
+  }
+  return parseOperationalDate(normalized, fieldLabel, fallback);
 }
 
 function getRecordArray(value: unknown, fieldLabel: string): { ok: true; records: Record<string, unknown>[] } | { ok: false; error: string } {
@@ -191,7 +197,7 @@ function collectActivities(input: Record<string, unknown>) {
   return { ok: true as const, records };
 }
 
-function collectNaps(input: Record<string, unknown>, fallbackDate: Date): { ok: true; records: DailyReportNapInput[] } | { ok: false; status: number; error: string } {
+function collectNaps(input: Record<string, unknown>, fallbackDate: Date, timeZone?: string): { ok: true; records: DailyReportNapInput[] } | { ok: false; status: number; error: string } {
   const naps = getRecordArray(input.naps, "Naps");
   if (!naps.ok) return { ok: false, status: 400, error: naps.error };
 
@@ -205,8 +211,8 @@ function collectNaps(input: Record<string, unknown>, fallbackDate: Date): { ok: 
     const endRaw = clean(nap.endsAt) || clean(nap.end) || clean(nap.napEnd);
     if (!startRaw && !endRaw) continue;
 
-    const parsedStart = parseOptionalDateField(startRaw, `Nap ${index + 1} start`, fallbackDate);
-    const parsedEnd = parseOptionalDateField(endRaw, `Nap ${index + 1} end`, fallbackDate);
+    const parsedStart = parseOptionalDateField(startRaw, `Nap ${index + 1} start`, fallbackDate, timeZone);
+    const parsedEnd = parseOptionalDateField(endRaw, `Nap ${index + 1} end`, fallbackDate, timeZone);
     const startsAt = parsedStart ?? parsedEnd;
     if (!startsAt) continue;
     const endsAt = parsedStart && parsedEnd && parsedEnd.getTime() >= startsAt.getTime() ? parsedEnd : null;
@@ -217,7 +223,7 @@ function collectNaps(input: Record<string, unknown>, fallbackDate: Date): { ok: 
   return { ok: true, records };
 }
 
-function collectDiapers(input: Record<string, unknown>, fallbackDate: Date): { ok: true; records: DailyReportDiaperInput[] } | { ok: false; status: number; error: string } {
+function collectDiapers(input: Record<string, unknown>, fallbackDate: Date, timeZone?: string): { ok: true; records: DailyReportDiaperInput[] } | { ok: false; status: number; error: string } {
   const diapers = getRecordArray(input.diapers, "Diaper and potty logs");
   if (!diapers.ok) return { ok: false, status: 400, error: diapers.error };
 
@@ -238,7 +244,7 @@ function collectDiapers(input: Record<string, unknown>, fallbackDate: Date): { o
     const type = clean(diaper.type) || (notes || isTouched ? "Care log" : "");
     if (!type) continue;
     const occurredAtRaw = clean(diaper.occurredAt);
-    const parsedOccurredAt = parseOptionalDateField(occurredAtRaw, `Diaper/potty ${index + 1} time`, fallbackDate);
+    const parsedOccurredAt = parseOptionalDateField(occurredAtRaw, `Diaper/potty ${index + 1} time`, fallbackDate, timeZone);
 
     records.push({
       type,
@@ -250,7 +256,7 @@ function collectDiapers(input: Record<string, unknown>, fallbackDate: Date): { o
   return { ok: true, records };
 }
 
-export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
+export function parseTeacherDailyReportPayload(body: unknown, options: { timeZone?: string } = {}): ParseResult {
   const input = asRecord(body);
   const childIds = collectChildIds(input);
   if (!childIds.ok) return childIds;
@@ -260,9 +266,9 @@ export function parseTeacherDailyReportPayload(body: unknown): ParseResult {
 
   const meals = collectMeals(input);
   if (!meals.ok) return { ok: false, status: 400, error: meals.error };
-  const naps = collectNaps(input, reportDate);
+  const naps = collectNaps(input, reportDate, options.timeZone);
   if (!naps.ok) return naps;
-  const diapers = collectDiapers(input, reportDate);
+  const diapers = collectDiapers(input, reportDate, options.timeZone);
   if (!diapers.ok) return diapers;
   const activities = collectActivities(input);
   if (!activities.ok) return { ok: false, status: 400, error: activities.error };

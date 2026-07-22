@@ -249,7 +249,7 @@ export function TeacherMobileWorkspace({
   classroomRatios = [],
   teacherChecklistCompletedIds = [],
 }: Props) {
-  const timeZone = useSchoolTimeZone();
+  const timeZone = useSchoolTimeZone(teacherProfile?.centerId);
   const router = useRouter();
   const firstChild = roster[0]?.id ?? "";
   const [profileName, setProfileName] = useState(teacherProfile?.name ?? teacherName);

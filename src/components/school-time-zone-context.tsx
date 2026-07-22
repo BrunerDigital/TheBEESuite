@@ -13,8 +13,9 @@ export function SchoolTimeZoneProvider({ children, timeZone, timeZonesByCenterId
   return <SchoolTimeZoneContext value={{ defaultTimeZone: timeZone || DEFAULT_SCHOOL_TIME_ZONE, byCenterId: timeZonesByCenterId }}>{children}</SchoolTimeZoneContext>;
 }
 
-export function useSchoolTimeZone() {
-  return useContext(SchoolTimeZoneContext).defaultTimeZone;
+export function useSchoolTimeZone(centerId?: string | null) {
+  const context = useContext(SchoolTimeZoneContext);
+  return (centerId ? context.byCenterId[centerId] : null) || context.defaultTimeZone;
 }
 
 export function SchoolDateTime({

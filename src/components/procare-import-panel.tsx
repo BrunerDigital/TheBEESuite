@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -517,6 +518,15 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                     <Download data-icon="inline-start" />
                     Download Reconciliation Report
                   </Button>
+                  <Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Verify dashboard totals
+                  </Link>
+                  <Link href="/family-detail" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Review active families
+                  </Link>
+                  <Link href="/family-detail?showPast=1#past-enrollment-records" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                    Review past & other
+                  </Link>
                 </div>
               ) : null}
             </AlertDescription>

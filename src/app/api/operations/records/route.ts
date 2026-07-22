@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
@@ -33,6 +34,7 @@ import {
   ensureParentPortalLoginForGuardian,
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
+import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -314,6 +316,77 @@ async function POSTHandler(request: NextRequest) {
   }
   if (!["product", "tuitionPlan", "invoice", "ledgerEntry"].includes(entity) && !canManageOperations(user)) {
     return NextResponse.json({ ok: false, error: "Record management is not allowed for this role." }, { status: 403 });
+  }
+
+  if (entity === "childStatusBulk") {
+    const change = buildBulkEnrollmentChange({
+      childIds: body.childIds,
+      enrollmentStatus: body.enrollmentStatus,
+      classroomId: body.classroomId,
+    });
+    if (!change.ok) return NextResponse.json({ ok: false, error: change.error }, { status: 400 });
+
+    const children = await prisma.child.findMany({
+      where: { id: { in: change.value.childIds } },
+      select: {
+        id: true,
+        fullName: true,
+        enrollmentStatus: true,
+        classroomId: true,
+        family: { select: { id: true, centerId: true } },
+      },
+    });
+    if (children.length !== change.value.childIds.length) {
+      return NextResponse.json({ ok: false, error: "One or more selected children could not be found." }, { status: 404 });
+    }
+    if (children.some((child) => !child.family.centerId || !canAccessCenter(user, child.family.centerId))) {
+      return NextResponse.json({ ok: false, error: "You do not have access to one or more selected children." }, { status: 403 });
+    }
+
+    const centerIds = [...new Set(children.map((child) => child.family.centerId).filter((value): value is string => Boolean(value)))];
+    if (change.value.classroomId) {
+      const classroom = await prisma.classroom.findUnique({
+        where: { id: change.value.classroomId },
+        select: { id: true, centerId: true },
+      });
+      if (!classroom || !canAccessCenter(user, classroom.centerId)) {
+        return NextResponse.json({ ok: false, error: "The selected classroom is not available." }, { status: 403 });
+      }
+      if (centerIds.some((selectedCenterId) => selectedCenterId !== classroom.centerId)) {
+        return NextResponse.json({ ok: false, error: "Every selected child must belong to the classroom's school." }, { status: 400 });
+      }
+    }
+
+    const previousStatuses = Object.fromEntries(children.map((child) => [child.id, child.enrollmentStatus]));
+    const updated = await prisma.child.updateMany({
+      where: { id: { in: change.value.childIds } },
+      data: {
+        enrollmentStatus: change.value.enrollmentStatus,
+        classroomId: change.value.classroomId,
+      },
+    });
+    await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
+      centerId: selectedCenterId,
+      action: "operations.child_status.bulk_updated",
+      resource: "Child",
+      resourceId: change.value.childIds.length === 1 ? change.value.childIds[0] : null,
+      metadata: {
+        childIds: change.value.childIds,
+        previousStatuses,
+        enrollmentStatus: change.value.enrollmentStatus,
+        classroomId: change.value.classroomId,
+        updatedCount: updated.count,
+      },
+    })));
+    revalidatePath("/", "layout");
+    return NextResponse.json({
+      ok: true,
+      entity,
+      mode: "updated",
+      updatedCount: updated.count,
+      enrollmentStatus: change.value.enrollmentStatus,
+      classroomId: change.value.classroomId,
+    });
   }
 
   if (entity === "staffPayrollSummary") {

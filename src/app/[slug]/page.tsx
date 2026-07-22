@@ -1758,9 +1758,10 @@ async function renderLivePage(
         orderBy: { fullName: "asc" },
         take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
-          family: { select: { name: true, centerId: true, custodyNotes: true } },
+          family: { select: { id: true, name: true, centerId: true, custodyNotes: true } },
           classroom: {
             select: {
+              id: true,
               name: true,
               center: { select: { name: true, crmLocationId: true } },
             },
@@ -1773,9 +1774,10 @@ async function renderLivePage(
         orderBy: { fullName: "asc" },
         take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
-          family: { select: { name: true, centerId: true, custodyNotes: true } },
+          family: { select: { id: true, name: true, centerId: true, custodyNotes: true } },
           classroom: {
             select: {
+              id: true,
               name: true,
               center: { select: { name: true, crmLocationId: true } },
             },

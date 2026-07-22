@@ -4947,6 +4947,7 @@ export function ChildProfilesPage({ data }: { data: ChildProfilesPageData }) {
       <ChildProfilesEnrollmentPanel
         currentChildren={data.children}
         allChildren={data.allChildren}
+        centers={data.intakeCenters}
         enrollmentLifecycle={data.stats.enrollmentLifecycle}
         currentChildCount={data.stats.total}
         allChildCount={data.stats.allTotal}

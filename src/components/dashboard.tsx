@@ -672,7 +672,8 @@ function ExecutiveLensDashboard({
                   Print report
                 </Button>
               </div>
-              <div className="overflow-x-auto rounded-lg border">
+              {selectedPayrollSummary.employeeSummaries.length ? (
+                <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -702,7 +703,15 @@ function ExecutiveLensDashboard({
                     ))}
                   </TableBody>
                 </Table>
-              </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                  <div className="font-semibold">This is an older total-only submission.</div>
+                  <p className="mt-1">
+                    Employee details were not stored when this report was submitted. The school must send this payroll summary again to create the full employee list.
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
         </DialogContent>
@@ -718,7 +727,8 @@ function ExecutiveLensDashboard({
               <p>Printed: {formatPrintDateTime(payrollPrintGeneratedAt, timeZone)}</p>
             </header>
             <h2>Employee payroll summary</h2>
-            <table>
+            {selectedPayrollSummary.employeeSummaries.length ? (
+              <table>
               <thead>
                 <tr>
                   <th>Employee</th>
@@ -751,7 +761,12 @@ function ExecutiveLensDashboard({
                   <th>{formatMoneyCents(selectedPayrollSummary.estimatedGrossCents)}</th>
                 </tr>
               </tbody>
-            </table>
+              </table>
+            ) : (
+              <p>
+                Employee details are unavailable for this older total-only submission. Resend the payroll summary from the school workspace to create the full employee list.
+              </p>
+            )}
           </>
         ) : null}
       </PrintableReport>

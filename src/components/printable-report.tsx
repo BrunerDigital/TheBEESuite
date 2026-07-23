@@ -15,8 +15,17 @@ export function ReportPrintStyles() {
   return (
     <style>{`
       @media print {
+        @page {
+          margin: 0.35in;
+        }
+
         body.bee-report-printing * {
           visibility: hidden !important;
+        }
+
+        body.bee-report-printing > *:not(:has(.bee-print-report-active)),
+        body.bee-report-printing *:has(.bee-print-report-active) > *:not(:has(.bee-print-report-active)):not(.bee-print-report-active) {
+          display: none !important;
         }
 
         body.bee-report-printing .bee-print-report-active,
@@ -26,11 +35,11 @@ export function ReportPrintStyles() {
 
         body.bee-report-printing .bee-print-report-active {
           display: block !important;
-          position: absolute !important;
-          inset: 0 auto auto 0 !important;
+          position: static !important;
           width: 100% !important;
-          min-height: 100% !important;
-          padding: 0.25in !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
           background: #ffffff !important;
           color: #111827 !important;
           font-family: Arial, sans-serif !important;

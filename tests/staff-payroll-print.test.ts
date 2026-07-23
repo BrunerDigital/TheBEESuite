@@ -95,6 +95,15 @@ test("executives can filter, open, and print school-specific payroll reports", a
   assert.match(source, /Open report/);
   assert.match(source, /Print report/);
   assert.match(source, /Employee payroll summary/);
+  assert.match(source, /older total-only submission/);
+  assert.match(source, /send this payroll summary again/);
+});
+
+test("print reports remove hidden dashboard layout instead of leaving blank pages", async () => {
+  const source = await readFile("src/components/printable-report.tsx", "utf8");
+  assert.match(source, /not\(:has\(\.bee-print-report-active\)\)[\s\S]*display: none !important/);
+  assert.match(source, /\.bee-print-report-active \{[\s\S]*position: static !important/);
+  assert.doesNotMatch(source, /\.bee-print-report-active \{[\s\S]*position: absolute !important/);
 });
 
 test("payroll rows exclude previous employees", async () => {

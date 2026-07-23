@@ -41,6 +41,7 @@ import {
   decodeProcareTabularBuffer,
   expandProcareSourceEntries,
 } from "@/lib/procare-multi-report-import";
+import { buildRenderedProcareReportRowsFromFiles } from "@/lib/procare-rendered-report-import";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1175,9 +1176,12 @@ function looksLikeStandardMultiReportShard(headers: string[]) {
   return STANDARD_MULTI_REPORT_HINT_GROUPS.some((group) => group.every((header) => normalized.has(header)));
 }
 
-function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
+function buildConsolidatedRowsFromFiles(
+  entries: Map<string, Buffer>,
+  options: { supplementalOnly?: boolean; allowEmpty?: boolean } = {},
+) {
   const sources: Array<{ sourceName: string; records: Record<string, string>[]; recognizedHeaders: number }> = [];
-  const inventory: Array<{ sourceName: string; reportKind: "consolidated" | "ignored"; rows: number; matchedHeaderAliases: number; note?: string }> = [];
+  const inventory: Array<{ sourceName: string; reportKind: "consolidated" | "supplemental_import" | "evidence_only" | "ignored"; rows: number; matchedHeaderAliases: number; note?: string }> = [];
   let hasStandardReportShard = false;
 
   for (const [sourceName, buffer] of entries) {
@@ -1195,7 +1199,11 @@ function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
       continue;
     }
     const rawHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
-    if (looksLikeStandardMultiReportShard(rawHeaders)) hasStandardReportShard = true;
+    const standardReportShard = looksLikeStandardMultiReportShard(rawHeaders);
+    if (standardReportShard) {
+      hasStandardReportShard = true;
+      if (options.supplementalOnly) continue;
+    }
     const headerAnalysis = analyzeProcareHeaders(rawHeaders);
     const headerMap = rawHeaders.map((header, index) => headerAnalysis[index]?.suggestedField || header);
     const recognizedHeaders = headerAnalysis.filter((header) => header.recognized).length;
@@ -1206,6 +1214,20 @@ function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
         rows: Math.max(rows.length - 1, 0),
         matchedHeaderAliases: recognizedHeaders,
         note: rows.length < 2 ? "No data rows were found." : "No supported ProCare import columns were recognized.",
+      });
+      continue;
+    }
+    const normalizedHeaders = rawHeaders.map(normalizedImportHeader);
+    const supplementalImportable = normalizedHeaders.some((header) => (
+      /employee|staff|teacher|attendance|absence|check in|check out|sign in|sign out|schedule|allerg|medical|medication|health|balance|amount due/.test(header)
+    ));
+    if (options.supplementalOnly && !supplementalImportable) {
+      inventory.push({
+        sourceName,
+        reportKind: "evidence_only",
+        rows: rows.length - 1,
+        matchedHeaderAliases: recognizedHeaders,
+        note: "Listed in the reviewed source inventory, but this report does not yet have a safe first-class destination mapping.",
       });
       continue;
     }
@@ -1227,14 +1249,32 @@ function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
     });
     inventory.push({
       sourceName,
-      reportKind: "consolidated",
+      reportKind: options.supplementalOnly ? "supplemental_import" : "consolidated",
       rows: rows.length - 1,
       matchedHeaderAliases: recognizedHeaders,
+      note: options.supplementalOnly ? "Mapped into supported staff, schedule, attendance, check-log, medical, allergy, or opening-balance fields." : undefined,
     });
   }
 
-  if (hasStandardReportShard) return null;
+  if (hasStandardReportShard && !options.supplementalOnly) return null;
   if (!sources.length) {
+    if (options.allowEmpty) {
+      return {
+        text: "",
+        filename: "",
+        sourceType: "csv_files",
+        datasetCoverage: {
+          version: "supplemental-multi-file-v1",
+          reportDetection: {},
+          sourceInventory: inventory,
+          sourceRows: {},
+          rawSourceRows: {},
+          duplicateSourceRowsRemoved: {},
+        },
+        parsedRows: [] as string[][],
+        records: [] as Record<string, string>[],
+      };
+    }
     throw new Error("No supported ProCare report or consolidated CSV columns were recognized. Upload the four standard ProCare reports, a ZIP containing them, or a consolidated CSV with headings such as Family Name, Child Name, Guardian Email, Balance, or Classroom.");
   }
 
@@ -1273,7 +1313,73 @@ function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
     sourceType: "csv_files",
     datasetCoverage,
     parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header] ?? ""))],
+    records,
   };
+}
+
+function combineStandardAndSupplementalProcareRows(
+  standardRecords: Array<Record<string, string>>,
+  entries: Map<string, Buffer>,
+) {
+  const supplemental = buildConsolidatedRowsFromFiles(entries, { supplementalOnly: true, allowEmpty: true });
+  if (!supplemental?.records.length) {
+    const standardCoverage = standardRecords[0]?.["procare dataset coverage manifest"]
+      ? JSON.parse(standardRecords[0]["procare dataset coverage manifest"])
+      : null;
+    if (standardCoverage && supplemental?.datasetCoverage.sourceInventory.length) {
+      standardCoverage.sourceInventory = [
+        ...(standardCoverage.sourceInventory ?? []).filter((item: { sourceName?: string }) => (
+          !supplemental.datasetCoverage.sourceInventory.some((supplementalItem) => supplementalItem.sourceName === item.sourceName)
+        )),
+        ...supplemental.datasetCoverage.sourceInventory,
+      ];
+      const encoded = JSON.stringify(standardCoverage);
+      return standardRecords.map((record) => ({ ...record, "procare dataset coverage manifest": encoded }));
+    }
+    return standardRecords;
+  }
+
+  const childIdentity = new Map<string, Record<string, string>>();
+  const accountIdentity = new Map<string, Record<string, string>>();
+  for (const record of standardRecords) {
+    const childId = externalValue(record, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+    const accountId = externalValue(record, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+    if (childId && !childIdentity.has(childId)) childIdentity.set(childId, record);
+    if (accountId && !accountIdentity.has(accountId)) accountIdentity.set(accountId, record);
+  }
+  const supplementalRecords = supplemental.records.map((record) => {
+    const childId = externalValue(record, ["child id", "child key", "student id", "student key", "person id", "procare child id"]);
+    const accountId = externalValue(record, ["account key", "account id", "account number", "account no", "family id", "family key", "key", "procare account id"]);
+    const identity = (childId && childIdentity.get(childId)) || (accountId && accountIdentity.get(accountId));
+    if (!identity) return record;
+    const retainedIdentity = Object.fromEntries(Object.entries(identity).filter(([key]) => (
+      !key.startsWith("procare dataset coverage") && !key.startsWith("procare source ")
+    )));
+    return { ...retainedIdentity, ...record };
+  });
+  const standardCoverage = standardRecords[0]?.["procare dataset coverage manifest"]
+    ? JSON.parse(standardRecords[0]["procare dataset coverage manifest"])
+    : {};
+  const supplementalInventoryNames = new Set(supplemental.datasetCoverage.sourceInventory.map((item) => item.sourceName));
+  const datasetCoverage = {
+    ...standardCoverage,
+    version: `${standardCoverage.version ?? 4}+supplemental-v1`,
+    sourceInventory: [
+      ...(standardCoverage.sourceInventory ?? []).filter((item: { sourceName?: string }) => !supplementalInventoryNames.has(item.sourceName ?? "")),
+      ...supplemental.datasetCoverage.sourceInventory,
+    ],
+    sourceRows: { ...(standardCoverage.sourceRows ?? {}), supplemental: supplementalRecords.length },
+    rawSourceRows: { ...(standardCoverage.rawSourceRows ?? {}), supplemental: Object.values(supplemental.datasetCoverage.rawSourceRows).reduce((sum, count) => sum + count, 0) },
+    duplicateSourceRowsRemoved: {
+      ...(standardCoverage.duplicateSourceRowsRemoved ?? {}),
+      supplemental: Object.values(supplemental.datasetCoverage.duplicateSourceRowsRemoved).reduce((sum, count) => sum + count, 0),
+    },
+  };
+  const encodedCoverage = JSON.stringify(datasetCoverage);
+  return [...standardRecords, ...supplementalRecords].map((record) => ({
+    ...record,
+    "procare dataset coverage manifest": encodedCoverage,
+  }));
 }
 
 async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
@@ -1302,7 +1408,19 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
     let records: Array<Record<string, string>>;
     try {
       records = await buildProcareMultiReportRowsFromFiles(expandedEntries);
+      records = combineStandardAndSupplementalProcareRows(records, expandedEntries);
     } catch (error) {
+      const rendered = buildRenderedProcareReportRowsFromFiles(expandedEntries);
+      if (rendered) {
+        const headers = [...new Set(rendered.records.flatMap((record) => Object.keys(record)))];
+        return {
+          text: JSON.stringify(rendered.records),
+          filename: uploadedFiles.map((uploadedFile) => uploadedFile.name).join(", "),
+          sourceType: "procare_rendered_report_files",
+          datasetCoverage: rendered.datasetCoverage,
+          parsedRows: [headers, ...rendered.records.map((record) => headers.map((header) => record[header] ?? ""))],
+        };
+      }
       const consolidated = buildConsolidatedRowsFromFiles(expandedEntries);
       if (consolidated) return consolidated;
       throw error;
@@ -1327,7 +1445,19 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
     let records: Array<Record<string, string>>;
     try {
       records = await buildProcareMultiReportRowsFromFiles(expandedEntries);
+      records = combineStandardAndSupplementalProcareRows(records, expandedEntries);
     } catch (error) {
+      const rendered = buildRenderedProcareReportRowsFromFiles(expandedEntries);
+      if (rendered) {
+        const headers = [...new Set(rendered.records.flatMap((record) => Object.keys(record)))];
+        return {
+          text: JSON.stringify(rendered.records),
+          filename: file.name,
+          sourceType: "procare_rendered_report_zip",
+          datasetCoverage: rendered.datasetCoverage,
+          parsedRows: [headers, ...rendered.records.map((record) => headers.map((header) => record[header] ?? ""))],
+        };
+      }
       const consolidated = buildConsolidatedRowsFromFiles(expandedEntries);
       if (consolidated) return { ...consolidated, filename: file.name || consolidated.filename };
       throw error;

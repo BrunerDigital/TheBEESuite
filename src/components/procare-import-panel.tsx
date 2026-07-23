@@ -134,7 +134,7 @@ type ImportPreview = {
   datasetCoverage?: {
     sourceInventory?: Array<{
       sourceName: string;
-      reportKind: "enrollment" | "parentinfo" | "relationships" | "childinfo" | "consolidated" | "ignored";
+      reportKind: string;
       rows: number;
       matchedHeaderAliases: number;
       note?: string;
@@ -167,7 +167,11 @@ function previewStatusVariant(status: "ready" | "warning") {
 }
 
 function selectedFileIdentity(file: File) {
-  return `${file.name}\0${file.size}\0${file.lastModified}`;
+  return `${file.webkitRelativePath || file.name}\0${file.size}\0${file.lastModified}`;
+}
+
+function selectedFileLabel(file: File) {
+  return file.webkitRelativePath || file.name || "unnamed file";
 }
 
 function formatFileSize(bytes: number) {
@@ -216,6 +220,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [disposedRowNumbers, setDisposedRowNumbers] = useState<number[]>([]);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
   const submitLockedRef = useRef(false);
 
   function clearPreview() {
@@ -231,6 +236,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     setProgressPhase("idle");
     setProgressPercent(0);
     setProgressMessage("");
+  }
+
+  function addSelectedFiles(files: FileList | null) {
+    const addedFiles = Array.from(files ?? []);
+    setSelectedFiles((current) => {
+      const merged = new Map(current.map((file) => [selectedFileIdentity(file), file]));
+      for (const file of addedFiles) merged.set(selectedFileIdentity(file), file);
+      return [...merged.values()];
+    });
+    clearPreview();
   }
 
   function markReviewStale() {
@@ -434,7 +449,8 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
   const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
   const sourceInventory = preview?.datasetCoverage?.sourceInventory ?? [];
-  const recognizedSourceFiles = sourceInventory.filter((source) => source.reportKind !== "ignored");
+  const recognizedSourceFiles = sourceInventory.filter((source) => !["ignored", "evidence_only"].includes(source.reportKind));
+  const evidenceOnlySourceFiles = sourceInventory.filter((source) => source.reportKind === "evidence_only");
   const ignoredSourceFiles = sourceInventory.filter((source) => source.reportKind === "ignored");
   const sourceRowsTotal = Object.values(preview?.datasetCoverage?.sourceRows ?? {}).reduce((total, count) => total + count, 0);
   const rawSourceRowsTotal = Object.values(preview?.datasetCoverage?.rawSourceRows ?? {}).reduce((total, count) => total + count, 0);
@@ -570,7 +586,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
       <CardHeader>
         <CardTitle>Import ProCare Family Accounts</CardTitle>
         <CardDescription>
-          The four standard reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. A consolidated ProCare CSV can also populate supported staff, attendance, check-log, medical, and opening-balance fields when those columns are present.
+          The four standard reports populate families, guardians, children, classrooms, enrollment details, allergies, emergency contacts, and pickups. Add staff, schedule, attendance, sign-in/out, health, and account-balance exports to the same upload or ZIP; supported rows are linked by ProCare IDs, while reports without a safe destination mapping are identified for migration follow-up.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -825,23 +841,46 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
             ) : null}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="procare-file">ProCare export files</Label>
+            <Label>ProCare export folder or files</Label>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => folderRef.current?.click()}>
+                <Upload data-icon="inline-start" />
+                Choose one folder
+              </Button>
+              <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+                <Upload data-icon="inline-start" />
+                Choose individual files
+              </Button>
+            </div>
+            <input
+              ref={(node) => {
+                folderRef.current = node;
+                if (node) {
+                  node.setAttribute("webkitdirectory", "");
+                  node.setAttribute("directory", "");
+                }
+              }}
+              id="procare-folder"
+              type="file"
+              multiple
+              onChange={(event) => {
+                addSelectedFiles(event.target.files);
+                event.target.value = "";
+              }}
+              className="sr-only"
+              aria-label="Choose a folder containing ProCare export files"
+            />
             <input
               ref={fileRef}
               id="procare-file"
               type="file"
               multiple
               onChange={(event) => {
-                const addedFiles = Array.from(event.target.files ?? []);
-                setSelectedFiles((current) => {
-                  const merged = new Map(current.map((file) => [selectedFileIdentity(file), file]));
-                  for (const file of addedFiles) merged.set(selectedFileIdentity(file), file);
-                  return [...merged.values()];
-                });
+                addSelectedFiles(event.target.files);
                 event.target.value = "";
-                clearPreview();
               }}
-              className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className="sr-only"
+              aria-label="Choose individual ProCare export files"
             />
             {selectedFiles.length ? (
               <div className="space-y-2 rounded-lg border bg-background p-3">
@@ -855,10 +894,11 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <div className="max-h-40 space-y-1 overflow-auto">
                   {selectedFiles.map((file) => {
                     const identity = selectedFileIdentity(file);
+                    const label = selectedFileLabel(file);
                     return (
                       <div key={identity} className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-2 py-1 text-xs">
-                        <span className="min-w-0 break-all">{file.name || "unnamed file"} · {formatFileSize(file.size)}</span>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => removeSelectedFile(identity)} aria-label={`Remove ${file.name || "unnamed file"}`}>
+                        <span className="min-w-0 break-all">{label} · {formatFileSize(file.size)}</span>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => removeSelectedFile(identity)} aria-label={`Remove ${label}`}>
                           <X className="size-4" />
                         </Button>
                       </div>
@@ -868,7 +908,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
-              File names and extensions do not matter. Select the four ProCare reports together, or choose the ZIP containing them. The importer identifies enrollment, parent, relationship, and child-information data from each file&apos;s columns, then asks you to review the correlations before importing.
+              Choose one folder containing any number or combination of the recommended ProCare exports, choose individual files, or choose a ZIP. Folder and file names do not control detection—the importer identifies each report from its columns and shows exactly what will import, needs mapping follow-up, or is unrelated. Each reviewed batch may contain up to 500 files and 100 MB.
             </p>
             {hasMixedSources ? (
               <Alert variant="destructive">
@@ -1075,6 +1115,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <p className="text-xs text-muted-foreground">Confirm that every intended export is listed. Files are classified by their columns, not their names.</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <Badge variant="outline">{recognizedSourceFiles.length.toLocaleString()} recognized source(s)</Badge>
+                <Badge variant={evidenceOnlySourceFiles.length ? "secondary" : "outline"}>{evidenceOnlySourceFiles.length.toLocaleString()} mapping follow-up source(s)</Badge>
                 <Badge variant={ignoredSourceFiles.length ? "destructive" : "outline"}>{ignoredSourceFiles.length.toLocaleString()} ignored source(s)</Badge>
                 <Badge variant="outline">{sourceRowsTotal.toLocaleString()} retained row(s)</Badge>
                 {rawSourceRowsTotal > 0 && rawSourceRowsTotal !== sourceRowsTotal ? (
@@ -1082,6 +1123,18 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 ) : null}
               </div>
             </div>
+            {evidenceOnlySourceFiles.length ? (
+              <Alert>
+                <AlertCircle className="size-4" />
+                <AlertTitle>{evidenceOnlySourceFiles.length} source file(s) need destination mapping</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  <p>These exports are listed in the reviewed inventory but are not written into operational records until a safe destination mapping is available.</p>
+                  {evidenceOnlySourceFiles.slice(0, 12).map((source) => (
+                    <div key={source.sourceName} className="break-all">{source.sourceName}: {source.note ?? "destination mapping required"}</div>
+                  ))}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <div className="grid gap-2 md:grid-cols-2">
               {recognizedSourceFiles.map((source) => (
                 <div key={source.sourceName} className="rounded-lg border bg-background p-3 text-xs">
@@ -1122,7 +1175,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 className="mt-0.5 size-4"
               />
               <span>
-                I confirm the recognized and ignored ProCare sources above are correct for this import, and ignored files should not be imported.
+                I confirm the imported, mapping-follow-up, and ignored ProCare sources above are correct for this import.
               </span>
             </label>
           </div>

@@ -749,6 +749,23 @@ export default async function DashboardPage() {
       overtimeMinutes: metadataNumber(metadata.overtimeMinutes) ?? 0,
       openMinutes: metadataNumber(metadata.openMinutes) ?? 0,
       estimatedGrossCents: metadataNumber(metadata.estimatedGrossCents),
+      employeeSummaries: Array.isArray(metadata.employeeSummaries)
+        ? metadata.employeeSummaries.map((value) => {
+            const employee = recordFromJson(value);
+            return {
+              employeeId: metadataString(employee.employeeId),
+              employeeName: metadataString(employee.employeeName) || "Unknown employee",
+              title: metadataString(employee.title),
+              department: metadataString(employee.department),
+              payCode: metadataString(employee.payCode),
+              totalMinutes: metadataNumber(employee.totalMinutes) ?? 0,
+              regularMinutes: metadataNumber(employee.regularMinutes) ?? 0,
+              overtimeMinutes: metadataNumber(employee.overtimeMinutes) ?? 0,
+              openMinutes: metadataNumber(employee.openMinutes) ?? 0,
+              estimatedGrossCents: metadataNumber(employee.estimatedGrossCents),
+            };
+          })
+        : [],
       submittedBy: metadataString(metadata.submittedBy) || "Unknown",
       submittedAt: metadataString(metadata.submittedAt) || row.createdAt.toISOString(),
     };

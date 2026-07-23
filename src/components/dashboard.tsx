@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -25,6 +26,8 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
@@ -33,6 +36,7 @@ import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/comp
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
+import { formatMoneyCents } from "@/lib/staff-compensation";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
 import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
@@ -164,6 +168,18 @@ export type LiveDashboardData = {
       overtimeMinutes: number;
       openMinutes: number;
       estimatedGrossCents: number | null;
+      employeeSummaries: Array<{
+        employeeId: string;
+        employeeName: string;
+        title: string;
+        department: string;
+        payCode: string;
+        totalMinutes: number;
+        regularMinutes: number;
+        overtimeMinutes: number;
+        openMinutes: number;
+        estimatedGrossCents: number | null;
+      }>;
       submittedBy: string;
       submittedAt: string;
     }>;
@@ -210,6 +226,21 @@ function ExecutiveLensDashboard({
   actionQueue: DashboardNotification[];
 }) {
   const timeZone = useSchoolTimeZone();
+  const [payrollSchoolFilter, setPayrollSchoolFilter] = useState("all");
+  const [selectedPayrollSummaryId, setSelectedPayrollSummaryId] = useState<string | null>(null);
+  const {
+    active: payrollPrintActive,
+    generatedAt: payrollPrintGeneratedAt,
+    print: printPayrollReport,
+  } = usePrintableReport();
+  const payrollSchools = [...new Map(metrics.payrollSummaries.map((summary) => [
+    summary.centerId,
+    { centerId: summary.centerId, schoolName: summary.schoolName },
+  ])).values()].sort((left, right) => left.schoolName.localeCompare(right.schoolName));
+  const filteredPayrollSummaries = payrollSchoolFilter === "all"
+    ? metrics.payrollSummaries
+    : metrics.payrollSummaries.filter((summary) => summary.centerId === payrollSchoolFilter);
+  const selectedPayrollSummary = metrics.payrollSummaries.find((summary) => summary.id === selectedPayrollSummaryId) ?? null;
   const sortedByOccupancy = [...metrics.schoolComparisons].sort((left, right) => right.occupancy - left.occupancy).slice(0, 10);
   const sortedByRevenue = [...metrics.schoolComparisons].sort((left, right) => right.revenueDollars - left.revenueDollars).slice(0, 8);
   const sortedByLeads = [...metrics.schoolComparisons].sort((left, right) => right.leads - left.leads).slice(0, 8);
@@ -431,10 +462,28 @@ function ExecutiveLensDashboard({
           id={`dashboard-${lens}-payroll-summary-submissions`}
           className="glass-panel"
           title="Payroll summaries"
-          description="Payroll summaries sent by directors for executive review. Individual employee timecards remain in the staff workspace."
+          description="Payroll summaries sent by directors for executive review, including totals for each employee."
         >
           {metrics.payrollSummaries.length ? (
-            <div className="max-h-[30rem] overflow-auto rounded-xl border bg-background/40">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="w-full max-w-sm space-y-1">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">School</div>
+                  <Select value={payrollSchoolFilter} onValueChange={(value) => value && setPayrollSchoolFilter(value)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All visible schools</SelectItem>
+                      {payrollSchools.map((school) => (
+                        <SelectItem key={school.centerId} value={school.centerId}>{compactSchoolName(school.schoolName)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {filteredPayrollSummaries.length} submitted report{filteredPayrollSummaries.length === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="max-h-[30rem] overflow-auto rounded-xl border bg-background/40">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
@@ -443,29 +492,45 @@ function ExecutiveLensDashboard({
                     <TableHead className="text-right">Employees</TableHead>
                     <TableHead className="text-right">Regular / OT</TableHead>
                     <TableHead className="text-right">Total / open</TableHead>
+                    <TableHead className="text-right">Est. gross</TableHead>
                     <TableHead>Submitted</TableHead>
+                    <TableHead className="text-right">Report</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {metrics.payrollSummaries.map((summary) => (
-                    <TableRow key={summary.id}>
-                      <TableCell className="font-medium">{compactSchoolName(summary.schoolName)}</TableCell>
-                      <TableCell>{summary.periodStart} to {summary.periodEnd}</TableCell>
-                      <TableCell className="text-right">{summary.employeeCount.toLocaleString()}</TableCell>
-                      <TableCell className="text-right">
-                        {formatStaffDecimalHours(summary.regularMinutes)} / {formatStaffDecimalHours(summary.overtimeMinutes)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatStaffDecimalHours(summary.totalMinutes)} / {formatStaffDecimalHours(summary.openMinutes)}
-                      </TableCell>
-                      <TableCell>
-                        <div>{summary.submittedBy}</div>
-                        <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt, timeZone)}</div>
+                  {filteredPayrollSummaries.map((summary) => (
+                      <TableRow key={summary.id}>
+                        <TableCell className="font-medium">{compactSchoolName(summary.schoolName)}</TableCell>
+                        <TableCell>{summary.periodStart} to {summary.periodEnd}</TableCell>
+                        <TableCell className="text-right">{summary.employeeCount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          {formatStaffDecimalHours(summary.regularMinutes)} / {formatStaffDecimalHours(summary.overtimeMinutes)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatStaffDecimalHours(summary.totalMinutes)} / {formatStaffDecimalHours(summary.openMinutes)}
+                        </TableCell>
+                        <TableCell className="text-right">{formatMoneyCents(summary.estimatedGrossCents)}</TableCell>
+                        <TableCell>
+                          <div>{summary.submittedBy}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt, timeZone)}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setSelectedPayrollSummaryId(summary.id)}>
+                            Open report
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                  ))}
+                  {!filteredPayrollSummaries.length ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
+                        No payroll reports have been submitted for this school.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : null}
                 </TableBody>
               </Table>
+              </div>
             </div>
           ) : (
             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No payroll summaries have been sent yet.</p>
@@ -580,7 +645,117 @@ function ExecutiveLensDashboard({
   ];
 
   return (
-    <WorkspaceBoard storageId={`dashboard-${lens}-executive`} className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3" items={executiveItems} />
+    <>
+      <ReportPrintStyles />
+      <WorkspaceBoard storageId={`dashboard-${lens}-executive`} className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3" items={executiveItems} />
+      <Dialog open={Boolean(selectedPayrollSummary)} onOpenChange={(open) => {
+        if (!open) setSelectedPayrollSummaryId(null);
+      }}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Payroll report</DialogTitle>
+            <DialogDescription>
+              {selectedPayrollSummary
+                ? `${compactSchoolName(selectedPayrollSummary.schoolName)} · ${selectedPayrollSummary.periodStart} to ${selectedPayrollSummary.periodEnd}`
+                : "Submitted payroll report"}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPayrollSummary ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+                <div>
+                  <div className="font-medium">{selectedPayrollSummary.employeeCount} employees · {formatStaffDecimalHours(selectedPayrollSummary.totalMinutes)} total hours</div>
+                  <div className="text-muted-foreground">Submitted by {selectedPayrollSummary.submittedBy} on {formatDashboardDateTime(selectedPayrollSummary.submittedAt, timeZone)}</div>
+                </div>
+                <Button type="button" variant="outline" onClick={printPayrollReport}>
+                  <Printer data-icon="inline-start" />
+                  Print report
+                </Button>
+              </div>
+              <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Department / pay code</TableHead>
+                      <TableHead className="text-right">Regular</TableHead>
+                      <TableHead className="text-right">OT</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Open</TableHead>
+                      <TableHead className="text-right">Est. gross</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedPayrollSummary.employeeSummaries.map((employee) => (
+                      <TableRow key={employee.employeeId}>
+                        <TableCell>
+                          <div className="font-medium">{employee.employeeName}</div>
+                          <div className="text-xs text-muted-foreground">{employee.title}</div>
+                        </TableCell>
+                        <TableCell>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.regularMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.overtimeMinutes)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatStaffDecimalHours(employee.totalMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.openMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatMoneyCents(employee.estimatedGrossCents)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      <PrintableReport active={payrollPrintActive && Boolean(selectedPayrollSummary)} label="Printable payroll report">
+        {selectedPayrollSummary ? (
+          <>
+            <header>
+              <h1>Payroll Report</h1>
+              <p>{selectedPayrollSummary.schoolName}</p>
+              <p>Pay period: {selectedPayrollSummary.periodStart} to {selectedPayrollSummary.periodEnd}</p>
+              <p>Submitted by {selectedPayrollSummary.submittedBy}: {formatPrintDateTime(selectedPayrollSummary.submittedAt, timeZone)}</p>
+              <p>Printed: {formatPrintDateTime(payrollPrintGeneratedAt, timeZone)}</p>
+            </header>
+            <h2>Employee payroll summary</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department / pay code</th>
+                  <th>Regular</th>
+                  <th>OT</th>
+                  <th>Total</th>
+                  <th>Open</th>
+                  <th>Estimated gross</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPayrollSummary.employeeSummaries.map((employee) => (
+                  <tr key={employee.employeeId}>
+                    <td>{employee.employeeName}{employee.title ? ` · ${employee.title}` : ""}</td>
+                    <td>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</td>
+                    <td>{formatStaffDecimalHours(employee.regularMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.overtimeMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.totalMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.openMinutes)}</td>
+                    <td>{formatMoneyCents(employee.estimatedGrossCents)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <th colSpan={2}>School total</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.regularMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.overtimeMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.totalMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.openMinutes)}</th>
+                  <th>{formatMoneyCents(selectedPayrollSummary.estimatedGrossCents)}</th>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        ) : null}
+      </PrintableReport>
+    </>
   );
 }
 

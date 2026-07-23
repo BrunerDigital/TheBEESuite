@@ -71,12 +71,30 @@ test("timestamp entry points use school-local conversion rather than browser-loc
   }
 });
 
-test("payroll print CSS excludes summaries and collapses non-print layout", async () => {
+test("payroll print CSS excludes the center summary and collapses non-print layout", async () => {
   const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
   assert.match(source, /staff-payroll-print-summary[\s\S]*display: none !important/);
   assert.match(source, /size: landscape/);
   assert.match(source, /not\(:has\(\.staff-payroll-print-area\)\)/);
   assert.doesNotMatch(source, /body:has\(\.staff-payroll-print-area\) \* \{\s*visibility: hidden/);
+});
+
+test("submitted payroll reports include a summary for every active employee", async () => {
+  const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
+  const sendSummary = source.slice(source.indexOf("function sendPayrollSummary"), source.indexOf("function saveTeacher"));
+  assert.match(sendSummary, /employeeSummaries: rows\.map/);
+  assert.match(sendSummary, /employeeName: row\.name/);
+  assert.match(sendSummary, /regularMinutes: row\.regularMinutes/);
+  assert.match(sendSummary, /overtimeMinutes: row\.overtimeMinutes/);
+});
+
+test("executives can filter, open, and print school-specific payroll reports", async () => {
+  const source = await readFile("src/components/dashboard.tsx", "utf8");
+  assert.match(source, /payrollSchoolFilter/);
+  assert.match(source, /summary\.centerId === payrollSchoolFilter/);
+  assert.match(source, /Open report/);
+  assert.match(source, /Print report/);
+  assert.match(source, /Employee payroll summary/);
 });
 
 test("payroll rows exclude previous employees", async () => {

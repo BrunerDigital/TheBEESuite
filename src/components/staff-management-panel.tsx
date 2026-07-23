@@ -727,6 +727,18 @@ export function StaffManagementPanel({
           estimatedGrossCents: canManageCompensation
             ? rows.reduce((sum, row) => sum + (row.estimatedGrossPayCents ?? 0), 0)
             : null,
+          employeeSummaries: rows.map((row) => ({
+            employeeId: row.id,
+            employeeName: row.name,
+            title: row.title,
+            department: row.payrollDepartment,
+            payCode: row.payrollPayCode,
+            totalMinutes: row.summary.totalMinutes,
+            regularMinutes: row.regularMinutes,
+            overtimeMinutes: row.overtimeMinutes,
+            openMinutes: row.summary.openShiftMinutes,
+            estimatedGrossCents: canManageCompensation ? row.estimatedGrossPayCents : null,
+          })),
         };
       }).filter((summary) => summary.employeeCount > 0);
       const response = await fetch("/api/operations/records", {

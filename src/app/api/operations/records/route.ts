@@ -396,6 +396,7 @@ async function POSTHandler(request: NextRequest) {
     }
     const summaries = rawSummaries.map((value: unknown) => {
       const row = jsonObject(value);
+      const rawEmployeeSummaries = Array.isArray(row.employeeSummaries) ? row.employeeSummaries : [];
       return {
         centerId: clean(row.centerId),
         periodStart: clean(row.periodStart),
@@ -408,6 +409,23 @@ async function POSTHandler(request: NextRequest) {
         estimatedGrossCents: row.estimatedGrossCents === null || row.estimatedGrossCents === undefined
           ? null
           : Math.max(0, intValue(row.estimatedGrossCents)),
+        employeeSummaries: rawEmployeeSummaries.slice(0, 500).map((value: unknown) => {
+          const employee = jsonObject(value);
+          return {
+            employeeId: clean(employee.employeeId),
+            employeeName: clean(employee.employeeName).slice(0, 160),
+            title: clean(employee.title).slice(0, 120),
+            department: clean(employee.department).slice(0, 160),
+            payCode: clean(employee.payCode).slice(0, 120),
+            totalMinutes: Math.max(0, intValue(employee.totalMinutes)),
+            regularMinutes: Math.max(0, intValue(employee.regularMinutes)),
+            overtimeMinutes: Math.max(0, intValue(employee.overtimeMinutes)),
+            openMinutes: Math.max(0, intValue(employee.openMinutes)),
+            estimatedGrossCents: employee.estimatedGrossCents === null || employee.estimatedGrossCents === undefined
+              ? null
+              : Math.max(0, intValue(employee.estimatedGrossCents)),
+          };
+        }),
       };
     });
     if (summaries.some((summary) => {
@@ -416,6 +434,12 @@ async function POSTHandler(request: NextRequest) {
       return !summary.centerId || !periodStart || !periodEnd || periodStart > periodEnd;
     })) {
       return NextResponse.json({ ok: false, error: "Each payroll summary needs a center and valid pay-period dates." }, { status: 400 });
+    }
+    if (summaries.some((summary) => (
+      summary.employeeSummaries.length !== summary.employeeCount
+      || summary.employeeSummaries.some((employee) => !employee.employeeId || !employee.employeeName)
+    ))) {
+      return NextResponse.json({ ok: false, error: "Each payroll summary needs one valid summary for every employee." }, { status: 400 });
     }
     if (summaries.some((summary) => !canAccessCenter(user, summary.centerId))) {
       return NextResponse.json({ ok: false, error: "You do not have access to one of the submitted centers." }, { status: 403 });

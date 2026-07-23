@@ -7,6 +7,11 @@ type ParsedCsv = {
   rows: CsvRow[];
 };
 
+type MergedProcareReport = ParsedCsv & {
+  rawRows: number;
+  duplicateRowsRemoved: number;
+};
+
 type ProcareReportKind = keyof typeof PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports;
 
 type DetectedProcareReport = {
@@ -14,6 +19,14 @@ type DetectedProcareReport = {
   parsed: ParsedCsv;
   score: number;
   aliasMatches: number;
+};
+
+type ProcareSourceInventoryItem = {
+  sourceName: string;
+  reportKind: ProcareReportKind | "ignored";
+  rows: number;
+  matchedHeaderAliases: number;
+  note?: string;
 };
 
 type ProcareImportDiagnostic = {
@@ -334,57 +347,81 @@ function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: Proc
 }
 
 function detectReports(entries: Map<string, Buffer>) {
+  const inventory: ProcareSourceInventoryItem[] = [];
   const parsedEntries = [...entries].flatMap(([sourceName, buffer]) => {
     try {
       return [{ sourceName, parsed: parseCsv(decodeProcareTabularBuffer(buffer), sourceName) }];
-    } catch {
+    } catch (error) {
+      inventory.push({
+        sourceName,
+        reportKind: "ignored",
+        rows: 0,
+        matchedHeaderAliases: 0,
+        note: error instanceof Error ? error.message : "This file is not a supported tabular report.",
+      });
       return [];
     }
   });
-  const candidates = Object.fromEntries(REPORT_KINDS.map((reportKind) => [
-    reportKind,
-    parsedEntries.flatMap((entry) => {
+  const reports: Record<ProcareReportKind, DetectedProcareReport[]> = {
+    enrollment: [],
+    parentinfo: [],
+    relationships: [],
+    childinfo: [],
+  };
+
+  for (const entry of parsedEntries) {
+    const candidates = REPORT_KINDS.flatMap((reportKind) => {
       try {
         const candidate = reportCandidate(entry.sourceName, entry.parsed, reportKind);
-        return candidate ? [candidate] : [];
+        return candidate ? [{ reportKind, candidate }] : [];
       } catch {
         return [];
       }
-    }).sort((left, right) => right.score - left.score || left.sourceName.localeCompare(right.sourceName)),
-  ])) as Record<ProcareReportKind, DetectedProcareReport[]>;
-
-  const best: { score: number; reports?: Record<ProcareReportKind, DetectedProcareReport> } = { score: Number.NEGATIVE_INFINITY };
-  const choose = (
-    index: number,
-    usedNames: Set<string>,
-    selected: Partial<Record<ProcareReportKind, DetectedProcareReport>>,
-    score: number,
-  ) => {
-    if (index === REPORT_KINDS.length) {
-      const reports = { ...selected } as Record<ProcareReportKind, DetectedProcareReport>;
-      if (score > best.score) {
-        best.score = score;
-        best.reports = reports;
-      }
-      return;
+    }).sort((left, right) => right.candidate.score - left.candidate.score);
+    if (!candidates.length) {
+      inventory.push({ sourceName: entry.sourceName, reportKind: "ignored", rows: entry.parsed.rows.length, matchedHeaderAliases: 0, note: "No supported ProCare report shape was recognized." });
+      continue;
     }
-    const reportKind = REPORT_KINDS[index];
-    for (const candidate of candidates[reportKind]) {
-      if (usedNames.has(candidate.sourceName)) continue;
-      usedNames.add(candidate.sourceName);
-      selected[reportKind] = candidate;
-      choose(index + 1, usedNames, selected, score + candidate.score);
-      delete selected[reportKind];
-      usedNames.delete(candidate.sourceName);
+    if (candidates.length > 1 && candidates[0].candidate.score === candidates[1].candidate.score) {
+      throw new Error(`${entry.sourceName} matches more than one ProCare report type equally. Keep the original header row or remove unrelated columns so the director can review it safely.`);
     }
-  };
-  choose(0, new Set(), {}, 0);
-  if (!best.reports) {
-    const missing = REPORT_KINDS.filter((reportKind) => !candidates[reportKind].length);
-    const missingLabels = missing.length ? missing.join(", ") : "a unique set of enrollment, parent, relationship, and child-information reports";
-    throw new Error(`The uploaded files could not be identified safely by their columns. Missing or ambiguous report data: ${missingLabels}. Filenames do not matter; include all four ProCare reports and keep their header rows.`);
+    const selected = candidates[0];
+    reports[selected.reportKind].push(selected.candidate);
+    inventory.push({
+      sourceName: entry.sourceName,
+      reportKind: selected.reportKind,
+      rows: selected.candidate.parsed.rows.length,
+      matchedHeaderAliases: selected.candidate.aliasMatches,
+    });
   }
-  return best.reports;
+
+  const missing = REPORT_KINDS.filter((reportKind) => !reports[reportKind].length);
+  if (missing.length) {
+    throw new Error(`The uploaded files could not be identified safely by their columns. Missing or ambiguous report data: ${missing.join(", ")}. Filenames do not matter; include all four ProCare reports and keep their header rows.`);
+  }
+  return { reports, inventory };
+}
+
+function mergeDetectedReports(reports: DetectedProcareReport[]): MergedProcareReport {
+  const headers = [...new Set(reports.flatMap((report) => report.parsed.headers))];
+  const seenRows = new Set<string>();
+  const rows: CsvRow[] = [];
+  let rawRows = 0;
+  for (const report of reports) {
+    for (const row of report.parsed.rows) {
+      rawRows += 1;
+      const fingerprint = JSON.stringify(headers.map((header) => [header, field(row, header)]));
+      if (seenRows.has(fingerprint)) continue;
+      seenRows.add(fingerprint);
+      rows.push(row);
+    }
+  }
+  return {
+    headers,
+    rows,
+    rawRows,
+    duplicateRowsRemoved: rawRows - rows.length,
+  };
 }
 
 function requireColumns(reportName: string, parsed: ParsedCsv, requiredColumns: readonly string[]) {
@@ -402,7 +439,7 @@ function zipEntries(buffer: Buffer) {
       zip.readEntry();
       zip.on("entry", (entry) => {
         totalUncompressedBytes += entry.uncompressedSize;
-        if (entries.size >= 20 || totalUncompressedBytes > 25 * 1024 * 1024) {
+        if (entries.size >= 200 || totalUncompressedBytes > 100 * 1024 * 1024) {
           zip.close();
           return reject(new Error("The ProCare ZIP exceeds the safe import size or file-count limit."));
         }
@@ -427,6 +464,31 @@ function zipEntries(buffer: Buffer) {
       zip.on("error", reject);
     });
   });
+}
+
+function isZipArchive(buffer: Buffer) {
+  return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
+}
+
+export async function expandProcareSourceEntries(entries: Map<string, Buffer>) {
+  const expanded = new Map<string, Buffer>();
+  for (const [sourceName, buffer] of entries) {
+    if (!isZipArchive(buffer)) {
+      expanded.set(sourceName, buffer);
+      continue;
+    }
+    const archivedEntries = await zipEntries(buffer);
+    for (const [archivedName, archivedBuffer] of archivedEntries) {
+      if (isZipArchive(archivedBuffer)) {
+        throw new Error(`${sourceName} contains a nested ZIP (${archivedName}). Extract nested archives first so the director can review every source file.`);
+      }
+      const expandedName = `${sourceName}/${archivedName}`;
+      if (expanded.has(expandedName)) throw new Error(`More than one uploaded source resolves to ${expandedName}.`);
+      expanded.set(expandedName, archivedBuffer);
+    }
+  }
+  if (expanded.size > 500) throw new Error("The selected ProCare sources contain more than 500 files. Split the handoff into reviewed batches.");
+  return expanded;
 }
 
 function fullName(row?: CsvRow) {
@@ -610,8 +672,13 @@ function diagnosticForResolution(
 }
 
 export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, Buffer>): Promise<Array<Record<string, string>>> {
-  const detectedReports = detectReports(entries);
-  const parsedReports = Object.fromEntries(REPORT_KINDS.map((reportKind) => [reportKind, detectedReports[reportKind].parsed])) as Record<ProcareReportKind, ParsedCsv>;
+  const detected = detectReports(entries);
+  const parsedReports: Record<ProcareReportKind, MergedProcareReport> = {
+    enrollment: mergeDetectedReports(detected.reports.enrollment),
+    parentinfo: mergeDetectedReports(detected.reports.parentinfo),
+    relationships: mergeDetectedReports(detected.reports.relationships),
+    childinfo: mergeDetectedReports(detected.reports.childinfo),
+  };
   for (const [reportName, coverage] of Object.entries(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports)) {
     requireColumns(reportName, parsedReports[reportName as ProcareReportKind], coverage.requiredColumns);
   }
@@ -982,14 +1049,29 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
   const datasetCoverage = {
     version: PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version,
     reportDetection: Object.fromEntries(REPORT_KINDS.map((reportKind) => [reportKind, {
-      sourceName: detectedReports[reportKind].sourceName,
-      matchedHeaderAliases: detectedReports[reportKind].aliasMatches,
+      sourceName: detected.reports[reportKind].map((report) => report.sourceName).join(", "),
+      sourceNames: detected.reports[reportKind].map((report) => report.sourceName),
+      sourceFileCount: detected.reports[reportKind].length,
+      matchedHeaderAliases: detected.reports[reportKind].reduce((total, report) => total + report.aliasMatches, 0),
     }])),
+    sourceInventory: detected.inventory,
     sourceRows: {
       enrollment: enrollment.length,
       accountPeople: parents.length,
       relationships: relationships.length,
       childInfo: childInfo.length,
+    },
+    rawSourceRows: {
+      enrollment: parsedReports.enrollment.rawRows,
+      accountPeople: parsedReports.parentinfo.rawRows,
+      relationships: parsedReports.relationships.rawRows,
+      childInfo: parsedReports.childinfo.rawRows,
+    },
+    duplicateSourceRowsRemoved: {
+      enrollment: parsedReports.enrollment.duplicateRowsRemoved,
+      accountPeople: parsedReports.parentinfo.duplicateRowsRemoved,
+      relationships: parsedReports.relationships.duplicateRowsRemoved,
+      childInfo: parsedReports.childinfo.duplicateRowsRemoved,
     },
     sourceIdentifiers: {
       accounts: peopleByAccount.size,

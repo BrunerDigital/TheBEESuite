@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload } from "lucide-react";
+import { AlertCircle, CheckCircle2, Download, Eye, LoaderCircle, Upload, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -51,15 +51,19 @@ function uploadImport(formData: FormData, onProgress: (percent: number, uploaded
 
 type ImportPreview = {
   rows: number;
+  totalRows?: number;
   readyRows: number;
   warningRows: number;
   unmappedRows: number;
   familyRows: number;
   staffRows: number;
+  sourceFamilyGroups?: number;
+  sourceChildGroups?: number;
   sourceGuardianGroups?: number;
   familyChildLinks?: number;
   familyGuardianLinks?: number;
   familiesWithCompleteProfileLinks?: number;
+  sourceStaffGroups?: number;
   matchedFamilies: number;
   newFamilies: number;
   matchedChildren: number;
@@ -67,14 +71,21 @@ type ImportPreview = {
   matchedStaff: number;
   newStaff: number;
   createdFamilies?: number;
+  updatedFamilies?: number;
   createdChildren?: number;
   createdClassrooms?: number;
   createdStaff?: number;
+  updatedStaff?: number;
   createdStaffLogins?: number;
+  emergencyContacts?: number;
+  authorizedPickups?: number;
+  medicalRows?: number;
   invoiceRows?: number;
+  ledgerRows?: number;
   imported?: number;
   unresolved?: number;
   disposed?: number;
+  sourceType?: string;
   classroomsReferenced: number;
   balanceRows: number;
   attendanceRows: number;
@@ -120,6 +131,18 @@ type ImportPreview = {
     required: boolean;
     correlations: Array<{ source: string; destination: string; label: string; recognized: boolean }>;
   }>;
+  datasetCoverage?: {
+    sourceInventory?: Array<{
+      sourceName: string;
+      reportKind: "enrollment" | "parentinfo" | "relationships" | "childinfo" | "consolidated" | "ignored";
+      rows: number;
+      matchedHeaderAliases: number;
+      note?: string;
+    }>;
+    sourceRows?: Record<string, number>;
+    rawSourceRows?: Record<string, number>;
+    duplicateSourceRowsRemoved?: Record<string, number>;
+  };
   warnings?: Array<{ rowNumber: number; message: string }>;
   rowResults?: Array<{
     rowNumber: number;
@@ -147,6 +170,29 @@ function selectedFileIdentity(file: File) {
   return `${file.name}\0${file.size}\0${file.lastModified}`;
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+function sumCounts(...counts: Array<number | null | undefined>): number {
+  return counts.reduce<number>((total, count) => total + Number(count ?? 0), 0);
+}
+
+function bestCount(...counts: Array<number | null | undefined>): number {
+  return Math.max(0, ...counts.map((count) => Number(count ?? 0)));
+}
+
+type SetupReadinessStatus = "ready" | "needs_review" | "next" | "held";
+
+function setupReadinessLabel(status: SetupReadinessStatus) {
+  if (status === "ready") return "Ready";
+  if (status === "needs_review") return "Needs review";
+  if (status === "held") return "Held off";
+  return "Next";
+}
+
 export function ProcareImportPanel({ centers, allowBulkImport = false }: { centers: CenterOption[]; allowBulkImport?: boolean }) {
   const router = useRouter();
   const [centerId, setCenterId] = useState(allowBulkImport ? "auto" : centers[0]?.id ?? "");
@@ -154,6 +200,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [duplicateMatchMode, setDuplicateMatchMode] = useState("review");
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
+  const [sourceInventoryConfirmed, setSourceInventoryConfirmed] = useState(false);
   const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
   const [correlationConfirmations, setCorrelationConfirmations] = useState<string[]>([]);
   const [reviewStale, setReviewStale] = useState(false);
@@ -164,6 +211,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [lastImportSummary, setLastImportSummary] = useState<ImportPreview | null>(null);
   const [lastBatchId, setLastBatchId] = useState("");
   const [disposedRowNumbers, setDisposedRowNumbers] = useState<number[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -172,16 +220,28 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
 
   function clearPreview() {
     setPreview(null);
+    setLastImportSummary(null);
     setPreviewDialogOpen(false);
     setDuplicateReviewConfirmed(false);
+    setSourceInventoryConfirmed(false);
     setCorrelationConfirmations([]);
     setReviewStale(false);
+    setLastBatchId("");
+    setStatus("");
+    setProgressPhase("idle");
+    setProgressPercent(0);
+    setProgressMessage("");
   }
 
   function markReviewStale() {
     setDuplicateReviewConfirmed(false);
     setCorrelationConfirmations([]);
     setReviewStale(true);
+  }
+
+  function removeSelectedFile(identity: string) {
+    setSelectedFiles((current) => current.filter((file) => selectedFileIdentity(file) !== identity));
+    clearPreview();
   }
 
   function downloadBackup(batchId: string) {
@@ -220,6 +280,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         formData.set("dryRun", String(dryRun));
         formData.set("duplicateMatchMode", duplicateMatchMode);
         formData.set("duplicateReviewConfirmed", String(duplicateReviewConfirmed));
+        formData.set("sourceInventoryConfirmed", String(sourceInventoryConfirmed));
         formData.set("fieldMapping", JSON.stringify(fieldMapping));
         formData.set("correlationConfirmations", correlationConfirmations.join(","));
         formData.set("disposedRowNumbers", disposedRowNumbers.join(","));
@@ -278,14 +339,17 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           setProgressPercent(100);
           setProgressMessage("Upload complete. Import review is ready.");
           setPreview(json.summary ?? null);
+          setLastImportSummary(null);
           setPreviewDialogOpen(true);
           setDuplicateReviewConfirmed(false);
+          setSourceInventoryConfirmed(false);
           setCorrelationConfirmations([]);
           setReviewStale(false);
           setLastBatchId("");
           return;
         }
         const summary = json?.summary;
+        const completedSummary = preview && summary ? { ...preview, ...summary } : summary ?? preview ?? null;
         const unresolved = Number(summary?.unresolved ?? 0);
         if (!unresolved) {
           setCsv("");
@@ -297,10 +361,12 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
           if (fileRef.current) fileRef.current.value = "";
           setSelectedFiles([]);
         } else {
-          setPreview(summary ?? null);
+          setPreview(completedSummary);
           setPreviewDialogOpen(false);
         }
+        setLastImportSummary(completedSummary);
         setDuplicateReviewConfirmed(false);
+        setSourceInventoryConfirmed(false);
         setLastBatchId(json?.batchId ?? "");
         setProgressPhase("complete");
         setProgressPercent(100);
@@ -351,7 +417,10 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
   const importWorking = progressPhase === "uploading" || progressPhase === "processing";
   const busy = isPending || importWorking;
   const duplicateScanSummary = `Complete duplicate analysis ran in ${preview?.duplicateReviewChunks ?? 1} relationship-preserving review chunk(s) and found ${preview?.duplicateMatches ?? 0} possible match groups across ${duplicateReviewRows} review row(s).`;
-  const hasImportSource = Boolean(csv.trim() || selectedFiles.length);
+  const pastedCsvPresent = Boolean(csv.trim());
+  const selectedFilesTotalBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+  const hasMixedSources = pastedCsvPresent && selectedFiles.length > 0;
+  const hasImportSource = pastedCsvPresent || selectedFiles.length > 0;
   const noCentersAvailable = !centers.length;
   const hasCompletedPreview = Boolean(
     !reviewStale
@@ -361,17 +430,37 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     && Array.isArray(preview.warningRowNumbers)
     && Array.isArray(preview.duplicateReviewRowNumbers),
   );
-  const canPreview = !busy && Boolean(centerId) && hasImportSource && !noCentersAvailable;
+  const canPreview = !busy && Boolean(centerId) && hasImportSource && !hasMixedSources && !noCentersAvailable;
   const requiredCorrelationSections = preview?.correlationReview?.filter((section) => section.required) ?? [];
   const missingCorrelationSections = requiredCorrelationSections.filter((section) => !correlationConfirmations.includes(section.id));
+  const sourceInventory = preview?.datasetCoverage?.sourceInventory ?? [];
+  const recognizedSourceFiles = sourceInventory.filter((source) => source.reportKind !== "ignored");
+  const ignoredSourceFiles = sourceInventory.filter((source) => source.reportKind === "ignored");
+  const sourceRowsTotal = Object.values(preview?.datasetCoverage?.sourceRows ?? {}).reduce((total, count) => total + count, 0);
+  const rawSourceRowsTotal = Object.values(preview?.datasetCoverage?.rawSourceRows ?? {}).reduce((total, count) => total + count, 0);
+  const duplicateSourceRowsRemoved = preview?.datasetCoverage?.duplicateSourceRowsRemoved;
+  const duplicateSourceRowsRemovedDetails = duplicateSourceRowsRemoved
+    ? Object.entries(duplicateSourceRowsRemoved).filter(([, count]) => count > 0)
+    : [];
+  const duplicateSourceRowsRemovedTotal = duplicateSourceRowsRemoved
+    ? duplicateSourceRowsRemovedDetails.reduce((total, [, count]) => total + count, 0)
+    : 0;
+  const importCommitted = progressPhase === "complete" && Boolean(lastBatchId);
+  const needsSourceInventoryConfirmation = Boolean(preview?.datasetCoverage);
+  const sourceInventoryReady = !needsSourceInventoryConfirmation || sourceInventoryConfirmed || importCommitted;
+  const hasReviewedImport = hasCompletedPreview || importCommitted;
   const commitBlockedReason = noCentersAvailable
     ? "This account needs an active school assignment before importing."
     : !centerId
     ? "Choose a center before importing."
       : !hasImportSource
       ? "Choose a CSV export or paste CSV text before submitting."
+      : hasMixedSources
+      ? "Choose either uploaded files or pasted CSV text before submitting."
       : !hasCompletedPreview
       ? "Submit this exact ProCare export for review before committing it."
+      : !sourceInventoryReady
+      ? "Confirm the detected ProCare source inventory before importing."
       : missingCorrelationSections.length
       ? `Confirm each correlation step in order before importing: ${missingCorrelationSections.map((section) => section.title).join(", ")}.`
       : "";
@@ -385,6 +474,96 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     && !/^procare\s/.test(header.normalized)
     && !["row type", "import warning"].includes(header.normalized)
   )) ?? [];
+  const workflowStages = [
+    { label: "Select sources", complete: hasImportSource || Boolean(preview) || importCommitted },
+    { label: "Detect reports", complete: Boolean(preview) || importCommitted },
+    { label: "Normalize records", complete: Boolean(preview) || importCommitted },
+    { label: "Review data", complete: hasCompletedPreview || importCommitted },
+    {
+      label: "Confirm sources and mappings",
+      complete: (hasReviewedImport && sourceInventoryReady && (!requiredCorrelationSections.length || !missingCorrelationSections.length)) || importCommitted,
+    },
+    { label: "Resolve duplicates", complete: (hasReviewedImport && (!duplicateReviewRows || duplicateReviewConfirmed)) || importCommitted },
+    { label: "Commit safely", complete: Boolean(lastBatchId) },
+    { label: "Handoff ready", complete: importCommitted },
+  ];
+  const completedWorkflowSteps = workflowStages.filter((stage) => stage.complete).length;
+  const workflowPercent = Math.round((completedWorkflowSteps / workflowStages.length) * 100);
+  const setupSummary = preview ?? lastImportSummary;
+  const setupRows = setupSummary ? bestCount(setupSummary.totalRows, setupSummary.rows, setupSummary.imported) : 0;
+  const setupFamilyGroups = setupSummary ? bestCount(
+    setupSummary.sourceFamilyGroups,
+    sumCounts(setupSummary.newFamilies, setupSummary.matchedFamilies),
+    sumCounts(setupSummary.createdFamilies, setupSummary.updatedFamilies),
+  ) : 0;
+  const setupChildGroups = setupSummary ? bestCount(
+    setupSummary.sourceChildGroups,
+    sumCounts(setupSummary.newChildren, setupSummary.matchedChildren),
+    setupSummary.createdChildren,
+  ) : 0;
+  const setupGuardianLinks = setupSummary ? bestCount(
+    setupSummary.sourceGuardianGroups,
+    setupSummary.familyGuardianLinks,
+    sumCounts(setupSummary.emergencyContacts, setupSummary.authorizedPickups),
+  ) : 0;
+  const setupClassroomCount = setupSummary ? bestCount(setupSummary.classroomsReferenced, setupSummary.createdClassrooms) : 0;
+  const setupBillingRows = setupSummary ? sumCounts(setupSummary.balanceRows, setupSummary.invoiceRows, setupSummary.ledgerRows) : 0;
+  const setupAttendanceRows = setupSummary ? sumCounts(setupSummary.attendanceRows, setupSummary.checkLogRows) : 0;
+  const setupOpenIssueRows = setupSummary ? sumCounts(setupSummary.unresolved, setupSummary.warningRows) : 0;
+  const setupSourceCount = setupSummary?.datasetCoverage?.sourceInventory?.filter((source) => source.reportKind !== "ignored").length ?? 0;
+  const setupReadinessStages: Array<{ title: string; detail: string; status: SetupReadinessStatus; href?: string }> = setupSummary ? [
+    {
+      title: "Source package",
+      detail: setupSourceCount
+        ? `${setupSourceCount.toLocaleString()} recognized source file(s), ${setupRows.toLocaleString()} row(s) tracked in the import review.`
+        : `${setupRows.toLocaleString()} ProCare row(s) tracked in the import review.`,
+      status: setupRows ? "ready" : "needs_review",
+    },
+    {
+      title: "Families",
+      detail: `${setupFamilyGroups.toLocaleString()} family group(s) detected or written. Review household names, inactive/past records, and balances before inviting parents.`,
+      status: setupFamilyGroups ? "ready" : "needs_review",
+      href: "/family-detail",
+    },
+    {
+      title: "Children and enrollment",
+      detail: `${setupChildGroups.toLocaleString()} child record(s), ${(setupSummary.familyChildLinks ?? 0).toLocaleString()} family-child link(s), and ${setupClassroomCount.toLocaleString()} classroom reference(s).`,
+      status: setupChildGroups && (setupSummary.familyChildLinks || setupClassroomCount) ? "ready" : "needs_review",
+      href: "/family-detail?view=children",
+    },
+    {
+      title: "Parents and pickups",
+      detail: `${setupGuardianLinks.toLocaleString()} parent, guardian, emergency-contact, or pickup link(s). Confirm custody-sensitive relationships before parent portal activation.`,
+      status: setupGuardianLinks ? "ready" : "needs_review",
+      href: "/family-detail",
+    },
+    {
+      title: "Optional operational rows",
+      detail: setupBillingRows || setupAttendanceRows
+        ? `${setupBillingRows.toLocaleString()} billing/ledger row(s) and ${setupAttendanceRows.toLocaleString()} attendance/check-log row(s) were detected. Verify these modules before use.`
+        : "No optional billing, ledger, attendance, or check-log rows were detected in this export.",
+      status: setupBillingRows || setupAttendanceRows ? "next" : "ready",
+      href: setupBillingRows ? "/billing-settings" : "/classroom-dashboard",
+    },
+    {
+      title: "Cleanup",
+      detail: setupOpenIssueRows
+        ? `${setupOpenIssueRows.toLocaleString()} row(s) still need mapping, duplicate review, or disposal before the school is transition-ready.`
+        : "No unresolved cleanup rows remain in this review state.",
+      status: setupOpenIssueRows ? "needs_review" : "ready",
+    },
+    {
+      title: "School setup handoff",
+      detail: "Use School setup to confirm hours, classrooms, capacity, ratios, documents, notifications, calendar closures, and director launch checklist items.",
+      status: lastBatchId ? "next" : "held",
+      href: "/billing-settings?view=setup",
+    },
+    {
+      title: "Activation gates",
+      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until separately approved.",
+      status: "held",
+    },
+  ] : [];
 
   return (
     <Card className="glass-panel">
@@ -395,6 +574,24 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="space-y-3 rounded-xl border bg-muted/20 p-4" aria-live="polite">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">Onboarding import workflow</div>
+              <p className="text-xs text-muted-foreground">Progress includes source selection, detection, normalization, review, confirmations, duplicate decisions, commit, and handoff.</p>
+            </div>
+            <Badge variant="outline">{completedWorkflowSteps} of {workflowStages.length} steps</Badge>
+          </div>
+          <Progress value={workflowPercent} aria-label="Overall ProCare onboarding import progress">
+            <ProgressLabel>Overall readiness</ProgressLabel>
+            <ProgressValue>{() => `${workflowPercent}%`}</ProgressValue>
+          </Progress>
+          <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+            {workflowStages.map((stage) => (
+              <div key={stage.label} className={stage.complete ? "text-foreground" : ""}>{stage.complete ? "✓" : "○"} {stage.label}</div>
+            ))}
+          </div>
+        </div>
         <Dialog open={previewDialogOpen} onOpenChange={setPreviewDialogOpen}>
           <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-[min(96vw,76rem)]">
             <DialogHeader className="px-5 pt-5">
@@ -481,9 +678,9 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
                 Close Review
               </Button>
-              <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
+              <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
                 <Upload data-icon="inline-start" />
-                {importWorking ? "Working..." : "Commit Import"}
+                {importCommitted ? "Import Complete" : importWorking ? "Working..." : "Commit Import"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -531,6 +728,62 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               ) : null}
             </AlertDescription>
           </Alert>
+        ) : null}
+        {setupSummary ? (
+          <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-medium">Post-import setup readiness</div>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Use this as the director handoff after review or import. It shows what BEE Suite can use now, what still needs cleanup, and which launch actions stay gated.
+                </p>
+              </div>
+              <Badge variant={lastBatchId ? "outline" : "secondary"}>{lastBatchId ? "Imported batch" : "Preview only"}</Badge>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {setupReadinessStages.map((stage) => (
+                <div key={stage.title} className="rounded-lg border bg-background p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">{stage.title}</div>
+                    <Badge variant={stage.status === "needs_review" ? "destructive" : "outline"}>{setupReadinessLabel(stage.status)}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{stage.detail}</p>
+                  {stage.href ? (
+                    <Link href={stage.href} className="mt-2 inline-flex text-xs font-medium text-primary underline-offset-4 hover:underline">
+                      Open related setup area
+                    </Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <Alert>
+              <AlertCircle className="size-4" />
+              <AlertTitle>Import does not activate the school by itself</AlertTitle>
+              <AlertDescription>
+                Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until the director completes setup review and receives separate approval for each gate.
+              </AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/family-detail" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Review families
+              </Link>
+              <Link href="/family-detail?view=children" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Review children
+              </Link>
+              <Link href="/classroom-dashboard#classroom-editor" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Review classrooms
+              </Link>
+              <Link href="/billing-settings?view=setup" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                Open school setup
+              </Link>
+              {lastBatchId ? (
+                <Button size="sm" variant="outline" onClick={() => downloadReconciliation(lastBatchId)}>
+                  <Download data-icon="inline-start" />
+                  Reconciliation report
+                </Button>
+              ) : null}
+            </div>
+          </div>
         ) : null}
         {error ? (
           <Alert variant="destructive">
@@ -591,14 +844,45 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               className="block w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
             {selectedFiles.length ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>Selected: {selectedFiles.map((file) => file.name).join(", ")}</span>
-                <Button type="button" size="sm" variant="ghost" onClick={() => { setSelectedFiles([]); clearPreview(); }}>Clear files</Button>
+              <div className="space-y-2 rounded-lg border bg-background p-3">
+                <div className="flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>{selectedFiles.length.toLocaleString()} file(s) selected · {formatFileSize(selectedFilesTotalBytes)}</span>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => { setSelectedFiles([]); clearPreview(); }}>
+                    <X data-icon="inline-start" />
+                    Clear files
+                  </Button>
+                </div>
+                <div className="max-h-40 space-y-1 overflow-auto">
+                  {selectedFiles.map((file) => {
+                    const identity = selectedFileIdentity(file);
+                    return (
+                      <div key={identity} className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-2 py-1 text-xs">
+                        <span className="min-w-0 break-all">{file.name || "unnamed file"} · {formatFileSize(file.size)}</span>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => removeSelectedFile(identity)} aria-label={`Remove ${file.name || "unnamed file"}`}>
+                          <X className="size-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
             <p className="text-xs leading-5 text-muted-foreground">
               File names and extensions do not matter. Select the four ProCare reports together, or choose the ZIP containing them. The importer identifies enrollment, parent, relationship, and child-information data from each file&apos;s columns, then asks you to review the correlations before importing.
             </p>
+            {hasMixedSources ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Choose one source type</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p>Uploaded files and pasted CSV text are both present. Clear one source before submitting so the review matches exactly what will be imported.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" onClick={() => { setCsv(""); clearPreview(); }}>Clear pasted text</Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => { setSelectedFiles([]); clearPreview(); }}>Clear uploaded files</Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </div>
         </div>
         <div className="grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-[18rem_1fr]">
@@ -737,7 +1021,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
         {preview ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Preview ready</AlertTitle>
+            <AlertTitle>Preview ready - no records written yet</AlertTitle>
             <AlertDescription>
               {preview.readyRows} rows are ready, {preview.warningRows} need review, across {preview.centersTouched || 1} center(s). Expected diff: {preview.newFamilies} new families, {preview.matchedFamilies} family updates, {preview.newChildren} new children, {preview.sourceGuardianGroups ?? 0} parent profiles, {preview.familyChildLinks ?? 0} family-child links, {preview.familyGuardianLinks ?? 0} family-parent links, {preview.newStaff} new staff, {preview.matchedStaff} staff updates, {preview.balanceRows} balance rows. {duplicateScanSummary}
             </AlertDescription>
@@ -782,6 +1066,65 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
                 <div key={`${warning.rowNumber}-${warning.message}`}>Row {warning.rowNumber}: {warning.message}</div>
               ))}
             </div>
+          </div>
+        ) : null}
+        {sourceInventory.length ? (
+          <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+            <div>
+              <div className="text-sm font-medium">Detected source inventory</div>
+              <p className="text-xs text-muted-foreground">Confirm that every intended export is listed. Files are classified by their columns, not their names.</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Badge variant="outline">{recognizedSourceFiles.length.toLocaleString()} recognized source(s)</Badge>
+                <Badge variant={ignoredSourceFiles.length ? "destructive" : "outline"}>{ignoredSourceFiles.length.toLocaleString()} ignored source(s)</Badge>
+                <Badge variant="outline">{sourceRowsTotal.toLocaleString()} retained row(s)</Badge>
+                {rawSourceRowsTotal > 0 && rawSourceRowsTotal !== sourceRowsTotal ? (
+                  <Badge variant="outline">{rawSourceRowsTotal.toLocaleString()} raw row(s)</Badge>
+                ) : null}
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {recognizedSourceFiles.map((source) => (
+                <div key={source.sourceName} className="rounded-lg border bg-background p-3 text-xs">
+                  <div className="font-medium break-all">{source.sourceName}</div>
+                  <div className="mt-1 text-muted-foreground">{source.reportKind} · {source.rows.toLocaleString()} rows · {source.matchedHeaderAliases} normalized headings</div>
+                </div>
+              ))}
+            </div>
+            {duplicateSourceRowsRemovedTotal ? (
+              <Alert>
+                <CheckCircle2 className="size-4" />
+                <AlertTitle>{duplicateSourceRowsRemovedTotal.toLocaleString()} duplicate source row(s) were removed</AlertTitle>
+                <AlertDescription>
+                  Exact repeated rows were removed before normalization: {duplicateSourceRowsRemovedDetails.map(([kind, count]) => `${kind} ${count}`).join(", ")}.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {ignoredSourceFiles.length ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>{ignoredSourceFiles.length} source file(s) were not imported</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  <p>Remove or replace these files if they were meant to be part of the ProCare import.</p>
+                  {ignoredSourceFiles.slice(0, 12).map((source) => (
+                    <div key={source.sourceName} className="break-all">{source.sourceName}: {source.note ?? "unrecognized"}</div>
+                  ))}
+                  {ignoredSourceFiles.length > 12 ? (
+                    <div>{ignoredSourceFiles.length - 12} more ignored source(s) are included in the import backup manifest.</div>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <label className="flex items-start gap-2 rounded-lg border bg-background p-3 text-xs text-foreground">
+              <input
+                type="checkbox"
+                checked={sourceInventoryConfirmed}
+                onChange={(event) => setSourceInventoryConfirmed(event.target.checked)}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                I confirm the recognized and ignored ProCare sources above are correct for this import, and ignored files should not be imported.
+              </span>
+            </label>
           </div>
         ) : null}
         {preview?.unresolved ? (
@@ -836,16 +1179,16 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
               View Review Table
             </Button>
           ) : null}
-          <Button disabled={busy || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
+          <Button disabled={busy || importCommitted || Boolean(commitBlockedReason)} onClick={() => submit(false)}>
             <Upload data-icon="inline-start" />
-            {importWorking ? "Importing..." : "Import ProCare Data"}
+            {importCommitted ? "Import Complete" : importWorking ? "Importing..." : "Import ProCare Data"}
           </Button>
           <Button disabled={busy || !centerId} onClick={() => downloadBackup("latest")} variant="outline">
             <Download data-icon="inline-start" />
             Download Latest Backup
           </Button>
         </div>
-        {commitBlockedReason ? (
+        {!importCommitted && commitBlockedReason ? (
           <p className="text-xs text-muted-foreground">{commitBlockedReason}</p>
         ) : null}
         {preview?.warningRows ? (

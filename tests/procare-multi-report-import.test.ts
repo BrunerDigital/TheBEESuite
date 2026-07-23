@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildProcareMultiReportRowsFromFiles,
+  expandProcareSourceEntries,
   PROCARE_MULTI_REPORT_COVERAGE_MANIFEST,
 } from "@/lib/procare-multi-report-import";
 
@@ -14,6 +15,73 @@ function csv(headers: string[], rows: string[][], encoding: BufferEncoding = "ut
     [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"),
     encoding,
   );
+}
+
+function crc32(buffer: Buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zip(files: Record<string, Buffer>) {
+  const localParts: Buffer[] = [];
+  const centralParts: Buffer[] = [];
+  let offset = 0;
+  for (const [name, data] of Object.entries(files)) {
+    const encodedName = Buffer.from(name);
+    const checksum = crc32(data);
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4);
+    localHeader.writeUInt16LE(0, 6);
+    localHeader.writeUInt16LE(0, 8);
+    localHeader.writeUInt16LE(0, 10);
+    localHeader.writeUInt16LE(0, 12);
+    localHeader.writeUInt32LE(checksum, 14);
+    localHeader.writeUInt32LE(data.length, 18);
+    localHeader.writeUInt32LE(data.length, 22);
+    localHeader.writeUInt16LE(encodedName.length, 26);
+    localHeader.writeUInt16LE(0, 28);
+    localParts.push(localHeader, encodedName, data);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4);
+    centralHeader.writeUInt16LE(20, 6);
+    centralHeader.writeUInt16LE(0, 8);
+    centralHeader.writeUInt16LE(0, 10);
+    centralHeader.writeUInt16LE(0, 12);
+    centralHeader.writeUInt16LE(0, 14);
+    centralHeader.writeUInt32LE(checksum, 16);
+    centralHeader.writeUInt32LE(data.length, 20);
+    centralHeader.writeUInt32LE(data.length, 24);
+    centralHeader.writeUInt16LE(encodedName.length, 28);
+    centralHeader.writeUInt16LE(0, 30);
+    centralHeader.writeUInt16LE(0, 32);
+    centralHeader.writeUInt16LE(0, 34);
+    centralHeader.writeUInt16LE(0, 36);
+    centralHeader.writeUInt32LE(0, 38);
+    centralHeader.writeUInt32LE(offset, 42);
+    centralParts.push(centralHeader, encodedName);
+    offset += localHeader.length + encodedName.length + data.length;
+  }
+  const centralDirectory = Buffer.concat(centralParts);
+  const endRecord = Buffer.alloc(22);
+  const fileCount = Object.keys(files).length;
+  endRecord.writeUInt32LE(0x06054b50, 0);
+  endRecord.writeUInt16LE(0, 4);
+  endRecord.writeUInt16LE(0, 6);
+  endRecord.writeUInt16LE(fileCount, 8);
+  endRecord.writeUInt16LE(fileCount, 10);
+  endRecord.writeUInt32LE(centralDirectory.length, 12);
+  endRecord.writeUInt32LE(offset, 16);
+  endRecord.writeUInt16LE(0, 20);
+  return Buffer.concat([...localParts, centralDirectory, endRecord]);
 }
 
 function standardFiles(input: {
@@ -373,4 +441,56 @@ test("multi-report detection ignores filenames and canonicalizes common header v
   assert.equal(JSON.parse(row["procare relationship records"])[0].authorizedPickup, true);
   assert.equal(coverage.reportDetection.enrollment.sourceName, "July roster from office.dat");
   assert.ok(coverage.reportDetection.enrollment.matchedHeaderAliases > 0);
+});
+
+test("multi-report detection merges every recognized shard and inventories unrelated files", async () => {
+  const files = standardFiles({
+    enrollment: [["child-1", "child-person-1", "Child", "Avery Rivera", "Rivera", "Avery", "", "2022-03-04", "", "Preschool", "room-1", "Enrolled", "", "", "person-1", "", "", "row-1"]],
+    parents: [["account-1", "key-1", "person-1", "Payer", "1", "Jordan Rivera", "Rivera", "Jordan", "", "parent@example.test", "", "", "", "", "5551112222", "", ""]],
+    relationships: [["child-1", "rel-1", "person-1", "Relationship", "1", "Jordan Rivera", "Rivera", "Jordan", "", "parent@example.test", "", "Parent", "Checked", "Checked", "Checked", "", "", "", "", "5551112222", "", "", "", ""]],
+  });
+  files.set("second roster - arbitrary name", csv(
+    ["Child ID", "Person ID", "Person Type", "Full Name", "Last Name", "First Name", "Date of Birth", "Primary Classroom", "Classroom ID", "Enrollment Status", "Relationship 1 Id", "Row ID"],
+    [
+      ["child-2", "child-person-2", "Child", "Bailey Rivera", "Rivera", "Bailey", "2023-04-05", "Toddlers", "room-2", "Enrolled", "person-1", "row-2"],
+      ["child-2", "child-person-2", "Child", "Bailey Rivera", "Rivera", "Bailey", "2023-04-05", "Toddlers", "room-2", "Enrolled", "person-1", "row-2"],
+    ],
+  ));
+  files.set("office notes.txt", Buffer.from("This handoff was prepared for the school director."));
+
+  const rows = await buildProcareMultiReportRowsFromFiles(files);
+  const coverage = JSON.parse(rows[0]["procare dataset coverage manifest"]);
+
+  assert.deepEqual(rows.filter((row) => row["child id"]).map((row) => row["child id"]), ["child-1", "child-2"]);
+  assert.equal(coverage.reportDetection.enrollment.sourceFileCount, 2);
+  assert.equal(coverage.sourceRows.enrollment, 2);
+  assert.equal(coverage.rawSourceRows.enrollment, 3);
+  assert.equal(coverage.duplicateSourceRowsRemoved.enrollment, 1);
+  assert.equal(coverage.sourceInventory.find((item: { sourceName: string }) => item.sourceName === "office notes.txt").reportKind, "ignored");
+});
+
+test("multi-report expansion supports a ZIP selected with loose report files", async () => {
+  const standard = standardFiles({
+    enrollment: [["child-1", "child-person-1", "Child", "Avery Rivera", "Rivera", "Avery", "", "2022-03-04", "", "Preschool", "room-1", "Enrolled", "", "", "person-1", "", "", "row-1"]],
+    parents: [["account-1", "key-1", "person-1", "Payer", "1", "Jordan Rivera", "Rivera", "Jordan", "", "parent@example.test", "", "", "", "", "5551112222", "", ""]],
+    relationships: [["child-1", "rel-1", "person-1", "Relationship", "1", "Jordan Rivera", "Rivera", "Jordan", "", "parent@example.test", "", "Parent", "Checked", "Checked", "Checked", "", "", "", "", "5551112222", "", "", "", ""]],
+    childInfo: [["child-1", "child-person-1", "Avery Rivera", "Allergy", "1", "Peanuts", "1", "Checked"]],
+  });
+  const selectedSources = new Map<string, Buffer>([
+    ["director handoff.zip", zip({
+      "office/export-a.dat": standard.get("enrollment.csv")!,
+      "office/export-b": standard.get("parentinfo.csv")!,
+    })],
+    ["relationship dump with no extension", standard.get("relationships.csv")!],
+    ["medical notes.tsv", standard.get("childinfo.csv")!],
+  ]);
+
+  const rows = await buildProcareMultiReportRowsFromFiles(await expandProcareSourceEntries(selectedSources));
+  const coverage = JSON.parse(rows[0]["procare dataset coverage manifest"]);
+
+  assert.equal(rows[0]["child id"], "child-1");
+  assert.equal(coverage.reportDetection.enrollment.sourceName, "director handoff.zip/office/export-a.dat");
+  assert.equal(coverage.reportDetection.parentinfo.sourceName, "director handoff.zip/office/export-b");
+  assert.equal(coverage.sourceInventory.length, 4);
+  assert.deepEqual(coverage.sourceRows, { enrollment: 1, accountPeople: 1, relationships: 1, childInfo: 1 });
 });

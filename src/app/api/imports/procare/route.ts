@@ -37,9 +37,9 @@ import {
 } from "@/lib/procare-import-review";
 import { buildProcareReconciliationReport, procareRetentionReviewDue } from "@/lib/procare-migration-controls";
 import {
-  buildProcareMultiReportRows,
   buildProcareMultiReportRowsFromFiles,
   decodeProcareTabularBuffer,
+  expandProcareSourceEntries,
 } from "@/lib/procare-multi-report-import";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -1157,23 +1157,165 @@ function isZipBuffer(buffer: Buffer) {
   return buffer.length > 4 && buffer.readUInt32LE(0) === 0x04034b50;
 }
 
+const STANDARD_MULTI_REPORT_HINT_GROUPS = [
+  ["enrollment status", "relationship 1 id"],
+  ["account key", "person sort id"],
+  ["relationship type", "authorized pickup"],
+  ["category description", "item description"],
+] as const;
+const MAX_PROCARE_SOURCE_FILES = 500;
+const MAX_PROCARE_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+function normalizedImportHeader(value: string) {
+  return value.replace(/^\ufeff/, "").trim().toLowerCase().replace(/#/g, " number ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeStandardMultiReportShard(headers: string[]) {
+  const normalized = new Set(headers.map(normalizedImportHeader));
+  return STANDARD_MULTI_REPORT_HINT_GROUPS.some((group) => group.every((header) => normalized.has(header)));
+}
+
+function buildConsolidatedRowsFromFiles(entries: Map<string, Buffer>) {
+  const sources: Array<{ sourceName: string; records: Record<string, string>[]; recognizedHeaders: number }> = [];
+  const inventory: Array<{ sourceName: string; reportKind: "consolidated" | "ignored"; rows: number; matchedHeaderAliases: number; note?: string }> = [];
+  let hasStandardReportShard = false;
+
+  for (const [sourceName, buffer] of entries) {
+    let rows: string[][];
+    try {
+      rows = parseImportRows(decodeProcareTabularBuffer(buffer));
+    } catch (error) {
+      inventory.push({
+        sourceName,
+        reportKind: "ignored",
+        rows: 0,
+        matchedHeaderAliases: 0,
+        note: error instanceof Error ? error.message : "This file is not a supported tabular report.",
+      });
+      continue;
+    }
+    const rawHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
+    if (looksLikeStandardMultiReportShard(rawHeaders)) hasStandardReportShard = true;
+    const headerAnalysis = analyzeProcareHeaders(rawHeaders);
+    const headerMap = rawHeaders.map((header, index) => headerAnalysis[index]?.suggestedField || header);
+    const recognizedHeaders = headerAnalysis.filter((header) => header.recognized).length;
+    if (rows.length < 2 || !recognizedHeaders) {
+      inventory.push({
+        sourceName,
+        reportKind: "ignored",
+        rows: Math.max(rows.length - 1, 0),
+        matchedHeaderAliases: recognizedHeaders,
+        note: rows.length < 2 ? "No data rows were found." : "No supported ProCare import columns were recognized.",
+      });
+      continue;
+    }
+    sources.push({
+      sourceName,
+      recognizedHeaders,
+      records: rows.slice(1).map((row, rowIndex) => {
+        const record: Record<string, string> = {
+          "bee import source file": sourceName,
+          "bee import source row": String(rowIndex + 2),
+        };
+        for (const [column, header] of headerMap.entries()) {
+          const cell = row[column] ?? "";
+          if (!cell) continue;
+          record[header] = record[header] || cell;
+        }
+        return record;
+      }),
+    });
+    inventory.push({
+      sourceName,
+      reportKind: "consolidated",
+      rows: rows.length - 1,
+      matchedHeaderAliases: recognizedHeaders,
+    });
+  }
+
+  if (hasStandardReportShard) return null;
+  if (!sources.length) {
+    throw new Error("No supported ProCare report or consolidated CSV columns were recognized. Upload the four standard ProCare reports, a ZIP containing them, or a consolidated CSV with headings such as Family Name, Child Name, Guardian Email, Balance, or Classroom.");
+  }
+
+  const dataHeaders = [...new Set(sources.flatMap((source) => source.records.flatMap((record) => Object.keys(record))))];
+  const seenRows = new Set<string>();
+  const records: Record<string, string>[] = [];
+  let rawRows = 0;
+  for (const source of sources) {
+    for (const record of source.records) {
+      rawRows += 1;
+      const fingerprint = JSON.stringify(dataHeaders.filter((header) => !header.startsWith("bee import source ")).map((header) => [header, record[header] ?? ""]));
+      if (seenRows.has(fingerprint)) continue;
+      seenRows.add(fingerprint);
+      records.push(record);
+    }
+  }
+  const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
+  const datasetCoverage = {
+    version: "consolidated-multi-file-v1",
+    reportDetection: {
+      consolidated: {
+        sourceName: sources.map((source) => source.sourceName).join(", "),
+        sourceNames: sources.map((source) => source.sourceName),
+        sourceFileCount: sources.length,
+        matchedHeaderAliases: sources.reduce((total, source) => total + source.recognizedHeaders, 0),
+      },
+    },
+    sourceInventory: inventory,
+    sourceRows: { consolidated: records.length },
+    rawSourceRows: { consolidated: rawRows },
+    duplicateSourceRowsRemoved: { consolidated: rawRows - records.length },
+  };
+  return {
+    text: JSON.stringify({ records, datasetCoverage }),
+    filename: sources.map((source) => source.sourceName).join(", "),
+    sourceType: "csv_files",
+    datasetCoverage,
+    parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header] ?? ""))],
+  };
+}
+
 async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   const uploadedFiles = files.filter((entry): entry is File => entry instanceof File && entry.size > 0);
+  if (uploadedFiles.length && pastedCsv.trim()) {
+    throw new Error("Choose either uploaded files or pasted CSV text before submitting the ProCare import review.");
+  }
+  if (uploadedFiles.length > MAX_PROCARE_SOURCE_FILES) {
+    throw new Error(`The selected ProCare sources contain more than ${MAX_PROCARE_SOURCE_FILES} files. Split the handoff into reviewed batches.`);
+  }
+  const uploadedBytes = uploadedFiles.reduce((total, file) => total + file.size, 0);
+  if (uploadedBytes > MAX_PROCARE_UPLOAD_BYTES) {
+    throw new Error("The selected ProCare sources are larger than 100 MB. Split the handoff into reviewed batches.");
+  }
   if (!uploadedFiles.length) {
-    return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text" };
+    return { text: pastedCsv, filename: "pasted-procare-import.csv", sourceType: "csv_text", datasetCoverage: null };
   }
 
   if (uploadedFiles.length > 1) {
     const entries = new Map<string, Buffer>();
     for (const [index, file] of uploadedFiles.entries()) {
-      entries.set(`upload-${index + 1}:${file.name || "unnamed"}`, Buffer.from(await file.arrayBuffer()));
+      const buffer = Buffer.from(await file.arrayBuffer());
+      entries.set(`upload-${index + 1}:${file.name || "unnamed"}`, buffer);
     }
-    const records = await buildProcareMultiReportRowsFromFiles(entries);
+    const expandedEntries = await expandProcareSourceEntries(entries);
+    let records: Array<Record<string, string>>;
+    try {
+      records = await buildProcareMultiReportRowsFromFiles(expandedEntries);
+    } catch (error) {
+      const consolidated = buildConsolidatedRowsFromFiles(expandedEntries);
+      if (consolidated) return consolidated;
+      throw error;
+    }
     const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
+    const datasetCoverage = records[0]?.["procare dataset coverage manifest"]
+      ? JSON.parse(records[0]["procare dataset coverage manifest"])
+      : null;
     return {
       text: JSON.stringify(records),
       filename: uploadedFiles.map((file) => file.name).join(", "),
       sourceType: "procare_multi_report_files",
+      datasetCoverage,
       parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
     };
   }
@@ -1181,16 +1323,28 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
   const file = uploadedFiles[0];
   const buffer = Buffer.from(await file.arrayBuffer());
   if (isZipBuffer(buffer)) {
-    const records = await buildProcareMultiReportRows(buffer);
+    const expandedEntries = await expandProcareSourceEntries(new Map([[file.name || "uploaded-procare.zip", buffer]]));
+    let records: Array<Record<string, string>>;
+    try {
+      records = await buildProcareMultiReportRowsFromFiles(expandedEntries);
+    } catch (error) {
+      const consolidated = buildConsolidatedRowsFromFiles(expandedEntries);
+      if (consolidated) return { ...consolidated, filename: file.name || consolidated.filename };
+      throw error;
+    }
     const headers = [...new Set(records.flatMap((record) => Object.keys(record)))];
+    const datasetCoverage = records[0]?.["procare dataset coverage manifest"]
+      ? JSON.parse(records[0]["procare dataset coverage manifest"])
+      : null;
     return {
       text: JSON.stringify(records),
       filename: file.name,
       sourceType: "procare_multi_report_zip",
+      datasetCoverage,
       parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
     };
   }
-  return { text: decodeProcareTabularBuffer(buffer), filename: file.name || "unnamed-procare-export", sourceType: "csv_file" };
+  return { text: decodeProcareTabularBuffer(buffer), filename: file.name || "unnamed-procare-export", sourceType: "csv_file", datasetCoverage: null };
 }
 
 const importBackupInclude = {
@@ -1586,6 +1740,7 @@ async function POSTHandler(request: NextRequest) {
   const dryRun = clean(formData.get("dryRun")).toLowerCase() === "true";
   const duplicateMode = duplicateMatchMode(clean(formData.get("duplicateMatchMode")));
   const duplicateReviewConfirmed = clean(formData.get("duplicateReviewConfirmed")).toLowerCase() === "true";
+  const sourceInventoryConfirmed = clean(formData.get("sourceInventoryConfirmed")).toLowerCase() === "true";
   const submittedSourceSha256 = clean(formData.get("sourceSha256"));
   const submittedReviewFingerprint = clean(formData.get("reviewFingerprint"));
   const submittedWarningRowNumbers = parseImportRowNumbers(clean(formData.get("reviewWarningRowNumbers")));
@@ -1694,8 +1849,15 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       dryRun: true,
-      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview },
+      summary: { ...preview, sourceSha256, reviewFingerprint, headerAnalysis, fieldOptions: PROCARE_FIELD_OPTIONS, correlationReview, datasetCoverage: importPayload.datasetCoverage ?? null },
     });
+  }
+
+  if (importPayload.datasetCoverage && !sourceInventoryConfirmed) {
+    return NextResponse.json({
+      ok: false,
+      error: "Confirm the detected ProCare source inventory before importing.",
+    }, { status: 409 });
   }
 
   const missingCorrelationConfirmations = correlationReview
@@ -2912,6 +3074,8 @@ async function POSTHandler(request: NextRequest) {
     headerAnalysis,
     fieldOptions: PROCARE_FIELD_OPTIONS,
     correlationReview,
+    datasetCoverage: importPayload.datasetCoverage ?? existingSummary.datasetCoverage ?? null,
+    sourceInventoryConfirmed: sourceInventoryConfirmed || existingSummary.sourceInventoryConfirmed === true,
     warningRows: progressCounts.needs_resolution ?? 0,
     duplicateReviewRows,
     rowResults: unresolvedRows.map((row) => ({

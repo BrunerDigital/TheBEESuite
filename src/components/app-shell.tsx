@@ -48,6 +48,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { modules, navGroups } from "@/lib/demo-data";
+import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
 import { canAccessModule } from "@/lib/rbac";
 import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
@@ -102,15 +103,6 @@ type GlobalSearchResult = {
   badge?: string;
 };
 
-function notificationBodyUrl(body: string) {
-  return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
-}
-
-function storedNotificationHref(notification: NotificationSummary["notifications"][number]) {
-  if (notification.type === "payment_method_form") return notificationBodyUrl(notification.body) ?? "/parent-portal#billing";
-  return "/notifications";
-}
-
 function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
   return <BrandLogo href="/" branding={branding} size="md" />;
 }
@@ -120,6 +112,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const canViewEnrollment = canAccessModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
   const canViewFteReports = canAccessModule(currentUser, "fte-reports");
+  const notificationCenterHref = notificationCenterHrefForRole(currentUser?.role);
 
   function loadSummary() {
     let mounted = true;
@@ -248,8 +241,8 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <Link href="/notifications" className="block p-3 text-sm font-medium text-primary hover:bg-muted">
-          Open notification center
+        <Link href={notificationCenterHref} className="block p-3 text-sm font-medium text-primary hover:bg-muted">
+          {notificationCenterHref === "/parent-portal" ? "Open parent portal" : "Open notification center"}
         </Link>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -419,6 +412,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !parentFacing;
+  const showNotificationTools = Boolean(currentUser);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessModule(currentUser, item.slug))
@@ -683,7 +677,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </DialogContent>
                 </Dialog>
               ) : null}
-              {showWorkspaceTools ? <NotificationDropdown currentUser={currentUser} /> : null}
+              {showNotificationTools ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />

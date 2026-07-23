@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Baby, BookOpen, Camera, CheckCircle2, ClipboardCheck, Clock, ExternalLink, KeyRound, LogIn, LogOut, MapPin, Moon, Palette, Plus, QrCode, Save, ShieldAlert, Trash2, UserX, Users, Utensils } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -319,23 +319,33 @@ export function TeacherMobileWorkspace({
     hasStaffKioskCode,
   );
 
-  async function getOfflineCredentials() {
+  const showStatus = useCallback((next: string) => {
+    setError("");
+    setStatus(next);
+  }, []);
+
+  const showError = useCallback((next: string) => {
+    setStatus("");
+    setError(next);
+  }, []);
+
+  const getOfflineCredentials = useCallback(async () => {
     if (offlineCredentialsRef.current) return offlineCredentialsRef.current;
     const response = await fetch("/api/teacher/offline-queue-key", { cache: "no-store" });
     const json = await response.json().catch(() => null) as { key?: string; scopeId?: string; error?: string } | null;
     if (!response.ok || !json?.key || !json.scopeId) throw new Error(json?.error || "Offline recovery could not be initialized.");
     offlineCredentialsRef.current = { key: json.key, scopeId: json.scopeId };
     return offlineCredentialsRef.current;
-  }
+  }, []);
 
-  async function readOfflineQueue() {
+  const readOfflineQueue = useCallback(async () => {
     const credentials = await getOfflineCredentials();
     const envelope = parseEncryptedClassroomOfflineQueue(window.localStorage.getItem(classroomOfflineQueueStorageKey(credentials.scopeId)));
     if (!envelope) return [];
     return decryptClassroomOfflineQueue({ envelope, ...credentials });
-  }
+  }, [getOfflineCredentials]);
 
-  async function persistOfflineQueue(next: ClassroomOfflineAction[]) {
+  const persistOfflineQueue = useCallback(async (next: ClassroomOfflineAction[]) => {
     const credentials = await getOfflineCredentials();
     const trimmed = next.slice(0, 50);
     const storageKey = classroomOfflineQueueStorageKey(credentials.scopeId);
@@ -343,9 +353,9 @@ export function TeacherMobileWorkspace({
     else window.localStorage.setItem(storageKey, JSON.stringify(await encryptClassroomOfflineQueue({ actions: trimmed, ...credentials })));
     setOfflineQueue(trimmed);
     return trimmed;
-  }
+  }, [getOfflineCredentials]);
 
-  async function syncStoredQueue() {
+  const syncStoredQueue = useCallback(async () => {
     const queued = await readOfflineQueue();
     if (!queued.length) return;
     const remaining: ClassroomOfflineAction[] = [];
@@ -361,7 +371,7 @@ export function TeacherMobileWorkspace({
     await persistOfflineQueue(remaining);
     if (!remaining.length) showStatus(`${synced} queued classroom action${synced === 1 ? "" : "s"} synced.`);
     else showError(`${synced} queued action${synced === 1 ? "" : "s"} synced. ${remaining.length} need connection or director review.`);
-  }
+  }, [persistOfflineQueue, readOfflineQueue, showError, showStatus]);
 
   useEffect(() => {
     const loadStoredState = window.setTimeout(() => {
@@ -382,7 +392,7 @@ export function TeacherMobileWorkspace({
       window.removeEventListener("online", updateOnlineState);
       window.removeEventListener("offline", updateOnlineState);
     };
-  }, []);
+  }, [readOfflineQueue, showError, syncStoredQueue]);
 
   async function queueOfflineAction(action: ClassroomOfflineAction) {
     try {
@@ -509,16 +519,6 @@ export function TeacherMobileWorkspace({
 
   function selectClassroomDailyReports(children: ChildOption[]) {
     setDailyReportTargets(children.map((child) => child.id));
-  }
-
-  function showStatus(next: string) {
-    setError("");
-    setStatus(next);
-  }
-
-  function showError(next: string) {
-    setStatus("");
-    setError(next);
   }
 
   function saveTeacherProfile(event: FormEvent<HTMLFormElement>) {

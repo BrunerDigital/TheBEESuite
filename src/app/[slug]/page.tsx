@@ -1682,12 +1682,16 @@ async function renderLivePage(
     });
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     function serializeFamilyForClient(family: (typeof allFamilies)[number], options: { currentChildrenOnly: boolean }) {
+      const visibleChildren = options.currentChildrenOnly
+        ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
+        : family.children;
       return {
         ...family,
         centerName: family.centerId ? centerNameById.get(family.centerId) ?? null : null,
-        children: options.currentChildrenOnly
-          ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
-          : family.children,
+        children: visibleChildren.map((child) => ({
+          ...child,
+          tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
+        })),
         billingAccount: family.billingAccount
           ? {
               id: family.billingAccount.id,
@@ -3095,6 +3099,7 @@ async function renderLivePage(
     );
     const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
     const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
+    const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
 
     return (
@@ -3108,6 +3113,7 @@ async function renderLivePage(
           initialSelection: {
             familyId: requestedBillingFamilyId,
             centerId: requestedBillingCenterId,
+            childId: requestedBillingChildId,
             searchQuery: requestedBillingSearch,
           },
           workbench: {

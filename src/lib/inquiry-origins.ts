@@ -18,7 +18,10 @@ export function getConfiguredInquiryAllowedOrigins(
     .map(cleanOrigin)
     .filter(Boolean);
 
-  return configured?.length ? configured : [...DEFAULT_INQUIRY_ALLOWED_ORIGINS];
+  return [...new Set([
+    ...DEFAULT_INQUIRY_ALLOWED_ORIGINS,
+    ...(configured ?? []),
+  ])];
 }
 
 export function isAllowedInquiryOrigin(

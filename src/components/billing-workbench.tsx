@@ -126,6 +126,7 @@ type Props = {
   tuitionPlans: BillingWorkbenchTuitionPlan[];
   initialFamilyId?: string;
   initialCenterId?: string;
+  initialChildId?: string;
   searchQuery?: string;
 };
 
@@ -265,7 +266,7 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const initialFamily = useMemo(
@@ -312,7 +313,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [invoiceEditorId, setInvoiceEditorId] = useState("");
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
-  const [assignmentChildId, setAssignmentChildId] = useState("");
+  const [assignmentChildId, setAssignmentChildId] = useState(
+    initialFamily?.children.some((child) => child.id === initialChildId) ? initialChildId ?? "" : "",
+  );
   const [assignmentEnabled, setAssignmentEnabled] = useState("true");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
@@ -347,6 +350,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     : selectedChildren[0]?.id ?? "";
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
+  const activeWeeklyTuitionAssignments = selectedChildren.filter(
+    (child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0,
+  );
+  const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
+    (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
+    0,
+  );
   const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
   const effectiveAssignmentCadence = "weekly";
   const effectiveAssignmentBillingDay = "5";
@@ -1163,12 +1173,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             ) : null
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccountLabel} detail={`Updated ${formatShortDate(selectedFamily?.updatedAt)}`} />
             <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
             <SummaryMetric label="Family contacts" value={`${selectedPaymentRequestEmailOptions.length} billing emails`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
             <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
+            <SummaryMetric
+              label="Weekly tuition"
+              value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+              detail={activeWeeklyTuitionAssignments.length
+                ? activeWeeklyTuitionAssignments.map((child) => `${child.fullName} ${money(child.tuitionAssignment?.amountCents ?? 0)}`).join(" · ")
+                : "No active child rate"}
+            />
           </div>
         </EntityHeader>
 
@@ -1649,7 +1666,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   <SelectContent>
                     {selectedChildren.map((child) => (
                       <SelectItem key={child.id} value={child.id}>
-                        {child.fullName}{child.tuitionAssignment?.enabled ? " · active" : ""}
+                        {child.fullName}{child.tuitionAssignment?.enabled && child.tuitionAssignment.amountCents
+                          ? ` · ${money(child.tuitionAssignment.amountCents)}/week`
+                          : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1687,6 +1706,18 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   placeholder="2026-W23"
                 />
               </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DisplayValue
+                label="Customer weekly tuition"
+                value={selectedAssignment?.enabled && selectedAssignment.amountCents ? money(selectedAssignment.amountCents) : "Not assigned"}
+                detail={selectedAssignment?.tuitionPlanName ?? "Saved on this child’s billing assignment"}
+              />
+              <DisplayValue
+                label="Family weekly total"
+                value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+                detail={`${activeWeeklyTuitionAssignments.length} active child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`}
+              />
             </div>
             <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
             <div className="flex flex-wrap gap-2">

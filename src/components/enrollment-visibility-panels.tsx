@@ -59,6 +59,10 @@ function formatDate(value: Date | string | null | undefined) {
   }).format(new Date(value));
 }
 
+function money(cents: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
 type PastEnrollmentRow = {
   id: string;
   familyId: string;
@@ -430,7 +434,19 @@ export function FamilyProfilesEnrollmentPanel({
                     <div className="text-xs text-muted-foreground">{family.billingEmail ?? "No billing email"}</div>
                   </TableCell>
                   <TableCell>{family.guardians.map((guardian) => guardian.fullName).join(", ") || "None"}</TableCell>
-                  <TableCell>{family.children.map((child) => `${child.fullName} (${child.ageGroup})`).join(", ") || "None"}</TableCell>
+                  <TableCell>
+                    <div className="space-y-1">
+                      {family.children.map((child) => (
+                        <div key={child.id}>
+                          {child.fullName} ({child.ageGroup})
+                          {child.tuitionAssignment?.enabled && child.tuitionAssignment.amountCents
+                            ? <span className="ml-1 text-xs font-medium text-muted-foreground">· {money(child.tuitionAssignment.amountCents)}/week</span>
+                            : null}
+                        </div>
+                      ))}
+                      {!family.children.length ? "None" : null}
+                    </div>
+                  </TableCell>
                   <TableCell>{family._count.documents} docs · {family._count.messages} messages</TableCell>
                   <TableCell>
                     {hasCustodyWarning(family) ? (

@@ -4,7 +4,8 @@
   "author": "BrunerDigital",
   "private": true,
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "sharp": "0.35.3"
   },
   "scripts": {
     "dev": "next dev",
@@ -24,6 +25,7 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "test:api": "tsx scripts/api-route-smoke.ts",
     "test:smoke": "tsx scripts/playwright-smoke.ts",
+    "procare:prepare-rendered": "tsx scripts/prepare-rendered-procare-import.ts",
     "mobile:store:check": "node scripts/mobile-store-readiness-check.mjs",
     "ops:check": "node scripts/deployment-ops-check.mjs",
     "ios:parent:add": "npx cap add ios",
@@ -89,7 +91,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.14.0",
-    "next": "16.2.6",
+    "next": "16.2.11",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -106,7 +108,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.2.11",
     "playwright": "^1.59.1",
     "prisma": "^6.19.3",
     "tailwindcss": "^4",

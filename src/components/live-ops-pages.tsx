@@ -4961,6 +4961,7 @@ export type BillingInvoicesPageData = {
   initialSelection?: {
     familyId?: string;
     centerId?: string;
+    childId?: string;
     searchQuery?: string;
   };
   receiptSchools: BillingReceiptSchool[];
@@ -5161,13 +5162,14 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         </CardContent>
       </Card>
       <BillingWorkbench
-        key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
+        key={`${data.initialSelection?.familyId ?? ""}-${data.initialSelection?.centerId ?? ""}-${data.initialSelection?.childId ?? ""}-${data.initialSelection?.searchQuery ?? ""}`}
         families={data.workbench.families}
         centers={data.workbench.centers}
         products={data.workbench.products}
         tuitionPlans={data.workbench.tuitionPlans}
         initialFamilyId={data.initialSelection?.familyId}
         initialCenterId={data.initialSelection?.centerId}
+        initialChildId={data.initialSelection?.childId}
         searchQuery={data.initialSelection?.searchQuery}
       />
       <Card className="glass-panel">

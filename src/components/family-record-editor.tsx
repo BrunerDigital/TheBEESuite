@@ -65,6 +65,16 @@ type ChildRecord = {
   allergies: AllergyRecord[];
   medicalNotes: MedicalNoteRecord[];
   documents: DocumentRecord[];
+  tuitionAssignment?: {
+    enabled: boolean;
+    tuitionPlanId: string | null;
+    tuitionPlanName: string | null;
+    cadence: string | null;
+    amountCents: number | null;
+    billingDay: number | null;
+    startsPeriod: string | null;
+    description: string | null;
+  } | null;
 };
 
 type AuthorizedPickupRecord = {
@@ -367,10 +377,14 @@ function familyProfileHref(family: EditableFamilyRecord | null | undefined) {
   return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
 }
 
-function familyBillingHref(family: EditableFamilyRecord | null | undefined) {
+function familyBillingHref(
+  family: EditableFamilyRecord | null | undefined,
+  child: ChildRecord | null | undefined,
+) {
   if (!family) return "/billing-invoices#billing-workbench";
   const params = new URLSearchParams({ familyId: family.id });
   if (family.centerId) params.set("centerId", family.centerId);
+  if (child?.id) params.set("childId", child.id);
   return `/billing-invoices?${params.toString()}#billing-workbench`;
 }
 
@@ -555,6 +569,16 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
   const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
   const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
+  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled && selectedChild.tuitionAssignment.amountCents
+    ? selectedChild.tuitionAssignment
+    : null;
+  const activeWeeklyTuitionAssignments = selectedFamily?.children.filter(
+    (child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0,
+  ) ?? [];
+  const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
+    (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
+    0,
+  );
   const selectedGuardianLabel = selectedGuardian?.fullName ?? (guardianName.trim() ? `${guardianName.trim()} (new parent)` : "No parent selected");
   const editingTargetLabel = selectedFamily
     ? `${selectedFamily.name} / ${selectedChild?.fullName ?? "family account"}`
@@ -1044,10 +1068,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           actions={
             selectedFamily ? (
               <>
-                <a href={familyBillingHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <Link href={familyBillingHref(selectedFamily, selectedChild)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                   <CreditCard data-icon="inline-start" />
                   Open billing
-                </a>
+                </Link>
                 <Link href={familyProfileHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                   <ArrowUpRight data-icon="inline-start" />
                   View full profile
@@ -1058,7 +1082,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryMetric label="Record type" value="Family account" detail={`Updated ${selectedFamilyUpdatedAt}`} />
-            <SummaryMetric label="Selected child" value={selectedChildLabel} detail={selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"} />
+            <SummaryMetric
+              label="Selected child"
+              value={selectedChildLabel}
+              detail={selectedWeeklyTuition ? `${money(selectedWeeklyTuition.amountCents ?? 0)} weekly tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
+            />
             <SummaryMetric label="Selected parent" value={selectedGuardianLabel} detail={selectedGuardian?.isBillingContact ? "Billing contact" : selectedGuardian?.relation ?? "Guardian"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccount ? money(selectedBillingAccount.balanceCents) : "Not linked"} detail={`Autopay ${selectedAutopayStatus}`} />
             <SummaryMetric label="Records" value={`${selectedFamily?.children.length ?? 0} children`} detail={`${documentRecordCount} docs, ${selectedFamily?.guardians.length ?? 0} contacts`} />
@@ -1183,6 +1211,27 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   Autopay {selectedAutopayStatus}
                 </Badge>
                 {selectedBillingAccount ? <Badge variant="outline">Balance {money(selectedBillingAccount.balanceCents)}</Badge> : null}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <SummaryMetric
+                label="Family weekly tuition"
+                value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+                detail={activeWeeklyTuitionAssignments.length
+                  ? `${activeWeeklyTuitionAssignments.length} active child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`
+                  : "Assign weekly tuition from Billing"}
+              />
+              <div className="rounded-lg border bg-card/50 p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weekly tuition by child</div>
+                <div className="mt-2 space-y-1 text-sm">
+                  {activeWeeklyTuitionAssignments.map((child) => (
+                    <div key={child.id} className="flex items-center justify-between gap-3">
+                      <span className="truncate">{child.fullName}</span>
+                      <span className="shrink-0 font-medium">{money(child.tuitionAssignment?.amountCents ?? 0)}/week</span>
+                    </div>
+                  ))}
+                  {!activeWeeklyTuitionAssignments.length ? <span className="text-muted-foreground">No weekly tuition assigned.</span> : null}
+                </div>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -1549,6 +1598,18 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
         <section id="family-children" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Child profile</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SummaryMetric
+              label="Weekly tuition rate"
+              value={selectedWeeklyTuition ? money(selectedWeeklyTuition.amountCents ?? 0) : "Not assigned"}
+              detail={selectedWeeklyTuition?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
+            />
+            <SummaryMetric
+              label="Weekly billing"
+              value={selectedWeeklyTuition ? "Active" : "Not active"}
+              detail={selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>Child</Label>

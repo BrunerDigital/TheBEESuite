@@ -4,7 +4,7 @@ type Row = string[];
 type RecordRow = Record<string, string>;
 type InventoryItem = {
   sourceName: string;
-  reportKind: "rendered_account_information" | "rendered_registration" | "rendered_enrollment_status" | "rendered_balance" | "evidence_only" | "ignored";
+  reportKind: "rendered_account_information" | "rendered_registration" | "flat_child_information" | "rendered_enrollment_status" | "rendered_balance" | "evidence_only" | "ignored";
   rows: number;
   matchedHeaderAliases: number;
   note?: string;
@@ -17,12 +17,18 @@ type Registration = {
   childName: string; childDob: string; gender: string; classroom: string; status: string; address: string;
   relationships: Array<{ name: string; relation: string; address: string; flags: string; contact: string }>;
 };
+type FlatChild = {
+  childId: string; personId: string; childName: string; childDob: string; gender: string;
+  classroom: string; classroomId: string; status: string; statusDate: string;
+};
 
 const SIGNATURES = {
   account: /FD_AccountInformation\d+\.rpt|Account Information Sheet/i,
   registration: /Child Registration Information/i,
+  childInformation: /Child Information Sheet/i,
   enrollment: /FD_ChildEnrollment05\.rpt|Child Enrollment Status List/i,
   classroom: /FD_ChildEnrollment01\.rpt|Enrolled Children by Classroom/i,
+  classroomSchedule: /Classroom Schedule Summary/i,
   balance: /FA_AccountBalanceSummary\d+\.rpt|Account Balance Summary/i,
   payments: /TE_PaymentByType\d+\.rpt|Tuition Express Payments by Type/i,
 };
@@ -58,7 +64,7 @@ function decode(buffer: Buffer) {
   catch { return new TextDecoder("windows-1252").decode(buffer); }
 }
 function cell(row: Row, column: number) { return (row[column - 1] ?? "").trim(); }
-function accountKey(input: string) { return input.match(/\[\*?([A-Z0-9_-]+)\]/i)?.[1]?.toUpperCase() ?? ""; }
+function accountKey(input: string) { return input.match(/\[\*?([A-Z0-9_-]+)\*?\]/i)?.[1]?.toUpperCase() ?? ""; }
 function normalizedName(input: string) { return input.trim().replace(/\s+/g, " ").toLowerCase(); }
 function displayName(input: string) {
   const clean = input.trim().replace(/\s+/g, " ");
@@ -120,6 +126,72 @@ function registrations(rows: Row[]) {
   return result;
 }
 
+function childInformationRegistrations(rows: Row[]) {
+  const result = new Map<string, Registration>();
+  let current: Registration | null = null;
+  for (const row of rows) {
+    const childName = displayName(cell(row, 5));
+    const childDob = dateIn(cell(row, 8));
+    if (childName && childDob) {
+      const key = childKey(childName, childDob);
+      current = result.get(key) ?? {
+        childName,
+        childDob,
+        gender: genderIn(cell(row, 8)),
+        classroom: cell(row, 7),
+        status: "",
+        address: cell(row, 6),
+        relationships: [],
+      };
+      result.set(key, current);
+      continue;
+    }
+    if (!current) continue;
+    const name = displayName(cell(row, 10));
+    if (!name) continue;
+    const relationship = {
+      name,
+      relation: cell(row, 12) || "Unknown",
+      address: cell(row, 11),
+      flags: cell(row, 13),
+      contact: cell(row, 14),
+    };
+    const fingerprint = JSON.stringify(relationship);
+    if (!current.relationships.some((item) => JSON.stringify(item) === fingerprint)) current.relationships.push(relationship);
+  }
+  return result;
+}
+
+function flatChildren(rows: Row[]) {
+  const headerIndex = rows.findIndex((row) => {
+    const headers = row.map((value) => value.trim().toLowerCase());
+    return headers.includes("child id") && headers.includes("full name") && headers.includes("enrollment status");
+  });
+  if (headerIndex < 0) return new Map<string, FlatChild>();
+  const headers = rows[headerIndex].map((value) => value.trim().toLowerCase());
+  const at = (row: Row, name: string) => row[headers.indexOf(name)]?.trim() ?? "";
+  const result = new Map<string, FlatChild>();
+  for (const row of rows.slice(headerIndex + 1)) {
+    const childName = displayName(at(row, "full name"));
+    const childDob = dateIn(at(row, "date of birth"));
+    if (!childName) continue;
+    const item = {
+      childId: at(row, "child id"),
+      personId: at(row, "person id"),
+      childName,
+      childDob,
+      gender: at(row, "gender"),
+      classroom: at(row, "primary classroom"),
+      classroomId: at(row, "classroom id"),
+      status: at(row, "enrollment status"),
+      statusDate: dateIn(at(row, "status date")),
+    };
+    const key = childKey(childName, childDob);
+    if (!result.has(key)) result.set(key, item);
+  }
+  return result;
+}
+
 function statuses(rows: Row[]) {
   const result = new Map<string, Array<{ status: string; startDate: string }>>();
   for (const row of rows) {
@@ -145,6 +217,7 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
   const inventory: InventoryItem[] = [];
   const children: AccountChild[] = [];
   const registrationByChild = new Map<string, Registration>();
+  const flatChildByIdentity = new Map<string, FlatChild>();
   const statusesByName = new Map<string, Array<{ status: string; startDate: string }>>();
   const balanceByAccount = new Map<string, string>();
   let detected = false;
@@ -161,7 +234,12 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
       continue;
     }
     const signature = rows.slice(0, 3).flat().join(" ");
-    if (SIGNATURES.account.test(signature)) {
+    const parsedFlatChildren = flatChildren(rows);
+    if (parsedFlatChildren.size) {
+      detected = true;
+      for (const [key, child] of parsedFlatChildren) flatChildByIdentity.set(key, child);
+      inventory.push({ sourceName, reportKind: "flat_child_information", rows: parsedFlatChildren.size, matchedHeaderAliases: 9 });
+    } else if (SIGNATURES.account.test(signature)) {
       detected = true;
       const parsed = accountChildren(rows);
       children.push(...parsed);
@@ -170,6 +248,11 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
       detected = true;
       for (const [key, registration] of registrations(rows)) registrationByChild.set(key, registration);
       inventory.push({ sourceName, reportKind: "rendered_registration", rows: rows.length, matchedHeaderAliases: 9 });
+    } else if (SIGNATURES.childInformation.test(signature)) {
+      detected = true;
+      const parsed = childInformationRegistrations(rows);
+      for (const [key, registration] of parsed) registrationByChild.set(key, registration);
+      inventory.push({ sourceName, reportKind: "rendered_registration", rows: parsed.size, matchedHeaderAliases: 8 });
     } else if (SIGNATURES.enrollment.test(signature)) {
       detected = true;
       for (const [key, value] of statuses(rows)) statusesByName.set(key, value);
@@ -181,6 +264,9 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
     } else if (SIGNATURES.classroom.test(signature)) {
       detected = true;
       inventory.push({ sourceName, reportKind: "evidence_only", rows: rows.length, matchedHeaderAliases: 2, note: "Classroom head-count reconciliation only; child assignments come from the account and registration reports." });
+    } else if (SIGNATURES.classroomSchedule.test(signature)) {
+      detected = true;
+      inventory.push({ sourceName, reportKind: "evidence_only", rows: rows.length, matchedHeaderAliases: 4, note: "Classroom schedule reconciliation only; current child assignments come from the flat child-information export." });
     } else if (SIGNATURES.payments.test(signature)) {
       detected = true;
       inventory.push({ sourceName, reportKind: "evidence_only", rows: rows.length, matchedHeaderAliases: 5, note: "Historical payment reconciliation only; payment rows are not recreated as BEE Suite charges or Stripe payments." });
@@ -217,6 +303,7 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
     }
     const statusRows = statusesByName.get(normalizedName(registration.childName)) ?? [];
     const uniqueStatus = statusRows.length === 1 ? statusRows[0] : null;
+    const flatChild = flatChildByIdentity.get(childKey(registration.childName, registration.childDob));
     const relationships = registration.relationships.map((relationship) => ({
       externalId: `rendered-person-${stableId(match.accountId, relationship.name, relationship.contact)}`,
       name: relationship.name,
@@ -235,13 +322,15 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
       "row type": "procare_rendered_report_child",
       "account id": match.accountId,
       "family name": match.accountName,
-      "child id": `rendered-child-${stableId(match.accountId, registration.childName, registration.childDob)}`,
+      "child id": flatChild?.childId || `rendered-child-${stableId(match.accountId, registration.childName, registration.childDob)}`,
+      "child person id": flatChild?.personId ?? "",
       "child name": registration.childName,
       "date of birth": registration.childDob,
-      gender: registration.gender,
-      classroom: registration.classroom || match.classroom,
-      "child status": uniqueStatus?.status || registration.status || match.status,
-      "start date": uniqueStatus?.startDate ?? "",
+      gender: flatChild?.gender || registration.gender,
+      classroom: flatChild?.classroom || registration.classroom || match.classroom,
+      "classroom id": flatChild?.classroomId ?? "",
+      "child status": flatChild?.status || uniqueStatus?.status || registration.status || match.status,
+      "start date": uniqueStatus?.startDate || flatChild?.statusDate || "",
       address: registration.address || match.payerAddress,
       "guardian name": guardian?.name || match.payerName,
       "guardian email": guardian?.email || emailIn(match.payerContact),
@@ -262,15 +351,20 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
   const importedKeys = new Set(records.map((record) => childKey(record["child name"] ?? "", record["date of birth"] ?? "")));
   for (const child of children) {
     if (importedKeys.has(childKey(child.childName, child.childDob))) continue;
+    const flatChild = flatChildByIdentity.get(childKey(child.childName, child.childDob));
     const record: RecordRow = {
       "row type": "procare_rendered_account_child",
       "account id": child.accountId,
       "family name": child.accountName,
-      "child id": `rendered-child-${stableId(child.accountId, child.childName, child.childDob)}`,
+      "child id": flatChild?.childId || `rendered-child-${stableId(child.accountId, child.childName, child.childDob)}`,
+      "child person id": flatChild?.personId ?? "",
       "child name": child.childName,
       "date of birth": child.childDob,
-      classroom: child.classroom,
-      "child status": child.status || "Enrolled",
+      gender: flatChild?.gender ?? "",
+      classroom: flatChild?.classroom || child.classroom,
+      "classroom id": flatChild?.classroomId ?? "",
+      "child status": flatChild?.status || child.status || "Enrolled",
+      "start date": flatChild?.statusDate ?? "",
       address: child.payerAddress,
       "guardian name": child.payerName,
       "guardian email": emailIn(child.payerContact),
@@ -287,7 +381,7 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
   const coverage = {
     version: "rendered-procare-report-v1",
     sourceInventory: inventory,
-    sourceRows: { accountChildren: children.length, registrations: registrationByChild.size, enrollmentStatusNames: statusesByName.size, balances: balanceByAccount.size },
+    sourceRows: { accountChildren: children.length, registrations: registrationByChild.size, flatChildren: flatChildByIdentity.size, enrollmentStatusNames: statusesByName.size, balances: balanceByAccount.size },
     rawSourceRows: Object.fromEntries(inventory.map((item) => [item.sourceName, item.rows])),
     duplicateSourceRowsRemoved: {},
     normalizedRows: {

@@ -95,3 +95,36 @@ test("rendered ProCare reports fail closed when a registration cannot be linked 
   assert.match(result.records[0]["import warning"], /missing from the account-information report/i);
   assert.equal(result.datasetCoverage.normalizedRows.needsResolution, 2);
 });
+
+test("alternate ProCare child-information layout accepts trailing account markers and uses flat child IDs and statuses", () => {
+  const files = new Map<string, Buffer>([
+    ["one.csv", Buffer.from(row({
+      3: "Account Information Sheet",
+      6: "[SMITH*]",
+      9: "Smith, Jordan",
+      11: "parent@example.test",
+      15: "Smith, Avery",
+      17: "Preschool",
+      18: "DOB: 1/2/2022",
+    }))],
+    ["two.csv", Buffer.from([
+      row({ 2: "Child Information Sheet", 5: "Smith, Avery", 7: "Preschool", 8: "DOB: 1/2/2022" }),
+      row({ 10: "Smith, Jordan", 12: "Mom", 13: "Lives With Emergency Pickup", 14: "parent@example.test\n828-555-0100" }),
+    ].join("\n"))],
+    ["three.csv", Buffer.from([
+      csvRow(["Child ID", "Full Name", "Gender", "Date of Birth", "Primary Classroom", "Classroom ID", "Enrollment Status", "Status Date", "Person ID"]),
+      csvRow(["CHILD-123", "Smith, Avery", "Female", "1/2/2022", "Preschool", "ROOM-4", "Enrolled", "8/1/2025", "PERSON-8"]),
+    ].join("\n"))],
+  ]);
+
+  const result = buildRenderedProcareReportRowsFromFiles(files);
+  assert.ok(result);
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0]["account id"], "SMITH");
+  assert.equal(result.records[0]["child id"], "CHILD-123");
+  assert.equal(result.records[0]["child person id"], "PERSON-8");
+  assert.equal(result.records[0]["classroom id"], "ROOM-4");
+  assert.equal(result.records[0]["child status"], "Enrolled");
+  assert.equal(result.records[0]["guardian email"], "parent@example.test");
+  assert.equal(result.records[0]["import warning"], undefined);
+});

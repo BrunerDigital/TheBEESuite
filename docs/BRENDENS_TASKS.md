@@ -17,12 +17,14 @@ Connected evidence: Brenden completed Supabase dashboard sign-in. The production
 | Decision date | Release scope | Decision | Result | Limits |
 | --- | --- | --- | --- | --- |
 | 2026-07-20 | GitHub PR `#8`, `Sync Supabase migration history for readiness smoke` | Brenden stated: “Authorize PR #8 merge and production verification.” | Merged at `2026-07-20T19:05:03Z` as `93cf5c7f`; Vercel production became `READY`, Supabase protected-main migration check reported current, and health/log verification passed. | This exact approval did not authorize later production migrations, real-customer test writes, credential rotation, provider changes, or wider-school activation. |
+| 2026-07-20 | GitHub PR `#11`, `Enable RLS for parent setup tokens`; only isolated demo teacher `demoteacher@kidcityusa.com` | Brenden stated: “Authorize PR #11 merge and production verification. Authorize rotation of only the isolated demo teacher credential for the bounded daily-report regression and cleanup.” | Merged at `2026-07-20T20:48:52Z` as `8054ef23`; protected-main applied the migration, production reached 88/88 RLS, Vercel became `READY`, public/parent smoke and logs passed, and the authorized teacher create/replay/cleanup passed with zero test rows remaining. | Limited to this PR and this synthetic credential/regression. No family send, real-customer mutation, provider change beyond the already recorded leaked-password setting, module activation, school-wave GO, billing/payment/payout action, or ProCare cutover. |
 
 ## Production security configuration evidence
 
 | Evidence date/time | Target | Change | Verification | Remaining boundary |
 | --- | --- | --- | --- | --- |
-| 2026-07-20T20:38:32Z | Supabase project `nqjrlktoewiueiwrubas`, production Auth email provider | Enabled **Prevent use of leaked passwords**. | Dashboard showed the setting enabled after save; a fresh Security Advisor run returned zero errors, zero warnings, and no leaked-password finding. | No existing password was changed. MFA policy/enrollment, credential rotation, and the isolated teacher regression remain separate gates. |
+| 2026-07-20T20:38:32Z | Supabase project `nqjrlktoewiueiwrubas`, production Auth email provider | Enabled **Prevent use of leaked passwords**. | Dashboard showed the setting enabled after save; a fresh Security Advisor run returned zero errors, zero warnings, and no leaked-password finding. | MFA policy and role-enrollment evidence remain separate open requirements. |
+| 2026-07-20T20:54:50Z | Isolated demo teacher `demoteacher@kidcityusa.com` only | Rotated the generated credential, stored it as Windows generic credential `TheBeeSuite/production/isolated-demo-teacher`, and incremented the application session version. | Production login `200`; one internal daily report created `201`; the same client action replayed `200` with the original report and `replayed: true`; logout `200`; cleanup deleted one report, report audit, device session, device audit, and rate-limit bucket; zero matching rows remained. | This does not authorize rotation of any other account, reveal the stored secret, broaden demo access, or satisfy MFA, cross-role isolation, Storage restore, or school-wave gates. |
 
 ## Actual wave choices
 
@@ -37,7 +39,13 @@ No delegation acceptance has been recorded as of July 20, 2026. Brenden remains 
 
 | Acceptance date/time | School/scope | Responsibility | Accepted owner | Coverage window | Acceptance evidence |
 | --- | --- | --- | --- | --- | --- |
-| 2026-07-20T14:20:13-04:00 | Platform production release/database readiness; no school-wave or business/legal approval implied | Technical release/database ownership, including stop and rollback authority | Brenden Bruner | Effective immediately and continuing until replaced or revoked; response target and backup owner remain unrecorded | Brenden stated: “I, Brenden, accept technical release/database ownership, including stop and rollback authority.” |
+| 2026-07-20T14:20:13-04:00 | Platform production release/database readiness; no school-wave or business/legal approval implied | Technical release/database ownership, including stop and rollback authority | Brenden Bruner | Effective immediately; P0 acknowledge 15m, decision 30m, recovery start 60m; P1 acknowledge 30m and plan 60m; backup owner/after-hours coverage still unaccepted | Brenden stated: “I, Brenden, accept technical release/database ownership, including stop and rollback authority.” Brenden's later request to fix the response target authorized recording the technical targets. |
+
+## Database and Storage recovery decision
+
+| Decision date | Scope | Decision/result | Remaining boundary | Evidence reference |
+| --- | --- | --- | --- | --- |
+| 2026-07-20 | No-production-data database and Storage recovery method and drill | Implemented a hash-addressed private-bucket archive/verify/restore tool and completed a destructive synthetic relationship-plus-child-media restore with zero fixture loss, matching database/object hashes, private signed access, unauthenticated denial, and complete branch/archive cleanup. | Production Storage backup remains non-operational until a company-approved encrypted/versioned off-platform destination and nightly runner are configured. A second human backup technical owner has not accepted. The drill does not certify full E7 or a wider-school wave. | `SUPABASE_DATABASE_STORAGE_RECOVERY_RUNBOOK.md`; `SECURITY_DATABASE_STORAGE_RESTORE_EVIDENCE_PACKET.md` |
 
 ## Completed signoffs
 

@@ -2,7 +2,7 @@
 
 Childcare CRM, school operations, billing, parent portal, teacher portal, and executive reporting platform.
 
-Last refreshed: July 8, 2026
+Last refreshed: July 24, 2026
 
 The BEE Suite is a multi-tenant, white-label operating system for childcare brands and schools. It supports inquiry intake, enrollment, families, children, classrooms, staffing, tuition billing, Stripe Connect payout setup, parent communications, documents, compliance workflows, FTE reporting, role-specific portals, and human-reviewed AI assistance.
 
@@ -13,7 +13,7 @@ The BEE Suite is a multi-tenant, white-label operating system for childcare bran
 - Database/Auth/Storage: Supabase-backed Prisma application
 - Payments: Stripe Checkout and Connect foundations with school payout onboarding and autopay billing workflows
 - Communication: in-app messaging, SendGrid email paths, Twilio SMS foundations, notification preferences, and delivery logging
-- Rollout focus: Kid City USA corporate schools, with Kokomo treated as live production data and Longmont used for import/payout testing
+- Rollout focus: Kokomo may continue approved normal production use; the wider Kid City school wave and each sensitive module remain independently gated
 
 ## Main User Flows
 
@@ -77,6 +77,7 @@ npm run typecheck
 npm test
 npm run vercel-build
 npm run cloud:validate
+npm run test:smoke
 ```
 
 Database and rollout helpers:
@@ -85,6 +86,7 @@ Database and rollout helpers:
 npm run db:generate
 npm run db:migrate
 npm run pilot:check
+npm run procare:prepare-rendered -- <secure-export-directory> <ignored-review-directory>
 npm run kidcity:ensure-corporate-schools
 npm run kidcity:prepare-school-payouts
 ```
@@ -112,7 +114,8 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/STRIPE_CONNECT.md](docs/STRI
 ## Data And Rollout Guardrails
 
 - Kokomo is a live production school in The BEE Suite. Do not reset, reseed, overwrite, rollback, or bulk-reimport Kokomo data.
-- Use Longmont, staging, or approved test data for ProCare import and payout onboarding testing.
+- Prepare ProCare exports locally or in an approved non-production environment. Do not run a production preview or import without location-specific authorization.
+- Keep raw and prepared ProCare export directories out of Git. The repository ignore rules cover the expected export/preparation folder names.
 - Use import preview/diff, backups, audit logs, and spot checks before inviting parents or changing payment flows.
 - Live parent payments must remain tied to Stripe Connect readiness, webhook reconciliation, school payout readiness, and approved fee disclosures.
 
@@ -121,11 +124,15 @@ Primary rollout checklist: [docs/KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.
 ## Documentation Index
 
 - Product status: [docs/PRODUCT.md](docs/PRODUCT.md)
+- July 24 production release: [docs/RELEASE_NOTES_2026-07-24.md](docs/RELEASE_NOTES_2026-07-24.md)
+- Current production-readiness matrix: [docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md](docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md)
 - Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - Security/privacy operations: [docs/SECURITY_PRIVACY_OPERATIONS.md](docs/SECURITY_PRIVACY_OPERATIONS.md)
 - ProCare migration: [docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md](docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md)
+- ProCare export validation: [docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md](docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md)
 - SOP library: [docs/sops/README.md](docs/sops/README.md)
+- July 24 team-share packet: [output/pdf/TEAM_SHARE_GUIDES_2026-07-24/README.md](output/pdf/TEAM_SHARE_GUIDES_2026-07-24/README.md)
 - Public resources page content: [docs/sops/](docs/sops/)
 - QA/change notes: [docs/qa-codex-change-notes/README.md](docs/qa-codex-change-notes/README.md)
 - App Store packet: [docs/APP_STORE_SUBMISSION_PACKET.md](docs/APP_STORE_SUBMISSION_PACKET.md)

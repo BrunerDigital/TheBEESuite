@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: June 26, 2026
+Last updated: July 24, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -42,14 +42,19 @@ Do not enter operational data if the wrong school, classroom, or family scope ap
 Use the family profile as the source of truth for parent portal access and child visibility.
 
 1. Open the family record.
-2. Confirm all guardians are listed with the correct relationship.
-3. Confirm each guardian's personal email address is accurate.
-4. Confirm each child is linked to the correct family and classroom.
-5. Review custody, pickup, allergy, medication, and media permission notes.
-6. Remove or deactivate outdated contacts instead of leaving confusing duplicate records.
-7. Save changes and refresh the record before inviting or training the family.
+2. Read the sticky `Currently editing family data` header before changing anything. Confirm the school, family, selected child, selected parent, billing account, and record counts.
+3. Use `View full profile` for the complete record and `Open billing` when the selected family or child needs billing work. These links preserve the current context.
+4. Confirm all guardians are listed with the correct relationship.
+5. Confirm each guardian's personal email address is accurate.
+6. Confirm each child is linked to the correct family and classroom.
+7. Review custody, pickup, allergy, medication, and media permission notes.
+8. Follow the school's approved access-removal process for outdated contacts; do not remove a guardian, payer, pickup, or emergency contact merely because the record looks duplicated.
+9. Save the specific section and confirm the success state before switching to another family, child, or guardian.
+10. Refresh or reopen the full profile before inviting or training the family.
 
 Stop and escalate if custody, pickup, or medical information conflicts with school paperwork.
+
+Weekly tuition is read from the selected child's billing assignment. The family view shows the total of active child assignments and a per-child breakdown. Directors should open Billing to change the assignment rather than typing another tuition amount into family or enrollment notes.
 
 ## Parent Portal Access
 
@@ -82,14 +87,16 @@ Never give one guardian another guardian's login.
 Billing users should review the ledger before sending payment instructions.
 
 1. Open the family billing or invoice view.
-2. Confirm the current balance, open invoices, credits, and recent payments.
-3. If the family owes money, open the invoice or payment action connected to that balance.
-4. Confirm the payment method offered to parents matches the school policy:
+2. Confirm the header shows the intended school, family, billing account, and selected child.
+3. Confirm the current balance, active per-child weekly tuition, family weekly total, open invoices, credits, and recent payments.
+4. If the family owes money, open the invoice or payment action connected to that balance.
+5. Confirm the payment method offered to parents matches the school policy:
    - ACH/bank payment is preferred when enabled.
    - Card payment is optional if enabled.
    - Any fee or recovery disclosure must be shown before payment.
-5. For failed or pending payments, review the payment status before retrying.
-6. Do not mark an invoice paid manually unless the payment has been verified outside the app.
+6. For failed or pending payments, review the payment status before retrying.
+7. Do not mark an invoice paid manually unless the payment has been verified outside the app.
+8. Do not use `Charge This Child Now` unless an immediate invoice is intended and approved.
 
 If Stripe checkout shows an error, capture the family name, invoice number, amount, payment method, time, and screenshot before escalating.
 

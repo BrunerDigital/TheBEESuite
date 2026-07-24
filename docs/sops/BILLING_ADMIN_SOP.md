@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: July 7, 2026
+Last updated: July 24, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -73,11 +73,22 @@ Do not send live payment links until all items are complete:
 
 1. Open the selected family.
 2. Choose the child.
-3. Set the tuition plan.
-4. Confirm enabled status.
-5. Confirm start week or period.
-6. Save recurring tuition.
-7. Use `Charge This Child Now` only when the school wants an immediate invoice.
+3. Confirm the sticky billing header shows the intended school, family, billing account, and selected child.
+4. Review `Customer weekly tuition` and the `Family weekly total`.
+5. Select the tuition plan assigned to that child.
+6. Confirm enabled status and the start week or period.
+7. Save recurring tuition.
+8. Reopen the family or child profile and confirm the same rate appears there.
+9. Use `Charge This Child Now` only when the school has separately approved an immediate invoice.
+
+The child billing assignment is the canonical weekly rate:
+
+- Family records display the sum of active child assignments plus the per-child breakdown.
+- Child profiles, enrollment records, and Billing show that same assignment.
+- Do not maintain a second family-level or profile-only tuition amount.
+- An eligible recurring assignment creates the Friday invoice for the following week. The scheduler runs daily so eligible work can be caught after the configured Friday point.
+- A saved payment method is required for automatic collection, not for invoice creation.
+- `Charge This Child Now` posts an immediate invoice and balance; it does not replace recurring assignment.
 
 ## Send A Secure Payment Method Request
 
@@ -159,7 +170,8 @@ Use card payments only when the school allows them.
 - Review failed payments and dunning tasks.
 - Review subsidy/agency receivables.
 - Review payment method/autopay setup status.
-- Confirm upcoming tuition run settings.
+- Confirm upcoming tuition run settings, child assignments, and start periods.
+- Spot-check that family totals equal the active per-child weekly rates.
 - Export or save required reports.
 - Document unresolved blockers and owners.
 

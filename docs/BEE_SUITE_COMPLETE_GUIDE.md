@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** July 15, 2026  
+**Documentation snapshot:** July 24, 2026
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.  
 **Audience:** School owners, executives, directors, teachers, billing staff, parents, implementation teams, support staff, developers, and AI assistants asked to explain the system aloud.
 
@@ -177,15 +177,15 @@ The **Waitlist** organizes families by age group, desired date, sibling priority
 
 The public **Registration** workflow collects family and child information, required acknowledgements, uploads, and signatures. Staff can review, approve, or reject an application and can gate registration fees or deposits on payment readiness.
 
-The **ProCare Import Center** supports migration from CSV exports. Its foundations cover preview and mapping, duplicate matching, row and batch tracking, families, guardians, children, classrooms, staff, invoices, balances, attendance, source identifiers, backups, and rollback-oriented evidence. A real migration still requires field validation and a controlled cutover.
+The **ProCare Import Center** supports migration from CSV exports. Its foundations cover preview and mapping, duplicate matching, row and batch tracking, families, guardians, children, classrooms, staff, invoices, balances, attendance, source identifiers, backups, and rollback-oriented evidence. Local preparation can create an ignored review package that retains a source-coverage manifest, but preparation is not preview, import, activation, or cutover. A real migration requires zero unresolved authoritative links, field validation, a reviewed source hash, and a controlled location-specific approval.
 
 ### 6.4 Families and child records
 
-The **Family Detail** view is the household record. It connects guardians, authorized pickups, emergency contacts, siblings, billing contact, communication history, documents, timelines, and restricted notes.
+The **Family Detail** view is the household record. It connects guardians, authorized pickups, emergency contacts, siblings, billing contact, communication history, documents, timelines, and restricted notes. While editing, a persistent context header identifies the current school, family, child, guardian, billing account, and record counts. Direct links open the full profile or the selected family's and child's billing context.
 
 The **Child Profile** contains enrollment, classroom, schedule, allergies, medical notes, permissions, emergency contacts, location history, attendance, daily care, media, incidents, and documents. Custody, medical, and incident information is need-to-know data and requires stricter handling.
 
-Family deduplication and lead merging help prevent the same household from becoming multiple disconnected records. Contact-change requests let parents propose updates without silently overwriting verified school records; staff review and accept or reject the change.
+Family deduplication and lead merging help prevent the same household from becoming multiple disconnected records. Contact-change requests let parents propose updates without silently overwriting verified school records; staff review and accept or reject the change. The assigned child billing record is the canonical weekly tuition source shown in family, child, enrollment, and billing views.
 
 ### 6.5 Classroom and teacher operations
 
@@ -233,7 +233,7 @@ SendGrid paths support transactional email. Twilio paths support outbound SMS, i
 
 ### 6.9 Billing, payments, and payouts
 
-The **Billing and Invoices** area manages family billing accounts, tuition plans, products, invoice items, due dates, status, balances, credits, subsidies, and ledger history.
+The **Billing and Invoices** area manages family billing accounts, tuition plans, products, invoice items, due dates, status, balances, credits, subsidies, and ledger history. Weekly tuition is assigned to a child. The family view totals active child assignments, while the child, enrollment, and billing views show the same source value.
 
 The **Payments** area manages checkout readiness, saved-method setup, payment-method requests, autopay status, failed-payment follow-up, payment records, payout status, and reconciliation evidence.
 
@@ -243,7 +243,7 @@ The intended financial chain is:
 
 Stripe Checkout provides hosted payment collection. Stripe Connect provides a connected account and payout path for each school or approved owner structure. Webhook records are deduplicated so a repeated provider event does not apply the same financial action twice. Payment-method request links are expiring, family-specific paths for securely collecting a method.
 
-Scheduled billing foundations include recurring tuition creation, autopay attempts, payment reminders, dunning for failures, and reconciliation reports. “Dunning” means the controlled sequence used to notify a payer and recover a failed or overdue payment.
+Scheduled billing foundations include recurring tuition creation, autopay attempts, payment reminders, dunning for failures, and reconciliation reports. An eligible assignment creates a Friday invoice for the following week; a saved payment method is required for automatic collection, not invoice creation. `Charge This Child Now` creates an immediate invoice and is a separate manual action. “Dunning” means the controlled sequence used to notify a payer and recover a failed or overdue payment.
 
 The **Billing Settings** area defines tuition plans, products, discounts, taxes, subsidy fields, processor settings, and policy notes.
 
@@ -279,7 +279,7 @@ Google Calendar integration is credential-gated and should preserve the BEE Suit
 
 The **Analytics** area covers enrollment funnel, lead sources, tour conversion, occupancy, revenue, balances, attendance, ratios, response time, incidents, compliance, campaigns, and reviews. Data can be filtered by the user's authorized centers and exported where allowed.
 
-The **Reputation** area supports satisfaction surveys, NPS-style scores, review requests, testimonials, and response drafts. Public testimonial use requires explicit approval. AI-generated responses remain drafts.
+The **Reputation** area supports satisfaction surveys, NPS-style scores, review requests, testimonials, and response drafts. Public survey submissions require an active survey, persistent throttling, tenant-valid record references, and an atomic audited update. The public response does not expose prior comments or respondent details. Public testimonial use requires explicit approval. AI-generated responses remain drafts.
 
 The **Audit Logs** area records actor, action, resource, resource identifier, center, tenant, metadata, and time for sensitive operations such as permission changes, restricted record access, billing changes, incident review, documents, and support access.
 
@@ -318,7 +318,7 @@ AI output is labeled as a suggestion and should be reviewed before use. It must 
 ### 7.1 Inquiry to enrolled family
 
 1. A prospective family submits a public inquiry or registration form.
-2. The system validates the request, identifies the intended center, creates or matches a lead, records its origin, and routes notifications.
+2. The system validates the request, confirms the browser origin against the trusted production list plus configured additions, identifies the intended center, creates or matches a lead, records its source and UTM origin, and routes notifications.
 3. Enrollment staff add notes, tasks, messages, and a tour.
 4. The lead advances through pipeline stages. Stage changes are recorded rather than inferred from a single screen.
 5. The family completes an application, uploads requested documents, acknowledges policies, and provides signatures.
@@ -338,10 +338,10 @@ AI output is labeled as a suggestion and should be reviewed before use. It must 
 
 ### 7.3 Tuition and payment
 
-1. A tuition plan or assignment determines what should be billed.
-2. The billing run creates an invoice and itemized charges.
+1. The selected child's billing assignment determines the canonical weekly tuition rate and eligible start period.
+2. The recurring scheduler creates the Friday invoice for the following week, or a separately approved billing action creates an immediate invoice and itemized charges.
 3. The invoice contributes to the family billing-account balance and ledger.
-4. The parent pays through hosted checkout or an approved saved method, or autopay attempts the invoice.
+4. The parent pays through hosted checkout or an approved saved method, or autopay attempts the due invoice when a saved method exists.
 5. Stripe sends a signed webhook event.
 6. The server verifies and deduplicates the event, updates payment and invoice state, and records ledger evidence.
 7. Failed or overdue items enter reminder and dunning workflows.
@@ -529,7 +529,7 @@ The repository contains broad production-capable foundations, but the existence 
 
 ### Broadly implemented in the current version
 
-Role-specific login and portal surfaces; tenant and scoped access; CRM and inquiry routing; registration and enrollment records; families and children; classrooms and staff; attendance and kiosk foundations; teacher daily reports, incidents, and media; parent portal workflows; billing accounts, invoices, ledgers, Checkout and Connect foundations; communications and delivery logs; documents and compliance records; FTE reporting; analytics; audit logs; white-label data; imports; readiness checks; and human-reviewed AI assistance.
+Role-specific login and portal surfaces; tenant and scoped access; CRM and inquiry routing; registration and enrollment records; context-aware family and child editing; classrooms and staff; attendance and kiosk foundations; teacher daily reports, incidents, and media; parent portal workflows; canonical child-level weekly tuition across family/child/enrollment/billing views; billing accounts, invoices, ledgers, Checkout and Connect foundations; communications and delivery logs; documents and compliance records; FTE reporting; analytics; hardened public survey collection; audit logs; white-label data; imports; readiness checks; and human-reviewed AI assistance.
 
 ### Implemented foundations that require per-school rollout validation
 
@@ -587,6 +587,8 @@ This guide consolidates the implementation and existing operational documentatio
 Primary references:
 
 - `README.md`
+- `docs/RELEASE_NOTES_2026-07-24.md`
+- `docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md`
 - `docs/PRODUCT.md`
 - `docs/ARCHITECTURE.md`
 - `docs/user-feature-access-map.md`

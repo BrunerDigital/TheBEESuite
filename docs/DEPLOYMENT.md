@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Last updated: July 8, 2026
+Last updated: July 24, 2026
 
 The BEE Suite production app is deployed on Vercel from GitHub and uses Supabase/Postgres, Supabase Auth/Storage, Prisma, Stripe, SendGrid, and Twilio-backed runtime configuration.
 
@@ -10,7 +10,7 @@ The BEE Suite production app is deployed on Vercel from GitHub and uses Supabase
 - Vercel project: `the-bee-suite`
 - Vercel scope: `brunerdigitals-projects`
 - GitHub repository: `BrunerDigital/TheBEESuite`
-- Framework: Next.js 16 App Router
+- Framework: Next.js 16.2.11 App Router
 - Production build command: `npm run vercel-build`
 
 `npm run vercel-build` runs:
@@ -36,11 +36,15 @@ Do not commit `.env.local`, pulled Vercel env files, SendGrid env files, local S
 
 Standard production deploy:
 
-1. Commit and push `main`.
-2. Vercel Git integration builds the pushed commit.
-3. Confirm the deployment reaches `READY`.
-4. Confirm production aliases include `thebeesuite.io` and `www.thebeesuite.io`.
-5. Run a live health check:
+1. Record the current production deployment ID as the rollback target.
+2. Run `npm run vercel-build` against the exact candidate.
+3. Commit only the authorized files and confirm the worktree is clean.
+4. Push `main`.
+5. Vercel Git integration builds the pushed commit.
+6. Use `npx vercel deploy --prod --yes` only when the release authorization explicitly requires a direct CLI production deployment. A push plus CLI deployment can create two identical production builds; verify the final alias target.
+7. Confirm the final deployment reaches `READY`.
+8. Confirm production aliases include `thebeesuite.io` and `www.thebeesuite.io`.
+9. Run a live health check:
 
 ```bash
 Invoke-WebRequest -Uri "https://thebeesuite.io/api/health" -UseBasicParsing
@@ -52,6 +56,8 @@ Useful CLI commands:
 npx vercel ls --scope brunerdigitals-projects
 npx vercel inspect <deployment-url-or-id> --scope brunerdigitals-projects
 npx vercel redeploy <deployment-id> --target production --scope brunerdigitals-projects
+npx vercel logs <deployment-id> --since 15m --level error
+npx vercel logs <deployment-id> --since 15m --status-code 500
 ```
 
 When changing Vercel env vars, redeploy production afterward. Existing deployments do not pick up changed env values.
@@ -155,6 +161,7 @@ For broader release checks:
 ```bash
 npm run cloud:validate
 npm run pilot:check
+npm run ops:check
 ```
 
 ## Post-Deploy Validation
@@ -162,6 +169,12 @@ npm run pilot:check
 - Confirm Vercel deployment state is `READY`.
 - Hit `/api/health` on the production domain.
 - Check Vercel runtime errors for the last 15 minutes.
+- Confirm the production aliases resolve to the final `READY` deployment rather than an earlier concurrent build.
 - Smoke the role-specific login entry points: `/parents`, `/teachers`, `/directors`, `/executives`.
+- Run `SMOKE_BASE_URL=https://thebeesuite.io npm run test:smoke` using the appropriate shell syntax. The smoke is anonymous unless separately approved credentials are supplied.
+- For inquiry-origin changes, use `OPTIONS /api/inquiries`; do not create a lead merely to test CORS.
+- For public survey changes, rely on focused tests or an approved synthetic active survey. Do not post feedback to a real family survey.
 - For billing changes, smoke Stripe Connect readiness and webhook logs before enabling school payments.
 - For rollout/import changes, verify center scope and do not test with Kokomo destructive operations.
+
+The verified July 24 reference release is documented in `RELEASE_NOTES_2026-07-24.md`.

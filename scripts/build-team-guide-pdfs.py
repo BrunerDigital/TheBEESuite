@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import re
 import shutil
@@ -14,7 +15,7 @@ from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, 
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_2026-07-20"
+OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_2026-07-24"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
@@ -32,16 +33,21 @@ FILES = [
 ]
 
 STATUS = """
-> TEAM SHARE SNAPSHOT - JULY 20, 2026
+> TEAM SHARE SNAPSHOT - JULY 24, 2026
 >
-> This copy was refreshed against the current application routes, role rules, module inventory, and July 20 production-readiness record. Kokomo may continue its approved normal production use. Any wider school rollout, parent invitation wave, kiosk activation, billing activation, payment activation, ProCare retirement, or store release remains separately approval-gated. Confirm the named school and module have a dated GO before treating a workflow as live.
+> This copy was refreshed after production release `7e64b926`. The release is live and verified, but it did not activate a ProCare import, billing, payments, invitations, communications, kiosk, or a wider school wave. Kokomo may continue its approved normal production use. Confirm the named school and module have a dated GO before treating a workflow as live.
 """.strip()
 
 LATEST = """
-## July 20, 2026 capability addendum
+## July 24, 2026 capability addendum
 
 The current application also includes the following role-gated capabilities:
 
+- **Context-aware family editing:** Directors see the current school, family, child, guardian, and billing account while editing and can open the complete profile or selected billing context directly.
+- **Canonical weekly tuition:** The selected child's billing assignment supplies the weekly rate shown across family, child, enrollment, and Billing views. Family totals add active child assignments. A saved payment method is required for automatic collection, not invoice creation.
+- **Survey response protection:** Public survey submissions are active-only, persistently throttled, tenant-validated, atomically audited, and return no prior comments or respondent details.
+- **Safe ProCare preparation:** The preparation command creates an ignored review package, preserves a source-coverage manifest, and refuses to overwrite the source folder. Preparation is never import or cutover approval.
+- **Stable inquiry origins:** Trusted Kid City and BEE Suite production origins remain allowed when operators add configured origins.
 - **Corporate Asset Hub:** Executives can upload approved brand, social, flyer, and training resources. Executives and school directors can search, preview, and securely download files from the private corporate library.
 - **Corporate software invoice:** Authorized Kid City corporate accounting and executive users can review the monthly BEE Suite software invoice, based on active school users, and open the hosted payment flow. This is separate from family tuition billing.
 - **Terminal Store:** Authorized directors and executives can purchase approved readers, docks, hubs, cases, and mounts through a BEE Suite-branded hosted checkout. Hardware pricing, shipping, fulfillment, tax treatment, and support ownership must be approved before broad use.
@@ -67,6 +73,26 @@ def refresh(text: str, is_complete: bool) -> str:
         else:
             text += "\n" + LATEST + "\n"
     return text
+
+
+def bundle_markdown_images(text: str, source: Path) -> str:
+    def replace(match: re.Match[str]) -> str:
+        alt, target = match.group(1), match.group(2).strip()
+        if re.match(r"^(?:https?://|data:|#)", target):
+            return match.group(0)
+        asset = (source.parent / target).resolve()
+        if not asset.is_file() or not asset.is_relative_to(ROOT.resolve()):
+            return match.group(0)
+        digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:10]
+        bundled_name = f"{asset.stem}-{digest}{asset.suffix.lower()}"
+        shutil.copy2(asset, OUT / "assets" / bundled_name)
+        return f"![{alt}](../assets/{bundled_name})"
+
+    bundled = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", replace, text)
+    # Generated packet copies should not carry Markdown hard-break whitespace.
+    # Blank lines preserve the intended separation without failing Git checks.
+    bundled = re.sub(r"[ \t]+\n", "\n\n", bundled)
+    return re.sub(r"\n{3,}", "\n\n", bundled)
 
 
 def esc(s: str) -> str:
@@ -132,7 +158,7 @@ def build_pdf(md: Path, pdf: Path) -> None:
 
     def footer(canvas, doc):
         canvas.saveState(); canvas.setFont("Helvetica", 8); canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawString(0.7*inch, 0.45*inch, "The BEE Suite - Team Share Copy - July 20, 2026")
+        canvas.drawString(0.7*inch, 0.45*inch, "The BEE Suite - Team Share Copy - July 24, 2026")
         canvas.drawRightString(7.8*inch, 0.45*inch, f"Page {doc.page}"); canvas.restoreState()
 
     doc = SimpleDocTemplate(str(pdf), pagesize=letter, rightMargin=0.7*inch, leftMargin=0.7*inch, topMargin=0.65*inch, bottomMargin=0.7*inch, title=md.stem, author="The BEE Suite")
@@ -143,12 +169,14 @@ def main() -> None:
     if OUT.exists(): shutil.rmtree(OUT)
     (OUT / "markdown").mkdir(parents=True)
     (OUT / "pdf").mkdir()
+    (OUT / "assets").mkdir()
     for rel in FILES:
         src = ROOT / rel
         dest = OUT / "markdown" / src.name
-        dest.write_text(refresh(src.read_text(encoding="utf-8"), src.name == "BEE_SUITE_COMPLETE_GUIDE.md"), encoding="utf-8")
+        refreshed = refresh(src.read_text(encoding="utf-8"), src.name == "BEE_SUITE_COMPLETE_GUIDE.md")
+        dest.write_text(bundle_markdown_images(refreshed, src), encoding="utf-8")
         build_pdf(dest, OUT / "pdf" / (dest.stem + ".pdf"))
-    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 20, 2026. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nKokomo may continue approved normal production use. Wider-school rollout and each sensitive module remain separately approval-gated. These guides explain the workflows; they do not replace a dated school/module GO decision.\n"""
+    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 24, 2026 after verified production release `7e64b926`. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nThe July 24 software release is live and verified. It did not activate ProCare imports, billing, payments, invitations, communications, kiosk, or a wider school wave. Kokomo may continue approved normal production use. Wider-school rollout and each sensitive module remain separately approval-gated. These guides explain the workflows; they do not replace a dated school/module GO decision.\n\n## Privacy of bundled visuals\n\nThe bundled images are existing branded, demo, or stock training assets reviewed for this packet; they do not contain real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")
 

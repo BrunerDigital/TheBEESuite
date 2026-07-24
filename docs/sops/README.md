@@ -1,8 +1,10 @@
 # The BEE Suite Role SOP Library
 
-Last updated: July 7, 2026
+Last updated: July 24, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, pilot, parent portal rollout, billing rollout, or kiosk rollout.
+
+Latest sendable packet: `output/pdf/TEAM_SHARE_GUIDES_2026-07-24/`. It contains the refreshed Markdown copies, bundled visuals, matching PDFs, and a one-page index.
 
 ## Send-Out Order
 
@@ -43,6 +45,10 @@ Use these SOPs when training a school team or sending role-specific instructions
 - Do not share admin screenshots with parents if the screenshot includes another family, child, balance, staff record, incident, or document.
 - Treat custody, medical, billing, incident, staff, and compliance information as need-to-know.
 - If a workflow looks wrong during training, stop and fix the underlying record before telling staff to work around it.
+- When demonstrating family or billing work, name the school, family, child, and payer context before saving.
+- Treat the assigned child billing record as the source of truth for weekly tuition. Do not create a second editable family-level weekly rate.
+- Use `Charge This Child Now` only for a separately approved immediate invoice; saving recurring tuition is the normal assignment action.
+- ProCare preparation, preview, import, cutover, parent invitations, kiosk, billing, and payments are independent gates. Training material does not activate any of them.
 
 ## Launch Sign-Off
 
@@ -58,3 +64,4 @@ Before the guides are sent broadly, the school should confirm:
 - Stripe payout and checkout readiness are complete before parents are asked to pay online.
 - Billing and document workflows have been tested with one low-risk family record.
 - The support escalation path is clear for executives, directors, billing users, teachers, parents, and front desk staff.
+- The named school/module has a dated GO decision; a successful software release is not that decision.

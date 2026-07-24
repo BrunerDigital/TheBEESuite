@@ -1,5 +1,7 @@
 # Kid City USA Inquiry Intake
 
+Last updated: July 24, 2026
+
 The public WordPress/Avada inquiry form should submit to:
 
 ```text
@@ -42,7 +44,18 @@ The hosted Kid City embed loads active Kid City USA open-school options from `/a
 
 The CRM lead is created first. Google Sheets and email failures are returned in the response but do not block lead creation.
 
-The endpoint rejects browser requests from origins outside `INQUIRY_ALLOWED_ORIGINS` and includes hidden `company` / `website` honeypot fields in the hosted embed. Honeypot hits return a non-error response without creating a CRM lead.
+The endpoint rejects browser requests outside the trusted production list plus any configured additions and includes hidden `company` / `website` honeypot fields in the hosted embed. Honeypot hits return a non-error response without creating a CRM lead.
+
+The trusted production origins are always retained:
+
+```text
+https://kidcityusa.com
+https://www.kidcityusa.com
+https://thebeesuite.io
+https://www.thebeesuite.io
+```
+
+`INQUIRY_ALLOWED_ORIGINS` extends this list; it cannot remove or replace the trusted defaults.
 
 The endpoint also applies a best-effort server-side burst limit per requester. It is not a replacement for a WAF or dedicated abuse service, but it reduces accidental or automated repeated submissions during live testing.
 
@@ -127,11 +140,13 @@ INQUIRY_TURNSTILE_SECRET_KEY
 director@example.com,marketing@example.com
 ```
 
-`INQUIRY_ALLOWED_ORIGINS` should include the WordPress origins:
+Use `INQUIRY_ALLOWED_ORIGINS` only for additional approved origins, such as a staging domain or another authorized website:
 
 ```text
-https://kidcityusa.com,https://www.kidcityusa.com,https://thebeesuite.io
+https://staging.example.com,https://www.authorized-provider-site.example
 ```
+
+After any origin change, run non-mutating `OPTIONS /api/inquiries` preflights and confirm each approved origin receives HTTP 204 with the exact requesting origin in `Access-Control-Allow-Origin`. Do not submit a live inquiry solely to test CORS.
 
 ## Google Sheets
 

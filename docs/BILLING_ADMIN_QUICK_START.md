@@ -1,6 +1,6 @@
 # Billing Admin Quick Start
 
-Last updated: July 1, 2026
+Last updated: July 24, 2026
 
 This guide is for school billing users, directors who handle billing, and administrators validating tuition/payment workflows in The BEE Suite.
 
@@ -9,7 +9,7 @@ This guide is for school billing users, directors who handle billing, and admini
 Do not enable or promote live parent payments for a school until all of the following are complete:
 
 1. Stripe connected account onboarding is complete for the correct school or payout owner.
-2. Payment processing recovery policy, card recovery language, debit/prepaid handling, refunds, disputes, and parent-facing disclosures are approved by the school/legal/accounting owner. ACH and instant bank remain parent-fee-free.
+2. Payment processing recovery policy, card recovery language, debit/prepaid handling, refunds, disputes, and parent-facing disclosures are approved by the school/legal/accounting owner. Do not promise that a payment method is always fee-free; the exact total shown before submission controls.
 3. Tuition plans, fees, discounts, subsidy rules, invoice cadence, ledger balances, and family billing accounts are validated against school records.
 4. At least one billing smoke test has passed for the school using approved test data or approved live pilot data.
 5. Support ownership is documented for failed payments, parent questions, refunds, disputes, and payout issues.
@@ -24,7 +24,9 @@ Do not enable or promote live parent payments for a school until all of the foll
 ## Families, Balances, And Ledgers
 
 - Confirm each billing account is attached to the correct family and school.
+- Confirm the sticky header shows the intended school, family, billing account, and selected child before saving or charging.
 - Compare displayed balances to the latest ledger report before major corrections.
+- Compare the family weekly total to the sum of active child-level weekly tuition assignments.
 - Use ledger reconciliation reports to identify invoice/ledger mismatches.
 - Keep notes factual and limited to billing-relevant details.
 - Do not store full card numbers, bank account numbers, or other payment credentials in notes.
@@ -33,7 +35,7 @@ Do not enable or promote live parent payments for a school until all of the foll
 
 Before generating or sending invoices:
 
-- Confirm tuition plans and assignments are current.
+- Confirm tuition plans, child assignments, enabled state, and start periods are current.
 - Confirm discounts, sibling discounts, fees, subsidy/copay splits, and due dates.
 - Review invoice previews when available.
 - Check for duplicate draft invoices before creating another run.
@@ -44,6 +46,14 @@ After invoices are created:
 - Spot-check families across age groups, tuition plans, discounts, and subsidy scenarios.
 - Confirm invoice totals, due dates, and ledger entries.
 - Send parent notices only after the school approves the batch.
+
+Recurring weekly tuition rules:
+
+- The selected child's billing assignment is the canonical rate.
+- Family, child, enrollment, and Billing views should display the same assignment.
+- Eligible assignments create a Friday invoice for the following week.
+- A saved payment method enables automatic collection but is not required for invoice creation.
+- `Charge This Child Now` creates an immediate invoice. Use it only when that separate action is intended and approved.
 
 ## Payment Method Requests And Autopay
 
@@ -93,6 +103,7 @@ For parent questions:
 - Confirm subsidy/agency receivables.
 - Export or save billing reports required by the school.
 - Confirm upcoming tuition run settings.
+- Confirm active child assignments still add up to the displayed family weekly totals.
 - Document unresolved billing blockers and owners.
 
 ## Support

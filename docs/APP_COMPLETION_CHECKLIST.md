@@ -1,6 +1,6 @@
 # The BEE Suite App Completion Checklist
 
-Last updated: June 25, 2026
+Last updated: July 24, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -17,6 +17,7 @@ Status legend:
 ## Current Production Baseline
 
 - [ ] Complete a fresh production smoke test for every role after each major deployment.
+- [x] July 24 release `7e64b926` reached Vercel `READY`; anonymous production smoke, database health, trusted inquiry-origin preflights, and initial logs passed.
 - [x] Next.js App Router SaaS app deployed on Vercel.
 - [x] Production domain connected at `thebeesuite.io`.
 - [x] GitHub main branch deployment flow active.
@@ -105,6 +106,7 @@ Status legend:
 - [x] Executive-level Kid City USA views can show CRM/FTE/reporting data.
 - [x] Demo-login-only data exists for classroom and parent engagement sections.
 - [x] Add configurable dashboard widgets per role.
+- [x] Preserve family and child context when opening the affected family and Billing workflows.
 - [x] Add saved filters and date ranges.
 - [x] Add export/share actions for dashboard snapshots.
 
@@ -140,6 +142,7 @@ Status legend:
 - [x] Add self-service inquiry form builder for every new tenant/location during onboarding.
 - [x] Add executive dashboard button to copy embed code for each location/brand.
 - [x] Add CAPTCHA/bot protection to public inquiry endpoint.
+- [x] Preserve trusted production inquiry origins when configured origins are added.
 - [x] Add UTM/source capture and reporting across all embeds.
 - [x] Add retry queue for failed email/Google Sheet/CRM forwarding.
 
@@ -154,6 +157,8 @@ Status legend:
 - [x] Sensitive medical/custody/document fields are modeled separately.
 - [x] Complete full edit forms for family, guardian, child, pickup, emergency contact, allergy, medical note, and family/child document fields.
 - [x] Add custody visibility controls and staff-facing warnings across family, child, teacher, kiosk, and document review surfaces.
+- [x] Add a persistent family editor context header plus direct full-profile and selected-child Billing links.
+- [x] Show the canonical child weekly tuition assignment consistently in family, child, enrollment, and Billing views.
 - [x] Add document request/upload/review/expiration workflow per family/child with parent portal submission and director review actions.
 - [x] Add guardian self-service change request approval workflow with restricted request notes, director review, parent notification, and audit trail.
 - [x] Add family merge/deduplication with same-school duplicate scoring and guarded merge action.
@@ -208,6 +213,8 @@ Status legend:
 - [x] Add rollback/export backup for imports.
 - [x] Add duplicate matching controls for families/children/guardians.
 - [x] Add final migration runbook for switching each location off ProCare.
+- [x] Add ignored rendered-export preparation packages with retained source-coverage manifest and same-folder overwrite protection.
+- [ ] Resolve Oakleaf's 8 and Canton's 7 authoritative account-link warnings before requesting a production import preview.
 
 ## Attendance, Check-In, And Kiosk
 
@@ -275,7 +282,7 @@ Status legend:
 - [x] Stripe webhook route exists.
 - [x] Billing guardrails and idempotency tests exist.
 - [x] Schema covers billing accounts, invoices, invoice items, payments, ledger entries, products, tuition plans, and subscription placeholders.
-- [x] Payment fee strategy has been defined: ACH/instant bank parent-fee-free, card processing recovery, BEE Suite monthly/payment operations fees, and Kid City USA pilot waiver.
+- [x] Payment fee strategy foundations exist for ACH/instant bank, card processing recovery, BEE Suite monthly/payment operations fees, and the Kid City USA pilot waiver; parent instructions use the exact checkout total and do not promise every bank payment is always fee-free.
 - [x] Complete parent tuition payment UI in parent portal.
 - [x] Complete school payout onboarding UI for Stripe Connect.
 - [x] Finalize payment processing recovery disclosure packet and code-level legal/accounting approval gate.
@@ -385,6 +392,7 @@ Status legend:
 - [x] Add campaign send scheduling and reporting.
 - [x] Add review request workflows.
 - [x] Add survey/NPS collection.
+- [x] Harden public survey collection with active-only submissions, persistent throttling, tenant validation, atomic audited rollups, and redacted public responses.
 - [x] Add AI review response generator in UI.
 
 ## Reporting And Analytics

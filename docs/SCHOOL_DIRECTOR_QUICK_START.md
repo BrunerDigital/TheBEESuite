@@ -1,6 +1,6 @@
 # School Director Quick Start
 
-Last updated: June 1, 2026
+Last updated: July 24, 2026
 
 This guide is for location-level school users/directors.
 
@@ -30,8 +30,19 @@ This guide is for location-level school users/directors.
 
 - Use the family/student intake flow to add a new family.
 - Add guardians first, then children under the family profile.
+- Before editing, confirm the sticky context header names the intended school, family, selected child, selected guardian, and billing account.
 - Confirm each child is linked to the correct family and classroom.
+- Use `View full profile` for the complete family record and `Open billing` for the selected family's or child's billing context.
+- Weekly tuition comes from the child billing assignment. The family record shows the active family total and per-child rates; change the assignment in Billing rather than adding another amount to notes or profile fields.
+- Save and confirm the section before switching families, children, or guardians.
 - Keep custody, medical, allergy, and authorized pickup notes accurate and limited to staff who need them.
+
+## Enrollment
+
+- Use the enrollment directory and child profile to confirm status, classroom, family, and assigned weekly tuition.
+- An `Enrolled` CRM stage does not replace a director-approved enrollment record.
+- Do not create a duplicate family or child when the applicant already exists. Resolve duplicate warnings within the same school before continuing.
+- Moving a child between classrooms or schools can affect access, attendance, and billing; use the approved transfer workflow rather than editing unrelated fields.
 
 ## Check-In / Check-Out
 
@@ -42,10 +53,12 @@ This guide is for location-level school users/directors.
 
 ## ProCare Import
 
-- Use ProCare import only for your own location unless you have executive access.
-- Run preview/dry-run first when available.
-- Review families, children, classrooms, teachers, balances, and attendance before committing imported data.
-- Do not upload exports from another school into your location.
+- Do not run ProCare preview or import unless the named location and action are explicitly authorized.
+- Use `npm run procare:prepare-rendered` only in an approved engineering environment to create an ignored review package; this command does not import data.
+- Require the prepared package to retain its source-coverage manifest and require zero unresolved account links before requesting preview approval.
+- After preview is separately authorized, review families, guardians, children, classrooms, teachers, balances, attendance, warnings, duplicates, source hash, and center identity before any commit decision.
+- Do not upload exports from another school into your location, commit raw exports to Git, or treat a successful software release as ProCare cutover approval.
+- ProCare remains authoritative until a written location-specific cutover is recorded.
 
 ## Support
 

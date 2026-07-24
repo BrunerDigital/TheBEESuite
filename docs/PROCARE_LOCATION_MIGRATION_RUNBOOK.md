@@ -1,6 +1,6 @@
 # ProCare Location Migration Runbook
 
-Last updated: June 9, 2026
+Last updated: July 24, 2026
 
 Purpose: move one school location at a time from ProCare to The BEE Suite as the operational source of truth for families, children, guardians, classrooms, staff, attendance, documents, billing setup, FTE, communications, and reporting.
 
@@ -13,6 +13,30 @@ This runbook is per location. Do not cut over a group of schools until every loc
 - After go-live approval, The BEE Suite becomes the source of truth for the enabled modules at that location.
 - Parent payments remain disabled until Stripe Connect onboarding, payment terms, `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, refund/dispute handling, and test payments are approved for that location.
 - Google Sheets backups for inquiry and FTE workflows are operational backups only. They are not the system of record after The BEE Suite is approved as the source of truth.
+
+## Local Preparation Before Preview
+
+Preparation is read-only with respect to The BEE Suite database. It converts a supported rendered ProCare export folder into a review package:
+
+```bash
+npm run procare:prepare-rendered -- <secure-source-folder> <ignored-output-folder>
+```
+
+Required controls:
+
+1. Keep the source and output folders separate. The tool refuses to overwrite the source directory.
+2. Keep both folders outside Git. The repository ignores expected ProCare export and prepared-import directory names, but operators must still check `git status` before committing.
+3. Retain `IMPORT-INSTRUCTIONS.txt`, `01-procare-import-ready.csv`, and `02-procare-needs-account-resolution.csv` together as one review package.
+4. Confirm the prepared CSV contains the `procare dataset coverage manifest` on its first data row. This proves which supported source reports were available during preparation.
+5. Require zero records in the unresolved file before requesting a production preview. Resolve warnings against authoritative all-accounts/DOB source reports; do not infer or manually invent missing relationships.
+6. Preparation does not authorize preview, import commit, invitations, kiosk, billing, payments, communication, source-of-truth cutover, or ProCare retirement.
+
+Current July 24 evidence:
+
+- Oakleaf: 58 records prepared, 8 unresolved account links.
+- Canton: 73 records prepared, 7 unresolved links; 6 are missing from the account report and 1 requires authoritative DOB resolution.
+
+See `docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md`. Neither location is cleared for import preview or commit by this evidence.
 
 ## Roles
 
@@ -72,7 +96,8 @@ Create one evidence packet per location and keep it with the support/cutover rec
 3. Review `ProcareImportRow` errors and warnings.
 4. Confirm unmapped fields are either mapped, stored in `customFields.rawData`, or intentionally excluded.
 5. Resolve duplicate family, child, guardian, staff, and lead records using the duplicate matching controls.
-6. Run staging or pilot-environment validation before production import.
+6. Confirm the preparation package has zero unresolved account links.
+7. Run staging or pilot-environment validation before production import.
 
 ### T-2 Director Validation
 
@@ -130,6 +155,7 @@ Send the location a written freeze notice:
 6. Review new, matched, warning, and error counts.
 7. Stop if the import maps rows to the wrong center or creates unexpected duplicate groups.
 8. Confirm database duplicate analysis completed for the entire export. Large exports are reviewed in bounded windows while preserving one full-export family/child/staff identity set; any warning or ambiguous duplicate remains fail-closed.
+9. Confirm the source-coverage manifest lists every expected report and matches the evidence packet.
 
 ### 4. Commit Import
 
@@ -204,6 +230,7 @@ Stop cutover and keep ProCare as source of truth if any of these happen:
 - Import preview maps rows to the wrong center.
 - Critical counts do not reconcile and the director cannot approve the exception.
 - Guardian, child, or family duplicate groups cannot be resolved safely.
+- The preparation package contains any unresolved account link, missing source report, missing authoritative DOB match, or ambiguous unique-name fallback.
 - Kiosk accepts the wrong center, wrong guardian, wrong child, or wrong current attendance state.
 - Billing balances or invoices appear on the wrong family.
 - Parent portal exposes the wrong family.
@@ -280,6 +307,7 @@ Go-live decision: GO / NO-GO
 ## Related Docs
 
 - `docs/PROCARE_FIELD_COVERAGE.md`
+- `docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md`
 - `docs/PROCARE_MIGRATION_EVIDENCE_PACKET_TEMPLATE.md`
 - `docs/KIDCITY_CUTOVER_OWNER_CHECKLIST.md`
 - `docs/SCHOOL_FULL_FEATURE_ROLLOUT_CHECKLIST_2026-06-08.md`

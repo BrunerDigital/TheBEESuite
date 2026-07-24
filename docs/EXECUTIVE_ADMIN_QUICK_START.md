@@ -1,6 +1,6 @@
 # Executive Admin Quick Start
 
-Last updated: June 1, 2026
+Last updated: July 24, 2026
 
 This guide is for Kid City USA corporate/executive users and future brand/franchise administrators.
 
@@ -22,7 +22,8 @@ This guide is for Kid City USA corporate/executive users and future brand/franch
 
 - Use the inquiry/embed tools to copy form code for a brand or location.
 - Confirm each embed uses the correct location ID.
-- After adding an embed, submit a test inquiry and confirm it appears in the correct CRM center.
+- After adding an embed, first verify the public script, location list, routing audit, and approved-origin `OPTIONS` preflight without creating a lead.
+- Submit a synthetic inquiry only when the named test location and email/Google Sheet side effects are separately approved; then confirm it appears only in the correct CRM center.
 - Confirm notification emails and Google Sheet backup are working.
 
 ## FTE Reporting

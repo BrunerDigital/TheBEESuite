@@ -1,12 +1,14 @@
 # Operator Launch Handbook
 
-Last updated: June 8, 2026
+Last updated: July 24, 2026
 
 This is the central operator-facing index for launching and supporting The BEE Suite with Kid City USA and future childcare operators.
 
 ## Core Runbooks
 
 - `docs/PRODUCTION_RELEASE_CHECKLIST.md` - release process before production changes.
+- `docs/RELEASE_NOTES_2026-07-24.md` - exact commit, deployment, verification, and unchanged gates for the July 24 release.
+- `docs/PRODUCTION_READINESS_AUDIT_MATRIX_2026-07-24.md` - current role, feature, workflow, security, and data-integrity status.
 - `docs/SCHOOL_FULL_FEATURE_ROLLOUT_CHECKLIST_2026-06-08.md` - full-feature school rollout tracker covering build gaps, per-school setup, validation, approvals, and go/no-go.
 - `docs/ROLE_SMOKE_TEST_CHECKLIST.md` - role-by-role production smoke testing.
 - `docs/SUPPORT_ESCALATION_GUIDE.md` - support severity, triage, and data safety.
@@ -15,6 +17,7 @@ This is the central operator-facing index for launching and supporting The BEE S
 - `docs/KIDCITY_CRM_CUTOVER.md` - Kid City CRM cutover workflow.
 - `docs/KIDCITY_CUTOVER_OWNER_CHECKLIST.md` - owner-side Kid City cutover actions.
 - `docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md` - per-location final migration sequence for switching off ProCare.
+- `docs/PROCARE_EXPORT_VALIDATION_2026-07-24.md` - current Oakleaf and Canton preparation results and unresolved-link gates.
 - `docs/in-school-testing-runbook.md` - in-school pilot testing.
 
 ## Module Guides
@@ -41,9 +44,9 @@ This is the central operator-facing index for launching and supporting The BEE S
 
 1. Confirm the school exists as a center with correct location ID.
 2. Confirm director/location user account and access scope.
-3. Import or manually create classrooms, staff, families, children, and balances.
+3. Prepare, validate, and separately authorize any import, or manually create classrooms, staff, families, children, and balances. A software release does not authorize a ProCare preview or import.
 4. Validate location-scoped CRM lead visibility.
-5. Configure inquiry embed and submit a test inquiry.
+5. Configure the inquiry embed and verify routing/CORS without a mutation. Submit a synthetic inquiry only when a named test location and provider side effects are separately approved.
 6. Configure FTE reporting access and submit a test weekly report.
 7. Configure kiosk/PIN workflow and test one family check-in/check-out.
 8. Keep payment checkout disabled until Stripe connected account onboarding is complete, and keep parent-paid processing recovery disabled until `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md` is approved for the school.
@@ -57,4 +60,5 @@ This is the central operator-facing index for launching and supporting The BEE S
 - CRM inquiry intake and FTE workflows are live operational priorities.
 - Parent portal, teacher workflows, kiosk, documents, billing, and messaging foundations exist, but full school use is gated by real school data, role-by-role validation, training, and school signoff.
 - Parent payments stay disabled per school until Stripe connected account onboarding, fee disclosures, refund/dispute handling, and legal/accounting approval are complete. Parent-paid processing recovery stays at `$0` until `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true` is approved.
+- The July 24 software release is live and verified, but it did not activate ProCare imports, billing, payments, invitations, communications, kiosk, or any wider-school gate.
 - Do not claim legal/licensing compliance. Use `compliance-ready workflows` and `documentation support`.

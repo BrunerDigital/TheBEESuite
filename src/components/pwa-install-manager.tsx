@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Download, ListChecks, Share2, X } from "lucide-react";
+import { Download, ListChecks, Share2, ShieldAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { securePublicAppUrlForPath } from "@/lib/public-app-url";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -66,6 +67,21 @@ function readStandaloneMode() {
   return window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone === true;
 }
 
+function readSecureInstallState() {
+  const localDevelopmentHost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "[::1]";
+  return {
+    isSecureOrigin: window.location.protocol === "https:" || localDevelopmentHost,
+    secureUrl: securePublicAppUrlForPath(
+      window.location.pathname,
+      window.location.search,
+      window.location.hash,
+    ),
+  };
+}
+
 function readDeviceKind(): DeviceKind {
   const userAgent = window.navigator.userAgent;
   const isIOS = /iPad|iPhone|iPod/.test(userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -88,7 +104,7 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean, context: Instal
   if (deviceKind === "ios") {
     return {
       title: "Add to Home Screen",
-      body: `On iPhone or iPad, open this page in Safari, tap Share, then choose Add to Home Screen for ${context.appName}.`,
+      body: `On iPhone or iPad, first confirm Safari shows thebeesuite.io with a secure connection. Then tap Share and choose Add to Home Screen for ${context.appName}.`,
       button: "Show steps",
       Icon: Share2,
     };
@@ -122,7 +138,13 @@ function installCopy(deviceKind: DeviceKind, canPrompt: boolean, context: Instal
 
 function installSteps(deviceKind: DeviceKind, context: InstallContext) {
   if (deviceKind === "ios") {
-    return ["Open this page in Safari.", "Tap Share.", "Choose Add to Home Screen.", `Confirm the ${context.appName} icon.`];
+    return [
+      "Open this page in Safari.",
+      "Confirm the address begins with https://thebeesuite.io and Safari does not say Not Secure.",
+      "Tap Share.",
+      "Choose Add to Home Screen.",
+      `Confirm the ${context.appName} icon.`,
+    ];
   }
 
   if (deviceKind === "fire") {
@@ -168,6 +190,8 @@ export function PwaInstallManager() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [deviceKind, setDeviceKind] = useState<DeviceKind>("desktop");
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isSecureOrigin, setIsSecureOrigin] = useState(true);
+  const [secureUrl, setSecureUrl] = useState("https://thebeesuite.io/parents");
   const [isDismissed, setIsDismissed] = useState(true);
   const [isPrompting, setIsPrompting] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -182,10 +206,16 @@ export function PwaInstallManager() {
 
   useEffect(() => {
     const syncBrowserState = window.setTimeout(() => {
+      const secureInstallState = readSecureInstallState();
       setDeviceKind(readDeviceKind());
       setIsStandalone(readStandaloneMode());
+      setIsSecureOrigin(secureInstallState.isSecureOrigin);
+      setSecureUrl(secureInstallState.secureUrl);
       setIsDismissed(storageKey ? readDismissed(storageKey) : true);
       setIsReady(true);
+      if (!secureInstallState.isSecureOrigin) {
+        window.location.replace(secureInstallState.secureUrl);
+      }
     }, 0);
 
     const media = window.matchMedia("(display-mode: standalone)");
@@ -247,7 +277,38 @@ export function PwaInstallManager() {
     setIsDismissed(true);
   }
 
-  if (!isReady || !installContext || isStandalone || isDismissed || (!installPrompt && deviceKind === "desktop")) return null;
+  if (!isReady || !installContext || isStandalone) return null;
+
+  if (!isSecureOrigin) {
+    return (
+      <div
+        className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/90 p-4 text-white backdrop-blur-md"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="insecure-install-title"
+      >
+        <div className="flex w-full max-w-lg items-start gap-3 rounded-xl border border-red-300/35 bg-slate-950 p-4 shadow-2xl shadow-black/50 sm:p-5">
+          <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-red-300 text-red-950">
+            <ShieldAlert className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div id="insecure-install-title" className="text-sm font-semibold">Do not install from this page</div>
+            <p className="mt-1 text-sm leading-5 text-slate-300">
+              This connection is not secure. Do not enter a password or add this page to your iPhone Home Screen.
+              Open the official secure BEE Suite address below instead.
+            </p>
+            <Button
+              className="mt-3 h-8 px-3"
+              nativeButton={false}
+              render={<a href={secureUrl}>Open secure BEE Suite</a>}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isDismissed || (!installPrompt && deviceKind === "desktop")) return null;
 
   const copy = installCopy(deviceKind, Boolean(installPrompt), installContext);
   const steps = showManualSteps ? installSteps(deviceKind, installContext) : [];

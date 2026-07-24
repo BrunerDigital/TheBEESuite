@@ -4,6 +4,7 @@ import { ClientErrorReporter } from "@/components/client-error-reporter";
 import { PwaInstallManager } from "@/components/pwa-install-manager";
 import { SubmissionFeedback } from "@/components/submission-feedback";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
@@ -18,11 +19,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(CANONICAL_APP_BASE_URL),
   title: "The BEE Suite",
   applicationName: "The BEE Suite",
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
   manifest: "/manifest.webmanifest",
+  alternates: {
+    canonical: "/",
+  },
   icons: {
     shortcut: [{ url: "/favicon.ico" }],
     icon: [{ url: "/brand/the-bee-suite/favicon.png", sizes: "512x512", type: "image/png" }],

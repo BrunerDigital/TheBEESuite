@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   applicationName: parentApp.appStoreName,
   description: parentApp.description,
   manifest: parentApp.manifestPath,
+  alternates: {
+    canonical: "/parents",
+  },
   icons: {
     apple: [{ url: "/brand/the-bee-suite/app-icon-yellow.png", sizes: "1024x1024", type: "image/png" }],
   },

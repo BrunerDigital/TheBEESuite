@@ -65,6 +65,7 @@ export function buildParentPortalInvitationText({
     "",
     "In the portal you can securely add a bank account for ACH payments, review invoices and payment history, read and send messages, and view reports, incidents, photos, documents, and school updates.",
     "You can use the portal in your browser or add it to your phone's home screen for app-like access.",
+    "For your security, use only an address beginning with https://thebeesuite.io. If Safari says Not Secure, close that page and reopen the secure link above.",
     "The school will never ask you to send your password, bank login, or full card number by email or text.",
   ].join("\n");
 }

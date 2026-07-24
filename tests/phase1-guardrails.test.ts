@@ -399,6 +399,21 @@ test("public parent links never expose Vercel deployment hosts", () => {
     canonicalizePublicUrl("https://the-bee-suite-beta.vercel.app/parent-portal"),
     "https://thebeesuite.io/parent-portal",
   );
+  assert.equal(
+    canonicalizePublicUrl("http://thebeesuite.io/parents"),
+    "https://thebeesuite.io/parents",
+  );
+  assert.equal(
+    canonicalizePublicUrl("https://www.thebeesuite.io/parents"),
+    "https://thebeesuite.io/parents",
+  );
+  assert.equal(
+    buildPublicAppBaseUrl({
+      configuredAppUrl: "http://www.thebeesuite.io",
+      requestUrl: "http://www.thebeesuite.io/api/parent/invitations",
+    }),
+    CANONICAL_APP_BASE_URL,
+  );
 
   assert.equal(
     buildPasswordResetRedirectUrl({
@@ -461,6 +476,8 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.match(text, /last 4 digits of your phone number/);
   assert.match(text, /bank account for ACH payments/);
   assert.match(text, /reports, incidents, photos/);
+  assert.match(text, /use only an address beginning with https:\/\/thebeesuite\.io/);
+  assert.match(text, /Safari says Not Secure/);
   assert.doesNotMatch(text, /vercel\.app/i);
 
   const html = buildParentPortalInvitationHtml({

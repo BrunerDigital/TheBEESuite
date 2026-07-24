@@ -4,9 +4,13 @@ import {
   buildParentLoginSetupUrl,
   PARENT_PORTAL_SETUP_PATH,
 } from "@/lib/parent-portal-invitations";
+import {
+  CANONICAL_APP_BASE_URL,
+  canonicalizePublicUrl,
+} from "@/lib/public-app-url";
 
 type SupabaseAuthKeyPreference = "anon" | "service";
-export const CANONICAL_APP_BASE_URL = "https://thebeesuite.io";
+export { CANONICAL_APP_BASE_URL, canonicalizePublicUrl };
 
 export function cleanSupabaseUrl(value?: string | null) {
   return value?.trim().replace(/\/+$/, "") || "";
@@ -29,31 +33,6 @@ export function hasSupabaseAdminAuthConfig() {
   const url = cleanSupabaseUrl(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   return Boolean(url && serviceKey);
-}
-
-function cleanUrl(value?: string | null) {
-  return value?.trim().replace(/\/+$/, "") || "";
-}
-
-function hasVercelAppHost(hostname: string) {
-  return hostname.toLowerCase() === "vercel.app" || hostname.toLowerCase().endsWith(".vercel.app");
-}
-
-export function canonicalizePublicUrl(value?: string | null) {
-  const cleaned = cleanUrl(value);
-  if (!cleaned) return "";
-
-  try {
-    const url = new URL(cleaned);
-    if (hasVercelAppHost(url.hostname)) {
-      const canonical = new URL(CANONICAL_APP_BASE_URL);
-      url.protocol = canonical.protocol;
-      url.host = canonical.host;
-    }
-    return cleanUrl(url.toString());
-  } catch {
-    return cleaned;
-  }
 }
 
 export function buildPublicAppBaseUrl({

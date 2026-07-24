@@ -1,7 +1,13 @@
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { canonicalPublicRequestRedirectUrl } from "@/lib/public-app-url";
 import { updateSession } from "@/utils/supabase/middleware";
 
 export async function proxy(request: NextRequest) {
+  const canonicalRedirectUrl = canonicalPublicRequestRedirectUrl(request.url);
+  if (canonicalRedirectUrl) {
+    return NextResponse.redirect(canonicalRedirectUrl, 308);
+  }
+
   return updateSession(request);
 }
 

@@ -62,6 +62,18 @@ export function defaultFteWeekEnd(weekStart: Date) {
   return end;
 }
 
+export function fteReminderCoverageWhere(reminderWeekStart: Date) {
+  return {
+    OR: [
+      { weekStart: reminderWeekStart },
+      {
+        weekStart: { lte: reminderWeekStart },
+        weekEnd: { gte: reminderWeekStart },
+      },
+    ],
+  };
+}
+
 function timeZoneOffsetMs(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,

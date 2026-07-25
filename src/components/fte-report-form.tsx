@@ -346,7 +346,10 @@ export function FteReportForm({
         return;
       }
 
-      setStatusMessage(`FTE report saved${json?.report?.centerName ? ` for ${json.report.centerName}` : ""}.`);
+      setStatusMessage(
+        `FTE report saved${json?.report?.centerName ? ` for ${json.report.centerName}` : ""}`
+        + `${json?.report?.weekStart ? ` for the selected week of ${dateInput(json.report.weekStart)}` : ""}.`,
+      );
       const nextCenterId = form.centerId || defaultCenterId;
       setForm(emptyForm(nextCenterId, defaultValuesForCenter(nextCenterId, prefills), centers.find((center) => center.id === nextCenterId)));
       window.setTimeout(() => window.location.reload(), 750);

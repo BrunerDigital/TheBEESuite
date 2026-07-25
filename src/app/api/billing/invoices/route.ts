@@ -91,7 +91,7 @@ async function assertFamilyAccess(user: CurrentBillingUser, familyId: string) {
   return { ok: true as const, family, centerId: family.centerId };
 }
 
-async function resolveCharge(body: Record<string, unknown>): Promise<
+async function resolveCharge(body: Record<string, unknown>, centerId: string): Promise<
   | { ok: true; charge: ChargeResolution }
   | { ok: false; status: number; error: string }
 > {
@@ -118,7 +118,7 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
 
   if (chargeSource === "tuitionPlan" || tuitionPlanId) {
     if (!tuitionPlanId) return { ok: false, status: 400, error: "Tuition plan is required." };
-    const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
+    const plan = await prisma.tuitionPlan.findFirst({ where: { id: tuitionPlanId, centerId } });
     if (!plan) return { ok: false, status: 404, error: "Tuition plan not found." };
     return {
       ok: true,
@@ -153,7 +153,7 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
 
-  const chargeResult = await resolveCharge(body);
+  const chargeResult = await resolveCharge(body, familyAccess.centerId);
   if (!chargeResult.ok) return NextResponse.json({ ok: false, error: chargeResult.error }, { status: chargeResult.status });
 
   const dueDate = parseDate(body.dueDate);
@@ -222,7 +222,7 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
   const centerAccess = await assertCenterAccess(user, clean(body.centerId));
   if (!centerAccess.ok) return NextResponse.json({ ok: false, error: centerAccess.error }, { status: centerAccess.status });
 
-  const chargeResult = await resolveCharge(body);
+  const chargeResult = await resolveCharge(body, centerAccess.center.id);
   if (!chargeResult.ok) return NextResponse.json({ ok: false, error: chargeResult.error }, { status: chargeResult.status });
 
   const charge = chargeResult.charge;

@@ -5768,7 +5768,15 @@ export function WhiteLabelPage({ data }: { data: WhiteLabelPageData }) {
 
 export type BillingSettingsPageData = {
   products: Array<{ id: string; name: string; type: string; amountCents: number }>;
-  tuitionPlans: Array<{ id: string; name: string; ageGroup: string; cadence: string; amountCents: number }>;
+  tuitionPlans: Array<{
+    id: string;
+    centerId: string | null;
+    name: string;
+    ageGroup: string;
+    cadence: string;
+    amountCents: number;
+    center: { id: string; name: string; crmLocationId: string | null } | null;
+  }>;
   subscriptions: Array<{ id: string; name: string; plan: string; status: string }>;
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
@@ -5967,6 +5975,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
               <TableHeader>
                 <TableRow>
                   <TableHead>Plan</TableHead>
+                  <TableHead>School</TableHead>
                   <TableHead>Age group</TableHead>
                   <TableHead>Cadence</TableHead>
                   <TableHead>Amount</TableHead>
@@ -5976,6 +5985,7 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
                 {data.tuitionPlans.map((plan) => (
                   <TableRow key={plan.id}>
                     <TableCell className="font-medium">{plan.name}</TableCell>
+                    <TableCell>{plan.center ? [plan.center.crmLocationId, plan.center.name].filter(Boolean).join(" · ") : "Unassigned legacy rate"}</TableCell>
                     <TableCell>{plan.ageGroup}</TableCell>
                     <TableCell>{plan.cadence}</TableCell>
                     <TableCell>{money(plan.amountCents)}</TableCell>

@@ -506,6 +506,13 @@ async function processPayment(body: Record<string, unknown>) {
 }
 
 async function paymentStatus(body: Record<string, unknown>) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+  if (!canManageBilling(user)) {
+    return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
+  }
   const paymentId = clean(body.paymentId);
   const payment = await prisma.payment.findUnique({
     where: { id: paymentId },

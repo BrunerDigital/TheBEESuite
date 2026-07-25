@@ -91,6 +91,9 @@ async function POSTHandler(request: NextRequest) {
 
   const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+  if (plan.centerId !== access.centerId) {
+    return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+  }
   const cadence = WEEKLY_TUITION_AUTOBILL_CADENCE;
   const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
   const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);

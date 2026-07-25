@@ -91,6 +91,7 @@ async function GETHandler(request: NextRequest) {
 
   const dueChildren = candidateChildren.flatMap((entry) => {
     const plan = plansById.get(entry.planId);
+    if (!plan || plan.centerId !== entry.child.family.centerId) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);

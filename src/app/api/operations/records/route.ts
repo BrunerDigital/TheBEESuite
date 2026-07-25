@@ -1759,7 +1759,23 @@ async function POSTHandler(request: NextRequest) {
     if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Product name and amount are required." }, { status: 400 });
     result = id ? await prisma.product.update({ where: { id }, data }) : await prisma.product.create({ data });
   } else if (entity === "tuitionPlan") {
+    const requestedCenterId = clean(body.centerId);
+    if (!requestedCenterId) {
+      return NextResponse.json({ ok: false, error: "School is required for every tuition plan." }, { status: 400 });
+    }
+    if (!canAccessCenter(user, requestedCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this school's tuition plans." }, { status: 403 });
+    }
+    if (id) {
+      const existing = await prisma.tuitionPlan.findUnique({ where: { id }, select: { centerId: true } });
+      if (!existing) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+      if (existing.centerId && existing.centerId !== requestedCenterId) {
+        return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+      }
+    }
+    centerId = requestedCenterId;
     const data = {
+      centerId: requestedCenterId,
       name: clean(body.name),
       ageGroup: clean(body.ageGroup) || "Preschool",
       cadence: "weekly",

@@ -2997,7 +2997,7 @@ async function renderLivePage(
                 },
               },
               payments: {
-                where: { provider: "stripe", status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                where: { provider: { in: ["stripe", "stripe_terminal"] }, status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
                 orderBy: [{ paidAt: "desc" }, { id: "desc" }],
                 take: 20,
                 select: {
@@ -3020,7 +3020,11 @@ async function renderLivePage(
         },
       }),
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], take: 100 }),
-      prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { name: "asc" }], take: 100 }),
+      prisma.tuitionPlan.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
+        take: 500,
+      }),
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
@@ -3182,7 +3186,9 @@ async function renderLivePage(
               }),
             })),
             products: billingProducts,
-            tuitionPlans,
+            tuitionPlans: tuitionPlans.filter(
+              (plan): plan is typeof plan & { centerId: string } => Boolean(plan.centerId),
+            ),
           },
           invoices: invoices.map((invoice) => ({
             id: invoice.id,
@@ -3815,7 +3821,11 @@ async function renderLivePage(
   if (slug === "billing-settings") {
     const [products, tuitionPlans, subscriptions, billingCenters] = await Promise.all([
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
-      prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { amountCents: "asc" }] }),
+      prisma.tuitionPlan.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { amountCents: "asc" }],
+        include: { center: { select: { id: true, name: true, crmLocationId: true } } },
+      }),
       prisma.subscriptionPlaceholder.findMany({ orderBy: [{ status: "asc" }, { name: "asc" }] }),
       prisma.center.findMany({
         where: getLeadScopeWhere(user),

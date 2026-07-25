@@ -114,6 +114,7 @@ export type BillingWorkbenchProduct = {
 
 export type BillingWorkbenchTuitionPlan = {
   id: string;
+  centerId: string;
   name: string;
   ageGroup: string;
   cadence: string;
@@ -277,10 +278,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const initialCenter = initialCenterId && centers.some((center) => center.id === initialCenterId)
     ? initialCenterId
     : initialFamily?.centerId ?? centers[0]?.id ?? "";
+  const initialLocationTuitionPlans = tuitionPlans.filter((plan) => plan.centerId === initialCenter);
   const [centerId, setCenterId] = useState(initialCenter);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
-  const [tuitionPlanId, setTuitionPlanId] = useState(tuitionPlans[0]?.id ?? "");
+  const [tuitionPlanId, setTuitionPlanId] = useState(initialLocationTuitionPlans[0]?.id ?? "");
   const uniformShirtProduct = products.find((product) => product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE) ?? null;
   const [productId, setProductId] = useState(uniformShirtProduct?.id ?? products[0]?.id ?? "");
   const [productQuantity, setProductQuantity] = useState("1");
@@ -321,10 +323,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
-  const [planEditorId, setPlanEditorId] = useState(tuitionPlans[0]?.id ?? "new");
-  const [planName, setPlanName] = useState(tuitionPlans[0]?.name ?? "");
-  const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
+  const [planEditorId, setPlanEditorId] = useState(initialLocationTuitionPlans[0]?.id ?? "new");
+  const [planName, setPlanName] = useState(initialLocationTuitionPlans[0]?.name ?? "");
+  const [planAgeGroup, setPlanAgeGroup] = useState(initialLocationTuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
+  const [planAmountDollars, setPlanAmountDollars] = useState(initialLocationTuitionPlans[0] ? String(initialLocationTuitionPlans[0].amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
@@ -337,13 +339,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     () => families.filter((family) => !centerId || family.centerId === centerId),
     [centerId, families],
   );
+  const locationTuitionPlans = useMemo(
+    () => tuitionPlans.filter((plan) => plan.centerId === centerId),
+    [centerId, tuitionPlans],
+  );
   const effectiveFamilyId = familyId && filteredFamilies.some((family) => family.id === familyId)
     ? familyId
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
   const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
-  const selectedPlan = tuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
+  const selectedPlan = locationTuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
   const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
@@ -358,7 +364,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
     0,
   );
-  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
+  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || locationTuitionPlans[0]?.id || "";
   const effectiveAssignmentCadence = "weekly";
   const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
@@ -374,11 +380,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const ageGroups = useMemo(
     () => mergeAgeGroupOptions(
       selectedCenter?.dashboardOptions?.ageGroups,
-      tuitionPlans.map((plan) => plan.ageGroup),
+      locationTuitionPlans.map((plan) => plan.ageGroup),
       families.flatMap((family) => family.children.map((child) => child.ageGroup)),
       planAgeGroup,
     ),
-    [families, planAgeGroup, selectedCenter, tuitionPlans],
+    [families, locationTuitionPlans, planAgeGroup, selectedCenter],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
@@ -693,6 +699,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
 
   function handleCenterChange(value: string | null) {
     if (!value) return;
+    const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
     setCenterId(value);
     setFamilyId("");
     setChildId("none");
@@ -702,6 +709,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    setTuitionPlanId(nextPlans[0]?.id ?? "");
+    setAssignmentTuitionPlanId("");
+    setPlanEditorId(nextPlans[0]?.id ?? "new");
+    setPlanName(nextPlans[0]?.name ?? "");
+    setPlanAgeGroup(nextPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
+    setPlanAmountDollars(nextPlans[0] ? String(nextPlans[0].amountCents / 100) : "");
   }
 
   function handleFamilyChange(value: string | null) {
@@ -719,7 +732,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   function handleTuitionPlanChange(value: string | null) {
     if (!value) return;
     setTuitionPlanId(value);
-    const nextPlan = tuitionPlans.find((plan) => plan.id === value);
+    const nextPlan = locationTuitionPlans.find((plan) => plan.id === value);
     if (nextPlan) setAgeGroup(nextPlan.ageGroup || "all");
   }
 
@@ -960,7 +973,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     const child = selectedChildren.find((item) => item.id === value);
     const assignment = child?.tuitionAssignment;
     setAssignmentChildId(value);
-    setAssignmentTuitionPlanId(assignment?.tuitionPlanId || tuitionPlans[0]?.id || "");
+    setAssignmentTuitionPlanId(assignment?.tuitionPlanId || locationTuitionPlans[0]?.id || "");
     setAssignmentStartPeriod(
       assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
         ? assignment.startsPeriod
@@ -1017,7 +1030,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       setPlanAmountDollars("");
       return;
     }
-    const plan = tuitionPlans.find((item) => item.id === value);
+    const plan = locationTuitionPlans.find((item) => item.id === value);
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
@@ -1037,6 +1050,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         body: JSON.stringify({
           entity: "tuitionPlan",
           id: planEditorId === "new" ? undefined : planEditorId,
+          centerId,
           name: planName,
           ageGroup: planAgeGroup,
           cadence: "weekly",
@@ -1465,7 +1479,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <SelectTrigger><SelectValue placeholder="New or existing rate" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New tuition rate</SelectItem>
-                  {tuitionPlans.map((plan) => (
+                  {locationTuitionPlans.map((plan) => (
                     <SelectItem key={plan.id} value={plan.id}>
                       {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                     </SelectItem>
@@ -1524,7 +1538,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
               products={products}
-              tuitionPlans={tuitionPlans}
+              tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
@@ -1619,7 +1633,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
               products={products}
-              tuitionPlans={tuitionPlans}
+              tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
@@ -1701,7 +1715,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <Select value={effectiveAssignmentPlanId} onValueChange={handleAssignmentPlanChange}>
                   <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
                   <SelectContent>
-                    {tuitionPlans.map((plan) => (
+                    {locationTuitionPlans.map((plan) => (
                       <SelectItem key={plan.id} value={plan.id}>
                         {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                       </SelectItem>

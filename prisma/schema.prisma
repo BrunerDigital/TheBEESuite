@@ -168,6 +168,7 @@ model Center {
   emergencyDrillLogs       EmergencyDrillLog[]
   complianceTasks          ComplianceTask[]
   dataDeletionRequests     DataDeletionRequest[]
+  tuitionPlans             TuitionPlan[]
 
   @@index([crmLocationId])
   @@index([locationId])
@@ -1287,10 +1288,15 @@ model Product {
 
 model TuitionPlan {
   id          String @id @default(cuid())
+  centerId    String?
   name        String
   ageGroup    String
   cadence     String
   amountCents Int
+
+  center Center? @relation(fields: [centerId], references: [id])
+
+  @@index([centerId, ageGroup, name])
 }
 
 model SubscriptionPlaceholder {

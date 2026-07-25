@@ -1001,7 +1001,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       }
       setStatusMessage(
         assignmentEnabled === "true"
-          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Friday autobill is scheduled for the following week.`
+          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Thursday autobill is scheduled for the following week.`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
     });
@@ -1441,7 +1441,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div>
               <div className="text-sm font-medium">Tuition rate setup</div>
               <p className="text-xs text-muted-foreground">
-                School users can add or edit weekly rates here. Assigned tuition autobills every Friday for the following week when the family has a saved payment method.
+                School users can add or edit weekly rates here. Assigned tuition autobills every Thursday for the following week when the family has autopay enabled and a saved default payment method.
               </p>
             </div>
             <Badge variant="outline">School-managed rates</Badge>
@@ -1697,7 +1697,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   </SelectContent>
                 </Select>
               </div>
-              <DisplayValue label="Autobill weekday" value="Friday" detail="Runs automatically" />
+              <DisplayValue label="Autobill weekday" value="Thursday" detail="Runs automatically" />
               <div className="space-y-1">
                 <Label>Start week</Label>
                 <Input
@@ -1731,7 +1731,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tuition assignments create a Friday invoice for the following week and the daily autopay run charges families with saved methods as soon as the invoice is due. Charge now posts the selected rate immediately to the family balance and parent portal.
+              Tuition assignments create a Thursday invoice for the following week. The Thursday autopay run charges the assigned tuition amount only when the family has autopay enabled and a saved default payment method. Charge now posts the selected rate immediately to the family balance and parent portal.
             </p>
           </TabsContent>
 

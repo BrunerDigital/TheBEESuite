@@ -9,6 +9,8 @@ import {
   recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
   utcBillingWeekday,
+  WEEKLY_TUITION_AUTOBILL_DAY,
+  weeklyTuitionChargeDateForPeriod,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
 
@@ -92,7 +94,9 @@ async function GETHandler(request: NextRequest) {
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
     const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
-    const billingDay = normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
+    const billingDay = cadence === "weekly"
+      ? WEEKLY_TUITION_AUTOBILL_DAY
+      : normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
     const currentDay = cadence === "weekly" ? currentWeeklyDay : currentMonthlyDay;
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
@@ -122,7 +126,9 @@ async function GETHandler(request: NextRequest) {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
         const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
-        const dueDate = recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
+        const dueDate = entry.cadence === "weekly"
+          ? weeklyTuitionChargeDateForPeriod(entry.billingPeriod)
+          : recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
         const dedupeKey = billingDedupeKey({
           familyId: entry.child.familyId,
           chargeSource: "tuitionPlan",
@@ -141,6 +147,7 @@ async function GETHandler(request: NextRequest) {
             mode: "recurring",
             billingPeriod: entry.billingPeriod,
             billingCadence: entry.cadence,
+            scheduledChargeDate: dueDate.toISOString(),
             centerId: entry.child.family.centerId,
             childId: entry.child.id,
             childName: entry.child.fullName,

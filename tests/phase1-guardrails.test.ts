@@ -474,7 +474,7 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.match(text, /First-login password: BusyBees/);
   assert.match(text, /can keep this password or choose a private password anytime/);
   assert.match(text, /last 4 digits of your phone number/);
-  assert.match(text, /bank account for ACH payments/);
+  assert.match(text, /pay by debit\/credit card or bank account/);
   assert.match(text, /reports, incidents, photos/);
   assert.match(text, /use only an address beginning with https:\/\/thebeesuite\.io/);
   assert.match(text, /Safari says Not Secure/);

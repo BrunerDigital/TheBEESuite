@@ -39,7 +39,7 @@ function requestBaseUrl(request: NextRequest) {
 function paymentMethodCategoryFrom(value: unknown): StripePaymentMethodCategory {
   const normalized = clean(value).toLowerCase();
   if (normalized === "ach" || normalized === "card" || normalized === "link_bank") return normalized;
-  return "ach";
+  return "card";
 }
 
 async function POSTHandler(request: NextRequest) {

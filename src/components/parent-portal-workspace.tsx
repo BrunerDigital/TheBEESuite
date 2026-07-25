@@ -1313,7 +1313,7 @@ export function ParentPortalWorkspace({
                   <div className="flex items-center gap-2 font-medium">
                     Payment Methods And Autopay
                     <InfoTip label="About payment methods and autopay">
-                      Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block bank verification.
+                      Save a debit/credit card or bank account if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block payment-method setup.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -1325,13 +1325,13 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")}>
-                    <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
                     <CreditCard data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Card" : "Set Up Card Autopay"}
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                    <Building2 data-icon="inline-start" />
+                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -1362,17 +1362,17 @@ export function ParentPortalWorkspace({
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")}>
+                      <CreditCard data-icon="inline-start" />
+                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    </Button>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
-                      <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -1510,13 +1510,13 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("link_bank")}>
-                    <Building2 data-icon="inline-start" />
-                    Buy With Instant Bank
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("card")}>
                     <CreditCard data-icon="inline-start" />
                     Buy With Card
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("link_bank")} variant="outline">
+                    <Building2 data-icon="inline-start" />
+                    Buy With Instant Bank
                   </Button>
                 </div>
               </div>
@@ -1536,22 +1536,21 @@ export function ParentPortalWorkspace({
                   </Badge>
                   <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "link_bank")}>
+                    <Button
+                      className="w-full sm:w-auto"
+                      disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment}
+                      onClick={() => payInvoice(invoice.id, "card")}
+                    >
+                      <CreditCard data-icon="inline-start" />
+                      Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    </Button>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment}
-                      onClick={() => payInvoice(invoice.id, "card")}
-                      variant="outline"
-                    >
-                      <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                   {invoice.pendingPayment ? (

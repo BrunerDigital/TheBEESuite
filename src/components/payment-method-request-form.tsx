@@ -234,14 +234,20 @@ export function PaymentMethodRequestForm({
 
         <div className="grid gap-2 sm:grid-cols-2">
           <Button
-            className={focus === "instant-bank" ? "h-11 bg-sky-500 text-white hover:bg-sky-400" : "h-11"}
+            className={focus === "instant-bank" ? "order-1 h-11 bg-sky-500 text-white hover:bg-sky-400" : "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10"}
             disabled={isPending}
             onClick={() => startSetup("link_bank")}
+            variant={focus === "instant-bank" ? "default" : "outline"}
           >
             <Building2 data-icon="inline-start" />
             Verify Bank Instantly
           </Button>
-          <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startSetup("card")}>
+          <Button
+            className={focus === "instant-bank" ? "order-2 h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" : "order-1 h-11"}
+            disabled={isPending}
+            onClick={() => startSetup("card")}
+            variant={focus === "instant-bank" ? "outline" : "default"}
+          >
             <CreditCard data-icon="inline-start" />
             Save Debit/Credit Card
           </Button>
@@ -261,15 +267,15 @@ export function PaymentMethodRequestForm({
               </Badge>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <Button className="h-11" disabled={isPending} onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
-                <Building2 data-icon="inline-start" />
-                <span className="sm:hidden">Bank Login</span>
-                <span className="hidden sm:inline">Pay With Instant Bank Login</span>
-              </Button>
-              <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "card")}>
+              <Button className="h-11" disabled={isPending} onClick={() => startPayment(nextOpenInvoice.id, "card")}>
                 <CreditCard data-icon="inline-start" />
                 <span className="sm:hidden">Debit/Credit</span>
                 <span className="hidden sm:inline">Pay With Debit/Credit Card</span>
+              </Button>
+              <Button className="h-11 border-white/15 bg-white/5 text-white hover:bg-white/10" disabled={isPending} variant="outline" onClick={() => startPayment(nextOpenInvoice.id, "link_bank")}>
+                <Building2 data-icon="inline-start" />
+                <span className="sm:hidden">Bank Login</span>
+                <span className="hidden sm:inline">Pay With Instant Bank Login</span>
               </Button>
             </div>
             {openInvoices.length > 1 ? (

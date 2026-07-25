@@ -54,6 +54,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
+import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
@@ -3503,7 +3504,14 @@ async function renderLivePage(
     const aiDayStart = new Date();
     aiDayStart.setHours(0, 0, 0, 0);
     const [summaries, suggestions, aiLeads, aiFamilies, unreadMessages, openInvoices, overdueInvoices, pendingIncidents, upcomingTours, aiCheckLogs, aiStaff, classroomCapacity, openComplianceTasks, overdueInvoiceTotal] = await Promise.all([
-      prisma.aiSummary.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
+      prisma.aiSummary.findMany({
+        where: aiSummaryWhereForViewer({
+          hasTenantWideAccess: tenantWide,
+          visibleCenterIds,
+        }),
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
       prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.lead.findMany({
         where: leadWhere,

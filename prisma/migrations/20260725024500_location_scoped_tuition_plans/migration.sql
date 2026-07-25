@@ -36,6 +36,41 @@ FROM "ScopedPlanCenters" pc
 WHERE tp."id" = pc."planId"
   AND pc."centerCount" = 1;
 
+-- Unassigned legacy plans retain the school recorded when the plan was
+-- created. This is more reliable than plan-name guessing and preserves the
+-- original location even if another school later edited a globally visible
+-- record.
+WITH "CreatedPlanCenters" AS (
+  SELECT DISTINCT ON (a."resourceId")
+    a."resourceId" AS "planId",
+    a."centerId"
+  FROM "AuditLog" a
+  WHERE a."action" = 'operations.tuitionPlan.created'
+    AND a."centerId" IS NOT NULL
+  ORDER BY a."resourceId", a."createdAt" ASC
+),
+"MultiCenterPlans" AS (
+  SELECT
+    c."customFields"->>'tuitionPlanId' AS "planId"
+  FROM "Child" c
+  JOIN "Family" f
+    ON f."id" = c."familyId"
+  WHERE f."centerId" IS NOT NULL
+    AND c."customFields"->>'tuitionPlanId' IS NOT NULL
+  GROUP BY c."customFields"->>'tuitionPlanId'
+  HAVING COUNT(DISTINCT f."centerId") > 1
+)
+UPDATE "TuitionPlan" tp
+SET "centerId" = cpc."centerId"
+FROM "CreatedPlanCenters" cpc
+WHERE tp."id" = cpc."planId"
+  AND tp."centerId" IS NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM "MultiCenterPlans" mcp
+    WHERE mcp."planId" = tp."id"
+  );
+
 WITH "PlanCenters" AS (
   SELECT DISTINCT
     tp."id" AS "planId",
@@ -108,35 +143,26 @@ WHERE f."id" = c."familyId"
   AND f."centerId" = sp."centerId"
   AND c."customFields"->>'tuitionPlanId' = sp."planId";
 
-WITH "PlanCenters" AS (
-  SELECT DISTINCT
-    tp."id" AS "planId",
-    f."centerId"
-  FROM "TuitionPlan" tp
-  JOIN "Child" c
-    ON c."customFields"->>'tuitionPlanId' = tp."id"
+WITH "AccountPlans" AS (
+  SELECT
+    ba."id" AS "billingAccountId",
+    'loc_' || SUBSTRING(
+      MD5((ba."customFields"->>'tuitionAutobillPlanId') || ':' || f."centerId"),
+      1,
+      24
+    ) AS "newPlanId"
+  FROM "BillingAccount" ba
   JOIN "Family" f
-    ON f."id" = c."familyId"
+    ON f."id" = ba."familyId"
   WHERE f."centerId" IS NOT NULL
-),
-"ScopedPlanCenters" AS (
-  SELECT
-    pc."planId",
-    pc."centerId",
-    COUNT(*) OVER (PARTITION BY pc."planId") AS "centerCount"
-  FROM "PlanCenters" pc
-),
-"SharedPlans" AS (
-  SELECT
-    pc."planId",
-    pc."centerId",
-    'loc_' || SUBSTRING(MD5(pc."planId" || ':' || pc."centerId"), 1, 24) AS "newPlanId"
-  FROM "ScopedPlanCenters" pc
-  WHERE pc."centerCount" > 1
+    AND ba."customFields"->>'tuitionAutobillPlanId' IS NOT NULL
 )
 UPDATE "BillingAccount" ba
-SET "customFields" = JSONB_SET(ba."customFields", '{tuitionAutobillPlanId}', TO_JSONB(sp."newPlanId"), true)
-FROM "Family" f, "SharedPlans" sp
-WHERE f."id" = ba."familyId"
-  AND f."centerId" = sp."centerId"
-  AND ba."customFields"->>'tuitionAutobillPlanId' = sp."planId";
+SET "customFields" = JSONB_SET(ba."customFields", '{tuitionAutobillPlanId}', TO_JSONB(ap."newPlanId"), true)
+FROM "AccountPlans" ap
+WHERE ba."id" = ap."billingAccountId"
+  AND EXISTS (
+    SELECT 1
+    FROM "TuitionPlan" tp
+    WHERE tp."id" = ap."newPlanId"
+  );

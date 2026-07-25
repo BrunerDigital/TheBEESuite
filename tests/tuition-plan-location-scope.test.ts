@@ -13,6 +13,7 @@ test("tuition plans are persisted with a school relationship and indexed by loca
   assert.match(schema, /@@index\(\[centerId, ageGroup, name\]\)/);
   assert.match(migration, /ADD COLUMN "centerId" TEXT/);
   assert.match(migration, /SharedPlans/);
+  assert.match(migration, /operations\.tuitionPlan\.created/);
   assert.match(migration, /JSONB_SET\(c\."customFields", '\{tuitionPlanId\}'/);
 });
 

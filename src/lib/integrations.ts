@@ -70,6 +70,25 @@ export type StripePaymentIntentSnapshot = {
   raw?: unknown;
 };
 
+export type StripeTerminalReaderSnapshot = {
+  id: string;
+  label: string | null;
+  deviceType: string | null;
+  status: string | null;
+  locationId: string | null;
+  actionStatus: string | null;
+  actionFailureCode: string | null;
+  actionFailureMessage: string | null;
+  paymentIntentId: string | null;
+  raw?: unknown;
+};
+
+export type StripeTerminalLocationSnapshot = {
+  id: string;
+  displayName: string | null;
+  raw?: unknown;
+};
+
 export type StripeCheckoutSessionSnapshot = {
   id: string;
   url?: string | null;
@@ -1075,6 +1094,353 @@ export async function createStripeOffSessionPaymentIntent({
     };
   }
 
+  return { ok: true, configured: true, provider: "stripe", id: paymentIntent.id, paymentIntent };
+}
+
+function stripeTerminalReaderSnapshot(value: unknown): StripeTerminalReaderSnapshot | null {
+  const reader = asRecord(value);
+  const id = clean(reader.id);
+  if (!id.startsWith("tmr_")) return null;
+  const location = asRecord(reader.location);
+  const action = asRecord(reader.action);
+  const failure = asRecord(action.failure_message);
+  return {
+    id,
+    label: clean(reader.label) || null,
+    deviceType: clean(reader.device_type) || null,
+    status: clean(reader.status) || null,
+    locationId: clean(location.id || reader.location) || null,
+    actionStatus: clean(action.status) || null,
+    actionFailureCode: clean(action.failure_code) || null,
+    actionFailureMessage: clean(action.failure_message) || clean(failure.message) || null,
+    paymentIntentId: clean(action.payment_intent) || null,
+    raw: value,
+  };
+}
+
+export async function listStripeTerminalReaders({
+  locationId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+}: {
+  locationId?: string | null;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { readers?: StripeTerminalReaderSnapshot[] }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const query = new URLSearchParams({ limit: "100" });
+  const cleanLocationId = clean(locationId);
+  if (cleanLocationId.startsWith("tml_")) query.set("location", cleanLocationId);
+  const response = await fetch(`https://api.stripe.com/v1/terminal/readers?${query}`, {
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { data?: unknown[]; error?: { message?: string } } | null;
+  if (!response.ok) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    readers: (json?.data ?? []).map(stripeTerminalReaderSnapshot).filter((reader): reader is StripeTerminalReaderSnapshot => Boolean(reader)),
+  };
+}
+
+export async function createStripeTerminalLocation({
+  displayName,
+  address,
+  connectedAccountId,
+  tenantId,
+  credentials,
+  idempotencyKey,
+}: {
+  displayName: string;
+  address: { line1: string; city: string; state: string; postalCode: string; country?: string };
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  idempotencyKey?: string | null;
+}): Promise<IntegrationSendResult & { location?: StripeTerminalLocationSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const body = new URLSearchParams({
+    display_name: clean(displayName),
+    "address[line1]": clean(address.line1),
+    "address[city]": clean(address.city),
+    "address[state]": clean(address.state),
+    "address[postal_code]": clean(address.postalCode),
+    "address[country]": clean(address.country) || "US",
+  });
+  const response = await fetch("https://api.stripe.com/v1/terminal/locations", {
+    method: "POST",
+    headers: {
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; display_name?: string; error?: { message?: string } } | null;
+  if (!response.ok || !clean(json?.id).startsWith("tml_")) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: json!.id,
+    location: { id: json!.id!, displayName: clean(json?.display_name) || null, raw: json },
+  };
+}
+
+export async function registerStripeTerminalReader({
+  registrationCode,
+  label,
+  locationId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+  idempotencyKey,
+}: {
+  registrationCode: string;
+  label: string;
+  locationId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  idempotencyKey?: string | null;
+}): Promise<IntegrationSendResult & { reader?: StripeTerminalReaderSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const body = new URLSearchParams({
+    registration_code: clean(registrationCode),
+    label: clean(label),
+    location: clean(locationId),
+  });
+  const response = await fetch("https://api.stripe.com/v1/terminal/readers", {
+    method: "POST",
+    headers: {
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const reader = stripeTerminalReaderSnapshot(json);
+  if (!response.ok || !reader) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", id: reader.id, reader };
+}
+
+export async function retrieveStripeTerminalReader({
+  readerId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+}: {
+  readerId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { reader?: StripeTerminalReaderSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const response = await fetch(`https://api.stripe.com/v1/terminal/readers/${encodeURIComponent(clean(readerId))}`, {
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const reader = stripeTerminalReaderSnapshot(json);
+  if (!response.ok || !reader) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", id: reader.id, reader };
+}
+
+export async function createStripeTerminalPaymentIntent({
+  amountCents,
+  invoiceAmountCents = amountCents,
+  invoiceNumber,
+  centerName,
+  customerEmail,
+  metadata,
+  connectedAccountId,
+  applicationFeeAmountCents = 0,
+  idempotencyKey,
+  tenantId,
+  credentials,
+}: {
+  amountCents: number;
+  invoiceAmountCents?: number;
+  invoiceNumber: string;
+  centerName?: string | null;
+  customerEmail?: string | null;
+  metadata: Record<string, string>;
+  connectedAccountId?: string | null;
+  applicationFeeAmountCents?: number;
+  idempotencyKey?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { paymentIntent?: StripePaymentIntentSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  if (amountCents <= 0 || invoiceAmountCents <= 0) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment amount must be greater than zero." };
+  }
+  const body = new URLSearchParams({
+    amount: String(amountCents),
+    currency: "usd",
+    "payment_method_types[0]": "card_present",
+    capture_method: "automatic",
+    description: `${centerName ? `${centerName} ` : ""}${invoiceNumber} in-person payment`,
+  });
+  if (customerEmail && isEmail(customerEmail)) body.set("receipt_email", customerEmail);
+  if (connectedAccountId && applicationFeeAmountCents > 0) {
+    body.set("application_fee_amount", String(Math.min(applicationFeeAmountCents, amountCents)));
+  }
+  Object.entries({ ...metadata, invoiceAmountCents: String(invoiceAmountCents) }).forEach(([key, value]) => {
+    body.set(`metadata[${key}]`, value);
+  });
+  const response = await fetch("https://api.stripe.com/v1/payment_intents", {
+    method: "POST",
+    headers: {
+      ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; amount?: number; status?: string; error?: { message?: string } } | null;
+  const paymentIntent = clean(json?.id).startsWith("pi_")
+    ? { id: json!.id!, amountCents: json?.amount ?? null, status: clean(json?.status) || null, raw: json }
+    : undefined;
+  if (!response.ok || !paymentIntent) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", id: paymentIntent.id, paymentIntent };
+}
+
+export async function processStripeTerminalPaymentIntent({
+  readerId,
+  paymentIntentId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+  idempotencyKey,
+}: {
+  readerId: string;
+  paymentIntentId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  idempotencyKey?: string | null;
+}): Promise<IntegrationSendResult & { reader?: StripeTerminalReaderSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const body = new URLSearchParams({
+    payment_intent: clean(paymentIntentId),
+    "process_config[enable_customer_cancellation]": "true",
+    "process_config[skip_tipping]": "true",
+  });
+  const response = await fetch(
+    `https://api.stripe.com/v1/terminal/readers/${encodeURIComponent(clean(readerId))}/process_payment_intent`,
+    {
+      method: "POST",
+      headers: {
+        ...connectedStripeHeaders(apiKey, "form", connectedAccountId),
+        ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+      },
+      body,
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  const json = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const reader = stripeTerminalReaderSnapshot(json);
+  if (!response.ok || !reader) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: clean(asRecord(json?.error).message) || `Payment processor returned ${response.status}.`,
+    };
+  }
+  return { ok: true, configured: true, provider: "stripe", id: reader.id, reader };
+}
+
+export async function retrieveStripePaymentIntent({
+  paymentIntentId,
+  connectedAccountId,
+  tenantId,
+  credentials,
+}: {
+  paymentIntentId: string;
+  connectedAccountId?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { paymentIntent?: StripePaymentIntentSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+  const response = await fetch(`https://api.stripe.com/v1/payment_intents/${encodeURIComponent(clean(paymentIntentId))}`, {
+    headers: connectedStripeHeaders(apiKey, "form", connectedAccountId),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; amount?: number; status?: string; error?: { message?: string } } | null;
+  const paymentIntent = clean(json?.id).startsWith("pi_")
+    ? { id: json!.id!, amountCents: json?.amount ?? null, status: clean(json?.status) || null, raw: json }
+    : undefined;
+  if (!response.ok || !paymentIntent) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
   return { ok: true, configured: true, provider: "stripe", id: paymentIntent.id, paymentIntent };
 }
 

@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
 import { STUDENT_UNIFORM_SHIRT_BASE_NAME, STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE, STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT } from "@/lib/uniform-products";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 
 export type BillingWorkbenchFamily = {
   id: string;
@@ -443,7 +444,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   function paymentMethodLabel(method: DirectorPaymentMethod) {
     if (method === "autopay") return "Run autopay";
     if (method === "saved_method") return "Charge saved method";
-    if (method === "card_checkout") return "Open card terminal";
+    if (method === "card_checkout") return "Open phone card checkout";
     if (method === "instant_bank_checkout") return "Instant bank checkout";
     return "ACH bank checkout";
   }
@@ -1288,7 +1289,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <div className="flex items-center gap-2 text-sm font-medium">
                   Director payment terminal
                   <InfoTip label="About director payment actions">
-                    Choose total balance, an open invoice, or a custom amount, then charge a saved method or open the secure phone card terminal.
+                    Choose total balance, an open invoice, or a custom amount, then charge a saved method, use the in-person Stripe reader, or open secure phone checkout.
                   </InfoTip>
                 </div>
               </div>
@@ -1347,12 +1348,23 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   Run Autopay
                 </Button>
               ) : null}
+              {selectedCenter && selectedFamily && selectedBillingAccount ? (
+                <StripeTerminalPayment
+                  centerId={selectedCenter.id}
+                  billingAccountId={selectedBillingAccount.id}
+                  familyId={selectedFamily.id}
+                  invoiceId={selectedPaymentInvoice?.id || null}
+                  amountCents={directorPaymentAmountCents}
+                  description={paymentDescription}
+                  disabled={isPending || !selectedCheckoutReadiness?.canAcceptParentPayments}
+                />
+              ) : null}
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
                 onClick={() => openPaymentReview("card_checkout")}
               >
                 <CreditCard data-icon="inline-start" />
-                Open Card Terminal
+                Phone Card Checkout
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
@@ -1374,7 +1386,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               Payment help
               <InfoTip label="Payment action help" side="right">
-                Use Open Card Terminal when a parent gives card details by phone. The director is sent to a secure processor page, so card numbers are never typed into or stored by The BEE Suite.
+                Use In-Person Card Reader when the parent is at the school. Use Phone Card Checkout when a parent gives card details by phone. In both flows, card numbers are handled by Stripe and never stored by The BEE Suite.
               </InfoTip>
             </div>
           </div>

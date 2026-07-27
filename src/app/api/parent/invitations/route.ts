@@ -6,10 +6,11 @@ import { sendEmail } from "@/lib/integrations";
 import {
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
-  buildParentLoginUrl,
-  PARENT_PORTAL_INVITE_MODE,
+  buildParentLoginSetupUrl,
+  DIRECT_PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readiness";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
@@ -51,7 +52,19 @@ async function POSTHandler(request: NextRequest) {
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
     include: {
-      family: true,
+      family: {
+        include: {
+          children: {
+            select: {
+              id: true,
+              fullName: true,
+              enrollmentStatus: true,
+              sourceSystem: true,
+              externalId: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -104,6 +117,63 @@ async function POSTHandler(request: NextRequest) {
   }
 
   try {
+    const tenantCenters = await prisma.center.findMany({
+      where: { organization: { tenantId: center.organization.tenantId } },
+      select: { id: true },
+    });
+    const matchingEmailGuardians = email
+      ? await prisma.guardian.findMany({
+          where: {
+            email: { equals: email, mode: "insensitive" },
+            family: { centerId: { in: tenantCenters.map((item) => item.id) } },
+          },
+          select: {
+            id: true,
+            familyId: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            sourceSystem: true,
+            externalId: true,
+          },
+        })
+      : [];
+    const relevantImportBatch = await prisma.procareImportBatch.findFirst({
+      where: { rows: { some: { createdFamilyId: guardian.family.id } } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true, summary: true },
+    });
+    const readiness = evaluateParentInvitationReadiness({
+      guardian: {
+        id: guardian.id,
+        familyId: guardian.familyId,
+        fullName: guardian.fullName,
+        email: guardian.email,
+        phone: guardian.phone,
+        sourceSystem: guardian.sourceSystem,
+        externalId: guardian.externalId,
+      },
+      family: {
+        id: guardian.family.id,
+        centerId: guardian.family.centerId,
+        sourceSystem: guardian.family.sourceSystem,
+        externalId: guardian.family.externalId,
+        children: guardian.family.children,
+      },
+      matchingEmailGuardians,
+      relevantImportBatch,
+    });
+    if (!readiness.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Invitation blocked until these records are corrected: ${readiness.blockers.join(" ")}`,
+          readiness,
+        },
+        { status: 409 },
+      );
+    }
+
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
       : null;
@@ -115,10 +185,12 @@ async function POSTHandler(request: NextRequest) {
       guardianId: guardian.id,
       linkedBy: user.email,
       linkedReason: "direct_parent_invitation",
-      resetToInitialPassword: true,
+      resetToInitialPassword: false,
+      inviteMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
     });
     if (!provisioned.ok) {
-      return NextResponse.json({ ok: false, error: provisioned.reason }, { status: provisioned.status ?? 502 });
+      const status = provisioned.status && provisioned.status >= 400 ? provisioned.status : 409;
+      return NextResponse.json({ ok: false, error: provisioned.reason }, { status });
     }
 
     if (defaultPinData) {
@@ -127,7 +199,7 @@ async function POSTHandler(request: NextRequest) {
 
     const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
     const appBaseUrl = getAppBaseUrl(request.url);
-    const loginUrl = buildParentLoginUrl(appBaseUrl);
+    const loginUrl = buildParentLoginSetupUrl(appBaseUrl);
     const branding = resolveWorkspaceBranding({
       tenantName: center.organization.tenant.name,
       tenantSlug: center.organization.tenant.slug,
@@ -140,15 +212,17 @@ async function POSTHandler(request: NextRequest) {
       centerLabel: center.crmLocationId ?? center.name,
       email,
       loginUrl,
+      initialPasswordIssued: provisioned.credentialCreated,
     });
     const invitationHtml = buildParentPortalInvitationHtml({
       guardianName: guardian.fullName,
       centerLabel: center.crmLocationId ?? center.name,
       email,
       loginUrl,
+      initialPasswordIssued: provisioned.credentialCreated,
       branding,
     });
-    const subject = `${center.crmLocationId ?? center.name}: your parent app is ready`;
+    const subject = `${center.crmLocationId ?? center.name}: finish your parent app setup`;
     const manualCopy = buildManualEmailCopy({ to: email, subject, body: invitationText });
     const emailCopy = await sendEmail({
       to: [email],
@@ -183,12 +257,13 @@ async function POSTHandler(request: NextRequest) {
         familyId: guardian.familyId,
         parentUserId: provisioned.userId,
         email,
-        authMode: PARENT_PORTAL_INVITE_MODE,
+        authMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
         credentialCreated: provisioned.credentialCreated,
-        initialPasswordIssued: true,
+        initialPasswordIssued: provisioned.credentialCreated,
         kioskPinDefaultedFromPhone: Boolean(defaultPinData),
         emailBrand: branding.kind,
-        emailCopySent: emailCopy.ok,
+        emailAcceptedByProvider: emailCopy.ok,
+        readinessImportBatchId: readiness.importBatchId,
       },
     });
 
@@ -197,7 +272,7 @@ async function POSTHandler(request: NextRequest) {
         {
           ok: false,
           error: emailCopy.error || "The parent account was linked, but the invitation email could not be sent. Use the manual email copy provided.",
-          auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: false },
+          auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailAccepted: false },
           emailCopy,
           manualCopy,
         },
@@ -213,7 +288,7 @@ async function POSTHandler(request: NextRequest) {
         email: updatedGuardian?.email ?? guardian.email,
         userId: provisioned.userId,
       },
-      auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailSent: true },
+      auth: { created: provisioned.created, credentialCreated: provisioned.credentialCreated, emailAccepted: true },
       emailCopy,
       manualCopy,
     });

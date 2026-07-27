@@ -468,7 +468,9 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.match(text, /First-login password: BusyBees/);
   assert.match(text, /can keep this password or choose a private password anytime/);
   assert.match(text, /last 4 digits of your phone number/);
-  assert.match(text, /pay by debit\/credit card or bank account/);
+  assert.match(text, /Complete these steps in order/);
+  assert.match(text, /Stop and contact the school before continuing if anything is wrong/);
+  assert.match(text, /billing or payment setup only if your school separately tells you/);
   assert.match(text, /reports, incidents, photos/);
   assert.match(text, /use only an address beginning with https:\/\/thebeesuite\.io/);
   assert.match(text, /Safari says Not Secure/);
@@ -487,7 +489,8 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
     },
   });
   assert.match(html, /https:\/\/thebeesuite\.io\/brand\/kid-city-usa\/logo-horizontal\.png/);
-  assert.match(html, /Open the Parent App/);
+  assert.match(html, /Start Parent Setup/);
+  assert.match(html, /Complete these steps in order/);
   assert.match(html, /BusyBees/);
   assert.match(html, /can keep this password or choose a private password anytime/);
 });

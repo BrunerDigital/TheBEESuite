@@ -576,7 +576,7 @@ export function ProcareImportPanel({ centers, allowBulkImport = false }: { cente
     },
     {
       title: "Activation gates",
-      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until separately approved.",
+      detail: "Parent invitations, kiosk/PIN credentials, billing/payment activation, and ProCare retirement stay held off until separately approved. When invitations are approved, each send reruns a fail-closed import and relationship preflight before any account or email change.",
       status: "held",
     },
   ] : [];

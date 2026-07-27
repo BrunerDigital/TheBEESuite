@@ -67,12 +67,14 @@ export function parentPortalLinkedFields({
   linkedBy,
   linkedReason = "default_parent_portal_access",
   registrationApproval = false,
+  inviteMode = PARENT_PORTAL_INVITE_MODE,
 }: {
   customFields: unknown;
   loginEmail: string;
   linkedBy?: string | null;
   linkedReason?: string;
   registrationApproval?: boolean;
+  inviteMode?: string;
 }) {
   const fields = asRecord(customFields);
   const parentPortal = asRecord(fields.parentPortal);
@@ -84,7 +86,7 @@ export function parentPortalLinkedFields({
       accessDisabled: false,
       linkedAt: new Date().toISOString(),
       linkedBy: linkedBy || linkedReason,
-      inviteMode: PARENT_PORTAL_INVITE_MODE,
+      inviteMode,
       loginEmail,
       registrationApproval: registrationApproval || parentPortal.registrationApproval === true,
     },
@@ -97,12 +99,14 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason,
   registrationApproval = false,
   resetToInitialPassword = false,
+  inviteMode = PARENT_PORTAL_INVITE_MODE,
 }: {
   guardianId: string;
   linkedBy?: string | null;
   linkedReason?: string;
   registrationApproval?: boolean;
   resetToInitialPassword?: boolean;
+  inviteMode?: string;
 }): Promise<ParentPortalProvisionResult> {
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
@@ -199,6 +203,7 @@ export async function ensureParentPortalLoginForGuardian({
         linkedBy,
         linkedReason,
         registrationApproval,
+        inviteMode,
       }),
     },
   })));

@@ -40,8 +40,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       }
       setStatusMessage(
         json?.auth?.credentialCreated
-          ? "The branded parent app invitation was sent with the login email, first-login password, kiosk PIN guidance, and portal overview."
-          : "The branded parent app invitation was resent and the first-login password was refreshed.",
+          ? "The provider accepted the parent setup email. It includes the login, first-login password, profile check, kiosk PIN, home-screen, and optional billing steps in order."
+          : "The provider accepted the setup reminder. The parent's current password was preserved; the email includes a forgot-password option if needed.",
       );
     });
   }
@@ -84,8 +84,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email is the login. The invitation explains the BusyBees first-login password, the phone-based kiosk PIN, ACH setup,
-          and the family tools available in the parent portal.
+          Before creating access or contacting the parent, BEE Suite checks the completed ProCare batch, all four source reports,
+          unresolved rows, family-child links, guardian identity, email, and phone. Accepted email is tracked separately from confirmed delivery.
         </p>
         <Button disabled={isPending || !email} onClick={submit} className="w-full">
           <Send data-icon="inline-start" />

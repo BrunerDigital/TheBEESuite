@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   getPasswordResetRedirectUrl,
@@ -51,4 +52,13 @@ test("parent portal invite links fall back to request origin", () => {
     getPasswordResetRedirectUrl("https://pilot.thebeesuite.io/api/auth/forgot-password", PARENT_PORTAL_SETUP_PATH),
     "https://pilot.thebeesuite.io/reset-password?next=%2Fparent-portal%2Fsetup",
   );
+});
+
+test("direct parent invitations preflight ProCare data and preserve existing passwords", () => {
+  const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
+  assert.match(source, /evaluateParentInvitationReadiness/);
+  assert.match(source, /buildParentLoginSetupUrl/);
+  assert.match(source, /resetToInitialPassword:\s*false/);
+  assert.doesNotMatch(source, /resetToInitialPassword:\s*true/);
+  assert.match(source, /provisioned\.status\s*>=\s*400/);
 });

@@ -4,6 +4,10 @@ import {
   PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION,
   PAYMENT_PROCESSING_RECOVERY_LABEL,
 } from "@/lib/payment-disclosures";
+import {
+  invalidPaymentRedirectUrl,
+  isSecurePaymentUrl,
+} from "@/lib/payment-redirect-security";
 import { readStripeConnectAccountId } from "@/lib/stripe-connect-readiness";
 
 export type IntegrationSendResult = {
@@ -749,6 +753,9 @@ export async function createStripeCheckoutSession({
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
+  if (invalidPaymentRedirectUrl(successUrl, cancelUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
+  }
 
   const fallbackPaymentMethodTypes = stripeCheckoutPaymentMethodTypes(paymentMethodCategory);
   type CheckoutPaymentMethodMode = "configuration" | "payment_method_types" | "dynamic";
@@ -850,6 +857,9 @@ export async function createStripeCheckoutSession({
       provider: "stripe",
       error: json?.error?.message || `Payment processor returned ${status}.`,
     };
+  }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
@@ -1861,6 +1871,9 @@ export async function createStripeSetupCheckoutSession({
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
+  if (invalidPaymentRedirectUrl(successUrl, cancelUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
+  }
 
   const paymentMethodConfigurationId = getStripePaymentMethodConfigurationId(paymentMethodCategory);
   const fallbackPaymentMethodTypes = stripeSetupPaymentMethodTypes(paymentMethodCategory);
@@ -1937,6 +1950,9 @@ export async function createStripeSetupCheckoutSession({
       error: json?.error?.message || `Payment processor returned ${status}.`,
     };
   }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
+  }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
 }
@@ -2012,6 +2028,9 @@ export async function createStripeBillingPortalSession({
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
+  if (invalidPaymentRedirectUrl(returnUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
+  }
 
   const body = new URLSearchParams({
     customer: customerId,
@@ -2032,6 +2051,9 @@ export async function createStripeBillingPortalSession({
       provider: "stripe",
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
     };
+  }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure portal URL." };
   }
 
   return { ok: true, configured: true, provider: "stripe", id: json.id, url: json.url };
@@ -2229,6 +2251,9 @@ export async function createStripeAccountLink({
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
+  if (invalidPaymentRedirectUrl(refreshUrl, returnUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
+  }
 
   const response = await fetch("https://api.stripe.com/v2/core/account_links", {
     method: "POST",
@@ -2259,6 +2284,9 @@ export async function createStripeAccountLink({
       provider: "stripe",
       error: json?.error?.message || `Payment processor returned ${response.status}.`,
     };
+  }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure onboarding URL." };
   }
 
   return { ok: true, configured: true, provider: "stripe", id: accountId, url: json.url };

@@ -3,13 +3,13 @@ import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser 
 import { writeAuditLog } from "@/lib/audit";
 import { createStripeAccountLink, readStripeConnectedAccountId } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 function requestBaseUrl(request: NextRequest) {
-  return getAppBaseUrl(request.url);
+  return getSecurePaymentAppBaseUrl(request.url);
 }
 
 function jsonObject(value: unknown): Record<string, unknown> {

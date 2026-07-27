@@ -433,29 +433,23 @@ test("public parent links never expose Vercel deployment hosts", () => {
   );
 });
 
-test("external payment session callbacks use the branded app base URL", () => {
+test("external payment session callbacks use the canonical secure payment URL", () => {
   const externalSessionRoutes = [
     "src/app/api/billing/checkout-session/route.ts",
     "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-request/checkout/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
     "src/app/api/billing/payment-method-request/session/route.ts",
+    "src/app/api/billing/software-payment-method/route.ts",
     "src/app/api/billing/connect/onboard/route.ts",
     "src/app/api/billing/connect/refresh/route.ts",
     "src/app/api/terminal-store/checkout-session/route.ts",
   ];
-  const securePaymentRequestRoutes = new Set([
-    "src/app/api/billing/payment-method-request/checkout/route.ts",
-    "src/app/api/billing/payment-method-request/session/route.ts",
-  ]);
 
   for (const route of externalSessionRoutes) {
     const source = readFileSync(route, "utf8");
-    if (securePaymentRequestRoutes.has(route)) {
-      assert.match(source, /getPaymentMethodRequestAppBaseUrl\(request\.url\)/, `${route} must use the secure payment request app URL helper`);
-    } else {
-      assert.match(source, /getAppBaseUrl\(request\.url\)/, `${route} must use the branded public app URL helper`);
-    }
+    assert.match(source, /getSecurePaymentAppBaseUrl\(request\.url\)/, `${route} must use the canonical secure payment URL helper`);
+    assert.doesNotMatch(source, /getAppBaseUrl\(request\.url\)/, `${route} must not trust a configurable or request-derived payment callback host`);
     assert.doesNotMatch(source, /request\.nextUrl\.origin/, `${route} must not leak deployment preview origins to external providers`);
   }
 });

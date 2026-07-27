@@ -3,9 +3,9 @@ import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createStripeCustomer, createStripeSetupCheckoutSession, type StripePaymentMethodCategory } from "@/lib/integrations";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -51,7 +51,7 @@ async function POSTHandler(request: NextRequest) {
 
   const requested = clean(body.method);
   const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
-  const baseUrl = getAppBaseUrl(request.url);
+  const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const session = await createStripeSetupCheckoutSession({
     customerId,
     paymentMethodCategory,

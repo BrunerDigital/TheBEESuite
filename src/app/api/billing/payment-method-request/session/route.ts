@@ -10,11 +10,11 @@ import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
 import {
   buildPaymentMethodRequestCheckoutBranding,
   buildPublicPaymentBrandAssetUrl,
-  getPaymentMethodRequestAppBaseUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { checkPersistentRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
@@ -33,7 +33,7 @@ function jsonObject(value: unknown): Record<string, unknown> {
 }
 
 function requestBaseUrl(request: NextRequest) {
-  return getPaymentMethodRequestAppBaseUrl(request.url);
+  return getSecurePaymentAppBaseUrl(request.url);
 }
 
 function paymentMethodCategoryFrom(value: unknown): StripePaymentMethodCategory {

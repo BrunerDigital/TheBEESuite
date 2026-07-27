@@ -14,7 +14,7 @@ import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-ma
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ function clean(value: unknown) {
 }
 
 function requestBaseUrl(request: NextRequest) {
-  return getAppBaseUrl(request.url);
+  return getSecurePaymentAppBaseUrl(request.url);
 }
 
 function jsonObject(value: unknown): Record<string, unknown> {

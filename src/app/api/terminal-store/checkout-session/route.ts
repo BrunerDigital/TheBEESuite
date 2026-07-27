@@ -8,7 +8,7 @@ import {
   terminalStoreOrderTotals,
   type TerminalStoreLineItem,
 } from "@/lib/terminal-store";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { withApiLogging } from "@/lib/request-response-logging";
 
 export const runtime = "nodejs";
@@ -18,7 +18,7 @@ function clean(value: unknown) {
 }
 
 function requestBaseUrl(request: NextRequest) {
-  return getAppBaseUrl(request.url);
+  return getSecurePaymentAppBaseUrl(request.url);
 }
 
 function lineItemsFromBody(value: unknown): TerminalStoreLineItem[] {

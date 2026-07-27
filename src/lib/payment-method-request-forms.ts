@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { CANONICAL_APP_BASE_URL, getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 
 export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
@@ -217,18 +217,8 @@ export async function resolvePaymentMethodRequestShortLink(code: unknown, now = 
   return link.token;
 }
 
-function isLocalPaymentRequestHost(value: string) {
-  try {
-    const url = new URL(value);
-    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  } catch {
-    return false;
-  }
-}
-
 export function getPaymentMethodRequestAppBaseUrl(requestUrl?: string) {
-  const appBaseUrl = getAppBaseUrl(requestUrl);
-  return isLocalPaymentRequestHost(appBaseUrl) ? appBaseUrl : CANONICAL_APP_BASE_URL;
+  return getSecurePaymentAppBaseUrl(requestUrl);
 }
 
 export function buildPublicPaymentBrandAssetUrl(appBaseUrl: string, assetPath?: string | null) {

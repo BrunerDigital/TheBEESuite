@@ -2,20 +2,23 @@ from __future__ import annotations
 
 import hashlib
 import html
+import io
 import re
 import shutil
 from pathlib import Path
 
+from PIL import Image as PILImage
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image as RLImage
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_2026-07-24"
+OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_2026-07-27"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
@@ -33,46 +36,20 @@ FILES = [
 ]
 
 STATUS = """
-> TEAM SHARE SNAPSHOT - JULY 24, 2026
+> TEAM SHARE SNAPSHOT - JULY 27, 2026
 >
-> This copy was refreshed after production release `7e64b926`. The release is live and verified, but it did not activate a ProCare import, billing, payments, invitations, communications, kiosk, or a wider school wave. Kokomo may continue its approved normal production use. Confirm the named school and module have a dated GO before treating a workflow as live.
-""".strip()
-
-LATEST = """
-## July 24, 2026 capability addendum
-
-The current application also includes the following role-gated capabilities:
-
-- **Context-aware family editing:** Directors see the current school, family, child, guardian, and billing account while editing and can open the complete profile or selected billing context directly.
-- **Canonical weekly tuition:** The selected child's billing assignment supplies the weekly rate shown across family, child, enrollment, and Billing views. Family totals add active child assignments. A saved payment method is required for automatic collection, not invoice creation.
-- **Survey response protection:** Public survey submissions are active-only, persistently throttled, tenant-validated, atomically audited, and return no prior comments or respondent details.
-- **Safe ProCare preparation:** The preparation command creates an ignored review package, preserves a source-coverage manifest, and refuses to overwrite the source folder. Preparation is never import or cutover approval.
-- **Stable inquiry origins:** Trusted Kid City and BEE Suite production origins remain allowed when operators add configured origins.
-- **Corporate Asset Hub:** Executives can upload approved brand, social, flyer, and training resources. Executives and school directors can search, preview, and securely download files from the private corporate library.
-- **Corporate software invoice:** Authorized Kid City corporate accounting and executive users can review the monthly BEE Suite software invoice, based on active school users, and open the hosted payment flow. This is separate from family tuition billing.
-- **Terminal Store:** Authorized directors and executives can purchase approved readers, docks, hubs, cases, and mounts through a BEE Suite-branded hosted checkout. Hardware pricing, shipping, fulfillment, tax treatment, and support ownership must be approved before broad use.
-- **Family-level refunds:** Billing staff can start with a family-level refund amount and optionally prioritize payment references. The system allocates the amount across eligible refundable Stripe charges. If refundable charges cannot cover the full amount, the remainder must be handled as family credit or an approved manual reimbursement; it cannot be represented as a Stripe refund that did not occur.
-
-These capabilities remain subject to role scope, tenant isolation, audit logging, school-specific readiness, and human approval. AI suggestions remain drafts and never make final safety, medical, custody, legal, billing, refund, or compliance decisions.
+> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
 """.strip()
 
 
-def refresh(text: str, is_complete: bool) -> str:
-    text = re.sub(r"(?im)^(\*\*Documentation snapshot:\*\*|\*\*Updated:\*\*|Last updated:|Updated:)\s*[^\n]+", lambda m: m.group(1) + " July 20, 2026  ", text, count=1)
+def refresh(text: str) -> str:
+    text = re.sub(r"(?im)^(\*\*Documentation snapshot:\*\*|\*\*Updated:\*\*|Last updated:|Updated:)\s*[^\n]+", lambda m: m.group(1) + " July 27, 2026  ", text, count=1)
     lines = text.splitlines()
     insert_at = 1
     while insert_at < len(lines) and (not lines[insert_at].strip() or "updated" in lines[insert_at].lower() or "snapshot" in lines[insert_at].lower() or "purpose" in lines[insert_at].lower() or "audience" in lines[insert_at].lower()):
         insert_at += 1
     lines[insert_at:insert_at] = ["", STATUS, ""]
-    text = "\n".join(lines).strip() + "\n"
-    if is_complete:
-        marker = "\n## 7. "
-        pos = text.find(marker)
-        if pos >= 0:
-            text = text[:pos] + "\n\n" + LATEST + "\n" + text[pos:]
-        else:
-            text += "\n" + LATEST + "\n"
-    return text
+    return "\n".join(lines).strip() + "\n"
 
 
 def bundle_markdown_images(text: str, source: Path) -> str:
@@ -111,22 +88,57 @@ def build_pdf(md: Path, pdf: Path) -> None:
     h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=colors.HexColor("#1F2937"), spaceAfter=12)
     h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#A16207"), spaceBefore=10, spaceAfter=6)
     h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#374151"), spaceBefore=8, spaceAfter=4)
+    caption = ParagraphStyle("Caption", parent=body, fontName="Helvetica-Oblique", fontSize=8, leading=10, textColor=colors.HexColor("#6B7280"), alignment=TA_CENTER, spaceAfter=4)
     quote = ParagraphStyle("Quote", parent=body, backColor=colors.HexColor("#FFF7D6"), borderColor=colors.HexColor("#E0A800"), borderWidth=0.7, borderPadding=8, leftIndent=8, rightIndent=8, spaceBefore=5, spaceAfter=8)
     bullet = ParagraphStyle("Bullet", parent=body, leftIndent=16, firstLineIndent=-9, bulletIndent=6)
     code = ParagraphStyle("Code", parent=body, fontName="Courier", fontSize=7.5, leading=10, backColor=colors.HexColor("#F3F4F6"), borderPadding=6)
     story = []
+    image_buffers: list[io.BytesIO] = []
     lines = md.read_text(encoding="utf-8").splitlines()
     i = 0
     in_code = False
+    skip_code = False
     code_lines = []
     while i < len(lines):
         line = lines[i].rstrip()
         if line.startswith("```"):
             if in_code:
-                story.append(Paragraph(esc("<br/>".join(code_lines)), code)); code_lines = []
+                if not skip_code:
+                    story.append(Paragraph(esc("<br/>".join(code_lines)), code))
+                code_lines = []
+                skip_code = False
+            else:
+                skip_code = line.strip().lower() == "```mermaid"
             in_code = not in_code; i += 1; continue
         if in_code:
             code_lines.append(line); i += 1; continue
+        image_match = re.fullmatch(r"!\[([^\]]*)\]\(([^)]+)\)", line.strip())
+        if image_match:
+            alt, target = image_match.group(1), image_match.group(2).strip()
+            image_path = (md.parent / target).resolve()
+            if image_path.is_file() and image_path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                screenshot_match = re.search(r"(?:iphone|ipad|desktop)", image_path.name, re.IGNORECASE)
+                if screenshot_match:
+                    device = screenshot_match.group(0).lower()
+                    viewport_ratio = {"iphone": 16 / 9, "ipad": 4 / 3, "desktop": 10 / 16}[device]
+                    with PILImage.open(image_path) as source_image:
+                        viewport_height = min(source_image.height, round(source_image.width * viewport_ratio))
+                        viewport_image = source_image.crop((0, 0, source_image.width, viewport_height))
+                        image_buffer = io.BytesIO()
+                        viewport_image.save(image_buffer, format="PNG")
+                        image_buffer.seek(0)
+                    image_buffers.append(image_buffer)
+                    figure = RLImage(image_buffer)
+                else:
+                    figure = RLImage(str(image_path))
+                scale = min((6.95 * inch) / figure.imageWidth, (4.35 * inch) / figure.imageHeight, 1)
+                figure.drawWidth = figure.imageWidth * scale
+                figure.drawHeight = figure.imageHeight * scale
+                story.extend([Paragraph(f"Figure: {esc(alt)}", caption), figure, Spacer(1, 8)])
+            else:
+                story.append(Paragraph(f"[Visual: {esc(alt)}]", body))
+            i += 1
+            continue
         if line.startswith("|") and i + 1 < len(lines) and re.match(r"^\|?\s*:?-+", lines[i + 1]):
             rows = []
             while i < len(lines) and lines[i].lstrip().startswith("|"):
@@ -158,7 +170,7 @@ def build_pdf(md: Path, pdf: Path) -> None:
 
     def footer(canvas, doc):
         canvas.saveState(); canvas.setFont("Helvetica", 8); canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawString(0.7*inch, 0.45*inch, "The BEE Suite - Team Share Copy - July 24, 2026")
+        canvas.drawString(0.7*inch, 0.45*inch, "The BEE Suite - Team Share Copy - July 27, 2026")
         canvas.drawRightString(7.8*inch, 0.45*inch, f"Page {doc.page}"); canvas.restoreState()
 
     doc = SimpleDocTemplate(str(pdf), pagesize=letter, rightMargin=0.7*inch, leftMargin=0.7*inch, topMargin=0.65*inch, bottomMargin=0.7*inch, title=md.stem, author="The BEE Suite")
@@ -173,10 +185,10 @@ def main() -> None:
     for rel in FILES:
         src = ROOT / rel
         dest = OUT / "markdown" / src.name
-        refreshed = refresh(src.read_text(encoding="utf-8"), src.name == "BEE_SUITE_COMPLETE_GUIDE.md")
+        refreshed = refresh(src.read_text(encoding="utf-8"))
         dest.write_text(bundle_markdown_images(refreshed, src), encoding="utf-8")
         build_pdf(dest, OUT / "pdf" / (dest.stem + ".pdf"))
-    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 24, 2026 after verified production release `7e64b926`. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nThe July 24 software release is live and verified. It did not activate ProCare imports, billing, payments, invitations, communications, kiosk, or a wider school wave. Kokomo may continue approved normal production use. Wider-school rollout and each sensitive module remain separately approval-gated. These guides explain the workflows; they do not replace a dated school/module GO decision.\n\n## Privacy of bundled visuals\n\nThe bundled images are existing branded, demo, or stock training assets reviewed for this packet; they do not contain real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
+    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 27, 2026 from repository working-tree behavior reviewed the same day. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nThis packet documents the current repository behavior; it does not claim that every capability is deployed or approved for every school. Setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval remain independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nThe packet embeds nine privacy-safe process diagrams, five screenshot-derived role graphics, and the latest light-mode role screenshots dated July 27, 2026. Warning banners and developer controls are excluded. Teacher guides use iPad and desktop captures, director and executive guides use desktop captures, and parent guides use iPhone, iPad, and desktop captures with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")
 

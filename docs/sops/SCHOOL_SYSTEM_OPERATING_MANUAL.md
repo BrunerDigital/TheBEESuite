@@ -1,6 +1,6 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: July 24, 2026
+Last updated: July 27, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 
@@ -12,9 +12,11 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ## Visual Launch Map
 
-![School launch swimlane](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png)
 
-![Daily user quick start](../../public/brand/the-bee-suite/explainers/bee-suite-daily-user-quick-start-2026-07-01.svg)
+![Director daily operating flow](../../public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27.png)
+
+![Role and device screenshot standard](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/role-device-standards-guide.png)
 
 ## System Map
 
@@ -26,7 +28,7 @@ flowchart LR
   C --> E["Parent portal"]
   C --> F["Billing and payments"]
   D --> G["Daily reports, media, incidents"]
-  E --> H["Messages, documents, ACH, acknowledgements"]
+  E --> H["Messages, documents, card/bank payments, acknowledgements"]
   F --> I["Invoices, autopay, reconciliation"]
   G --> J["Director review and compliance records"]
   I --> J
@@ -63,7 +65,7 @@ Complete these items before using The BEE Suite as the daily system:
 4. Create director, assistant director, teacher, billing/admin, executive, and support users with the least access they need.
 5. Confirm parent guardian emails and family links before sending parent portal access.
 6. Set or confirm kiosk PINs and QR credentials before lobby check-in goes live.
-7. Load tuition plans, assign the correct weekly rate to each child, and validate family totals, fees, discounts, subsidy/copay rules, ledger balances, and open invoices.
+7. Create tuition plans inside the correct school, assign the correct weekly rate to each child, and validate family totals, fees, discounts, subsidy/copay rules, ledger balances, and open invoices.
 8. Complete Stripe connected payout onboarding for the correct school before accepting parent payments.
 9. Approve payment disclosures, ACH/card policy, refund process, dispute process, and support owner.
 10. Test login, dashboard, family record, attendance, daily report, incident, parent portal, billing, document, and kiosk flows using approved test records.
@@ -85,11 +87,11 @@ flowchart TD
 
 | User type | What they need first | Primary daily workflow | Sendable guide |
 | --- | --- | --- | --- |
-| Executive or owner | Multi-location access, admin permissions, launch checklist, payout readiness | Review dashboards, FTE, school setup, integrations, access, and audit logs | `EXECUTIVE_ADMIN_SOP.md` |
+| Executive or owner | Multi-location access, admin permissions, launch checklist, payout readiness | Review dashboards, selected-period FTE, school setup, integrations, access, and audit logs | `EXECUTIVE_ADMIN_SOP.md` |
 | Director or assistant director | Correct school access, families, classrooms, teacher accounts, billing readiness | Run school dashboard, CRM, family records, parent access, classroom oversight, documents, messages, and escalations | `DIRECTOR_SOP.md` |
-| Billing admin | Billing access, ledgers, tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send ACH setup links, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
+| Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
-| Parent or guardian | Guardian email linked to family, default or reset password, parent portal link | Install portal, view updates, message school, review documents, pay by ACH/card, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
+| Parent or guardian | Guardian email linked to family, school-issued first-login password, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
 | Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
@@ -110,7 +112,7 @@ Do not ask parents to pay online until:
 
 - The school's Stripe connected payout account is ready.
 - Webhook reconciliation is configured and tested.
-- ACH, instant-bank, and card options match approved school policy.
+- Debit/credit card, Instant Bank, and One-Time Bank options match approved school policy and show any approved recovery before submission.
 - Parent processing recovery language is approved before card recovery is enabled.
 - Refunds, disputes, failed payments, duplicate payment handling, and support ownership are documented.
 - A billing smoke test passes for the school.
@@ -129,11 +131,9 @@ Software deployment readiness does not open this gate. Billing, live payments, i
 
 Use these visuals in training decks and printed packets:
 
-![User dashboard views](../USER_DASHBOARD_VIEWS_GRAPHIC_2026-06-08.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png)
 
-![Director dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png)
-
-![Parent dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27.png)
 
 ## Support Escalation Packet
 

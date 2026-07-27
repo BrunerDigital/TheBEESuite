@@ -1,12 +1,20 @@
 # Director SOP - The BEE Suite
 
-Last updated: July 24, 2026
+Last updated: July 27, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
 ## Visual Overview
 
-![Director dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png)
+![Director desktop operations guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/director-desktop-operations-guide.png)
+
+## Desktop Screenshots
+
+Director instructions use desktop screenshots because family, billing, staffing, and exception-review work depends on the wider operating context.
+
+![Director daily reports workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/director-desktop-reports-light.png)
+
+![Director billing and invoice workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/director-desktop-billing-light.png)
 
 Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
 
@@ -67,9 +75,9 @@ https://thebeesuite.io/login
 Parent login rules:
 
 - Username/email: the parent's personal email address on the guardian profile.
-- First access: the parent creates a private password from the one-time setup link sent to that email.
-- The setup link expires after one hour and cannot be reused; sending a new setup link revokes the prior unused setup link.
-- If the parent cannot log in, confirm the guardian email is correct and use a fresh setup/recovery link. Never send or request a password.
+- First access: the approved parent invitation includes the secure parent URL, guardian email, and a school-issued first-login password.
+- The parent may keep that password or choose a private password later from Parent Portal settings.
+- If the parent cannot log in, confirm the guardian email and family link, then use the approved resend/reset workflow. Never ask the parent to send a password back to the school.
 
 Director steps:
 
@@ -77,7 +85,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to open the private one-time setup link, create a password, and then use their guardian email at `https://thebeesuite.io/parents`. If the link expires, send a fresh link; never send or request a password.
+5. Tell the parent to use the guardian email and first-login password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.
@@ -91,12 +99,13 @@ Billing users should review the ledger before sending payment instructions.
 3. Confirm the current balance, active per-child weekly tuition, family weekly total, open invoices, credits, and recent payments.
 4. If the family owes money, open the invoice or payment action connected to that balance.
 5. Confirm the payment method offered to parents matches the school policy:
-   - ACH/bank payment is preferred when enabled.
-   - Card payment is optional if enabled.
+   - Debit/credit card is presented first in the current parent flow.
+   - Instant Bank and One-Time Bank remain available when enabled.
    - Any fee or recovery disclosure must be shown before payment.
 6. For failed or pending payments, review the payment status before retrying.
 7. Do not mark an invoice paid manually unless the payment has been verified outside the app.
 8. Do not use `Charge This Child Now` unless an immediate invoice is intended and approved.
+9. Use `In-Person Card Reader` only with a reader assigned to the current school, a parent physically present, and a verified family/account amount.
 
 If Stripe checkout shows an error, capture the family name, invoice number, amount, payment method, time, and screenshot before escalating.
 

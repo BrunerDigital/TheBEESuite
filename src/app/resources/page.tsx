@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -25,7 +26,7 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "SOPs and Step-by-Step Guides | The BEE Suite",
   description:
-    "Public The BEE Suite SOPs, setup guides, parent portal instructions, ACH payment guidance, kiosk workflows, and role-based school operating procedures.",
+    "Current The BEE Suite setup guides, parent portal instructions, card and bank payment guidance, launch gates, kiosk workflows, and role-based operating procedures.",
 };
 
 type ResourceGuide = {
@@ -33,12 +34,20 @@ type ResourceGuide = {
   audience: string;
   title: string;
   summary: string;
+  graphicSrc: string;
+  graphicAlt: string;
   icon: LucideIcon;
   steps: string[];
   visual: Array<{
     label: string;
     detail: string;
     icon: LucideIcon;
+  }>;
+  screenshots?: Array<{
+    src: string;
+    alt: string;
+    label: string;
+    device: "iPhone" | "iPad" | "Desktop";
   }>;
 };
 
@@ -48,13 +57,36 @@ const guides: ResourceGuide[] = [
     audience: "Parents and guardians",
     title: "Install the BEE Suite Parent Portal",
     summary: "Add the parent portal to an iPhone, iPad, Android phone, Fire tablet, or desktop browser.",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png",
+    graphicAlt: "Current six-step parent access and installation flow for The BEE Suite",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-overview-light.png",
+        alt: "Parent portal overview shown at an iPhone viewport",
+        label: "Parent portal overview",
+        device: "iPhone",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-ipad-overview-light.png",
+        alt: "Parent portal overview shown at an iPad viewport",
+        label: "Parent portal on a tablet",
+        device: "iPad",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-desktop-overview-light.png",
+        alt: "Parent portal overview shown at a desktop viewport",
+        label: "Parent portal on desktop",
+        device: "Desktop",
+      },
+    ],
     icon: Smartphone,
     steps: [
-      "Open the link your school gave you, or go to the public parent login page.",
-      "Sign in with the email your school has on file.",
-      "On iPhone or iPad, open the Share menu in Safari and choose Add to Home Screen.",
-      "On Android or Fire tablets, open the browser menu in Chrome or Silk and choose Install app or Add to Home screen.",
-      "Name the shortcut The BEE Suite, save it, then open the new icon and confirm you are still signed in.",
+      "Open https://thebeesuite.io/parents and confirm the address starts with https://thebeesuite.io. In Safari, stop if the address bar says Not Secure.",
+      "Sign in with the guardian email and school-issued first-login password from the approved invitation.",
+      "Confirm the correct family and child records before continuing.",
+      "On iPhone or iPad, use Safari Share > Add to Home Screen. On Android or Fire, use the Chrome or Silk menu > Install app or Add to Home screen.",
+      "Open the new BEE Suite icon and sign in again if the device asks.",
+      "Keep the issued password or change it later in Settings. Use password recovery if it is lost; never share or forward invitation credentials.",
     ],
     visual: [
       { label: "Open", detail: "Use Safari, Chrome, or Silk", icon: MonitorSmartphone },
@@ -63,23 +95,33 @@ const guides: ResourceGuide[] = [
     ],
   },
   {
-    id: "ach-payments",
+    id: "payments",
     audience: "Parents and guardians",
-    title: "Verify ACH and Avoid Card Processing Fees",
-    summary: "Use a verified bank account for tuition payments when your school supports ACH.",
+    title: "Card, Bank, and Autopay Payments",
+    summary: "Save a card or bank securely, choose a payment option, and review the exact total before submitting.",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png",
+    graphicAlt: "Current parent card, bank, invoice, and autopay payment choices",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-billing-light.png",
+        alt: "Parent billing and payment options shown at an iPhone viewport",
+        label: "Billing and payment options",
+        device: "iPhone",
+      },
+    ],
     icon: Landmark,
     steps: [
-      "Open the parent portal and go to Billing or Payments.",
-      "Choose Add bank account or ACH as the payment method.",
-      "Enter the requested bank details only inside the secure payment screen.",
-      "Complete instant verification or confirm the micro-deposits when they appear in your bank account.",
-      "Set the verified bank account as the preferred payment method before paying an invoice or enabling autopay.",
-      "Review the checkout screen before submitting payment. Card payments may include card processing fees when charged by the processor or school policy.",
+      "Open Billing or Payment Settings and confirm the correct family and invoice.",
+      "Choose Save Debit/Credit Card to save a card, or Verify Bank Instantly to save a bank.",
+      "For an open invoice, choose Debit/Credit Card, Instant Bank, or One-Time Bank.",
+      "Enter card or bank details only inside the secure Stripe payment screen.",
+      "Review the exact total, processing recovery when shown, and payment disclosure before submitting.",
+      "Wait for the confirmation and current status. Do not repeat a pending bank payment or setup attempt.",
     ],
     visual: [
-      { label: "Add ACH", detail: "Start from Billing", icon: CreditCard },
-      { label: "Verify", detail: "Instant check or deposits", icon: ShieldCheck },
-      { label: "Pay", detail: "Use bank account at checkout", icon: CheckCircle2 },
+      { label: "Choose", detail: "Card first; bank remains available", icon: CreditCard },
+      { label: "Secure", detail: "Enter details only in Stripe", icon: ShieldCheck },
+      { label: "Confirm", detail: "Review total and payment status", icon: CheckCircle2 },
     ],
   },
   {
@@ -87,6 +129,28 @@ const guides: ResourceGuide[] = [
     audience: "Parents and guardians",
     title: "Parent Portal Daily Use",
     summary: "Check child updates, messages, photos, documents, invoices, payment methods, and school notices.",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/parent-multidevice-portal-guide.png",
+    graphicAlt: "Current parent portal guide led by iPhone with daily report and billing examples",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-daily-reports-light.png",
+        alt: "Parent daily reports shown at an iPhone viewport",
+        label: "Daily reports",
+        device: "iPhone",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-activities-light.png",
+        alt: "Parent classroom activities shown at an iPhone viewport",
+        label: "Classroom activities",
+        device: "iPhone",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-overview-light.png",
+        alt: "Parent family portal overview shown at an iPhone viewport",
+        label: "Family overview",
+        device: "iPhone",
+      },
+    ],
     icon: UsersRound,
     steps: [
       "Log in from the installed app or parent login page.",
@@ -106,14 +170,16 @@ const guides: ResourceGuide[] = [
     audience: "School owners and executives",
     title: "School System Operating Manual",
     summary: "Launch The BEE Suite as the school system of record across roles, campuses, and daily workflows.",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png",
+    graphicAlt: "Current independent school launch gates and stop conditions",
     icon: Building2,
     steps: [
-      "Confirm school profile, locations, programs, rooms, tuition rules, billing cadence, staff roles, and family records.",
-      "Invite executives, directors, billing admins, teachers, and families with the right role and location access.",
-      "Train directors on enrollment, billing readiness, compliance records, attendance, staffing, and reporting.",
-      "Train teachers on attendance, reports, incidents, media uploads, messaging, and classroom device rules.",
-      "Train families on parent portal installation, ACH verification, payments, documents, and school escalation rules.",
-      "Review launch reports daily during rollout, then weekly after workflows stabilize.",
+      "Approve the school profile, rooms, staff roles, family records, tuition rules, billing cadence, and source-data reconciliation.",
+      "Test real role and school isolation for executives, directors, billing admins, teachers, parents, and kiosk users.",
+      "Keep setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval as independent dated gates.",
+      "Train directors, teachers, billing staff, and families only on features approved for that school.",
+      "Keep ProCare as the source of record until reconciliation, ownership, and the signed cutover decision are complete.",
+      "A HELD OFF gate is not a PASS. Record each GO or NO-GO and its owner; stop the affected flow when evidence is missing.",
     ],
     visual: [
       { label: "Configure", detail: "Schools, roles, billing", icon: ClipboardCheck },
@@ -126,12 +192,29 @@ const guides: ResourceGuide[] = [
     audience: "Executives and owners",
     title: "Executive Admin SOP",
     summary: "Monitor multi-location operations, access controls, staffing signals, financial readiness, and reporting.",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/executive-desktop-oversight-guide.png",
+    graphicAlt: "Current executive desktop administration and FTE oversight guide",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-admin-light.png",
+        alt: "Executive administration workspace shown at a desktop viewport",
+        label: "Executive administration",
+        device: "Desktop",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-fte-light.png",
+        alt: "Executive FTE reporting workspace shown at a desktop viewport",
+        label: "FTE reporting",
+        device: "Desktop",
+      },
+    ],
     icon: ShieldCheck,
     steps: [
       "Log in through the executive workspace.",
       "Review location status, enrollment pipeline, occupancy, attendance, staffing, billing readiness, and unresolved exceptions.",
       "Confirm each user has the least access needed for their job.",
       "Review high-risk records such as custody, medical, incident, payment, and compliance changes.",
+      "For FTE, select the intended reporting period, review the saved draft for that period, and submit by Friday at 12 PM Eastern.",
       "Use reporting to identify location-level blockers and assign owners for follow-up.",
     ],
     visual: [
@@ -145,6 +228,22 @@ const guides: ResourceGuide[] = [
     audience: "Directors and assistant directors",
     title: "Director SOP",
     summary: "Run daily school operations from enrollment through attendance, billing readiness, staffing, and family communication.",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/director-desktop-operations-guide.png",
+    graphicAlt: "Current director desktop daily reports and billing operations guide",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/director-desktop-reports-light.png",
+        alt: "Director daily reports workspace shown at a desktop viewport",
+        label: "Daily reports",
+        device: "Desktop",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/director-desktop-billing-light.png",
+        alt: "Director billing and invoice workspace shown at a desktop viewport",
+        label: "Billing and invoices",
+        device: "Desktop",
+      },
+    ],
     icon: ClipboardCheck,
     steps: [
       "Begin each day by reviewing attendance, staff coverage, ratios, open messages, pending documents, and billing exceptions.",
@@ -164,12 +263,35 @@ const guides: ResourceGuide[] = [
     audience: "Teachers and classroom staff",
     title: "Teacher SOP",
     summary: "Use the classroom workspace for attendance, daily reports, incidents, photos, and routine family updates.",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/teacher-classroom-device-guide.png",
+    graphicAlt: "Current teacher classroom guide using iPad for daily reports and desktop for roster review",
+    screenshots: [
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-ipad-roster-light.png",
+        alt: "Teacher classroom workspace shown at an iPad viewport",
+        label: "Classroom workspace",
+        device: "iPad",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-ipad-daily-report-light.png",
+        alt: "Teacher daily report workflow shown at an iPad viewport",
+        label: "Daily reports",
+        device: "iPad",
+      },
+      {
+        src: "/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-desktop-roster-light.png",
+        alt: "Teacher classroom workspace shown at a desktop viewport",
+        label: "Desktop workspace",
+        device: "Desktop",
+      },
+    ],
     icon: GraduationCap,
     steps: [
       "Log in on the assigned classroom device only.",
-      "Confirm the roster and mark attendance as children arrive and leave.",
+      "Confirm the roster and mark attendance as children arrive and leave using the school-local time shown.",
       "Record meals, naps, activities, supplies, notes, and incidents according to school policy.",
       "Upload classroom photos only when allowed by the school and child permissions.",
+      "Confirm the saved or unsaved state before leaving a record. If the device was offline, wait for sync and do not repeat the action.",
       "Send routine classroom messages through approved channels and escalate urgent issues to the director immediately.",
     ],
     visual: [
@@ -183,13 +305,16 @@ const guides: ResourceGuide[] = [
     audience: "Billing administrators",
     title: "Billing Admin SOP",
     summary: "Manage invoices, balances, payment methods, autopay readiness, exceptions, and family payment questions.",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png",
+    graphicAlt: "Current school-scoped weekly tuition, Thursday invoicing, autopay, and reconciliation flow",
     icon: CreditCard,
     steps: [
-      "Review billing schedules, tuition plans, discounts, balances, credits, failed payments, and upcoming autopay runs.",
-      "Confirm family payment methods are attached to the correct account before processing.",
-      "Encourage ACH verification when families want to avoid card processing fees.",
-      "Document payment exceptions, reversals, credits, and parent conversations according to school policy.",
-      "Escalate disputes, suspected fraud, custody-related billing questions, and policy decisions to leadership.",
+      "Review school-scoped tuition plans, assigned child rates, discounts, balances, credits, failed payments, and upcoming autopay runs.",
+      "Confirm the Thursday schedule will create the following week's tuition invoice once and use the assigned child's canonical billing rate.",
+      "Confirm family payment methods belong to the correct account; the parent flow presents card first while secure bank choices remain available.",
+      "For an in-person card payment, use the school's connected Terminal location and network reader only while the parent is present.",
+      "Reconcile invoices, Stripe events, ledger entries, and payout destination. Document exceptions, reversals, credits, and parent conversations.",
+      "Escalate duplicate charges, reader mismatches, disputes, suspected fraud, custody-related billing questions, and policy decisions.",
     ],
     visual: [
       { label: "Prepare", detail: "Invoices and balances", icon: FileText },
@@ -202,8 +327,11 @@ const guides: ResourceGuide[] = [
     audience: "Schools, staff, and authorized pickups",
     title: "Kiosk and Authorized Pickup Guide",
     summary: "Use the lobby kiosk for check-in, check-out, staff clock events, PINs, QR codes, and pickup verification.",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27.png",
+    graphicAlt: "Current kiosk location, device, identity, event, release, and exception flow",
     icon: DoorOpen,
     steps: [
+      "Use the kiosk only after the school has a separate dated kiosk/PIN approval.",
       "Open the kiosk workflow on the lobby tablet and confirm it is connected to the correct location.",
       "Keep the tablet mounted, charged, and visible to authorized staff.",
       "Families use the approved PIN, QR code, or school-approved check-in method.",
@@ -244,6 +372,63 @@ function VisualFlow({ guide }: { guide: ResourceGuide }) {
   );
 }
 
+function ScreenshotGallery({ guide }: { guide: ResourceGuide }) {
+  if (!guide.screenshots?.length) return null;
+
+  return (
+    <div className="mt-6 rounded-lg border border-white/10 bg-[#05070a]/65 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Screen guide</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+            Current light-mode, privacy-safe demo captures with warning banners and developer controls excluded. Open any image to review the full working viewport.
+          </p>
+        </div>
+        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Captured July 27, 2026</div>
+      </div>
+
+      <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {guide.screenshots.map((screenshot) => {
+          const frameClass =
+            screenshot.device === "iPhone"
+              ? "aspect-[9/16]"
+              : screenshot.device === "iPad"
+                ? "aspect-[3/4]"
+                : "aspect-[16/10]";
+
+          return (
+            <Link
+              key={`${screenshot.device}-${screenshot.label}`}
+              href={screenshot.src}
+              target="_blank"
+              rel="noreferrer"
+              prefetch={false}
+              className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] transition hover:border-amber-300/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber-300/40"
+            >
+              <div className={`relative overflow-hidden bg-[#0b1017] ${frameClass}`}>
+                <Image
+                  src={screenshot.src}
+                  alt={screenshot.alt}
+                  fill
+                  sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
+                  className="object-cover object-top transition duration-300 group-hover:scale-[1.01]"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 p-3">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">{screenshot.device}</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{screenshot.label}</div>
+                </div>
+                <ArrowRight className="size-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-amber-200" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function GuideSection({ guide }: { guide: ResourceGuide }) {
   return (
     <section id={guide.id} className="scroll-mt-24 rounded-lg border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/20 md:p-6">
@@ -273,6 +458,18 @@ function GuideSection({ guide }: { guide: ResourceGuide }) {
       <div className="mt-6">
         <VisualFlow guide={guide} />
       </div>
+
+      <figure className="mt-6 overflow-hidden rounded-lg border border-white/10 bg-[#f7f4ed]">
+        <Image
+          src={guide.graphicSrc}
+          alt={guide.graphicAlt}
+          width={1600}
+          height={1000}
+          className="h-auto w-full"
+        />
+      </figure>
+
+      <ScreenshotGallery guide={guide} />
 
       <div className="mt-6 rounded-lg border border-white/10 bg-[#05070a]/65 p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Step-by-step guide</h3>
@@ -317,7 +514,7 @@ export default function ResourcesPage() {
                 SOPs and guides for every BEE Suite user.
               </h1>
               <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                Use these public guides for parent portal setup, ACH verification, daily school operations, classroom workflows, billing, kiosk setup, pickup verification, and support escalation.
+                Updated July 27, 2026. Use these guides for secure parent access, card and bank payments, independent school launch gates, daily operations, classroom workflows, billing, kiosk pickup, FTE reporting, and support escalation.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Button className="h-11 px-5" nativeButton={false} render={<Link href="#parent-portal-install" />}>

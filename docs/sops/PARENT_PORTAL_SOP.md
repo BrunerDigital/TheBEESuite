@@ -1,14 +1,28 @@
 # Parent Portal SOP - The BEE Suite
 
-Last updated: June 26, 2026
+Last updated: July 27, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
 ## Visual Overview
 
-![Parent dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png)
 
-Use `PARENT_PORTAL_INSTALL_GUIDE.md` to install the parent portal on a phone or tablet. Use `PARENT_ACH_PAYMENT_GUIDE.md` to verify a bank account and avoid card processing recovery when bank payment is available.
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
+
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/parent-multidevice-portal-guide.png)
+
+## iPhone-First Screenshots
+
+Parent instructions lead with iPhone screens because that is the primary day-to-day view. The install guide also includes iPad and desktop views so families can recognize the same portal on all three device types.
+
+![Parent daily reports on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-daily-reports-light.png)
+
+![Parent classroom activities on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-activities-light.png)
+
+![Parent billing history on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-billing-light.png)
+
+Use `PARENT_PORTAL_INSTALL_GUIDE.md` to install the parent portal safely on a phone or tablet. Use `PARENT_ACH_PAYMENT_GUIDE.md` for card, Instant Bank, One-Time Bank, and autopay instructions.
 
 ## Purpose
 
@@ -16,11 +30,11 @@ The BEE Suite parent portal gives families one place to view child updates, mess
 
 ## Login
 
-1. Go to `https://thebeesuite.io/login`.
+1. Go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address that is on your guardian profile with the school.
-3. On your first visit, open the private setup link sent by your school and create a password. The link expires after one hour and stops working after it is used.
-4. For later visits, use your private password.
-5. If the setup link expired or you forgot your password, select **Forgot password** to request a fresh recovery link.
+3. On first access, enter the first-login password included in the approved parent invitation.
+4. You may keep that password or choose a private password later from Parent Portal settings.
+5. If you forgot your current password, select **Forgot password** and follow the recovery instructions.
 6. After login, open the parent portal.
 
 If login does not work, ask the school to confirm the email address on your guardian profile. The email must match the one you are entering.
@@ -65,11 +79,12 @@ Only school-approved media should appear in the parent portal.
 
 1. Open the billing, invoice, or balance area.
 2. Review the open balance, invoice number, due date, and payment amount.
-3. Choose the available payment option.
-4. ACH/bank payment may ask you to connect a bank account securely.
-5. Card payment may be available if the school has enabled it.
-6. Review any fee or processing disclosure before submitting payment.
-7. Complete checkout and wait for the confirmation screen.
+3. Choose `Debit/Credit Card`, `Instant Bank`, or `One-Time Bank` from the options the school has enabled. Card is presented first in the current flow, but the choice remains yours.
+4. Card setup or payment opens Stripe's secure card form.
+5. Instant Bank asks you to connect and verify a bank account through the secure processor.
+6. One-Time Bank may collect bank details for that payment without making it the default saved card.
+7. Review the exact checkout total and any approved card processing recovery before submitting.
+8. Complete checkout and wait for the confirmation screen.
 
 ACH payments can take time to fully settle. If a payment is pending, do not submit the same payment repeatedly unless the school tells you to retry.
 
@@ -106,8 +121,8 @@ Do not use messages for emergencies. Call the school directly for urgent safety,
 
 Use these rules:
 
-- If you have never used the parent portal, open the private one-time setup link from your school.
-- If the setup link is expired or already used, request a fresh recovery link; do not ask the school to send a password.
+- If you have never used the parent portal, use the guardian email and first-login password from the approved school invitation.
+- You may change the issued password later from Parent Portal settings.
 - If you forgot your password, use the password reset option or ask the school for help.
 - If the app says your account cannot be found, ask the school to confirm your guardian email.
 

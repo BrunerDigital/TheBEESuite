@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: July 24, 2026
+Last updated: July 27, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -10,16 +10,18 @@ This SOP explains how billing users manage tuition, invoices, payment methods, A
 
 ## Visual Overview
 
-![Payment architecture](../BEE_SUITE_PAYMENTS_ARCHITECTURE_VISUAL_2026-06-08.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png)
 
-![Stripe payout onboarding](../../screenshots/live-stripe-connect-onboarding.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
+
+![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27.png)
 
 ## Billing Admin Responsibilities
 
 - Keep family billing accounts and ledger balances accurate.
 - Confirm tuition plans, fees, discounts, subsidy/copay rules, and due dates before invoicing.
 - Send secure payment setup links instead of collecting card or bank details manually.
-- Promote ACH or instant bank verification as the lowest-cost payment path when enabled.
+- Present card and bank choices accurately. Card is first in the current parent flow; bank options remain available when enabled.
 - Confirm card disclosures before card payment recovery is used.
 - Reconcile payments after processor confirmation.
 - Escalate refunds, disputes, failed payments, duplicate charges, and policy questions.
@@ -61,13 +63,14 @@ Do not send live payment links until all items are complete:
 ## Batch Tuition Run
 
 1. Confirm tuition plans and child assignments are current.
-2. Open the batch tuition tab.
-3. Choose target: per matching child or per matching family.
-4. Choose age group and enrollment status.
-5. Confirm due date and billing period.
-6. Run the batch only after reviewing scope.
-7. Spot-check invoices across tuition plans, discounts, subsidy scenarios, and siblings.
-8. Send parent notices only after the school approves the batch.
+2. Filter to the correct school. Tuition plans are school-scoped and cannot be assigned across locations.
+3. Open the batch tuition tab.
+4. Choose target: per matching child or per matching family.
+5. Choose age group and enrollment status.
+6. Confirm due date and billing period.
+7. Run the batch only after reviewing scope.
+8. Spot-check invoices across tuition plans, discounts, subsidy scenarios, and siblings.
+9. Send parent notices only after the school approves the batch.
 
 ## Recurring Tuition Assignment
 
@@ -86,7 +89,7 @@ The child billing assignment is the canonical weekly rate:
 - Family records display the sum of active child assignments plus the per-child breakdown.
 - Child profiles, enrollment records, and Billing show that same assignment.
 - Do not maintain a second family-level or profile-only tuition amount.
-- An eligible recurring assignment creates the Friday invoice for the following week. The scheduler runs daily so eligible work can be caught after the configured Friday point.
+- An eligible recurring assignment creates the Thursday invoice for the following week. The scheduler runs daily and uses Thursday for weekly assignments, including legacy assignments that previously stored Friday.
 - A saved payment method is required for automatic collection, not for invoice creation.
 - `Charge This Child Now` posts an immediate invoice and balance; it does not replace recurring assignment.
 
@@ -100,12 +103,13 @@ Use this when a family needs to save ACH/bank or card details for future payment
 4. Select the intended recipient email.
 5. Send the secure payment request.
 6. Tell the parent to start from the branded The BEE Suite link.
-7. Tell the parent to choose `Verify Bank Instantly` to verify ACH through their bank.
-8. Remind the parent that The BEE Suite does not store bank login credentials, full bank account numbers, or full card numbers.
+7. Explain that `Save Debit/Credit Card` is presented first and `Verify Bank Instantly` remains available for ACH verification.
+8. If card recovery is approved, tell the parent it is disclosed before submission and applies only to the selected card path.
+9. Remind the parent that The BEE Suite does not store bank login credentials, full bank account numbers, or full card numbers.
 
 ## ACH And Instant Bank Guidance
 
-ACH/bank payment should be the default parent recommendation when the school enables it.
+Bank payment remains an available lower-cost option when the school enables it. Do not describe it as the only or automatically selected method; the current parent flow presents card first.
 
 - `Verify Bank Instantly` saves a verified bank payment profile for future payments or autopay.
 - `Instant Bank` lets a parent pay an invoice by logging into their bank through the secure processor handoff.
@@ -135,6 +139,21 @@ Use card payments only when the school allows them.
 6. Submit the payment or open the secure checkout handoff.
 7. Wait for processor confirmation or webhook reconciliation.
 8. Do not mark paid manually unless the external payment has been verified.
+
+## Run An In-Person Stripe Terminal Payment
+
+Use this only for an authorized school with a ready connected account and a certified reader assigned to that school's Stripe Terminal location.
+
+1. Open the intended family billing account and confirm the school, family, billing account, invoice or amount, and payout account.
+2. Choose `In-Person Card Reader`.
+3. Select an online reader registered to the current school.
+4. If needed, register the school's S700/S710 or WisePOS E using its pairing code and a clear reader label.
+5. Confirm the parent is physically present and can review and cancel from the reader.
+6. Review the account payment, any approved card recovery, and the total shown on the reader.
+7. Ask the parent to tap, insert, or swipe on the Stripe reader.
+8. Wait for processor status and webhook reconciliation before treating the payment as recorded.
+
+Card details are encrypted by Stripe hardware and never enter The BEE Suite. Smart readers are controlled over the network; direct USB data use requires Stripe's Android mobile-reader SDK.
 
 ## Failed Or Pending Payment Procedure
 

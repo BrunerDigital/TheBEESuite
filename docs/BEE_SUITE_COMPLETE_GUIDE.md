@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** July 24, 2026
+**Documentation snapshot:** July 27, 2026
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.  
 **Audience:** School owners, executives, directors, teachers, billing staff, parents, implementation teams, support staff, developers, and AI assistants asked to explain the system aloud.
 
@@ -163,7 +163,7 @@ The **Multi-location Dashboard** compares assigned centers. It supports enrollme
 
 The **Center Dashboard** concentrates on today's school activity: attendance, tours, staffing, messages, birthdays, incidents, tasks, billing alerts, and licensing reminders.
 
-The **FTE Reports** area supports weekly full-time-equivalent reporting. Directors submit enrollment and age-group counts; executives track missing schools, request corrections, approve submissions, review history, and export CSV data.
+The **FTE Reports** area supports weekly full-time-equivalent reporting. Directors select the reporting week and submit enrollment, full-time, part-time, age-group, billing, payroll, capacity, and notes. The saved reporting period is separate from submission time. Executives review the selected period, track missing schools, request corrections, approve submissions, review history, and export CSV data.
 
 ### 6.3 CRM, inquiry, and enrollment
 
@@ -209,7 +209,7 @@ Child location records and transitions provide a current-location and movement h
 
 The **Parent Portal** is the family's unified view. It can show linked children, today's activity, daily reports, approved photos, messages, announcements, calendar information, invoices, payments, documents, incident acknowledgements, authorized pickups, kiosk credentials, preferences, and change requests.
 
-Parent setup and invitation links establish the relationship among the authentication user, guardian record, family, and children. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
+Parent invitations establish the relationship among the authentication user, guardian record, family, and children. The approved invitation supplies the secure parent URL, guardian email, and school-issued first-login password. The parent may change that password later from settings. Portal queries are family-scoped. A guardian should never be able to change a URL or identifier and retrieve another family's information.
 
 The portal supports responsive web and progressive-web-app use. Install guides cover phones, tablets, and desktops. A Capacitor iOS parent shell and app-store assets exist, but the product notes distinguish the current web/PWA experience from a future fully native mobile product with native push and offline sync.
 
@@ -233,7 +233,7 @@ SendGrid paths support transactional email. Twilio paths support outbound SMS, i
 
 ### 6.9 Billing, payments, and payouts
 
-The **Billing and Invoices** area manages family billing accounts, tuition plans, products, invoice items, due dates, status, balances, credits, subsidies, and ledger history. Weekly tuition is assigned to a child. The family view totals active child assignments, while the child, enrollment, and billing views show the same source value.
+The **Billing and Invoices** area manages family billing accounts, school-scoped tuition plans, products, invoice items, due dates, status, balances, credits, subsidies, and ledger history. Weekly tuition is assigned to a child using a plan belonging to that child's school. Cross-school plan assignment fails closed. The family view totals active child assignments, while the child, enrollment, and billing views show the same source value.
 
 The **Payments** area manages checkout readiness, saved-method setup, payment-method requests, autopay status, failed-payment follow-up, payment records, payout status, and reconciliation evidence.
 
@@ -241,13 +241,15 @@ The intended financial chain is:
 
 **Tuition assignment → invoice and invoice items → family balance → payment method or hosted checkout → Stripe event → webhook verification → payment and ledger update → reconciliation → school payout.**
 
-Stripe Checkout provides hosted payment collection. Stripe Connect provides a connected account and payout path for each school or approved owner structure. Webhook records are deduplicated so a repeated provider event does not apply the same financial action twice. Payment-method request links are expiring, family-specific paths for securely collecting a method.
+Stripe Checkout provides hosted payment collection. The parent flow presents debit/credit card first and keeps Instant Bank and One-Time Bank available when enabled. Stripe Connect provides a connected account and payout path for each school or approved owner structure. Webhook records are deduplicated so a repeated provider event does not apply the same financial action twice. Payment-method request links are expiring, family-specific paths for securely collecting a method.
 
-Scheduled billing foundations include recurring tuition creation, autopay attempts, payment reminders, dunning for failures, and reconciliation reports. An eligible assignment creates a Friday invoice for the following week; a saved payment method is required for automatic collection, not invoice creation. `Charge This Child Now` creates an immediate invoice and is a separate manual action. “Dunning” means the controlled sequence used to notify a payer and recover a failed or overdue payment.
+Scheduled billing foundations include recurring tuition creation, autopay attempts, payment reminders, dunning for failures, and reconciliation reports. An eligible weekly assignment creates a Thursday invoice for the following week and the scheduled autopay run follows when the family has autopay enabled and a saved default method. A saved payment method is required for automatic collection, not invoice creation. `Charge This Child Now` creates an immediate invoice and is a separate manual action. “Dunning” means the controlled sequence used to notify a payer and recover a failed or overdue payment.
 
 The **Billing Settings** area defines tuition plans, products, discounts, taxes, subsidy fields, processor settings, and policy notes.
 
-The **Terminal Store** is a Stripe-hosted purchase flow for approved equipment or products. It is separate from tuition and requires live validation of pricing, tax, shipping, fulfillment, and support ownership before broad use.
+The **In-Person Stripe Terminal** flow lets authorized directors and executives collect a card-present family payment using a certified reader registered to the current school's Stripe Terminal location. The parent must be present and able to review and cancel on the reader. Card data is encrypted by Stripe hardware and never enters The BEE Suite. Processor status and webhook reconciliation must complete before the payment is treated as recorded.
+
+The **Terminal Store** is a separate Stripe-hosted purchase flow for approved equipment or products. It is not tuition collection and requires live validation of pricing, tax, shipping, fulfillment, and support ownership before broad use.
 
 The **Corporate Billing** view supports BEE Suite software invoices to a corporate customer based on active school-user counts and maintains an audit trail distinct from parent tuition billing.
 
@@ -339,9 +341,9 @@ AI output is labeled as a suggestion and should be reviewed before use. It must 
 ### 7.3 Tuition and payment
 
 1. The selected child's billing assignment determines the canonical weekly tuition rate and eligible start period.
-2. The recurring scheduler creates the Friday invoice for the following week, or a separately approved billing action creates an immediate invoice and itemized charges.
+2. The recurring scheduler creates the Thursday invoice for the following week, or a separately approved billing action creates an immediate invoice and itemized charges.
 3. The invoice contributes to the family billing-account balance and ledger.
-4. The parent pays through hosted checkout or an approved saved method, or autopay attempts the due invoice when a saved method exists.
+4. The parent chooses the card-first hosted flow, an available bank option, an approved saved method, or an authorized school-scoped Terminal reader; autopay attempts the due invoice when it is enabled and a saved default method exists.
 5. Stripe sends a signed webhook event.
 6. The server verifies and deduplicates the event, updates payment and invoice state, and records ledger evidence.
 7. Failed or overdue items enter reminder and dunning workflows.
@@ -358,11 +360,12 @@ AI output is labeled as a suggestion and should be reviewed before use. It must 
 
 ### 7.5 Weekly FTE reporting
 
-1. Each center prepares counts for the reporting week.
-2. A director submits total enrolled, full-time, part-time, age-group counts, calculated FTE, and notes.
-3. Executive users see submitted and missing centers.
-4. A reviewer requests correction or approves the report.
-5. Authorized users compare historical trends or export a consolidated file.
+1. Each center selects the intended reporting week start and end.
+2. A director reviews prefilled enrollment, full-time, part-time, age-group, billing, payroll, capacity, calculated FTE, occupancy, and notes.
+3. The director resolves unknown schedules and submits the selected reporting period; the period is stored separately from submission time.
+4. Executive users see submitted, corrected, and missing centers for that selected period. Current-week reports are due Friday by 12:00 PM ET.
+5. A reviewer requests correction or approves the report.
+6. Authorized users compare historical trends or export a consolidated file.
 
 ---
 
@@ -529,11 +532,11 @@ The repository contains broad production-capable foundations, but the existence 
 
 ### Broadly implemented in the current version
 
-Role-specific login and portal surfaces; tenant and scoped access; CRM and inquiry routing; registration and enrollment records; context-aware family and child editing; classrooms and staff; attendance and kiosk foundations; teacher daily reports, incidents, and media; parent portal workflows; canonical child-level weekly tuition across family/child/enrollment/billing views; billing accounts, invoices, ledgers, Checkout and Connect foundations; communications and delivery logs; documents and compliance records; FTE reporting; analytics; hardened public survey collection; audit logs; white-label data; imports; readiness checks; and human-reviewed AI assistance.
+Role-specific login and portal surfaces; tenant and scoped access; CRM and inquiry routing; registration and enrollment records; context-aware family and child editing; classrooms and staff; attendance and kiosk foundations; teacher daily reports, incidents, and media; parent portal workflows; canonical school-scoped child-level weekly tuition across family/child/enrollment/billing views; Thursday recurring tuition and autopay scheduling; billing accounts, invoices, ledgers, Checkout, Connect, and school-scoped Stripe Terminal foundations; communications and delivery logs; documents and compliance records; selected-period FTE reporting; analytics; hardened public survey collection; audit logs; white-label data; imports; readiness checks; and human-reviewed AI assistance.
 
 ### Implemented foundations that require per-school rollout validation
 
-Live Stripe payouts and payment policy; recurring billing and autopay; ACH or card recovery rules; Twilio compliance and sender registration; SendGrid domain authentication; Google credentials; custom-domain activation; signature-provider configuration; storage hardening; payment-terminal fulfillment; production monitoring; real-school ProCare field mapping; and final role-by-role regression testing.
+Live Stripe payouts and payment policy; recurring billing and autopay; card or bank recovery rules; school reader registration and card-present procedures; Twilio compliance and sender registration; SendGrid domain authentication; Google credentials; custom-domain activation; signature-provider configuration; storage hardening; payment-terminal fulfillment; production monitoring; real-school ProCare field mapping; and final role-by-role regression testing.
 
 ### Known roadmap or incomplete areas
 

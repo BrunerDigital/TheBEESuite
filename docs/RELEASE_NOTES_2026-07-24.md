@@ -1,5 +1,7 @@
 # The BEE Suite Production Release - July 24, 2026
 
+> Historical release record. Current July 27 operating guidance supersedes the weekly schedule below: eligible weekly tuition now creates the following week's invoice on Thursday.
+
 ## Release identity
 
 - Commit: `7e64b9269ec83ffba7adc5ca987846da912b2dbf`
@@ -19,7 +21,7 @@
 - Child profiles show the assigned rate, plan, active state, and start period.
 - Enrollment and billing views show the same assigned rate instead of requiring a duplicate family-level rate.
 - Opening Billing from a selected family/child preserves that context.
-- Recurring tuition creates a Friday invoice for the following week once the assignment is active and eligible. A saved payment method is required for automatic collection, not for invoice creation.
+- At this release, recurring tuition created a Friday invoice for the following week. The current schedule is Thursday. A saved payment method is required for automatic collection, not for invoice creation.
 - `Charge This Child Now` is an immediate manual invoice action and must not be used as a substitute for assigning recurring tuition.
 
 ### Family and enrollment records

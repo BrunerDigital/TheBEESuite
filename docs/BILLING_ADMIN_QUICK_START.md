@@ -1,6 +1,6 @@
 # Billing Admin Quick Start
 
-Last updated: July 24, 2026
+Last updated: July 27, 2026
 
 This guide is for school billing users, directors who handle billing, and administrators validating tuition/payment workflows in The BEE Suite.
 
@@ -51,7 +51,7 @@ Recurring weekly tuition rules:
 
 - The selected child's billing assignment is the canonical rate.
 - Family, child, enrollment, and Billing views should display the same assignment.
-- Eligible assignments create a Friday invoice for the following week.
+- Eligible assignments create a Thursday invoice for the following week.
 - A saved payment method enables automatic collection but is not required for invoice creation.
 - `Charge This Child Now` creates an immediate invoice. Use it only when that separate action is intended and approved.
 
@@ -60,6 +60,9 @@ Recurring weekly tuition rules:
 - Use secure payment-method request links instead of collecting payment details manually.
 - Confirm links are sent to the correct guardian/payer.
 - Verify expiration and school branding before sending.
+- The parent flow presents **Debit/Credit Card** first and keeps **Instant Bank** and **One-Time Bank** available.
+- For saved methods, parents can choose **Save Debit/Credit Card** or **Verify Bank Instantly**.
+- Confirm the exact total, processing recovery when shown, and disclosure before submission.
 - Confirm autopay status before assuming a family will be charged automatically.
 - If a parent reports a setup issue, verify the billing account, guardian contact, connected Stripe account, and request status.
 
@@ -87,6 +90,8 @@ Before allowing real terminal or reader orders:
 - Confirm live pricing, markup, shipping/tax handling, fulfillment owner, and support handoff.
 - Confirm the order is for the correct school and shipping address.
 - Confirm who handles replacement, returns, warranty, and device setup.
+
+Hardware ordering is separate from accepting an in-person payment. For an in-person payment, the parent must be present and the billing user must use a network smart reader registered to the correct school's connected-account Terminal location. Direct USB reader support is limited to the Android SDK flow.
 
 ## Parent Billing Questions
 

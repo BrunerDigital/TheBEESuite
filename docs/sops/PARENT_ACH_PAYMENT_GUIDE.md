@@ -1,20 +1,18 @@
-# Parent Step-By-Step Guide: Verify ACH And Avoid Card Processing Fees
+# Parent Step-By-Step Guide: Card, Bank, And Autopay Payments
 
-Last updated: July 7, 2026
+Last updated: July 27, 2026
 
 Audience: parents and guardians paying tuition through The BEE Suite.
 
 ## Goal
 
-Use a verified bank account when possible. Bank payment is the preferred low-cost path and helps families avoid the debit/credit card processing recovery that may be added when a school allows card payments.
+Choose the payment method that works for your family. The current portal presents debit/credit card first, followed by Instant Bank and One-Time Bank when the school enables those options. A school-approved card processing recovery may apply to card payments; the exact total is shown before submission.
 
 Exact totals are always shown before you submit payment. Do not submit a payment if the amount or payment method looks wrong.
 
 ## Visual Preview
 
-![Parent billing view](../../screenshots/parent-portal.png)
-
-![Payment architecture](../BEE_SUITE_PAYMENTS_ARCHITECTURE_VISUAL_2026-06-08.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
 
 ## Where You May Start
 
@@ -23,7 +21,19 @@ You may see the bank verification flow from either place:
 - Parent portal billing area: open the parent portal and go to `Billing`.
 - Secure payment setup link: open the branded The BEE Suite link your school sent by email or portal notification.
 
-Both paths use a secure payment processor handoff. The BEE Suite does not store your bank login, full bank account number, or full card number.
+Both paths use a secure Stripe handoff. The BEE Suite does not store your bank login, full bank account number, or full card number.
+
+## Pay Or Save A Debit/Credit Card
+
+Card is presented first in the current parent payment flow.
+
+1. Open the parent portal or the secure payment request from your school.
+2. Choose `Save Debit/Credit Card` to save a method, or `Pay With Debit/Credit Card` to pay an open invoice.
+3. Review the family, invoice, amount, and any approved card processing recovery.
+4. Continue to Stripe's secure card form.
+5. Enter the card details there, not in a BEE Suite message, email, note, or screenshot.
+6. Submit and wait for the confirmation screen.
+7. Return to the portal and confirm the saved method, payment, receipt, or invoice status.
 
 ## Verify Your Bank Instantly
 
@@ -72,7 +82,7 @@ If your portal shows `One-Time Bank` or `ACH`, use it when you want a bank payme
 
 ## When To Use A Card
 
-Use `Debit/Credit Card` only if you choose that option and accept any disclosed card processing recovery.
+Use `Debit/Credit Card` when you choose that option and accept any disclosed card processing recovery.
 
 Card payments may be convenient, but they can cost more than bank payment. If the school has approved card processing recovery, the card total may include a separate recovery line before checkout.
 
@@ -82,7 +92,7 @@ Card payments may be convenient, but they can cost more than bank payment. If th
 | --- | --- | --- |
 | Enabled | A payment method is saved and autopay is active if your school uses autopay | Watch invoices and receipts |
 | Pending | Bank verification or payment method setup is not fully complete | Wait or contact the school if it does not update |
-| Disabled | No active autopay method is saved | Choose `Verify Bank Instantly` or ask the school for a setup link |
+| Disabled | No active autopay method is saved | Choose `Save Debit/Credit Card`, `Verify Bank Instantly`, or ask the school for a secure payment request |
 
 ## Safety Rules
 
@@ -99,7 +109,7 @@ Contact the school if:
 - Setup says pending for more than a few business days.
 - Your invoice still looks unpaid after a confirmed payment.
 - You chose the wrong payment method.
-- You see a card recovery fee but expected to pay by bank.
+- The checkout shows card recovery but you intended to use a bank option.
 - You see a family or invoice that is not yours.
 
 Include your name, child name, school, invoice number, payment method, time of attempt, and a screenshot if safe to share.

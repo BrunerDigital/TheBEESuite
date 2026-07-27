@@ -1,6 +1,6 @@
 # Executive Admin SOP - The BEE Suite
 
-Last updated: July 7, 2026
+Last updated: July 27, 2026
 
 Audience: school owners, corporate users, franchise/brand admins, regional managers, and platform operators.
 
@@ -10,9 +10,19 @@ Executive admins use The BEE Suite to launch schools, manage access, review mult
 
 ## Visual Overview
 
-![Executive dashboard](../../screenshots/dashboard-desktop.png)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png)
 
-![School launch swimlane](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27.png)
+
+![Executive desktop oversight guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/executive-desktop-oversight-guide.png)
+
+## Desktop Screenshots
+
+Executive and owner instructions use desktop screenshots so multi-location comparisons, reporting periods, and exception ownership remain visible together.
+
+![Executive administration workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-admin-light.png)
+
+![Executive FTE reporting workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-fte-light.png)
 
 ## Executive Responsibilities
 
@@ -73,13 +83,14 @@ Stop if a user can see the wrong school, classroom, family, child, invoice, docu
 ## FTE Review Procedure
 
 1. Open `FTE Reports`.
-2. Review current-week submitted and missing schools.
-3. Follow up with directors whose reports are missing before the cutoff.
-4. Review submitted totals for obvious errors.
-5. Request correction if the school submitted wrong counts.
-6. Approve the report only after totals are reviewed.
-7. Export CSV or backup snapshot when needed.
-8. Track recurring late submissions by school.
+2. Select the reporting period you intend to review; the stored week is separate from the date the report was submitted.
+3. Review submitted, corrected, and missing schools for that selected period.
+4. Follow up with directors whose current-week reports are missing before Friday at 12:00 PM ET.
+5. Review submitted totals, full-time/part-time counts, age groups, occupancy, billing, and payroll values for obvious errors.
+6. Request correction if the school submitted wrong counts or selected the wrong week.
+7. Approve the report only after the period and totals are reviewed.
+8. Export CSV or backup snapshot when needed.
+9. Track recurring late submissions by school.
 
 ## Payment Readiness Approval
 
@@ -89,12 +100,13 @@ Do not approve live parent payments for a school until every item below is compl
 2. The correct school has a connected payout account.
 3. Stripe status says the school can accept parent payments.
 4. Tuition plans, fees, discounts, subsidy rules, ledger balances, and open invoices are validated.
-5. ACH/default bank payment policy is approved.
-6. Card payment policy is approved if card payments are enabled.
+5. Parent card and bank payment choices are approved; the current flow presents card before available bank options.
+6. Saved card, saved bank, one-time bank, and autopay disclosures match approved school policy.
 7. Parent processing recovery disclosure is approved before card recovery is enabled.
 8. Refund, dispute, failed payment, duplicate payment, and support procedures are assigned.
 9. A low-risk billing smoke test has passed.
 10. Directors and billing users know who owns parent billing questions.
+11. Any in-person Stripe Terminal reader is registered to the correct school's connected-account location and has a named hardware/support owner.
 
 ## Integration Readiness
 

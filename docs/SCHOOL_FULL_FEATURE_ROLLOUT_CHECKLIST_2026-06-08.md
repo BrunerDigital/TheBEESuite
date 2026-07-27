@@ -1,5 +1,7 @@
 # School Full-Feature Rollout Checklist
 
+> Historical rollout snapshot. Use `docs/sops/README.md` and the current dated readiness records for live decisions. Setup, parent invitations, kiosk/PIN, billing, payments, ProCare retirement, mobile stores, and wider-wave approval remain independent gates; `HELD OFF` is not `PASS`.
+
 Last updated: June 9, 2026
 
 Purpose: track everything that must be complete before a school can use the full BEE Suite feature set live: executive/admin, director operations, CRM, enrollment, FTE, ProCare cutover, attendance/kiosk, teacher workflows, parent portal, billing/payments, documents, compliance, messaging, reporting, integrations, and support.

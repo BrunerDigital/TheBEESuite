@@ -1561,13 +1561,25 @@ async function POSTHandler(request: NextRequest) {
     result = id ? await prisma.announcement.update({ where: { id }, data }) : await prisma.announcement.create({ data });
   } else if (entity === "campaign") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+    const campaignCenterId = canAccessAllCenters(user) ? clean(body.centerId) || null : user.primaryCenterId;
+    if (!canAccessAllCenters(user) && !campaignCenterId) {
+      return NextResponse.json({ ok: false, error: "A school assignment is required before managing campaigns." }, { status: 403 });
+    }
+    if (campaignCenterId && !canAccessCenter(user, campaignCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this campaign school." }, { status: 403 });
+    }
+    centerId = campaignCenterId;
     if (id) {
       const existing = await prisma.campaign.findUnique({
         where: { id },
-        select: { tenantId: true, brand: { select: { tenantId: true } } },
+        select: { tenantId: true, audience: true, brand: { select: { tenantId: true } } },
       });
       if (!existing || (existing.tenantId !== user.tenantId && existing.brand?.tenantId !== user.tenantId)) {
         return NextResponse.json({ ok: false, error: "Campaign not found for this tenant." }, { status: 404 });
+      }
+      const existingCenterId = clean(jsonObject(existing.audience).centerId);
+      if (!canAccessAllCenters(user) && existingCenterId !== campaignCenterId) {
+        return NextResponse.json({ ok: false, error: "Campaign not found for this school." }, { status: 404 });
       }
     }
     const draft = normalizeCampaignDraft({
@@ -1588,7 +1600,12 @@ async function POSTHandler(request: NextRequest) {
       subject: draft.subject,
       body: draft.body,
       templateKey: draft.templateKey,
-      audience: draft.audience ? draft.audience as Prisma.InputJsonObject : undefined,
+      audience: draft.audience || campaignCenterId
+        ? {
+            ...(draft.audience ?? {}),
+            ...(campaignCenterId ? { centerId: campaignCenterId } : {}),
+          } as Prisma.InputJsonObject
+        : undefined,
       status: draft.status,
       scheduledAt: draft.scheduledAt,
       metrics: id ? undefined : { createdFrom: "operations_record_api", templateKey: draft.templateKey },

@@ -973,7 +973,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ? classrooms
       : [];
   const attendanceSnapshot = live?.attendanceSnapshot ?? (showDemoFallbackData ? {
-    scopeLabel: "Demo school",
+    scopeLabel: "All classes at Kid City USA - Little Harbor",
     total: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
     present: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
     checkedOut: 0,
@@ -982,7 +982,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     rows: classroomSnapshots.map((room) => ({
       classroomId: String(room.name),
       classroomName: String(room.name),
-      centerName: "Kid City USA - Demo",
+      centerName: "Kid City USA - Little Harbor",
       total: Number(room.present),
       present: Number(room.present),
       checkedOut: 0,
@@ -995,8 +995,6 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : showDemoFallbackData
       ? messages
       : [];
-  const isClassroomDemo = showDemoFallbackData && !live?.classroomSnapshots?.length;
-  const isParentMessageDemo = showDemoFallbackData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
     "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm sensitive actions before sending messages or changing records.";
   const aiHighlights = live?.aiHighlights?.length
@@ -1004,7 +1002,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : showDemoFallbackData
       ? ["4 high-fit leads", "8 expiring docs", "2 open seats"]
       : [];
-  const asOfLabel = live?.asOfLabel ?? "Demo workspace";
+  const asOfLabel = live?.asOfLabel ?? "Current workspace";
   const maxRevenue = Math.max(...dashboardAnalytics.map((point) => point.revenue), 1);
   const maxFunnelCount = Math.max(...dashboardAnalytics.flatMap((point) => [point.leads, point.tours, point.enrolled]), 1);
   const openSeatsByAgeGroup = Array.from(
@@ -1582,7 +1580,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           className="glass-panel"
                           contentClassName="flex flex-col gap-4"
                           title="Capacity by classroom"
-                          description={isClassroomDemo ? "Demo account preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
+                          description="Open seats and ratio pulse"
                         >
                           {classroomSnapshots.slice(0, 6).map((room) => (
                             <div key={room.name} className="flex flex-col gap-2">
@@ -1750,11 +1748,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         className="glass-panel"
                         contentClassName="flex flex-col gap-4"
                         title="Parent messages"
-                        description={isParentMessageDemo ? "Demo account preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
+                        description="Unread and priority conversations"
                       >
-                        {parentMessages.map((message) => (
+                        {parentMessages.map((message, index) => (
                           <Link
-                            key={message.subject}
+                            key={`${message.from}-${message.subject}-${index}`}
                             href={withQueryParam("/messages", "q", message.from)}
                             className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={`Open message from ${message.from}`}

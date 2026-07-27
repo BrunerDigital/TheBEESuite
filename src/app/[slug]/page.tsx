@@ -54,6 +54,7 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
@@ -264,16 +265,18 @@ async function getFamilyIntakeCenters(user: CurrentUser) {
 
   return centers.map((center) => ({
     id: center.id,
-    name: [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    name: removeDemoMarkersFromUserView(
+      [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    ),
     classrooms: center.classrooms,
   }));
 }
 
 function formatCenterName(center: { name: string; crmLocationId: string | null; city?: string | null; state?: string | null }) {
-  return [
+  return removeDemoMarkersFromUserView([
     center.crmLocationId ?? center.name,
     [center.city, center.state].filter(Boolean).join(", "),
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" · "));
 }
 
 function centerLocationData(center: { ownerGroup?: { name: string; ownerType?: string | null } | null }) {
@@ -464,7 +467,7 @@ function serializeFteReport(report: {
   return {
     id: report.id,
     centerId: report.centerId,
-    centerName: report.center.crmLocationId ?? report.center.name,
+    centerName: removeDemoMarkersFromUserView(report.center.crmLocationId ?? report.center.name),
     locationData: stringField(metadata.locationData) || centerLocationData(report.center),
     weekStart: report.weekStart.toISOString(),
     weekEnd: report.weekEnd?.toISOString() ?? null,
@@ -759,6 +762,9 @@ async function renderLivePage(
   const tenantWide = canAccessAllCenters(user);
   const allCenters = tenantWide;
   const showDemoFallbackData = canViewDemoFallbackData(user);
+  const userViewText = (value: string) => showDemoFallbackData
+    ? removeDemoMarkersFromUserView(value)
+    : value;
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = visibleCenterIdFilter(visibleCenterIds);
@@ -2350,9 +2356,9 @@ async function renderLivePage(
     return (
       <TeacherMobileWorkspace
         roster={roster}
-        teacherName={user.name}
+        teacherName={userViewText(user.name)}
         teacherProfile={{
-          name: user.name,
+          name: userViewText(user.name),
           loginEmail: user.email,
           contactEmail: staffProfile ? readStaffContactEmail(staffProfile.customFields) : null,
           phone: staffProfile?.phone ?? null,
@@ -2588,6 +2594,17 @@ async function renderLivePage(
 
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
+      subject: message.subject ? userViewText(message.subject) : null,
+      body: userViewText(message.body),
+      family: message.family
+        ? { ...message.family, name: userViewText(message.family.name) }
+        : null,
+      sender: message.sender
+        ? { ...message.sender, name: userViewText(message.sender.name) }
+        : null,
+      assignedTo: message.assignedTo
+        ? { ...message.assignedTo, name: userViewText(message.assignedTo.name) }
+        : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
     })));
@@ -2596,7 +2613,7 @@ async function renderLivePage(
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     const familyOptions = families.map((family) => ({
       id: family.id,
-      name: family.name,
+      name: userViewText(family.name),
       billingEmail: family.billingEmail,
       centerId: family.centerId,
       centerLabel: family.centerId ? centerLabelById.get(family.centerId) ?? null : null,
@@ -2699,7 +2716,10 @@ async function renderLivePage(
           familyOptions: demoMode ? [] : familyOptions,
           templates: templateOptions,
           mergeFields: messageMergeFields,
-          staffOptions: staffUsers,
+          staffOptions: staffUsers.map((staffUser) => ({
+            ...staffUser,
+            name: userViewText(staffUser.name),
+          })),
           replyDraft: requestedReplyToMessageId
             ? {
                 replyToMessageId: requestedReplyToMessageId,

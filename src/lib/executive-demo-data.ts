@@ -6,7 +6,7 @@ import type {
 } from "@/components/live-ops-pages";
 
 const today = new Date();
-const demoCenter = { name: "Kid City USA - Demo", crmLocationId: "Kid City USA - Demo" };
+const demoCenter = { name: "Kid City USA - Little Harbor", crmLocationId: "Kid City USA - Little Harbor" };
 
 function isoWithOffset(days: number, hour = 9, minute = 0) {
   const date = new Date(today);
@@ -80,7 +80,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     sentiment: "warm",
     readAt: null,
     createdAt: isoWithOffset(0, 8, 35),
-    family: { name: "Executive Demo Family", billingEmail: "demo-parent@example.com", centerId: null },
+    family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
     sender: null,
   },
   {
@@ -93,7 +93,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     sentiment: "neutral",
     readAt: isoWithOffset(0, 10, 10),
     createdAt: isoWithOffset(0, 9, 45),
-    family: { name: "Executive Demo Family", billingEmail: "demo-parent@example.com", centerId: null },
+    family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
     sender: { name: "Mr. Bee Draft Assistant", email: "mrbee@thebeesuite.io" },
   },
   {
@@ -107,7 +107,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     sentiment: "sensitive",
     readAt: null,
     createdAt: isoWithOffset(-1, 16, 20),
-    family: { name: "Executive Demo Family", billingEmail: "demo-parent@example.com", centerId: null },
+    family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
     sender: null,
   },
 ];
@@ -118,7 +118,7 @@ export const executiveAnnouncementDemoRows: AnnouncementsPageData["announcements
     title: "Picture Day Reminder",
     body:
       "Picture day is this Thursday. Please send your child in their preferred outfit and include any classroom-specific notes for teachers.",
-    audience: { centers: "Kid City USA - Demo", classrooms: ["Infant Hive", "Toddler Hive", "3's Hive"] },
+    audience: { centers: "Kid City USA - Little Harbor", classrooms: ["Infant Hive", "Toddler Hive", "3's Hive"] },
     status: "scheduled",
     sendAt: isoWithOffset(2, 7, 30),
     center: null,
@@ -138,7 +138,7 @@ export const executiveAnnouncementDemoRows: AnnouncementsPageData["announcements
     title: "May Family Newsletter",
     body:
       "This month's newsletter highlights classroom learning themes, staff spotlights, birthdays, and upcoming family events.",
-    audience: { centers: "All demo centers", familyStatus: "Enrolled" },
+    audience: { centers: "All centers", familyStatus: "Enrolled" },
     status: "sent",
     sendAt: isoWithOffset(-4, 8, 0),
     center: null,
@@ -153,7 +153,7 @@ export const executiveDailyReportDemoRows: DailyReportsPageData["reports"] = [
     teacherNote: "Enjoyed sensory play, finished most of lunch, and rested after outdoor stroller time.",
     suppliesNeeded: "Diapers",
     sentAt: isoWithOffset(0, 15, 35),
-    child: { fullName: "Demo Child A", ageGroup: "Infant" },
+    child: { fullName: "Ava Rivera", ageGroup: "Infant" },
     classroom: {
       name: "Infant Hive",
       center: demoCenter,
@@ -167,7 +167,7 @@ export const executiveDailyReportDemoRows: DailyReportsPageData["reports"] = [
     teacherNote: "Participated in circle time and practiced sharing during block play.",
     suppliesNeeded: null,
     sentAt: null,
-    child: { fullName: "Demo Child B", ageGroup: "Toddler" },
+    child: { fullName: "Mia Rivera", ageGroup: "Toddler" },
     classroom: {
       name: "Toddler Hive",
       center: demoCenter,
@@ -181,7 +181,7 @@ export const executiveDailyReportDemoRows: DailyReportsPageData["reports"] = [
     teacherNote: "Worked on early literacy centers and helped lead cleanup after art.",
     suppliesNeeded: "Extra clothes",
     sentAt: isoWithOffset(-1, 15, 20),
-    child: { fullName: "Demo Child C", ageGroup: "Pre-K" },
+    child: { fullName: "Noah Rivera", ageGroup: "Pre-K" },
     classroom: {
       name: "Pre-K Hive",
       center: demoCenter,
@@ -193,14 +193,14 @@ export const executiveDailyReportDemoRows: DailyReportsPageData["reports"] = [
 export const executiveParentPortalDemo = {
   family: {
     id: "exec-demo-family",
-    name: "Executive Demo Family",
-    billingEmail: "demo-parent@example.com",
+    name: "Rivera Family",
+    billingEmail: "parent@example.com",
     guardians: [
       {
         id: "exec-demo-guardian-a",
         userId: null,
-        fullName: "Jordan Demo",
-        email: "demo-parent@example.com",
+        fullName: "Jordan Rivera",
+        email: "parent@example.com",
         phone: "(555) 014-1200",
         relation: "Mother",
         preferredCommunication: "email",
@@ -208,8 +208,8 @@ export const executiveParentPortalDemo = {
       {
         id: "exec-demo-guardian-b",
         userId: null,
-        fullName: "Taylor Demo",
-        email: "demo-guardian@example.com",
+        fullName: "Taylor Rivera",
+        email: "guardian@example.com",
         phone: "(555) 014-1201",
         relation: "Father",
         preferredCommunication: "sms",
@@ -218,7 +218,7 @@ export const executiveParentPortalDemo = {
     children: [
       {
         id: "exec-demo-child-a",
-        fullName: "Demo Child A",
+        fullName: "Ava Rivera",
         preferredName: "Ari",
         ageGroup: "Infant",
         enrollmentStatus: "enrolled",
@@ -230,7 +230,7 @@ export const executiveParentPortalDemo = {
       },
       {
         id: "exec-demo-child-b",
-        fullName: "Demo Child B",
+        fullName: "Mia Rivera",
         preferredName: "Mia",
         ageGroup: "Toddler",
         enrollmentStatus: "enrolled",
@@ -250,7 +250,7 @@ export const executiveParentPortalDemo = {
   invoices: [
     {
       id: "exec-demo-invoice",
-      number: "DEMO-1042",
+      number: "KC-1042",
       status: "OPEN",
       dueDate: isoWithOffset(7, 9, 0),
       totalCents: 124500,
@@ -303,7 +303,7 @@ export const executiveParentPortalDemo = {
       description: "Child bumped knee during indoor gross motor play. No visible injury after comfort and observation.",
       actionTaken: "Teacher comforted child, notified director, and shared report for parent acknowledgment.",
       parentAcknowledgedAt: null,
-      child: { fullName: "Demo Child B" },
+      child: { fullName: "Mia Rivera" },
     },
   ],
   messages: executiveParentMessageDemoRows.map((message) => ({

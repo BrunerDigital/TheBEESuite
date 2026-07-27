@@ -978,9 +978,9 @@ export function ParentPortalWorkspace({
       {demoMode ? (
         <Alert className="border-primary/30 bg-primary/10">
           <ShieldCheck className="size-4" />
-          <AlertTitle>Demo account data</AlertTitle>
+          <AlertTitle>Read-only workspace</AlertTitle>
           <AlertDescription>
-            This parent portal sample is visible only to demo accounts and is not saved as live family data.
+            This parent portal preview is read-only. Changes are not saved as live family data.
           </AlertDescription>
         </Alert>
       ) : null}

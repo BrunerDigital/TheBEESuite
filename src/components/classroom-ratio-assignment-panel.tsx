@@ -172,8 +172,8 @@ export function ClassroomRatioAssignmentPanel({ classrooms, staff, canManage = f
         {demoMode ? (
           <Alert>
             <AlertCircle className="size-4" />
-            <AlertTitle>Demo view</AlertTitle>
-            <AlertDescription>Assignment actions are disabled for demo classroom data.</AlertDescription>
+            <AlertTitle>Read-only workspace</AlertTitle>
+            <AlertDescription>Assignment actions are unavailable in this workspace.</AlertDescription>
           </Alert>
         ) : null}
         {statusMessage ? (

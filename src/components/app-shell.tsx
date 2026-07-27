@@ -51,6 +51,7 @@ import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
 import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { cn } from "@/lib/utils";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
@@ -72,6 +73,10 @@ function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) 
     && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)
   ) return false;
   return canAccessModule(currentUser, slug);
+}
+
+function shellUserViewText(value: string) {
+  return removeDemoMarkersFromUserView(value);
 }
 
 type NotificationSummary = {
@@ -238,10 +243,12 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
               className="block rounded-lg p-3 text-sm transition hover:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="font-medium">{item.title}</div>
+                <div className="font-medium">{shellUserViewText(item.title)}</div>
                 <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.body}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {shellUserViewText(item.body)}
+              </p>
             </Link>
           ))}
           {!items.length ? (
@@ -339,14 +346,16 @@ function isParentFacingUser(currentUser?: ShellUser) {
 }
 
 function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
+  const displayName = removeDemoMarkersFromUserView(currentUser.name);
+  const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
-        <UserAvatar name={currentUser.name} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
+        <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <div className="p-2">
-          <ProfilePhotoUploader name={currentUser.name} email={currentUser.email} profilePhotoUrl={currentUser.profilePhotoUrl} />
+          <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
         </div>
         <div className="px-3 pb-2">
           <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
@@ -413,6 +422,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchUserEmail = currentUser?.email ?? "";
+  const displayUserName = currentUser
+    ? removeDemoMarkersFromUserView(currentUser.name)
+    : undefined;
   const trimmedSearchQuery = searchQuery.trim();
   const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
   const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
@@ -611,8 +623,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                             onClick={() => setSearchOpen(false)}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{result.label}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                              <span className="block truncate text-sm font-medium">{shellUserViewText(result.label)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail)}</span>
                             </span>
                             {result.badge ? <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">{result.badge}</Badge> : null}
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
@@ -651,8 +663,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                         {activeSearchResults.slice(0, 6).map((result) => (
                           <Link key={result.id} href={result.href} onClick={() => setMobileSearchOpen(false)} className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10">
                             <span className="min-w-0">
-                              <span className="block truncate font-medium">{result.label}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                              <span className="block truncate font-medium">{shellUserViewText(result.label)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail)}</span>
                             </span>
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
                           </Link>
@@ -714,7 +726,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   <div className="hidden items-center gap-2 sm:flex">
                     <AccountMenu currentUser={currentUser} onLogout={logout} />
                     <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
-                      <div className="text-xs font-medium leading-none">{currentUser.name}</div>
+                      <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
                     </div>
                     <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>

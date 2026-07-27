@@ -325,10 +325,10 @@ function DemoDataNotice({ section }: { section: string }) {
       <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <Badge variant="outline" className="border-primary/40 text-primary">
-            Demo account data
+            Read-only workspace
           </Badge>
           <p className="mt-2 text-sm text-muted-foreground">
-            This {section} sample is visible only to demo accounts and is not saved as live school data.
+            This {section} preview is read-only. Changes are not saved as live school data.
           </p>
         </div>
         <span className="text-xs font-medium uppercase tracking-[0.16em] text-primary">Preview only</span>

@@ -19,6 +19,7 @@ import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,9 @@ export default async function DashboardPage() {
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
   const showDemoFallbackData = canViewDemoFallbackData(user);
+  const displayText = (value: string) => showDemoFallbackData
+    ? removeDemoMarkersFromUserView(value)
+    : value;
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
@@ -429,17 +433,17 @@ export default async function DashboardPage() {
   }
   const attendanceScopeLabel = user.role === UserRole.TEACHER
     ? attendanceClassroomRows[0]
-      ? `${attendanceClassroomRows[0].center.crmLocationId ?? attendanceClassroomRows[0].center.name} - ${attendanceClassroomRows[0].name}`
+      ? `${displayText(attendanceClassroomRows[0].center.crmLocationId ?? attendanceClassroomRows[0].center.name)} - ${attendanceClassroomRows[0].name}`
       : "Assigned classroom not set"
     : centers.length === 1
-      ? `All classes at ${centers[0].crmLocationId ?? centers[0].name}`
+      ? `All classes at ${displayText(centers[0].crmLocationId ?? centers[0].name)}`
       : "All classes across visible schools";
   const attendanceSnapshot = buildDashboardAttendanceSnapshot({
     scopeLabel: attendanceScopeLabel,
     classrooms: attendanceClassroomRows.map((classroom) => ({
       id: classroom.id,
       name: classroom.name,
-      centerName: classroom.center.crmLocationId ?? classroom.center.name,
+      centerName: displayText(classroom.center.crmLocationId ?? classroom.center.name),
       children: classroom.children,
     })),
     latestLogByChild: latestDashboardCheckLogByChild,
@@ -692,7 +696,7 @@ export default async function DashboardPage() {
     const pendingIncidentCount = pendingIncidentsByCenter.get(center.id) ?? 0;
     return {
       id: center.id,
-      name: center.crmLocationId ?? center.name,
+      name: displayText(center.crmLocationId ?? center.name),
       region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
       children,
       capacity: capacityForCenter,
@@ -798,7 +802,7 @@ export default async function DashboardPage() {
     ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread.`
     : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread.`;
   const centerEmbedCards = centers.map((center) => {
-    const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
+    const displayName = [displayText(center.crmLocationId ?? center.name), [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
       .join(" · ");
     return {
@@ -810,13 +814,13 @@ export default async function DashboardPage() {
       embedCode: isKidCityWorkspace
         ? getKidCityLocationInquiryEmbedCode({
             centerId: center.id,
-            centerName: center.name,
+            centerName: displayText(center.name),
             crmLocationId: center.crmLocationId,
             locationId: center.locationId,
           })
         : getCenterInquiryEmbedCode({
             centerId: center.id,
-            centerName: center.name,
+            centerName: displayText(center.name),
             brandName,
           }),
     };
@@ -836,8 +840,10 @@ export default async function DashboardPage() {
   const registrationShares = canManageCrmLeads(user)
     ? centers.map((center) => ({
         centerId: center.id,
-        schoolLabel: center.crmLocationId
-          ?? [center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+        schoolLabel: displayText(
+          center.crmLocationId
+            ?? [center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+        ),
         registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(), center.id),
       }))
     : [];
@@ -858,9 +864,9 @@ export default async function DashboardPage() {
       value: `${item._count._all.toLocaleString()} leads`,
     })),
     leadRows: recentDashboardLeads.map((lead) => ({
-      family: lead.familyName,
-      child: lead.childName || lead.ageGroupInterest || lead.programInterest || "Child details pending",
-      source: lead.leadSource || "Website/manual",
+      family: displayText(lead.familyName),
+      child: displayText(lead.childName || lead.ageGroupInterest || lead.programInterest || "Child details pending"),
+      source: displayText(lead.leadSource || "Website/manual"),
       stage: stageLabels[lead.stage],
       score: lead.score,
       desiredStart: lead.desiredStartDate
@@ -871,9 +877,9 @@ export default async function DashboardPage() {
         : [lead.programInterest, lead.ageGroupInterest].filter((tag): tag is string => Boolean(tag)),
     })),
     centers: executiveSchoolComparisons.slice(0, 6).map((center) => ({
-      name: center.name,
-      region: center.region,
-      director: user.name,
+      name: displayText(center.name),
+      region: displayText(center.region),
+      director: displayText(user.name),
       children: center.children,
       capacity: center.capacity,
       staff: center.staff,
@@ -891,10 +897,10 @@ export default async function DashboardPage() {
       };
     }),
     parentMessages: parentMessageRows.map((message) => ({
-      from: message.family?.name ?? message.sender?.name ?? "Parent message",
-      subject: message.subject ?? "Parent message",
+      from: displayText(message.family?.name ?? message.sender?.name ?? "Parent message"),
+      subject: displayText(message.subject ?? "Parent message"),
       status: message.priority === "high" || message.priority === "urgent" ? "Priority" : message.readAt ? "Reviewed" : "Open",
-      preview: message.body,
+      preview: displayText(message.body),
       sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
     })),
     aiHighlights,

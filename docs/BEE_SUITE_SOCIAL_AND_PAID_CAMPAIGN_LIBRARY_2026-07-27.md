@@ -10,7 +10,7 @@ This pack turns the approved light-mode product screenshots and SOP graphics int
 | --- | ---: | --- |
 | Square | 1080 x 1080 | Instagram, Facebook, LinkedIn |
 | Portrait | 1080 x 1350 | Instagram and Facebook feed, LinkedIn |
-| Story | 1080 x 1920 | Instagram Stories, Facebook Stories, Reels, TikTok |
+| Story | 1080 x 1920 | Instagram Stories, Facebook Stories, Reels, TikTok video end card |
 | Landscape | 1200 x 628 | LinkedIn sponsored content and Facebook link ads |
 | Google square clean | 1200 x 1200 | Google Demand Gen and responsive display image candidate |
 | Google landscape clean | 1200 x 628 | Google Demand Gen and responsive display image candidate |
@@ -74,7 +74,7 @@ Childcare teams should not have to rebuild the school day across disconnected ta
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 
 ## Parents stay informed. Teachers stay focused.
 
@@ -125,7 +125,7 @@ The daily report should support the classroom—not interrupt it. Teachers recor
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 
 ## The right view for every role.
 
@@ -176,7 +176,7 @@ Every childcare role needs a different view. Owners need rollups. Directors need
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 
 ## See every school without losing the details.
 
@@ -227,7 +227,7 @@ Multi-location visibility should not erase school-level truth. The BEE Suite hel
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 
 ## Billing belongs in the same operating record.
 
@@ -278,7 +278,7 @@ Tuition setup, invoice creation, payment status, and family history work better 
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 
 ## Launch by feature. Grow with confidence.
 
@@ -329,4 +329,4 @@ A software release is not the same as a school launch. The BEE Suite rollout fra
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: `google-square-clean` and `google-landscape-clean` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.

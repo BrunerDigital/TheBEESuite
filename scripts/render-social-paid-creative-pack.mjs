@@ -48,7 +48,12 @@ const formats = {
   story: {
     width: 1080,
     height: 1920,
-    placements: ["Instagram Stories", "Facebook Stories", "Instagram Reels", "TikTok"],
+    placements: [
+      "Instagram Stories",
+      "Facebook Stories",
+      "Instagram Reels",
+      "TikTok video end card",
+    ],
   },
   landscape: {
     width: 1200,
@@ -890,7 +895,7 @@ ${googleCopy.descriptions.map((description) => `- ${description}`).join("\n")}
 - Meta and Instagram: square, portrait, and story exports.
 - LinkedIn: landscape or portrait export.
 - Google responsive display and Demand Gen: \`google-square-clean\` and \`google-landscape-clean\` image candidates, paired with the Google copy fields above.
-- TikTok and Reels: story export; use as a static end card or animate the product frames without changing the copy.
+- TikTok and Reels: use the story export as a video-production end card or animate the product frames without changing the copy; export the final video to the selected placement specification.
 `;
       },
     )
@@ -908,7 +913,7 @@ This pack turns the approved light-mode product screenshots and SOP graphics int
 | --- | ---: | --- |
 | Square | 1080 x 1080 | Instagram, Facebook, LinkedIn |
 | Portrait | 1080 x 1350 | Instagram and Facebook feed, LinkedIn |
-| Story | 1080 x 1920 | Instagram Stories, Facebook Stories, Reels, TikTok |
+| Story | 1080 x 1920 | Instagram Stories, Facebook Stories, Reels, TikTok video end card |
 | Landscape | 1200 x 628 | LinkedIn sponsored content and Facebook link ads |
 | Google square clean | 1200 x 1200 | Google Demand Gen and responsive display image candidate |
 | Google landscape clean | 1200 x 628 | Google Demand Gen and responsive display image candidate |

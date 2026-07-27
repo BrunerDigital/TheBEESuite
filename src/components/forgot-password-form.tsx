@@ -69,7 +69,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
               ? parentSetupFlow
                 ? "We will send a secure recovery link for the email your school invited. After updating your password, finish parent setup."
                 : "We will send a secure recovery link for the parent or guardian email your school has on file."
-              : "We’ll send a secure Supabase Auth recovery link so your Kid City USA or BEE Suite account can set a fresh password."}
+              : "We’ll send a secure Supabase Auth recovery link so your school or BEE Suite account can set a fresh password."}
           </p>
         </div>
         <p className="text-sm text-slate-300">
@@ -115,7 +115,7 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
                   className="h-11"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder={parentPortalFlow ? "parent@example.com" : "school@kidcityusa.com"}
+                  placeholder={parentPortalFlow ? "parent@example.com" : "school@example.com"}
                   type="email"
                   autoComplete="email"
                   required

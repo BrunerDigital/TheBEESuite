@@ -33,10 +33,12 @@ export function buildRegistrationShareEmail({
   schoolLabel,
   registrationUrl,
   senderName,
+  brandName,
 }: {
   schoolLabel: string;
   registrationUrl: string;
   senderName?: string | null;
+  brandName: string;
 }) {
   const senderLine = senderName?.trim()
     ? `${senderName.trim()} from ${schoolLabel} invited you to complete the school's online registration and enrollment packet.`
@@ -53,6 +55,8 @@ export function buildRegistrationShareEmail({
       `This link is connected directly to ${schoolLabel}, so your completed packet will be routed to that school's director dashboard for review.`,
       "",
       "Submitting the packet does not confirm enrollment. The school will follow up after reviewing it.",
+      "",
+      brandName,
     ].join("\n"),
   };
 }
@@ -131,6 +135,7 @@ export function buildRegistrationLeadSuggestion({
   stage,
   contextPrompt,
   customFields,
+  brandName,
 }: {
   familyName: string;
   childName?: string | null;
@@ -140,6 +145,7 @@ export function buildRegistrationLeadSuggestion({
   stage: string;
   contextPrompt?: string;
   customFields?: unknown;
+  brandName: string;
 }): RegistrationLeadSuggestion | null {
   if (registrationCompletedStages.has(stage)) return null;
 
@@ -170,7 +176,7 @@ export function buildRegistrationLeadSuggestion({
       "This form is linked directly to this school. Submitting it sends the packet to the director for review and does not confirm enrollment.",
       "",
       "Thank you,",
-      "Kid City USA",
+      brandName,
     ].join("\n"),
   };
 }

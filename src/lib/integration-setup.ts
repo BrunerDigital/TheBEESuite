@@ -279,7 +279,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     envRequirements: [{ label: "LinkedIn access token", names: ["LINKEDIN_SOCIAL_ACCESS_TOKEN"] }],
     fields: [
       { key: "organizationId", label: "Organization ID", type: "text", placeholder: "Organization ID" },
-      { key: "vanityName", label: "Page vanity name", type: "text", placeholder: "kid-city-usa" },
+      { key: "vanityName", label: "Page vanity name", type: "text", placeholder: "school-brand" },
       { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School LinkedIn Page" },
       { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Community Management approval notes" },
     ],

@@ -150,6 +150,7 @@ import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES, studentUniformProductOptions } from "@/lib/uniform-products";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
+import { canUseKidCityCorporateBilling } from "@/lib/brand-assets";
 import {
   asRecord,
   buildRegistrationReviewPreview,
@@ -178,8 +179,12 @@ function safeFormSubmissionDetails(data: unknown) {
   return keys.length ? `Submitted fields: ${keys.join(", ")}` : "No submitted values";
 }
 
-async function signedProfilePhotoUrl(customFields: unknown, role: UserRole) {
-  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
+async function signedProfilePhotoUrl(
+  customFields: unknown,
+  role: UserRole,
+  brandKind: CurrentUser["branding"]["kind"],
+) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role, brandKind);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
@@ -1072,6 +1077,7 @@ async function renderLivePage(
     return (
       <MultiLocationDashboardPage
         data={{
+          brandName: user.branding.name,
           centers,
           stats: {
             centers: centers.length,
@@ -3876,6 +3882,7 @@ async function renderLivePage(
   }
 
   if (slug === "corporate-billing") {
+    if (!canUseKidCityCorporateBilling(user.role, user.branding.kind)) notFound();
     const kidCitySoftwareInvoice = await getKidCitySoftwareInvoiceSnapshot(prisma);
     return <CorporateBillingPage data={{ kidCitySoftwareInvoice }} />;
   }
@@ -4115,6 +4122,7 @@ async function renderLivePage(
     return (
       <TeamPermissionsPage
         data={{
+          brandName: user.branding.name,
           users,
           roleCounts: roleCounts.map((role) => ({ role: role.role, count: role._count._all })),
           deviceSessions: deviceSessions.map((session) => ({
@@ -4260,6 +4268,7 @@ async function renderLivePage(
     return (
       <AgencyAdminPage
         data={{
+          brandName: user.branding.name,
           stats: {
             organizations,
             centers: adminCenters.length,
@@ -5136,7 +5145,7 @@ async function renderLivePage(
         ...profile,
         user: {
           ...profile.user,
-          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields, profile.user.role),
+          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields, profile.user.role, user.branding.kind),
         },
       })),
     );

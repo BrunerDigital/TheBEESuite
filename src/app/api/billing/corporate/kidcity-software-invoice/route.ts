@@ -8,6 +8,7 @@ import {
 } from "@/lib/kidcity-software-billing";
 import { prisma } from "@/lib/prisma";
 import { canAccessModule } from "@/lib/rbac";
+import { canUseKidCityCorporateBilling } from "@/lib/brand-assets";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -22,6 +23,9 @@ async function GETHandler() {
   if (!canAccessModule(user, "corporate-billing")) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
   }
+  if (!canUseKidCityCorporateBilling(user.role, user.branding.kind)) {
+    return NextResponse.json({ ok: false, error: "This invoice is only available to the Kid City USA tenant." }, { status: 403 });
+  }
 
   const snapshot = await getKidCitySoftwareInvoiceSnapshot(prisma);
   return NextResponse.json({ ok: true, invoice: snapshot });
@@ -32,6 +36,9 @@ async function POSTHandler(request: NextRequest) {
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!canAccessModule(user, "corporate-billing")) {
     return NextResponse.json({ ok: false, error: "Corporate billing access is not allowed for this role." }, { status: 403 });
+  }
+  if (!canUseKidCityCorporateBilling(user.role, user.branding.kind)) {
+    return NextResponse.json({ ok: false, error: "This invoice is only available to the Kid City USA tenant." }, { status: 403 });
   }
 
   const body = jsonObject(await request.json().catch(() => ({})));

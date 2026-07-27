@@ -447,7 +447,7 @@ export function kidCityRegistrationPacketSchema() {
   return {
     version: 3,
     source: "public_online_registration",
-    title: "Kid City USA Online Registration Packet - Florida March 2026",
+    title: "Online Registration Packet - Florida March 2026",
     sections: kidCityRegistrationPacketSections,
   };
 }

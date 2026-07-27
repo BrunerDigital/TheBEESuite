@@ -31,6 +31,7 @@ type CenterOption = {
 type RegistrationFormProps = {
   centers: CenterOption[];
   initialCenterId?: string;
+  brandName?: string;
 };
 
 type SubmitResult = {
@@ -409,7 +410,11 @@ function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { l
   );
 }
 
-export function OnlineRegistrationForm({ centers, initialCenterId = "" }: RegistrationFormProps) {
+export function OnlineRegistrationForm({
+  centers,
+  initialCenterId = "",
+  brandName = "the selected school",
+}: RegistrationFormProps) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SubmitResult | null>(null);
   const lockedCenter = centers.find((center) => center.id === initialCenterId);
@@ -621,7 +626,7 @@ export function OnlineRegistrationForm({ centers, initialCenterId = "" }: Regist
           <SelectField id="bathroomRequest" label="Does your child ask to use the bathroom?" options={yesNoOptions} />
           <SelectField id="bathroomHelpNeeded" label="Does your child need bathroom help?" options={yesNoOptions} />
           <TextAreaField id="toiletingRoutine" label="Toileting routines or methods" />
-          <TextAreaField id="goalsExpectations" label="Goals and expectations for Kid City USA" />
+          <TextAreaField id="goalsExpectations" label={`Goals and expectations for ${brandName}`} />
           <TextAreaField id="friendsAtCenter" label="Friends or acquaintances at this center" />
           <TextAreaField id="childPersonality" label="Describe your child" placeholder="Shy, outgoing, a leader, strong willed, etc." />
           <TextAreaField id="otherHelpfulInfo" label="Other information to help meet your child's needs" />
@@ -681,7 +686,9 @@ export function OnlineRegistrationForm({ centers, initialCenterId = "" }: Regist
           <CheckboxCard name="sunscreenPermission">I authorize sunscreen or topical application according to school policy.</CheckboxCard>
           <CheckboxCard name="waterActivityPermission">I authorize water activity participation when applicable.</CheckboxCard>
           <CheckboxCard name="emergencyMedicalPermission" required>I authorize emergency medical care if needed.</CheckboxCard>
-          <CheckboxCard name="firstAidEmergencyConsent" required>I give consent for Kid City USA staff to provide first aid and, if necessary, transport my child for emergency care.</CheckboxCard>
+          <CheckboxCard name="firstAidEmergencyConsent" required>
+            {`I give consent for ${brandName} staff to provide first aid and, if necessary, transport my child for emergency care.`}
+          </CheckboxCard>
           <CheckboxCard name="floridaKnowYourChildcareAcknowledgment" required>I have received, read, and understand the Know Your Childcare Facility information.</CheckboxCard>
           <CheckboxCard name="floridaDistractedAdultAcknowledgment" required>I have received, read, and understand the Distracted Adult Flyer.</CheckboxCard>
           <CheckboxCard name="dcfInspectionAccessAcknowledgment" required>I understand DCF licensing authority may access, photograph, record, and copy child care records for inspections.</CheckboxCard>

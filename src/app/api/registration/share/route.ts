@@ -111,6 +111,7 @@ async function POSTHandler(request: NextRequest) {
     schoolLabel,
     registrationUrl,
     senderName: user.name,
+    brandName: user.branding.name,
   });
   const emailResult = await sendEmail({
     to: emails,

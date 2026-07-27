@@ -45,6 +45,7 @@ import {
   buildRegistrationLeadSuggestion,
   buildRegistrationShareUrl,
 } from "@/lib/registration-sharing";
+import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 
 type CenterOption = {
@@ -156,6 +157,7 @@ type Props = {
     name: string;
     role: string;
     centerIds: string[];
+    branding: WorkspaceBranding;
   };
 };
 
@@ -227,34 +229,38 @@ function getLeadOwner(lead?: CrmLead | null) {
     : typeof ownerEmail === "string" ? ownerEmail : "";
 }
 
-function makeMrBeeDraft(lead?: CrmLead) {
+function makeMrBeeDraft(lead: CrmLead | undefined, brandName: string) {
   if (!lead) return "Choose a lead and Mr. Bee will draft a warm, human-reviewed follow-up.";
 
-  return `Hi ${lead.familyName}, this is Kid City USA following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
+  return `Hi ${lead.familyName}, this is ${brandName} following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }
 
-function makeLeadEmailOptions(lead: CrmLead | undefined, appBaseUrl: string): LeadEmailSuggestion[] {
+function makeLeadEmailOptions(
+  lead: CrmLead | undefined,
+  appBaseUrl: string,
+  brandName: string,
+): LeadEmailSuggestion[] {
   if (!lead) return [];
   const program = lead.programInterest ?? "childcare";
   const childLine = lead.childName ? ` for ${lead.childName}` : "";
   const centerName = lead.center.crmLocationId ?? lead.center.name;
-  const subject = `Kid City USA ${program} follow-up`;
+  const subject = `${brandName} ${program} follow-up`;
 
   const generalSuggestions = [
     {
       label: "Warm follow-up",
       subject,
-      body: `Hi ${lead.familyName},\n\nThank you for your interest in ${program}${childLine} at ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nThank you for your interest in ${program}${childLine} at ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.\n\nThank you,\n${brandName}`,
     },
     {
       label: "Tour next step",
       subject: `Tour availability for ${centerName}`,
-      body: `Hi ${lead.familyName},\n\nI wanted to follow up on your ${program} inquiry${childLine}. If you would like to tour ${centerName}, reply with a few times that work well and our team can help coordinate the visit.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nI wanted to follow up on your ${program} inquiry${childLine}. If you would like to tour ${centerName}, reply with a few times that work well and our team can help coordinate the visit.\n\nThank you,\n${brandName}`,
     },
     {
       label: "Application help",
       subject: `Enrollment next steps for ${centerName}`,
-      body: `Hi ${lead.familyName},\n\nThis is Kid City USA checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nThis is ${brandName} checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\n${brandName}`,
     },
   ];
   const registrationSuggestion = buildRegistrationLeadSuggestion({
@@ -265,6 +271,7 @@ function makeLeadEmailOptions(lead: CrmLead | undefined, appBaseUrl: string): Le
     registrationUrl: buildRegistrationShareUrl(appBaseUrl, lead.center.id),
     stage: lead.stage,
     customFields: lead.customFields,
+    brandName,
   });
   return registrationSuggestion ? [registrationSuggestion, ...generalSuggestions] : generalSuggestions;
 }
@@ -471,6 +478,7 @@ function subscribeCrmSavedViews(callback: () => void) {
 
 export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }: Props) {
   const timeZone = useSchoolTimeZone();
+  const brandName = currentUser.branding.name;
   const searchParams = useSearchParams();
   const routeQuery = searchParams.get("q") ?? "";
   const [leads, setLeads] = useState(initialLeads);
@@ -505,11 +513,11 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   const [taskDueAt, setTaskDueAt] = useState("");
   const [tourStartsAt, setTourStartsAt] = useState("");
   const [tourNotes, setTourNotes] = useState("");
-  const [emailSubject, setEmailSubject] = useState("Kid City USA enrollment follow-up");
-  const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0]));
+  const [emailSubject, setEmailSubject] = useState(`${brandName} enrollment follow-up`);
+  const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0], brandName));
   const [emailPurposePrompt, setEmailPurposePrompt] = useState("");
   const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(
-    () => makeLeadEmailOptions(initialLeads[0], appBaseUrl),
+    () => makeLeadEmailOptions(initialLeads[0], appBaseUrl, brandName),
   );
   const [emailAttachments, setEmailAttachments] = useState<EmailComposerAttachment[]>([]);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
@@ -616,9 +624,9 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
   function selectLead(lead: CrmLead) {
     setSelectedLeadId(lead.id);
     setSelectedLeadDetails(null);
-    setEmailSubject(`Kid City USA ${lead.programInterest ?? "enrollment"} follow-up`);
-    setEmailDraft(makeMrBeeDraft(lead));
-    setEmailSuggestions(makeLeadEmailOptions(lead, appBaseUrl));
+    setEmailSubject(`${brandName} ${lead.programInterest ?? "enrollment"} follow-up`);
+    setEmailDraft(makeMrBeeDraft(lead, brandName));
+    setEmailSuggestions(makeLeadEmailOptions(lead, appBaseUrl, brandName));
     setEmailAttachments([]);
     setEditForm({
       familyName: lead.familyName,
@@ -758,8 +766,8 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       const json = (await response.json()) as { lead: CrmLead };
       setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
       setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
-      setEmailDraft(makeMrBeeDraft(json.lead));
-      setEmailSuggestions(makeLeadEmailOptions(json.lead, appBaseUrl));
+      setEmailDraft(makeMrBeeDraft(json.lead, brandName));
+      setEmailSuggestions(makeLeadEmailOptions(json.lead, appBaseUrl, brandName));
       showStatus("Lead details updated and audit logged.");
     });
   }
@@ -957,7 +965,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
       const json = (await response.json()) as { suggestions?: LeadEmailSuggestion[]; guardrailNote?: string };
       const nextSuggestions = Array.isArray(json.suggestions) && json.suggestions.length
         ? json.suggestions
-        : makeLeadEmailOptions(selectedLead, appBaseUrl);
+        : makeLeadEmailOptions(selectedLead, appBaseUrl, brandName);
       setEmailSuggestions(nextSuggestions);
       showStatus("Message options generated. Review one before sending.");
     });
@@ -1071,7 +1079,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
             notes: json?.note ? [json.note, ...current.notes] : current.notes,
           }
         : current);
-      setEmailSuggestions(makeLeadEmailOptions(nextLead, appBaseUrl));
+      setEmailSuggestions(makeLeadEmailOptions(nextLead, appBaseUrl, brandName));
       showStatus("School-specific registration form sent and logged on this CRM lead.");
     });
   }
@@ -1141,7 +1149,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
         <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-primary text-primary-foreground">Kid City USA Live CRM</Badge>
+              <Badge className="bg-primary text-primary-foreground">{brandName} Live CRM</Badge>
               <Badge variant="outline">SaaS tenant-ready</Badge>
               <Badge variant="secondary">{filteredLeads.length.toLocaleString()} visible leads</Badge>
               <Badge variant="outline">
@@ -1158,7 +1166,7 @@ export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }:
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                   Live lead intake, school routing, manual lead entry, pipeline movement,
-                  and Mr. Bee communication support for Kid City USA’s first rollout.
+                  and Mr. Bee communication support for {brandName} enrollment operations.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">

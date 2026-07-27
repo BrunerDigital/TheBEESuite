@@ -473,8 +473,8 @@ async function POSTHandler(request: NextRequest) {
 
     const form = await prisma.form.upsert({
       where: { id: "online-registration-packet" },
-      update: { name: "Kid City USA Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
-      create: { id: "online-registration-packet", name: "Kid City USA Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
+      update: { name: "Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
+      create: { id: "online-registration-packet", name: "Online Registration Packet", type: "online_registration", schema: kidCityRegistrationPacketSchema(), status: "active" },
     });
 
     const submission = await prisma.formSubmission.create({

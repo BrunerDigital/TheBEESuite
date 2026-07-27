@@ -511,6 +511,7 @@ export function AuditLogsPage({ data }: { data: AuditLogsData }) {
 }
 
 export type TeamPermissionsData = {
+  brandName: string;
   users: Array<{
     id: string;
     name: string;
@@ -565,7 +566,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>User Directory</CardTitle>
-          <CardDescription>Kid City USA pilot accounts and SaaS role model</CardDescription>
+          <CardDescription>{data.brandName} accounts and role-scoped access</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -618,6 +619,7 @@ export function TeamPermissionsPage({ data }: { data: TeamPermissionsData }) {
 }
 
 export type AgencyAdminData = {
+  brandName: string;
   stats: {
     organizations: number;
     centers: number;
@@ -695,7 +697,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Executive / Franchise Admin</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Corporate controls for location lifecycle, owner groups, scoped users, password resets, and multi-location visibility for Kid City USA and future SaaS tenants.
+          Corporate controls for location lifecycle, owner groups, scoped users, password resets, and multi-location visibility for {data.brandName}.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-4">
@@ -704,7 +706,7 @@ export function AgencyAdminPage({ data }: { data: AgencyAdminData }) {
         <StatCard label="Users" value={data.stats.users} />
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
       </div>
-      <ExecutiveAdminConsole centers={data.centers} ownerGroups={data.ownerGroups} users={data.users} />
+      <ExecutiveAdminConsole centers={data.centers} ownerGroups={data.ownerGroups} users={data.users} brandName={data.brandName} />
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <Card className="glass-panel">
           <CardHeader>
@@ -4333,6 +4335,7 @@ export function CompliancePage({ data }: { data: CompliancePageData }) {
 }
 
 export type MultiLocationDashboardData = {
+  brandName: string;
   centers: Array<{
     id: string;
     name: string;
@@ -4372,7 +4375,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
         </Badge>
         <h1 className="text-3xl font-semibold tracking-tight">Multi-Location Dashboard</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-          Brand and regional visibility across Kid City USA school profiles, enrollment demand, staff, and upcoming tours.
+          Brand and regional visibility across {data.brandName} school profiles, enrollment demand, staff, and upcoming tours.
         </p>
       </section>
       <div className="grid gap-4 md:grid-cols-5">
@@ -4453,7 +4456,7 @@ export function MultiLocationDashboardPage({ data }: { data: MultiLocationDashbo
             <CardDescription>
               {data.fte.status === "ready"
                 ? `Synced from ${data.fte.sourceMode === "template_week_tab" ? "template" : "rolling"} Google Sheets tab "${data.fte.sheetName}".`
-                : "Connect the Kid City USA FTE Google Sheet to show live full-time-equivalent reporting."}
+                : `Connect the ${data.brandName} FTE Google Sheet to show live full-time-equivalent reporting.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-[16rem_1fr]">

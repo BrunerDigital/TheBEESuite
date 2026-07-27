@@ -50,7 +50,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
 import { canAccessModule } from "@/lib/rbac";
-import type { WorkspaceBranding } from "@/lib/brand-assets";
+import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
@@ -65,6 +65,14 @@ type ShellUser = {
   timeZone?: string;
   timeZonesByCenterId?: Record<string, string>;
 };
+
+function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
+  if (
+    slug === "corporate-billing"
+    && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)
+  ) return false;
+  return canAccessModule(currentUser, slug);
+}
 
 type NotificationSummary = {
   stats: {
@@ -109,9 +117,9 @@ function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
 
 function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
-  const canViewEnrollment = canAccessModule(currentUser, "crm-leads");
+  const canViewEnrollment = canAccessShellModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
-  const canViewFteReports = canAccessModule(currentUser, "fte-reports");
+  const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
   const notificationCenterHref = notificationCenterHrefForRole(currentUser?.role);
 
   function loadSummary() {
@@ -255,7 +263,7 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(([, slug]) => canAccessModule(currentUser, slug)),
+      items: group.items.filter(([, slug]) => canAccessShellModule(currentUser, slug)),
     }))
     .filter((group) => group.items.length);
 
@@ -415,15 +423,15 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const showNotificationTools = Boolean(currentUser);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
-    .filter((item) => canAccessModule(currentUser, item.slug))
+    .filter((item) => canAccessShellModule(currentUser, item.slug))
     .slice(0, 12);
-  const searchDestination = canAccessModule(currentUser, "crm-leads")
+  const searchDestination = canAccessShellModule(currentUser, "crm-leads")
     ? "crm-leads"
-    : canAccessModule(currentUser, "parent-portal")
+    : canAccessShellModule(currentUser, "parent-portal")
       ? "parent-portal"
-      : canAccessModule(currentUser, "billing-invoices")
+      : canAccessShellModule(currentUser, "billing-invoices")
         ? "billing-invoices"
-        : canAccessModule(currentUser, "messages")
+        : canAccessShellModule(currentUser, "messages")
           ? "messages"
           : "dashboard";
   const searchPlaceholder = searchDestination === "crm-leads"
@@ -441,6 +449,22 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     if (storedTheme === "dark") document.documentElement.classList.add("dark");
     if (storedTheme === "light") document.documentElement.classList.remove("dark");
   }, []);
+
+  useEffect(() => {
+    const branding = currentUser?.branding;
+    if (!branding) return;
+
+    const previousTitle = document.title;
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const previousFavicon = favicon?.href;
+    document.title = `${branding.name} | The BEE Suite`;
+    if (favicon) favicon.href = branding.markSrc;
+
+    return () => {
+      document.title = previousTitle;
+      if (favicon && previousFavicon) favicon.href = previousFavicon;
+    };
+  }, [currentUser?.branding]);
 
   useEffect(() => {
     const query = searchQuery.trim();

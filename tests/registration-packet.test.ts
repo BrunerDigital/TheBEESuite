@@ -35,10 +35,10 @@ test("registration approval refuses duplicate or post-approval review writes", (
 });
 import { INTERNAL_SIGNATURE_PENDING_KEY } from "../src/lib/signature-capture";
 
-test("Kid City registration packet schema includes final operational sections", () => {
+test("registration packet schema includes final operational sections without tenant-specific branding", () => {
   const schema = kidCityRegistrationPacketSchema();
   assert.equal(schema.version, 3);
-  assert.equal(schema.title, "Kid City USA Online Registration Packet - Florida March 2026");
+  assert.equal(schema.title, "Online Registration Packet - Florida March 2026");
   assert.deepEqual(schema.sections.map((section) => section.id), [
     "school_program",
     "guardians_billing",

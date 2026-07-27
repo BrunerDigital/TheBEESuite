@@ -167,8 +167,12 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
   return `${data}.${sign(data)}`;
 }
 
-async function resolveCurrentUserProfilePhotoUrl(customFields: unknown, role: UserRole) {
-  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
+async function resolveCurrentUserProfilePhotoUrl(
+  customFields: unknown,
+  role: UserRole,
+  branding: WorkspaceBranding,
+) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role, branding.kind);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
@@ -336,6 +340,14 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
       })
     : [];
   const timeZonesByCenterId = Object.fromEntries(timeZoneCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
+  const branding = resolveWorkspaceBranding({
+    tenantName: user.tenant.name,
+    tenantSlug: user.tenant.slug,
+    brandName,
+    brandSlug: user.organization?.brand?.slug,
+    organizationName: user.organization?.name,
+    email: user.email,
+  });
 
   return {
     id: user.id,
@@ -351,15 +363,8 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
-    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role),
-    branding: resolveWorkspaceBranding({
-      tenantName: user.tenant.name,
-      tenantSlug: user.tenant.slug,
-      brandName,
-      brandSlug: user.organization?.brand?.slug,
-      organizationName: user.organization?.name,
-      email: user.email,
-    }),
+    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role, branding),
+    branding,
     timeZone: timeZonesByCenterId[centerIds[0] ?? ""] || "America/New_York",
     timeZonesByCenterId,
   };

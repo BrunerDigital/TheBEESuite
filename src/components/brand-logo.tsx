@@ -17,6 +17,12 @@ const kidCityLogoSizes: Record<BrandSize, string> = {
   lg: "h-16 max-w-[16rem]",
 };
 
+const missHoneysLogoSizes: Record<BrandSize, string> = {
+  sm: "size-12",
+  md: "size-16",
+  lg: "size-24",
+};
+
 export function BrandIcon({
   branding = BEE_SUITE_BRANDING,
   className,
@@ -27,15 +33,20 @@ export function BrandIcon({
   priority?: boolean;
 }) {
   const isKidCity = branding.kind === "kid-city-usa";
+  const isMissHoneys = branding.kind === "miss-honeys-learning-center";
 
   return (
-    <span className={cn("relative block overflow-hidden bg-black/5", isKidCity ? "rounded-xl bg-white" : "rounded-xl", className)}>
+    <span className={cn(
+      "relative block overflow-hidden rounded-xl bg-black/5",
+      (isKidCity || isMissHoneys) && "bg-white",
+      className,
+    )}>
       <Image
         src={branding.markSrc}
         alt={branding.logoAlt}
         width={branding.markWidth}
         height={branding.markHeight}
-        className={cn("size-full object-contain", isKidCity && "p-1")}
+        className={cn("size-full object-contain", (isKidCity || isMissHoneys) && "p-1")}
         priority={priority}
       />
     </span>
@@ -62,14 +73,20 @@ export function BrandLogo({
   priority?: boolean;
 }) {
   const isKidCity = branding.kind === "kid-city-usa";
-  const content = isKidCity ? (
-    <span className="flex min-w-0 items-center">
+  const isMissHoneys = branding.kind === "miss-honeys-learning-center";
+  const usesTenantLogo = isKidCity || isMissHoneys;
+  const content = usesTenantLogo ? (
+    <span className={cn("flex min-w-0 items-center", isMissHoneys && "rounded-2xl bg-white p-1")}>
       <Image
         src={branding.logoSrc}
         alt={branding.logoAlt}
         width={branding.logoWidth}
         height={branding.logoHeight}
-        className={cn("w-auto object-contain", kidCityLogoSizes[size], imageClassName)}
+        className={cn(
+          "w-auto object-contain",
+          isMissHoneys ? missHoneysLogoSizes[size] : kidCityLogoSizes[size],
+          imageClassName,
+        )}
         priority={priority}
       />
     </span>

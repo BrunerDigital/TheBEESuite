@@ -481,9 +481,9 @@ async function createParentPortalInvite(input: {
     const deliveryAuditText = text.replace(setupLink.setupUrl, "[private setup link redacted]");
     const emailCopy = await sendEmail({
       to: [email],
-      subject: "Kid City USA registration next steps",
+      subject: `${input.user.branding.name} registration next steps`,
       text,
-      fromName: "Kid City USA",
+      fromName: input.user.branding.name,
       disableClickTracking: true,
       categories: ["parent_invitation_email"],
       customArgs: { guardianId: input.guardian.id, familyId: input.family.id, centerId: input.center.id, setupTokenId: setupLink.tokenId },
@@ -494,9 +494,9 @@ async function createParentPortalInvite(input: {
       centerId: input.center.id,
       purpose: "parent_invitation_email",
       to: [email],
-      subject: "Kid City USA registration next steps",
+      subject: `${input.user.branding.name} registration next steps`,
       text: deliveryAuditText,
-      fromName: "Kid City USA",
+      fromName: input.user.branding.name,
       result: emailCopy,
       metadata: { guardianId: input.guardian.id, familyId: input.family.id, registrationApproval: true, setupTokenId: setupLink.tokenId },
     });
@@ -673,9 +673,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     const email = await sendEmail({
       to: [packet.primaryGuardianEmail],
       replyTo: center.email,
-      subject: "Kid City USA registration review update",
+      subject: `${user.branding.name} registration review update`,
       text: rejectionText,
-      fromName: "Kid City USA",
+      fromName: user.branding.name,
       categories: ["registration_email"],
       customArgs: { submissionId, centerId: center.id, leadId: packet.leadId },
       tenantId: center.organization.tenantId,
@@ -687,9 +687,9 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       purpose: "registration_email",
       to: [packet.primaryGuardianEmail],
       replyTo: center.email,
-      subject: "Kid City USA registration review update",
+      subject: `${user.branding.name} registration review update`,
       text: rejectionText,
-      fromName: "Kid City USA",
+      fromName: user.branding.name,
       result: email,
       metadata: { submissionId, reviewStatus: "rejected" },
     });

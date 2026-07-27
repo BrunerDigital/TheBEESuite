@@ -41,12 +41,14 @@ test("registration share email identifies the school and preserves the review bo
     schoolLabel: "NC | Canton",
     registrationUrl: "https://thebeesuite.io/registration?centerId=canton",
     senderName: "Center Director",
+    brandName: "Miss Honey's Learning Center",
   });
 
   assert.match(message.subject, /NC \| Canton/);
   assert.match(message.text, /school-specific form/);
   assert.match(message.text, /director dashboard/);
   assert.match(message.text, /does not confirm enrollment/);
+  assert.match(message.text, /Miss Honey's Learning Center/);
 });
 
 test("CRM registration delivery advances only early stages and records lead invitation state", () => {
@@ -82,17 +84,20 @@ test("AI lead suggestions offer the school-specific registration form when appro
     schoolLabel: "FL | Orlando",
     registrationUrl: "https://thebeesuite.io/registration?centerId=orlando",
     stage: "TOUR_COMPLETED",
+    brandName: "Miss Honey's Learning Center",
   });
 
   assert.equal(suggestion?.label, "Send registration form");
   assert.match(suggestion?.body ?? "", /centerId=orlando/);
   assert.match(suggestion?.body ?? "", /does not confirm enrollment/);
+  assert.match(suggestion?.body ?? "", /Miss Honey's Learning Center/);
 
   const reminder = buildRegistrationLeadSuggestion({
     familyName: "Bee Family",
     schoolLabel: "FL | Orlando",
     registrationUrl: "https://thebeesuite.io/registration?centerId=orlando",
     stage: "APPLICATION_SENT",
+    brandName: "Miss Honey's Learning Center",
     customFields: {
       registrationInvitation: {
         status: "sent",
@@ -108,6 +113,7 @@ test("AI lead suggestions offer the school-specific registration form when appro
     registrationUrl: "https://thebeesuite.io/registration?centerId=orlando",
     stage: "APPLICATION_SUBMITTED",
     contextPrompt: "send registration form",
+    brandName: "Miss Honey's Learning Center",
   }), null);
 });
 
@@ -117,6 +123,7 @@ test("AI can consider registration before a tour only when staff explicitly asks
     schoolLabel: "FL | Orlando",
     registrationUrl: "https://thebeesuite.io/registration?centerId=orlando",
     stage: "CONTACTED",
+    brandName: "Miss Honey's Learning Center",
   }), null);
 
   assert.equal(buildRegistrationLeadSuggestion({
@@ -125,5 +132,6 @@ test("AI can consider registration before a tour only when staff explicitly asks
     registrationUrl: "https://thebeesuite.io/registration?centerId=orlando",
     stage: "CONTACTED",
     contextPrompt: "Please include the registration form",
+    brandName: "Miss Honey's Learning Center",
   })?.label, "Send registration form");
 });

@@ -308,7 +308,7 @@ export function AuthLikePage({ type, nextPath = "" }: { type: "login" | "forgot-
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" placeholder="director@kidcityusa.example" type="email" />
+            <Input id="email" placeholder="director@school.example" type="email" />
           </div>
           {!isForgot ? (
             <div className="flex flex-col gap-2">

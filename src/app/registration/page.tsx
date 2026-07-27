@@ -4,6 +4,7 @@ import { BrandIcon } from "@/components/brand-logo";
 import { OnlineRegistrationForm } from "@/components/online-registration-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BEE_SUITE_BRANDING, resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { prisma } from "@/lib/prisma";
 import { logOperationalError } from "@/lib/request-response-logging";
 import { resolveRegistrationHandoffCenterId } from "@/lib/registration-handoff";
@@ -21,6 +22,13 @@ async function getRegistrationCenters() {
         crmLocationId: true,
         city: true,
         state: true,
+        organization: {
+          select: {
+            name: true,
+            tenant: { select: { name: true, slug: true } },
+            brand: { select: { name: true, slug: true } },
+          },
+        },
       },
     });
   } catch (error) {
@@ -41,6 +49,24 @@ export default async function OnlineRegistrationPage({
   const [centers, query] = await Promise.all([getRegistrationCenters(), searchParams]);
   const requestedCenterId = firstSearchParam(query.centerId).trim();
   const initialCenterId = resolveRegistrationHandoffCenterId(requestedCenterId, centers.map((center) => center.id));
+  const selectedCenter = centers.find((center) => center.id === initialCenterId);
+  const branding = selectedCenter
+    ? resolveWorkspaceBranding({
+        tenantName: selectedCenter.organization.tenant.name,
+        tenantSlug: selectedCenter.organization.tenant.slug,
+        brandName: selectedCenter.organization.brand?.name,
+        brandSlug: selectedCenter.organization.brand?.slug,
+        organizationName: selectedCenter.organization.name,
+      })
+    : BEE_SUITE_BRANDING;
+  const isTenantRegistration = branding.kind !== "bee-suite";
+  const formCenters = centers.map((center) => ({
+    id: center.id,
+    name: center.name,
+    crmLocationId: center.crmLocationId,
+    city: center.city,
+    state: center.state,
+  }));
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(245,181,27,0.16),transparent_28rem),linear-gradient(135deg,#05070a,#0a0f15_56%,#171104)] px-4 py-8 text-foreground sm:px-6 lg:px-8">
@@ -53,8 +79,8 @@ export default async function OnlineRegistrationPage({
             render={<Link href="/" />}
           >
             <ArrowLeft data-icon="inline-start" />
-            <BrandIcon className="size-6 rounded-md" />
-            The BEE Suite
+            <BrandIcon branding={branding} className="size-6 rounded-md" />
+            {branding.shortName}
           </Button>
           <Button nativeButton={false} render={<Link href="/parents" />}>
             Parent login
@@ -68,7 +94,9 @@ export default async function OnlineRegistrationPage({
                 <FileCheck2 className="size-4" />
                 Online registration
               </div>
-              <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">Start a childcare registration packet.</h1>
+              <h1 className="text-4xl font-semibold tracking-normal sm:text-5xl">
+                Start {isTenantRegistration ? `a ${branding.name}` : "a childcare"} registration packet.
+              </h1>
               <p className="mt-5 text-sm leading-6 text-zinc-300">
                 Families can submit registration details online. The BEE Suite routes the packet to the selected school, creates or updates the CRM lead, and queues a director review task.
               </p>
@@ -95,7 +123,11 @@ export default async function OnlineRegistrationPage({
             </div>
           </div>
 
-          <OnlineRegistrationForm centers={centers} initialCenterId={initialCenterId} />
+          <OnlineRegistrationForm
+            centers={formCenters}
+            initialCenterId={initialCenterId}
+            brandName={isTenantRegistration ? branding.name : "the selected school"}
+          />
         </section>
       </div>
     </main>

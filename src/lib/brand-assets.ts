@@ -1,4 +1,4 @@
-export type BrandKind = "bee-suite" | "kid-city-usa";
+export type BrandKind = "bee-suite" | "kid-city-usa" | "miss-honeys-learning-center";
 
 export type WorkspaceBranding = {
   kind: BrandKind;
@@ -42,6 +42,20 @@ export const KID_CITY_USA_BRANDING: WorkspaceBranding = {
   logoAlt: "Kid City USA logo",
 };
 
+export const MISS_HONEYS_LEARNING_CENTER_BRANDING: WorkspaceBranding = {
+  kind: "miss-honeys-learning-center",
+  name: "Miss Honey's Learning Center",
+  shortName: "Miss Honey's",
+  tagline: "Learning Center",
+  logoSrc: "/brand/miss-honeys-learning-center/logo-transparent.png",
+  logoWidth: 1024,
+  logoHeight: 1024,
+  markSrc: "/brand/miss-honeys-learning-center/logo-transparent.png",
+  markWidth: 1024,
+  markHeight: 1024,
+  logoAlt: "Miss Honey's Learning Center logo",
+};
+
 function normalizeBrandText(value?: string | null) {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -50,6 +64,18 @@ export function isKidCityBrandText(value?: string | null) {
   const normalized = normalizeBrandText(value);
   const compact = normalized.replace(/\s+/g, "");
   return normalized.includes("kid city usa") || compact.includes("kidcityusa");
+}
+
+export function isMissHoneysBrandText(value?: string | null) {
+  const normalized = normalizeBrandText(value);
+  const compact = normalized.replace(/\s+/g, "");
+  return normalized.includes("miss honey s learning center")
+    || normalized.includes("miss honeys learning center")
+    || compact.includes("misshoneyslearningcenter");
+}
+
+export function canUseKidCityCorporateBilling(role?: string | null, brandKind?: BrandKind | null) {
+  return role === "PLATFORM_OWNER" || brandKind === "kid-city-usa";
 }
 
 export function resolveWorkspaceBranding(input?: {
@@ -69,6 +95,7 @@ export function resolveWorkspaceBranding(input?: {
     input?.email,
   ].join(" ");
 
+  if (isMissHoneysBrandText(candidate)) return MISS_HONEYS_LEARNING_CENTER_BRANDING;
   if (isKidCityBrandText(candidate)) return KID_CITY_USA_BRANDING;
 
   return BEE_SUITE_BRANDING;

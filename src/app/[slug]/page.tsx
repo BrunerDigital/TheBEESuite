@@ -3857,10 +3857,8 @@ async function renderLivePage(
           centers: billingCenters,
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
-          tuitionFeatureFeeBps: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_BPS || "150", 10) || 150,
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
           parentSurchargeBps: getStripeCardProcessingRecoveryBps(),
-          tuitionFeatureFeeFixedCents: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS || "0", 10) || 0,
           parentSurchargeFixedCents: getStripeCardProcessingRecoveryFixedCents(),
         }}
       />

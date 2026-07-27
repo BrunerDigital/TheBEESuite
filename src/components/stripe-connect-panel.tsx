@@ -38,10 +38,8 @@ type StripeConnectPanelProps = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
-  tuitionFeatureFeeBps: number;
   parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
-  tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
 };
 
@@ -90,10 +88,8 @@ export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
-  tuitionFeatureFeeBps,
   parentProcessingRecoveryApproved,
   parentSurchargeBps,
-  tuitionFeatureFeeFixedCents,
   parentSurchargeFixedCents,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
@@ -333,13 +329,8 @@ export function StripeConnectPanel({
             </Badge>
             <CardTitle>School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              The BEE Suite platform account can collect parent payments, retain the configured school-paid tuition payments feature fee, and route the remaining funds to each school&apos;s connected payout account.
+              The BEE Suite platform account can collect parent payments and route funds to each school&apos;s connected payout account.
             </CardDescription>
-          </div>
-          <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Tuition feature fee</div>
-            <div className="text-2xl font-semibold">{percentFromBps(tuitionFeatureFeeBps)}{centsLabel(tuitionFeatureFeeFixedCents)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">School-paid BEE Suite fee retained from tuition payout</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
             <div className="font-medium">Parent card recovery</div>
@@ -578,7 +569,7 @@ export function StripeConnectPanel({
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
         {!parentProcessingRecoveryApproved ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">

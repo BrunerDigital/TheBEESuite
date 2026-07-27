@@ -1564,11 +1564,6 @@ export function ParentPortalWorkspace({
                       cardRecovery: invoice.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice.totalCents),
                       formatMoney: money,
                     })}
-                    {invoice.checkoutOptions?.beeSuitePaymentOperationsFeeAmountCents ? (
-                      <span className="block">
-                        School-paid BEE Suite payment operations fee retained from payout: {money(invoice.checkoutOptions.beeSuitePaymentOperationsFeeAmountCents)}.
-                      </span>
-                    ) : null}
                   </div>
                 </div>
               );

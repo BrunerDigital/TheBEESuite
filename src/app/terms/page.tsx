@@ -58,7 +58,7 @@ export default function TermsPage() {
               <p className="mt-5 text-base leading-7 text-slate-300">
                 These terms govern access to The BEE Suite websites, parent portal, mobile app, support, documentation, and related childcare operations services.
               </p>
-              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: July 9, 2026</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">Last updated: July 27, 2026</p>
             </div>
 
             <div className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -84,6 +84,7 @@ export default function TermsPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm leading-6 text-slate-300">
                   <p>When enabled, parent payments are for childcare tuition, school fees, goods, or services consumed outside the app. Payment method entry is handled by Stripe or another approved payment provider.</p>
+                  <p>Unless waived or otherwise agreed in writing, The BEE Suite retains a school-paid tuition feature fee of 1.50% from each tuition payout. This fee is paid by the school and does not increase the family&apos;s tuition invoice.</p>
                   <p>The BEE Suite does not store full card numbers, full bank account numbers, or bank login credentials.</p>
                 </CardContent>
               </Card>

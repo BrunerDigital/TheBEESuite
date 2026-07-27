@@ -5781,10 +5781,8 @@ export type BillingSettingsPageData = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
-  tuitionFeatureFeeBps: number;
   parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
-  tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
 };
 
@@ -5930,15 +5928,13 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
         centers={data.centers}
         stripeConfigured={data.stripeConfigured}
         webhookConfigured={data.webhookConfigured}
-        tuitionFeatureFeeBps={data.tuitionFeatureFeeBps}
         parentProcessingRecoveryApproved={data.parentProcessingRecoveryApproved}
         parentSurchargeBps={data.parentSurchargeBps}
-        tuitionFeatureFeeFixedCents={data.tuitionFeatureFeeFixedCents}
         parentSurchargeFixedCents={data.parentSurchargeFixedCents}
       />
       <TuitionPaymentReminderSettingsPanel centers={data.centers} />
       <DashboardOptionsSettingsPanel centers={data.centers} />
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card className="glass-panel">
           <CardHeader>
             <CardTitle>Parent Tuition Flow</CardTitle>
@@ -5952,14 +5948,6 @@ export function BillingSettingsPage({ data }: { data: BillingSettingsPageData })
             <CardTitle>School Payout Flow</CardTitle>
             <CardDescription>
               Each school completes payout onboarding before live parent payments are accepted for that school.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-        <Card className="glass-panel">
-          <CardHeader>
-            <CardTitle>Platform Fee Flow</CardTitle>
-            <CardDescription>
-              The configured school-paid tuition payments feature fee is retained by The BEE Suite while the remaining payment amount is routed to the school payout account.
             </CardDescription>
           </CardHeader>
         </Card>

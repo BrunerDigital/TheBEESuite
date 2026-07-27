@@ -126,6 +126,7 @@ test("payment method request copy links to the branded form", () => {
 
 test("payment method request app URL keeps emailed links on the secure Bee Suite host", () => {
   const savedEnv = {
+    NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     APP_URL: process.env.APP_URL,
     VERCEL_URL: process.env.VERCEL_URL,
@@ -151,6 +152,7 @@ test("payment method request app URL keeps emailed links on the secure Bee Suite
 
     process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
     delete process.env.VERCEL_URL;
+    Reflect.set(process.env, "NODE_ENV", "test");
 
     assert.equal(
       getPaymentMethodRequestAppBaseUrl("http://localhost:3000/api/billing/payment-method-requests"),

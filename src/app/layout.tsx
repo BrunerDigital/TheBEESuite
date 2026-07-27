@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
   manifest: "/manifest.webmanifest",
+  verification: {
+    google: "vvV52uTS8R9VfxBbB22mW_i69KPstd9eg1ixpyWsGp4",
+  },
   alternates: {
     canonical: "/",
   },

@@ -6,23 +6,23 @@ Audience: school owners, corporate users, franchise/brand admins, regional manag
 
 ## Purpose
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 Executive admins use The BEE Suite to launch schools, manage access, review multi-location performance, approve payment readiness, monitor FTE reporting, and maintain operational guardrails across centers.
 
 ## Visual Overview
 
-![Independent school launch gates](../assets/bee-suite-school-launch-gates-2026-07-27-05462a2b94.png)
+![Independent school launch gates](../assets/bee-suite-school-launch-gates-2026-07-27-v3-ec156afee4.png)
 
-![Selected-period weekly FTE flow](../assets/bee-suite-fte-reporting-flow-2026-07-27-25c8129809.png)
+![Selected-period weekly FTE flow](../assets/bee-suite-fte-reporting-flow-2026-07-27-v3-e38d5e049f.png)
 
-![Executive desktop oversight guide](../assets/executive-desktop-oversight-guide-bc5e259f3c.png)
+![Executive desktop oversight guide](../assets/executive-desktop-oversight-guide-a4a9f165de.png)
 
 ## Desktop Screenshots
 
-Executive and owner instructions use desktop screenshots so multi-location comparisons, reporting periods, and exception ownership remain visible together.
+Use the desktop view for multi-location comparisons, reporting periods, and exception ownership.
 
 ![Executive administration workspace on desktop](../assets/executive-desktop-admin-light-4dd2ac08b6.png)
 

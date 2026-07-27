@@ -6,11 +6,11 @@ Audience: center directors, assistant directors, and school operators responsibl
 
 ## Visual Overview
 
-![Director desktop operations guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/director-desktop-operations-guide.png)
+![Director desktop operations guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/director-desktop-operations-guide.png)
 
 ## Desktop Screenshots
 
-Director instructions use desktop screenshots because family, billing, staffing, and exception-review work depends on the wider operating context.
+Use the desktop view for family, billing, staffing, and exception-review work.
 
 ![Director daily reports workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/director-desktop-reports-light.png)
 

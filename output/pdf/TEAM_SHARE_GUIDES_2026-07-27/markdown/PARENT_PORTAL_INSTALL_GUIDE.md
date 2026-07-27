@@ -4,9 +4,9 @@ Last updated: July 27, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 ## What You Need
 
@@ -16,9 +16,9 @@ Audience: parents and guardians whose school uses The BEE Suite.
 
 ## Visual Preview
 
-![Parent access and secure installation flow](../assets/bee-suite-parent-access-install-2026-07-27-5571746038.png)
+![Parent access and secure installation flow](../assets/bee-suite-parent-access-install-2026-07-27-v3-0355a44526.png)
 
-![Parent multi-device portal guide](../assets/parent-multidevice-portal-guide-e3e9bcc31c.png)
+![Parent multi-device portal guide](../assets/parent-multidevice-portal-guide-6697fb42a2.png)
 
 ## Parent Portal On Each Device
 

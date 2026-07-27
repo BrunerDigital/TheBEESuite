@@ -10,15 +10,15 @@ Executive admins use The BEE Suite to launch schools, manage access, review mult
 
 ## Visual Overview
 
-![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png)
 
-![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27.png)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png)
 
-![Executive desktop oversight guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/executive-desktop-oversight-guide.png)
+![Executive desktop oversight guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/executive-desktop-oversight-guide.png)
 
 ## Desktop Screenshots
 
-Executive and owner instructions use desktop screenshots so multi-location comparisons, reporting periods, and exception ownership remain visible together.
+Use the desktop view for multi-location comparisons, reporting periods, and exception ownership.
 
 ![Executive administration workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-admin-light.png)
 

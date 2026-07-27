@@ -12,7 +12,7 @@ Exact totals are always shown before you submit payment. Do not submit a payment
 
 ## Visual Preview
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
 
 ## Where You May Start
 

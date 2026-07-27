@@ -14,7 +14,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import CondPageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,9 +36,9 @@ FILES = [
 ]
 
 STATUS = """
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 """.strip()
 
 
@@ -134,7 +134,14 @@ def build_pdf(md: Path, pdf: Path) -> None:
                 scale = min((6.95 * inch) / figure.imageWidth, (4.35 * inch) / figure.imageHeight, 1)
                 figure.drawWidth = figure.imageWidth * scale
                 figure.drawHeight = figure.imageHeight * scale
-                story.extend([Paragraph(f"Figure: {esc(alt)}", caption), figure, Spacer(1, 8)])
+                story.extend(
+                    [
+                        CondPageBreak(figure.drawHeight + 24),
+                        Paragraph(f"Figure: {esc(alt)}", caption),
+                        figure,
+                        Spacer(1, 8),
+                    ]
+                )
             else:
                 story.append(Paragraph(f"[Visual: {esc(alt)}]", body))
             i += 1
@@ -188,7 +195,7 @@ def main() -> None:
         refreshed = refresh(src.read_text(encoding="utf-8"))
         dest.write_text(bundle_markdown_images(refreshed, src), encoding="utf-8")
         build_pdf(dest, OUT / "pdf" / (dest.stem + ".pdf"))
-    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 27, 2026 from repository working-tree behavior reviewed the same day. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nThis packet documents the current repository behavior; it does not claim that every capability is deployed or approved for every school. Setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval remain independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nThe packet embeds nine privacy-safe process diagrams, five screenshot-derived role graphics, and the latest light-mode role screenshots dated July 27, 2026. Warning banners and developer controls are excluded. Teacher guides use iPad and desktop captures, director and executive guides use desktop captures, and parent guides use iPhone, iPad, and desktop captures with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
+    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 27, 2026. This folder contains current Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nSetup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval are independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nTeacher guides use iPad and desktop screens. Director and executive guides use desktop screens. Parent guides use iPhone, iPad, and desktop screens, with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")
 

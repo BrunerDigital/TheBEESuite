@@ -18,7 +18,7 @@ const outDir = path.join(
   "brand",
   "the-bee-suite",
   "sop-graphics",
-  "2026-07-27",
+  "2026-07-27-v2",
 );
 const iconPath = path.join(root, "public", "brand", "the-bee-suite", "app-icon-yellow.png");
 const width = 1600;
@@ -44,16 +44,16 @@ const graphics = [
     id: "teacher-classroom-device-guide",
     eyebrow: "TEACHER SOP",
     title: "Classroom work stays visible and verified",
-    subtitle: "Use the iPad for in-room work. Desktop remains available for review and follow-up.",
+    subtitle: "Use iPad for classroom work and desktop for review or follow-up.",
     accent: colors.teacher,
-    deviceLabel: "iPad primary • Desktop supported",
+    deviceLabel: "iPad first • Desktop",
     screens: [
       {
         src: "teacher-ipad-daily-report-light.png",
         x: 72,
         y: 232,
         width: 516,
-        height: 688,
+        height: 500,
         radius: 32,
         label: "iPad • Daily report",
       },
@@ -68,17 +68,17 @@ const graphics = [
       },
     ],
     steps: [
-      ["1", "Confirm scope", "Verify your name, school, classroom, and roster before recording anything."],
-      ["2", "Record the day", "Use attendance, meals, naps, potty, activities, mood, supplies, and notes."],
-      ["3", "Check save state", "Verify the correct child, date, and saved or synced state before moving on."],
-      ["4", "Escalate safely", "Send incidents and roster or safety conflicts to the director for review."],
+      ["1", "Confirm scope", "Verify your school, classroom, roster, and child."],
+      ["2", "Record the day", "Add attendance, care details, activities, and notes."],
+      ["3", "Confirm save", "Check the child, date, and saved or synced state."],
+      ["4", "Escalate", "Send incidents, roster conflicts, or safety concerns to the director."],
     ],
   },
   {
     id: "director-desktop-operations-guide",
     eyebrow: "DIRECTOR SOP",
     title: "Operate the school from one verified desktop",
-    subtitle: "Confirm school context first, then move from operating pulse to the exact family, billing, or compliance record.",
+    subtitle: "Confirm the school first, then open the exact family, billing, or compliance record.",
     accent: colors.director,
     deviceLabel: "Desktop required",
     screens: [
@@ -102,17 +102,17 @@ const graphics = [
       },
     ],
     steps: [
-      ["1", "Verify school", "Confirm the assigned location, local time, staffing, attendance, and current exceptions."],
-      ["2", "Open exact context", "Check family, child, invoice, classroom, or record identifiers before editing."],
-      ["3", "Review outcomes", "Reconcile balances, payment status, reports, incidents, documents, and queued actions."],
-      ["4", "Close with an owner", "Leave every unresolved item with a named person, next action, and follow-up time."],
+      ["1", "Verify school", "Confirm location, local time, staffing, attendance, and exceptions."],
+      ["2", "Open exact record", "Check family, child, invoice, classroom, or record IDs."],
+      ["3", "Review results", "Reconcile payments, reports, incidents, documents, and sync."],
+      ["4", "Assign follow-up", "Give each unresolved item an owner and next action."],
     ],
   },
   {
     id: "executive-desktop-oversight-guide",
     eyebrow: "EXECUTIVE SOP",
-    title: "Review trends, scope, and weekly FTE on desktop",
-    subtitle: "Use the executive view for authorized rollups, school comparison, corrections, approvals, and exports.",
+    title: "Review scope, trends, and weekly FTE",
+    subtitle: "Use desktop for authorized rollups, school comparisons, corrections, approvals, and exports.",
     accent: colors.executive,
     deviceLabel: "Desktop required",
     screens: [
@@ -136,43 +136,43 @@ const graphics = [
       },
     ],
     steps: [
-      ["1", "Confirm scope", "Verify brand, region, school access, reporting period, and data-as-of time."],
-      ["2", "Review rollups", "Compare enrollment, occupancy, billing, staffing, compliance, and follow-up trends."],
-      ["3", "Validate FTE", "Check the intended week, missing schools, totals, corrections, and approval state."],
-      ["4", "Export deliberately", "Use reviewed filters and retain the report period and scope with every export."],
+      ["1", "Confirm scope", "Verify brand, school access, reporting period, and data time."],
+      ["2", "Compare rollups", "Review enrollment, occupancy, billing, staffing, and compliance."],
+      ["3", "Validate FTE", "Check week, missing schools, totals, corrections, and approval."],
+      ["4", "Export safely", "Keep the reviewed period and scope with every export."],
     ],
   },
   {
     id: "parent-multidevice-portal-guide",
     eyebrow: "PARENT SOP",
     title: "Your family portal, led by iPhone",
-    subtitle: "Use iPhone for everyday updates and payments. The same portal also adapts to iPad and desktop.",
+    subtitle: "Use iPhone for everyday updates and payments; iPad and desktop show the same family portal.",
     accent: colors.parent,
-    deviceLabel: "iPhone primary • iPad + desktop supported",
+    deviceLabel: "iPhone first • iPad + desktop",
     phoneScreens: [
       ["parent-iphone-overview-light.png", "Family overview"],
       ["parent-iphone-daily-reports-light.png", "Daily report"],
       ["parent-iphone-billing-light.png", "Billing history"],
     ],
     steps: [
-      ["1", "Verify family", "Confirm the school, family, child, and selected day before using an update."],
-      ["2", "Review the day", "Open reports, activities, photos, meals, naps, care details, and teacher notes."],
-      ["3", "Use Billing", "Check the invoice, payment status, amount, and ledger before starting a payment."],
-      ["4", "Protect access", "Use only your guardian login and contact the school when a record looks wrong."],
+      ["1", "Verify family", "Confirm the school, child, and selected day."],
+      ["2", "Review the day", "Open reports, activities, photos, care details, and notes."],
+      ["3", "Check Billing", "Review the invoice, amount, payment status, and ledger."],
+      ["4", "Protect access", "Use only your login; contact the school if a record is wrong."],
     ],
   },
   {
     id: "role-device-standards-guide",
     eyebrow: "SCREENSHOT + TRAINING STANDARD",
     title: "Show each role on the device they actually use",
-    subtitle: "All approved July 27 visuals use current light-mode screens, synthetic demo records, and no warning banners.",
+    subtitle: "Use the device view that matches each role's normal work.",
     accent: colors.gold,
-    deviceLabel: "Current visual standard • July 27, 2026",
+    deviceLabel: "Role and device standard",
     roleCards: [
       {
         role: "Teachers",
         device: "iPad + desktop",
-        note: "Lead with the iPad classroom workflow; add desktop for review.",
+        note: "Lead with iPad for classroom work; use desktop for review.",
         src: "teacher-ipad-roster-light.png",
         accent: colors.teacher,
       },
@@ -193,7 +193,7 @@ const graphics = [
       {
         role: "Parents",
         device: "iPhone first",
-        note: "Use iPhone most often; include iPad and desktop for responsive coverage.",
+        note: "Lead with iPhone; include iPad and desktop when useful.",
         src: "parent-iphone-overview-light.png",
         accent: colors.parent,
       },
@@ -246,12 +246,11 @@ function textBlock(value, x, y, options = {}) {
 function header(graphic, iconDataUrl) {
   return `
     <image href="${iconDataUrl}" x="72" y="48" width="58" height="58"/>
-    <text x="150" y="73" fill="${graphic.accent}" font-size="18" font-weight="900" letter-spacing=".12em">THE BEE SUITE • ${escapeXml(graphic.eyebrow)}</text>
-    <text x="150" y="99" fill="${colors.muted}" font-size="16" font-weight="700">CURRENT LIGHT-MODE VISUALS • JULY 27, 2026</text>
+    <text x="150" y="82" fill="${graphic.accent}" font-size="18" font-weight="900" letter-spacing=".12em">THE BEE SUITE • ${escapeXml(graphic.eyebrow)}</text>
     <rect x="1128" y="54" width="400" height="46" rx="23" fill="${graphic.accent}" opacity=".12"/>
     <text x="1328" y="83" fill="${graphic.accent}" font-size="18" font-weight="850" text-anchor="middle">${escapeXml(graphic.deviceLabel)}</text>
-    <text x="72" y="166" fill="${colors.ink}" font-size="52" font-weight="950">${escapeXml(graphic.title)}</text>
-    ${textBlock(graphic.subtitle, 72, 208, { size: 23, maxChars: 104, lineHeight: 30 })}
+    <text x="72" y="156" fill="${colors.ink}" font-size="50" font-weight="950">${escapeXml(graphic.title)}</text>
+    ${textBlock(graphic.subtitle, 72, 198, { size: 22, maxChars: 108, lineHeight: 29 })}
   `;
 }
 
@@ -280,11 +279,13 @@ function stepStrip(graphic) {
       const x = 72 + index * 364;
       return `
         <g>
-          <rect x="${x}" y="770" width="338" height="168" rx="22" fill="${colors.white}" stroke="${colors.line}" stroke-width="2"/>
-          <circle cx="${x + 38}" cy="808" r="23" fill="${graphic.accent}"/>
-          <text x="${x + 38}" y="816" fill="#fff" font-size="22" font-weight="900" text-anchor="middle">${number}</text>
-          <text x="${x + 72}" y="816" fill="${colors.ink}" font-size="23" font-weight="900">${escapeXml(title)}</text>
-          ${textBlock(body, x + 24, 856, { size: 18, maxChars: 34, lineHeight: 24, fill: colors.muted })}
+          <g data-safe-box="true" data-safe-x="${x + 18}" data-safe-y="772" data-safe-width="302" data-safe-height="164">
+            <rect x="${x}" y="758" width="338" height="184" rx="22" fill="${colors.white}" stroke="${colors.line}" stroke-width="2"/>
+            <circle cx="${x + 38}" cy="798" r="23" fill="${graphic.accent}"/>
+            <text x="${x + 38}" y="806" fill="#fff" font-size="22" font-weight="900" text-anchor="middle">${number}</text>
+            <text x="${x + 72}" y="806" fill="${colors.ink}" font-size="21" font-weight="900">${escapeXml(title)}</text>
+            ${textBlock(body, x + 24, 846, { size: 17, maxChars: 34, lineHeight: 23, fill: colors.muted })}
+          </g>
         </g>`;
     })
     .join("\n");
@@ -298,8 +299,8 @@ function screenFrame(screen, dataUrl, index) {
         <rect x="${screen.x}" y="${screen.y}" width="${screen.width}" height="${screen.height}" rx="${screen.radius}"/>
       </clipPath>
       <rect x="${screen.x - 8}" y="${screen.y - 8}" width="${screen.width + 16}" height="${screen.height + 16}" rx="${screen.radius + 7}" fill="#121826"/>
-      <image href="${dataUrl}" x="${screen.x}" y="${screen.y}" width="${screen.width}" height="${screen.height}" preserveAspectRatio="xMidYMin slice" clip-path="url(#screen-${index})"/>
-      <rect x="${screen.x + 18}" y="${screen.y + 18}" width="${labelWidth}" height="38" rx="19" fill="#111827" opacity=".9"/>
+      <image href="${dataUrl}" x="${screen.x}" y="${screen.y}" width="${screen.width}" height="${screen.height}" preserveAspectRatio="xMidYMin meet" clip-path="url(#screen-${index})"/>
+      <rect x="${screen.x + 18}" y="${screen.y + 18}" width="${Math.min(labelWidth, screen.width - 36)}" height="38" rx="19" fill="#111827" opacity=".9"/>
       <text x="${screen.x + 36}" y="${screen.y + 44}" fill="#fff" font-size="17" font-weight="800">${escapeXml(screen.label)}</text>
     </g>`;
 }
@@ -340,10 +341,12 @@ async function renderParentGuide(graphic, iconDataUrl, imageData) {
     .map(([number, title, body], index) => {
       const y = 282 + index * 146;
       return `
-        <circle cx="1098" cy="${y}" r="24" fill="${graphic.accent}"/>
-        <text x="1098" y="${y + 8}" fill="#fff" font-size="22" font-weight="900" text-anchor="middle">${number}</text>
-        <text x="1140" y="${y + 2}" fill="${colors.ink}" font-size="25" font-weight="900">${escapeXml(title)}</text>
-        ${textBlock(body, 1140, y + 38, { size: 19, maxChars: 34, lineHeight: 25, fill: colors.muted })}
+        <g data-safe-box="true" data-safe-x="1070" data-safe-y="${y - 28}" data-safe-width="430" data-safe-height="118">
+          <circle cx="1098" cy="${y}" r="24" fill="${graphic.accent}"/>
+          <text x="1098" y="${y + 8}" fill="#fff" font-size="22" font-weight="900" text-anchor="middle">${number}</text>
+          <text x="1140" y="${y + 2}" fill="${colors.ink}" font-size="24" font-weight="900">${escapeXml(title)}</text>
+          ${textBlock(body, 1140, y + 38, { size: 18, maxChars: 35, lineHeight: 24, fill: colors.muted })}
+        </g>
       `;
     })
     .join("\n");
@@ -355,8 +358,6 @@ async function renderParentGuide(graphic, iconDataUrl, imageData) {
     ${phones}
     <rect x="1052" y="248" width="476" height="618" rx="30" fill="#fff" stroke="${colors.line}" stroke-width="2"/>
     ${steps}
-    <rect x="1052" y="892" width="476" height="48" rx="24" fill="${graphic.accent}" opacity=".12"/>
-    <text x="1290" y="923" fill="${graphic.accent}" font-size="18" font-weight="900" text-anchor="middle">The same verified family record follows every screen.</text>
   </svg>`;
 }
 
@@ -371,7 +372,7 @@ async function renderDeviceStandards(graphic, iconDataUrl, imageData) {
       const screenshotHeight = 248;
       const copyX = x + screenshotWidth + 48;
       return `
-        <g filter="url(#shadow)">
+        <g filter="url(#shadow)" data-safe-box="true" data-safe-x="${x + 20}" data-safe-y="${y + 18}" data-safe-width="688" data-safe-height="274">
           <rect x="${x}" y="${y}" width="728" height="310" rx="26" fill="#fff" stroke="${colors.line}" stroke-width="2"/>
           <clipPath id="role-${index}">
             <rect x="${x + 24}" y="${y + 24}" width="${screenshotWidth}" height="${screenshotHeight}" rx="18"/>
@@ -382,7 +383,6 @@ async function renderDeviceStandards(graphic, iconDataUrl, imageData) {
           <text x="${copyX + 20}" y="${y + 63}" fill="${card.accent}" font-size="22" font-weight="900">${escapeXml(card.role)}</text>
           <text x="${copyX}" y="${y + 114}" fill="${colors.ink}" font-size="31" font-weight="950">${escapeXml(card.device)}</text>
           ${textBlock(card.note, copyX, y + 158, { size: 21, maxChars: card.role === "Parents" || card.role === "Teachers" ? 35 : 26, lineHeight: 29, fill: colors.muted })}
-          <text x="${copyX}" y="${y + 260}" fill="${card.accent}" font-size="17" font-weight="850">LIGHT MODE • CURRENT UI • NO WARNING BANNERS</text>
         </g>`;
     })
     .join("\n");
@@ -392,9 +392,44 @@ async function renderDeviceStandards(graphic, iconDataUrl, imageData) {
     <rect width="${width}" height="${height}" fill="url(#grid)"/>
     ${header(graphic, iconDataUrl)}
     ${cards}
-    <rect x="72" y="946" width="1456" height="3" rx="2" fill="${colors.gold}"/>
-    <text x="72" y="980" fill="${colors.muted}" font-size="18">Use these device priorities for SOPs, resource cards, training packets, and future screenshot refreshes.</text>
   </svg>`;
+}
+
+async function validateLayout(page, fileName) {
+  const rootName = await page.evaluate(() => document.documentElement.localName);
+  if (rootName !== "svg") {
+    throw new Error(`${fileName} did not render as SVG; received ${rootName}.`);
+  }
+  const violations = await page.evaluate(({ width, height }) => {
+    const tolerance = 1;
+    return [...document.querySelectorAll("text")].flatMap((element) => {
+      const box = element.getBBox();
+      const safeParent = element.closest("[data-safe-box]");
+      const safe = safeParent
+        ? {
+            x: Number(safeParent.getAttribute("data-safe-x")),
+            y: Number(safeParent.getAttribute("data-safe-y")),
+            width: Number(safeParent.getAttribute("data-safe-width")),
+            height: Number(safeParent.getAttribute("data-safe-height")),
+          }
+        : { x: 32, y: 20, width: width - 64, height: height - 40 };
+      const outside =
+        box.x < safe.x - tolerance ||
+        box.y < safe.y - tolerance ||
+        box.x + box.width > safe.x + safe.width + tolerance ||
+        box.y + box.height > safe.y + safe.height + tolerance;
+      return outside
+        ? [{
+            text: element.textContent,
+            box: { x: box.x, y: box.y, width: box.width, height: box.height },
+            safe,
+          }]
+        : [];
+    });
+  }, { width, height });
+  if (violations.length) {
+    throw new Error(`${fileName} has text outside its safe area:\n${JSON.stringify(violations, null, 2)}`);
+  }
 }
 
 async function renderPng(svgPath, pngPath) {
@@ -402,6 +437,7 @@ async function renderPng(svgPath, pngPath) {
   try {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.goto(pathToFileURL(svgPath).href);
+    await validateLayout(page, path.basename(svgPath));
     await page.screenshot({ path: pngPath, type: "png" });
   } finally {
     await browser.close();

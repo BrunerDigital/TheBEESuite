@@ -4,17 +4,17 @@ Last updated: July 27, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 ## Visual Overview
 
-![Director desktop operations guide](../assets/director-desktop-operations-guide-18e714ef41.png)
+![Director desktop operations guide](../assets/director-desktop-operations-guide-17aee1579d.png)
 
 ## Desktop Screenshots
 
-Director instructions use desktop screenshots because family, billing, staffing, and exception-review work depends on the wider operating context.
+Use the desktop view for family, billing, staffing, and exception-review work.
 
 ![Director daily reports workspace on desktop](../assets/director-desktop-reports-light-f478e8bf5d.png)
 

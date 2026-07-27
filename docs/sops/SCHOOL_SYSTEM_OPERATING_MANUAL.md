@@ -12,11 +12,11 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ## Visual Launch Map
 
-![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png)
 
-![Director daily operating flow](../../public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27.png)
+![Director daily operating flow](../../public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27-v3.png)
 
-![Role and device screenshot standard](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/role-device-standards-guide.png)
+![Role and device screenshot standard](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/role-device-standards-guide.png)
 
 ## System Map
 
@@ -131,9 +131,9 @@ Software deployment readiness does not open this gate. Billing, live payments, i
 
 Use these visuals in training decks and printed packets:
 
-![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png)
 
-![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27.png)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png)
 
 ## Support Escalation Packet
 

@@ -10,7 +10,7 @@ The lobby kiosk lets verified adults check children in or out and lets staff clo
 
 ## Visual Overview
 
-![Kiosk and authorized pickup flow](../../public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27.png)
+![Kiosk and authorized pickup flow](../../public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png)
 
 ## Director Setup
 

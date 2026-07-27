@@ -6,19 +6,19 @@ Audience: billing admins, school directors handling billing, accounting users, a
 
 ## Purpose
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 This SOP explains how billing users manage tuition, invoices, payment methods, ACH setup, card payments, dunning, reconciliation, and payment support in The BEE Suite.
 
 ## Visual Overview
 
-![Weekly tuition assignment and Thursday billing flow](../assets/bee-suite-weekly-tuition-flow-2026-07-27-7410645fd3.png)
+![Weekly tuition assignment and Thursday billing flow](../assets/bee-suite-weekly-tuition-flow-2026-07-27-v3-21a75588f4.png)
 
-![Parent payment choices](../assets/bee-suite-parent-payment-options-2026-07-27-574d19dcf6.png)
+![Parent payment choices](../assets/bee-suite-parent-payment-options-2026-07-27-v3-1574c47519.png)
 
-![School-scoped Stripe Terminal payment](../assets/bee-suite-terminal-payment-flow-2026-07-27-4adf2dd2ec.png)
+![School-scoped Stripe Terminal payment](../assets/bee-suite-terminal-payment-flow-2026-07-27-v3-1b2f1bdd6c.png)
 
 ## Billing Admin Responsibilities
 

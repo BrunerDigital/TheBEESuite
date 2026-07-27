@@ -57,7 +57,7 @@ const guides: ResourceGuide[] = [
     audience: "Parents and guardians",
     title: "Install the BEE Suite Parent Portal",
     summary: "Add the parent portal to an iPhone, iPad, Android phone, Fire tablet, or desktop browser.",
-    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png",
     graphicAlt: "Current six-step parent access and installation flow for The BEE Suite",
     screenshots: [
       {
@@ -99,7 +99,7 @@ const guides: ResourceGuide[] = [
     audience: "Parents and guardians",
     title: "Card, Bank, and Autopay Payments",
     summary: "Save a card or bank securely, choose a payment option, and review the exact total before submitting.",
-    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png",
     graphicAlt: "Current parent card, bank, invoice, and autopay payment choices",
     screenshots: [
       {
@@ -129,7 +129,7 @@ const guides: ResourceGuide[] = [
     audience: "Parents and guardians",
     title: "Parent Portal Daily Use",
     summary: "Check child updates, messages, photos, documents, invoices, payment methods, and school notices.",
-    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/parent-multidevice-portal-guide.png",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27-v2/parent-multidevice-portal-guide.png",
     graphicAlt: "Current parent portal guide led by iPhone with daily report and billing examples",
     screenshots: [
       {
@@ -170,7 +170,7 @@ const guides: ResourceGuide[] = [
     audience: "School owners and executives",
     title: "School System Operating Manual",
     summary: "Launch The BEE Suite as the school system of record across roles, campuses, and daily workflows.",
-    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png",
     graphicAlt: "Current independent school launch gates and stop conditions",
     icon: Building2,
     steps: [
@@ -192,7 +192,7 @@ const guides: ResourceGuide[] = [
     audience: "Executives and owners",
     title: "Executive Admin SOP",
     summary: "Monitor multi-location operations, access controls, staffing signals, financial readiness, and reporting.",
-    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/executive-desktop-oversight-guide.png",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27-v2/executive-desktop-oversight-guide.png",
     graphicAlt: "Current executive desktop administration and FTE oversight guide",
     screenshots: [
       {
@@ -228,7 +228,7 @@ const guides: ResourceGuide[] = [
     audience: "Directors and assistant directors",
     title: "Director SOP",
     summary: "Run daily school operations from enrollment through attendance, billing readiness, staffing, and family communication.",
-    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/director-desktop-operations-guide.png",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27-v2/director-desktop-operations-guide.png",
     graphicAlt: "Current director desktop daily reports and billing operations guide",
     screenshots: [
       {
@@ -263,7 +263,7 @@ const guides: ResourceGuide[] = [
     audience: "Teachers and classroom staff",
     title: "Teacher SOP",
     summary: "Use the classroom workspace for attendance, daily reports, incidents, photos, and routine family updates.",
-    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27/teacher-classroom-device-guide.png",
+    graphicSrc: "/brand/the-bee-suite/sop-graphics/2026-07-27-v2/teacher-classroom-device-guide.png",
     graphicAlt: "Current teacher classroom guide using iPad for daily reports and desktop for roster review",
     screenshots: [
       {
@@ -305,7 +305,7 @@ const guides: ResourceGuide[] = [
     audience: "Billing administrators",
     title: "Billing Admin SOP",
     summary: "Manage invoices, balances, payment methods, autopay readiness, exceptions, and family payment questions.",
-    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png",
     graphicAlt: "Current school-scoped weekly tuition, Thursday invoicing, autopay, and reconciliation flow",
     icon: CreditCard,
     steps: [
@@ -327,7 +327,7 @@ const guides: ResourceGuide[] = [
     audience: "Schools, staff, and authorized pickups",
     title: "Kiosk and Authorized Pickup Guide",
     summary: "Use the lobby kiosk for check-in, check-out, staff clock events, PINs, QR codes, and pickup verification.",
-    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27.png",
+    graphicSrc: "/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png",
     graphicAlt: "Current kiosk location, device, identity, event, release, and exception flow",
     icon: DoorOpen,
     steps: [
@@ -374,20 +374,21 @@ function VisualFlow({ guide }: { guide: ResourceGuide }) {
 
 function ScreenshotGallery({ guide }: { guide: ResourceGuide }) {
   if (!guide.screenshots?.length) return null;
+  const galleryClass =
+    guide.screenshots.length === 1
+      ? "grid-cols-1"
+      : guide.screenshots.length === 2
+        ? "sm:grid-cols-2"
+        : "sm:grid-cols-2 lg:grid-cols-3";
 
   return (
     <div className="mt-6 rounded-lg border border-white/10 bg-[#05070a]/65 p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Screen guide</h3>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
-            Current light-mode, privacy-safe demo captures with warning banners and developer controls excluded. Open any image to review the full working viewport.
-          </p>
-        </div>
-        <div className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Captured July 27, 2026</div>
+      <div>
+        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-400">Screens</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-300">Tap a screen to open the full view.</p>
       </div>
 
-      <div className="mt-4 grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className={`mt-4 grid items-start gap-4 ${galleryClass}`}>
         {guide.screenshots.map((screenshot) => {
           const frameClass =
             screenshot.device === "iPhone"
@@ -403,7 +404,9 @@ function ScreenshotGallery({ guide }: { guide: ResourceGuide }) {
               target="_blank"
               rel="noreferrer"
               prefetch={false}
-              className="group overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] transition hover:border-amber-300/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber-300/40"
+              className={`group w-full overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] transition hover:border-amber-300/60 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber-300/40 ${
+                guide.screenshots?.length === 1 && screenshot.device === "iPhone" ? "mx-auto max-w-sm" : ""
+              }`}
             >
               <div className={`relative overflow-hidden bg-[#0b1017] ${frameClass}`}>
                 <Image
@@ -411,7 +414,7 @@ function ScreenshotGallery({ guide }: { guide: ResourceGuide }) {
                   alt={screenshot.alt}
                   fill
                   sizes="(max-width: 639px) 100vw, (max-width: 1023px) 50vw, 33vw"
-                  className="object-cover object-top transition duration-300 group-hover:scale-[1.01]"
+                  className="object-contain object-top transition duration-300 group-hover:scale-[1.01]"
                 />
               </div>
               <div className="flex items-center justify-between gap-3 p-3">
@@ -432,7 +435,7 @@ function ScreenshotGallery({ guide }: { guide: ResourceGuide }) {
 function GuideSection({ guide }: { guide: ResourceGuide }) {
   return (
     <section id={guide.id} className="scroll-mt-24 rounded-lg border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/20 md:p-6">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+      <div>
         <div className="max-w-3xl">
           <div className="flex flex-wrap items-center gap-3">
             <div className="grid size-11 place-items-center rounded-lg bg-amber-300 text-slate-950">
@@ -445,14 +448,6 @@ function GuideSection({ guide }: { guide: ResourceGuide }) {
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-300">{guide.summary}</p>
         </div>
-        <Button
-          variant="outline"
-          className="h-10 border-white/15 bg-white/[0.04] px-4 text-white hover:bg-white/10"
-          nativeButton={false}
-          render={<Link href={`#${guide.id}`} />}
-        >
-          Section link
-        </Button>
       </div>
 
       <div className="mt-6">

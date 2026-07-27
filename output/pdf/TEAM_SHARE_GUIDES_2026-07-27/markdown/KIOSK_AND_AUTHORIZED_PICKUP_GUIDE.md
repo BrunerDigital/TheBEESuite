@@ -6,15 +6,15 @@ Audience: directors, front desk staff, parents, guardians, authorized pickups, a
 
 ## Purpose
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 The lobby kiosk lets verified adults check children in or out and lets staff clock in or out. Family check-in uses a center-specific 4 digit PIN or QR credential. Staff clock-in uses a 4 digit staff kiosk code.
 
 ## Visual Overview
 
-![Kiosk and authorized pickup flow](../assets/bee-suite-kiosk-pickup-flow-2026-07-27-279348604a.png)
+![Kiosk and authorized pickup flow](../assets/bee-suite-kiosk-pickup-flow-2026-07-27-v3-c446f8c3c3.png)
 
 ## Director Setup
 

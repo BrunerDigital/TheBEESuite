@@ -6,11 +6,11 @@ Audience: teachers and classroom staff using The BEE Suite for attendance, daily
 
 ## Visual Overview
 
-![Teacher classroom device guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/teacher-classroom-device-guide.png)
+![Teacher classroom device guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/teacher-classroom-device-guide.png)
 
 ## Device Screenshots
 
-Teacher training should lead with the iPad view used in the classroom and also show the desktop view used for office or planning work. Do not use a stretched phone capture as a substitute for the iPad layout.
+Use the iPad view for classroom work and the desktop view for office or planning work.
 
 ![Teacher classroom roster on iPad](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-ipad-roster-light.png)
 

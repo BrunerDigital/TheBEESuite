@@ -37,16 +37,16 @@ Screenshot standard:
 - Role screenshots use the current light-mode UI, exclude warning banners and developer controls, and contain privacy-safe seeded demo records only. Never replace them with production family, child, staff, billing, medical, custody, or authentication data.
 
 - `public/brand/the-bee-suite/screenshots/2026-07-27-light/` - latest privacy-safe light-mode role screenshot set for iPhone, iPad, and desktop.
-- `public/brand/the-bee-suite/sop-graphics/2026-07-27/` - screenshot-derived teacher, director, executive, parent, and role/device training graphics.
-- `public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-teacher-daily-flow-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27.png`
+- `public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/` - polished teacher, director, executive, parent, and role/device training graphics.
+- `public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-teacher-daily-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27-v3.png`
 
 ## Training Notes
 

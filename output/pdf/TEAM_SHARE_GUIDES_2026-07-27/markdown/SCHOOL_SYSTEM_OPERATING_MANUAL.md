@@ -6,9 +6,9 @@ Audience: owners, executives, school directors, billing admins, training leads, 
 
 ## Purpose
 
-> TEAM SHARE SNAPSHOT - JULY 27, 2026
+> CURRENT GUIDE
 >
-> This copy matches the repository working-tree behavior reviewed on July 27, 2026. It does not claim that every documented capability is deployed or approved for every school. It does not activate a ProCare import, billing, payments, invitations, communications, kiosk, mobile-store release, ProCare retirement, or a wider school wave. Confirm the named school and each sensitive module have a separate dated GO before treating a workflow as live.
+> Confirm the correct school and an approved feature before following these steps.
 
 This manual breaks down the key functions a school needs in order to use The BEE Suite as its operating system. It also points each user type to the SOP or step-by-step guide written for their role.
 
@@ -16,11 +16,11 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ## Visual Launch Map
 
-![Independent school launch gates](../assets/bee-suite-school-launch-gates-2026-07-27-05462a2b94.png)
+![Independent school launch gates](../assets/bee-suite-school-launch-gates-2026-07-27-v3-ec156afee4.png)
 
-![Director daily operating flow](../assets/bee-suite-director-daily-flow-2026-07-27-88822a3c3e.png)
+![Director daily operating flow](../assets/bee-suite-director-daily-flow-2026-07-27-v3-86d6ce7528.png)
 
-![Role and device screenshot standard](../assets/role-device-standards-guide-029ef15788.png)
+![Role and device screenshot standard](../assets/role-device-standards-guide-84bfebea52.png)
 
 ## System Map
 
@@ -135,9 +135,9 @@ Software deployment readiness does not open this gate. Billing, live payments, i
 
 Use these visuals in training decks and printed packets:
 
-![Weekly tuition assignment and Thursday billing flow](../assets/bee-suite-weekly-tuition-flow-2026-07-27-7410645fd3.png)
+![Weekly tuition assignment and Thursday billing flow](../assets/bee-suite-weekly-tuition-flow-2026-07-27-v3-21a75588f4.png)
 
-![Selected-period weekly FTE flow](../assets/bee-suite-fte-reporting-flow-2026-07-27-25c8129809.png)
+![Selected-period weekly FTE flow](../assets/bee-suite-fte-reporting-flow-2026-07-27-v3-e38d5e049f.png)
 
 ## Support Escalation Packet
 

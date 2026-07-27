@@ -8,38 +8,38 @@ const outDir = path.join(root, "public", "brand", "the-bee-suite", "explainers")
 const iconPath = path.join(root, "public", "brand", "the-bee-suite", "app-icon-yellow.png");
 const width = 1600;
 const height = 1000;
-const snapshot = "JULY 27, 2026";
+const exportSuffix = "-v3";
 
 const graphics = [
   {
     id: "bee-suite-school-launch-gates-2026-07-27",
     eyebrow: "SCHOOL LAUNCH",
     title: "Launch by independent gates",
-    subtitle: "Setup, parent access, kiosk, billing, payments, ProCare cutover, and the wider school wave are separate decisions.",
+    subtitle: "Setup, parent access, kiosk, billing, payments, ProCare cutover, and wider rollout are separate decisions.",
     steps: [
-      ["1", "Verify scope", "Confirm the school, owner, timezone, classrooms, staff, and role-limited access."],
-      ["2", "Validate records", "Review ProCare coverage and at least 10 representative families before any cutover."],
-      ["3", "Test roles", "Run director, teacher, parent, billing, kiosk, and executive checks with approved accounts."],
-      ["4", "Decide modules", "Record a dated GO or NO-GO separately for invitations, kiosk, billing, and payments."],
-      ["5", "Train users", "Give each role only its current guide and keep support ownership visible."],
-      ["6", "Monitor safely", "Retain ProCare until signed cutover and stop on wrong-scope or unsafe data."],
+      ["1", "Verify scope", "Confirm the school, timezone, classrooms, staff, and role access."],
+      ["2", "Validate records", "Review source coverage and 10 representative families."],
+      ["3", "Test each role", "Use approved director, teacher, parent, billing, kiosk, and executive accounts."],
+      ["4", "Decide each gate", "Record separate GO or NO-GO decisions for invitations, kiosk, billing, and payments."],
+      ["5", "Train by role", "Give each user the current guide for approved features."],
+      ["6", "Monitor launch", "Keep ProCare until signed cutover; stop on wrong-scope data."],
     ],
-    warning: "A software release, completed training, or a successful import preview does not activate a school or module.",
+    warning: "A software release, training session, or import preview does not activate a school or module.",
   },
   {
     id: "bee-suite-parent-access-install-2026-07-27",
     eyebrow: "PARENT ACCESS",
     title: "Invite, sign in, then install",
-    subtitle: "Use the guardian's verified email, the school-issued first-login password, and only the secure BEE Suite address.",
+    subtitle: "Use the verified guardian email, school-issued first-login password, and secure BEE Suite address.",
     steps: [
-      ["1", "Verify guardian", "Confirm the personal email, phone, family link, children, and pickup relationship."],
-      ["2", "Send approved invite", "The invitation provides the secure parent URL, login email, and first-login password."],
-      ["3", "Open secure site", "Use https://thebeesuite.io/parents. Close any page that Safari labels Not Secure."],
-      ["4", "Sign in", "Enter the guardian email and issued password. A private password can be chosen later in settings."],
-      ["5", "Install safely", "On iPhone use Safari Share > Add to Home Screen; Android/Fire use Install app or Add to Home screen."],
-      ["6", "Verify family", "Confirm the correct school and children appear before using messages, documents, kiosk, or billing."],
+      ["1", "Confirm guardian", "Verify email, phone, family link, children, and pickup access."],
+      ["2", "Send invitation", "Use the approved invite with the secure URL, email, and first-login password."],
+      ["3", "Open secure site", "Use thebeesuite.io/parents. Stop if Safari says Not Secure."],
+      ["4", "Sign in", "Enter the guardian email and issued password."],
+      ["5", "Install", "Use Add to Home Screen on iPhone or Install app on Android or Fire."],
+      ["6", "Check family", "Confirm the correct school and children before continuing."],
     ],
-    warning: "Never forward another guardian's credentials or request passwords, bank logins, or full card numbers by message.",
+    warning: "Never forward credentials or request passwords, bank logins, or full card numbers by message.",
   },
   {
     id: "bee-suite-parent-payment-options-2026-07-27",
@@ -47,14 +47,14 @@ const graphics = [
     title: "Review the total, then choose",
     subtitle: "Debit/credit card is presented first. Instant Bank and One-Time Bank remain available when the school enables them.",
     steps: [
-      ["1", "Open Billing", "Confirm the family, invoice number, due date, balance, and payment amount."],
-      ["2", "Choose a method", "Use Debit/Credit Card, Instant Bank, or One-Time Bank based on the option you want."],
-      ["3", "Review disclosure", "Card recovery appears only when approved and is shown before submission."],
-      ["4", "Use secure handoff", "Stripe collects card or bank details. The BEE Suite never stores full credentials."],
-      ["5", "Wait for status", "Cards can confirm quickly; bank payments may remain processing until settlement."],
-      ["6", "Avoid duplicates", "Do not pay the same invoice again while a payment is processing."],
+      ["1", "Open Billing", "Confirm the family, invoice, due date, balance, and amount."],
+      ["2", "Choose payment", "Select Debit/Credit Card, Instant Bank, or One-Time Bank."],
+      ["3", "Review total", "Check the exact total and any approved card recovery."],
+      ["4", "Continue to Stripe", "Enter card or bank details only on the secure Stripe screen."],
+      ["5", "Wait for status", "Bank payments may remain processing until settlement."],
+      ["6", "Avoid duplicates", "Do not repay an invoice while its payment is processing."],
     ],
-    warning: "The invoice amount remains the family ledger amount. Always use the exact total shown before submitting.",
+    warning: "Use the exact total shown before submitting.",
   },
   {
     id: "bee-suite-weekly-tuition-flow-2026-07-27",
@@ -62,12 +62,12 @@ const graphics = [
     title: "One school, one child, one source",
     subtitle: "The selected child's school-scoped assignment is the canonical weekly rate everywhere it is displayed.",
     steps: [
-      ["1", "Select school", "Confirm the billing workbench is filtered to the intended school."],
-      ["2", "Select family + child", "Verify the sticky context header before changing tuition."],
-      ["3", "Choose local plan", "Only a tuition plan belonging to that school can be assigned."],
-      ["4", "Save recurring", "Set the amount, enabled status, and start period; then reopen to verify."],
-      ["5", "Thursday run", "The Thursday scheduler creates the following week's invoice and attempts autopay when eligible."],
-      ["6", "Keep Charge Now separate", "Charge This Child Now creates an approved immediate invoice; it does not replace recurring tuition."],
+      ["1", "Select school", "Filter the billing workspace to the intended school."],
+      ["2", "Choose family + child", "Verify the context header before changing tuition."],
+      ["3", "Choose local plan", "Assign only a tuition plan belonging to that school."],
+      ["4", "Save recurring", "Set the amount, status, and start period; reopen to verify."],
+      ["5", "Thursday run", "Create next week's invoice and attempt eligible autopay."],
+      ["6", "Separate immediate charge", "Charge This Child Now does not replace recurring tuition."],
     ],
     warning: "A saved payment method is required for automatic collection, not for invoice creation.",
   },
@@ -75,14 +75,14 @@ const graphics = [
     id: "bee-suite-director-daily-flow-2026-07-27",
     eyebrow: "DIRECTOR OPERATIONS",
     title: "Open, verify, operate, close",
-    subtitle: "Directors work inside the assigned school and stop immediately if the displayed school, family, or classroom is wrong.",
+    subtitle: "Work inside the assigned school and stop if the displayed school, family, or classroom is wrong.",
     steps: [
-      ["1", "Open correctly", "Confirm school, staffing, attendance, ratios, messages, documents, and exceptions."],
-      ["2", "Verify family context", "Check the school, family, selected child, guardian, billing account, and record counts."],
-      ["3", "Run classrooms", "Validate rosters, teacher access, daily reports, incidents, media, and offline warnings."],
-      ["4", "Review billing", "Check child tuition assignments, family totals, balances, payment status, and payout readiness."],
-      ["5", "Communicate narrowly", "Use the smallest correct audience and review AI-drafted copy before sending."],
-      ["6", "Close exceptions", "Confirm attendance, reports, incidents, queued actions, and named follow-up owners."],
+      ["1", "Open correctly", "Confirm school, staffing, attendance, ratios, and exceptions."],
+      ["2", "Verify family", "Check the family, child, guardian, and billing account."],
+      ["3", "Run classrooms", "Review rosters, teacher access, reports, incidents, and sync."],
+      ["4", "Review billing", "Check tuition, balances, payment status, and payout readiness."],
+      ["5", "Message carefully", "Use the smallest correct audience and review drafts before sending."],
+      ["6", "Close exceptions", "Assign every unresolved item to a named follow-up owner."],
     ],
     warning: "Custody, pickup, medical, incident, billing, and compliance decisions remain human-reviewed.",
   },
@@ -90,14 +90,14 @@ const graphics = [
     id: "bee-suite-teacher-daily-flow-2026-07-27",
     eyebrow: "TEACHER WORKFLOW",
     title: "Work only the assigned classroom",
-    subtitle: "Attendance, care entries, reports, incidents, and messages stay classroom-scoped and use the school's local time.",
+    subtitle: "Attendance, care entries, reports, incidents, and messages stay classroom-scoped and use school-local time.",
     steps: [
-      ["1", "Confirm identity", "Check your name, school, classroom, roster, schedule, and child alerts."],
-      ["2", "Record attendance", "Mark real arrival, absence, classroom, and departure states for assigned children."],
-      ["3", "Add care details", "Record meals, naps, diapers, activities, supplies, mood, and notes with school-local times."],
-      ["4", "Save visibly", "Watch the saved or unsaved state and verify before changing child or leaving the page."],
-      ["5", "Handle offline once", "Allow queued actions to sync; do not repeat the same action while it is pending."],
-      ["6", "Escalate + close", "Send incidents for review, finish reports, confirm sync, and report roster or safety conflicts."],
+      ["1", "Confirm scope", "Check your school, classroom, roster, schedule, and child alerts."],
+      ["2", "Record attendance", "Mark real arrival, absence, classroom, and departure states."],
+      ["3", "Add care details", "Record meals, naps, diapers, activities, mood, and notes."],
+      ["4", "Confirm save", "Check the saved or synced state before moving on."],
+      ["5", "Sync once", "Let queued actions finish; do not repeat a pending action."],
+      ["6", "Escalate", "Send incidents, roster conflicts, and safety concerns for review."],
     ],
     warning: "Never use another teacher's account or enter information for a child outside your assigned classroom.",
   },
@@ -105,14 +105,14 @@ const graphics = [
     id: "bee-suite-kiosk-pickup-flow-2026-07-27",
     eyebrow: "KIOSK + PICKUP",
     title: "Verify before every handoff",
-    subtitle: "The lobby device must show the correct school, and every pickup remains subject to staff identity and safety review.",
+    subtitle: "The lobby device must show the correct school, and staff must verify every pickup.",
     steps: [
-      ["1", "Open correct kiosk", "Confirm the location, network, device reset behavior, and approved kiosk activation."],
-      ["2", "Enter credential", "The adult uses the center-specific four-digit PIN or approved QR credential."],
-      ["3", "Confirm family", "Verify the expected family and children; stop if any record is wrong."],
-      ["4", "Review warnings", "Staff resolve custody, protected pickup, missing authorization, or identity concerns."],
-      ["5", "Select + sign", "Choose the arriving or leaving children and enter the adult's full-name signature."],
-      ["6", "Complete + reset", "Wait for confirmation, then return the kiosk to its starting screen."],
+      ["1", "Open correct kiosk", "Confirm the school, network, and approved kiosk activation."],
+      ["2", "Enter credential", "Use the school-specific four-digit PIN or approved QR code."],
+      ["3", "Confirm family", "Verify the expected family and children; stop if anything is wrong."],
+      ["4", "Review warnings", "Resolve custody, authorization, or identity concerns."],
+      ["5", "Select + sign", "Choose the children and enter the adult's full-name signature."],
+      ["6", "Complete + reset", "Wait for confirmation, then return to the start screen."],
     ],
     warning: "A PIN or QR match does not override custody, pickup, identity, or emergency procedures.",
   },
@@ -120,14 +120,14 @@ const graphics = [
     id: "bee-suite-fte-reporting-flow-2026-07-27",
     eyebrow: "WEEKLY FTE",
     title: "Report the selected period",
-    subtitle: "The saved reporting week is independent from submission time and is used for reminders, history, corrections, and exports.",
+    subtitle: "The selected reporting week is separate from submission time and drives reminders, history, corrections, and exports.",
     steps: [
       ["1", "Choose school", "Confirm the location is inside your authorized scope."],
-      ["2", "Select week", "Set the intended week start and end; do not assume today's date is the report period."],
-      ["3", "Review prefill", "Verify enrolled, full-time, part-time, age-group, billing, payroll, and capacity values."],
-      ["4", "Resolve unknowns", "Correct schedules and totals before relying on the calculated FTE and occupancy."],
+      ["2", "Select week", "Set the intended week; do not assume today's date."],
+      ["3", "Review prefill", "Verify enrollment, schedules, billing, payroll, and capacity."],
+      ["4", "Resolve unknowns", "Correct schedules and totals before using FTE or occupancy."],
       ["5", "Submit by cutoff", "Current-week reports are due Friday by 12:00 PM ET."],
-      ["6", "Correct or approve", "Executives review the selected period, request corrections, approve, and export."],
+      ["6", "Review outcome", "Executives request corrections, approve, and export."],
     ],
     warning: "A report covering the selected week satisfies reminders even when it was submitted on a different date.",
   },
@@ -135,16 +135,16 @@ const graphics = [
     id: "bee-suite-terminal-payment-flow-2026-07-27",
     eyebrow: "IN-PERSON CARD",
     title: "School-scoped Stripe Terminal",
-    subtitle: "Authorized directors and executives can collect an in-person card payment on a certified reader assigned to the school.",
+    subtitle: "Authorized staff can collect an in-person card payment on a certified reader assigned to the school.",
     steps: [
-      ["1", "Verify context", "Confirm the school, family, billing account, invoice or amount, and connected payout account."],
-      ["2", "Choose reader", "Select an online reader registered to that school's Stripe Terminal location."],
-      ["3", "Confirm parent present", "The parent must be present and able to review and cancel from the reader."],
-      ["4", "Review total", "Confirm the account payment, any approved card recovery, and the amount shown on the reader."],
-      ["5", "Collect card", "The parent taps, inserts, or swipes on Stripe hardware; no full card data enters The BEE Suite."],
-      ["6", "Wait for ledger", "Finish only after processor status and webhook reconciliation record the payment correctly."],
+      ["1", "Verify context", "Confirm the school, family, invoice, amount, and payout account."],
+      ["2", "Choose reader", "Select an online reader registered to that school."],
+      ["3", "Confirm parent", "The parent must be present and able to cancel on the reader."],
+      ["4", "Review total", "Confirm the amount and any approved card recovery."],
+      ["5", "Collect card", "The parent taps, inserts, or swipes on the Stripe reader."],
+      ["6", "Wait for ledger", "Finish only after the processor and ledger confirm payment."],
     ],
-    warning: "Smart readers are controlled over the network. Direct USB data use requires Stripe's Android mobile-reader SDK.",
+    warning: "Use only a network reader assigned to the school.",
   },
 ];
 
@@ -173,9 +173,9 @@ function wrap(value, maxChars) {
   return lines;
 }
 
-function textLines(value, x, y, { size = 24, fill = "#cbd5e1", weight = 500, maxChars = 48, lineHeight = 31 } = {}) {
+function textLines(value, x, y, { size = 24, fill = "#cbd5e1", weight = 500, maxChars = 48, lineHeight = 31, attributes = "" } = {}) {
   return wrap(value, maxChars)
-    .map((line, index) => `<text x="${x}" y="${y + index * lineHeight}" fill="${fill}" font-size="${size}" font-weight="${weight}">${escapeXml(line)}</text>`)
+    .map((line, index) => `<text ${attributes} x="${x}" y="${y + index * lineHeight}" fill="${fill}" font-size="${size}" font-weight="${weight}">${escapeXml(line)}</text>`)
     .join("\n");
 }
 
@@ -185,13 +185,15 @@ function stepCard(step, index) {
   const row = Math.floor(index / 3);
   const x = 72 + column * 496;
   const y = 314 + row * 238;
+  const titleLines = wrap(title, 18);
+  const bodyY = titleLines.length > 1 ? y + 138 : y + 108;
   return `
-    <g>
+    <g data-safe-box="true" data-safe-x="${x + 18}" data-safe-y="${y + 16}" data-safe-width="${456 - 36}" data-safe-height="${204 - 32}">
       <rect x="${x}" y="${y}" width="456" height="204" rx="24" fill="rgba(255,255,255,.075)" stroke="rgba(255,255,255,.16)"/>
-      <circle cx="${x + 48}" cy="${y + 48}" r="27" fill="url(#gold)"/>
-      <text x="${x + 48}" y="${y + 58}" text-anchor="middle" fill="#15100a" font-size="27" font-weight="900">${escapeXml(number)}</text>
-      <text x="${x + 88}" y="${y + 58}" fill="#fff" font-size="29" font-weight="900">${escapeXml(title)}</text>
-      ${textLines(body, x + 32, y + 108, { size: 22, maxChars: 38, lineHeight: 29 })}
+      <circle data-layout-item="true" cx="${x + 46}" cy="${y + 48}" r="25" fill="url(#gold)"/>
+      <text x="${x + 46}" y="${y + 57}" text-anchor="middle" fill="#15100a" font-size="25" font-weight="900">${escapeXml(number)}</text>
+      ${titleLines.map((line, lineIndex) => `<text data-layout-item="true" x="${x + 96}" y="${y + 56 + lineIndex * 34}" fill="#fff" font-size="24" font-weight="900">${escapeXml(line)}</text>`).join("\n")}
+      ${textLines(body, x + 32, bodyY, { size: 21, maxChars: 40, lineHeight: 28, attributes: 'data-layout-item="true"' })}
     </g>`;
 }
 
@@ -216,15 +218,80 @@ function renderSvg(graphic, iconDataUrl) {
   <circle cx="1390" cy="72" r="250" fill="#f5b51b" opacity=".08"/>
   <image href="${iconDataUrl}" x="72" y="54" width="66" height="66"/>
   <text x="158" y="78" fill="#fde68a" font-size="18" font-weight="900" letter-spacing=".12em">THE BEE SUITE • ${escapeXml(graphic.eyebrow)}</text>
-  <text x="158" y="111" fill="#94a3b8" font-size="17" font-weight="700">${snapshot}</text>
-  <text x="72" y="194" fill="#fff" font-size="62" font-weight="950">${escapeXml(graphic.title)}</text>
-  ${textLines(graphic.subtitle, 72, 242, { size: 27, maxChars: 104, lineHeight: 35 })}
+  <text x="72" y="185" fill="#fff" font-size="62" font-weight="950">${escapeXml(graphic.title)}</text>
+  ${textLines(graphic.subtitle, 72, 235, { size: 27, maxChars: 104, lineHeight: 35 })}
   ${graphic.steps.map(stepCard).join("\n")}
-  <rect x="72" y="814" width="1456" height="118" rx="24" fill="rgba(245,181,27,.11)" stroke="rgba(245,181,27,.42)"/>
-  <text x="104" y="858" fill="#fde68a" font-size="20" font-weight="900" letter-spacing=".08em">STOP / VERIFY</text>
-  ${textLines(graphic.warning, 104, 895, { size: 23, fill: "#f8fafc", maxChars: 112, lineHeight: 29 })}
-  <text x="72" y="972" fill="#94a3b8" font-size="18">Operational instructions only. Follow the named school's current approval, safety, privacy, billing, and support policies.</text>
+  <g data-safe-box="true" data-safe-x="96" data-safe-y="838" data-safe-width="1408" data-safe-height="94">
+    <rect x="72" y="822" width="1456" height="130" rx="24" fill="rgba(245,181,27,.11)" stroke="rgba(245,181,27,.42)"/>
+    <text x="104" y="866" fill="#fde68a" font-size="20" font-weight="900" letter-spacing=".08em">STOP / VERIFY</text>
+    ${textLines(graphic.warning, 104, 908, { size: 24, fill: "#f8fafc", maxChars: 108, lineHeight: 30 })}
+  </g>
   </svg>`;
+}
+
+async function validateLayout(page, fileName) {
+  const rootName = await page.evaluate(() => document.documentElement.localName);
+  if (rootName !== "svg") {
+    throw new Error(`${fileName} did not render as SVG; received ${rootName}.`);
+  }
+  const violations = await page.evaluate(({ width, height }) => {
+    const tolerance = 1;
+    return [...document.querySelectorAll("text")].flatMap((element) => {
+      const box = element.getBBox();
+      const safeParent = element.closest("[data-safe-box]");
+      const safe = safeParent
+        ? {
+            x: Number(safeParent.getAttribute("data-safe-x")),
+            y: Number(safeParent.getAttribute("data-safe-y")),
+            width: Number(safeParent.getAttribute("data-safe-width")),
+            height: Number(safeParent.getAttribute("data-safe-height")),
+          }
+        : { x: 32, y: 20, width: width - 64, height: height - 40 };
+      const outside =
+        box.x < safe.x - tolerance ||
+        box.y < safe.y - tolerance ||
+        box.x + box.width > safe.x + safe.width + tolerance ||
+        box.y + box.height > safe.y + safe.height + tolerance;
+      return outside
+        ? [{
+            text: element.textContent,
+            box: { x: box.x, y: box.y, width: box.width, height: box.height },
+            safe,
+          }]
+        : [];
+    });
+  }, { width, height });
+  if (violations.length) {
+    throw new Error(`${fileName} has text outside its safe area:\n${JSON.stringify(violations, null, 2)}`);
+  }
+  const collisions = await page.evaluate(() => {
+    const intersects = (a, b) =>
+      a.x < b.x + b.width &&
+      a.x + a.width > b.x &&
+      a.y < b.y + b.height &&
+      a.y + a.height > b.y;
+    return [...document.querySelectorAll("[data-safe-box]")].flatMap((safeBox) => {
+      const items = [...safeBox.querySelectorAll("[data-layout-item]")].map((element) => ({
+        element,
+        box: element.getBBox(),
+      }));
+      const overlaps = [];
+      for (let first = 0; first < items.length; first += 1) {
+        for (let second = first + 1; second < items.length; second += 1) {
+          if (intersects(items[first].box, items[second].box)) {
+            overlaps.push({
+              first: items[first].element.textContent || items[first].element.localName,
+              second: items[second].element.textContent || items[second].element.localName,
+            });
+          }
+        }
+      }
+      return overlaps;
+    });
+  });
+  if (collisions.length) {
+    throw new Error(`${fileName} has overlapping layout items:\n${JSON.stringify(collisions, null, 2)}`);
+  }
 }
 
 async function renderPng(svgPath, pngPath) {
@@ -232,6 +299,7 @@ async function renderPng(svgPath, pngPath) {
   try {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.goto(pathToFileURL(svgPath).href);
+    await validateLayout(page, path.basename(svgPath));
     await page.screenshot({ path: pngPath, type: "png" });
   } finally {
     await browser.close();
@@ -244,8 +312,8 @@ async function main() {
   const iconDataUrl = `data:image/png;base64,${icon.toString("base64")}`;
   for (const graphic of graphics) {
     const svg = renderSvg(graphic, iconDataUrl).replace(/[ \t]+(?=\r?$)/gm, "");
-    const svgPath = path.join(outDir, `${graphic.id}.svg`);
-    const pngPath = path.join(outDir, `${graphic.id}.png`);
+    const svgPath = path.join(outDir, `${graphic.id}${exportSuffix}.svg`);
+    const pngPath = path.join(outDir, `${graphic.id}${exportSuffix}.png`);
     await writeFile(svgPath, svg, "utf8");
     await renderPng(svgPath, pngPath);
     console.log(`Rendered ${path.relative(root, svgPath)}`);

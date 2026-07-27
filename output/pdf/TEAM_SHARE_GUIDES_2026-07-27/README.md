@@ -1,6 +1,6 @@
 # The BEE Suite Team Share Guides
 
-Prepared July 27, 2026 from repository working-tree behavior reviewed the same day. This folder contains refreshed Markdown source copies and matching PDF editions of the core team-facing product, role, onboarding, payment, kiosk, migration, and support guides.
+Prepared July 27, 2026. This folder contains current Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.
 
 ## Recommended send order
 
@@ -12,11 +12,11 @@ Prepared July 27, 2026 from repository working-tree behavior reviewed the same d
 
 ## Important status
 
-This packet documents the current repository behavior; it does not claim that every capability is deployed or approved for every school. Setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval remain independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.
+Setup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval are independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.
 
 ## Current visuals
 
-The packet embeds nine privacy-safe process diagrams, five screenshot-derived role graphics, and the latest light-mode role screenshots dated July 27, 2026. Warning banners and developer controls are excluded. Teacher guides use iPad and desktop captures, director and executive guides use desktop captures, and parent guides use iPhone, iPad, and desktop captures with iPhone shown most often.
+Teacher guides use iPad and desktop screens. Director and executive guides use desktop screens. Parent guides use iPhone, iPad, and desktop screens, with iPhone shown most often.
 
 ## Privacy of bundled visuals
 

@@ -10,11 +10,11 @@ This SOP explains how billing users manage tuition, invoices, payment methods, A
 
 ## Visual Overview
 
-![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png)
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
 
-![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27.png)
+![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27-v3.png)
 
 ## Billing Admin Responsibilities
 

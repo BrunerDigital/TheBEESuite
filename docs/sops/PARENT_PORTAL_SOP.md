@@ -6,15 +6,15 @@ Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
 ## Visual Overview
 
-![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png)
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
 
-![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/parent-multidevice-portal-guide.png)
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/parent-multidevice-portal-guide.png)
 
 ## iPhone-First Screenshots
 
-Parent instructions lead with iPhone screens because that is the primary day-to-day view. The install guide also includes iPad and desktop views so families can recognize the same portal on all three device types.
+Use iPhone for most daily tasks. The same family portal is also available on iPad and desktop.
 
 ![Parent daily reports on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-daily-reports-light.png)
 

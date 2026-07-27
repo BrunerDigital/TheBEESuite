@@ -12,9 +12,9 @@ Audience: parents and guardians whose school uses The BEE Suite.
 
 ## Visual Preview
 
-![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png)
 
-![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27/parent-multidevice-portal-guide.png)
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/parent-multidevice-portal-guide.png)
 
 ## Parent Portal On Each Device
 

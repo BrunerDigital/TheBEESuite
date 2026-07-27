@@ -35,6 +35,11 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.match(resources, /Friday at 12 PM Eastern/);
   assert.match(resources, /HELD OFF gate is not a PASS/);
   assert.match(resources, /ProCare as the source of record/);
+  assert.match(resources, /object-contain/);
+  assert.match(resources, /Tap a screen to open the full view/);
+  assert.doesNotMatch(resources, /Section link/);
+  assert.doesNotMatch(resources, /Captured July 27, 2026/);
+  assert.doesNotMatch(resources, /warning banners and developer controls excluded/);
 });
 
 test("all dated instruction graphics referenced by public resources exist", () => {
@@ -45,7 +50,7 @@ test("all dated instruction graphics referenced by public resources exist", () =
 
   assert.ok(paths.length >= 9);
   for (const path of new Set(paths)) {
-    assert.match(path, /2026-07-27(?:\/[^/]+)?\.png$/);
+    assert.match(path, /2026-07-27(?:-v3|-v2\/[^/]+)\.png$/);
     assert.equal(existsSync(path), true, path);
   }
 });
@@ -84,12 +89,12 @@ test("screenshot-derived role SOP graphics are current and complete", () => {
 
   for (const name of expected) {
     assert.equal(
-      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27/${name}.png`),
+      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/${name}.png`),
       true,
       name,
     );
     assert.equal(
-      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27/${name}.svg`),
+      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/${name}.svg`),
       true,
       name,
     );

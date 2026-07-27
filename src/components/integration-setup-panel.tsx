@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useSearchParams } from "next/navigation";
-import { CheckCircle2, RefreshCw, Save, ShieldAlert } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { CheckCircle2, ExternalLink, Link2, RefreshCw, Save, ShieldAlert, Unplug } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,17 @@ type IntegrationSetupRow = {
     configuredRequirements: string[];
     missingRequirements: string[];
   };
+  oauth: {
+    supported: boolean;
+    appConfigured: boolean;
+    connectHref: string | null;
+    requestedScopes: string[];
+    connected: boolean;
+    expiresAt: string | null;
+    accountSelectionRequired: boolean;
+    discoveryError: string;
+  };
+  availableAccounts: Array<{ id: string; label: string; kind: string }>;
   lastSyncAt: Date | string | null;
 };
 
@@ -82,6 +93,7 @@ function credentialMap(integrations: IntegrationSetupRow[]) {
 
 export function IntegrationSetupPanel({ integrations, canManage, manageableProviders }: Props) {
   const timeZone = useSchoolTimeZone();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedProvider = searchParams.get("provider") as IntegrationProvider | null;
   const initialProvider = integrations.some((integration) => integration.provider === requestedProvider)
@@ -96,7 +108,14 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
   const [drafts, setDrafts] = useState(() => draftMap(integrations));
   const [credentialDrafts, setCredentialDrafts] = useState(() => credentialMap(integrations));
   const [setupStatusesByProvider, setSetupStatusesByProvider] = useState(() => statusMap(integrations));
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => {
+    const oauth = searchParams.get("oauth");
+    if (oauth === "connected") return "Provider login connected successfully.";
+    if (oauth === "choose_account") return "Provider login connected. Choose the school account or profile below.";
+    if (oauth === "error") return searchParams.get("oauth_error") || "Provider login could not be completed.";
+    return "";
+  });
+  const [selectedAccounts, setSelectedAccounts] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
   const draft = active ? drafts[active.provider] ?? active.config : {};
   const credentialDraft = active ? credentialDrafts[active.provider] ?? {} : {};
@@ -159,6 +178,47 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
       }));
       setSetupStatusesByProvider((current) => ({ ...current, [savedIntegration.provider]: savedIntegration.setupStatus }));
       setMessage(action === "check" ? "Server configuration checked." : "Integration setup saved.");
+    });
+  }
+
+  function selectOAuthAccount() {
+    if (!active) return;
+    const accountId = selectedAccounts[active.provider] || "";
+    if (!accountId) {
+      setMessage("Choose an account first.");
+      return;
+    }
+    startTransition(async () => {
+      setMessage("");
+      const response = await fetch(`/api/integrations/oauth/${active.provider}/select-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !json?.ok) {
+        setMessage(json?.error || "The provider account could not be selected.");
+        return;
+      }
+      setMessage("School account selected.");
+      router.refresh();
+    });
+  }
+
+  function disconnectOAuth() {
+    if (!active || !window.confirm(`Disconnect ${active.name} from this school? Saved provider tokens and account selection will be removed.`)) return;
+    startTransition(async () => {
+      setMessage("");
+      const response = await fetch(`/api/integrations/oauth/${active.provider}/disconnect`, {
+        method: "POST",
+      });
+      const json = await response.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !json?.ok) {
+        setMessage(json?.error || "The provider could not be disconnected.");
+        return;
+      }
+      setMessage(`${active.name} disconnected. Revoke The BEE Suite in the provider account too if you want to withdraw its authorization there.`);
+      router.refresh();
     });
   }
 
@@ -239,6 +299,80 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
             </div>
           </div>
 
+          {active.oauth.supported ? (
+            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-medium">
+                    <Link2 className="size-4 text-primary" />
+                    Provider login
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    The director signs in with the provider and approves access. Access and refresh tokens stay encrypted on the server for this school.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant={active.oauth.connected ? "default" : "outline"}>
+                      {active.oauth.connected ? "Login connected" : "Not connected"}
+                    </Badge>
+                    <Badge variant={active.oauth.appConfigured ? "secondary" : "outline"}>
+                      {active.oauth.appConfigured ? "BEE Suite app configured" : "Platform app setup required"}
+                    </Badge>
+                    {active.oauth.accountSelectionRequired ? <Badge variant="outline">Choose account</Badge> : null}
+                  </div>
+                  {active.oauth.discoveryError ? (
+                    <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+                      Login succeeded, but automatic account discovery reported: {active.oauth.discoveryError}
+                    </p>
+                  ) : null}
+                </div>
+                {activeCanManage ? (
+                  <div className="flex flex-wrap gap-2">
+                    {active.oauth.connectHref ? (
+                      <Button variant={active.oauth.connected ? "outline" : "default"} render={<a href={active.oauth.connectHref} />}>
+                        <ExternalLink data-icon="inline-start" />
+                        {active.oauth.connected ? "Reconnect" : `Connect ${active.name}`}
+                      </Button>
+                    ) : null}
+                    {active.oauth.connected ? (
+                      <Button type="button" variant="outline" onClick={disconnectOAuth} disabled={isPending}>
+                        <Unplug data-icon="inline-start" />
+                        Disconnect
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+
+              {active.oauth.accountSelectionRequired && active.availableAccounts.length ? (
+                <div className="mt-4 grid gap-3 rounded-xl border bg-background/60 p-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <div className="space-y-1">
+                    <Label>School account or profile</Label>
+                    <select
+                      className="h-8 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                      value={selectedAccounts[active.provider] || ""}
+                      onChange={(event) => setSelectedAccounts((current) => ({ ...current, [active.provider]: event.target.value }))}
+                      disabled={isPending}
+                    >
+                      <option value="">Choose an account</option>
+                      {active.availableAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>{account.label} · {account.kind}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button type="button" onClick={selectOAuthAccount} disabled={isPending || !selectedAccounts[active.provider]}>
+                    Use this account
+                  </Button>
+                </div>
+              ) : null}
+
+              {!active.oauth.appConfigured ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  A platform administrator must register The BEE Suite with this provider, approve the callback URL, and add the app client credentials before directors can connect.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <Label>Setup status</Label>
@@ -305,7 +439,7 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
             ))}
           </div>
 
-          {active.credentialFields.length ? (
+          {active.credentialFields.length && !active.oauth.supported ? (
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="flex flex-col gap-1">
                 <div className="font-medium">Tenant Credentials</div>

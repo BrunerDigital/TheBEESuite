@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, uniqueEmails } from "@/lib/integrations";
-import { getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
-import { readIntegrationConfig } from "@/lib/integration-setup";
+import { getMarketingConnection } from "@/lib/marketing-connection";
 import { prisma } from "@/lib/prisma";
 import { providerForSocialChannel, publishSocialPost, SOCIAL_CHANNELS, type SocialChannel } from "@/lib/social-publishing";
 
@@ -121,6 +120,7 @@ async function GETHandler(request: NextRequest) {
 
     if (campaign.type === "social_post") {
       const audience = asRecord(campaign.audience);
+      const centerId = clean(audience.centerId) || null;
       const allowedChannels = new Set(SOCIAL_CHANNELS.map((item) => item.channel));
       const channels = Array.isArray(audience.channels)
         ? audience.channels.filter((item): item is SocialChannel => typeof item === "string" && allowedChannels.has(item as SocialChannel))
@@ -133,18 +133,20 @@ async function GETHandler(request: NextRequest) {
       for (const channel of channels) {
         const provider = providerForSocialChannel(channel);
         if (!provider) continue;
-        const [integration, credentials] = await Promise.all([
-          prisma.integration.findFirst({ where: { tenantId, provider }, orderBy: { lastSyncAt: "desc" }, select: { configPlaceholder: true } }),
-          getTenantIntegrationCredentialMap(tenantId, provider),
-        ]);
+        const connection = await getMarketingConnection({
+          tenantId,
+          centerId,
+          provider,
+          updatedById: "system:campaign-scheduler",
+        });
         publishResults.push(await publishSocialPost({
           channel,
           text: campaign.body,
           title: campaign.name,
           mediaUrl: clean(audience.mediaUrl) || undefined,
           linkUrl: clean(audience.linkUrl) || undefined,
-          config: readIntegrationConfig(integration?.configPlaceholder),
-          credentials,
+          config: connection.config,
+          credentials: connection.credentials,
         }));
       }
       const allPublished = publishResults.length === channels.length && publishResults.every((result) => result.ok);

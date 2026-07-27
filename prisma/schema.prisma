@@ -159,6 +159,8 @@ model Center {
   accessGrants             UserAccessGrant[]
   brandAssets              BrandAsset[]
   customizations           BrandCustomization[]
+  integrations             Integration[]
+  integrationCredentials   IntegrationCredential[]
   integrationDeliveries    IntegrationDelivery[]
   messageTemplates         MessageTemplate[]
   calendarEvents           CalendarEvent[]
@@ -1523,17 +1525,25 @@ model PaymentMethodRequestLink {
 model Integration {
   id                String    @id @default(cuid())
   tenantId          String
+  centerId          String?
+  scopeKey          String    @default("tenant")
   provider          String
   status            String
   configPlaceholder Json?
   lastSyncAt        DateTime?
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider, scopeKey])
+  @@index([centerId, provider])
 }
 
 model IntegrationCredential {
   id             String   @id @default(cuid())
   tenantId       String
+  centerId       String?
+  scopeKey       String   @default("tenant")
   provider       String
   key            String
   encryptedValue String
@@ -1543,10 +1553,12 @@ model IntegrationCredential {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant  @relation(fields: [tenantId], references: [id])
+  center Center? @relation(fields: [centerId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, provider, key])
-  @@index([tenantId, provider])
+  @@unique([tenantId, provider, scopeKey, key])
+  @@index([tenantId, provider, scopeKey])
+  @@index([centerId, provider])
 }
 
 model IntegrationDelivery {

@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
-import { readIntegrationConfig } from "@/lib/integration-setup";
+import { integrationScopeForUser } from "@/lib/integration-scope";
+import { getMarketingConnection } from "@/lib/marketing-connection";
 import { prisma } from "@/lib/prisma";
 import { providerForSocialChannel, publishSocialPost, SOCIAL_CHANNELS, type SocialChannel } from "@/lib/social-publishing";
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -46,6 +46,10 @@ async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   if (!allowedRoles.has(user.role)) return NextResponse.json({ ok: false, error: "Director access required." }, { status: 403 });
+  const socialScope = integrationScopeForUser(user, "meta_social");
+  if (!socialScope.centerId && (user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR)) {
+    return NextResponse.json({ ok: false, error: "A school assignment is required before publishing." }, { status: 403 });
+  }
 
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const text = clean(body?.text);
@@ -90,11 +94,21 @@ async function POSTHandler(request: NextRequest) {
   for (const channel of channels) {
     const provider = providerForSocialChannel(channel);
     if (!provider) continue;
-    const [integration, credentials] = await Promise.all([
-      prisma.integration.findFirst({ where: { tenantId: user.tenantId, provider }, orderBy: { lastSyncAt: "desc" }, select: { configPlaceholder: true } }),
-      getTenantIntegrationCredentialMap(user.tenantId, provider),
-    ]);
-    results.push(await publishSocialPost({ channel, text, title, mediaUrl: mediaUrl || undefined, linkUrl: linkUrl || undefined, config: readIntegrationConfig(integration?.configPlaceholder), credentials }));
+    const connection = await getMarketingConnection({
+      tenantId: user.tenantId,
+      centerId: socialScope.centerId,
+      provider,
+      updatedById: user.id,
+    });
+    results.push(await publishSocialPost({
+      channel,
+      text,
+      title,
+      mediaUrl: mediaUrl || undefined,
+      linkUrl: linkUrl || undefined,
+      config: connection.config,
+      credentials: connection.credentials,
+    }));
   }
 
   const allPublished = results.length === channels.length && results.every((result) => result.ok);

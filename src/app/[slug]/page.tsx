@@ -78,7 +78,8 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
+import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
+import { integrationScopeForUser } from "@/lib/integration-scope";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
 import {
@@ -2784,9 +2785,18 @@ async function renderLivePage(
   }
 
   if (slug === "campaigns") {
-    const campaignWhere: Prisma.CampaignWhereInput = {
+    const tenantCampaignWhere: Prisma.CampaignWhereInput = {
       OR: [{ tenantId: user.tenantId }, { brand: { is: { tenantId: user.tenantId } } }],
     };
+    const campaignWhere: Prisma.CampaignWhereInput = canAccessAllCenters(user)
+      ? tenantCampaignWhere
+      : {
+          AND: [
+            tenantCampaignWhere,
+            { audience: { path: ["centerId"], equals: user.primaryCenterId ?? "__no_authorized_center__" } },
+          ],
+        };
+    const marketingScope = integrationScopeForUser(user, "meta_ads");
     const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials] = await Promise.all([
       prisma.campaign.findMany({
         where: campaignWhere,
@@ -2807,11 +2817,19 @@ async function renderLivePage(
       prisma.campaign.count({ where: { ...campaignWhere, status: "scheduled" } }),
       prisma.campaign.count({ where: { ...campaignWhere, status: "sent" } }),
       prisma.integration.findMany({
-        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        where: {
+          tenantId: user.tenantId,
+          provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+          scopeKey: marketingScope.scopeKey,
+        },
         select: { id: true, provider: true, status: true, configPlaceholder: true, lastSyncAt: true },
       }),
       prisma.integrationCredential.findMany({
-        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        where: {
+          tenantId: user.tenantId,
+          provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+          scopeKey: marketingScope.scopeKey,
+        },
         select: { provider: true, key: true, lastFour: true },
       }),
     ]);
@@ -2819,16 +2837,27 @@ async function renderLivePage(
     const setupViews = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
     const marketingConnections = setupViews
       .filter((integration) => AD_INTEGRATION_PROVIDERS.includes(integration.provider))
-      .map((integration) => ({
-        provider: integration.provider,
-        name: integration.name,
-        purpose: integration.purpose,
-        status: integration.status,
-        setupStatus: integration.setupStatus,
-        configured: integration.env.configured,
-        accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
-        lastSyncAt: integration.lastSyncAt,
-      }));
+      .map((integration) => {
+        const stored = integrationRecords.find((record) => record.provider === integration.provider);
+        const analytics = recordFromJson(recordFromJson(stored?.configPlaceholder).adAnalytics);
+        return {
+          provider: integration.provider,
+          name: integration.name,
+          purpose: integration.purpose,
+          status: integration.status,
+          setupStatus: integration.setupStatus,
+          configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
+          accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
+          analytics: {
+            spend: typeof analytics.spend === "number" ? analytics.spend : 0,
+            impressions: typeof analytics.impressions === "number" ? analytics.impressions : 0,
+            clicks: typeof analytics.clicks === "number" ? analytics.clicks : 0,
+            leads: typeof analytics.leads === "number" ? analytics.leads : 0,
+            campaignCount: Array.isArray(analytics.campaigns) ? analytics.campaigns.length : 0,
+          },
+          lastSyncAt: integration.lastSyncAt,
+        };
+      });
     const socialConnections = setupViews
       .filter((integration) => SOCIAL_INTEGRATION_PROVIDERS.includes(integration.provider))
       .map((integration) => {
@@ -2847,7 +2876,7 @@ async function renderLivePage(
           provider: integration.provider,
           name: integration.name,
           purpose: integration.purpose,
-          configured: integration.env.configured,
+          configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
           availableChannels,
           accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
           profileHandle: typeof integration.config.profileHandle === "string" ? integration.config.profileHandle : "",
@@ -4454,6 +4483,14 @@ async function renderLivePage(
   }
 
   if (slug === "integrations") {
+    const marketingScope = integrationScopeForUser(user, "meta_ads");
+    const integrationScopeWhere = {
+      tenantId: user.tenantId,
+      OR: [
+        { provider: { in: MARKETING_INTEGRATION_PROVIDERS }, scopeKey: marketingScope.scopeKey },
+        { provider: { notIn: MARKETING_INTEGRATION_PROVIDERS }, scopeKey: "tenant" },
+      ],
+    } satisfies Prisma.IntegrationWhereInput;
     const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER
       ? {}
       : tenantWide
@@ -4494,7 +4531,7 @@ async function renderLivePage(
         },
       }),
       prisma.integration.findMany({
-        where: { tenantId: user.tenantId },
+        where: integrationScopeWhere,
         select: {
           id: true,
           provider: true,
@@ -4504,7 +4541,7 @@ async function renderLivePage(
         },
       }),
       prisma.integrationCredential.findMany({
-        where: { tenantId: user.tenantId },
+        where: integrationScopeWhere,
         select: { provider: true, key: true, lastFour: true },
       }),
     ]);
@@ -4528,8 +4565,8 @@ async function renderLivePage(
           },
           recentDeliveries,
           setupIntegrations,
-          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR,
-          manageableProviders: user.role === UserRole.CENTER_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
+          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR,
+          manageableProviders: user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
           integrations: setupIntegrations.map((integration) => ({
             name: integration.name,
             purpose: integration.purpose,

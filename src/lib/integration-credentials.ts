@@ -21,36 +21,51 @@ export type TenantIntegrationCredentialEntry = {
 };
 
 const credentialFieldsByProvider: Partial<Record<IntegrationProvider, IntegrationCredentialField[]>> = {
-  meta_social: [{ key: "META_SOCIAL_ACCESS_TOKEN", label: "Meta Page access token" }],
-  linkedin_social: [{ key: "LINKEDIN_SOCIAL_ACCESS_TOKEN", label: "LinkedIn access token" }],
-  google_business: [{ key: "GOOGLE_BUSINESS_ACCESS_TOKEN", label: "Google Business OAuth access token" }],
-  tiktok_social: [{ key: "TIKTOK_SOCIAL_ACCESS_TOKEN", label: "TikTok user access token" }],
-  pinterest_social: [{ key: "PINTEREST_SOCIAL_ACCESS_TOKEN", label: "Pinterest access token" }],
-  x_social: [{ key: "X_SOCIAL_ACCESS_TOKEN", label: "X OAuth user access token" }],
+  meta_social: [
+    { key: "META_SOCIAL_ACCESS_TOKEN", label: "Meta Page access token" },
+    { key: "META_SOCIAL_USER_ACCESS_TOKEN", label: "Meta OAuth user token" },
+  ],
+  linkedin_social: [
+    { key: "LINKEDIN_SOCIAL_ACCESS_TOKEN", label: "LinkedIn access token" },
+    { key: "LINKEDIN_SOCIAL_REFRESH_TOKEN", label: "LinkedIn refresh token" },
+  ],
+  google_business: [
+    { key: "GOOGLE_BUSINESS_ACCESS_TOKEN", label: "Google Business OAuth access token" },
+    { key: "GOOGLE_BUSINESS_REFRESH_TOKEN", label: "Google Business OAuth refresh token" },
+  ],
+  tiktok_social: [
+    { key: "TIKTOK_SOCIAL_ACCESS_TOKEN", label: "TikTok user access token" },
+    { key: "TIKTOK_SOCIAL_REFRESH_TOKEN", label: "TikTok refresh token" },
+  ],
+  pinterest_social: [
+    { key: "PINTEREST_SOCIAL_ACCESS_TOKEN", label: "Pinterest access token" },
+    { key: "PINTEREST_SOCIAL_REFRESH_TOKEN", label: "Pinterest refresh token" },
+  ],
+  x_social: [
+    { key: "X_SOCIAL_ACCESS_TOKEN", label: "X OAuth user access token" },
+    { key: "X_SOCIAL_REFRESH_TOKEN", label: "X OAuth refresh token" },
+  ],
   meta_ads: [
     { key: "META_ADS_ACCESS_TOKEN", label: "Meta access token" },
+    { key: "META_ADS_USER_ACCESS_TOKEN", label: "Meta OAuth user token" },
   ],
   google_ads: [
     { key: "GOOGLE_ADS_DEVELOPER_TOKEN", label: "Developer token" },
+    { key: "GOOGLE_ADS_ACCESS_TOKEN", label: "OAuth access token" },
     { key: "GOOGLE_ADS_REFRESH_TOKEN", label: "OAuth refresh token" },
-    { key: "GOOGLE_CLIENT_ID", label: "OAuth client ID" },
-    { key: "GOOGLE_CLIENT_SECRET", label: "OAuth client secret" },
   ],
   tiktok_ads: [
     { key: "TIKTOK_ADS_ACCESS_TOKEN", label: "TikTok access token" },
-    { key: "TIKTOK_ADS_APP_ID", label: "App ID" },
-    { key: "TIKTOK_ADS_APP_SECRET", label: "App secret" },
+    { key: "TIKTOK_ADS_REFRESH_TOKEN", label: "TikTok refresh token" },
   ],
   linkedin_ads: [
     { key: "LINKEDIN_ADS_ACCESS_TOKEN", label: "LinkedIn access token" },
-    { key: "LINKEDIN_ADS_CLIENT_ID", label: "Client ID" },
-    { key: "LINKEDIN_ADS_CLIENT_SECRET", label: "Client secret" },
+    { key: "LINKEDIN_ADS_REFRESH_TOKEN", label: "LinkedIn refresh token" },
   ],
   microsoft_ads: [
     { key: "MICROSOFT_ADS_DEVELOPER_TOKEN", label: "Developer token" },
+    { key: "MICROSOFT_ADS_ACCESS_TOKEN", label: "OAuth access token" },
     { key: "MICROSOFT_ADS_REFRESH_TOKEN", label: "OAuth refresh token" },
-    { key: "MICROSOFT_ADS_CLIENT_ID", label: "Client ID" },
-    { key: "MICROSOFT_ADS_CLIENT_SECRET", label: "Client secret" },
   ],
   sendgrid: [
     { key: "SENDGRID_API_KEY", label: "SendGrid API key", placeholder: "SG..." },
@@ -149,27 +164,33 @@ export function credentialPresenceFromKeys(
 
 export async function upsertTenantIntegrationCredentials({
   tenantId,
+  centerId,
   provider,
   credentials,
   userId,
 }: {
   tenantId: string;
+  centerId?: string | null;
   provider: IntegrationProvider;
   credentials: Record<string, string>;
   userId: string;
 }) {
+  const scopeKey = centerId ? `center:${centerId}` : "tenant";
   const savedKeys: string[] = [];
   for (const [key, value] of Object.entries(credentials)) {
     const lastFour = value.slice(-4);
     await prisma.integrationCredential.upsert({
-      where: { tenantId_provider_key: { tenantId, provider, key } },
+      where: { tenantId_provider_scopeKey_key: { tenantId, provider, scopeKey, key } },
       update: {
+        centerId: centerId ?? null,
         encryptedValue: encryptIntegrationCredential(value),
         lastFour,
         updatedById: userId,
       },
       create: {
         tenantId,
+        centerId: centerId ?? null,
+        scopeKey,
         provider,
         key,
         encryptedValue: encryptIntegrationCredential(value),
@@ -183,10 +204,15 @@ export async function upsertTenantIntegrationCredentials({
   return savedKeys;
 }
 
-export async function getTenantIntegrationCredentialMap(tenantId: string | null | undefined, provider: IntegrationProvider) {
+export async function getTenantIntegrationCredentialMap(
+  tenantId: string | null | undefined,
+  provider: IntegrationProvider,
+  centerId?: string | null,
+) {
   if (!tenantId) return {};
+  const scopeKey = centerId ? `center:${centerId}` : "tenant";
   const credentials = await prisma.integrationCredential.findMany({
-    where: { tenantId, provider },
+    where: { tenantId, provider, scopeKey },
     select: { key: true, encryptedValue: true },
   });
   const result: Record<string, string> = {};
@@ -202,7 +228,7 @@ export async function getTenantIntegrationCredentialMap(tenantId: string | null 
 
 export async function getTenantIntegrationCredentialEntries(provider: IntegrationProvider, key?: string) {
   const credentials = await prisma.integrationCredential.findMany({
-    where: { provider, ...(key ? { key } : {}) },
+    where: { provider, scopeKey: "tenant", ...(key ? { key } : {}) },
     select: { tenantId: true, key: true, encryptedValue: true },
   });
   const result: TenantIntegrationCredentialEntry[] = [];

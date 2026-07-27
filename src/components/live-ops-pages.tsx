@@ -136,6 +136,7 @@ import { MediaReviewActions } from "@/components/media-review-actions";
 import { MedicationLogPanel, type MedicationLogChildOption } from "@/components/medication-log-panel";
 import { ProcareImportPanel } from "@/components/procare-import-panel";
 import { RegistrationReviewActions } from "@/components/registration-review-actions";
+import type { RegistrationReviewPreview } from "@/lib/registration-packet";
 import { ReputationWorkspace, type ReputationWorkspaceData } from "@/components/reputation-workspace";
 import { RequiredDocumentChecklistPanel } from "@/components/required-document-checklist-panel";
 import { SchoolReceiptDetailsCard } from "@/components/school-receipt-details-card";
@@ -1845,6 +1846,7 @@ export type EnrollmentPipelineData = {
     program: string;
     desiredStartDate: string;
     centerName: string;
+    preview: RegistrationReviewPreview;
   }>;
   enrollmentChecklists: Array<{
     id: string;
@@ -1945,6 +1947,7 @@ export function EnrollmentPipelinePage({ data }: { data: EnrollmentPipelineData 
                       submissionId={submission.id}
                       status={submission.status}
                       reviewStatus={submission.reviewStatus}
+                      preview={submission.preview}
                     />
                   </TableCell>
                 </TableRow>
@@ -3674,10 +3677,11 @@ export type FormsPageData = {
   submissions: Array<{
     id: string;
     status: string;
-    data: unknown;
     reviewStatus: RegistrationReviewStatus;
     registrationPayment: RegistrationPaymentStatus;
     summary: string;
+    details: string;
+    preview?: RegistrationReviewPreview;
     submittedAt: Date | string | null;
     signaturePlaceholder: boolean;
     form: { name: string; type: string };
@@ -3771,7 +3775,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                   </TableCell>
                   <TableCell>{submission.signaturePlaceholder ? "Captured" : "Not required"}</TableCell>
                   <TableCell className="max-w-xl whitespace-normal text-xs text-muted-foreground">
-                    {submission.form.type === "online_registration" ? submission.summary : jsonSummary(submission.data)}
+                    {submission.form.type === "online_registration" ? submission.summary : submission.details}
                   </TableCell>
                   <TableCell>
                     {submission.form.type === "online_registration" ? (
@@ -3779,6 +3783,7 @@ export function FormsPage({ data }: { data: FormsPageData }) {
                         submissionId={submission.id}
                         status={submission.status}
                         reviewStatus={submission.reviewStatus}
+                        preview={submission.preview ?? { sections: [], destinations: [] }}
                       />
                     ) : (
                       <span className="text-xs text-muted-foreground">No review action</span>

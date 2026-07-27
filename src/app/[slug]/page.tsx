@@ -152,6 +152,7 @@ import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
 import {
   asRecord,
+  buildRegistrationReviewPreview,
   cleanText,
   registrationReviewFromData,
   registrationSubmissionSummary,
@@ -168,6 +169,14 @@ import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
 export const dynamic = "force-dynamic";
 
 const centerIdFilter = visibleCenterIdFilter;
+
+function safeFormSubmissionDetails(data: unknown) {
+  const keys = Object.entries(asRecord(data))
+    .filter(([, value]) => value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0))
+    .map(([key]) => key)
+    .slice(0, 8);
+  return keys.length ? `Submitted fields: ${keys.join(", ")}` : "No submitted values";
+}
 
 async function signedProfilePhotoUrl(customFields: unknown, role: UserRole) {
   const fallbackUrl = defaultProfilePhotoUrlForRole(role);
@@ -1213,6 +1222,7 @@ async function renderLivePage(
               status: submission.status,
               reviewStatus: registrationReviewFromData(submission.data).status,
               registrationPayment: registrationPaymentFromData(submission.data),
+              preview: buildRegistrationReviewPreview(submission.data),
               submittedAt: submission.submittedAt,
               summary: registrationSubmissionSummary(submission.data),
               childFullName: cleanText(record.childFullName) || "Child",
@@ -5184,10 +5194,18 @@ async function renderLivePage(
         data={{
           forms,
           submissions: submissions.map((submission) => ({
-            ...submission,
+            id: submission.id,
+            status: submission.status,
+            submittedAt: submission.submittedAt,
+            signaturePlaceholder: submission.signaturePlaceholder,
+            form: submission.form,
             reviewStatus: registrationReviewFromData(submission.data).status,
             registrationPayment: registrationPaymentFromData(submission.data),
             summary: registrationSubmissionSummary(submission.data),
+            details: safeFormSubmissionDetails(submission.data),
+            preview: submission.form.type === "online_registration"
+              ? buildRegistrationReviewPreview(submission.data)
+              : undefined,
           })),
         }}
       />

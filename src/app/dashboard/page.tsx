@@ -12,11 +12,13 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
+import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -831,6 +833,14 @@ export default async function DashboardPage() {
         ]
       : centerEmbedCards
     : [];
+  const registrationShares = canManageCrmLeads(user)
+    ? centers.map((center) => ({
+        centerId: center.id,
+        schoolLabel: center.crmLocationId
+          ?? [center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+        registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(), center.id),
+      }))
+    : [];
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -916,6 +926,7 @@ export default async function DashboardPage() {
     aiSummary,
     inquiryEmbed: inquiryEmbeds[0],
     inquiryEmbeds,
+    registrationShares,
     executiveMetrics: canSeeExecutiveMetrics
       ? {
           currentWeekStart: fteDueState.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),

@@ -41,6 +41,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { crmPipelineStageDisclosure, enrollmentStages, stageLabels } from "@/lib/crm";
 import { registrationHandoffHref } from "@/lib/registration-handoff";
+import {
+  buildRegistrationLeadSuggestion,
+  buildRegistrationShareUrl,
+} from "@/lib/registration-sharing";
 import { cn } from "@/lib/utils";
 
 type CenterOption = {
@@ -147,6 +151,7 @@ type CrmSavedView = {
 type Props = {
   initialLeads: CrmLead[];
   centers: CenterOption[];
+  appBaseUrl: string;
   currentUser: {
     name: string;
     role: string;
@@ -228,14 +233,14 @@ function makeMrBeeDraft(lead?: CrmLead) {
   return `Hi ${lead.familyName}, this is Kid City USA following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }
 
-function makeLeadEmailOptions(lead?: CrmLead): LeadEmailSuggestion[] {
+function makeLeadEmailOptions(lead: CrmLead | undefined, appBaseUrl: string): LeadEmailSuggestion[] {
   if (!lead) return [];
   const program = lead.programInterest ?? "childcare";
   const childLine = lead.childName ? ` for ${lead.childName}` : "";
   const centerName = lead.center.crmLocationId ?? lead.center.name;
   const subject = `Kid City USA ${program} follow-up`;
 
-  return [
+  const generalSuggestions = [
     {
       label: "Warm follow-up",
       subject,
@@ -252,6 +257,16 @@ function makeLeadEmailOptions(lead?: CrmLead): LeadEmailSuggestion[] {
       body: `Hi ${lead.familyName},\n\nThis is Kid City USA checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\nKid City USA`,
     },
   ];
+  const registrationSuggestion = buildRegistrationLeadSuggestion({
+    familyName: lead.familyName,
+    childName: lead.childName,
+    program: lead.programInterest,
+    schoolLabel: centerName,
+    registrationUrl: buildRegistrationShareUrl(appBaseUrl, lead.center.id),
+    stage: lead.stage,
+    customFields: lead.customFields,
+  });
+  return registrationSuggestion ? [registrationSuggestion, ...generalSuggestions] : generalSuggestions;
 }
 
 function formatBytes(value: number) {
@@ -454,7 +469,7 @@ function subscribeCrmSavedViews(callback: () => void) {
   };
 }
 
-export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
+export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }: Props) {
   const timeZone = useSchoolTimeZone();
   const searchParams = useSearchParams();
   const routeQuery = searchParams.get("q") ?? "";
@@ -493,7 +508,9 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [emailSubject, setEmailSubject] = useState("Kid City USA enrollment follow-up");
   const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0]));
   const [emailPurposePrompt, setEmailPurposePrompt] = useState("");
-  const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(() => makeLeadEmailOptions(initialLeads[0]));
+  const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(
+    () => makeLeadEmailOptions(initialLeads[0], appBaseUrl),
+  );
   const [emailAttachments, setEmailAttachments] = useState<EmailComposerAttachment[]>([]);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
   const [editForm, setEditForm] = useState({
@@ -601,7 +618,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     setSelectedLeadDetails(null);
     setEmailSubject(`Kid City USA ${lead.programInterest ?? "enrollment"} follow-up`);
     setEmailDraft(makeMrBeeDraft(lead));
-    setEmailSuggestions(makeLeadEmailOptions(lead));
+    setEmailSuggestions(makeLeadEmailOptions(lead, appBaseUrl));
     setEmailAttachments([]);
     setEditForm({
       familyName: lead.familyName,
@@ -742,7 +759,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
       setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
       setEmailDraft(makeMrBeeDraft(json.lead));
-      setEmailSuggestions(makeLeadEmailOptions(json.lead));
+      setEmailSuggestions(makeLeadEmailOptions(json.lead, appBaseUrl));
       showStatus("Lead details updated and audit logged.");
     });
   }
@@ -940,7 +957,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const json = (await response.json()) as { suggestions?: LeadEmailSuggestion[]; guardrailNote?: string };
       const nextSuggestions = Array.isArray(json.suggestions) && json.suggestions.length
         ? json.suggestions
-        : makeLeadEmailOptions(selectedLead);
+        : makeLeadEmailOptions(selectedLead, appBaseUrl);
       setEmailSuggestions(nextSuggestions);
       showStatus("Message options generated. Review one before sending.");
     });
@@ -1016,6 +1033,53 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       setEmailAttachments([]);
       showStatus("Reviewed email sent and logged on the lead.");
     });
+  }
+
+  function sendRegistrationForm() {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch("/api/registration/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId: selectedLead.center.id,
+          leadId: selectedLead.id,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        registrationUrl?: string;
+        lead?: Pick<CrmLead, "id" | "stage" | "customFields"> | null;
+        note?: LeadNote | null;
+      } | null;
+
+      if (!response.ok) {
+        showError(json?.error || "The registration form could not be sent.");
+        return;
+      }
+
+      const nextLead = json?.lead
+        ? { ...selectedLead, stage: json.lead.stage, customFields: json.lead.customFields }
+        : selectedLead;
+      setLeads((current) => current.map((lead) => lead.id === nextLead.id ? nextLead : lead));
+      setSelectedLeadDetails((current) => current
+        ? {
+            ...current,
+            stage: nextLead.stage,
+            customFields: nextLead.customFields,
+            notes: json?.note ? [json.note, ...current.notes] : current.notes,
+          }
+        : current);
+      setEmailSuggestions(makeLeadEmailOptions(nextLead, appBaseUrl));
+      showStatus("School-specific registration form sent and logged on this CRM lead.");
+    });
+  }
+
+  async function copyRegistrationLink() {
+    if (!selectedLead) return;
+    await navigator.clipboard.writeText(buildRegistrationShareUrl(appBaseUrl, selectedLead.center.id));
+    showStatus("School-specific registration link copied.");
   }
 
   return (
@@ -1140,7 +1204,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
               value={emailPurposePrompt}
               onChange={(event) => setEmailPurposePrompt(event.target.value)}
               aria-label="Email purpose for Mr. Bee"
-              placeholder="Tell Mr. Bee the purpose of this email, such as invite them to tour, request missing paperwork, explain availability, or follow up after a call."
+              placeholder="Tell Mr. Bee the purpose, such as invite them to tour, send the school registration form, request paperwork, explain availability, or follow up after a call."
             />
             <div className="mt-3 grid gap-2">
               <Button variant="outline" disabled={!selectedLead || isPending} onClick={generateEmailSuggestions}>
@@ -1562,23 +1626,53 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       </Button>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    nativeButton={false}
-                    render={(
-                      <Link
-                        href={registrationHandoffHref(selectedLead.center.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                      />
-                    )}
-                  >
-                    Open school application
-                    <ArrowRight data-icon="inline-end" />
-                  </Button>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Opens the public registration packet with this lead&apos;s school preselected. Enrollment still requires director review and approval.
-                  </p>
+                  <div className="grid gap-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
+                    <div>
+                      <div className="text-sm font-medium">Registration and enrollment form</div>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Send this lead the form linked directly to {getCenterLabel(selectedLead.center)}.
+                        The send is logged on the lead and moves early-stage leads to Application Sent.
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button
+                        size="sm"
+                        disabled={!selectedLead.email || isPending}
+                        onClick={sendRegistrationForm}
+                      >
+                        <Send data-icon="inline-start" />
+                        Send registration form
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void copyRegistrationLink()}>
+                        <Clipboard data-icon="inline-start" />
+                        Copy registration link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="sm:col-span-2"
+                        nativeButton={false}
+                        render={(
+                          <Link
+                            href={registrationHandoffHref(selectedLead.center.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                        )}
+                      >
+                        Preview school application
+                        <ArrowRight data-icon="inline-end" />
+                      </Button>
+                    </div>
+                    {!selectedLead.email ? (
+                      <p className="text-xs text-destructive">
+                        Add a valid lead email before sending. The link can still be copied.
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Submitting the form sends the packet to the director for confirmation. It does not confirm enrollment.
+                    </p>
+                  </div>
                   {duplicateCandidates.length ? (
                     <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 p-3">
                       <div className="flex items-start gap-2">

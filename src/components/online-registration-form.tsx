@@ -412,6 +412,7 @@ function CheckboxGroup({ label, name, options, columns = "sm:grid-cols-2" }: { l
 export function OnlineRegistrationForm({ centers, initialCenterId = "" }: RegistrationFormProps) {
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const lockedCenter = centers.find((center) => center.id === initialCenterId);
 
   const groupedCenters = useMemo(() => {
     const groups = new Map<string, CenterOption[]>();
@@ -443,7 +444,7 @@ export function OnlineRegistrationForm({ centers, initialCenterId = "" }: Regist
   }
 
   return (
-    <form className="space-y-5" onSubmit={submitRegistration}>
+    <form className="min-w-0 space-y-5" onSubmit={submitRegistration}>
       {result?.ok ? (
         <Alert className="border-emerald-500/30 bg-emerald-500/10">
           <CheckCircle2 className="size-4" />
@@ -477,29 +478,49 @@ export function OnlineRegistrationForm({ centers, initialCenterId = "" }: Regist
             Step 1
           </Badge>
           <CardTitle>School and Program</CardTitle>
-          <CardDescription>Select the school receiving this registration packet.</CardDescription>
+          <CardDescription>
+            {lockedCenter
+              ? `This packet is linked to ${centerLabel(lockedCenter)}.`
+              : "Select the school receiving this registration packet."}
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label htmlFor="centerId">School</Label>
-            <Select name="centerId" defaultValue={initialCenterId} required>
-              <SelectTrigger id="centerId" className={registrationSelectTriggerClassName}>
-                <SelectValue placeholder="Choose a school" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">Choose a school</SelectItem>
-                {groupedCenters.map(([state, stateCenters]) => (
-                  <SelectGroup key={state}>
-                    <SelectGroupLabel>{state}</SelectGroupLabel>
-                    {stateCenters.map((center) => (
-                      <SelectItem key={center.id} value={center.id}>
-                        {centerLabel(center)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+            {lockedCenter ? (
+              <>
+                <input type="hidden" name="centerId" value={lockedCenter.id} />
+                <div
+                  id="centerId"
+                  className={`${registrationSelectTriggerClassName} flex items-center border-emerald-500/30 bg-emerald-500/10`}
+                >
+                  <ShieldCheck className="mr-2 size-4 shrink-0 text-emerald-400" />
+                  <span className="truncate">{centerLabel(lockedCenter)}</span>
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  School-specific registration link. Submitted details route only to this school.
+                </p>
+              </>
+            ) : (
+              <Select name="centerId" defaultValue={initialCenterId} required>
+                <SelectTrigger id="centerId" className={registrationSelectTriggerClassName}>
+                  <SelectValue placeholder="Choose a school" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Choose a school</SelectItem>
+                  {groupedCenters.map(([state, stateCenters]) => (
+                    <SelectGroup key={state}>
+                      <SelectGroupLabel>{state}</SelectGroupLabel>
+                      {stateCenters.map((center) => (
+                        <SelectItem key={center.id} value={center.id}>
+                          {centerLabel(center)}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <SelectField id="program" label="Program" options={programs} required emptyLabel="Choose a program" />
           <SelectField id="schedule" label="Schedule" options={schedules} required emptyLabel="Choose a schedule" />

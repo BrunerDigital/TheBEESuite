@@ -12,11 +12,17 @@ import { prisma } from "@/lib/prisma";
 import {
   asRecord,
   buildEnrollmentChecklist,
+  buildRegistrationChildCustomFields,
   buildRegistrationDocumentRequests,
+  buildRegistrationFamilyCustomFields,
+  buildRegistrationGuardianCustomFields,
   cleanText,
   familyNameFromGuardian,
   normalizeEmailText,
   parsePacketContactLines,
+  registrationGuardianIsBillingContact,
+  registrationReviewFromData,
+  registrationReviewTransitionError,
   shouldInviteParentOnRegistrationApproval,
   type RegistrationPacketPayload,
 } from "@/lib/registration-packet";
@@ -554,6 +560,12 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (!action) {
     return NextResponse.json({ ok: false, error: "Review status must be approved or rejected." }, { status: 400 });
   }
+  if (action === "APPROVED" && body.confirmed !== true) {
+    return NextResponse.json({
+      ok: false,
+      error: "Review the submitted packet and confirm its record placement before approving.",
+    }, { status: 400 });
+  }
 
   const submission = await prisma.formSubmission.findUnique({
     where: { id },
@@ -564,6 +576,13 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   }
   if (submission.form.type !== "online_registration") {
     return NextResponse.json({ ok: false, error: "This form submission is not an online registration packet." }, { status: 400 });
+  }
+  const transitionError = registrationReviewTransitionError(
+    registrationReviewFromData(submission.data).status,
+    action,
+  );
+  if (transitionError) {
+    return NextResponse.json({ ok: false, error: transitionError }, { status: 409 });
   }
   const submissionId = submission.id;
 
@@ -712,28 +731,13 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
             billingEmail: nullable(packet.billingContactEmail || packet.primaryGuardianEmail),
             custodyNotes: nullable(packet.custodyNotes || packet.restrictedPickups) ?? familyMatch.custodyNotes,
             sourceSystem: familyMatch.sourceSystem ?? "bee_suite_registration",
-            customFields: customFields(familyMatch.customFields, {
-              registrationSubmissionId: submissionId,
-              registrationReviewedAt: reviewedAt.toISOString(),
-              billingContactName: packet.billingContactName,
-              billingContactPhone: packet.billingContactPhone,
-              childAddress: packet.childAddress,
-              siblingNamesAges: packet.siblingNamesAges,
-              collectionResponsibilityAcknowledgment: packet.collectionResponsibilityAcknowledgment,
-              mealBenefitApplication: {
-                requested: packet.mealBenefitApplicationNeeded,
-                caseNumberSnap: packet.mealApplicationCaseNumberSnap,
-                caseNumberTanf: packet.mealApplicationCaseNumberTanf,
-                childStatuses: packet.mealApplicationChildStatuses,
-                householdMembers: packet.mealApplicationHouseholdMembers,
-                adultIncome: packet.mealApplicationAdultIncome,
-                noSsn: packet.mealApplicationNoSsn,
-                ethnicity: packet.mealApplicationEthnicity,
-                race: packet.mealApplicationRace,
-                signatureName: packet.mealApplicationSignatureName,
-                signatureDate: packet.mealApplicationSignatureDate,
-              },
-            }),
+            customFields: customFields(
+              familyMatch.customFields,
+              buildRegistrationFamilyCustomFields(packet, {
+                submissionId,
+                reviewedAt: reviewedAt.toISOString(),
+              }),
+            ),
           },
         })
       : await tx.family.create({
@@ -744,33 +748,16 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
             billingEmail: nullable(packet.billingContactEmail || packet.primaryGuardianEmail),
             custodyNotes: nullable(packet.custodyNotes || packet.restrictedPickups),
             sourceSystem: "bee_suite_registration",
-      externalId: `registration:${submissionId}`,
-            customFields: inputJson({
-              registrationSubmissionId: submissionId,
-              registrationReviewedAt: reviewedAt.toISOString(),
-              billingContactName: packet.billingContactName,
-              billingContactPhone: packet.billingContactPhone,
-              childAddress: packet.childAddress,
-              siblingNamesAges: packet.siblingNamesAges,
-              collectionResponsibilityAcknowledgment: packet.collectionResponsibilityAcknowledgment,
-              mealBenefitApplication: {
-                requested: packet.mealBenefitApplicationNeeded,
-                caseNumberSnap: packet.mealApplicationCaseNumberSnap,
-                caseNumberTanf: packet.mealApplicationCaseNumberTanf,
-                childStatuses: packet.mealApplicationChildStatuses,
-                householdMembers: packet.mealApplicationHouseholdMembers,
-                adultIncome: packet.mealApplicationAdultIncome,
-                noSsn: packet.mealApplicationNoSsn,
-                ethnicity: packet.mealApplicationEthnicity,
-                race: packet.mealApplicationRace,
-                signatureName: packet.mealApplicationSignatureName,
-                signatureDate: packet.mealApplicationSignatureDate,
-              },
-            }),
+            externalId: `registration:${submissionId}`,
+            customFields: inputJson(buildRegistrationFamilyCustomFields(packet, {
+              submissionId,
+              reviewedAt: reviewedAt.toISOString(),
+            })),
           },
         });
 
     async function upsertGuardian(input: {
+      kind: "primary" | "secondary";
       fullName: string;
       email: string;
       phone: string;
@@ -802,16 +789,13 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         employer: nullable(input.employer),
         isBillingContact: input.isBillingContact,
         sourceSystem: "bee_suite_registration",
-        customFields: customFields(existing?.customFields, {
-          registrationSubmissionId: submissionId,
-          address: input.address,
-          homePhone: input.homePhone,
-          workPhone: input.workPhone,
-          cellPhoneCarrier: input.cellPhoneCarrier,
-          driverLicense: input.driverLicense,
-          socialSecurityNumberProvidedOnPacket: Boolean(input.socialSecurityNumber),
-          parentPortalInvite: { status: inviteParent ? "pending" : "not_requested" },
-        }),
+        customFields: customFields(
+          existing?.customFields,
+          buildRegistrationGuardianCustomFields(packet, input.kind, {
+            submissionId,
+            inviteParent,
+          }),
+        ),
       };
       const guardian = existing
         ? tx.guardian.update({ where: { id: existing.id }, data })
@@ -825,6 +809,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     }
 
     const primaryGuardian = await upsertGuardian({
+      kind: "primary",
       fullName: packet.primaryGuardianName,
       email: packet.primaryGuardianEmail,
       phone: packet.primaryGuardianPhone,
@@ -836,9 +821,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       cellPhoneCarrier: packet.primaryGuardianCellPhoneCarrier,
       driverLicense: packet.primaryGuardianDriverLicense,
       socialSecurityNumber: packet.primaryGuardianSocialSecurityNumber,
-      isBillingContact: true,
+      isBillingContact: registrationGuardianIsBillingContact(packet, "primary"),
     });
     const secondaryGuardian = await upsertGuardian({
+      kind: "secondary",
       fullName: packet.secondaryGuardianName,
       email: packet.secondaryGuardianEmail,
       phone: packet.secondaryGuardianPhone,
@@ -850,7 +836,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       cellPhoneCarrier: packet.secondaryGuardianCellPhoneCarrier,
       driverLicense: packet.secondaryGuardianDriverLicense,
       socialSecurityNumber: packet.secondaryGuardianSocialSecurityNumber,
-      isBillingContact: false,
+      isBillingContact: registrationGuardianIsBillingContact(packet, "secondary"),
     });
     const savedGuardians = [primaryGuardian, secondaryGuardian].filter((guardian): guardian is NonNullable<typeof guardian> => Boolean(guardian));
 
@@ -876,77 +862,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
       photoVideoPermission: packet.photoVideoPermission,
       fieldTripPermission: packet.fieldTripPermission,
       sourceSystem: "bee_suite_registration",
-      customFields: inputJson({
-          registrationSubmissionId: submissionId,
-        childSex: packet.childSex,
-        childAddress: packet.childAddress,
-        childPrimaryLanguage: packet.childPrimaryLanguage,
-        childLivesWith: packet.childLivesWith,
-        previousCareProgram: packet.previousCareProgram,
-        siblingNamesAges: packet.siblingNamesAges,
-        dayStructure: packet.dayStructure,
-        newSituationNotes: packet.newSituationNotes,
-        appetiteNotes: packet.appetiteNotes,
-        feedsSelf: packet.feedsSelf,
-        foodLikes: packet.foodLikes,
-        foodDislikes: packet.foodDislikes,
-        napSchedule: packet.napSchedule,
-        nightSleepSchedule: packet.nightSleepSchedule,
-        sleepItems: packet.sleepItems,
-        napHints: packet.napHints,
-        favoriteActivities: packet.favoriteActivities,
-        developmentSkills: packet.developmentSkills,
-        toiletingStatus: packet.toiletingStatus,
-        bathroomRequest: packet.bathroomRequest,
-        bathroomHelpNeeded: packet.bathroomHelpNeeded,
-        toiletingRoutine: packet.toiletingRoutine,
-        goalsExpectations: packet.goalsExpectations,
-        friendsAtCenter: packet.friendsAtCenter,
-        childPersonality: packet.childPersonality,
-        otherHelpfulInfo: packet.otherHelpfulInfo,
-        participationInterests: packet.participationInterests,
-        participationOther: packet.participationOther,
-        transportationPermission: packet.transportationPermission,
-        sunscreenPermission: packet.sunscreenPermission,
-        waterActivityPermission: packet.waterActivityPermission,
-        emergencyMedicalPermission: packet.emergencyMedicalPermission,
-        firstAidEmergencyConsent: packet.firstAidEmergencyConsent,
-        floridaKnowYourChildcareAcknowledgment: packet.floridaKnowYourChildcareAcknowledgment,
-        floridaDistractedAdultAcknowledgment: packet.floridaDistractedAdultAcknowledgment,
-        dcfInspectionAccessAcknowledgment: packet.dcfInspectionAccessAcknowledgment,
-        physicalImmunizationThirtyDayAcknowledgment: packet.physicalImmunizationThirtyDayAcknowledgment,
-        foodProgramPermission: packet.foodProgramPermission,
-        nutritionPolicyAcknowledgment: packet.nutritionPolicyAcknowledgment,
-        foodActivityPermission: packet.foodActivityPermission,
-        foodActivityAllergyChoice: packet.foodActivityAllergyChoice,
-        foodActivityRestrictedItems: packet.foodActivityRestrictedItems,
-        uniformOrder: {
-          blackQuantity: packet.uniformBlackQuantity,
-          blackSize: packet.uniformBlackSize,
-          yellowQuantity: packet.uniformYellowQuantity,
-          yellowSize: packet.uniformYellowSize,
-          paymentChoice: packet.uniformPaymentChoice,
-          paymentAmount: packet.uniformPaymentAmount,
-          comments: packet.uniformComments,
-        },
-        immunizationStatus: packet.immunizationStatus,
-        immunizationExpirationDate: packet.immunizationExpirationDate,
-        physicalExpirationDate: packet.physicalExpirationDate,
-        elc4cExpirationDate: packet.elc4cExpirationDate,
-        hospitalPreference: packet.hospitalPreference,
-        financialAgreementInitials: {
-          paymentFees: packet.financialAgreementPaymentFeesInitials,
-          absenteePolicy: packet.financialAgreementAbsenteePolicyInitials,
-          registrationFee: packet.financialAgreementRegistrationFeeInitials,
-          returnedPayment: packet.financialAgreementReturnedPaymentInitials,
-          discharge: packet.financialAgreementDischargeInitials,
-          withdrawal: packet.financialAgreementWithdrawalInitials,
-          latePickup: packet.financialAgreementLatePickupInitials,
-          collection: packet.financialAgreementCollectionInitials,
-          uniform: packet.financialAgreementUniformInitials,
-          finalTerms: packet.financialAgreementFinalTermsInitials,
-        },
-      }),
+      customFields: customFields(
+        childMatch?.customFields,
+        buildRegistrationChildCustomFields(packet, { submissionId }),
+      ),
     };
     const child = childMatch
       ? await tx.child.update({ where: { id: childMatch.id }, data: childData })

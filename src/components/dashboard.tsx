@@ -31,6 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
+import { RegistrationShareCard } from "@/components/registration-share-card";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
@@ -94,6 +95,11 @@ export type LiveDashboardData = {
     title: string;
     description: string;
     embedCode: string;
+  }>;
+  registrationShares?: Array<{
+    centerId: string;
+    schoolLabel: string;
+    registrationUrl: string;
   }>;
   setupChecklists?: Array<{
     key: SetupChecklistKey;
@@ -1018,6 +1024,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : live?.inquiryEmbed
       ? [live.inquiryEmbed]
       : [];
+  const registrationShares = live?.registrationShares ?? [];
   const setupChecklists = live?.setupChecklists ?? [];
   const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
   const kpiValue = (label: string, fallback = "0") => dashboardKpis.find((kpi) => kpi.label === label)?.value ?? fallback;
@@ -1475,6 +1482,25 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         defaultLens={defaultLens}
         aiSummary={aiSummary}
       />
+
+      {registrationShares.length && isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
+        <section className="grid gap-4" aria-labelledby="registration-sharing-heading">
+          <div>
+            <h2 id="registration-sharing-heading" className="text-xl font-semibold">Registration and enrollment forms</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Send or copy a school-specific registration packet. These links do not use the inquiry form&apos;s location picker.
+            </p>
+          </div>
+          {registrationShares.map((share) => (
+            <RegistrationShareCard
+              key={share.centerId}
+              centerId={share.centerId}
+              schoolLabel={share.schoolLabel}
+              registrationUrl={share.registrationUrl}
+            />
+          ))}
+        </section>
+      ) : null}
 
       {inquiryEmbeds.length && isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
         <div className="grid gap-4">

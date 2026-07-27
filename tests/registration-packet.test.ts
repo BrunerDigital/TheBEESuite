@@ -2,14 +2,21 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildEnrollmentChecklist,
+  buildRegistrationChildCustomFields,
   buildRegistrationDocumentRequests,
+  buildRegistrationFamilyCustomFields,
+  buildRegistrationGuardianCustomFields,
+  buildRegistrationReviewPreview,
   kidCityRegistrationPacketSchema,
   markRegistrationPaymentChecklistPaid,
   parsePacketContactLines,
+  registrationGuardianIsBillingContact,
   registrationReviewFromData,
+  registrationReviewTransitionError,
   registrationSubmissionSummary,
   summarizeEnrollmentChecklist,
   shouldInviteParentOnRegistrationApproval,
+  type RegistrationPacketPayload,
 } from "../src/lib/registration-packet";
 
 test("registration approval requires an explicit parent invitation opt-in", () => {
@@ -17,6 +24,14 @@ test("registration approval requires an explicit parent invitation opt-in", () =
   assert.equal(shouldInviteParentOnRegistrationApproval(false), false);
   assert.equal(shouldInviteParentOnRegistrationApproval(undefined), false);
   assert.equal(shouldInviteParentOnRegistrationApproval("true"), false);
+});
+
+test("registration approval refuses duplicate or post-approval review writes", () => {
+  assert.match(registrationReviewTransitionError("approved", "APPROVED") ?? "", /already been approved/);
+  assert.match(registrationReviewTransitionError("approved", "REJECTED") ?? "", /cannot be reviewed again/);
+  assert.match(registrationReviewTransitionError("rejected", "REJECTED") ?? "", /already been rejected/);
+  assert.equal(registrationReviewTransitionError("rejected", "APPROVED"), null);
+  assert.equal(registrationReviewTransitionError("submitted", "APPROVED"), null);
 });
 import { INTERNAL_SIGNATURE_PENDING_KEY } from "../src/lib/signature-capture";
 
@@ -71,6 +86,93 @@ test("registration review and summary helpers read packet data safely", () => {
 
   assert.equal(registrationReviewFromData(data).status, "approved");
   assert.equal(registrationSubmissionSummary(data), "Avery Bee · Jane Bee · Pre-K · 2026-08-10 · approved");
+});
+
+test("director review preview includes filed destinations and redacts restricted values", () => {
+  const preview = buildRegistrationReviewPreview({
+    centerId: "center-1",
+    program: "Pre-K",
+    schedule: "Full time",
+    desiredStartDate: "2026-08-10",
+    primaryGuardianName: "Jane Bee",
+    primaryGuardianEmail: "jane@example.com",
+    primaryGuardianSocialSecurityNumber: "111-22-3333",
+    primaryGuardianDriverLicense: "D1234567",
+    childFullName: "Avery Bee",
+    insurancePolicyNumber: "POLICY-SECRET",
+    emergencyContacts: "Sam Bee, 555-1111, Uncle",
+    authorizedPickups: "Sam Bee, 555-1111, Uncle",
+    policyAcknowledgment: true,
+  });
+  const serialized = JSON.stringify(preview);
+
+  assert.equal(preview.destinations.includes("Family billing profile and guardian records"), true);
+  assert.equal(preview.destinations.includes("Emergency contacts and authorized pickup records"), true);
+  assert.equal(serialized.includes("111-22-3333"), false);
+  assert.equal(serialized.includes("D1234567"), false);
+  assert.equal(serialized.includes("POLICY-SECRET"), false);
+  assert.match(serialized, /restricted registration packet/);
+});
+
+test("registration mapping files submitted values into family, guardian, and child records without copying full identity numbers", () => {
+  const packet = {
+    primaryGuardianName: "Jane Bee",
+    primaryGuardianEmail: "jane@example.com",
+    primaryGuardianAddress: "1 Main St",
+    primaryGuardianDriverLicense: "D1234567",
+    primaryGuardianSocialSecurityNumber: "111-22-3333",
+    secondaryGuardianName: "John Bee",
+    secondaryGuardianEmail: "john@example.com",
+    secondaryGuardianDriverLicense: "D7654321",
+    secondaryGuardianSocialSecurityNumber: "999-88-7777",
+    billingContactName: "John Bee",
+    billingContactEmail: "john@example.com",
+    billingContactPhone: "555-1212",
+    childSex: "Female",
+    childPrimaryLanguage: "English",
+    mealBenefitApplicationNeeded: true,
+    mealApplicationAttendedThisCenter: "Yes",
+    mealApplicationHeadStartPreK: "No",
+    mealApplicationChildIncome: "None",
+    mealApplicationLastFourSsn: "3333",
+    handbookAcknowledgment: true,
+    emergencyProceduresAcknowledgment: true,
+    tuitionPolicyAcknowledgment: true,
+    disciplinePolicyAcknowledgment: true,
+    expulsionPolicyAcknowledgment: true,
+    mandatoryReportingAcknowledgment: true,
+    healthPolicyAcknowledgment: true,
+    collectionResponsibilityAcknowledgment: true,
+    policyAcknowledgment: true,
+    eSignatureConsent: true,
+    signatureName: "Jane Bee",
+    signatureDate: "2026-07-27",
+    insurancePolicyNumber: "POLICY-SECRET",
+  } as RegistrationPacketPayload;
+
+  const family = buildRegistrationFamilyCustomFields(packet, {
+    submissionId: "submission-1",
+    reviewedAt: "2026-07-27T12:00:00.000Z",
+  });
+  const primary = buildRegistrationGuardianCustomFields(packet, "primary", {
+    submissionId: "submission-1",
+    inviteParent: false,
+  });
+  const child = buildRegistrationChildCustomFields(packet, { submissionId: "submission-1" });
+  const serialized = JSON.stringify({ family, primary, child });
+
+  assert.equal(family.mealBenefitApplication.attendedThisCenter, "Yes");
+  assert.equal(family.mealBenefitApplication.headStartPreK, "No");
+  assert.equal(family.mealBenefitApplication.childIncome, "None");
+  assert.equal(family.registrationAcknowledgments.handbook, true);
+  assert.equal(primary.driverLicenseProvidedOnPacket, true);
+  assert.equal(primary.socialSecurityNumberProvidedOnPacket, true);
+  assert.equal(child.insurancePolicyNumberProvidedOnPacket, true);
+  assert.equal(registrationGuardianIsBillingContact(packet, "primary"), false);
+  assert.equal(registrationGuardianIsBillingContact(packet, "secondary"), true);
+  assert.equal(serialized.includes("111-22-3333"), false);
+  assert.equal(serialized.includes("D1234567"), false);
+  assert.equal(serialized.includes("POLICY-SECRET"), false);
 });
 
 test("enrollment checklist summary counts completed, pending, and blocked items", () => {

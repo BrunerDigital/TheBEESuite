@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canAccessCenter, getCurrentUser } from "@/lib/auth";
+import {
+  buildRegistrationLeadSuggestion,
+  buildRegistrationShareUrl,
+  type RegistrationLeadSuggestion,
+} from "@/lib/registration-sharing";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -50,6 +56,7 @@ function buildDraftOptions({
   centerName,
   purpose,
   contextPrompt,
+  registrationSuggestion,
 }: {
   familyName: string;
   childName?: string | null;
@@ -57,6 +64,7 @@ function buildDraftOptions({
   centerName: string;
   purpose: string;
   contextPrompt?: string;
+  registrationSuggestion?: RegistrationLeadSuggestion | null;
 }) {
   const programText = program || "childcare";
   const childLine = childName ? ` for ${childName}` : "";
@@ -68,7 +76,7 @@ function buildDraftOptions({
       : `Kid City USA ${programText} follow-up`;
   const nextStep = context || "We can answer questions, confirm availability, or help schedule the next step for your family.";
 
-  return [
+  const generalSuggestions = [
     {
       label: "Warm follow-up",
       subject: baseSubject,
@@ -85,6 +93,7 @@ function buildDraftOptions({
       body: `Hi ${familyName},\n\nThis is Kid City USA checking in about ${programText}${childLine}. ${nextStep}\n\nWe would be happy to connect directly and make the enrollment process easier for you.\n\nThank you,\nKid City USA`,
     },
   ];
+  return registrationSuggestion ? [registrationSuggestion, ...generalSuggestions] : generalSuggestions;
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -124,7 +133,24 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
   }
 
-  const suggestion = buildDraft({
+  const registrationSuggestion = buildRegistrationLeadSuggestion({
+    familyName: lead.familyName,
+    childName: lead.childName,
+    program: lead.programInterest,
+    schoolLabel: lead.center.crmLocationId ?? lead.center.name,
+    registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(request.url), lead.centerId),
+    stage: lead.stage,
+    contextPrompt: `${purpose} ${contextPrompt}`,
+    customFields: lead.customFields,
+  });
+  const explicitlyRequestedRegistration = /\b(registration|application|enroll(?:ment)?|paperwork|form)\b/i.test(
+    `${purpose} ${contextPrompt}`,
+  );
+  const suggestion = registrationSuggestion && (
+    explicitlyRequestedRegistration
+    || lead.stage === "APPLICATION_SENT"
+    || lead.stage === "APPLICATION_STARTED"
+  ) ? registrationSuggestion.body : buildDraft({
     familyName: lead.familyName,
     program: lead.programInterest,
     centerName: lead.center.crmLocationId ?? lead.center.name,
@@ -139,6 +165,7 @@ async function POSTHandler(request: NextRequest) {
         centerName: lead.center.crmLocationId ?? lead.center.name,
         purpose,
         contextPrompt,
+        registrationSuggestion,
       })
     : null;
 
@@ -150,12 +177,15 @@ async function POSTHandler(request: NextRequest) {
         centerId: lead.centerId,
         purpose,
         contextPrompt: contextPrompt || null,
+        leadStage: lead.stage,
+        registrationSuggestionIncluded: Boolean(registrationSuggestion),
+        registrationAlreadyShared: registrationSuggestion?.label === "Registration reminder",
         generatedBy: "rule_based_guardrailed_draft",
       },
       suggestion: suggestions ? JSON.stringify(suggestions) : suggestion,
       status: "pending_review",
       guardrailNote:
-        "Mr. Bee drafts are suggestions only. A staff member must review before sending. Do not use AI to make safety, medical, custody, legal, billing, or compliance decisions.",
+        "Mr. Bee drafts are suggestions only. A staff member must review before sending. Registration links are school-specific and do not confirm enrollment. Do not use AI to make safety, medical, custody, legal, billing, or compliance decisions.",
     },
   });
 

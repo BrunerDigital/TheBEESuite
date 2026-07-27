@@ -62,7 +62,7 @@ export default async function OnlineRegistrationPage({
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[0.78fr_1.22fr] lg:items-start">
-          <div className="sticky top-6 space-y-5">
+          <div className="min-w-0 space-y-5 lg:sticky lg:top-6">
             <div className="rounded-2xl border border-white/10 bg-black/45 p-6 text-white shadow-2xl shadow-black/30 backdrop-blur-xl">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-sm text-amber-200">
                 <FileCheck2 className="size-4" />

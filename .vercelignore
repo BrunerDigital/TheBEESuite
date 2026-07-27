@@ -13,7 +13,8 @@ docs/*
 !docs/SECURITY_COMPLIANCE_PRODUCTION_READINESS_AUDIT_2026-07-20.md
 !docs/BEE_SUITE_COMPLETE_GUIDE.md
 !docs/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md
-!docs/sops/
+!docs/sops
+!docs/sops/**
 !docs/sops/BILLING_ADMIN_SOP.md
 !docs/sops/DIRECTOR_SOP.md
 !docs/sops/EXECUTIVE_ADMIN_SOP.md
@@ -27,11 +28,7 @@ ios
 native
 output
 outputs
-screenshots
-!public/brand/the-bee-suite/screenshots/
-public/brand/the-bee-suite/screenshots/*
-!public/brand/the-bee-suite/screenshots/2026-07-27-light/
-!public/brand/the-bee-suite/screenshots/2026-07-27-light/**
+/screenshots
 wordpress-avada/*
 !wordpress-avada/kidcity-inquiry-form-bee-suite.html
 supabase/.temp

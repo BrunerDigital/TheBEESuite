@@ -85,23 +85,34 @@ function stableId(...parts: string[]) {
 function childKey(name: string, dob: string) { return `${normalizedName(name)}\0${dob}`; }
 
 function accountChildren(rows: Row[]) {
-  return rows.flatMap<AccountChild>((row) => {
+  const accounts = new Map<string, Pick<AccountChild, "accountName" | "payerName" | "payerAddress" | "payerContact">>();
+  const result: AccountChild[] = [];
+  for (const row of rows) {
     const accountId = accountKey(cell(row, 6));
-    const childName = displayName(cell(row, 15));
-    if (!accountId || !childName) return [];
-    const payerName = displayName(cell(row, 9));
-    return [{
-      accountId,
-      accountName: payerName ? `${payerName} Family` : `ProCare ${accountId}`,
+    if (!accountId) continue;
+    const prior = accounts.get(accountId);
+    const payerName = displayName(cell(row, 9)) || prior?.payerName || "";
+    const payerAddress = cell(row, 10) || prior?.payerAddress || "";
+    const payerContact = cell(row, 11) || prior?.payerContact || "";
+    const account = {
+      accountName: payerName ? `${payerName} Family` : prior?.accountName || `ProCare ${accountId}`,
       payerName,
-      payerAddress: cell(row, 10),
-      payerContact: cell(row, 11),
+      payerAddress,
+      payerContact,
+    };
+    accounts.set(accountId, account);
+    const childName = displayName(cell(row, 15));
+    if (!childName) continue;
+    result.push({
+      accountId,
+      ...account,
       childName,
       childDob: dateIn(cell(row, 18)),
       classroom: cell(row, 17),
       status: cell(row, 19),
-    }];
-  });
+    });
+  }
+  return result;
 }
 
 function registrations(rows: Row[]) {

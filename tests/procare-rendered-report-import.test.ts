@@ -128,3 +128,40 @@ test("alternate ProCare child-information layout accepts trailing account marker
   assert.equal(result.records[0]["guardian email"], "parent@example.test");
   assert.equal(result.records[0]["import warning"], undefined);
 });
+
+test("rendered account sheets carry payer identity from the account header onto later child rows", () => {
+  const files = new Map<string, Buffer>([
+    ["account.csv", Buffer.from([
+      row({
+        3: "Account Information Sheet",
+        6: "[COCHRAN]",
+        9: "Cochran, AnnMarie",
+        10: "48 Teresa Trail",
+        11: "Cell 828 555-0100",
+      }),
+      row({
+        6: "[COCHRAN]",
+        15: "Lee, Delilah",
+        17: "Toddlers",
+        18: "DOB: 5/21/2023",
+        19: "Enrolled",
+      }),
+    ].join("\n"))],
+    ["registration.csv", Buffer.from(row({
+      2: "Child Registration Information",
+      5: "Lee, Delilah",
+      6: "DOB: 5/21/2023",
+      8: "Toddlers",
+      11: "Enrolled",
+    }))],
+  ]);
+
+  const result = buildRenderedProcareReportRowsFromFiles(files);
+  assert.ok(result);
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0]["account id"], "COCHRAN");
+  assert.equal(result.records[0]["family name"], "AnnMarie Cochran Family");
+  assert.equal(result.records[0]["guardian name"], "AnnMarie Cochran");
+  assert.equal(result.records[0]["guardian phone"], "8285550100");
+  assert.equal(result.records[0]["import warning"], undefined);
+});

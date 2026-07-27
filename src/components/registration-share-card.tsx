@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowUpRight, CheckCircle2, Clipboard, Mail, Send } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Clipboard, Code2, Mail, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { buildRegistrationFormCode } from "@/lib/registration-form-code";
 
 type RegistrationShareCardProps = {
   centerId: string;
@@ -29,18 +30,30 @@ export function RegistrationShareCard({
   registrationUrl,
 }: RegistrationShareCardProps) {
   const [recipientInput, setRecipientInput] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"link" | "code" | null>(null);
   const [result, setResult] = useState<SendResult | null>(null);
   const [isPending, startTransition] = useTransition();
+  const registrationFormCode = buildRegistrationFormCode({ schoolLabel, registrationUrl });
 
   async function copyRegistrationLink() {
     try {
       await navigator.clipboard.writeText(registrationUrl);
-      setCopied(true);
+      setCopied("link");
       setResult(null);
-      window.setTimeout(() => setCopied(false), 2200);
+      window.setTimeout(() => setCopied(null), 2200);
     } catch {
       setResult({ error: "The link could not be copied automatically. Select the link below and copy it manually." });
+    }
+  }
+
+  async function copyRegistrationFormCode() {
+    try {
+      await navigator.clipboard.writeText(registrationFormCode);
+      setCopied("code");
+      setResult(null);
+      window.setTimeout(() => setCopied(null), 2200);
+    } catch {
+      setResult({ error: "The website code could not be copied automatically. Select the code below and copy it manually." });
     }
   }
 
@@ -118,8 +131,8 @@ export function RegistrationShareCard({
             {isPending ? "Sending…" : "Send registration form"}
           </Button>
           <Button type="button" variant="outline" onClick={copyRegistrationLink}>
-            {copied ? <CheckCircle2 data-icon="inline-start" /> : <Clipboard data-icon="inline-start" />}
-            {copied ? "Link copied" : "Copy registration link"}
+            {copied === "link" ? <CheckCircle2 data-icon="inline-start" /> : <Clipboard data-icon="inline-start" />}
+            {copied === "link" ? "Link copied" : "Copy registration link"}
           </Button>
           <Button
             variant="ghost"
@@ -134,6 +147,28 @@ export function RegistrationShareCard({
         <div className="rounded-lg border border-border/70 bg-background/45 p-3">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Linked registration form</p>
           <p className="break-all font-mono text-xs leading-5">{registrationUrl}</p>
+        </div>
+
+        <div className="space-y-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <div>
+            <p className="flex items-center gap-2 text-sm font-semibold">
+              <Code2 className="size-4 text-emerald-400" />
+              Website code for {schoolLabel}
+            </p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Paste this HTML into a school website or landing page. It adds a button that opens this school&apos;s secure hosted registration form.
+            </p>
+          </div>
+          <Textarea
+            value={registrationFormCode}
+            readOnly
+            aria-label={`Registration form code for ${schoolLabel}`}
+            className="min-h-48 font-mono text-xs"
+          />
+          <Button type="button" variant="outline" onClick={copyRegistrationFormCode}>
+            {copied === "code" ? <CheckCircle2 data-icon="inline-start" /> : <Clipboard data-icon="inline-start" />}
+            {copied === "code" ? "Code copied" : "Copy website code"}
+          </Button>
         </div>
 
         <p className="text-xs leading-5 text-muted-foreground">

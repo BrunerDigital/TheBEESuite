@@ -5,6 +5,7 @@ import { test } from "node:test";
 const routePath = new URL("../src/app/api/registration/share/route.ts", import.meta.url);
 const dashboardPath = new URL("../src/app/dashboard/page.tsx", import.meta.url);
 const formPath = new URL("../src/components/online-registration-form.tsx", import.meta.url);
+const shareCardPath = new URL("../src/components/registration-share-card.tsx", import.meta.url);
 const crmWorkspacePath = new URL("../src/components/crm/crm-workspace.tsx", import.meta.url);
 const mrBeePath = new URL("../src/app/api/ai/mr-bee/route.ts", import.meta.url);
 
@@ -43,10 +44,14 @@ test("Mr. Bee considers school-specific registration in lead response options", 
 
 test("dashboard exposes school-specific registration separately from inquiry embeds", async () => {
   const source = await readFile(dashboardPath, "utf8");
+  const shareCardSource = await readFile(shareCardPath, "utf8");
 
   assert.match(source, /const registrationShares = canManageCrmLeads\(user\)/);
   assert.match(source, /buildRegistrationShareUrl\(getAppBaseUrl\(\), center\.id\)/);
   assert.match(source, /const inquiryEmbeds = canManageCrmLeads\(user\)/);
+  assert.match(shareCardSource, /buildRegistrationFormCode/);
+  assert.match(shareCardSource, /Registration form code for/);
+  assert.match(shareCardSource, /Copy website code/);
 });
 
 test("a valid dashboard registration link locks the family form to its school", async () => {

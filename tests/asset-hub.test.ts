@@ -5,7 +5,9 @@ import { assetKind, buildAssetStorageKey, canManageAssetHub, canReadAssetHub, no
 test("asset hub restricts management while allowing directors to read", () => {
   assert.equal(canManageAssetHub("BRAND_ADMIN"), true);
   assert.equal(canManageAssetHub("CENTER_DIRECTOR"), false);
+  assert.equal(canManageAssetHub("ASSISTANT_DIRECTOR"), false);
   assert.equal(canReadAssetHub("CENTER_DIRECTOR"), true);
+  assert.equal(canReadAssetHub("ASSISTANT_DIRECTOR"), true);
   assert.equal(canReadAssetHub("TEACHER"), false);
 });
 

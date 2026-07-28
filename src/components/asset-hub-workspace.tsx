@@ -16,6 +16,7 @@ import {
   FileVideo,
   Grid2X2,
   List,
+  Printer,
   Presentation,
   Search,
   Sparkles,
@@ -214,8 +215,8 @@ export function AssetHubWorkspace({
             </div>
             <h1 className="text-3xl font-semibold text-white">Asset Hub</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-              Find approved graphics, videos, documents, flyers, and training
-              resources uploaded by the executive team.
+              Find, download, and print approved forms, templates, graphics,
+              flyers, and training resources uploaded by the executive team.
             </p>
           </div>
           {canManage && (
@@ -541,6 +542,25 @@ export function AssetHubWorkspace({
               >
                 <Download /> Download
               </Button>
+              <Button
+                render={
+                  <a
+                    href={`/api/asset-hub/download/${selected.id}?mode=print`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                }
+                variant="outline"
+                className="mt-2 w-full"
+              >
+                <Printer /> Print
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {selected.contentType === "application/pdf" ||
+                selected.name.toLowerCase().endsWith(".pdf")
+                  ? "Opens securely in a new tab so you can print the PDF."
+                  : "Downloads the editable template so you can open and print it in Word."}
+              </p>
               {canManage && (
                 <Button
                   variant="destructive"

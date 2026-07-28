@@ -59,10 +59,10 @@ import {
   type BillingWorkbenchTuitionPlan,
 } from "@/components/billing-workbench";
 import {
-  LedgerPrintButton,
   PaymentReceiptPrintButton,
   type BillingReceiptSchool,
 } from "@/components/billing-print-actions";
+import { FamilyLedgerCard } from "@/components/family-ledger-card";
 import { AutomationWorkflowBuilder, type AutomationWorkflowBuilderData } from "@/components/automation-workflow-builder";
 import { CampaignWorkspace, type CampaignWorkspaceData } from "@/components/campaign-workspace";
 import {
@@ -5055,10 +5055,13 @@ export type BillingInvoicesPageData = {
 };
 
 export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData }) {
-  const ledgerPrintEntries = data.ledgerEntries.map((entry) => ({
-    ...entry,
-    effectiveAt: new Date(entry.effectiveAt).toISOString(),
-  }));
+  const ledgerFamilyOptions = Array.from(new Map([
+    ...data.workbench.families.map((family) => [family.id, { id: family.id, name: family.name }] as const),
+    ...data.ledgerEntries.map((entry) => [
+      entry.billingAccount.family.id,
+      { id: entry.billingAccount.family.id, name: entry.billingAccount.family.name },
+    ] as const),
+  ]).values()).toSorted((left, right) => left.name.localeCompare(right.name));
 
   function billingFamilyHref(family: { id: string; centerId: string | null }) {
     const params = new URLSearchParams({ familyId: family.id });
@@ -5238,62 +5241,12 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
           </Table>
         </CardContent>
       </Card>
-      <Card className="glass-panel">
-        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <CardTitle>Family Ledger</CardTitle>
-            <CardDescription>Tuition charges, imported ProCare balances, credits, and manual adjustments.</CardDescription>
-          </div>
-          <LedgerPrintButton entries={ledgerPrintEntries} schools={data.receiptSchools} />
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Family</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.ledgerEntries.map((entry) => (
-                <TableRow key={entry.id} className="group">
-                  <TableCell>{formatDate(entry.effectiveAt)}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={familyProfileHref(entry.billingAccount.family)}
-                      className="font-medium underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {entry.billingAccount.family.name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">{entry.billingAccount.family.billingEmail ?? "No billing email"}</div>
-                  </TableCell>
-                  <TableCell><Badge variant="outline">{entry.type}</Badge></TableCell>
-                  <TableCell>{entry.description}</TableCell>
-                  <TableCell>{money(entry.amountCents)}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>{entry.balanceAfterCents === null ? "Not set" : money(entry.balanceAfterCents)}</span>
-                      <Link href={billingFamilyHref(entry.billingAccount.family)} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                        <ArrowRight data-icon="inline-start" />
-                        Account
-                      </Link>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!data.ledgerEntries.length ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">No ledger entries have been created yet.</TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <FamilyLedgerCard
+        entries={data.ledgerEntries}
+        families={ledgerFamilyOptions}
+        schools={data.receiptSchools}
+        initialFamilyId={data.initialSelection?.familyId}
+      />
     </div>
   );
 }

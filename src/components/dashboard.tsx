@@ -15,6 +15,10 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import {
+  AccountsReceivablePanel,
+  ExecutiveAccountsReceivablePanel,
+} from "@/components/accounts-receivable-panel";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
@@ -35,6 +39,7 @@ import { RegistrationShareCard } from "@/components/registration-share-card";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
+import type { AccountsReceivableSnapshot, AccountsReceivableSummary } from "@/lib/accounts-receivable";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
 import { formatMoneyCents } from "@/lib/staff-compensation";
@@ -86,6 +91,8 @@ export type LiveDashboardData = {
   visibleLenses?: readonly DashboardLens[];
   dashboardWidgets?: DashboardWidgetView[];
   dashboardWidgetRoleLabel?: string;
+  accountsReceivable?: AccountsReceivableSnapshot;
+  executiveAccountsReceivable?: AccountsReceivableSummary;
   inquiryEmbed?: {
     title: string;
     description: string;
@@ -225,11 +232,13 @@ function ExecutiveLensDashboard({
   metrics,
   trendData,
   actionQueue,
+  accountsReceivable,
 }: {
   lens: Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">;
   metrics: NonNullable<LiveDashboardData["executiveMetrics"]>;
   trendData: typeof analytics;
   actionQueue: DashboardNotification[];
+  accountsReceivable?: AccountsReceivableSummary;
 }) {
   const timeZone = useSchoolTimeZone();
   const [payrollSchoolFilter, setPayrollSchoolFilter] = useState("all");
@@ -308,6 +317,21 @@ function ExecutiveLensDashboard({
         </CollapsibleCard>
       ),
     },
+    ...(accountsReceivable ? [{
+      id: "executive-account-balances",
+      title: "Accounts receivable by school",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-executive-account-balances`}
+          className="glass-panel"
+          title="Accounts receivable by school"
+          description="Family balances across every school visible to this executive login."
+        >
+          <ExecutiveAccountsReceivablePanel summary={accountsReceivable} />
+        </CollapsibleCard>
+      ),
+    } satisfies WorkspaceBoardItem] : []),
     {
       id: "weekly-fte-progress",
       title: "Weekly FTE progress",
@@ -1031,6 +1055,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const showEnrollment = isWidgetVisible("enrollmentPipeline");
   const showClassroomCapacity = isWidgetVisible("classroomCapacity");
   const showFamilyCommunication = isWidgetVisible("familyCommunication");
+  const showAccountsReceivable = isWidgetVisible("billingRevenue")
+    && Boolean(live?.accountsReceivable || live?.executiveAccountsReceivable);
   const showExecutiveRollup = isWidgetVisible("executiveRollup");
   const isTeacherDashboard = visibleLenses.length === 1 && visibleLenses.includes("teacher");
   const isBillingDashboard = visibleLenses.length === 1 && visibleLenses.includes("billing");
@@ -1571,6 +1597,27 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         </CollapsibleCard>
                       ),
                     } satisfies WorkspaceBoardItem] : []),
+                    ...(showAccountsReceivable && (live?.accountsReceivable || live?.executiveAccountsReceivable) ? [{
+                      id: "school-account-balances",
+                      title: live.accountsReceivable ? "School account balances" : "Accounts receivable by school",
+                      className: "xl:col-span-2",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-account-balances"
+                          className="glass-panel"
+                          title={live.accountsReceivable ? "School account balances" : "Accounts receivable by school"}
+                          description={live.accountsReceivable
+                            ? "Every family account, with balances owed listed first"
+                            : "Family balances across every school visible to this executive login"}
+                        >
+                          {live.accountsReceivable ? (
+                            <AccountsReceivablePanel snapshot={live.accountsReceivable} />
+                          ) : live.executiveAccountsReceivable ? (
+                            <ExecutiveAccountsReceivablePanel summary={live.executiveAccountsReceivable} />
+                          ) : null}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
                     ...(isAnyWidgetVisible(["classroomCapacity", "staffingRatios"]) ? [{
                       id: "capacity-by-classroom",
                       title: "Capacity by classroom",
@@ -1797,10 +1844,28 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   metrics={executiveMetrics}
                   trendData={dashboardAnalytics}
                   actionQueue={actionQueue}
+                  accountsReceivable={live?.executiveAccountsReceivable}
                 />
               ),
             } satisfies WorkspaceBoardItem] : []),
-            ...(!isExecutiveLens ? visibleConfiguredWidgets.map((widget) => {
+            ...(!isExecutiveLens && tab === "billing" && showAccountsReceivable && live?.accountsReceivable ? [{
+              id: "billing-school-account-balances",
+              title: "School account balances",
+              className: "md:col-span-3",
+              children: (
+                <CollapsibleCard
+                  id="dashboard-billing-account-balances"
+                  className="glass-panel"
+                  title="School account balances"
+                  description="Every family account, with balances owed listed first"
+                >
+                  <AccountsReceivablePanel snapshot={live.accountsReceivable} />
+                </CollapsibleCard>
+              ),
+            } satisfies WorkspaceBoardItem] : []),
+            ...(!isExecutiveLens ? visibleConfiguredWidgets
+              .filter((widget) => !(tab === "billing" && showAccountsReceivable && widget.id === "billingRevenue"))
+              .map((widget) => {
               const summary = widgetSummaries[widget.id];
               return {
                 id: `${tab}-widget-${widget.id}`,

@@ -2,6 +2,7 @@ import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { resolveDailyReportEmailRecipients, type DailyReportEmailRecipient } from "@/lib/daily-report-email-settings";
+import { dailyReportTimedCareEvents } from "@/lib/daily-report-ordering";
 
 type DailyReportEmailMeal = {
   mealType: string;
@@ -125,18 +126,15 @@ export function buildDailyReportEmailText({
       }),
     ),
     ...bulletSection(
-      "Naps",
-      report.naps.map((nap) => {
-        const start = formatTime(nap.startsAt, timeZone);
-        const end = nap.endsAt ? formatTime(nap.endsAt, timeZone) : "end not recorded";
-        return `${start} to ${end}`;
-      }),
-    ),
-    ...bulletSection(
-      "Diaper / potty",
-      report.diapers.map((entry) => {
-        const notes = sentence(entry.notes);
-        return `${formatTime(entry.occurredAt, timeZone)}: ${entry.type}${notes ? ` - ${notes}` : ""}`;
+      "Care timeline",
+      dailyReportTimedCareEvents(report).map((event) => {
+        if (event.kind === "nap") {
+          const start = formatTime(new Date(event.startsAt), timeZone);
+          const end = event.endsAt ? formatTime(new Date(event.endsAt), timeZone) : "end not recorded";
+          return `${start}: Nap (${start} to ${end})`;
+        }
+        const notes = sentence(event.notes);
+        return `${formatTime(new Date(event.occurredAt), timeZone)}: Diaper / potty - ${event.type}${notes ? ` - ${notes}` : ""}`;
       }),
     ),
     ...bulletSection(

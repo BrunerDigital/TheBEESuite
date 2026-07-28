@@ -7,10 +7,9 @@ import {
   shouldSendExternalFteEscalation,
 } from "../src/lib/fte-escalations";
 
-test("FTE external escalations only send during configured Friday checkpoints", () => {
+test("FTE external escalations only send during the configured Friday evening checkpoint", () => {
   assert.equal(shouldSendExternalFteEscalation(null), false);
   assert.equal(shouldSendExternalFteEscalation(undefined), false);
-  assert.equal(shouldSendExternalFteEscalation("friday_8am"), true);
   assert.equal(shouldSendExternalFteEscalation("friday_5pm"), true);
 });
 

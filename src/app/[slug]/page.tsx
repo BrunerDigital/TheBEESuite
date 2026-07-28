@@ -1950,6 +1950,7 @@ async function renderLivePage(
         select: {
           id: true,
           date: true,
+          sentAt: true,
           mood: true,
           teacherNote: true,
           suppliesNeeded: true,

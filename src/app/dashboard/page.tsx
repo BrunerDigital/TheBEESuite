@@ -2,6 +2,13 @@ import { redirect } from "next/navigation";
 import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
+import {
+  accountsReceivableFamilySelect,
+  accountsReceivableSummaryFamilySelect,
+  buildAccountsReceivableSnapshot,
+  buildAccountsReceivableSummary,
+  canViewAccountBalances,
+} from "@/lib/accounts-receivable";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
@@ -93,6 +100,8 @@ export default async function DashboardPage() {
     role: user.role,
     value: getDashboardWidgetPreferenceValue(dashboardPreferenceUser?.customFields),
   });
+  const visibleDashboardLenses = dashboardLensesForRole(user);
+  const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const directorChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "director_launch");
   const teacherChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "teacher_profile");
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
@@ -156,6 +165,8 @@ export default async function DashboardPage() {
     complianceTaskCount,
     incidentReviewCount,
     attendanceClassroomRows,
+    accountsReceivableFamilyRows,
+    executiveAccountsReceivableFamilyRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -374,6 +385,19 @@ export default async function DashboardPage() {
         },
       },
     }),
+    canViewAccountBalances(user) && !canSeeExecutiveMetrics
+      ? prisma.family.findMany({
+          where: { centerId: scopedCenterFilter },
+          orderBy: { name: "asc" },
+          select: accountsReceivableFamilySelect,
+        })
+      : Promise.resolve([]),
+    canViewAccountBalances(user) && canSeeExecutiveMetrics
+      ? prisma.family.findMany({
+          where: { centerId: scopedCenterFilter },
+          select: accountsReceivableSummaryFamilySelect,
+        })
+      : Promise.resolve([]),
   ]);
 
   const attendanceServiceDayByCenter = new Map(
@@ -488,7 +512,6 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
-  const visibleDashboardLenses = dashboardLensesForRole(user);
   const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
     centerCount: centers.length,
     classroomCount: classroomSnapshotRows.length,
@@ -510,7 +533,6 @@ export default async function DashboardPage() {
     dashboardConfigured: dashboardWidgetConfig.widgets.some((widget) => widget.visible),
     payoutReady: centers.some((center) => stripeConnectReadinessFromFields(center.customFields).status === "ready"),
   });
-  const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const fteDueState = getFteDueState(today);
   const [
     executiveClassroomRows,
@@ -847,6 +869,24 @@ export default async function DashboardPage() {
         registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(), center.id),
       }))
     : [];
+  const accountsReceivable = canViewAccountBalances(user) && !canSeeExecutiveMetrics
+    ? buildAccountsReceivableSnapshot(
+        accountsReceivableFamilyRows,
+        Object.fromEntries(
+          centers.map((center) => [center.id, displayText(center.crmLocationId ?? center.name)]),
+        ),
+        today,
+      )
+    : undefined;
+  const executiveAccountsReceivable = canSeeExecutiveMetrics
+    ? buildAccountsReceivableSummary(
+        executiveAccountsReceivableFamilyRows,
+        Object.fromEntries(
+          centers.map((center) => [center.id, displayText(center.crmLocationId ?? center.name)]),
+        ),
+        today,
+      )
+    : undefined;
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -933,6 +973,8 @@ export default async function DashboardPage() {
     inquiryEmbed: inquiryEmbeds[0],
     inquiryEmbeds,
     registrationShares,
+    accountsReceivable,
+    executiveAccountsReceivable,
     executiveMetrics: canSeeExecutiveMetrics
       ? {
           currentWeekStart: fteDueState.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),

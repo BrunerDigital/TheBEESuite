@@ -72,7 +72,7 @@ async function GETHandler(request: NextRequest) {
       smsAttempted: 0,
       smsSent: 0,
       smsSkipped: 0,
-      skipReason: "FTE reminders only run during the Friday reminder windows.",
+      skipReason: "FTE reminders only run during the Friday evening reminder window.",
     });
   }
 

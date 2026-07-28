@@ -49,6 +49,10 @@ import {
 import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import {
+  dailyReportTimedCareEvents,
+  sortDailyReportsChronologically,
+} from "@/lib/daily-report-ordering";
 
 type Child = {
   id: string;
@@ -142,6 +146,7 @@ type UniformProductOption = {
 type DailyReport = {
   id: string;
   date: string | Date;
+  sentAt?: string | Date | null;
   mood: string | null;
   teacherNote: string | null;
   suppliesNeeded: string | null;
@@ -560,14 +565,14 @@ export function ParentPortalWorkspace({
     return Array.from(days.values())
       .map((day) => ({
         ...day,
-        reports: day.reports.toSorted((left, right) => dateTimestamp(right.date) - dateTimestamp(left.date)),
+        reports: sortDailyReportsChronologically(day.reports),
         media: day.media.toSorted((left, right) => dateTimestamp(right.createdAt) - dateTimestamp(left.createdAt)),
         totalItems: day.reports.length + day.activities.length + day.media.length,
       }))
       .toSorted((left, right) => right.key.localeCompare(left.key));
   }, [dailyReports, media]);
   const selectedUpdateDay = dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ?? dailyUpdateDays[0] ?? null;
-  const latestReport = selectedUpdateDay?.reports[0] ?? dailyReports[0] ?? null;
+  const latestReport = selectedUpdateDay?.reports.at(-1) ?? dailyReports[0] ?? null;
 
   function showStatus(next: string) {
     setError("");
@@ -1083,39 +1088,42 @@ export function ParentPortalWorkspace({
               <CardDescription>Recent teacher notes and care details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(selectedUpdateDay?.reports ?? []).map((report, index) => (
-                <div
-                  key={report.id}
-                  className={`rounded-xl border p-4 ${index === 0 ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{report.child.fullName}</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
+              {(selectedUpdateDay?.reports ?? []).map((report, index, reportsForDay) => {
+                const timedCareEvents = dailyReportTimedCareEvents(report);
+                const isLatest = index === reportsForDay.length - 1;
+                return (
+                  <div
+                    key={report.id}
+                    className={`rounded-xl border p-4 ${isLatest ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{report.child.fullName}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
+                      </div>
+                      {isLatest ? <Badge>Latest</Badge> : null}
                     </div>
-                    {index === 0 ? <Badge>Latest</Badge> : null}
+                    <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
+                    {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
+                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                      {report.meals?.map((meal) => (
+                        <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
+                      ))}
+                      {timedCareEvents.map((event) => event.kind === "nap" ? (
+                        <span key={`nap-${event.id}`}>Nap: {formatTime(event.startsAt)} - {formatTime(event.endsAt ?? null)}</span>
+                      ) : (
+                        <span key={`diaper-${event.id}`}>Potty/diaper: {event.type} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</span>
+                      ))}
+                      {!report.naps?.length && /\bno nap\b/i.test(report.teacherNote ?? "") ? (
+                        <span>Nap: No nap today</span>
+                      ) : null}
+                      {report.activities?.slice(0, 4).map((activity) => (
+                        <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
+                      ))}
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
-                  {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
-                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                    {report.meals?.map((meal) => (
-                      <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
-                    ))}
-                    {report.naps?.map((nap) => (
-                      <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
-                    ))}
-                    {!report.naps?.length && /\bno nap\b/i.test(report.teacherNote ?? "") ? (
-                      <span>Nap: No nap today</span>
-                    ) : null}
-                    {report.diapers?.map((diaper) => (
-                      <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
-                    ))}
-                    {report.activities?.slice(0, 4).map((activity) => (
-                      <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {!selectedUpdateDay?.reports.length ? (
                 <p className="text-sm text-muted-foreground">No daily report was shared for this day.</p>
               ) : null}

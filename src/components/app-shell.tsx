@@ -22,6 +22,7 @@ import {
   Sun,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { clearClassroomOfflineQueues } from "@/lib/classroom-offline-queue";
+import { canViewAccountBalances, isExecutiveAccountBalanceView } from "@/lib/accounts-receivable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -51,8 +53,8 @@ import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
 import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
-import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { cn } from "@/lib/utils";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
 type ShellUser = {
@@ -75,7 +77,8 @@ function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) 
   return canAccessModule(currentUser, slug);
 }
 
-function shellUserViewText(value: string) {
+function shellUserViewText(value: string, currentUser?: ShellUser) {
+  void currentUser;
   return removeDemoMarkersFromUserView(value);
 }
 
@@ -243,11 +246,11 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
               className="block rounded-lg p-3 text-sm transition hover:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="font-medium">{shellUserViewText(item.title)}</div>
+                <div className="font-medium">{shellUserViewText(item.title, currentUser)}</div>
                 <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
               </div>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                {shellUserViewText(item.body)}
+                {shellUserViewText(item.body, currentUser)}
               </p>
             </Link>
           ))}
@@ -623,8 +626,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                             onClick={() => setSearchOpen(false)}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{shellUserViewText(result.label)}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail)}</span>
+                              <span className="block truncate text-sm font-medium">{shellUserViewText(result.label, currentUser)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail, currentUser)}</span>
                             </span>
                             {result.badge ? <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">{result.badge}</Badge> : null}
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
@@ -663,8 +666,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                         {activeSearchResults.slice(0, 6).map((result) => (
                           <Link key={result.id} href={result.href} onClick={() => setMobileSearchOpen(false)} className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10">
                             <span className="min-w-0">
-                              <span className="block truncate font-medium">{shellUserViewText(result.label)}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail)}</span>
+                              <span className="block truncate font-medium">{shellUserViewText(result.label, currentUser)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail, currentUser)}</span>
                             </span>
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
                           </Link>
@@ -712,6 +715,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                     </div>
                   </DialogContent>
                 </Dialog>
+              ) : null}
+              {canViewAccountBalances(currentUser) ? (
+                <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
               ) : null}
               {showNotificationTools ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>

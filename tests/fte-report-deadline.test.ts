@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   FTE_POST_DEADLINE_ESCALATION_LABEL,
-  FTE_PRE_DEADLINE_ESCALATION_LABEL,
   FTE_REPORTING_DEADLINE_LABEL,
   fteDueAtForWeek,
   fteExternalEscalationWindow,
@@ -43,18 +43,11 @@ test("FTE due state treats Friday morning as due today and Friday afternoon as o
   assert.match(afterNoon.reminder, /Friday noon deadline/);
 });
 
-test("FTE external escalations fire only on Friday morning and Friday evening", () => {
+test("FTE external escalations fire only on Friday evening", () => {
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-11T14:00:00.000Z")), null);
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T11:59:00.000Z")), null);
-
-  const junePreDeadline = fteExternalEscalationWindow(new Date("2026-06-12T12:00:00.000Z"));
-  assert.equal(junePreDeadline?.key, "friday_8am");
-  assert.equal(junePreDeadline?.label, FTE_PRE_DEADLINE_ESCALATION_LABEL);
-
-  assert.equal(
-    fteExternalEscalationWindow(new Date("2026-06-12T15:59:00.000Z"))?.key,
-    "friday_8am",
-  );
+  assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T12:00:00.000Z")), null);
+  assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T15:59:00.000Z")), null);
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T16:30:00.000Z")), null);
   assert.equal(fteExternalEscalationWindow(new Date("2026-06-12T20:59:00.000Z")), null);
 
@@ -66,12 +59,20 @@ test("FTE external escalations fire only on Friday morning and Friday evening", 
     null,
   );
 
-  assert.equal(
-    fteExternalEscalationWindow(new Date("2026-12-11T13:00:00.000Z"))?.key,
-    "friday_8am",
-  );
+  assert.equal(fteExternalEscalationWindow(new Date("2026-12-11T13:00:00.000Z")), null);
   assert.equal(
     fteExternalEscalationWindow(new Date("2026-12-11T22:00:00.000Z"))?.key,
     "friday_5pm",
   );
+});
+
+test("FTE reminders have one Friday evening production schedule", () => {
+  const config = JSON.parse(readFileSync("vercel.json", "utf8")) as {
+    crons?: Array<{ path: string; schedule: string }>;
+  };
+  const schedules = (config.crons ?? []).filter((cron) => cron.path === "/api/cron/fte-reminders");
+
+  assert.deepEqual(schedules, [
+    { path: "/api/cron/fte-reminders", schedule: "0 22 * * 5" },
+  ]);
 });

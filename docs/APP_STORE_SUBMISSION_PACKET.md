@@ -1,6 +1,6 @@
 # App Store Submission Packet - BEE Suite Parent Portal
 
-Last updated: July 7, 2026
+Last updated: July 28, 2026
 
 This packet is for the first iOS App Store submission whose purpose is to make the parent portal easier for parents and guardians to access.
 
@@ -13,6 +13,7 @@ Current repository status:
 - Role-specific web entry points now exist for `/parents`, `/teachers`, `/directors`, and `/executives`, each with its own manifest metadata.
 - Public support and privacy routes now exist at `https://thebeesuite.io/support` and `https://thebeesuite.io/privacy`.
 - A Capacitor iOS project now exists at `ios/App/App.xcodeproj` for the parent app.
+- A separate teacher iOS submission path now exists at `ios-teacher/App/App.xcodeproj` with bundle ID `com.brunerdigital.thebeesuite.teacher`; use `docs/TEACHER_APP_STORE_SUBMISSION_PACKET.md` for that app.
 - There is still no uploadable `.ipa` in this repository because the final archive must be built and signed from Xcode on macOS.
 - The existing 1024 icon has an alpha channel, so a no-alpha App Store export was generated at `output/app-store/ios/app-icon-1024-no-alpha.png`.
 - The fake App Review parent account `app-review-parent@thebeesuite.io` was created, linked to seeded demo family data, and verified through the live login API on July 7, 2026.
@@ -58,7 +59,7 @@ Use these unless there is already an Apple Developer identifier reserved for thi
 | Target devices for first release | iPhone only |
 | Minimum deployment target | iOS 16.0 or newer |
 
-Future role-specific app identities are reserved in code so later submissions do not reuse the parent app metadata:
+Role-specific app identities are reserved in code so submissions do not reuse the parent app metadata:
 
 | Role app | Bundle ID | SKU | Web launch |
 | --- | --- | --- | --- |

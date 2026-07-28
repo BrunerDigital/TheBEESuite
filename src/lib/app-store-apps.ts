@@ -61,8 +61,8 @@ export const storeApps = {
   teacher: {
     key: "teacher",
     portal: "teachers",
-    appStoreName: "BEE Suite Teacher",
-    displayName: "BEE Suite",
+    appStoreName: "BEE Suite Teacher Portal",
+    displayName: "BEE Teacher",
     shortName: "BEE Teachers",
     bundleId: "com.brunerdigital.thebeesuite.teacher",
     sku: "BEE-SUITE-TEACHER-IOS",

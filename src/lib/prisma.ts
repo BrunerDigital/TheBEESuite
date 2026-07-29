@@ -15,7 +15,7 @@ function getRuntimeDatabaseUrl() {
     if (!isPostgres) return rawUrl;
 
     if (!url.searchParams.has("connection_limit")) {
-      url.searchParams.set("connection_limit", process.env.PRISMA_CONNECTION_LIMIT ?? "1");
+      url.searchParams.set("connection_limit", process.env.PRISMA_CONNECTION_LIMIT ?? "5");
     }
     if (!url.searchParams.has("pool_timeout")) {
       url.searchParams.set("pool_timeout", process.env.PRISMA_POOL_TIMEOUT ?? "20");

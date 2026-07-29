@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
@@ -53,12 +54,18 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
-  const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
-  const refreshUrl = `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`;
+  const attemptId = randomUUID();
+  const returnUrl = new URL("/billing-settings", baseUrl);
+  returnUrl.searchParams.set("stripeConnect", "return");
+  returnUrl.searchParams.set("center", center.id);
+  returnUrl.searchParams.set("payoutAttempt", attemptId);
+  const refreshUrl = new URL("/api/billing/connect/refresh", baseUrl);
+  refreshUrl.searchParams.set("centerId", center.id);
+  refreshUrl.searchParams.set("payoutAttempt", attemptId);
   const link = await createStripePayoutBankSelectionLink({
     accountId,
-    refreshUrl,
-    returnUrl,
+    refreshUrl: refreshUrl.toString(),
+    returnUrl: returnUrl.toString(),
     tenantId: user.tenantId,
   });
   if (!link.ok || !link.url) {
@@ -79,6 +86,7 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: accountId,
       crmLocationId: center.crmLocationId || null,
       mode: link.mode,
+      attemptId,
     },
   });
 
@@ -87,12 +95,16 @@ async function POSTHandler(request: NextRequest) {
       ok: true,
       url: link.url,
       mode: link.mode,
+      attemptId,
       centerId: center.id,
       centerName: center.name,
     },
     {
       headers: {
-        "Cache-Control": "no-store",
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Expires": "0",
+        "Pragma": "no-cache",
+        "Vary": "Cookie",
       },
     },
   );

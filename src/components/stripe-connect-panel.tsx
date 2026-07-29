@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -102,6 +102,7 @@ export function StripeConnectPanel({
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
+  const payoutWindowRef = useRef<Window | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [localCenters, setLocalCenters] = useState(centers);
   const [setupCenterId, setSetupCenterId] = useState<string | null>(null);
@@ -226,33 +227,49 @@ export function StripeConnectPanel({
   }
 
   async function openPayoutBankSelection(center: StripeConnectCenter) {
-    const stripeWindow = window.open("about:blank", "_blank");
+    if (payoutWindowRef.current && !payoutWindowRef.current.closed) {
+      payoutWindowRef.current.close();
+    }
+
+    const windowName = `stripe-payout-${center.id}-${Date.now()}`;
+    const stripeWindow = window.open("about:blank", windowName);
     if (!stripeWindow) {
       setMessage("Allow pop-ups for The BEE Suite, then choose the payout bank again.");
       return;
     }
     stripeWindow.opener = null;
+    payoutWindowRef.current = stripeWindow;
+    stripeWindow.document.title = `Opening payout setup for ${center.name}`;
+    stripeWindow.document.body.textContent = `Opening a fresh secure payout setup for ${center.name}...`;
 
     setBusyCenterId(center.id);
     setMessage(null);
     try {
       const response = await fetch("/api/billing/connect/payout-account", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ centerId: center.id }),
       });
       const json = await response.json();
       if (!response.ok || !json.ok || !json.url) {
         throw new Error(json.error || "Stripe payout settings could not be opened.");
       }
+      if (json.centerId !== center.id) {
+        throw new Error("Stripe payout setup returned the wrong school. Close the window and try again.");
+      }
       stripeWindow.location.replace(json.url as string);
       setMessage(
         json.mode === "onboarding"
-          ? `Stripe opened onboarding for ${center.name}. Enter this school's exact routing and account numbers, or select Skip for now and return later. Bee Suite access stays available either way.`
-          : `Stripe opened account-specific payout settings for ${center.name}. Enter or confirm the payout bank for this exact location, then return here and select Check.`,
+          ? `A fresh one-time Stripe onboarding session opened for ${center.name}. Enter this school's exact routing and account numbers, or select Skip for now and return later.`
+          : `A fresh account-specific Stripe session opened for ${center.name}. Enter or confirm this location's payout bank, then return here and select Check.`,
       );
     } catch (error) {
       stripeWindow.close();
+      payoutWindowRef.current = null;
       setMessage(error instanceof Error ? error.message : "Stripe payout settings could not be opened.");
     } finally {
       setBusyCenterId(null);

@@ -248,7 +248,7 @@ export function StripeConnectPanel({
       stripeWindow.location.replace(json.url as string);
       setMessage(
         json.mode === "onboarding"
-          ? `Stripe opened bank-required onboarding for ${center.name}. Finish this school's requirements, choose its exact bank account with the shared bank login, then return here and select Check.`
+          ? `Stripe opened onboarding for ${center.name}. Choose its exact bank account with the shared bank login, or select Skip for now and return later. Bee Suite access stays available either way.`
           : `Stripe opened account-specific payout settings for ${center.name}. Use the shared bank login, choose the bank account for this exact location, then return here and select Check.`,
       );
     } catch (error) {
@@ -441,7 +441,7 @@ export function StripeConnectPanel({
         <div className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
           <Landmark className="mt-0.5 size-5 shrink-0 text-primary" />
           <span>
-            Corporate schools may use the same bank login for every location. Open one school at a time; Stripe will finish bank-required onboarding when needed, then let you choose the account that belongs to that exact location. Return and select Check to confirm the bank name and last four digits.
+            Corporate schools may use the same bank login for every location. Open one school at a time and choose the account that belongs to that exact location, or select Skip for now and return later. Bank setup never blocks login to The BEE Suite. After connecting a bank, select Check to confirm its name and last four digits.
           </span>
         </div>
 

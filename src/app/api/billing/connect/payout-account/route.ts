@@ -2,10 +2,15 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { createStripePayoutBankSelectionLink, readStripeConnectedAccountId } from "@/lib/integrations";
+import {
+  createStripePayoutBankSelectionLink,
+  readStripeConnectedAccountId,
+  retrieveStripeConnectedAccount,
+} from "@/lib/integrations";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
+import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 
 export const runtime = "nodejs";
 
@@ -50,6 +55,30 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json(
       { ok: false, error: "Start this school's Stripe payout onboarding before choosing its bank account." },
       { status: 409 },
+    );
+  }
+
+  const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
+  const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account?.id);
+  if (!retrieved.ok || !retrieved.account || !binding.ok) {
+    const error = !retrieved.ok || !retrieved.account
+      ? retrieved.error || "The school's designated payout account could not be retrieved."
+      : !binding.ok
+        ? binding.error
+        : "The school's designated payout account could not be verified.";
+    await writeAuditLog(user, {
+      centerId: center.id,
+      action: "billing.connect.payout_bank_mapping_verification_failed",
+      resource: "Center",
+      resourceId: center.id,
+      metadata: {
+        stripeConnectedAccountId: accountId,
+        crmLocationId: center.crmLocationId || null,
+      },
+    });
+    return NextResponse.json(
+      { ok: false, configured: retrieved.configured, error },
+      { status: retrieved.ok && retrieved.account ? 409 : retrieved.configured ? 502 : 503 },
     );
   }
 

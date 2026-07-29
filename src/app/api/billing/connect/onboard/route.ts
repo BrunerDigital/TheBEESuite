@@ -7,6 +7,7 @@ import {
   createStripeConnectedAccount,
   getStripeSecretKey,
   readStripeConnectedAccountId,
+  retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
@@ -16,6 +17,7 @@ import {
   normalizeStripeConnectSetupInput,
   stripeConnectSetupCustomFieldPatch,
   type StripeConnectSetupInput,
+  verifyStripeConnectAccountBinding,
 } from "@/lib/stripe-connect-setup";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 
@@ -209,6 +211,54 @@ async function POSTHandler(request: NextRequest) {
       data: {
         customFields: currentFields,
       },
+    });
+  } else {
+    const retrieved = await retrieveStripeConnectedAccount(accountId, { tenantId: user.tenantId });
+    const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account?.id);
+    if (!retrieved.ok || !retrieved.account || !binding.ok) {
+      const retrievalFailed = !retrieved.ok || !retrieved.account;
+      const errorMessage = retrievalFailed
+        ? stripeConnectFailureMessage(
+            retrieved.error,
+            "The school's designated payout account could not be verified. Payout onboarding was stopped.",
+          )
+        : !binding.ok
+          ? binding.error
+          : "The school's designated payout account could not be verified. Payout onboarding was stopped.";
+      await prisma.center.update({
+        where: { id: center.id },
+        data: {
+          customFields: {
+            ...currentFields,
+            ...stripeConnectFailurePatch("account_mapping_verification_failed", errorMessage),
+          },
+        },
+      });
+      await writeAuditLog(user, {
+        centerId: center.id,
+        action: "billing.connect.account_mapping_verification_failed",
+        resource: "Center",
+        resourceId: center.id,
+        metadata: {
+          stripeConnectedAccountId: accountId,
+          crmLocationId: center.crmLocationId || null,
+        },
+      });
+      return NextResponse.json(
+        { ok: false, configured: retrieved.configured, error: errorMessage },
+        { status: retrievalFailed ? (retrieved.configured ? 502 : 503) : 409 },
+      );
+    }
+
+    const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
+    currentFields = {
+      ...currentFields,
+      ...stripeConnectCustomFieldPatch(readiness),
+      stripeConnectAccountId: binding.accountId,
+    };
+    await prisma.center.update({
+      where: { id: center.id },
+      data: { customFields: currentFields },
     });
   }
 

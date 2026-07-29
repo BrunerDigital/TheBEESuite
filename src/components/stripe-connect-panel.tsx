@@ -361,6 +361,7 @@ export function StripeConnectPanel({
 
   const setupBusy = Boolean(setupCenter && busyCenterId === setupCenter.id);
   const setupDialogTitle = setupCenter ? `The BEE Suite payout setup for ${setupCenter.name}` : "The BEE Suite payout setup";
+  const setupAccountLabel = setupCenter ? maskedAccount(setupCenter) : "Not connected";
 
   function setupFieldError(field: keyof StripeConnectSetupDetails) {
     const error = setupErrors[field];
@@ -469,7 +470,7 @@ export function StripeConnectPanel({
             <DialogHeader>
               <DialogTitle>{setupDialogTitle}</DialogTitle>
               <DialogDescription>
-                Save the school&apos;s Bee Suite payout profile before the secure processor handoff.
+                Review the selected school and its designated Stripe Connect account before the secure handoff.
               </DialogDescription>
             </DialogHeader>
             {setupForm ? (
@@ -480,8 +481,16 @@ export function StripeConnectPanel({
                 <div className="flex gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-muted-foreground">
                   <BadgeDollarSign className="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>
-                    Directors stay inside The BEE Suite until the final required verification step. The hosted handoff may show processor-required branding, disclosures, and identity prompts.
+                    Executives and authorized school administrators stay inside The BEE Suite until the final required verification step. The hosted handoff may show processor-required branding, disclosures, identity prompts, and bank-account fields.
                   </span>
+                </div>
+                <div className="rounded-lg border bg-background/50 p-3 text-sm leading-6">
+                  <div className="font-medium">{setupCenter?.name}</div>
+                  <div className="text-muted-foreground">
+                    {setupAccountLabel === "Not connected"
+                      ? "No account is mapped yet. Continuing creates this school's designated connected account and binds onboarding to it."
+                      : `Designated account: ${setupAccountLabel}. Continuing updates only this mapped account; it does not switch the school to another account.`}
+                  </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {setupInput("legalBusinessName", "Legal business name", { autoComplete: "organization" })}
@@ -537,7 +546,7 @@ export function StripeConnectPanel({
                     Cancel
                   </Button>
                   <Button type="submit" disabled={setupBusy}>
-                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue Secure Setup" : "Save Bee Suite Profile"}
+                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue to Stripe Requirements" : "Save Bee Suite Profile"}
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </DialogFooter>
@@ -658,7 +667,7 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Stripe Dashboard links are account-specific and should only be opened from this authenticated Bee Suite screen.
+          Parent payments are blocked until the designated school account has submitted its required details, has no outstanding requirements, and Stripe reports both charges and payouts enabled. Stripe Dashboard links are account-specific and should only be opened from this authenticated Bee Suite screen.
         </div>
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CreditCard className="mt-0.5 size-5 shrink-0 text-primary" />

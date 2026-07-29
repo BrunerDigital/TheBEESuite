@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   completeStripeConnectedAccountBusinessProfile,
@@ -14,6 +15,7 @@ import {
   STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS,
   normalizeStripeConnectSetupInput,
   stripeConnectSetupCustomFieldPatch,
+  verifyStripeConnectAccountBinding,
 } from "../src/lib/stripe-connect-setup";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -96,6 +98,24 @@ test("Stripe Connect restricted key fix message names required permissions", () 
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.includes("Connect > Account Links: Write"), true);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("full bank-account information"), false);
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Connect-only write access is not enough"), true);
+});
+
+test("Stripe payout handoffs remain bound to the school's designated account", () => {
+  assert.deepEqual(
+    verifyStripeConnectAccountBinding("acct_school", "acct_school"),
+    { ok: true, accountId: "acct_school" },
+  );
+  assert.equal(verifyStripeConnectAccountBinding("acct_school", "acct_other").ok, false);
+  assert.equal(verifyStripeConnectAccountBinding("not-an-account", "not-an-account").ok, false);
+
+  for (const routePath of [
+    "src/app/api/billing/connect/onboard/route.ts",
+    "src/app/api/billing/connect/payout-account/route.ts",
+  ]) {
+    const route = readFileSync(routePath, "utf8");
+    assert.match(route, /retrieveStripeConnectedAccount\(accountId/, `${routePath} must retrieve the mapped account`);
+    assert.match(route, /verifyStripeConnectAccountBinding\(accountId/, `${routePath} must verify the exact account`);
+  }
 });
 
 test("Stripe connected account creation sends dashboard profile details to Accounts v2", async () => {

@@ -22,8 +22,8 @@
   --glass-border: oklch(0.57 0.028 250 / 24%);
   --glass-highlight: oklch(1 0 0 / 82%);
   --glass-shadow-color: oklch(0.22 0.025 250 / 12%);
-  --module-accent: oklch(0.76 0.17 78);
-  --module-accent-secondary: oklch(0.7 0.11 210);
+  --module-accent: oklch(0.78 0.165 78);
+  --module-accent-secondary: oklch(0.72 0.17 52);
   --module-on-accent: oklch(0.16 0.02 250);
 }
 
@@ -38,7 +38,7 @@
   --glass-highlight: oklch(1 0 0 / 11%);
   --glass-shadow-color: oklch(0.03 0.01 250 / 48%);
   --module-accent: oklch(0.82 0.16 80);
-  --module-accent-secondary: oklch(0.72 0.12 215);
+  --module-accent-secondary: oklch(0.76 0.17 56);
   --module-on-accent: oklch(0.14 0.02 250);
 }
 
@@ -69,49 +69,49 @@
 
   .bee-app-frame[data-module="enrollment"] {
     --module-accent: oklch(0.78 0.17 78);
-    --module-accent-secondary: oklch(0.72 0.12 42);
+    --module-accent-secondary: oklch(0.74 0.17 58);
     --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="classroom"] {
-    --module-accent: oklch(0.7 0.13 168);
-    --module-accent-secondary: oklch(0.72 0.11 205);
-    --module-on-accent: oklch(0.13 0.025 185);
+    --module-accent: oklch(0.84 0.15 92);
+    --module-accent-secondary: oklch(0.78 0.17 72);
+    --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="billing"] {
-    --module-accent: oklch(0.67 0.14 235);
-    --module-accent-secondary: oklch(0.71 0.12 190);
-    --module-on-accent: white;
+    --module-accent: oklch(0.76 0.18 68);
+    --module-accent-secondary: oklch(0.71 0.19 50);
+    --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="compliance"] {
-    --module-accent: oklch(0.66 0.15 305);
-    --module-accent-secondary: oklch(0.68 0.12 260);
-    --module-on-accent: white;
+    --module-accent: oklch(0.8 0.17 84);
+    --module-accent-secondary: oklch(0.68 0.19 42);
+    --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="communication"] {
-    --module-accent: oklch(0.68 0.13 215);
-    --module-accent-secondary: oklch(0.7 0.12 170);
-    --module-on-accent: oklch(0.14 0.025 235);
+    --module-accent: oklch(0.82 0.16 88);
+    --module-accent-secondary: oklch(0.73 0.18 58);
+    --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="family"] {
-    --module-accent: oklch(0.79 0.17 78);
-    --module-accent-secondary: oklch(0.72 0.12 45);
+    --module-accent: oklch(0.85 0.145 94);
+    --module-accent-secondary: oklch(0.77 0.17 70);
     --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="executive"] {
-    --module-accent: oklch(0.69 0.15 292);
-    --module-accent-secondary: oklch(0.7 0.12 220);
-    --module-on-accent: white;
+    --module-accent: oklch(0.74 0.18 62);
+    --module-accent-secondary: oklch(0.68 0.19 44);
+    --module-on-accent: oklch(0.15 0.02 250);
   }
 
   .bee-app-frame[data-module="kiosk"] {
-    --module-accent: oklch(0.8 0.18 78);
-    --module-accent-secondary: oklch(0.69 0.11 220);
+    --module-accent: oklch(0.81 0.18 82);
+    --module-accent-secondary: oklch(0.72 0.18 54);
     --module-on-accent: oklch(0.15 0.02 250);
   }
 
@@ -265,7 +265,7 @@
 
   .auth-halo-shell {
     --module-accent: oklch(0.79 0.17 78);
-    --module-accent-secondary: oklch(0.68 0.12 225);
+    --module-accent-secondary: oklch(0.71 0.18 50);
     position: relative;
     isolation: isolate;
     color: var(--foreground);
@@ -276,11 +276,11 @@
   }
 
   .auth-halo-shell[data-portal="teachers"] {
-    --module-accent: oklch(0.7 0.13 168);
+    --module-accent: oklch(0.84 0.15 92);
   }
 
   .auth-halo-shell[data-portal="executives"] {
-    --module-accent: oklch(0.69 0.15 292);
+    --module-accent: oklch(0.74 0.18 62);
   }
 
   .auth-halo-story {
@@ -323,8 +323,8 @@
   }
 
   .kiosk-halo-shell {
-    --module-accent: oklch(0.8 0.18 78);
-    --module-accent-secondary: oklch(0.68 0.12 225);
+    --module-accent: oklch(0.81 0.18 82);
+    --module-accent-secondary: oklch(0.72 0.18 54);
     background:
       radial-gradient(circle at 82% 12%, color-mix(in oklch, var(--module-accent) 22%, transparent), transparent 30rem),
       radial-gradient(circle at 10% 86%, color-mix(in oklch, var(--module-accent-secondary) 13%, transparent), transparent 34rem),
@@ -557,10 +557,10 @@
   --input: oklch(0.88 0.018 84);
   --ring: oklch(0.78 0.165 78);
   --chart-1: oklch(0.78 0.165 78);
-  --chart-2: oklch(0.72 0.12 165);
-  --chart-3: oklch(0.72 0.1 225);
-  --chart-4: oklch(0.68 0.12 305);
-  --chart-5: oklch(0.72 0.13 42);
+  --chart-2: oklch(0.84 0.15 92);
+  --chart-3: oklch(0.76 0.17 68);
+  --chart-4: oklch(0.7 0.19 52);
+  --chart-5: oklch(0.66 0.18 38);
   --radius: 0.8rem;
   --sidebar: oklch(0.96 0.015 84);
   --sidebar-foreground: oklch(0.2 0.02 250);
@@ -585,17 +585,17 @@
   --secondary-foreground: oklch(0.94 0.012 84);
   --muted: oklch(0.27 0.025 250);
   --muted-foreground: oklch(0.72 0.02 84);
-  --accent: oklch(0.32 0.045 245);
+  --accent: oklch(0.3 0.055 72);
   --accent-foreground: oklch(0.96 0.014 84);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.82 0.16 80);
   --chart-1: oklch(0.82 0.16 80);
-  --chart-2: oklch(0.73 0.13 165);
-  --chart-3: oklch(0.72 0.12 225);
-  --chart-4: oklch(0.72 0.13 305);
-  --chart-5: oklch(0.74 0.13 42);
+  --chart-2: oklch(0.86 0.14 94);
+  --chart-3: oklch(0.78 0.17 68);
+  --chart-4: oklch(0.74 0.18 53);
+  --chart-5: oklch(0.7 0.18 40);
   --sidebar: oklch(0.16 0.022 250);
   --sidebar-foreground: oklch(0.94 0.012 84);
   --sidebar-primary: oklch(0.82 0.16 80);
@@ -603,7 +603,7 @@
   --sidebar-accent: oklch(0.24 0.025 250);
   --sidebar-accent-foreground: oklch(0.96 0.014 84);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.82 0.16 80);
 }
 
 @layer base {

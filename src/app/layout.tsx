@@ -25,9 +25,6 @@ export const metadata: Metadata = {
   description:
     "White-label childcare CRM, enrollment, billing, classroom operations, and parent engagement command center.",
   manifest: "/manifest.webmanifest",
-  verification: {
-    google: "vvV52uTS8R9VfxBbB22mW_i69KPstd9eg1ixpyWsGp4",
-  },
   alternates: {
     canonical: "/",
   },
@@ -47,12 +44,21 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  colorScheme: "dark",
+  colorScheme: "light dark",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f5b51b" },
     { media: "(prefers-color-scheme: dark)", color: "#05070a" },
   ],
 };
+
+const themeBootstrap = `
+try {
+  const stored = window.localStorage.getItem("bee-suite-theme");
+  const dark = stored ? stored === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.classList.toggle("dark", dark);
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+} catch {}
+`;
 
 export default function RootLayout({
   children,
@@ -62,8 +68,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <TooltipProvider>{children}</TooltipProvider>
         <ClientErrorReporter />

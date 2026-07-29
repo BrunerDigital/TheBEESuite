@@ -55,6 +55,7 @@ import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
+import { workspaceVisualDomain } from "@/lib/workspace-visual-domain";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
 type ShellUser = {
@@ -415,6 +416,7 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
 
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<{ query: string; results: GlobalSearchResult[]; error: string }>({
     query: "",
@@ -436,6 +438,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !parentFacing;
   const showNotificationTools = Boolean(currentUser);
+  const visualDomain = workspaceVisualDomain(pathname, currentUser?.role);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
     .filter((item) => canAccessShellModule(currentUser, item.slug))
@@ -554,7 +557,11 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
 
   return (
     <SchoolTimeZoneProvider timeZone={currentUser?.timeZone} timeZonesByCenterId={currentUser?.timeZonesByCenterId}>
-    <div className="min-h-screen">
+    <div
+      className="bee-app-frame min-h-screen"
+      data-module={visualDomain}
+      data-role={currentUser?.role ?? "PUBLIC"}
+    >
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
       </a>

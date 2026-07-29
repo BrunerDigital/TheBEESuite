@@ -401,9 +401,9 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   }
 
   return (
-    <main className="min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
+    <main className="kiosk-halo-shell min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
       <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-6xl flex-col gap-3 sm:min-h-[calc(100dvh-1.5rem)] lg:min-h-[calc(100dvh-2rem)]">
-        <section className="rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
+        <section className="kiosk-halo-header rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <Badge className="mb-2">
@@ -447,7 +447,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
         ) : null}
 
         <div className="grid flex-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[24rem_1fr]">
-          <Card className="glass-panel">
+          <Card className="kiosk-halo-panel glass-panel">
             <CardHeader className="p-4 pb-2">
               <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in/out"}</CardTitle>
               <CardDescription>
@@ -602,7 +602,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
             </CardContent>
           </Card>
 
-          <Card className="glass-panel">
+          <Card className="kiosk-halo-panel glass-panel">
             <CardHeader className="p-4 pb-2">
               <CardTitle>
                 {kioskMode === "staff"

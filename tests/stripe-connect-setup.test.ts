@@ -223,6 +223,7 @@ test("Stripe connected account business completion supplies childcare merchant f
     const result = await completeStripeConnectedAccountBusinessProfile({
       accountId: "acct_123",
       businessPhone: "+17655551234",
+      ein: "12-3456789",
       idempotencyKey: "kidcity-account-profile-center_123",
       credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
     });
@@ -237,6 +238,7 @@ test("Stripe connected account business completion supplies childcare merchant f
     assert.equal(merchant.mcc, "8351");
     assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
     assert.equal(asRecord(identity.business_details).phone, "+17655551234");
+    assert.deepEqual(asRecord(identity.business_details).id_numbers, [{ type: "us_ein", value: "123456789" }]);
     assert.equal(idempotencyKey, "kidcity-account-profile-center_123");
   } finally {
     globalThis.fetch = originalFetch;

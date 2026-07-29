@@ -2255,12 +2255,14 @@ export async function createStripeConnectedAccount({
 export async function completeStripeConnectedAccountBusinessProfile({
   accountId,
   businessPhone,
+  ein,
   tenantId,
   credentials,
   idempotencyKey,
 }: {
   accountId: string;
   businessPhone?: string | null;
+  ein?: string | null;
   tenantId?: string | null;
   credentials?: Record<string, string>;
   idempotencyKey?: string | null;
@@ -2276,6 +2278,14 @@ export async function completeStripeConnectedAccountBusinessProfile({
   }
 
   const contactPhone = clean(businessPhone) || undefined;
+  const federalEin = clean(ein).replace(/\D/g, "");
+  if (federalEin && federalEin.length !== 9) {
+    return { ok: false, configured: true, provider: "stripe", error: "School EIN must contain exactly 9 digits." };
+  }
+  const businessDetails = {
+    ...(contactPhone ? { phone: contactPhone } : {}),
+    ...(federalEin ? { id_numbers: [{ type: "us_ein", value: federalEin }] } : {}),
+  };
   const payload = {
     configuration: {
       merchant: {
@@ -2286,10 +2296,10 @@ export async function completeStripeConnectedAccountBusinessProfile({
         },
       },
     },
-    ...(contactPhone
+    ...(contactPhone || federalEin
       ? {
-          contact_phone: contactPhone,
-          identity: { business_details: { phone: contactPhone } },
+          ...(contactPhone ? { contact_phone: contactPhone } : {}),
+          identity: { business_details: businessDetails },
         }
       : {}),
     include: STRIPE_CONNECTED_ACCOUNT_INCLUDES,

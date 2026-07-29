@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { buildSchoolPayoutSetupInput } from "@/lib/school-payout-onboarding";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { normalizeStripeConnectSetupInput } from "@/lib/stripe-connect-setup";
+import { readSchoolEin } from "@/lib/school-tax-id";
 
 const DEMO_TENANT_SLUGS = ["bee-suite-demo", "bee-suite-isolated-demo"];
 
@@ -94,6 +95,7 @@ export async function completeKidCityStripeAccountSetup() {
     let profileUpdated = false;
     let payoutScheduleUpdated = false;
     let error: string | null = null;
+    const schoolEin = readSchoolEin(center.customFields);
     const initial = await retrieveStripeConnectedAccount(accountId, { tenantId: center.organization.tenantId });
     if (!initial.ok || !initial.account) {
       return {
@@ -113,8 +115,9 @@ export async function completeKidCityStripeAccountSetup() {
         const profile = await completeStripeConnectedAccountBusinessProfile({
           accountId,
           businessPhone: setup.details.payoutContactPhone,
+          ein: schoolEin,
           tenantId: center.organization.tenantId,
-          idempotencyKey: `kidcity-account-profile-v2-${center.id}`,
+          idempotencyKey: `kidcity-account-profile-v3-${center.id}`,
         });
         profileUpdated = profile.ok;
         if (!profile.ok) error = profile.error || "Stripe business profile update failed.";
@@ -157,6 +160,7 @@ export async function completeKidCityStripeAccountSetup() {
             ...existing,
             ...stripeConnectCustomFieldPatch(readiness),
             stripeConnectBusinessProfileCompletedAt: new Date().toISOString(),
+            ...(schoolEin ? { stripeConnectEinSubmittedAt: new Date().toISOString() } : {}),
             stripeConnectPayoutSchedule: payoutScheduleUpdated ? "daily" : existing.stripeConnectPayoutSchedule,
           }),
         },
@@ -170,6 +174,7 @@ export async function completeKidCityStripeAccountSetup() {
       status: readiness.status,
       profileUpdated,
       payoutScheduleUpdated,
+      einProvidedToStripe: Boolean(schoolEin),
       chargesEnabled: readiness.chargesEnabled,
       payoutsEnabled: readiness.payoutsEnabled,
       remainingRequirements: readiness.requirementFields,

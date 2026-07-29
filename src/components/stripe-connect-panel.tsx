@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +66,14 @@ function maskedAccount(center: StripeConnectCenter) {
   const accountId = stripeConnectReadinessFromFields(center.customFields).accountId;
   if (!accountId) return "Not connected";
   return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
+}
+
+function payoutBankLabel(center: StripeConnectCenter) {
+  const centerFields = fields(center.customFields);
+  const bankName = text(centerFields.stripePayoutBankName);
+  const last4 = text(centerFields.stripePayoutBankLast4);
+  if (last4) return `${bankName || "Bank account"} •••• ${last4}`;
+  return maskedAccount(center) === "Not connected" ? "Not connected" : "Choose bank for this school";
 }
 
 function percentFromBps(bps: number) {
@@ -217,6 +225,38 @@ export function StripeConnectPanel({
     }
   }
 
+  async function openPayoutBankSelection(center: StripeConnectCenter) {
+    const stripeWindow = window.open("about:blank", "_blank");
+    if (!stripeWindow) {
+      setMessage("Allow pop-ups for The BEE Suite, then choose the payout bank again.");
+      return;
+    }
+    stripeWindow.opener = null;
+
+    setBusyCenterId(center.id);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/billing/connect/payout-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ centerId: center.id }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok || !json.url) {
+        throw new Error(json.error || "Stripe payout settings could not be opened.");
+      }
+      stripeWindow.location.replace(json.url as string);
+      setMessage(
+        `Stripe opened for ${center.name}. Use the shared bank login, choose the bank account for this exact location, then return here and select Check.`,
+      );
+    } catch (error) {
+      stripeWindow.close();
+      setMessage(error instanceof Error ? error.message : "Stripe payout settings could not be opened.");
+    } finally {
+      setBusyCenterId(null);
+    }
+  }
+
   const syncStatus = useCallback(async (centerId: string) => {
     setBusyCenterId(centerId);
     setMessage(null);
@@ -244,11 +284,24 @@ export function StripeConnectPanel({
               stripePayoutRequirementFields: json.account.requirementFields,
               stripePayoutStatus: text(readiness.status) || json.status,
               stripeConnectLastSyncedAt: new Date().toISOString(),
+              stripePayoutBankName: json.payoutBank?.bankName ?? null,
+              stripePayoutBankLast4: json.payoutBank?.last4 ?? null,
+              stripePayoutBankStatus: json.payoutBank?.status ?? null,
+              stripePayoutBankCurrency: json.payoutBank?.currency ?? null,
+              stripePayoutBankDefaultConfirmed: json.payoutBank?.defaultForCurrency === true,
+              stripePayoutBankCount: json.payoutBankCount ?? 0,
+              stripePayoutBankLastSyncedAt: new Date().toISOString(),
             },
           };
         }));
       }
-      setMessage("Payout status updated.");
+      setMessage(
+        json.payoutBankError
+          ? `Payout status updated, but the bank destination could not be confirmed: ${json.payoutBankError}`
+          : json.payoutBank?.last4
+            ? `Payout status updated. ${json.payoutBank.bankName || "Bank account"} ending ${json.payoutBank.last4} is selected for this school.`
+            : "Payout status updated. Choose and confirm a payout bank for this school.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payout status could not be checked.");
     } finally {
@@ -383,6 +436,12 @@ export function StripeConnectPanel({
         ) : null}
 
         {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
+        <div className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
+          <Landmark className="mt-0.5 size-5 shrink-0 text-primary" />
+          <span>
+            Corporate schools may use the same bank login for every location. Open one school at a time, choose the account that belongs to that exact location in Stripe, then return and select Check to confirm the bank name and last four digits.
+          </span>
+        </div>
 
         <Dialog open={Boolean(setupCenterId)} onOpenChange={(open) => {
           if (!open && !setupBusy) closeSetupDialog();
@@ -474,7 +533,7 @@ export function StripeConnectPanel({
               <TableHead>School</TableHead>
               <TableHead>Location ID</TableHead>
               <TableHead>Payout contact</TableHead>
-              <TableHead>Payout account</TableHead>
+              <TableHead>Payout destination</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
               <TableHead>Software fee method</TableHead>
@@ -499,7 +558,10 @@ export function StripeConnectPanel({
                   <TableCell className="font-medium">{center.name}</TableCell>
                   <TableCell>{center.crmLocationId ?? "Not mapped"}</TableCell>
                   <TableCell>{center.email ?? "Add school email"}</TableCell>
-                  <TableCell>{maskedAccount(center)}</TableCell>
+                  <TableCell className="max-w-48 whitespace-normal">
+                    <div className="text-xs font-medium">{payoutBankLabel(center)}</div>
+                    {hasAccount ? <div className="mt-1 text-[11px] text-muted-foreground">{maskedAccount(center)}</div> : null}
+                  </TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
                     {readiness.requirementFields.length
@@ -523,7 +585,18 @@ export function StripeConnectPanel({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {hasAccount ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => openPayoutBankSelection(center)}
+                          disabled={busyCenterId === center.id || !stripeConfigured}
+                        >
+                          <Landmark data-icon="inline-start" />
+                          {text(centerFields.stripePayoutBankLast4) ? "Change bank" : "Choose bank"}
+                        </Button>
+                      ) : null}
                       {hasAccount ? (
                         <Button
                           type="button"
@@ -539,10 +612,11 @@ export function StripeConnectPanel({
                       <Button
                         type="button"
                         size="sm"
+                        variant={hasAccount ? "outline" : "default"}
                         onClick={() => openSetupDialog(center)}
                         disabled={busyCenterId === center.id}
                       >
-                        {hasAccount ? "Continue" : "Set up"}
+                        {hasAccount ? "Requirements" : "Set up"}
                         <ArrowUpRight data-icon="inline-end" />
                       </Button>
                     </div>
@@ -560,7 +634,7 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated Bee Suite screen.
+          Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Stripe Dashboard links are account-specific and should only be opened from this authenticated Bee Suite screen.
         </div>
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CreditCard className="mt-0.5 size-5 shrink-0 text-primary" />

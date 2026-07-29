@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createStripeConnectedAccount,
+  createStripeExpressDashboardLoginLink,
+  listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
 } from "../src/lib/integrations";
@@ -184,6 +186,90 @@ test("Stripe connected account payout schedule is set to daily automatic payouts
     assert.equal(stripeAccount, "acct_123");
     assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
     assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank selection opens the account-specific Express Dashboard", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let method = "";
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(url);
+    method = String(init?.method);
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/express/acct_123/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeExpressDashboardLoginLink({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.url, "https://connect.stripe.com/express/acct_123/secure");
+    assert.equal(requestedUrl, "https://api.stripe.com/v1/accounts/acct_123/login_links");
+    assert.equal(method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank lookup selects the default USD account for location confirmation", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify({
+      data: [
+        {
+          id: "ba_secondary",
+          object: "bank_account",
+          bank_name: "Corporate Bank",
+          last4: "1111",
+          currency: "usd",
+          country: "US",
+          status: "verified",
+          default_for_currency: false,
+        },
+        {
+          id: "ba_location",
+          object: "bank_account",
+          bank_name: "Corporate Bank",
+          last4: "7788",
+          currency: "usd",
+          country: "US",
+          status: "verified",
+          default_for_currency: true,
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await listStripeConnectedAccountPayoutBanks({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const url = new URL(requestedUrl);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.banks.length, 2);
+    assert.equal(result.defaultBank?.bankName, "Corporate Bank");
+    assert.equal(result.defaultBank?.last4, "7788");
+    assert.equal(url.pathname, "/v1/accounts/acct_123/external_accounts");
+    assert.equal(url.searchParams.get("object"), "bank_account");
   } finally {
     globalThis.fetch = originalFetch;
   }

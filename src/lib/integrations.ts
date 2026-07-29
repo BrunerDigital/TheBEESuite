@@ -119,6 +119,16 @@ export type StripeConnectedAccountSnapshot = {
   raw?: unknown;
 };
 
+export type StripePayoutBankSnapshot = {
+  id: string;
+  bankName: string | null;
+  last4: string | null;
+  status: string | null;
+  currency: string | null;
+  country: string | null;
+  defaultForCurrency: boolean;
+};
+
 export type StripeBalanceTransactionSnapshot = {
   id: string;
   type: string;
@@ -2290,6 +2300,133 @@ export async function createStripeAccountLink({
   }
 
   return { ok: true, configured: true, provider: "stripe", id: accountId, url: json.url };
+}
+
+export async function createStripeExpressDashboardLoginLink({
+  accountId,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+
+  const connectedAccountId = clean(accountId);
+  if (!connectedAccountId.startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
+  }
+
+  const response = await fetch(`https://api.stripe.com/v1/accounts/${connectedAccountId}/login_links`, {
+    method: "POST",
+    headers: stripeHeaders(apiKey, "form"),
+    body: new URLSearchParams(),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { url?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.url) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure dashboard URL." };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: connectedAccountId, url: json.url };
+}
+
+export async function listStripeConnectedAccountPayoutBanks({
+  accountId,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { banks: StripePayoutBankSnapshot[]; defaultBank: StripePayoutBankSnapshot | null }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return {
+      ok: false,
+      configured: false,
+      provider: "stripe",
+      error: "Payment processor is not configured.",
+      banks: [],
+      defaultBank: null,
+    };
+  }
+
+  const connectedAccountId = clean(accountId);
+  if (!connectedAccountId.startsWith("acct_")) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: "Connected payout account id is invalid.",
+      banks: [],
+      defaultBank: null,
+    };
+  }
+
+  const params = new URLSearchParams({ object: "bank_account", limit: "10" });
+  const response = await fetch(
+    `https://api.stripe.com/v1/accounts/${connectedAccountId}/external_accounts?${params.toString()}`,
+    {
+      method: "GET",
+      headers: stripeHeaders(apiKey, "form"),
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  const json = await response.json().catch(() => null) as {
+    data?: Array<Record<string, unknown>>;
+    error?: { message?: string };
+  } | null;
+
+  if (!response.ok || !Array.isArray(json?.data)) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+      banks: [],
+      defaultBank: null,
+    };
+  }
+
+  const banks = json.data
+    .filter((item) => clean(item.object) === "bank_account")
+    .map((item): StripePayoutBankSnapshot => ({
+      id: clean(item.id),
+      bankName: clean(item.bank_name) || null,
+      last4: clean(item.last4) || null,
+      status: clean(item.status) || null,
+      currency: clean(item.currency) || null,
+      country: clean(item.country) || null,
+      defaultForCurrency: item.default_for_currency === true,
+    }))
+    .filter((bank) => bank.id.startsWith("ba_"));
+  const defaultBank =
+    banks.find((bank) => bank.defaultForCurrency && bank.currency === "usd") ??
+    banks.find((bank) => bank.defaultForCurrency) ??
+    (banks.length === 1 ? banks[0] : null);
+
+  return {
+    ok: true,
+    configured: true,
+    provider: "stripe",
+    id: connectedAccountId,
+    banks,
+    defaultBank,
+  };
 }
 
 export async function setStripeConnectedAccountDailyPayouts({

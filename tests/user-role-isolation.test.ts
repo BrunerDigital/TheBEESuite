@@ -18,10 +18,11 @@ function scopedUser(role: UserRole, centerIds: string[], accessScope: CurrentUse
   return { role, centerIds, accessScope } as CurrentUser;
 }
 
-test("executive access requires resolved tenant or explicit scoped-center access", () => {
+test("executive access still requires resolved tenant or explicit scoped-center access", () => {
   const tenantExecutive = scopedUser(UserRole.BRAND_ADMIN, ["school_a", "school_b"], "tenant");
   const scopedExecutive = scopedUser(UserRole.REGIONAL_MANAGER, ["school_a"], "scoped");
   const noGrantExecutive = scopedUser(UserRole.BRAND_ADMIN, [], "none");
+  const noGrantAuditor = scopedUser(UserRole.READ_ONLY_AUDITOR, [], "none");
 
   assert.equal(canAccessAllCenters(tenantExecutive), true);
   assert.equal(canAccessCenter(tenantExecutive, "school_b"), true);
@@ -29,7 +30,10 @@ test("executive access requires resolved tenant or explicit scoped-center access
   assert.equal(canAccessCenter(scopedExecutive, "school_a"), true);
   assert.equal(canAccessCenter(scopedExecutive, "school_b"), false);
   assert.equal(canAccessAllCenters(noGrantExecutive), false);
+  assert.equal(canAccessCenter(noGrantExecutive, "school_b"), false);
   assert.equal(canAccessModule(noGrantExecutive, "multi-location-dashboard"), false);
+  assert.equal(canAccessAllCenters(noGrantAuditor), false);
+  assert.equal(canAccessModule(noGrantAuditor, "multi-location-dashboard"), true);
 });
 
 test("director and billing roles remain inside their assigned school", () => {

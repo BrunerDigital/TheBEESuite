@@ -53,9 +53,11 @@ test("family refund recovery never represents unrefundable value as a Stripe ref
   assert.equal(plan.remainingCents, 1_000);
   assert.deepEqual(plan.allocations.map((item) => [item.payment.id, item.amountCents]), [["payment_b", 1_500], ["payment_a", 2_500]]);
   const route = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
-  assert.match(route, /family credit or manual reimbursement/i);
-  assert.match(route, /Refund could not be issued/);
-  assert.match(route, /partial: totalCents < amountCents/);
+  const refundService = readFileSync("src/lib/family-refunds.ts", "utf8");
+  assert.match(route, /issueFamilyRefund/);
+  assert.match(refundService, /family credit or manual reimbursement/i);
+  assert.match(refundService, /Refund could not be issued/);
+  assert.match(refundService, /partial: totalCents < input\.amountCents/);
 });
 
 test("Director alert surfaces require authentication and preserve not-found recovery", () => {

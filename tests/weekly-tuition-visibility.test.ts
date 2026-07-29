@@ -15,6 +15,10 @@ test("weekly tuition uses the child assignment across family, enrollment, billin
   assert.match(enrollment, /child\.tuitionAssignment\.amountCents/);
   assert.match(billing, /label="Customer weekly tuition"/);
   assert.match(billing, /label="Family weekly total"/);
+  assert.match(billing, /applyFamilyTuitionContext\(nextFamily, locationTuitionPlans\)/);
+  assert.match(billing, /setAssignmentTuitionPlanId\(assignedPlan\?\.id \?\? ""\)/);
+  assert.match(billing, /Tuition rate setup\{selectedFamily \? ` · \$\{selectedFamily\.name\}` : ""\}/);
+  assert.doesNotMatch(billing, /assignment\?\.tuitionPlanId \|\| locationTuitionPlans\[0\]/);
   assert.match(familyEditor, /params\.set\("childId", child\.id\)/);
   assert.match(page, /searchParams\.childId/);
   assert.match(billingPage, /initialChildId=\{data\.initialSelection\?\.childId\}/);

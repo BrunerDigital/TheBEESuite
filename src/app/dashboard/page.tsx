@@ -544,6 +544,7 @@ export default async function DashboardPage() {
     executivePayrollSummaryRows,
     executiveExpiringDocumentRows,
     executivePendingIncidentRows,
+    executiveRefundRequestRows,
   ] = await Promise.all([
     prisma.classroom.findMany({
       where: { centerId: scopedCenterFilter },
@@ -650,6 +651,27 @@ export default async function DashboardPage() {
       },
       select: {
         classroom: { select: { centerId: true } },
+      },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.refundRequest.findMany({
+      where: {
+        centerId: scopedCenterFilter,
+        status: "pending",
+      },
+      orderBy: { requestedAt: "asc" },
+      take: 250,
+      select: {
+        id: true,
+        centerId: true,
+        familyId: true,
+        amountCents: true,
+        reason: true,
+        selectedPaymentIds: true,
+        requestedAt: true,
+        failureReason: true,
+        center: { select: { name: true, crmLocationId: true } },
+        family: { select: { name: true } },
+        requestedBy: { select: { name: true, email: true } },
       },
     }) : Promise.resolve([]),
   ]);
@@ -798,6 +820,19 @@ export default async function DashboardPage() {
       submittedAt: metadataString(metadata.submittedAt) || row.createdAt.toISOString(),
     };
   });
+  const refundRequests = executiveRefundRequestRows.map((request) => ({
+    id: request.id,
+    centerId: request.centerId,
+    schoolName: displayText(request.center.crmLocationId ?? request.center.name),
+    familyId: request.familyId,
+    familyName: request.family.name,
+    amountCents: request.amountCents,
+    reason: request.reason,
+    paymentReferenceCount: request.selectedPaymentIds.length,
+    requestedBy: request.requestedBy.name || request.requestedBy.email,
+    requestedAt: request.requestedAt.toISOString(),
+    failureReason: request.failureReason,
+  }));
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
@@ -986,6 +1021,7 @@ export default async function DashboardPage() {
           weeklyFteTrend,
           fteSubmissions,
           payrollSummaries,
+          refundRequests,
         }
       : undefined,
   };

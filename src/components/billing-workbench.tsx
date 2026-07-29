@@ -126,6 +126,7 @@ type Props = {
   centers: BillingWorkbenchCenter[];
   products: BillingWorkbenchProduct[];
   tuitionPlans: BillingWorkbenchTuitionPlan[];
+  currentRole: string;
   initialFamilyId?: string;
   initialCenterId?: string;
   initialChildId?: string;
@@ -268,7 +269,7 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
   const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const initialFamily = useMemo(
@@ -279,10 +280,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     ? initialCenterId
     : initialFamily?.centerId ?? centers[0]?.id ?? "";
   const initialLocationTuitionPlans = tuitionPlans.filter((plan) => plan.centerId === initialCenter);
+  const initialAssignmentChild = initialFamily?.children.find((child) => child.id === initialChildId)
+    ?? initialFamily?.children[0]
+    ?? null;
+  const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
+  const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
   const [centerId, setCenterId] = useState(initialCenter);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
-  const [tuitionPlanId, setTuitionPlanId] = useState(initialLocationTuitionPlans[0]?.id ?? "");
+  const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
   const uniformShirtProduct = products.find((product) => product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE) ?? null;
   const [productId, setProductId] = useState(uniformShirtProduct?.id ?? products[0]?.id ?? "");
   const [productQuantity, setProductQuantity] = useState("1");
@@ -316,17 +322,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [invoiceEditorId, setInvoiceEditorId] = useState("");
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
-  const [assignmentChildId, setAssignmentChildId] = useState(
-    initialFamily?.children.some((child) => child.id === initialChildId) ? initialChildId ?? "" : "",
-  );
-  const [assignmentEnabled, setAssignmentEnabled] = useState("true");
-  const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
-  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
-  const [assignmentDescription, setAssignmentDescription] = useState("");
-  const [planEditorId, setPlanEditorId] = useState(initialLocationTuitionPlans[0]?.id ?? "new");
-  const [planName, setPlanName] = useState(initialLocationTuitionPlans[0]?.name ?? "");
-  const [planAgeGroup, setPlanAgeGroup] = useState(initialLocationTuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planAmountDollars, setPlanAmountDollars] = useState(initialLocationTuitionPlans[0] ? String(initialLocationTuitionPlans[0].amountCents / 100) : "");
+  const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
+  const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
+  const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
+  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(initialAssignment?.startsPeriod ?? "");
+  const [assignmentDescription, setAssignmentDescription] = useState(initialAssignment?.description ?? initialAssignment?.tuitionPlanName ?? "");
+  const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
+  const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
+  const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
+  const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
@@ -364,7 +368,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
     0,
   );
-  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || locationTuitionPlans[0]?.id || "";
+  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || "";
   const effectiveAssignmentCadence = "weekly";
   const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
@@ -389,6 +393,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
   const refundablePayments = (selectedBillingAccount?.recentPayments ?? []).filter((payment) => payment.refundableCents > 0 && payment.stripePaymentIntentId);
+  const canApproveRefunds = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentRole);
   const selectedRefundPaymentIds = refundPaymentIds.filter((id) => refundablePayments.some((payment) => payment.id === id));
   const visibleRefundableCents = refundablePayments.reduce((total, payment) => total + payment.refundableCents, 0);
   const selectedPaymentInvoiceId = paymentTarget.startsWith("invoice:") ? paymentTarget.slice("invoice:".length) : "";
@@ -700,33 +705,29 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   function handleCenterChange(value: string | null) {
     if (!value) return;
     const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
+    const nextFamily = families.find((family) => family.centerId === value) ?? null;
     setCenterId(value);
-    setFamilyId("");
+    setFamilyId(nextFamily?.id ?? "");
     setChildId("none");
     setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
-    setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
-    setTuitionPlanId(nextPlans[0]?.id ?? "");
-    setAssignmentTuitionPlanId("");
-    setPlanEditorId(nextPlans[0]?.id ?? "new");
-    setPlanName(nextPlans[0]?.name ?? "");
-    setPlanAgeGroup(nextPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
-    setPlanAmountDollars(nextPlans[0] ? String(nextPlans[0].amountCents / 100) : "");
+    applyFamilyTuitionContext(nextFamily, nextPlans);
   }
 
   function handleFamilyChange(value: string | null) {
     if (!value) return;
+    const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     setFamilyId(value);
     setChildId("none");
     setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
-    setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
   }
 
   function handleTuitionPlanChange(value: string | null) {
@@ -734,6 +735,33 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     setTuitionPlanId(value);
     const nextPlan = locationTuitionPlans.find((plan) => plan.id === value);
     if (nextPlan) setAgeGroup(nextPlan.ageGroup || "all");
+  }
+
+  function applyFamilyTuitionContext(
+    family: BillingWorkbenchFamily | null,
+    availablePlans: BillingWorkbenchTuitionPlan[],
+    preferredChildId?: string,
+  ) {
+    const child = family?.children.find((item) => item.id === preferredChildId)
+      ?? family?.children[0]
+      ?? null;
+    const assignment = child?.tuitionAssignment ?? null;
+    const assignedPlan = availablePlans.find((plan) => plan.id === assignment?.tuitionPlanId) ?? null;
+
+    setAssignmentChildId(child?.id ?? "");
+    setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+    setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
+    setAssignmentStartPeriod(
+      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
+        ? assignment.startsPeriod
+        : currentPeriodForCadence("weekly"),
+    );
+    setAssignmentDescription(assignment?.description ?? assignment?.tuitionPlanName ?? "");
+    setTuitionPlanId(assignedPlan?.id ?? "");
+    setPlanEditorId(assignedPlan?.id ?? "new");
+    setPlanName(assignedPlan?.name ?? "");
+    setPlanAgeGroup(assignedPlan?.ageGroup ?? child?.ageGroup ?? defaultAgeGroupOptions[0]);
+    setPlanAmountDollars(assignedPlan ? String(assignedPlan.amountCents / 100) : "");
   }
 
   function submit(payload: Record<string, unknown>) {
@@ -751,6 +779,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         skipped?: number;
         totalCents?: number;
         warning?: string | null;
+        pendingApproval?: boolean;
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Billing action could not be completed.");
@@ -776,7 +805,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       }
       if (payload.mode === "refundPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(json?.warning || `${total} family refund issued across the eligible original payment method(s).`);
+        setStatusMessage(
+          json?.pendingApproval
+            ? `${total} refund request submitted to executives for approval. No funds have been moved.`
+            : json?.warning || `${total} family refund issued across the eligible original payment method(s).`,
+        );
         setRefundAmountDollars("");
         setRefundReason("");
         setRefundPaymentIds([]);
@@ -896,7 +929,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     const refundCents = dollarsToCents(refundAmountDollars);
     if (refundCents <= 0) return setErrorMessage("Enter a refund amount greater than zero.");
     if (!refundReason.trim()) return setErrorMessage("Enter a reason for the refund.");
-    if (!confirmBillingAction(`refund ${money(refundCents)} to ${selectedFamily.name}`)) return;
+    const action = canApproveRefunds ? "issue" : "request executive approval for";
+    if (!confirmBillingAction(`${action} a ${money(refundCents)} refund to ${selectedFamily.name}`)) return;
     submit({
       mode: "refundPayment",
       familyId: selectedFamily.id,
@@ -970,23 +1004,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
 
   function handleAssignmentChildChange(value: string | null) {
     if (!value) return;
-    const child = selectedChildren.find((item) => item.id === value);
-    const assignment = child?.tuitionAssignment;
-    setAssignmentChildId(value);
-    setAssignmentTuitionPlanId(assignment?.tuitionPlanId || locationTuitionPlans[0]?.id || "");
-    setAssignmentStartPeriod(
-      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
-        ? assignment.startsPeriod
-        : currentPeriodForCadence("weekly"),
-    );
-    setAssignmentDescription(assignment?.description || assignment?.tuitionPlanName || "");
-    setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+    applyFamilyTuitionContext(selectedFamily, locationTuitionPlans, value);
   }
 
   function handleAssignmentPlanChange(value: string | null) {
     if (!value) return;
+    const plan = locationTuitionPlans.find((item) => item.id === value);
     setAssignmentTuitionPlanId(value);
+    setTuitionPlanId(value);
     setAssignmentStartPeriod((current) => periodMatchesCadence(current, "weekly") ? current : currentPeriodForCadence("weekly"));
+    if (plan) {
+      setPlanEditorId(plan.id);
+      setPlanName(plan.name);
+      setPlanAgeGroup(plan.ageGroup);
+      setPlanAmountDollars(String(plan.amountCents / 100));
+    }
   }
 
   function submitAssignment() {
@@ -1465,12 +1497,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">Tuition rate setup</div>
+              <div className="text-sm font-medium">
+                Tuition rate setup{selectedFamily ? ` · ${selectedFamily.name}` : ""}
+              </div>
               <p className="text-xs text-muted-foreground">
-                School users can add or edit weekly rates here. Assigned tuition autobills every Thursday for the following week when the family has autopay enabled and a saved default payment method.
+                The selected family&apos;s assigned child rate is shown here. Choose or create a weekly school rate, then save it to the intended child under Recurring.
               </p>
             </div>
-            <Badge variant="outline">School-managed rates</Badge>
+            <Badge variant="outline">{selectedFamily?.name ?? "Choose a family"}</Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-6">
             <div className="space-y-1 md:col-span-2">
@@ -1747,7 +1781,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             </div>
             <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild} onClick={submitAssignment}>
+              <Button
+                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && !effectiveAssignmentPlanId)}
+                onClick={submitAssignment}
+              >
                 <CalendarClock data-icon="inline-start" />
                 Save Recurring Tuition
               </Button>
@@ -1847,7 +1884,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
           <TabsContent value="refund" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Issue a family refund</div>
-              <p className="mt-1 text-xs text-muted-foreground">Enter the total amount for the family. Bee Suite can split it across eligible Stripe transactions; payment references are optional and are used first for record keeping.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {canApproveRefunds
+                  ? "Executives can issue the approved total across eligible Stripe transactions. Payment references are optional and are used first for record keeping."
+                  : "Enter the requested total and reason. Bee Suite will notify executives; no money moves until an executive approves the request and records an approval reason."}
+              </p>
             </div>
             {refundablePayments.length ? (
               <>
@@ -1879,7 +1920,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <div className="flex flex-wrap items-center gap-2">
                   <Button disabled={isPending || dollarsToCents(refundAmountDollars) <= 0 || !refundReason.trim()} onClick={submitRefundPayment} variant="destructive">
                     <RotateCcw data-icon="inline-start" />
-                    Issue Refund
+                    {canApproveRefunds ? "Issue Refund" : "Request Refund Approval"}
                   </Button>
                   <Badge variant="outline">{money(visibleRefundableCents)} shown as Stripe-refundable</Badge>
                 </div>

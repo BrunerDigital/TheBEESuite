@@ -4992,6 +4992,7 @@ export type BillingInvoicesPageData = {
     centers: BillingWorkbenchCenter[];
     products: BillingWorkbenchProduct[];
     tuitionPlans: BillingWorkbenchTuitionPlan[];
+    currentRole: string;
   };
   invoices: Array<{
     id: string;
@@ -5192,6 +5193,7 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
         centers={data.workbench.centers}
         products={data.workbench.products}
         tuitionPlans={data.workbench.tuitionPlans}
+        currentRole={data.workbench.currentRole}
         initialFamilyId={data.initialSelection?.familyId}
         initialCenterId={data.initialSelection?.centerId}
         initialChildId={data.initialSelection?.childId}

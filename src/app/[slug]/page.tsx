@@ -3189,6 +3189,7 @@ async function renderLivePage(
             searchQuery: requestedBillingSearch,
           },
           workbench: {
+            currentRole: user.role,
             families: billingFamilies.map((family) => ({
               ...family,
               billingAccount: family.billingAccount

@@ -36,6 +36,7 @@ import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-confi
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { RegistrationShareCard } from "@/components/registration-share-card";
+import { RefundApprovalQueue, type ExecutiveRefundRequest } from "@/components/refund-approval-queue";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
@@ -196,6 +197,7 @@ export type LiveDashboardData = {
       submittedBy: string;
       submittedAt: string;
     }>;
+    refundRequests: ExecutiveRefundRequest[];
   };
 };
 
@@ -310,10 +312,44 @@ function ExecutiveLensDashboard({
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Executive actions</div>
-            <div className="mt-2 text-3xl font-semibold">{actionQueue.length}</div>
+            <div className="mt-2 text-3xl font-semibold">{actionQueue.length + metrics.refundRequests.length}</div>
             <p className="mt-1 text-xs text-muted-foreground">FTE, compliance, enrollment, billing, and parent-response queue</p>
-            <Progress className="mt-3" value={Math.min(actionQueue.length * 12, 100)} />
+            <Progress className="mt-3" value={Math.min((actionQueue.length + metrics.refundRequests.length) * 12, 100)} />
           </div>
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "refund-approval-queue",
+      title: "Refund approval queue",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-refund-approval-queue`}
+          className="glass-panel"
+          title="Refund approval queue"
+          description="Review director refund requests. Approval sends the refund; denial leaves the family ledger unchanged. Every decision requires a reason."
+        >
+          <RefundApprovalQueue requests={metrics.refundRequests} />
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "executive-all-location-records",
+      title: "All-location records",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-all-location-records`}
+          className="glass-panel"
+          title="All-location records"
+          description="Open tenant-wide operational records for every school available to executive users."
+          contentClassName="flex flex-wrap gap-2"
+        >
+          <Button variant="outline" nativeButton={false} render={<Link href="/billing-invoices" />}>Accounts and ledgers</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/family-detail" />}>Families and children</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/classroom-dashboard" />}>Classrooms</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/staff" />}>Teachers and staff</Button>
         </CollapsibleCard>
       ),
     },

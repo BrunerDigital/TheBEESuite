@@ -53,6 +53,11 @@ const tenantWideAccessRoles = new Set<UserRole>([
   UserRole.READ_ONLY_AUDITOR,
 ]);
 
+const executiveTenantWideRoles = new Set<UserRole>([
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
+]);
+
 const leadWriteRoles = new Set<UserRole>([
   UserRole.PLATFORM_OWNER,
   UserRole.BRAND_ADMIN,
@@ -314,6 +319,13 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     const allCenters = await prisma.center.findMany({ select: { id: true } });
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
+  } else if (executiveTenantWideRoles.has(user.role)) {
+    const tenantCenters = await prisma.center.findMany({
+      where: { organization: { tenantId: user.tenantId } },
+      select: { id: true },
+    });
+    centerIds = tenantCenters.map((center) => center.id);
+    accessScope = "tenant";
   } else if (activeGrants.length) {
     const allowBroadGrantAccess = canUseTenantWideAccessRole(user.role) && !hasProfileCenterAssignment;
     const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role, {

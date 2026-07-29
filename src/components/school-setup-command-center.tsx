@@ -197,7 +197,7 @@ export function SchoolSetupCommandCenter({ data }: { data: SchoolSetupCommandCen
         tasks={directorLaunchChecklistTasks}
         initialCompletedIds={data.directorChecklistCompletedIds}
         automaticCompletedIds={data.directorChecklistAutomaticCompletedIds}
-        graphicHref="/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg"
+        graphicHref="/brand/the-bee-suite/explainers/current/school-launch-gates.png"
       />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">

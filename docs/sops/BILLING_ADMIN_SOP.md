@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -10,11 +10,11 @@ This SOP explains how billing users manage tuition, invoices, payment methods, A
 
 ## Visual Overview
 
-![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png)
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/current/parent-payment-options.png)
 
-![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27-v3.png)
+![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/current/terminal-payment-flow.png)
 
 ## Billing Admin Responsibilities
 

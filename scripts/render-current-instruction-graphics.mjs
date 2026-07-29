@@ -4,15 +4,15 @@ import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 
 const root = process.cwd();
-const outDir = path.join(root, "public", "brand", "the-bee-suite", "explainers");
+const outDir = path.join(root, "public", "brand", "the-bee-suite", "explainers", "current");
 const iconPath = path.join(root, "public", "brand", "the-bee-suite", "app-icon-yellow.png");
 const width = 1600;
 const height = 1000;
-const exportSuffix = "-v3";
+const exportSuffix = "";
 
 const graphics = [
   {
-    id: "bee-suite-school-launch-gates-2026-07-27",
+    id: "school-launch-gates",
     eyebrow: "SCHOOL LAUNCH",
     title: "Launch by independent gates",
     subtitle: "Setup, parent access, kiosk, billing, payments, ProCare cutover, and wider rollout are separate decisions.",
@@ -27,7 +27,7 @@ const graphics = [
     warning: "A software release, training session, or import preview does not activate a school or module.",
   },
   {
-    id: "bee-suite-parent-access-install-2026-07-27",
+    id: "parent-access-install",
     eyebrow: "PARENT ACCESS",
     title: "Invite, sign in, then install",
     subtitle: "Use the verified guardian email, school-issued first-login password, and secure BEE Suite address.",
@@ -42,7 +42,7 @@ const graphics = [
     warning: "Never forward credentials or request passwords, bank logins, or full card numbers by message.",
   },
   {
-    id: "bee-suite-parent-payment-options-2026-07-27",
+    id: "parent-payment-options",
     eyebrow: "PARENT PAYMENTS",
     title: "Review the total, then choose",
     subtitle: "Debit/credit card is presented first. Instant Bank and One-Time Bank remain available when the school enables them.",
@@ -57,7 +57,7 @@ const graphics = [
     warning: "Use the exact total shown before submitting.",
   },
   {
-    id: "bee-suite-weekly-tuition-flow-2026-07-27",
+    id: "weekly-tuition-flow",
     eyebrow: "WEEKLY TUITION",
     title: "One school, one child, one source",
     subtitle: "The selected child's school-scoped assignment is the canonical weekly rate everywhere it is displayed.",
@@ -72,7 +72,7 @@ const graphics = [
     warning: "A saved payment method is required for automatic collection, not for invoice creation.",
   },
   {
-    id: "bee-suite-director-daily-flow-2026-07-27",
+    id: "director-daily-flow",
     eyebrow: "DIRECTOR OPERATIONS",
     title: "Open, verify, operate, close",
     subtitle: "Work inside the assigned school and stop if the displayed school, family, or classroom is wrong.",
@@ -87,7 +87,7 @@ const graphics = [
     warning: "Custody, pickup, medical, incident, billing, and compliance decisions remain human-reviewed.",
   },
   {
-    id: "bee-suite-teacher-daily-flow-2026-07-27",
+    id: "teacher-daily-flow",
     eyebrow: "TEACHER WORKFLOW",
     title: "Work only the assigned classroom",
     subtitle: "Attendance, care entries, reports, incidents, and messages stay classroom-scoped and use school-local time.",
@@ -102,7 +102,7 @@ const graphics = [
     warning: "Never use another teacher's account or enter information for a child outside your assigned classroom.",
   },
   {
-    id: "bee-suite-kiosk-pickup-flow-2026-07-27",
+    id: "kiosk-pickup-flow",
     eyebrow: "KIOSK + PICKUP",
     title: "Verify before every handoff",
     subtitle: "The lobby device must show the correct school, and staff must verify every pickup.",
@@ -117,7 +117,7 @@ const graphics = [
     warning: "A PIN or QR match does not override custody, pickup, identity, or emergency procedures.",
   },
   {
-    id: "bee-suite-fte-reporting-flow-2026-07-27",
+    id: "fte-reporting-flow",
     eyebrow: "WEEKLY FTE",
     title: "Report the selected period",
     subtitle: "The selected reporting week is separate from submission time and drives reminders, history, corrections, and exports.",
@@ -132,7 +132,7 @@ const graphics = [
     warning: "A report covering the selected week satisfies reminders even when it was submitted on a different date.",
   },
   {
-    id: "bee-suite-terminal-payment-flow-2026-07-27",
+    id: "terminal-payment-flow",
     eyebrow: "IN-PERSON CARD",
     title: "School-scoped Stripe Terminal",
     subtitle: "Authorized staff can collect an in-person card payment on a certified reader assigned to the school.",

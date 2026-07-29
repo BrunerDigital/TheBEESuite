@@ -3,8 +3,8 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const root = process.cwd();
-const releaseDate = "2026-07-27";
-const releaseVersion = `${releaseDate}-v3`;
+const releaseDate = "2026-07-29";
+const releaseVersion = "current";
 const publicDir = path.join(
   root,
   "public",
@@ -17,7 +17,7 @@ const outputDir = path.join(
   root,
   "outputs",
   "marketing",
-  `the-bee-suite-social-paid-pack-${releaseDate}`,
+  "the-bee-suite-social-paid-pack-current",
 );
 const logoPath = path.join(
   root,
@@ -186,20 +186,20 @@ const concepts = [
     audience: "Childcare owners, operators, and center directors",
     goal: "Broad awareness and qualified workspace requests",
     accent: "#f5b51b",
-    googleAsset: "screenshots/2026-07-27-light/director-desktop-dashboard-light.png",
+    googleAsset: "screenshots/current/director-desktop-dashboard-light.png",
     assets: [
       {
-        path: "screenshots/2026-07-27-light/director-desktop-dashboard-light.png",
+        path: "screenshots/current/director-desktop-dashboard-light.png",
         kind: "desktop",
         label: "DIRECTOR DESKTOP",
       },
       {
-        path: "screenshots/2026-07-27-light/teacher-ipad-daily-report-light.png",
+        path: "screenshots/current/teacher-ipad-daily-report-light.png",
         kind: "tablet",
         label: "TEACHER IPAD",
       },
       {
-        path: "screenshots/2026-07-27-light/parent-iphone-overview-light.png",
+        path: "screenshots/current/parent-iphone-overview-light.png",
         kind: "phone",
         label: "PARENT IPHONE",
       },
@@ -221,15 +221,15 @@ const concepts = [
     audience: "Center directors, education leaders, and school operators",
     goal: "Feature awareness and teacher-parent workflow interest",
     accent: "#22c7b8",
-    googleAsset: "screenshots/2026-07-27-light/teacher-ipad-daily-report-light.png",
+    googleAsset: "screenshots/current/teacher-ipad-daily-report-light.png",
     assets: [
       {
-        path: "screenshots/2026-07-27-light/teacher-ipad-daily-report-light.png",
+        path: "screenshots/current/teacher-ipad-daily-report-light.png",
         kind: "tablet",
         label: "TEACHER IPAD",
       },
       {
-        path: "screenshots/2026-07-27-light/parent-iphone-overview-light.png",
+        path: "screenshots/current/parent-iphone-overview-light.png",
         kind: "phone",
         label: "PARENT IPHONE",
       },
@@ -251,10 +251,10 @@ const concepts = [
     audience: "Multi-location owners, franchise teams, and operational leaders",
     goal: "Differentiate role-safe, school-scoped operations",
     accent: "#38bdf8",
-    googleAsset: "screenshots/2026-07-27-light/executive-desktop-dashboard-light.png",
+    googleAsset: "screenshots/current/executive-desktop-dashboard-light.png",
     assets: [
       {
-        path: "sop-graphics/2026-07-27-v2/role-device-standards-guide.png",
+        path: "sop-graphics/current/role-device-standards-guide.png",
         kind: "graphic",
         label: "ROLE + DEVICE STANDARD",
       },
@@ -276,15 +276,15 @@ const concepts = [
     audience: "Childcare groups, franchise operators, and executive teams",
     goal: "Generate interest from multi-location buyers",
     accent: "#a78bfa",
-    googleAsset: "screenshots/2026-07-27-light/executive-desktop-dashboard-light.png",
+    googleAsset: "screenshots/current/executive-desktop-dashboard-light.png",
     assets: [
       {
-        path: "screenshots/2026-07-27-light/executive-desktop-dashboard-light.png",
+        path: "screenshots/current/executive-desktop-dashboard-light.png",
         kind: "desktop",
         label: "EXECUTIVE DASHBOARD",
       },
       {
-        path: "screenshots/2026-07-27-light/executive-desktop-fte-light.png",
+        path: "screenshots/current/executive-desktop-fte-light.png",
         kind: "desktop",
         label: "FTE REPORTING",
       },
@@ -306,15 +306,15 @@ const concepts = [
     audience: "Owners, directors, and childcare billing teams",
     goal: "Build consideration for billing and family payment workflows",
     accent: "#f59e0b",
-    googleAsset: "screenshots/2026-07-27-light/director-desktop-billing-light.png",
+    googleAsset: "screenshots/current/director-desktop-billing-light.png",
     assets: [
       {
-        path: "explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png",
+        path: "explainers/current/weekly-tuition-flow.png",
         kind: "graphic",
         label: "WEEKLY TUITION FLOW",
       },
       {
-        path: "screenshots/2026-07-27-light/parent-iphone-billing-light.png",
+        path: "screenshots/current/parent-iphone-billing-light.png",
         kind: "phone",
         label: "PARENT BILLING",
       },
@@ -336,10 +336,10 @@ const concepts = [
     audience: "Owners, directors, implementation teams, and childcare brands",
     goal: "Communicate deliberate implementation and rollout control",
     accent: "#84cc16",
-    googleAsset: "screenshots/2026-07-27-light/director-desktop-reports-light.png",
+    googleAsset: "screenshots/current/director-desktop-reports-light.png",
     assets: [
       {
-        path: "explainers/bee-suite-school-launch-gates-2026-07-27-v3.png",
+        path: "explainers/current/school-launch-gates.png",
         kind: "graphic",
         label: "LAUNCH GATES",
       },
@@ -839,7 +839,7 @@ function manifest() {
     })),
     guardrails: [
       "All user-facing copy, logos, dimensions, and safe zones are deterministic.",
-      "Every product image comes from the approved July 27, 2026 light-mode screenshot and SOP graphic set.",
+      "Every product image comes from the approved current light-mode screenshot and SOP graphic set.",
       "Google clean image candidates contain one intact light-mode product screenshot and no added logo, headline, CTA, button, or collage.",
       "No customer results, prices, testimonials, certifications, or compliance guarantees are claimed.",
       "Sensitive decisions remain with authorized staff; creative does not imply autonomous legal, medical, safety, custody, billing, licensing, or compliance decisions.",
@@ -903,7 +903,7 @@ ${googleCopy.descriptions.map((description) => `- ${description}`).join("\n")}
 
   return `# The BEE Suite Social and Paid Campaign Library
 
-Updated: July 27, 2026
+Updated: July 29, 2026
 
 This pack turns the approved light-mode product screenshots and SOP graphics into platform-ready organic and paid creative. It is a creative library, not authorization to activate campaigns or spend budget.
 
@@ -1090,7 +1090,7 @@ async function main() {
   await writeFile(path.join(outputDir, "campaign-copy.md"), copyContent, "utf8");
   await writeFile(path.join(outputDir, "review-board.html"), reviewContent, "utf8");
   await writeFile(
-    path.join(root, "docs", "BEE_SUITE_SOCIAL_AND_PAID_CAMPAIGN_LIBRARY_2026-07-27.md"),
+    path.join(root, "docs", "BEE_SUITE_SOCIAL_AND_PAID_CAMPAIGN_LIBRARY.md"),
     copyContent,
     "utf8",
   );

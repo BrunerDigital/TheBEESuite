@@ -958,7 +958,7 @@ export default async function DashboardPage() {
         title: "Teacher profile setup checklist",
         description: "Confirm your teacher account, classroom, roster, kiosk code, and classroom tablet workflows are ready.",
         completedIds: teacherChecklistCompletedIds,
-        graphicHref: "/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
+        graphicHref: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
       }] : []),
       ...(user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? [{
         key: "director_launch" as const,
@@ -966,7 +966,7 @@ export default async function DashboardPage() {
         description: "Track the school-level setup work required before all BEE Suite features go live.",
         completedIds: directorChecklistCompletedIds,
         automaticCompletedIds: directorChecklistAutomaticCompletedIds,
-        graphicHref: "/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg",
+        graphicHref: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
       }] : []),
     ],
     aiSummary,

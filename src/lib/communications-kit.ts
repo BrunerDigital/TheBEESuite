@@ -49,15 +49,15 @@ export const processFaqs = [
 ] as const;
 
 const guideByCategory: Record<string, string> = {
-  onboarding: "/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png",
-  enrollment: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png",
+  onboarding: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
+  enrollment: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
   billing: "/brand/the-bee-suite/usage/bee-suite-director-operations.png",
   attendance: "/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
   classroom: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
-  staff: "/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
-  school_setup: "/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg",
-  fte_reports: "/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png",
-  reporting: "/brand/the-bee-suite/explainers/bee-suite-getting-started-platform-map-2026-07-01.svg",
+  staff: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
+  school_setup: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
+  fte_reports: "/brand/the-bee-suite/explainers/current/fte-reporting-flow.png",
+  reporting: "/brand/the-bee-suite/explainers/current/director-daily-flow.png",
 };
 
 function escapeHtml(value: string) {

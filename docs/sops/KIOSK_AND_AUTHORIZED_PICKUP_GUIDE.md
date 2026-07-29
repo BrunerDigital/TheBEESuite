@@ -1,6 +1,6 @@
 # Kiosk And Authorized Pickup Guide - The BEE Suite
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: directors, front desk staff, parents, guardians, authorized pickups, and staff using the lobby kiosk.
 
@@ -10,7 +10,7 @@ The lobby kiosk lets verified adults check children in or out and lets staff clo
 
 ## Visual Overview
 
-![Kiosk and authorized pickup flow](../../public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png)
+![Kiosk and authorized pickup flow](../../public/brand/the-bee-suite/explainers/current/kiosk-pickup-flow.png)
 
 ## Director Setup
 

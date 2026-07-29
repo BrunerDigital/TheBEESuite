@@ -1,6 +1,6 @@
 # Parent Step-By-Step Guide: Card, Bank, And Autopay Payments
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: parents and guardians paying tuition through The BEE Suite.
 
@@ -12,7 +12,7 @@ Exact totals are always shown before you submit payment. Do not submit a payment
 
 ## Visual Preview
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/current/parent-payment-options.png)
 
 ## Where You May Start
 

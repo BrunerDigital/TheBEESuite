@@ -1,26 +1,26 @@
 # Parent Portal SOP - The BEE Suite
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
 ## Visual Overview
 
-![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/current/parent-access-install.png)
 
-![Parent payment choices](../../public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png)
+![Parent payment choices](../../public/brand/the-bee-suite/explainers/current/parent-payment-options.png)
 
-![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/parent-multidevice-portal-guide.png)
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/current/parent-multidevice-portal-guide.png)
 
 ## iPhone-First Screenshots
 
 Use iPhone for most daily tasks. The same family portal is also available on iPad and desktop.
 
-![Parent daily reports on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-daily-reports-light.png)
+![Parent daily reports on iPhone](../../public/brand/the-bee-suite/screenshots/current/parent-iphone-daily-reports-light.png)
 
-![Parent classroom activities on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-activities-light.png)
+![Parent classroom activities on iPhone](../../public/brand/the-bee-suite/screenshots/current/parent-iphone-activities-light.png)
 
-![Parent billing history on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-billing-light.png)
+![Parent billing history on iPhone](../../public/brand/the-bee-suite/screenshots/current/parent-iphone-billing-light.png)
 
 Use `PARENT_PORTAL_INSTALL_GUIDE.md` to install the parent portal safely on a phone or tablet. Use `PARENT_ACH_PAYMENT_GUIDE.md` for card, Instant Bank, One-Time Bank, and autopay instructions.
 

@@ -1,6 +1,6 @@
 # The BEE Suite School Data Import and Parent Launch Email Kit
 
-**Updated:** July 27, 2026
+**Updated:** July 29, 2026
 **Purpose:** Ready-to-send emails that guide a school from ProCare export through BEE Suite import, school setup, payment readiness, and parent portal launch.
 
 ## How to use this kit
@@ -528,7 +528,7 @@ Before sending any email in this kit:
 
 - The BEE Suite ProCare migration runbook: `docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md`
 - The BEE Suite ProCare field map: `docs/PROCARE_FIELD_COVERAGE.md`
-- School rollout checklist: `docs/SCHOOL_FULL_FEATURE_ROLLOUT_CHECKLIST_2026-06-08.md`
+- Production-readiness master: `docs/PRODUCTION_READINESS_MASTER_EXECUTION_TASK_2026-07-20.md`
 - Stripe payout setup: `docs/STRIPE_CONNECT_SETUP.md`
 - Parent ACH guide: `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md`
 - Parent portal SOP: `docs/sops/PARENT_PORTAL_SOP.md`

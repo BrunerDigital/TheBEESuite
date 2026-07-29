@@ -184,63 +184,63 @@ const explainerGraphics = [
   {
     title: "School launch gates",
     body: "Separates technical release from school readiness across setup, parent access, kiosk, billing, payments, migration, and wider rollout.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Parent access and installation",
     body: "Shows the current invite, first-login, and install path across iPhone, iPad, Android, Fire tablet, and desktop.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Parent payment options",
     body: "Explains card-first checkout, saved payment methods, one-time bank payments, autopay status, and exact-total review.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/parent-payment-options.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Weekly tuition flow",
     body: "Keeps the assigned child billing record as the source of truth from school selection through the Thursday invoice run.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Director daily flow",
     body: "Connects the morning school review, family and classroom follow-up, billing oversight, records, communication, and closeout.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/director-daily-flow.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Teacher daily flow",
     body: "Shows the iPad-first classroom rhythm for roster review, attendance, care logs, photos, incidents, messages, and daily reports.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-teacher-daily-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Kiosk pickup flow",
     body: "Covers guardian PIN or QR verification, child selection, check-in or pickup, signatures, staff clocks, and escalation.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/kiosk-pickup-flow.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "FTE reporting flow",
     body: "Preserves the selected reporting week from school submission through executive review and follow-up.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/fte-reporting-flow.png",
     width: 1600,
     height: 1000,
   },
   {
     title: "Terminal payment flow",
     body: "Shows the school-scoped Stripe Terminal path from reader registration through card-present payment and reconciliation.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27-v3.png",
+    src: "/brand/the-bee-suite/explainers/current/terminal-payment-flow.png",
     width: 1600,
     height: 1000,
   },
@@ -587,7 +587,7 @@ export default function LandingPage() {
           <div className="mt-10 grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
             <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
               <Image
-                src="/brand/the-bee-suite/sop-graphics/2026-07-27-v2/role-device-standards-guide.png"
+                src="/brand/the-bee-suite/sop-graphics/current/role-device-standards-guide.png"
                 alt="The BEE Suite role and device standards for executives, directors, teachers, and parents"
                 width={1600}
                 height={1000}
@@ -629,7 +629,7 @@ export default function LandingPage() {
           </div>
           <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
             <Image
-              src="/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png"
+              src="/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png"
               alt="The BEE Suite weekly tuition flow"
               width={1600}
               height={1000}
@@ -646,7 +646,7 @@ export default function LandingPage() {
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1fr] lg:items-end">
             <SectionHeading
               title="Current SOP graphics for the flows that need precision."
-              body="The July 27 visual library covers launch gates, parent access, payment choices, weekly tuition, director and teacher routines, kiosk pickup, FTE reporting, and Terminal payments."
+              body="The current visual library covers launch gates, parent access, payment choices, weekly tuition, director and teacher routines, kiosk pickup, FTE reporting, and Terminal payments."
             />
             <div className="grid gap-3 sm:grid-cols-3">
               {[
@@ -773,7 +773,7 @@ export default function LandingPage() {
           <div>
             <SectionHeading
               title="Current visual guides for the people who use the system."
-              body="The public resource library now uses the same July 27 light-mode product screens as the app story: teacher iPad and desktop, director and executive desktop, and parent iPhone, iPad, and desktop."
+              body="The public resource library now uses the same current light-mode product screens as the app story: teacher iPad and desktop, director and executive desktop, and parent iPhone, iPad, and desktop."
             />
             <div className="mt-8 space-y-4">
               {[
@@ -797,7 +797,7 @@ export default function LandingPage() {
           </div>
           <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
             <Image
-              src="/brand/the-bee-suite/sop-graphics/2026-07-27-v2/director-desktop-operations-guide.png"
+              src="/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png"
               alt="The BEE Suite director desktop operations guide"
               width={1600}
               height={1000}

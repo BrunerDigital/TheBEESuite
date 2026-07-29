@@ -871,7 +871,7 @@ export function TeacherMobileWorkspace({
         description="Check off each item after you confirm your account, classroom, roster, kiosk code, and classroom tablet workflows are ready."
         tasks={teacherProfileChecklistTasks}
         initialCompletedIds={teacherChecklistCompletedIds}
-        graphicHref="/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg"
+        graphicHref="/brand/the-bee-suite/explainers/current/teacher-daily-flow.png"
         compact
       />
 

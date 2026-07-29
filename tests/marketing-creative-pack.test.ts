@@ -8,7 +8,7 @@ const releaseDir = path.join(
   "brand",
   "the-bee-suite",
   "marketing",
-  "2026-07-27-v3",
+  "current",
 );
 const manifest = JSON.parse(
   readFileSync(path.join(releaseDir, "manifest.json"), "utf8"),
@@ -47,7 +47,7 @@ function pngDimensions(filePath: string) {
 }
 
 test("social and paid campaign pack covers six concepts and six platform formats", () => {
-  assert.equal(manifest.releaseVersion, "2026-07-27-v3");
+  assert.equal(manifest.releaseVersion, "current");
   assert.equal(manifest.concepts.length, 6);
 
   const expectedDimensions = new Map([
@@ -110,15 +110,15 @@ test("creative sources stay on the approved current screenshot and SOP sets", ()
   );
 
   assert.ok(
-    sourcePaths.some((source) => source.includes("screenshots/2026-07-27-light/")),
+    sourcePaths.some((source) => source.includes("screenshots/current/")),
   );
   assert.ok(
     sourcePaths.some((source) =>
-      source.includes("sop-graphics/2026-07-27-v2/"),
+      source.includes("sop-graphics/current/"),
     ),
   );
   assert.ok(
-    sourcePaths.some((source) => source.includes("explainers/") && source.includes("-v3.png")),
+    sourcePaths.some((source) => source.includes("explainers/current/")),
   );
   assert.equal(sourcePaths.some((source) => source.includes("2026-07-07")), false);
 

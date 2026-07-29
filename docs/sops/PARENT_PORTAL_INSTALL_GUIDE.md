@@ -1,6 +1,6 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
@@ -12,19 +12,19 @@ Audience: parents and guardians whose school uses The BEE Suite.
 
 ## Visual Preview
 
-![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/current/parent-access-install.png)
 
-![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/parent-multidevice-portal-guide.png)
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/current/parent-multidevice-portal-guide.png)
 
 ## Parent Portal On Each Device
 
 The iPhone view is the primary parent training screen. The iPad and desktop captures show the same portal at wider breakpoints.
 
-![Parent portal overview on iPhone](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-iphone-overview-light.png)
+![Parent portal overview on iPhone](../../public/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png)
 
-![Parent portal overview on iPad](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-ipad-overview-light.png)
+![Parent portal overview on iPad](../../public/brand/the-bee-suite/screenshots/current/parent-ipad-overview-light.png)
 
-![Parent portal overview on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/parent-desktop-overview-light.png)
+![Parent portal overview on desktop](../../public/brand/the-bee-suite/screenshots/current/parent-desktop-overview-light.png)
 
 ## Start Here
 

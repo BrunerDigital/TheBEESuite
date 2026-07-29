@@ -13,10 +13,10 @@ const combinedSource = `${pageSource}\n${heroSource}`;
 
 test("landing page presents the current role and device views", () => {
   for (const expected of [
-    "2026-07-27-light/director-desktop-dashboard-light.png",
-    "2026-07-27-light/teacher-ipad-daily-report-light.png",
-    "2026-07-27-light/parent-iphone-overview-light.png",
-    "2026-07-27-light/executive-desktop-dashboard-light.png",
+    "screenshots/current/director-desktop-dashboard-light.png",
+    "screenshots/current/teacher-ipad-daily-report-light.png",
+    "screenshots/current/parent-iphone-overview-light.png",
+    "screenshots/current/executive-desktop-dashboard-light.png",
     "Current light-mode product",
     "Director desktop",
     "Teacher iPad",
@@ -55,9 +55,9 @@ test("landing page uses the current SOP and explainer graphics", () => {
   ].map((match) => match[1]);
 
   assert.ok(assetPaths.length >= 12, "expected a substantial set of current product graphics");
-  assert.ok(assetPaths.some((asset) => asset.includes("2026-07-27-v3")));
-  assert.ok(assetPaths.some((asset) => asset.includes("2026-07-27-light")));
-  assert.ok(assetPaths.some((asset) => asset.includes("/sop-graphics/")));
+  assert.ok(assetPaths.some((asset) => asset.includes("/explainers/current/")));
+  assert.ok(assetPaths.some((asset) => asset.includes("/screenshots/current/")));
+  assert.ok(assetPaths.some((asset) => asset.includes("/sop-graphics/current/")));
 
   for (const asset of assetPaths) {
     assert.ok(

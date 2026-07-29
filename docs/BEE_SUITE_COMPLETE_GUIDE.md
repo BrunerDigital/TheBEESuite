@@ -1,6 +1,6 @@
 # The BEE Suite: Complete Product, User, and Technical Guide
 
-**Documentation snapshot:** July 27, 2026
+**Documentation snapshot:** July 29, 2026
 **Purpose:** A single, narration-friendly explanation of what The BEE Suite is, what is included, who uses it, how information moves through it, and how the software is built.  
 **Audience:** School owners, executives, directors, teachers, billing staff, parents, implementation teams, support staff, developers, and AI assistants asked to explain the system aloud.
 

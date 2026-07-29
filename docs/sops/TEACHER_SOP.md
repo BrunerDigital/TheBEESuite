@@ -1,22 +1,22 @@
 # Teacher SOP - The BEE Suite
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 
 ## Visual Overview
 
-![Teacher classroom device guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/teacher-classroom-device-guide.png)
+![Teacher classroom device guide](../../public/brand/the-bee-suite/sop-graphics/current/teacher-classroom-device-guide.png)
 
 ## Device Screenshots
 
 Use the iPad view for classroom work and the desktop view for office or planning work.
 
-![Teacher classroom roster on iPad](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-ipad-roster-light.png)
+![Teacher classroom roster on iPad](../../public/brand/the-bee-suite/screenshots/current/teacher-ipad-roster-light.png)
 
-![Teacher daily report workflow on iPad](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-ipad-daily-report-light.png)
+![Teacher daily report workflow on iPad](../../public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png)
 
-![Teacher classroom roster on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/teacher-desktop-roster-light.png)
+![Teacher classroom roster on desktop](../../public/brand/the-bee-suite/screenshots/current/teacher-desktop-roster-light.png)
 
 Use `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` for staff kiosk clock-in/out details.
 

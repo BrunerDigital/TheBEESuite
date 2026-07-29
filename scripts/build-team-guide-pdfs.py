@@ -18,7 +18,8 @@ from reportlab.platypus import CondPageBreak, Paragraph, SimpleDocTemplate, Spac
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_2026-07-27"
+OUT = ROOT / "output" / "pdf" / "TEAM_SHARE_GUIDES_CURRENT"
+PUBLICATION_DATE = "July 29, 2026"
 
 FILES = [
     Path("docs/BEE_SUITE_COMPLETE_GUIDE.md"),
@@ -43,7 +44,12 @@ STATUS = """
 
 
 def refresh(text: str) -> str:
-    text = re.sub(r"(?im)^(\*\*Documentation snapshot:\*\*|\*\*Updated:\*\*|Last updated:|Updated:)\s*[^\n]+", lambda m: m.group(1) + " July 27, 2026  ", text, count=1)
+    text = re.sub(
+        r"(?im)^(\*\*Documentation snapshot:\*\*|\*\*Updated:\*\*|Last updated:|Updated:)\s*[^\n]+",
+        lambda m: m.group(1) + f" {PUBLICATION_DATE}  ",
+        text,
+        count=1,
+    )
     lines = text.splitlines()
     insert_at = 1
     while insert_at < len(lines) and (not lines[insert_at].strip() or "updated" in lines[insert_at].lower() or "snapshot" in lines[insert_at].lower() or "purpose" in lines[insert_at].lower() or "audience" in lines[insert_at].lower()):
@@ -84,13 +90,13 @@ def esc(s: str) -> str:
 
 def build_pdf(md: Path, pdf: Path) -> None:
     styles = getSampleStyleSheet()
-    body = ParagraphStyle("Body", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.4, leading=13, textColor=colors.HexColor("#252525"), spaceAfter=6)
+    body = ParagraphStyle("Body", parent=styles["BodyText"], fontName="Helvetica", fontSize=9.4, leading=12.4, textColor=colors.HexColor("#252525"), spaceAfter=5)
     h1 = ParagraphStyle("H1", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=20, leading=24, textColor=colors.HexColor("#1F2937"), spaceAfter=12)
-    h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#A16207"), spaceBefore=10, spaceAfter=6)
-    h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#374151"), spaceBefore=8, spaceAfter=4)
+    h2 = ParagraphStyle("H2", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#A16207"), spaceBefore=8, spaceAfter=5)
+    h3 = ParagraphStyle("H3", parent=styles["Heading3"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#374151"), spaceBefore=6, spaceAfter=3)
     caption = ParagraphStyle("Caption", parent=body, fontName="Helvetica-Oblique", fontSize=8, leading=10, textColor=colors.HexColor("#6B7280"), alignment=TA_CENTER, spaceAfter=4)
     quote = ParagraphStyle("Quote", parent=body, backColor=colors.HexColor("#FFF7D6"), borderColor=colors.HexColor("#E0A800"), borderWidth=0.7, borderPadding=8, leftIndent=8, rightIndent=8, spaceBefore=5, spaceAfter=8)
-    bullet = ParagraphStyle("Bullet", parent=body, leftIndent=16, firstLineIndent=-9, bulletIndent=6)
+    bullet = ParagraphStyle("Bullet", parent=body, leading=11.7, spaceAfter=2.5, leftIndent=16, firstLineIndent=-9, bulletIndent=6)
     code = ParagraphStyle("Code", parent=body, fontName="Courier", fontSize=7.5, leading=10, backColor=colors.HexColor("#F3F4F6"), borderPadding=6)
     story = []
     image_buffers: list[io.BytesIO] = []
@@ -131,7 +137,28 @@ def build_pdf(md: Path, pdf: Path) -> None:
                     figure = RLImage(image_buffer)
                 else:
                     figure = RLImage(str(image_path))
-                scale = min((6.95 * inch) / figure.imageWidth, (4.35 * inch) / figure.imageHeight, 1)
+                compact_visual_guides = {
+                    "BILLING_ADMIN_SOP",
+                    "EXECUTIVE_ADMIN_SOP",
+                    "PARENT_PORTAL_INSTALL_GUIDE",
+                    "PARENT_PORTAL_SOP",
+                    "SCHOOL_SYSTEM_OPERATING_MANUAL",
+                    "TEACHER_SOP",
+                }
+                extra_compact_visual_heights = {
+                    "BILLING_ADMIN_SOP": 3.0,
+                    "SCHOOL_SYSTEM_OPERATING_MANUAL": 3.25,
+                    "TEACHER_SOP": 3.0,
+                }
+                if md.stem in extra_compact_visual_heights:
+                    max_figure_height = extra_compact_visual_heights[md.stem] * inch
+                elif md.stem == "PARENT_ACH_PAYMENT_GUIDE":
+                    max_figure_height = 3.55 * inch
+                elif md.stem in compact_visual_guides:
+                    max_figure_height = 3.65 * inch
+                else:
+                    max_figure_height = 4.35 * inch
+                scale = min((6.95 * inch) / figure.imageWidth, max_figure_height / figure.imageHeight, 1)
                 figure.drawWidth = figure.imageWidth * scale
                 figure.drawHeight = figure.imageHeight * scale
                 story.extend(
@@ -177,7 +204,7 @@ def build_pdf(md: Path, pdf: Path) -> None:
 
     def footer(canvas, doc):
         canvas.saveState(); canvas.setFont("Helvetica", 8); canvas.setFillColor(colors.HexColor("#6B7280"))
-        canvas.drawString(0.7*inch, 0.45*inch, "The BEE Suite - Team Share Copy - July 27, 2026")
+        canvas.drawString(0.7*inch, 0.45*inch, f"The BEE Suite - Team Share Copy - {PUBLICATION_DATE}")
         canvas.drawRightString(7.8*inch, 0.45*inch, f"Page {doc.page}"); canvas.restoreState()
 
     doc = SimpleDocTemplate(str(pdf), pagesize=letter, rightMargin=0.7*inch, leftMargin=0.7*inch, topMargin=0.65*inch, bottomMargin=0.7*inch, title=md.stem, author="The BEE Suite")
@@ -195,7 +222,7 @@ def main() -> None:
         refreshed = refresh(src.read_text(encoding="utf-8"))
         dest.write_text(bundle_markdown_images(refreshed, src), encoding="utf-8")
         build_pdf(dest, OUT / "pdf" / (dest.stem + ".pdf"))
-    readme = """# The BEE Suite Team Share Guides\n\nPrepared July 27, 2026. This folder contains current Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nSetup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval are independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nTeacher guides use iPad and desktop screens. Director and executive guides use desktop screens. Parent guides use iPhone, iPad, and desktop screens, with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
+    readme = f"""# The BEE Suite Team Share Guides\n\nPrepared {PUBLICATION_DATE}. This stable `CURRENT` folder replaces prior date-stamped packets and contains the canonical Markdown and PDF editions of the core product, role, onboarding, payment, kiosk, migration, and support guides.\n\n## Recommended send order\n\n1. Start with `BEE_SUITE_COMPLETE_GUIDE.pdf` or `SCHOOL_SYSTEM_OPERATING_MANUAL.pdf`.\n2. Send each person only the SOP for their role.\n3. Send parent guides only after family links and invitation readiness are approved.\n4. Send payment guidance only after the named school's billing and payment gates are approved.\n5. Use the migration email sequence for a controlled school launch; ProCare remains the source of truth until signed cutover.\n\n## Important status\n\nSetup, parent invitations, kiosk/PIN, billing, parent payments, ProCare retirement, mobile stores, and wider-wave approval are independent gates. `HELD OFF` is not `PASS`. These guides do not replace a dated school/module GO decision.\n\n## Current visuals\n\nThe packet uses the same deep navy, warm white, and BEE gold system as the current web app. Teacher guides use iPad and desktop screens. Director and executive guides use desktop screens. Parent guides use iPhone, iPad, and desktop screens, with iPhone shown most often.\n\n## Privacy of bundled visuals\n\nThe bundled visuals use seeded demo records and contain no real child, family, employee, billing, or authentication data. Do not replace them with production screenshots unless those screenshots are separately reviewed and approved for the intended audience.\n"""
     (OUT / "README.md").write_text(readme, encoding="utf-8")
     build_pdf(OUT / "README.md", OUT / "TEAM_SHARE_GUIDES_INDEX.pdf")
 

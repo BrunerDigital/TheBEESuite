@@ -5,6 +5,7 @@ import test from "node:test";
 const currentGuides = [
   "docs/BEE_SUITE_COMPLETE_GUIDE.md",
   "docs/BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md",
+  "docs/SUPPORT_ESCALATION_GUIDE.md",
   "docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md",
   "docs/sops/EXECUTIVE_ADMIN_SOP.md",
   "docs/sops/DIRECTOR_SOP.md",
@@ -16,10 +17,10 @@ const currentGuides = [
   "docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
 ];
 
-test("current guides are dated July 27 and exclude superseded workflow copy", () => {
+test("current guides are dated July 29 and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /July 27, 2026/, path);
+    assert.match(content, /July 29, 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -42,7 +43,7 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   assert.doesNotMatch(resources, /warning banners and developer controls excluded/);
 });
 
-test("all dated instruction graphics referenced by public resources exist", () => {
+test("all canonical instruction graphics referenced by public resources exist", () => {
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
   const paths = [...resources.matchAll(/graphicSrc: "([^"]+)"/g)].map(
     ([, path]) => `public${path}`,
@@ -50,7 +51,7 @@ test("all dated instruction graphics referenced by public resources exist", () =
 
   assert.ok(paths.length >= 9);
   for (const path of new Set(paths)) {
-    assert.match(path, /2026-07-27(?:-v3|-v2\/[^/]+)\.png$/);
+    assert.match(path, /(?:explainers|sop-graphics)\/current\/[^/]+\.png$/);
     assert.equal(existsSync(path), true, path);
   }
 });
@@ -73,7 +74,7 @@ test("role screenshot coverage matches the approved device mix", () => {
   assert.equal(screenshotPaths.some((path) => path.includes("2026-07-07")), false);
 
   for (const path of screenshotPaths) {
-    assert.match(path, /screenshots\/2026-07-27-light\/.+-light\.png$/);
+    assert.match(path, /screenshots\/current\/.+-light\.png$/);
     assert.equal(existsSync(path), true, path);
   }
 });
@@ -89,14 +90,29 @@ test("screenshot-derived role SOP graphics are current and complete", () => {
 
   for (const name of expected) {
     assert.equal(
-      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/${name}.png`),
+      existsSync(`public/brand/the-bee-suite/sop-graphics/current/${name}.png`),
       true,
       name,
     );
     assert.equal(
-      existsSync(`public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/${name}.svg`),
+      existsSync(`public/brand/the-bee-suite/sop-graphics/current/${name}.svg`),
       true,
       name,
     );
   }
+});
+
+test("public guide sources do not point at versioned visual directories or publish shared passwords", () => {
+  const publicGuideSources = [
+    ...currentGuides,
+    "docs/sops/README.md",
+    "src/app/resources/page.tsx",
+    "src/app/page.tsx",
+    "src/lib/communications-kit.ts",
+  ].map((path) => readFileSync(path, "utf8")).join("\n");
+
+  assert.doesNotMatch(publicGuideSources, /screenshots\/2026-/);
+  assert.doesNotMatch(publicGuideSources, /sop-graphics\/2026-/);
+  assert.doesNotMatch(publicGuideSources, /explainers\/[^"')\s]*2026-/);
+  assert.doesNotMatch(publicGuideSources, /BusyBees/i);
 });

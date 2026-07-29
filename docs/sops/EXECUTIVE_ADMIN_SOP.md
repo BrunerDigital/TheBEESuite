@@ -1,6 +1,6 @@
 # Executive Admin SOP - The BEE Suite
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Audience: school owners, corporate users, franchise/brand admins, regional managers, and platform operators.
 
@@ -10,19 +10,19 @@ Executive admins use The BEE Suite to launch schools, manage access, review mult
 
 ## Visual Overview
 
-![Independent school launch gates](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/current/school-launch-gates.png)
 
-![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/current/fte-reporting-flow.png)
 
-![Executive desktop oversight guide](../../public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/executive-desktop-oversight-guide.png)
+![Executive desktop oversight guide](../../public/brand/the-bee-suite/sop-graphics/current/executive-desktop-oversight-guide.png)
 
 ## Desktop Screenshots
 
 Use the desktop view for multi-location comparisons, reporting periods, and exception ownership.
 
-![Executive administration workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-admin-light.png)
+![Executive administration workspace on desktop](../../public/brand/the-bee-suite/screenshots/current/executive-desktop-admin-light.png)
 
-![Executive FTE reporting workspace on desktop](../../public/brand/the-bee-suite/screenshots/2026-07-27-light/executive-desktop-fte-light.png)
+![Executive FTE reporting workspace on desktop](../../public/brand/the-bee-suite/screenshots/current/executive-desktop-fte-light.png)
 
 ## Executive Responsibilities
 

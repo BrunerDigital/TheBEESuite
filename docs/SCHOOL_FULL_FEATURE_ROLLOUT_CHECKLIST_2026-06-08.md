@@ -11,7 +11,6 @@ Status legend:
 - `[ ]` Still needs build work, real school data, vendor setup, legal/accounting approval, production validation, or school signoff.
 
 Source references:
-- `docs/UPDATED_COMPLETION_CHECKLIST_2026-06-04.md`
 - `docs/APP_COMPLETION_CHECKLIST.md`
 - `docs/ROLE_SMOKE_TEST_REPORT_2026-06-05.md`
 - `docs/OWNER_ACTION_ITEMS.md`

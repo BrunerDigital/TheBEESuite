@@ -1,6 +1,6 @@
 # The BEE Suite App Completion Checklist
 
-Last updated: July 24, 2026
+Last updated: July 29, 2026
 
 Status legend:
 - `[x]` Built, deployed, or foundation-complete enough to use or test now.
@@ -475,7 +475,7 @@ Status legend:
 ## Documentation And Operations
 
 - [x] Update stale product notes/roadmap docs so shipped features are no longer labeled as placeholders.
-- [x] Create dedicated teacher classroom quick-start and billing/admin quick-start guides from the paper training packet.
+- [x] Consolidate teacher, director, executive, billing, parent, and kiosk instructions into the canonical `docs/sops/` library.
 - [x] Architecture docs exist.
 - [x] Product docs exist.
 - [x] Deployment/go-live docs exist.
@@ -488,11 +488,11 @@ Status legend:
 - [x] Pricing/payment visuals exist.
 - [x] In-school testing runbook exists.
 - [x] Consolidate docs into one operator-facing launch handbook.
-- [x] Create school director quick-start guide.
-- [x] Create executive/admin quick-start guide.
-- [x] Create parent onboarding guide once parent portal is production-ready.
+- [x] Maintain one current school system operating manual plus role-specific director, executive, teacher, billing, parent, and kiosk SOPs.
+- [x] Maintain the parent install guide and parent portal SOP as the canonical onboarding and daily-use instructions.
 - [x] Create incident response/support escalation guide.
-- [x] Generate low-ink paper training packet with role setup sheets, SOP handouts, source graphics, preview screenshots, manifest, and PDF output.
+- [x] Generate the branded `output/pdf/TEAM_SHARE_GUIDES_CURRENT/` packet from canonical Markdown, current role screenshots, and current instruction graphics.
+- [x] Remove superseded date-stamped guide bundles, old screenshot generations, shared-password setup roadmaps, and duplicate printable sources.
 
 ## User-Facing Route Checklist
 

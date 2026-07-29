@@ -1,10 +1,10 @@
 # The BEE Suite Role SOP Library
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, pilot, parent portal rollout, billing rollout, or kiosk rollout.
 
-Latest sendable packet: `output/pdf/TEAM_SHARE_GUIDES_2026-07-27/`. It contains the refreshed Markdown copies, bundled visuals, matching PDFs, and a one-page index.
+Latest sendable packet: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`. This stable path contains the refreshed Markdown copies, bundled visuals, matching PDFs, and a one-page index. Rebuilds replace this packet instead of creating another dated version.
 
 ## Send-Out Order
 
@@ -36,17 +36,9 @@ Screenshot standard:
 - Parents: iPhone, iPad, and desktop, with iPhone used for most examples.
 - Role screenshots use the current light-mode UI, exclude warning banners and developer controls, and contain privacy-safe seeded demo records only. Never replace them with production family, child, staff, billing, medical, custody, or authentication data.
 
-- `public/brand/the-bee-suite/screenshots/2026-07-27-light/` - latest privacy-safe light-mode role screenshot set for iPhone, iPad, and desktop.
-- `public/brand/the-bee-suite/sop-graphics/2026-07-27-v2/` - polished teacher, director, executive, parent, and role/device training graphics.
-- `public/brand/the-bee-suite/explainers/bee-suite-school-launch-gates-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-parent-access-install-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-parent-payment-options-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-weekly-tuition-flow-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-director-daily-flow-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-teacher-daily-flow-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-kiosk-pickup-flow-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-fte-reporting-flow-2026-07-27-v3.png`
-- `public/brand/the-bee-suite/explainers/bee-suite-terminal-payment-flow-2026-07-27-v3.png`
+- `public/brand/the-bee-suite/screenshots/current/` - canonical privacy-safe light-mode role screenshots for iPhone, iPad, and desktop.
+- `public/brand/the-bee-suite/sop-graphics/current/` - canonical teacher, director, executive, parent, and role/device training graphics.
+- `public/brand/the-bee-suite/explainers/current/` - canonical launch, parent access, payment, tuition, daily operations, kiosk, FTE, and Terminal flows.
 
 ## Training Notes
 

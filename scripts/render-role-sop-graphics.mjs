@@ -10,7 +10,7 @@ const sourceDir = path.join(
   "brand",
   "the-bee-suite",
   "screenshots",
-  "2026-07-27-light",
+  "current",
 );
 const outDir = path.join(
   root,
@@ -18,7 +18,7 @@ const outDir = path.join(
   "brand",
   "the-bee-suite",
   "sop-graphics",
-  "2026-07-27-v2",
+  "current",
 );
 const iconPath = path.join(root, "public", "brand", "the-bee-suite", "app-icon-yellow.png");
 const width = 1600;

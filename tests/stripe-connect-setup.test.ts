@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   createStripeConnectedAccount,
   createStripeExpressDashboardLoginLink,
+  createStripePayoutBankSelectionLink,
   listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
@@ -217,6 +218,47 @@ test("Stripe payout bank selection opens the account-specific Express Dashboard"
     assert.equal(result.url, "https://connect.stripe.com/express/acct_123/secure");
     assert.equal(requestedUrl, "https://api.stripe.com/v1/accounts/acct_123/login_links");
     assert.equal(method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank selection falls back to onboarding before the Express Dashboard is available", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrls.push(String(url));
+    if (requestedUrls.length === 1) {
+      return new Response(JSON.stringify({
+        error: { message: "Cannot create a login link for an account that has not completed onboarding." },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/setup/acct_123/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripePayoutBankSelectionLink({
+      accountId: "acct_123",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/billing-settings?stripeConnect=return&center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, "onboarding");
+    assert.equal(result.url, "https://connect.stripe.com/setup/acct_123/secure");
+    assert.equal(requestedUrls[0], "https://api.stripe.com/v1/accounts/acct_123/login_links");
+    assert.equal(requestedUrls[1], "https://api.stripe.com/v2/core/account_links");
   } finally {
     globalThis.fetch = originalFetch;
   }

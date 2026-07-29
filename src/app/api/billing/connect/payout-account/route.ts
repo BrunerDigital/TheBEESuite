@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { createStripeExpressDashboardLoginLink, readStripeConnectedAccountId } from "@/lib/integrations";
+import { createStripePayoutBankSelectionLink, readStripeConnectedAccountId } from "@/lib/integrations";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
@@ -51,8 +52,13 @@ async function POSTHandler(request: NextRequest) {
     );
   }
 
-  const link = await createStripeExpressDashboardLoginLink({
+  const baseUrl = getSecurePaymentAppBaseUrl(request.url);
+  const returnUrl = `${baseUrl}/billing-settings?stripeConnect=return&center=${encodeURIComponent(center.id)}`;
+  const refreshUrl = `${baseUrl}/api/billing/connect/refresh?centerId=${encodeURIComponent(center.id)}`;
+  const link = await createStripePayoutBankSelectionLink({
     accountId,
+    refreshUrl,
+    returnUrl,
     tenantId: user.tenantId,
   });
   if (!link.ok || !link.url) {
@@ -64,12 +70,15 @@ async function POSTHandler(request: NextRequest) {
 
   await writeAuditLog(user, {
     centerId: center.id,
-    action: "billing.connect.payout_bank_selection_opened",
+    action: link.mode === "onboarding"
+      ? "billing.connect.payout_bank_onboarding_opened"
+      : "billing.connect.payout_bank_selection_opened",
     resource: "Center",
     resourceId: center.id,
     metadata: {
       stripeConnectedAccountId: accountId,
       crmLocationId: center.crmLocationId || null,
+      mode: link.mode,
     },
   });
 
@@ -77,6 +86,7 @@ async function POSTHandler(request: NextRequest) {
     {
       ok: true,
       url: link.url,
+      mode: link.mode,
       centerId: center.id,
       centerName: center.name,
     },

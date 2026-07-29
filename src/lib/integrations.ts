@@ -2344,6 +2344,42 @@ export async function createStripeExpressDashboardLoginLink({
   return { ok: true, configured: true, provider: "stripe", id: connectedAccountId, url: json.url };
 }
 
+export async function createStripePayoutBankSelectionLink({
+  accountId,
+  refreshUrl,
+  returnUrl,
+  tenantId,
+  credentials,
+}: {
+  accountId: string;
+  refreshUrl: string;
+  returnUrl: string;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+}): Promise<IntegrationSendResult & { mode: "dashboard" | "onboarding" }> {
+  const dashboard = await createStripeExpressDashboardLoginLink({
+    accountId,
+    tenantId,
+    credentials,
+  });
+  if (dashboard.ok && dashboard.url) {
+    return { ...dashboard, mode: "dashboard" };
+  }
+
+  if (!/has not completed onboarding/i.test(dashboard.error || "")) {
+    return { ...dashboard, mode: "dashboard" };
+  }
+
+  const onboarding = await createStripeAccountLink({
+    accountId,
+    refreshUrl,
+    returnUrl,
+    tenantId,
+    credentials,
+  });
+  return { ...onboarding, mode: "onboarding" };
+}
+
 export async function listStripeConnectedAccountPayoutBanks({
   accountId,
   tenantId,

@@ -57,6 +57,7 @@ import { modules } from "@/lib/demo-data";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canManageExecutiveMarketingPortfolio } from "@/lib/executive-marketing";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -4505,6 +4506,7 @@ async function renderLivePage(
 
   if (slug === "integrations") {
     const marketingScope = integrationScopeForUser(user, "meta_ads");
+    const canManageMarketingPortfolio = canManageExecutiveMarketingPortfolio(user.role);
     const integrationScopeWhere = {
       tenantId: user.tenantId,
       OR: [
@@ -4519,7 +4521,7 @@ async function renderLivePage(
         : { centerId: scopedCenterIds };
     const acceptedStaleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const sendGridWhere: Prisma.IntegrationDeliveryWhereInput = { ...deliveryWhere, provider: "sendgrid" };
-    const [totalDeliveries, deliveredDeliveries, acceptedDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, acceptedStaleDeliveries, deferredDeliveries, suppressedDeliveries, bouncedDeliveries, recentDeliveries, integrationRecords, integrationCredentials] = await Promise.all([
+    const [totalDeliveries, deliveredDeliveries, acceptedDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, acceptedStaleDeliveries, deferredDeliveries, suppressedDeliveries, bouncedDeliveries, recentDeliveries, integrationRecords, integrationCredentials, marketingPortfolioCenters, centerMarketingRecords, centerMarketingCredentials] = await Promise.all([
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "accepted" } }),
@@ -4565,8 +4567,65 @@ async function renderLivePage(
         where: integrationScopeWhere,
         select: { provider: true, key: true, lastFour: true },
       }),
+      canManageMarketingPortfolio
+        ? prisma.center.findMany({
+            where: { status: "active", organization: { tenantId: user.tenantId } },
+            orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+            select: { id: true, name: true, crmLocationId: true, city: true, state: true },
+          })
+        : Promise.resolve([]),
+      canManageMarketingPortfolio
+        ? prisma.integration.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+              centerId: { not: null },
+            },
+            select: {
+              id: true,
+              centerId: true,
+              provider: true,
+              status: true,
+              configPlaceholder: true,
+              lastSyncAt: true,
+            },
+          })
+        : Promise.resolve([]),
+      canManageMarketingPortfolio
+        ? prisma.integrationCredential.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+              centerId: { not: null },
+            },
+            select: { centerId: true, provider: true, key: true, lastFour: true },
+          })
+        : Promise.resolve([]),
     ]);
     const setupIntegrations = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
+    const executiveMarketing = canManageMarketingPortfolio
+      ? {
+          centers: marketingPortfolioCenters.map((center) => {
+            const records = centerMarketingRecords.filter((record) => record.centerId === center.id);
+            const credentials = centerMarketingCredentials.filter((credential) => credential.centerId === center.id);
+            const views = buildIntegrationSetupViews(records, process.env, credentials)
+              .filter((view) => MARKETING_INTEGRATION_PROVIDERS.includes(view.provider));
+            return {
+              ...center,
+              connections: views
+                .filter((view) => view.id)
+                .map((view) => ({
+                  provider: view.provider,
+                  configured: view.env.configured && hasRequiredMarketingAccountConfig(view.provider, view.config),
+                  accountLabel: typeof view.config.accountLabel === "string" ? view.config.accountLabel : "",
+                  setupStatus: view.setupStatus,
+                  lastSyncAt: typeof view.lastSyncAt === "string" ? view.lastSyncAt : null,
+                })),
+            };
+          }),
+          managerConnections: setupIntegrations.filter((view) => MARKETING_INTEGRATION_PROVIDERS.includes(view.provider)),
+        }
+      : undefined;
 
     return (
       <IntegrationsPage
@@ -4586,6 +4645,7 @@ async function renderLivePage(
           },
           recentDeliveries,
           setupIntegrations,
+          executiveMarketing,
           canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR,
           manageableProviders: user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
           integrations: setupIntegrations.map((integration) => ({

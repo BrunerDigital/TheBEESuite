@@ -328,7 +328,11 @@ export function IntegrationSetupPanel({ integrations, canManage, manageableProvi
                 {activeCanManage ? (
                   <div className="flex flex-wrap gap-2">
                     {active.oauth.connectHref ? (
-                      <Button variant={active.oauth.connected ? "outline" : "default"} render={<a href={active.oauth.connectHref} />}>
+                      <Button
+                        nativeButton={false}
+                        variant={active.oauth.connected ? "outline" : "default"}
+                        render={<a href={active.oauth.connectHref} />}
+                      >
                         <ExternalLink data-icon="inline-start" />
                         {active.oauth.connected ? "Reconnect" : `Connect ${active.name}`}
                       </Button>

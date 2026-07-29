@@ -1,12 +1,21 @@
 # School Marketing Connections and Integrations
 
-Last updated: July 27, 2026
+Last updated: July 29, 2026
 
 ## What is implemented
 
 Directors can open **Settings & Setup → Integrations**, choose a marketing provider, and connect the school's account through that provider's OAuth login and consent screen. The resulting access and refresh tokens are encrypted server-side and scoped to the director's school.
 
 Center Directors and Assistant Directors use the same school-scoped connection flow. They can reconnect or disconnect a provider without affecting another school. Disconnecting removes The BEE Suite's saved tokens and account selection; the director should also revoke The BEE Suite in the provider's own security settings when they want to withdraw the provider-side authorization.
+
+Platform Owners, Brand Admins, and Regional Managers also receive a **School social profile portfolio** on the Integrations page. It lists every active school in their BEE Suite tenant in one table. An executive can:
+
+- connect one provider manager login at tenant scope;
+- refresh the Pages, business locations, ad accounts, and profiles that login currently controls;
+- review conservative school-name and location suggestions;
+- explicitly assign or update one provider profile for each active school.
+
+Assignments are revalidated against the provider before save. The manager's available-profile list is visible only to executive roles. Each selected assignment is stored as its own center-scoped integration so the school's Director and Assistant Director retain their existing single-school workflow and cannot see another school's candidates or connection.
 
 The Campaigns workspace can:
 
@@ -22,6 +31,7 @@ The application never asks a director to email, paste into chat, or expose a pro
 ## Scope and authorization
 
 - Marketing `Integration` and `IntegrationCredential` records use `scopeKey = center:<centerId>` for Center Director and Assistant Director workflows.
+- Executive manager authorizations use tenant scope for account discovery; assigning a profile writes a separately audited `center:<centerId>` integration and encrypted credential set.
 - Infrastructure integrations such as Stripe, SendGrid, Supabase, Twilio, and Google Sheets remain tenant-scoped.
 - OAuth state is HMAC-signed, bound to the current BEE Suite user, tenant, school, provider, and a short-lived HTTP-only cookie.
 - OAuth callbacks reject expired, tampered, cross-user, cross-tenant, and cross-school state.

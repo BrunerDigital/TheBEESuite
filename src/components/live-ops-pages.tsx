@@ -78,6 +78,10 @@ import {
 } from "@/components/child-location-tracker-panel";
 import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
+import {
+  ExecutiveMarketingPortfolio,
+  type ExecutiveMarketingCenter,
+} from "@/components/executive-marketing-portfolio";
 import { DeveloperSubscriptionConsole, type DeveloperSubscriptionSchool } from "@/components/developer-subscription-console";
 import { DeviceSessionPanel, type DeviceSessionPanelRow } from "@/components/device-session-panel";
 import { DocumentReviewActions } from "@/components/document-review-actions";
@@ -838,6 +842,10 @@ export type IntegrationsData = {
   setupIntegrations: IntegrationSetupView[];
   canManageSetup: boolean;
   manageableProviders?: IntegrationProvider[];
+  executiveMarketing?: {
+    centers: ExecutiveMarketingCenter[];
+    managerConnections: IntegrationSetupView[];
+  };
   deliveryStats?: {
     total: number;
     delivered: number;
@@ -930,6 +938,12 @@ export function IntegrationsPage({ data }: { data: IntegrationsData }) {
           </Card>
         ))}
       </div>
+      {data.executiveMarketing ? (
+        <ExecutiveMarketingPortfolio
+          centers={data.executiveMarketing.centers}
+          managerConnections={data.executiveMarketing.managerConnections}
+        />
+      ) : null}
       <IntegrationSetupPanel integrations={data.setupIntegrations} canManage={data.canManageSetup} manageableProviders={data.manageableProviders} />
       {data.recentDeliveries ? (
         <Card className="glass-panel">

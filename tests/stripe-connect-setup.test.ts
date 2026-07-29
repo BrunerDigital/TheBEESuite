@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  completeStripeConnectedAccountBusinessProfile,
   createStripeConnectedAccount,
   createStripeExpressDashboardLoginLink,
   createStripePayoutBankSelectionLink,
@@ -139,9 +140,12 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     const profile = asRecord(defaults.profile);
 
     assert.equal(businessDetails.registered_name, "Kokomo School LLC");
+    assert.equal(businessDetails.phone, "+17655551234");
     assert.equal(businessAddress.line1, "123 Main Street");
     assert.equal(businessAddress.line2, "Suite 2");
     assert.equal(support.email, "families@example.com");
+    assert.equal(merchant.mcc, "8351");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
     assert.equal(support.url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
@@ -187,6 +191,53 @@ test("Stripe connected account payout schedule is set to daily automatic payouts
     assert.equal(stripeAccount, "acct_123");
     assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
     assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe connected account business completion supplies childcare merchant fields", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let payload: Record<string, unknown> = {};
+  let idempotencyKey = "";
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(url);
+    payload = JSON.parse(String(init?.body));
+    idempotencyKey = String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? "");
+    return new Response(JSON.stringify({
+      id: "acct_123",
+      configuration: {
+        merchant: { capabilities: { card_payments: { status: "restricted" } } },
+        recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "restricted" } } } },
+      },
+      requirements: { entries: [{ description: "external_account" }] },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await completeStripeConnectedAccountBusinessProfile({
+      accountId: "acct_123",
+      businessPhone: "+17655551234",
+      idempotencyKey: "kidcity-account-profile-center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const configuration = asRecord(payload.configuration);
+    const merchant = asRecord(configuration.merchant);
+    const identity = asRecord(payload.identity);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.account?.detailsSubmitted, false);
+    assert.deepEqual(result.account?.requirementFields, ["external_account"]);
+    assert.equal(requestedUrl, "https://api.stripe.com/v2/core/accounts/acct_123");
+    assert.equal(merchant.mcc, "8351");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
+    assert.equal(asRecord(identity.business_details).phone, "+17655551234");
+    assert.equal(idempotencyKey, "kidcity-account-profile-center_123");
   } finally {
     globalThis.fetch = originalFetch;
   }

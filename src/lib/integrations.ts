@@ -29,6 +29,8 @@ export type EmailAttachment = {
 const STRIPE_API_VERSION = process.env.STRIPE_API_VERSION || "2026-06-24.dahlia";
 const STRIPE_ACCOUNTS_V2_API_VERSION = process.env.STRIPE_ACCOUNTS_V2_API_VERSION || STRIPE_API_VERSION;
 const STRIPE_CONNECTED_ACCOUNT_INCLUDES = ["configuration.merchant", "configuration.recipient", "requirements"];
+export const STRIPE_CHILD_CARE_MCC = "8351";
+export const STRIPE_KID_CITY_STATEMENT_DESCRIPTOR = "KID CITY USA";
 
 export type StripePaymentMethodCategory = "default" | "ach" | "card" | "link_bank";
 export type StripeBankAccountVerificationMethod = "automatic" | "instant";
@@ -486,12 +488,12 @@ function normalizeStripeAccount(json: unknown): StripeConnectedAccountSnapshot {
   const futureEventuallyDue = asStringArray(futureRequirements.eventually_due);
   const entries = Array.isArray(requirements.entries)
     ? requirements.entries
-        .map((entry) => asRecord(entry).field)
+        .map((entry) => clean(asRecord(entry).field) || clean(asRecord(entry).description))
         .filter((field): field is string => typeof field === "string")
     : [];
   const futureEntries = Array.isArray(futureRequirements.entries)
     ? futureRequirements.entries
-        .map((entry) => asRecord(entry).field)
+        .map((entry) => clean(asRecord(entry).field) || clean(asRecord(entry).description))
         .filter((field): field is string => typeof field === "string")
     : [];
   const requirementFields = Array.from(new Set([
@@ -2181,12 +2183,18 @@ export async function createStripeConnectedAccount({
       business_details: {
         registered_name: registeredName,
         address: businessAddress,
+        phone: contactPhone,
       },
       country: "us",
       entity_type: "company",
     },
     configuration: {
       merchant: {
+        mcc: STRIPE_CHILD_CARE_MCC,
+        statement_descriptor: {
+          descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR,
+          prefix: "KIDCITY",
+        },
         capabilities: {
           card_payments: { requested: true },
         },
@@ -2222,6 +2230,72 @@ export async function createStripeConnectedAccount({
   };
 
   const response = await fetch("https://api.stripe.com/v2/core/accounts", {
+    method: "POST",
+    headers: {
+      ...stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),
+      ...(clean(idempotencyKey) ? { "Idempotency-Key": clean(idempotencyKey) } : {}),
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const json = await response.json().catch(() => null) as { id?: string; error?: { message?: string } } | null;
+
+  if (!response.ok || !json?.id) {
+    return {
+      ok: false,
+      configured: true,
+      provider: "stripe",
+      error: json?.error?.message || `Payment processor returned ${response.status}.`,
+    };
+  }
+
+  return { ok: true, configured: true, provider: "stripe", id: json.id, account: normalizeStripeAccount(json) };
+}
+
+export async function completeStripeConnectedAccountBusinessProfile({
+  accountId,
+  businessPhone,
+  tenantId,
+  credentials,
+  idempotencyKey,
+}: {
+  accountId: string;
+  businessPhone?: string | null;
+  tenantId?: string | null;
+  credentials?: Record<string, string>;
+  idempotencyKey?: string | null;
+}): Promise<IntegrationSendResult & { account?: StripeConnectedAccountSnapshot }> {
+  const apiKey = await getStripeSecretKey({ tenantId, credentials });
+  if (!apiKey) {
+    return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
+  }
+
+  const connectedAccountId = clean(accountId);
+  if (!connectedAccountId.startsWith("acct_")) {
+    return { ok: false, configured: true, provider: "stripe", error: "Connected payout account id is invalid." };
+  }
+
+  const contactPhone = clean(businessPhone) || undefined;
+  const payload = {
+    configuration: {
+      merchant: {
+        mcc: STRIPE_CHILD_CARE_MCC,
+        statement_descriptor: {
+          descriptor: STRIPE_KID_CITY_STATEMENT_DESCRIPTOR,
+          prefix: "KIDCITY",
+        },
+      },
+    },
+    ...(contactPhone
+      ? {
+          contact_phone: contactPhone,
+          identity: { business_details: { phone: contactPhone } },
+        }
+      : {}),
+    include: STRIPE_CONNECTED_ACCOUNT_INCLUDES,
+  };
+
+  const response = await fetch(`https://api.stripe.com/v2/core/accounts/${encodeURIComponent(connectedAccountId)}`, {
     method: "POST",
     headers: {
       ...stripeHeaders(apiKey, "json", STRIPE_ACCOUNTS_V2_API_VERSION),

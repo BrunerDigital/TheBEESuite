@@ -555,7 +555,7 @@ export function StripeConnectPanel({
               <TableHead>Payout destination</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
-              <TableHead>Software fee method</TableHead>
+              <TableHead>BEE Suite fee method (not payouts)</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -567,11 +567,16 @@ export function StripeConnectPanel({
               const centerFields = fields(center.customFields);
               const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
               const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
+              const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
               const softwareMethodLabel = softwareMethodType === "us_bank_account"
                 ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
                 : softwareMethodType === "card"
                   ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
-                  : hasAccount ? "Payout bank preferred · authorization required" : "Add after payout setup";
+                  : hasConfirmedPayoutBank
+                    ? "Separate authorization required for BEE Suite fees"
+                    : hasAccount
+                      ? "Complete payout bank first"
+                      : "Add after payout setup";
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
@@ -593,9 +598,9 @@ export function StripeConnectPanel({
                   <TableCell className="max-w-xs whitespace-normal">
                     <div className="text-xs font-medium">{softwareMethodLabel}</div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasAccount} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
+                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
                         <BadgeDollarSign data-icon="inline-start" />
-                        {softwareMethodType ? "Use bank" : "Authorize bank"}
+                        {softwareMethodType ? "Change fee bank" : hasConfirmedPayoutBank ? "Authorize fee bank" : "Available after payout bank"}
                       </Button>
                       <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
                         <CreditCard data-icon="inline-start" />
@@ -613,7 +618,7 @@ export function StripeConnectPanel({
                           disabled={busyCenterId === center.id || !stripeConfigured}
                         >
                           <Landmark data-icon="inline-start" />
-                          {text(centerFields.stripePayoutBankLast4) ? "Change bank" : "Choose bank"}
+                          {hasConfirmedPayoutBank ? "Change payout bank" : "Connect payout bank"}
                         </Button>
                       ) : null}
                       {hasAccount ? (

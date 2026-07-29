@@ -35,6 +35,18 @@ async function POSTHandler(request: NextRequest) {
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
 
   const fields = jsonObject(center.customFields);
+  const requested = clean(body.method);
+  const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
+  if (paymentMethodCategory === "ach" && !clean(fields.stripePayoutBankLast4)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Connect and confirm this school's payout bank first. Software-fee authorization is separate from the payout destination.",
+      },
+      { status: 409 },
+    );
+  }
+
   let customerId = clean(fields.stripeSoftwareCustomerId);
   if (!customerId) {
     const customer = await createStripeCustomer({
@@ -49,8 +61,6 @@ async function POSTHandler(request: NextRequest) {
     customerId = customer.id;
   }
 
-  const requested = clean(body.method);
-  const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
   const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const session = await createStripeSetupCheckoutSession({
     customerId,

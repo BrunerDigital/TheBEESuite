@@ -352,9 +352,36 @@ export function FamilyProfilesEnrollmentPanel({
     allFamilies,
     requestedFamilyId,
   });
+  const [guardianDirectorySearch, setGuardianDirectorySearch] = useState("");
   const visibleFamilies = currentFamilies;
   const visibleFamilyCount = currentFamilyCount;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);
+  const allGuardianDirectoryRows = useMemo(
+    () => visibleFamilies
+      .flatMap((family) => family.guardians.map((guardian) => ({
+        ...guardian,
+        familyId: family.id,
+        familyName: family.name,
+      })))
+      .sort((left, right) => (
+        left.fullName.localeCompare(right.fullName)
+        || left.familyName.localeCompare(right.familyName)
+      )),
+    [visibleFamilies],
+  );
+  const guardianDirectoryRows = useMemo(() => {
+    const query = guardianDirectorySearch.trim().toLocaleLowerCase();
+    if (!query) return allGuardianDirectoryRows;
+    return allGuardianDirectoryRows.filter((guardian) => [
+      guardian.fullName,
+      guardian.familyName,
+      guardian.relation,
+      guardian.email,
+      guardian.phone,
+    ].some((value) => value?.toLocaleLowerCase().includes(query)));
+  }, [allGuardianDirectoryRows, guardianDirectorySearch]);
+  const familiesWithoutGuardians = visibleFamilies.filter((family) => family.guardians.length === 0).length;
+  const contactsWithoutEmailOrPhone = allGuardianDirectoryRows.filter((guardian) => !guardian.email && !guardian.phone).length;
   const pastEnrollmentRows = useMemo<PastEnrollmentRow[]>(() => allFamilies.flatMap((family) => family.children
     .filter((child) => !isCurrentlyEnrolledChildRecord(child))
     .map((child) => ({
@@ -486,6 +513,97 @@ export function FamilyProfilesEnrollmentPanel({
               ) : null}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      <Card id="guardian-directory" className="glass-panel scroll-mt-36">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Parent / Guardian Directory</CardTitle>
+              <CardDescription>
+                All imported and manually entered contacts for the currently visible school families. Portal access is shown separately and is not required for a contact to appear here.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{allGuardianDirectoryRows.length.toLocaleString()} contacts</Badge>
+              {familiesWithoutGuardians ? (
+                <Badge variant="secondary">
+                  {familiesWithoutGuardians.toLocaleString()} famil{familiesWithoutGuardians === 1 ? "y" : "ies"} need{familiesWithoutGuardians === 1 ? "s" : ""} a guardian
+                </Badge>
+              ) : null}
+              {contactsWithoutEmailOrPhone ? (
+                <Badge variant="secondary">
+                  {contactsWithoutEmailOrPhone.toLocaleString()} need email or phone
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <Input
+              value={guardianDirectorySearch}
+              onChange={(event) => setGuardianDirectorySearch(event.target.value)}
+              placeholder="Search guardian, family, relationship, email, or phone"
+              aria-label="Search parent and guardian directory"
+            />
+            {guardianDirectorySearch.trim() ? (
+              <p className="text-xs text-muted-foreground">
+                Showing {guardianDirectoryRows.length.toLocaleString()} of {allGuardianDirectoryRows.length.toLocaleString()} contacts.
+              </p>
+            ) : null}
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Parent / guardian</TableHead>
+                  <TableHead>Family</TableHead>
+                  <TableHead>Relationship</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Portal</TableHead>
+                  <TableHead>Open</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {guardianDirectoryRows.map((guardian) => (
+                  <TableRow key={guardian.id}>
+                    <TableCell className="font-medium">{guardian.fullName}</TableCell>
+                    <TableCell>{guardian.familyName}</TableCell>
+                    <TableCell>{guardian.relation || "Not specified"}</TableCell>
+                    <TableCell>
+                      <div>{guardian.email || "No email"}</div>
+                      <div className="text-xs text-muted-foreground">{guardian.phone || "No phone"}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={guardian.userId ? "secondary" : "outline"}>
+                        {guardian.userId ? "Portal linked" : "Not linked"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/family-detail?familyId=${encodeURIComponent(guardian.familyId)}#family-guardians`}
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                      >
+                        <ArrowUpRight data-icon="inline-start" />
+                        Family
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!guardianDirectoryRows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-muted-foreground">
+                      {allGuardianDirectoryRows.length
+                        ? "No parent or guardian contacts match this search."
+                        : "No parent or guardian contacts are visible for this school scope."}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

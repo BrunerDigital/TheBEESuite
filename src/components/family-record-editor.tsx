@@ -355,7 +355,7 @@ function pickInitialFamily(families: EditableFamilyRecord[], initialFamilyId?: s
     const bySearch = families.find((family) => familySearchText(family).includes(query));
     if (bySearch) return bySearch;
   }
-  return families[0] ?? null;
+  return families.find((family) => family.guardians.length > 0) ?? families[0] ?? null;
 }
 
 function pickInitialChild(family: EditableFamilyRecord | null, initialChildId?: string, searchQuery?: string) {
@@ -1324,10 +1324,22 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
         <section id="family-guardians" className="scroll-mt-36 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Parent / guardian contacts</div>
-            <Badge variant="outline">
-              {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
-            </Badge>
+            <div>
+              <div className="text-sm font-medium">
+                Parent / guardian contacts{selectedFamily ? ` for ${selectedFamily.name}` : ""}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These contacts belong to the selected family. Use the parent / guardian directory below to review every visible family.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
+              </Badge>
+              <Link href="#guardian-directory" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                View all contacts
+              </Link>
+            </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">

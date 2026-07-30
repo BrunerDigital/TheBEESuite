@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { buildPayrollDayRows } from "@/components/staff-management-panel";
+import {
+  buildPayrollDayRows,
+  clampClockEditDateTimeToPayPeriod,
+  filterClockEditRowsByPayPeriod,
+} from "@/components/staff-management-panel";
 import { formatZonedTimestamp, zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 test("payroll timecards include every calendar day in the selected period", () => {
@@ -51,6 +55,25 @@ test("school-local datetime inputs round trip across daylight saving changes", (
   assert.equal(
     zonedDateTimeLocalToUtc("2026-07-15T08:00", "America/Indiana/Indianapolis")?.toISOString(),
     "2026-07-15T12:00:00.000Z",
+  );
+});
+
+test("staff clock punches are viewed by pay period without dropping other periods", () => {
+  const punches = [
+    { id: "before", occurredAt: "2026-07-05T16:30" },
+    { id: "start", occurredAt: "2026-07-06T08:00" },
+    { id: "end", occurredAt: "2026-07-19T17:00" },
+    { id: "after", occurredAt: "2026-07-20T08:00" },
+  ];
+
+  assert.deepEqual(
+    filterClockEditRowsByPayPeriod(punches, "2026-07-06", "2026-07-19").map((row) => row.id),
+    ["start", "end"],
+  );
+  assert.equal(punches.length, 4);
+  assert.equal(
+    clampClockEditDateTimeToPayPeriod("2026-07-30T09:15", "2026-07-06", "2026-07-19"),
+    "2026-07-19T09:15",
   );
 });
 
@@ -119,4 +142,7 @@ test("manual payroll edits cannot be lost by switching staff before saving", asy
   assert.match(source, /Save or reload the current employee's punches/);
   assert.match(source, /Not saved:/);
   assert.match(source, /punches are saved/);
+  assert.match(source, /for \(const row of clockEditRows\)/);
+  assert.match(source, /sortClockEditRows\(visibleClockEditRows\)/);
+  assert.match(source, /outside this period preserved/);
 });

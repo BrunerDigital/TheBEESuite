@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   agencyPaymentDescription,
+  canSaveTuitionPlanAmount,
+  isVoucherFundedTuitionAmount,
   normalizeSubsidyVoucher,
   subsidyVoucherLedgerLines,
   billingDedupeKey,
@@ -46,6 +48,15 @@ test("billing workflow helpers parse family charge amounts", () => {
   assert.equal(parseCurrencyCents("1,250.50"), 125050);
   assert.equal(parseCurrencyCents("$99.99"), 9999);
   assert.equal(parseCurrencyCents(""), 0);
+});
+
+test("zero-dollar tuition requires an explicit voucher-funded rate", () => {
+  assert.equal(canSaveTuitionPlanAmount(25000, false), true);
+  assert.equal(canSaveTuitionPlanAmount(0, false), false);
+  assert.equal(canSaveTuitionPlanAmount(0, true), true);
+  assert.equal(canSaveTuitionPlanAmount(-1, true), false);
+  assert.equal(isVoucherFundedTuitionAmount(0), true);
+  assert.equal(isVoucherFundedTuitionAmount(25000), false);
 });
 
 test("agency payment helpers normalize metadata and descriptions", () => {
@@ -164,6 +175,16 @@ test("recurring tuition eligibility waits for start period and billing day", () 
     startsPeriod: "2026-06",
     billingPeriod: "2026-06",
     billingDay: 1,
+    currentDay: 15,
+  }), false);
+
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "voucher_plan",
+    amountCents: 0,
+    startsPeriod: "2026-06",
+    billingPeriod: "2026-06",
+    billingDay: 15,
     currentDay: 15,
   }), false);
 });

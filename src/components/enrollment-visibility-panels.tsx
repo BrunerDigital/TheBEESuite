@@ -443,7 +443,7 @@ export function FamilyProfilesEnrollmentPanel({
                       {family.children.map((child) => (
                         <div key={child.id}>
                           {child.fullName} ({child.ageGroup})
-                          {child.tuitionAssignment?.enabled && child.tuitionAssignment.amountCents
+                          {child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number"
                             ? <span className="ml-1 text-xs font-medium text-muted-foreground">· {money(child.tuitionAssignment.amountCents)}/week</span>
                             : null}
                         </div>

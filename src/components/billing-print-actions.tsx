@@ -73,6 +73,8 @@ function schoolEinLabel(school: BillingReceiptSchool | null) {
 export function LedgerPrintButton({ entries, schools }: { entries: BillingLedgerPrintEntry[]; schools: BillingReceiptSchool[] }) {
   const timeZone = useSchoolTimeZone();
   const { active, generatedAt, print } = usePrintableReport();
+  const familyName = entries[0]?.billingAccount.family.name.trim();
+  const reportTitle = familyName ? `${familyName} Ledger Report` : "Family Ledger Report";
   const totalCharges = entries.filter((entry) => entry.amountCents > 0).reduce((sum, entry) => sum + entry.amountCents, 0);
   const totalCredits = entries.filter((entry) => entry.amountCents < 0).reduce((sum, entry) => sum + Math.abs(entry.amountCents), 0);
   const singleSchool = schools.length === 1 ? schools[0] : null;
@@ -84,9 +86,9 @@ export function LedgerPrintButton({ entries, schools }: { entries: BillingLedger
         <Printer data-icon="inline-start" />
         Print ledger
       </Button>
-      <PrintableReport active={active} label="Printable customer ledger report">
+      <PrintableReport active={active} label={`Printable ${reportTitle}`}>
         <header style={{ marginBottom: 20 }}>
-          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Customer Ledger Report</h1>
+          <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>{reportTitle}</h1>
           <div>Generated: {formatPrintDateTime(generatedAt, timeZone)}</div>
           <div>School: {singleSchool ? schoolLabel(singleSchool) : "Multiple schools"}</div>
           <div>School EIN: {singleSchool ? schoolEinLabel(singleSchool) : "Shown by ledger row"}</div>

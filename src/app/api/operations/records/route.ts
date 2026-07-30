@@ -35,6 +35,7 @@ import {
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
+import { canSaveTuitionPlanAmount } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -1798,7 +1799,13 @@ async function POSTHandler(request: NextRequest) {
       cadence: "weekly",
       amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
     };
-    if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Plan name and amount are required." }, { status: 400 });
+    const zeroDollarVoucher = body.zeroDollarVoucher === true;
+    if (!data.name || !canSaveTuitionPlanAmount(data.amountCents, zeroDollarVoucher)) {
+      return NextResponse.json({
+        ok: false,
+        error: "Plan name and a positive amount are required unless this is explicitly marked as a $0 CCDF or voucher rate.",
+      }, { status: 400 });
+    }
     result = id ? await prisma.tuitionPlan.update({ where: { id }, data }) : await prisma.tuitionPlan.create({ data });
   } else if (entity === "review") {
     const requestedCenterId = clean(body.centerId) || null;

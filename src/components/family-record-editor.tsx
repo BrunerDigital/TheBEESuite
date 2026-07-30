@@ -569,11 +569,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
   const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
   const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
-  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled && selectedChild.tuitionAssignment.amountCents
+  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled
+    && typeof selectedChild.tuitionAssignment.amountCents === "number"
     ? selectedChild.tuitionAssignment
     : null;
   const activeWeeklyTuitionAssignments = selectedFamily?.children.filter(
-    (child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0,
+    (child) => child.tuitionAssignment?.enabled
+      && typeof child.tuitionAssignment.amountCents === "number"
+      && child.tuitionAssignment.amountCents >= 0,
   ) ?? [];
   const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
@@ -1605,10 +1608,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               detail={selectedWeeklyTuition?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
             />
             <SummaryMetric
-              label="Weekly billing"
-              value={selectedWeeklyTuition ? "Active" : "Not active"}
-              detail={selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
-            />
+                label="Weekly billing"
+                value={selectedWeeklyTuition?.amountCents === 0 ? "Voucher funded" : selectedWeeklyTuition ? "Active" : "Not active"}
+                detail={selectedWeeklyTuition?.amountCents === 0
+                  ? "No family invoice or autopay"
+                  : selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
+              />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">

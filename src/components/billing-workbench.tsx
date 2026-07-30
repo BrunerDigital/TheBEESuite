@@ -134,6 +134,7 @@ type Props = {
 };
 
 type DirectorPaymentMethod = "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
+type TuitionFundingType = "family" | "voucher";
 
 type BillingWorkbenchOpenInvoice = NonNullable<NonNullable<BillingWorkbenchFamily["billingAccount"]>["openInvoices"]>[number];
 
@@ -331,6 +332,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
+  const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
@@ -362,13 +364,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
   const activeWeeklyTuitionAssignments = selectedChildren.filter(
-    (child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0,
+    (child) => child.tuitionAssignment?.enabled
+      && typeof child.tuitionAssignment.amountCents === "number"
+      && child.tuitionAssignment.amountCents >= 0,
   );
   const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
     0,
   );
   const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || "";
+  const effectiveAssignmentPlan = locationTuitionPlans.find((plan) => plan.id === effectiveAssignmentPlanId) ?? null;
+  const assignmentIsVoucherFunded = assignmentEnabled === "true" && (
+    effectiveAssignmentPlan?.amountCents === 0
+    || (effectiveAssignmentPlanId === planEditorId && planFundingType === "voucher")
+  );
   const effectiveAssignmentCadence = "weekly";
   const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
@@ -762,6 +771,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPlanName(assignedPlan?.name ?? "");
     setPlanAgeGroup(assignedPlan?.ageGroup ?? child?.ageGroup ?? defaultAgeGroupOptions[0]);
     setPlanAmountDollars(assignedPlan ? String(assignedPlan.amountCents / 100) : "");
+    setPlanFundingType(assignedPlan?.amountCents === 0 ? "voucher" : "family");
   }
 
   function submit(payload: Record<string, unknown>) {
@@ -1018,12 +1028,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setPlanName(plan.name);
       setPlanAgeGroup(plan.ageGroup);
       setPlanAmountDollars(String(plan.amountCents / 100));
+      setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
     }
   }
 
   function submitAssignment() {
-    if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving recurring tuition.");
-    if (!confirmBillingAction("save recurring tuition", selectedAssignmentChild.fullName)) return;
+    if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
+    const action = assignmentIsVoucherFunded
+      ? "save a $0 CCDF or voucher-funded tuition assignment"
+      : "save recurring tuition";
+    if (!confirmBillingAction(action, selectedAssignmentChild.fullName)) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -1046,7 +1060,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         return;
       }
       setStatusMessage(
-        assignmentEnabled === "true"
+        assignmentIsVoucherFunded
+          ? `$0.00 CCDF or voucher-funded tuition saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled.`
+          : assignmentEnabled === "true"
           ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Thursday autobill is scheduled for the following week.`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
@@ -1060,6 +1076,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       setPlanName("");
       setPlanAgeGroup(ageGroups[0] ?? defaultAgeGroupOptions[0]);
       setPlanAmountDollars("");
+      setPlanFundingType("family");
       return;
     }
     const plan = locationTuitionPlans.find((item) => item.id === value);
@@ -1067,11 +1084,29 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
     setPlanAmountDollars(String(plan.amountCents / 100));
+    setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
+  }
+
+  function handlePlanFundingTypeChange(value: string | null) {
+    if (value !== "family" && value !== "voucher") return;
+    setPlanFundingType(value);
+    if (value === "voucher") {
+      setPlanAmountDollars("0.00");
+    } else if (dollarsToCents(planAmountDollars) <= 0) {
+      setPlanAmountDollars("");
+    }
   }
 
   function saveTuitionPlan() {
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
+    }
+    const planAmountCents = dollarsToCents(planAmountDollars);
+    if (planFundingType === "family" && planAmountCents <= 0) {
+      return setErrorMessage("Family-paid tuition must be greater than $0. Choose CCDF / voucher-funded to save a $0.00 rate.");
+    }
+    if (planFundingType === "voucher" && planAmountCents !== 0) {
+      return setErrorMessage("CCDF / voucher-funded tuition must be saved at $0.00 family responsibility.");
     }
     startTransition(async () => {
       setStatusMessage("");
@@ -1087,6 +1122,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           ageGroup: planAgeGroup,
           cadence: "weekly",
           amountDollars: planAmountDollars,
+          zeroDollarVoucher: planFundingType === "voucher",
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
@@ -1094,7 +1130,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setErrorMessage(json?.error || "Tuition plan could not be saved.");
         return;
       }
-      setStatusMessage(`Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`);
+      setStatusMessage(
+        planFundingType === "voucher"
+          ? `$0.00 CCDF / voucher rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
+          : `Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`,
+      );
       if (json?.record?.id) {
         setPlanEditorId(json.record.id);
         setTuitionPlanId(json.record.id);
@@ -1231,7 +1271,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
               detail={activeWeeklyTuitionAssignments.length
                 ? activeWeeklyTuitionAssignments.map((child) => `${child.fullName} ${money(child.tuitionAssignment?.amountCents ?? 0)}`).join(" · ")
-                : "No active child rate"}
+                : "No saved child rate"}
             />
           </div>
         </EntityHeader>
@@ -1501,7 +1541,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 Tuition rate setup{selectedFamily ? ` · ${selectedFamily.name}` : ""}
               </div>
               <p className="text-xs text-muted-foreground">
-                The selected family&apos;s assigned child rate is shown here. Choose or create a weekly school rate, then save it to the intended child under Recurring.
+                Choose or create a weekly school rate, including an explicit $0.00 family rate for CCDF or voucher-funded care, then save it to the intended child under Recurring.
               </p>
             </div>
             <Badge variant="outline">{selectedFamily?.name ?? "Choose a family"}</Badge>
@@ -1537,8 +1577,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Amount</Label>
-              <Input inputMode="decimal" value={planAmountDollars} onChange={(event) => setPlanAmountDollars(event.target.value)} placeholder="250.00" />
+              <Label>Funding</Label>
+              <Select value={planFundingType} onValueChange={handlePlanFundingTypeChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="family">Family-paid</SelectItem>
+                  <SelectItem value="voucher">CCDF / voucher-funded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Family weekly amount</Label>
+              <Input
+                inputMode="decimal"
+                value={planAmountDollars}
+                disabled={planFundingType === "voucher"}
+                onChange={(event) => setPlanAmountDollars(event.target.value)}
+                placeholder="250.00"
+              />
             </div>
             <DisplayValue label="Cadence" value="Weekly" detail="Standard billing cycle" />
             <div className="flex items-end">
@@ -1726,7 +1782,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   <SelectContent>
                     {selectedChildren.map((child) => (
                       <SelectItem key={child.id} value={child.id}>
-                        {child.fullName}{child.tuitionAssignment?.enabled && child.tuitionAssignment.amountCents
+                        {child.fullName}{child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number"
                           ? ` · ${money(child.tuitionAssignment.amountCents)}/week`
                           : ""}
                       </SelectItem>
@@ -1757,7 +1813,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </SelectContent>
                 </Select>
               </div>
-              <DisplayValue label="Autobill weekday" value="Thursday" detail="Runs automatically" />
+              <DisplayValue
+                label="Autobill"
+                value={assignmentIsVoucherFunded ? "Not scheduled" : "Thursday"}
+                detail={assignmentIsVoucherFunded ? "$0 voucher assignment only" : "Runs automatically"}
+              />
               <div className="space-y-1">
                 <Label>Start week</Label>
                 <Input
@@ -1770,13 +1830,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <div className="grid gap-3 sm:grid-cols-2">
               <DisplayValue
                 label="Customer weekly tuition"
-                value={selectedAssignment?.enabled && selectedAssignment.amountCents ? money(selectedAssignment.amountCents) : "Not assigned"}
-                detail={selectedAssignment?.tuitionPlanName ?? "Saved on this child’s billing assignment"}
+                value={selectedAssignment?.enabled && typeof selectedAssignment.amountCents === "number" ? money(selectedAssignment.amountCents) : "Not assigned"}
+                detail={selectedAssignment?.enabled && selectedAssignment.amountCents === 0
+                  ? `${selectedAssignment.tuitionPlanName ?? "Voucher-funded tuition"} · no family invoice`
+                  : selectedAssignment?.tuitionPlanName ?? "Saved on this child’s billing assignment"}
               />
               <DisplayValue
                 label="Family weekly total"
                 value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
-                detail={`${activeWeeklyTuitionAssignments.length} active child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`}
+                detail={`${activeWeeklyTuitionAssignments.length} saved child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`}
               />
             </div>
             <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
@@ -1786,15 +1848,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 onClick={submitAssignment}
               >
                 <CalendarClock data-icon="inline-start" />
-                Save Recurring Tuition
+                Save Tuition Assignment
               </Button>
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId} onClick={submitAssignmentChargeNow} variant="outline">
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded} onClick={submitAssignmentChargeNow} variant="outline">
                 <ReceiptText data-icon="inline-start" />
                 Charge This Child Now
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tuition assignments create a Thursday invoice for the following week. The Thursday autopay run charges the assigned tuition amount only when the family has autopay enabled and a saved default payment method. Charge now posts the selected rate immediately to the family balance and parent portal.
+              Positive tuition assignments create a Thursday invoice for the following week. Explicit $0.00 CCDF or voucher-funded assignments stay visible on the child but never create a family invoice or autopay attempt. Charge now is available only for positive family tuition.
             </p>
           </TabsContent>
 

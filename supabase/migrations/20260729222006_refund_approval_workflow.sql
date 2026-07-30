@@ -1,3 +1,4 @@
+-- Keep this filename aligned with the migration version applied in Supabase production.
 SET lock_timeout = '5s';
 SET statement_timeout = '5min';
 

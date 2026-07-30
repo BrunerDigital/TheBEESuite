@@ -1018,6 +1018,10 @@ test("readiness guard requires a Supabase URL for Auth readiness", () => {
 test("readiness guard accepts Vercel Postgres database URL aliases", () => {
   assert.equal(hasDatabaseConfig({}), false);
   assert.equal(getDatabaseUrl({ POSTGRES_PRISMA_URL: " postgresql://pooled " }), "postgresql://pooled");
+  assert.equal(
+    getDatabaseUrl({ DATABASE_URL: "postgresql://direct", POSTGRES_PRISMA_URL: "postgresql://pooled" }),
+    "postgresql://pooled",
+  );
   assert.equal(hasDatabaseConfig({ POSTGRES_URL: "postgresql://direct" }), true);
   assert.equal(getDatabaseUrl({ DATABASE_URL: "postgresql://primary", POSTGRES_URL: "postgresql://direct" }), "postgresql://primary");
 });

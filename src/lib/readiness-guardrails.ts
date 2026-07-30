@@ -2,7 +2,7 @@ import { cleanSupabaseUrl } from "@/lib/supabase-auth";
 
 type EnvMap = Record<string, string | undefined>;
 
-export const databaseUrlEnvNames = ["DATABASE_URL", "POSTGRES_PRISMA_URL", "POSTGRES_URL"] as const;
+export const databaseUrlEnvNames = ["POSTGRES_PRISMA_URL", "DATABASE_URL", "POSTGRES_URL"] as const;
 
 export function envPresent(env: EnvMap, name: string) {
   return Boolean(env[name]?.trim());

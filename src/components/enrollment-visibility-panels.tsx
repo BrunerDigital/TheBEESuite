@@ -64,6 +64,10 @@ function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
 }
 
+function hasPortalPhone(phone: string | null | undefined) {
+  return (phone?.replace(/\D/g, "").length ?? 0) >= 4;
+}
+
 type PastEnrollmentRow = {
   id: string;
   familyId: string;
@@ -364,7 +368,10 @@ export function FamilyProfilesEnrollmentPanel({
         familyName: family.name,
       })))
       .sort((left, right) => (
-        left.fullName.localeCompare(right.fullName)
+        Number(Boolean(right.isBillingContact && !right.email)) - Number(Boolean(left.isBillingContact && !left.email))
+        || Number(Boolean(right.isBillingContact && !hasPortalPhone(right.phone))) - Number(Boolean(left.isBillingContact && !hasPortalPhone(left.phone)))
+        || Number(Boolean(right.isBillingContact)) - Number(Boolean(left.isBillingContact))
+        || left.fullName.localeCompare(right.fullName)
         || left.familyName.localeCompare(right.familyName)
       )),
     [visibleFamilies],
@@ -382,6 +389,9 @@ export function FamilyProfilesEnrollmentPanel({
   }, [allGuardianDirectoryRows, guardianDirectorySearch]);
   const familiesWithoutGuardians = visibleFamilies.filter((family) => family.guardians.length === 0).length;
   const contactsWithoutEmailOrPhone = allGuardianDirectoryRows.filter((guardian) => !guardian.email && !guardian.phone).length;
+  const billingGuardians = allGuardianDirectoryRows.filter((guardian) => guardian.isBillingContact);
+  const billingGuardiansMissingEmail = billingGuardians.filter((guardian) => !guardian.email).length;
+  const billingGuardiansMissingPhone = billingGuardians.filter((guardian) => guardian.email && !hasPortalPhone(guardian.phone)).length;
   const pastEnrollmentRows = useMemo<PastEnrollmentRow[]>(() => allFamilies.flatMap((family) => family.children
     .filter((child) => !isCurrentlyEnrolledChildRecord(child))
     .map((child) => ({
@@ -522,7 +532,7 @@ export function FamilyProfilesEnrollmentPanel({
             <div>
               <CardTitle>Parent / Guardian Directory</CardTitle>
               <CardDescription>
-                All imported and manually entered contacts for the currently visible school families. Portal access is shown separately and is not required for a contact to appear here.
+                All imported and manually entered contacts for the currently visible school families. Billing contacts need their own email and phone before an invitation can be reviewed; the invitation action also checks source completeness and duplicate identity.
               </CardDescription>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -535,6 +545,16 @@ export function FamilyProfilesEnrollmentPanel({
               {contactsWithoutEmailOrPhone ? (
                 <Badge variant="secondary">
                   {contactsWithoutEmailOrPhone.toLocaleString()} need email or phone
+                </Badge>
+              ) : null}
+              {billingGuardiansMissingEmail ? (
+                <Badge variant="destructive">
+                  {billingGuardiansMissingEmail.toLocaleString()} payer{billingGuardiansMissingEmail === 1 ? "" : "s"} need email
+                </Badge>
+              ) : null}
+              {billingGuardiansMissingPhone ? (
+                <Badge variant="secondary">
+                  {billingGuardiansMissingPhone.toLocaleString()} payer{billingGuardiansMissingPhone === 1 ? "" : "s"} need phone
                 </Badge>
               ) : null}
             </div>
@@ -560,6 +580,7 @@ export function FamilyProfilesEnrollmentPanel({
                   <TableHead>Parent / guardian</TableHead>
                   <TableHead>Family</TableHead>
                   <TableHead>Relationship</TableHead>
+                  <TableHead>Billing</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Portal</TableHead>
                   <TableHead>Open</TableHead>
@@ -572,12 +593,23 @@ export function FamilyProfilesEnrollmentPanel({
                     <TableCell>{guardian.familyName}</TableCell>
                     <TableCell>{guardian.relation || "Not specified"}</TableCell>
                     <TableCell>
-                      <div>{guardian.email || "No email"}</div>
+                      {guardian.isBillingContact ? <Badge variant="secondary">Pays bills</Badge> : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className={guardian.isBillingContact && !guardian.email ? "font-medium text-destructive" : undefined}>
+                        {guardian.email || (guardian.isBillingContact ? "Email required for payer" : "No email")}
+                      </div>
                       <div className="text-xs text-muted-foreground">{guardian.phone || "No phone"}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={guardian.userId ? "secondary" : "outline"}>
-                        {guardian.userId ? "Portal linked" : "Not linked"}
+                      <Badge variant={guardian.userId ? "secondary" : guardian.isBillingContact && !guardian.email ? "destructive" : "outline"}>
+                        {guardian.userId
+                          ? "Portal linked"
+                          : !guardian.email
+                            ? "Email required"
+                            : !hasPortalPhone(guardian.phone)
+                              ? "Phone required"
+                              : "Contact ready"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -593,7 +625,7 @@ export function FamilyProfilesEnrollmentPanel({
                 ))}
                 {!guardianDirectoryRows.length ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-muted-foreground">
+                    <TableCell colSpan={7} className="text-muted-foreground">
                       {allGuardianDirectoryRows.length
                         ? "No parent or guardian contacts match this search."
                         : "No parent or guardian contacts are visible for this school scope."}

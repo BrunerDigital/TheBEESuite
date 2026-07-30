@@ -695,6 +695,12 @@ async function POSTHandler(request: NextRequest) {
         : {}),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
+    if (data.isBillingContact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email ?? "")) {
+      return NextResponse.json(
+        { ok: false, error: "A billing contact needs a valid email address before parent portal access can be prepared." },
+        { status: 400 },
+      );
+    }
     const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })

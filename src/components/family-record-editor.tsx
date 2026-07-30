@@ -228,6 +228,10 @@ function parentPortalStatusText(json: {
   return "";
 }
 
+function isValidGuardianEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase());
+}
+
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "Not set";
   const date = new Date(value);
@@ -1361,7 +1365,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Input value={guardianName} onChange={(event) => setGuardianName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Email</Label>
+              <Label>Email{isBillingContact ? " (required for payer portal)" : ""}</Label>
               <Input value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} type="email" />
             </div>
             <div className="space-y-1">
@@ -1399,9 +1403,18 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Badge variant="secondary" className="w-fit self-center">Portal linked</Badge>
             ) : null}
           </div>
+          {isBillingContact && !isValidGuardianEmail(guardianEmail) ? (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Billing contact email required</AlertTitle>
+              <AlertDescription>
+                Add this payer&apos;s personal email before saving. The parent portal invitation also requires a phone number with at least four digits.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={isPending || !selectedFamily || !guardianName.trim()}
+              disabled={isPending || !selectedFamily || !guardianName.trim() || (isBillingContact && !isValidGuardianEmail(guardianEmail))}
               onClick={() => postRecord({
                 entity: "guardian",
                 id: selectedGuardian?.id,

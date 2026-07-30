@@ -16,6 +16,7 @@ import { ParentPortalInviteButton } from "@/components/parent-portal-invite-butt
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import { BULK_ENROLLMENT_STATUSES } from "@/lib/child-enrollment-bulk";
 import { isCurrentlyEnrolledChildRecord, normalizedEnrollmentStatus, type EnrollmentLifecycleCounts } from "@/lib/enrollment-status";
+import { familiesForCompleteRecordEditing } from "@/lib/family-profile-visibility";
 
 type IntakeCenter = { id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> };
 
@@ -346,8 +347,11 @@ export function FamilyProfilesEnrollmentPanel({
   );
   const [showOtherStatuses, setShowOtherStatuses] = useState(requestedFamilyHasOtherStatus || requestedPastView);
   const effectiveShowOtherStatuses = showOtherStatuses || requestedFamilyHasOtherStatus || requestedPastView;
-  const requestedFamily = requestedFamilyId ? allFamilies.find((family) => family.id === requestedFamilyId) ?? null : null;
-  const editorFamilies = requestedFamilyHasOtherStatus && requestedFamily ? [requestedFamily] : currentFamilies;
+  const editorFamilies = familiesForCompleteRecordEditing({
+    currentFamilies,
+    allFamilies,
+    requestedFamilyId,
+  });
   const visibleFamilies = currentFamilies;
   const visibleFamilyCount = currentFamilyCount;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);

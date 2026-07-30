@@ -520,8 +520,8 @@ export function FamilyProfilesEnrollmentPanel({
         <CardHeader>
           <CardTitle>Parent Portal Access</CardTitle>
           <CardDescription>
-            Send parent portal login emails for linked parent accounts. Parents sign in with their guardian email and the school
-            private password from a one-time setup link, then only see family records connected through that guardian profile.
+            Create parent portal access with the guardian email and BusyBees first-login password, send the welcome and app-install
+            steps, or send the separate parent feature guide and FAQ after the account is linked.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">

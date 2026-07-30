@@ -11,9 +11,13 @@ import {
   rolloutSchoolEmailCandidates,
 } from "@/lib/kidcity-corporate-rollout";
 import {
+  buildParentLoginUrl,
   buildParentLoginSetupUrl,
+  buildParentPortalGuideHtml,
+  buildParentPortalGuideText,
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
+  buildParentPortalUrl,
   DIRECT_PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
 import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
@@ -480,12 +484,88 @@ async function sendTests(args: Args) {
       throw new Error(`${center.name} test invitation was not accepted by SendGrid: ${emailResult.error ?? "unknown error"}`);
     }
 
+    const guideLoginUrl = buildParentLoginUrl("https://thebeesuite.io");
+    const portalUrl = buildParentPortalUrl("https://thebeesuite.io");
+    const guideText = buildParentPortalGuideText({
+      guardianName: "Brenden Bruner - Parent Invite Test",
+      centerLabel,
+      loginUrl: guideLoginUrl,
+      portalUrl,
+    });
+    const guideHtml = buildParentPortalGuideHtml({
+      guardianName: "Brenden Bruner - Parent Invite Test",
+      centerLabel,
+      loginUrl: guideLoginUrl,
+      portalUrl,
+      branding,
+    });
+    const guideSubject = `[TEST ${args.runId}] ${centerLabel}: parent app guide, features, and FAQ`;
+    const guideResult = await sendEmail({
+      to: [args.recipient],
+      subject: guideSubject,
+      text: guideText,
+      html: guideHtml,
+      fromName: branding.name,
+      disableClickTracking: true,
+      categories: ["parent_guide_email", "corporate_parent_invite_test"],
+      customArgs: {
+        purpose: "parent_guide_email",
+        test: true,
+        testRunId: args.runId,
+        guardianId: fixture.guardianId,
+        familyId: fixture.familyId,
+        centerId: center.id,
+      },
+      tenantId: center.organization.tenantId,
+    });
+    await recordEmailDeliveryAttempt({
+      tenantId: center.organization.tenantId,
+      centerId: center.id,
+      dedupeKey: `${dedupeKey}:guide`,
+      purpose: "parent_guide_email",
+      to: [args.recipient],
+      subject: guideSubject,
+      text: guideText,
+      html: guideHtml,
+      fromName: branding.name,
+      result: guideResult,
+      metadata: {
+        test: true,
+        testRunId: args.runId,
+        loginEmail: item.loginEmail,
+        guardianId: fixture.guardianId,
+        familyId: fixture.familyId,
+        schoolEmail: center.email,
+      },
+    });
+    await prisma.auditLog.create({
+      data: {
+        tenantId: center.organization.tenantId,
+        centerId: center.id,
+        userId: corporateActor.id,
+        action: "parent_portal.test_guide_sent",
+        resource: "Guardian",
+        resourceId: fixture.guardianId,
+        metadata: {
+          syntheticTest: true,
+          testRunId: args.runId,
+          deliveryRecipient: args.recipient,
+          loginEmail: item.loginEmail,
+          emailAcceptedByProvider: guideResult.ok,
+        } satisfies Prisma.InputJsonObject,
+      },
+    });
+    if (!guideResult.ok) {
+      throw new Error(`${center.name} test guide was not accepted by SendGrid: ${guideResult.error ?? "unknown error"}`);
+    }
+
     results.push({
       ...item,
       guardianId: fixture.guardianId,
       familyId: fixture.familyId,
       credentialCreated: provisioned.credentialCreated,
-      providerMessageId: emailResult.id ?? null,
+      invitationProviderMessageId: emailResult.id ?? null,
+      guideProviderMessageId: guideResult.id ?? null,
       accepted: true,
     });
   }
@@ -496,7 +576,7 @@ async function sendTests(args: Args) {
     fixtureOnly: args.fixtureOnly,
     provisionOnly: args.provisionOnly,
     runId: args.runId,
-    sent: args.provisionOnly || args.fixtureOnly ? 0 : results.length,
+    sent: args.provisionOnly || args.fixtureOnly ? 0 : results.length * 2,
     fixtures: results.length,
     provisioned: args.fixtureOnly ? 0 : results.length,
     tests: results,

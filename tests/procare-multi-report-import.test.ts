@@ -193,6 +193,66 @@ test("multi-report account joins retain non-PII diagnostics instead of guessing 
   assert.doesNotMatch(diagnosticText, /Private Adult|private@example|account-secret|person-shared/);
 });
 
+test("multi-report account joins use unique explicit child membership when relationship identifiers match no account", async () => {
+  const files = standardFiles({
+    enrollment: [
+      ["child-direct", "person-child-direct", "Child", "Direct Child", "Child", "Direct", "", "2022-01-01", "", "Room", "room-1", "Enrolled", "", "", "", "", "", "child-row-direct"],
+    ],
+    parents: [
+      ["account-direct", "key-direct", "person-parent-direct", "Payer", "1", "Direct Parent", "Parent", "Direct", "", "direct@example.test", "", "", "", "", "", "", ""],
+      ["account-direct", "key-direct", "person-child-direct", "Child", "2", "Direct Child", "Child", "Direct", "", "", "", "", "", "", "", "", ""],
+    ],
+    relationships: [],
+  });
+
+  const [row] = await buildProcareMultiReportRowsFromFiles(files);
+  const coverage = JSON.parse(row["procare coverage manifest"]);
+
+  assert.equal(row["account id"], "account-direct");
+  assert.equal(row["guardian id"], "person-parent-direct");
+  assert.equal(row["import warning"], "");
+  assert.equal(coverage.accountResolution.method, "child_person_identifier_to_unique_account_identifier");
+  assert.equal(coverage.accountResolution.candidateSource, "explicit_child_membership");
+  assert.equal(coverage.accountResolution.directChildAccountCount, 1);
+});
+
+test("multi-report detection does not treat child time cards as enrollment", async () => {
+  const files = standardFiles({
+    enrollment: [
+      ["child-1", "person-child-1", "Child", "Example Child", "Child", "Example", "", "2022-01-01", "", "Room", "room-1", "Enrolled", "2026-01-01", "", "person-parent-1", "", "", "child-row-1"],
+    ],
+    parents: [
+      ["account-1", "key-1", "person-parent-1", "Payer", "1", "Example Parent", "Parent", "Example", "", "example@example.test", "", "", "", "", "", "", ""],
+    ],
+    relationships: [
+      ["child-1", "rel-1", "person-parent-1", "Relationship", "1", "Example Parent", "Parent", "Example", "", "example@example.test", "", "Parent", "Checked", "Checked", "Checked", "", "", "", "", "", "", "", "", ""],
+    ],
+  });
+  files.set("child-time-card.csv", csv(
+    [
+      "Child ID",
+      "Full Name",
+      "Date of Birth",
+      "Classroom",
+      "Punch In Date/Time",
+      "Punch Out Date/Time",
+    ],
+    [
+      ["child-1", "Example Child", "2022-01-01", "Room", "2026-07-30 08:00", "2026-07-30 17:00"],
+      ["child-1", "Example Child", "2022-01-01", "Room", "2026-07-31 08:00", "2026-07-31 17:00"],
+    ],
+  ));
+
+  const [row] = await buildProcareMultiReportRowsFromFiles(files);
+  const datasetCoverage = JSON.parse(row["procare dataset coverage manifest"]);
+  const timeCard = datasetCoverage.sourceInventory.find((item: { sourceName: string }) => (
+    item.sourceName === "child-time-card.csv"
+  ));
+
+  assert.equal(datasetCoverage.sourceRows.enrollment, 1);
+  assert.equal(timeCard.reportKind, "ignored");
+});
+
 test("multi-report account joins merge parents for a child shared by two accounts when one unique sibling household exists", async () => {
   const files = standardFiles({
     enrollment: [
@@ -228,7 +288,7 @@ test("multi-report account joins merge parents for a child shared by two account
   assert.equal(relationships[0].guardian, false);
   assert.equal(relationships[0].emergency, false);
   assert.equal(relationships[0].authorizedPickup, false);
-  assert.equal(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version, 4);
+  assert.equal(PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.version, 5);
 });
 
 test("multi-report rows retain complete relationship, allergy, and child-info source records with coverage", async () => {

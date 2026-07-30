@@ -53,7 +53,7 @@ type ProcareImportDiagnostic = {
 };
 
 export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
-  version: 4,
+  version: 5,
   reports: {
     enrollment: {
       requiredColumns: ["Child ID"],
@@ -77,9 +77,10 @@ export const PROCARE_MULTI_REPORT_COVERAGE_MANIFEST = {
     },
   },
   accountResolution: {
-    method: "nonblank relationship/enrollment person identifiers joined to nonblank parentinfo account identifiers",
+    method: "nonblank relationship/enrollment person identifiers joined to nonblank parentinfo account identifiers, with explicit child membership used only when relationship identifiers match no account",
     ambiguousBehavior: "retain diagnostics without selecting an account unless the same child is explicitly listed in every candidate account and exactly one account contains another child",
     sharedChildBehavior: "select the unique sibling household as canonical and merge payer records from every explicitly linked child account",
+    childMembershipFallback: "when relationship identifiers match no account, use the child's nonblank Person ID only if ParentInfo explicitly lists that person as Person Type Child",
   },
   sourceOnlyRetention: {
     accountWithoutEnrollment: "procare_multi_report_family_only",
@@ -330,6 +331,13 @@ const REPORT_DISTINCTIVE_COLUMNS: Record<ProcareReportKind, readonly string[]> =
   childinfo: ["Category Description", "Item Description", "Item Is Active", "Category Sort ID"],
 };
 
+const REPORT_MIN_DISTINCTIVE_MATCHES: Record<ProcareReportKind, number> = {
+  enrollment: 3,
+  parentinfo: 1,
+  relationships: 1,
+  childinfo: 1,
+};
+
 function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: ProcareReportKind): DetectedProcareReport | null {
   const canonicalized = canonicalizeReport(parsed, reportKind);
   const available = new Set(canonicalized.headers.map(normalizeColumnName));
@@ -337,7 +345,7 @@ function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: Proc
   if (!required.every((column) => available.has(normalizeColumnName(column)))) return null;
   const distinctiveMatches = REPORT_DISTINCTIVE_COLUMNS[reportKind]
     .filter((column) => available.has(normalizeColumnName(column))).length;
-  if (!distinctiveMatches) return null;
+  if (distinctiveMatches < REPORT_MIN_DISTINCTIVE_MATCHES[reportKind]) return null;
   return {
     sourceName,
     parsed: canonicalized,
@@ -554,9 +562,22 @@ function accountResolution({
     for (const accountId of accountIds) candidateAccountIds.add(accountId);
   }
 
-  const sortedCandidateAccountIds = [...candidateAccountIds].sort((left, right) => left.localeCompare(right));
-  const candidateAccountCount = sortedCandidateAccountIds.length;
   const childPersonId = field(child, "Person ID");
+  const directChildAccountIds = childPersonId
+    ? [...(accountsByPerson.get(childPersonId) ?? [])].filter((accountId) => (
+        (peopleByAccount.get(accountId) ?? []).some((person) => (
+          field(person, "Person ID") === childPersonId && personType(person) === "child"
+        ))
+      ))
+    : [];
+  const candidateSource = candidateAccountIds.size
+    ? "relationship_identifiers"
+    : directChildAccountIds.length ? "explicit_child_membership" : null;
+  const effectiveCandidateAccountIds = candidateAccountIds.size
+    ? candidateAccountIds
+    : new Set(directChildAccountIds);
+  const sortedCandidateAccountIds = [...effectiveCandidateAccountIds].sort((left, right) => left.localeCompare(right));
+  const candidateAccountCount = sortedCandidateAccountIds.length;
   const sharedChildCandidates = childPersonId && candidateAccountCount > 1
     ? sortedCandidateAccountIds.map((accountId) => {
         const accountPeople = peopleByAccount.get(accountId) ?? [];
@@ -579,6 +600,13 @@ function accountResolution({
   const status = candidateAccountCount === 1 || mergedAccountIds.length
     ? "resolved"
     : candidateAccountCount === 0 ? "missing" : "ambiguous";
+  const method = mergedAccountIds.length
+    ? "shared_child_unique_sibling_household"
+    : status === "resolved"
+      ? candidateSource === "explicit_child_membership"
+        ? "child_person_identifier_to_unique_account_identifier"
+        : "person_identifier_to_unique_account_identifier"
+      : null;
   return {
     status,
     accountId: mergedAccountIds.length
@@ -586,7 +614,10 @@ function accountResolution({
       : status === "resolved" ? sortedCandidateAccountIds[0] ?? "" : "",
     candidateAccountIds: sortedCandidateAccountIds,
     candidateAccountCount,
+    candidateSource,
+    directChildAccountCount: directChildAccountIds.length,
     mergedAccountIds,
+    method,
     relationshipPersonCount: relationshipPersonIds.size,
     linkedPersonCount,
     unlinkedPersonCount: relationshipPersonIds.size - linkedPersonCount,
@@ -769,7 +800,10 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     accountId,
     candidateAccountIds: [accountId],
     candidateAccountCount: 1,
+    candidateSource: null,
+    directChildAccountCount: 0,
     mergedAccountIds: [],
+    method: null,
     relationshipPersonCount: 0,
     linkedPersonCount: 0,
     unlinkedPersonCount: 0,
@@ -779,7 +813,10 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
     accountId: "",
     candidateAccountIds: [],
     candidateAccountCount: 0,
+    candidateSource: null,
+    directChildAccountCount: 0,
     mergedAccountIds: [],
+    method: null,
     relationshipPersonCount: 0,
     linkedPersonCount: 0,
     unlinkedPersonCount: 0,
@@ -846,11 +883,11 @@ export async function buildProcareMultiReportRowsFromFiles(entries: Map<string, 
       accountResolution: {
         status: resolution.status,
         method: resolutionMethod === undefined
-          ? resolution.mergedAccountIds.length
-            ? "shared_child_unique_sibling_household"
-            : resolution.status === "resolved" ? "person_identifier_to_unique_account_identifier" : null
+          ? resolution.method
           : resolutionMethod,
         candidateAccountCount: resolution.candidateAccountCount,
+        candidateSource: resolution.candidateSource,
+        directChildAccountCount: resolution.directChildAccountCount,
         relationshipPersonCount: resolution.relationshipPersonCount,
         linkedPersonCount: resolution.linkedPersonCount,
         unlinkedPersonCount: resolution.unlinkedPersonCount,

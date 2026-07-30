@@ -73,7 +73,8 @@
     "kidcity:prepare-school-payouts": "tsx -r tsconfig-paths/register scripts/prepare-kidcity-school-payouts.ts",
     "kidcity:complete-stripe-accounts": "tsx -r tsconfig-paths/register scripts/complete-kidcity-stripe-account-setup.ts",
     "kidcity:prepare-kokomo-payout": "tsx -r tsconfig-paths/register scripts/prepare-kokomo-payout-onboarding.ts",
-    "billing:ensure-uniform-products": "tsx -r tsconfig-paths/register scripts/ensure-student-uniform-products.ts"
+    "billing:ensure-uniform-products": "tsx -r tsconfig-paths/register scripts/ensure-student-uniform-products.ts",
+    "parents:prepare-payer-portals": "tsx -r tsconfig-paths/register scripts/prepare-payer-portal-accounts.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

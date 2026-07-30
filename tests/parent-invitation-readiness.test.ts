@@ -66,6 +66,72 @@ test("complete ProCare family and four-report import passes invitation preflight
   assert.deepEqual(result, { ok: true, blockers: [], importBatchId: "batch_1" });
 });
 
+test("reviewed rendered ProCare package passes with complete source evidence and excluded unresolved rows", () => {
+  const input = readyInput();
+  input.relevantImportBatch = {
+    id: "batch-rendered",
+    status: "completed",
+    summary: {
+      errors: 0,
+      unresolved: 0,
+      warningRows: 0,
+      disposed: 0,
+      sourceInventoryConfirmed: true,
+      sourceType: "procare_rendered_report_files",
+      importMethod: "guarded_rendered_package",
+      reviewFingerprint: "reviewed-source-fingerprint",
+      excludedUnresolvedRows: 2,
+      datasetCoverage: {
+        sourceRows: {
+          accountChildren: 10,
+          registrations: 11,
+          enrollmentStatusNames: 12,
+        },
+        normalizedRows: {
+          ready: 10,
+          needsResolution: 2,
+        },
+        sourceInventory: [
+          { reportKind: "rendered_account_information", rows: 10, matchedHeaderAliases: 7 },
+          { reportKind: "rendered_enrollment_status", rows: 12, matchedHeaderAliases: 3 },
+          { reportKind: "rendered_registration", rows: 11, matchedHeaderAliases: 9 },
+        ],
+        warningCoverage: {},
+      },
+    },
+  };
+
+  assert.equal(evaluateParentInvitationReadiness(input).ok, true);
+});
+
+test("rendered ProCare package fails closed when source evidence is incomplete", () => {
+  const input = readyInput();
+  input.relevantImportBatch = {
+    id: "batch-rendered-incomplete",
+    status: "completed",
+    summary: {
+      sourceInventoryConfirmed: true,
+      sourceType: "procare_rendered_report_files",
+      importMethod: "guarded_rendered_package",
+      reviewFingerprint: "reviewed-source-fingerprint",
+      excludedUnresolvedRows: 1,
+      datasetCoverage: {
+        sourceRows: { accountChildren: 10, registrations: 10 },
+        normalizedRows: { ready: 10, needsResolution: 2 },
+        sourceInventory: [
+          { reportKind: "rendered_account_information", rows: 10, matchedHeaderAliases: 7 },
+          { reportKind: "rendered_registration", rows: 10, matchedHeaderAliases: 9 },
+        ],
+        warningCoverage: {},
+      },
+    },
+  };
+
+  const result = evaluateParentInvitationReadiness(input);
+  assert.equal(result.ok, false);
+  assert.match(result.blockers.join(" "), /not fully reviewed|not all present/i);
+});
+
 test("incomplete or warning-bearing ProCare batches fail closed", () => {
   const input = readyInput();
   input.relevantImportBatch = {
@@ -89,7 +155,7 @@ test("incomplete or warning-bearing ProCare batches fail closed", () => {
   assert.match(result.blockers.join(" "), /not complete and error-free/);
   assert.match(result.blockers.join(" "), /errors, unresolved warnings, or disposed/);
   assert.match(result.blockers.join(" "), /source-file inventory/);
-  assert.match(result.blockers.join(" "), /complete four-report/);
+  assert.match(result.blockers.join(" "), /not fully reviewed|not all present/);
   assert.match(result.blockers.join(" "), /relationship coverage warnings/);
 });
 

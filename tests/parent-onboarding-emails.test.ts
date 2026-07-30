@@ -72,8 +72,7 @@ test("director guide action requires a linked parent and keeps delivery school-s
   assert.match(route, /action: "parent_portal\.guide_sent"/);
   assert.match(route, /disableClickTracking: true/);
   assert.match(route, /canAccessCenter\(user, center\.id\)/);
-  assert.match(route, /resetToInitialPassword: false/);
-  assert.doesNotMatch(route, /resetToInitialPassword: true/);
+  assert.match(route, /resetToInitialPassword:\s*preparedWithoutInvite/);
 
   assert.match(component, /Send Parent Feature Guide & FAQ/);
   assert.match(component, /disabled=\{isPending \|\| !email \|\| !linked\}/);

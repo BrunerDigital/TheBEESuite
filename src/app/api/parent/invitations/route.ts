@@ -13,7 +13,10 @@ import {
   buildParentPortalUrl,
   DIRECT_PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
-import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import {
+  ensureParentPortalLoginForGuardian,
+  parentPortalInvitationSentFields,
+} from "@/lib/parent-portal-logins";
 import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readiness";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -31,6 +34,12 @@ function clean(value: unknown) {
 
 function normalizeEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -276,11 +285,12 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Add a phone number with at least 4 digits before sending the parent app invite." }, { status: 400 });
     }
 
+    const preparedWithoutInvite = record(record(guardian.customFields).parentPortal).preparedWithoutInvite === true;
     const provisioned = await ensureParentPortalLoginForGuardian({
       guardianId: guardian.id,
       linkedBy: user.email,
       linkedReason: "direct_parent_invitation",
-      resetToInitialPassword: false,
+      resetToInitialPassword: preparedWithoutInvite,
       inviteMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
     });
     if (!provisioned.ok) {
@@ -294,19 +304,20 @@ async function POSTHandler(request: NextRequest) {
 
     const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
     const loginUrl = buildParentLoginSetupUrl(appBaseUrl);
+    const initialPasswordIssued = provisioned.credentialCreated || preparedWithoutInvite;
     const invitationText = buildParentPortalInvitationText({
       guardianName: guardian.fullName,
       centerLabel,
       email,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued,
     });
     const invitationHtml = buildParentPortalInvitationHtml({
       guardianName: guardian.fullName,
       centerLabel,
       email,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued,
       branding,
     });
     const subject = `${centerLabel}: welcome to The BEE Suite parent app`;
@@ -335,6 +346,17 @@ async function POSTHandler(request: NextRequest) {
       metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
     });
 
+    if (emailCopy.ok) {
+      const linkedGuardians = await prisma.guardian.findMany({
+        where: { id: { in: provisioned.linkedGuardianIds } },
+        select: { id: true, customFields: true },
+      });
+      await prisma.$transaction(linkedGuardians.map((item) => prisma.guardian.update({
+        where: { id: item.id },
+        data: { customFields: parentPortalInvitationSentFields(item.customFields) },
+      })));
+    }
+
     await writeAuditLog(user, {
       centerId: center.id,
       action: "parent_portal.guardian_invited",
@@ -346,7 +368,7 @@ async function POSTHandler(request: NextRequest) {
         email,
         authMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
         credentialCreated: provisioned.credentialCreated,
-        initialPasswordIssued: provisioned.credentialCreated,
+        initialPasswordIssued,
         kioskPinDefaultedFromPhone: Boolean(defaultPinData),
         emailBrand: branding.kind,
         emailAcceptedByProvider: emailCopy.ok,

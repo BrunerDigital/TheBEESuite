@@ -99,6 +99,31 @@ function sourceRowsComplete(datasetCoverage: Record<string, unknown>) {
   );
 }
 
+function renderedReportDetectionComplete(datasetCoverage: Record<string, unknown>) {
+  const inventory = Array.isArray(datasetCoverage.sourceInventory)
+    ? datasetCoverage.sourceInventory.map(record)
+    : [];
+  const requiredKinds = [
+    "rendered_account_information",
+    "rendered_enrollment_status",
+    "rendered_registration",
+  ];
+  return requiredKinds.every((reportKind) => inventory.some((item) => (
+    clean(item.reportKind) === reportKind
+    && number(item.rows) > 0
+    && number(item.matchedHeaderAliases) > 0
+  )));
+}
+
+function renderedSourceRowsComplete(datasetCoverage: Record<string, unknown>) {
+  const sourceRows = record(datasetCoverage.sourceRows);
+  return (
+    number(sourceRows.accountChildren) > 0
+    && number(sourceRows.registrations) > 0
+    && number(sourceRows.enrollmentStatusNames) > 0
+  );
+}
+
 function warningCoverageCount(datasetCoverage: Record<string, unknown>) {
   return Object.values(record(datasetCoverage.warningCoverage)).reduce<number>((total, value) => total + number(value), 0);
 }
@@ -155,6 +180,8 @@ export function evaluateProcareInvitationBatchReadiness(
   const blockers: string[] = [];
   const summary = record(batch.summary);
   const datasetCoverage = record(summary.datasetCoverage);
+  const sourceType = clean(summary.sourceType);
+  const isGuardedRenderedPackage = sourceType === "procare_rendered_report_files";
   if (batch.status !== "completed") {
     blockers.push("The linked ProCare import is not complete and error-free.");
   }
@@ -169,11 +196,26 @@ export function evaluateProcareInvitationBatchReadiness(
   if (summary.sourceInventoryConfirmed !== true) {
     blockers.push("The ProCare source-file inventory was not confirmed before import.");
   }
-  if (!clean(summary.sourceType).startsWith("procare_multi_report_")) {
-    blockers.push("Parent invitations require the complete four-report ProCare import package.");
-  }
-  if (!reportDetectionComplete(datasetCoverage) || !sourceRowsComplete(datasetCoverage)) {
-    blockers.push("The ProCare enrollment, parent, relationship, and child-information reports are not all present.");
+  if (isGuardedRenderedPackage) {
+    const normalizedRows = record(datasetCoverage.normalizedRows);
+    if (
+      clean(summary.importMethod) !== "guarded_rendered_package"
+      || !clean(summary.reviewFingerprint)
+      || number(normalizedRows.ready) <= 0
+      || number(normalizedRows.needsResolution) !== number(summary.excludedUnresolvedRows)
+    ) {
+      blockers.push("The rendered ProCare package was not fully reviewed or did not exclude every unresolved row.");
+    }
+    if (!renderedReportDetectionComplete(datasetCoverage) || !renderedSourceRowsComplete(datasetCoverage)) {
+      blockers.push("The rendered ProCare account, registration, and enrollment-status reports are not all present.");
+    }
+  } else {
+    if (!sourceType.startsWith("procare_multi_report_")) {
+      blockers.push("Parent invitations require a complete guarded ProCare import package.");
+    }
+    if (!reportDetectionComplete(datasetCoverage) || !sourceRowsComplete(datasetCoverage)) {
+      blockers.push("The ProCare enrollment, parent, relationship, and child-information reports are not all present.");
+    }
   }
   if (warningCoverageCount(datasetCoverage)) {
     blockers.push("The ProCare source package still contains unresolved account, child, or relationship coverage warnings.");

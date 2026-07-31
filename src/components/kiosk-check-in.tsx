@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2, Clock, CreditCard, KeyRound, LogIn, LogOut, QrCode, ShieldCheck, UserRound } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { updateKioskChildSelection } from "@/lib/kiosk-child-selection";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -753,10 +754,9 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                               className="mt-1 size-7 accent-primary"
                               checked={checked}
                               onChange={(event) => {
+                                const selected = event.currentTarget.checked;
                                 markActivity();
-                                setSelectedIds((current) => event.currentTarget.checked
-                                  ? [...new Set([...current, child.id])]
-                                  : current.filter((id) => id !== child.id));
+                                setSelectedIds((current) => updateKioskChildSelection(current, child.id, selected));
                               }}
                             />
                             <div>

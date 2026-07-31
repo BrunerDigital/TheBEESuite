@@ -38,6 +38,7 @@ yarn-error.log*
 # Keep the source files local; only commit sanitized fixtures and documentation.
 /docs/*[Pp]ro[Cc]are [Ee]xport*/
 /docs/*[Pp]ro[Cc]are [Ii]mport [Pp]repared*/
+/docs/procare-exports/
 
 # Supabase local CLI state
 /supabase/.temp/

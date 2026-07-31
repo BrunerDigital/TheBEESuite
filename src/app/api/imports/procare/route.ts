@@ -2458,18 +2458,18 @@ async function POSTHandler(request: NextRequest) {
           guardianPhone ? { phone: guardianPhone } : undefined,
           !externalId && name ? { fullName: name } : undefined,
         ].filter(Boolean) as Array<{ email?: string; phone?: string; fullName?: string }>;
-        const fallbackGuardians = !fallbackGuardianMatchers.length
-          ? []
-          : await prisma.guardian.findMany({
-              where: { familyId: family.id, OR: fallbackGuardianMatchers },
-              take: 2,
-            });
         const externalGuardians = externalId
           ? await prisma.guardian.findMany({
               where: { family: { centerId: targetCenter.id }, sourceSystem: "procare", externalId },
               take: 2,
             })
           : [];
+        const fallbackGuardians = externalGuardians.length || !fallbackGuardianMatchers.length
+          ? []
+          : await prisma.guardian.findMany({
+              where: { familyId: family.id, OR: fallbackGuardianMatchers },
+              take: 2,
+            });
         if (externalGuardians.length > 1) {
           throw new Error("Multiple existing guardians use this ProCare Person ID. Resolve the duplicate records before importing.");
         }

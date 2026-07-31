@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarDays, Clock, Download, FileText, MessageSquare, Printer, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
+import { CalendarDays, ClipboardList, Clock, Download, FileText, MessageSquare, Printer, ReceiptText, Search, TrendingUp, UsersRound } from "lucide-react";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-s
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 
 export type AnalyticsReportBuilderFilters = {
+  report?: ReportKind;
   range: string;
   start: string;
   end: string;
@@ -23,6 +24,7 @@ export type AnalyticsReportBuilderFilters = {
 };
 
 const reportOptions: Array<{ value: ReportKind; label: string }> = [
+  { value: "enrollment_status", label: "Enrollment status" },
   { value: "lead_funnel", label: "Lead funnel" },
   { value: "attendance", label: "Attendance" },
   { value: "billing", label: "Billing/AR" },
@@ -38,11 +40,11 @@ function hours(minutes: number) {
   return (Math.max(0, minutes) / 60).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(value: string) {
+function formatDate(value: string, timeZone = "UTC") {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? "Not set"
-    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
+    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone }).format(date);
 }
 
 function barWidth(value: number) {
@@ -84,17 +86,21 @@ export function AnalyticsReportBuilder({
   const [start, setStart] = useState(filters.start);
   const [end, setEnd] = useState(filters.end);
   const [centerId, setCenterId] = useState(filters.centerId || "all");
-  const [report, setReport] = useState<ReportKind>("lead_funnel");
+  const [report, setReport] = useState<ReportKind>(filters.report ?? "lead_funnel");
   const [query, setQuery] = useState("");
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
 
   const exportState = { range, start, end, centerId, report };
   const reportDefinition = REPORT_DEFINITIONS[report];
+  const enrollmentAsOf = data.range.endDate;
+  const selectedCenterDetails = data.scope.centerIds.length === 1
+    ? data.centers.find((center) => center.id === data.scope.centerIds[0]) ?? null
+    : null;
   const selectedCenterLabel = centerId === "all"
     ? "All accessible centers"
     : data.centers.find((center) => center.id === centerId)?.label ?? "Selected center";
   const rangeLabel = range === "all"
-    ? `${start ? formatDate(start) : formatDate(data.range.startDate)} to ${end ? formatDate(end) : formatDate(data.range.endDate)}`
+    ? `${start ? formatDate(start) : formatDate(data.range.startDate, timeZone)} to ${end ? formatDate(end) : formatDate(data.range.endDate, timeZone)}`
     : reportRangeLabel(range);
   const printFilterSummary = [
     `Report: ${reportLabel(report)}`,
@@ -110,6 +116,35 @@ export function AnalyticsReportBuilder({
       row.centerLabel.toLowerCase().includes(needle),
     );
   }, [data.leadSources, query]);
+
+  const filteredEnrollmentStatus = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return data.enrollmentStatus.filter((row) =>
+      !needle
+      || row.childName.toLowerCase().includes(needle)
+      || row.centerLabel.toLowerCase().includes(needle)
+      || row.groupLabel.toLowerCase().includes(needle)
+      || row.gender.toLowerCase().includes(needle)
+      || row.enrollmentStatus.toLowerCase().includes(needle),
+    );
+  }, [data.enrollmentStatus, query]);
+
+  const groupedEnrollmentStatus = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      centerId: string;
+      centerLabel: string;
+      groupLabel: string;
+      rows: typeof filteredEnrollmentStatus;
+    }> = [];
+    filteredEnrollmentStatus.forEach((row) => {
+      const key = `${row.centerId}:${row.groupLabel}`;
+      const existing = groups.find((group) => group.key === key);
+      if (existing) existing.rows.push(row);
+      else groups.push({ key, centerId: row.centerId, centerLabel: row.centerLabel, groupLabel: row.groupLabel, rows: [row] });
+    });
+    return groups;
+  }, [filteredEnrollmentStatus]);
 
   const filteredAttendance = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -154,20 +189,63 @@ export function AnalyticsReportBuilder({
       <ReportPrintStyles />
       <PrintableReport active={printActive} label="Printable analytics report">
         <header>
-          <h1>{reportLabel(report)} Report</h1>
-          <p>{printFilterSummary}</p>
-          <p>Loaded range: {formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</p>
+          <h1>{report === "enrollment_status" ? selectedCenterDetails?.name ?? "Enrollment Status Summary" : `${reportLabel(report)} Report`}</h1>
+          {report === "enrollment_status" ? (
+            <>
+              {selectedCenterDetails ? <p>{[selectedCenterDetails.address, selectedCenterDetails.city, selectedCenterDetails.state, selectedCenterDetails.postalCode].filter(Boolean).join(", ")}</p> : null}
+              {selectedCenterDetails?.phone ? <p>Phone: {selectedCenterDetails.phone}</p> : null}
+              {selectedCenterDetails?.schoolEin ? <p>Tax ID: {selectedCenterDetails.schoolEin}</p> : null}
+              <h2>Enrollment Status Summary</h2>
+              <p>As of {formatDate(enrollmentAsOf, timeZone)}</p>
+              <p>Between 0 and 120 months old; missing DOB records remain visible for review.</p>
+            </>
+          ) : (
+            <>
+              <p>{printFilterSummary}</p>
+              <p>Loaded range: {formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</p>
+            </>
+          )}
           <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
-        <h2>Summary</h2>
-        <table>
-          <tbody>
-            <tr><th>Lead conversion</th><td>{data.totals.leadConversionRate}% enrolled</td></tr>
-            <tr><th>Attendance rate</th><td>{data.totals.attendanceRate}% present</td></tr>
-            <tr><th>Message response</th><td>{data.totals.avgResponseHours === null ? "No replies" : `${data.totals.avgResponseHours}h avg`}</td></tr>
-            <tr><th>Staff hours</th><td>{hours(data.totals.staffHoursMinutes)} decimal hours</td></tr>
-          </tbody>
-        </table>
+        {report !== "enrollment_status" ? (
+          <>
+            <h2>Summary</h2>
+            <table>
+              <tbody>
+                <tr><th>Lead conversion</th><td>{data.totals.leadConversionRate}% enrolled</td></tr>
+                <tr><th>Attendance rate</th><td>{data.totals.attendanceRate}% present</td></tr>
+                <tr><th>Message response</th><td>{data.totals.avgResponseHours === null ? "No replies" : `${data.totals.avgResponseHours}h avg`}</td></tr>
+                <tr><th>Staff hours</th><td>{hours(data.totals.staffHoursMinutes)} decimal hours</td></tr>
+              </tbody>
+            </table>
+          </>
+        ) : null}
+
+        {report === "enrollment_status" ? (
+          <>
+            {groupedEnrollmentStatus.map((group) => (
+              <section key={group.key}>
+                <h2>{data.scope.centerIds.length > 1 ? `${group.centerLabel} — ` : ""}{group.groupLabel}</h2>
+                <table>
+                  <thead><tr><th>Status Date</th><th>Child&apos;s Name</th><th>Gender</th><th>DOB</th><th>Child&apos;s Age</th></tr></thead>
+                  <tbody>
+                    {group.rows.map((row) => (
+                      <tr key={row.childId}>
+                        <td>{row.statusDate ? formatDate(row.statusDate) : "Not set"}</td>
+                        <td>{row.childName}</td>
+                        <td>{row.gender}</td>
+                        <td>{row.dateOfBirth ? formatDate(row.dateOfBirth) : "Needs review"}</td>
+                        <td>{row.ageLabel}</td>
+                      </tr>
+                    ))}
+                    <tr><th colSpan={4}>Total Distinct Count</th><td>{group.rows.length}</td></tr>
+                  </tbody>
+                </table>
+              </section>
+            ))}
+            {!groupedEnrollmentStatus.length ? <p>No currently enrolled children match the report filters.</p> : null}
+          </>
+        ) : null}
 
         {report === "lead_funnel" ? (
           <>
@@ -343,6 +421,7 @@ export function AnalyticsReportBuilder({
         </CardHeader>
         <CardContent className="space-y-4">
           <form action="/analytics" method="get" className="grid gap-3 md:grid-cols-2 xl:grid-cols-[12rem_1fr_11rem_11rem_14rem_auto]">
+            <input type="hidden" name="report" value={report} />
             <input type="hidden" name="range" value={range} />
             <input type="hidden" name="centerId" value={centerId} />
             <div className="space-y-1">
@@ -360,7 +439,7 @@ export function AnalyticsReportBuilder({
               <Label>Search Visible Rows</Label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Source, center, period, teacher..." />
+                <Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Child, classroom, center, teacher..." />
               </div>
             </div>
             <div className="space-y-1">
@@ -409,11 +488,15 @@ export function AnalyticsReportBuilder({
               </Button>
             </div>
           </form>
-          <div className="grid gap-3 md:grid-cols-5">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Loaded range</div>
-              <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</div>
+              <div className="mt-1 text-sm font-medium">{formatDate(data.range.startDate, timeZone)} to {formatDate(data.range.endDate, timeZone)}</div>
               <div className="mt-1 text-xs text-muted-foreground">Generated {formatDate(data.generatedAt)}</div>
+            </div>
+            <div className="rounded-xl border bg-background/40 p-3">
+              <div className="text-xs text-muted-foreground">Current enrollment</div>
+              <div className="mt-1 text-sm font-medium">{data.totals.currentEnrollmentCount.toLocaleString()} children</div>
             </div>
             <div className="rounded-xl border bg-background/40 p-3">
               <div className="text-xs text-muted-foreground">Lead conversion</div>
@@ -444,12 +527,61 @@ export function AnalyticsReportBuilder({
 
       <Tabs value={report} onValueChange={(value) => value && setReport(value as ReportKind)} className="gap-4">
         <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="enrollment_status"><ClipboardList data-icon="inline-start" />Enrollment status</TabsTrigger>
           <TabsTrigger value="lead_funnel"><TrendingUp data-icon="inline-start" />Lead funnel</TabsTrigger>
           <TabsTrigger value="attendance"><UsersRound data-icon="inline-start" />Attendance</TabsTrigger>
           <TabsTrigger value="billing"><ReceiptText data-icon="inline-start" />Billing/AR</TabsTrigger>
           <TabsTrigger value="messages"><MessageSquare data-icon="inline-start" />Messages</TabsTrigger>
           <TabsTrigger value="staff_hours"><Clock data-icon="inline-start" />Staff hours</TabsTrigger>
         </TabsList>
+        <TabsContent value="enrollment_status" className="space-y-4">
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Enrollment Status Summary</CardTitle>
+              <CardDescription>
+                Current enrolled roster as of {formatDate(enrollmentAsOf, timeZone)}, grouped by classroom or age group for viewing, export, and print.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {groupedEnrollmentStatus.map((group) => (
+                <section key={group.key} className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2">
+                    <div>
+                      <h3 className="font-semibold">{group.groupLabel}</h3>
+                      {data.scope.centerIds.length > 1 ? <p className="text-xs text-muted-foreground">{group.centerLabel}</p> : null}
+                    </div>
+                    <Badge variant="outline">{group.rows.length} enrolled</Badge>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Status date</TableHead>
+                        <TableHead>Child&apos;s name</TableHead>
+                        <TableHead>Gender</TableHead>
+                        <TableHead>DOB</TableHead>
+                        <TableHead>Child&apos;s age</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.rows.map((row) => (
+                        <TableRow key={row.childId}>
+                          <TableCell>{row.statusDate ? formatDate(row.statusDate) : "Not set"}</TableCell>
+                          <TableCell className="font-medium">{row.childName}</TableCell>
+                          <TableCell>{row.gender}</TableCell>
+                          <TableCell>{row.dateOfBirth ? formatDate(row.dateOfBirth) : <Badge variant="outline">Needs review</Badge>}</TableCell>
+                          <TableCell>{row.ageLabel}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </section>
+              ))}
+              {!groupedEnrollmentStatus.length ? (
+                <p className="text-sm text-muted-foreground">No currently enrolled children match the report filters.</p>
+              ) : null}
+            </CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="lead_funnel" className="space-y-4">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
             <Card className="glass-panel">

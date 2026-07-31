@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  buildEnrollmentStatusReportRows,
+  childAgeInMonths,
   normalizeReportFilters,
   parseReportDate,
   reportRowsToCsv,
@@ -14,6 +16,22 @@ const emptyReportData: AnalyticsReportData = {
   range: { startDate: "2026-06-01T00:00:00.000Z", endDate: "2026-06-08T23:59:59.999Z" },
   scope: { centerIds: ["center_1"], centerLabels: ["FL | Tampa"] },
   centers: [{ id: "center_1", name: "Main", label: "FL | Tampa", timezone: "America/New_York" }],
+  enrollmentStatus: [
+    {
+      childId: "child_1",
+      centerId: "center_1",
+      centerLabel: "FL | Tampa",
+      groupLabel: "Infants",
+      groupSortOrder: 0,
+      statusDate: "2026-01-27T12:00:00.000Z",
+      childName: "Warren, Blake",
+      gender: "Female",
+      dateOfBirth: "2025-07-24T12:00:00.000Z",
+      ageInMonths: 10,
+      ageLabel: "0 Yr - 10 Mo",
+      enrollmentStatus: "enrolled",
+    },
+  ],
   leadSources: [
     {
       centerId: "center_1",
@@ -67,8 +85,48 @@ const emptyReportData: AnalyticsReportData = {
     staffHoursMinutes: 510,
     staffOpenShiftMinutes: 0,
     staffClockedIn: 0,
+    currentEnrollmentCount: 1,
   },
 };
+
+test("enrollment status rows calculate age as of the report date and retain missing DOB exceptions", () => {
+  const centerById = new Map([["center_1", emptyReportData.centers[0]]]);
+  const children = [
+    {
+      id: "child_1", fullName: "Warren, Blake", dateOfBirth: new Date("2025-07-24T12:00:00.000Z"), startDate: new Date("2026-01-27T12:00:00.000Z"),
+      ageGroup: "Infant", enrollmentStatus: "enrolled", customFields: { gender: "F" }, family: { centerId: "center_1" },
+      classroom: { name: "Infants", ageGroup: "Infant", centerId: "center_1" },
+    },
+    {
+      id: "child_2", fullName: "DOB, Review", dateOfBirth: new Date("1900-01-01T12:00:00.000Z"), startDate: null,
+      ageGroup: "Twos", enrollmentStatus: "active", customFields: { dateOfBirthMissing: true, rawData: { Gender: "Male" } }, family: { centerId: "center_1" },
+      classroom: { name: "Twos", ageGroup: "Twos", centerId: "center_1" },
+    },
+    {
+      id: "child_other", fullName: "Other School", dateOfBirth: new Date("2025-01-01T12:00:00.000Z"), startDate: null,
+      ageGroup: "Infant", enrollmentStatus: "enrolled", customFields: {}, family: { centerId: "center_2" },
+      classroom: { name: "Infants", ageGroup: "Infant", centerId: "center_2" },
+    },
+  ];
+
+  const rows = buildEnrollmentStatusReportRows(children, centerById, new Date("2026-07-31T23:59:59.999Z"));
+  assert.equal(childAgeInMonths(children[0].dateOfBirth, new Date("2026-07-31T23:59:59.999Z")), 12);
+  assert.deepEqual(rows.map((row) => [row.childId, row.gender, row.ageLabel]), [
+    ["child_1", "Female", "1 Yr - 0 Mo"],
+    ["child_2", "Male", "DOB needs review"],
+  ]);
+});
+
+test("enrollment ages use the school's calendar date without shifting stored DOB dates", () => {
+  assert.equal(
+    childAgeInMonths(
+      new Date("2025-08-01T00:00:00.000Z"),
+      new Date("2026-08-01T03:59:59.999Z"),
+      "America/New_York",
+    ),
+    11,
+  );
+});
 
 test("report filters normalize quick ranges and center ids", () => {
   const filters = normalizeReportFilters(
@@ -105,6 +163,16 @@ test("lead funnel report exports CSV rows", () => {
   assert.match(csv, /30%/);
 });
 
+test("enrollment status report exports the ProCare-style roster fields", () => {
+  const report = rowsForReportKind(emptyReportData, "enrollment_status");
+  const csv = reportRowsToCsv(report);
+
+  assert.match(csv, /Enrollment Status Summary/);
+  assert.match(csv, /Status date/);
+  assert.match(csv, /Warren, Blake/);
+  assert.match(csv, /0 Yr - 10 Mo/);
+});
+
 test("staff hours report exports clock totals", () => {
   const report = rowsForReportKind(emptyReportData, "staff_hours");
   const csv = reportRowsToCsv(report);
@@ -120,4 +188,19 @@ test("report PDF export returns a PDF buffer", () => {
 
   assert.equal(pdf.subarray(0, 8).toString(), "%PDF-1.4");
   assert.match(pdf.toString(), /%%EOF/);
+});
+
+test("report PDF export paginates without dropping later rows", () => {
+  const report = rowsForReportKind({
+    ...emptyReportData,
+    enrollmentStatus: Array.from({ length: 130 }, (_, index) => ({
+      ...emptyReportData.enrollmentStatus[0],
+      childId: `child_${index}`,
+      childName: `Child ${String(index).padStart(3, "0")}`,
+    })),
+  }, "enrollment_status");
+  const pdfText = reportRowsToPdf(report).toString();
+
+  assert.match(pdfText, /Page 3 of 3/);
+  assert.match(pdfText, /Child 129/);
 });

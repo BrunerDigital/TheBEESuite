@@ -369,6 +369,14 @@ function paymentListLabel(payment: Payment, timeZone: string) {
   return payment.status.toLowerCase();
 }
 
+function paymentProviderLabel(provider: string) {
+  if (provider === "stripe") return "Online payment";
+  if (provider === "stripe_terminal") return "In-person card payment";
+  if (provider === "manual_check") return "Check payment";
+  if (provider === "subsidy_agency") return "Agency payment";
+  return provider.replaceAll("_", " ");
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -505,6 +513,7 @@ export function ParentPortalWorkspace({
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
+  const latestLedgerEntry = ledgerEntries[0] ?? null;
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
@@ -1304,10 +1313,24 @@ export function ParentPortalWorkspace({
                 </AlertDescription>
               </Alert>
             ) : null}
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
                 <div className="mt-1 text-2xl font-semibold">{money(balanceCents)}</div>
+                <div className="mt-1 text-xs text-muted-foreground">Posted payments and credits are included.</div>
+              </div>
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="text-xs text-muted-foreground">Latest account activity</div>
+                {latestLedgerEntry ? (
+                  <>
+                    <div className="mt-1 truncate font-medium">{latestLedgerEntry.description}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {money(latestLedgerEntry.amountCents)} · Balance {latestLedgerEntry.balanceAfterCents === null ? "not set" : money(latestLedgerEntry.balanceAfterCents)}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-1 font-medium">No account activity recorded</div>
+                )}
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Billing email</div>
@@ -1316,6 +1339,51 @@ export function ParentPortalWorkspace({
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Autopay</div>
                 <div className="mt-1 font-medium capitalize">{autopayStatus}</div>
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3">
+                <div className="font-medium">Account ledger</div>
+                <div className="text-xs text-muted-foreground">The same charges, credits, payments, adjustments, and running balances used by your school.</div>
+              </div>
+              <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1">
+                {ledgerEntries.map((entry) => (
+                  <div key={entry.id} className="grid gap-1 rounded-lg bg-background/35 p-3 text-sm sm:grid-cols-[1fr_auto]">
+                    <div>
+                      <div className="font-medium">{entry.description}</div>
+                      <div className="text-xs text-muted-foreground">{entry.type.replaceAll("_", " ")} · {formatDate(entry.effectiveAt)}</div>
+                    </div>
+                    <div className="text-right font-medium">
+                      {money(entry.amountCents)}
+                      <div className="text-xs text-muted-foreground">
+                        Balance {entry.balanceAfterCents === null ? "not set" : money(entry.balanceAfterCents)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!ledgerEntries.length ? <p className="text-sm text-muted-foreground">No ledger entries are visible yet.</p> : null}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-background/40 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <ReceiptText className="size-4 text-primary" />
+                Recent payments
+              </div>
+              <div className="space-y-2">
+                {payments.slice(0, 5).map((payment) => {
+                  const completed = payment.status === "PAID";
+                  return (
+                    <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
+                      <span className="text-muted-foreground">
+                        {paymentProviderLabel(payment.provider)} · {paymentListLabel(payment, timeZone)}
+                      </span>
+                      <span className={completed ? "font-medium text-emerald-700 dark:text-emerald-300" : "font-medium text-muted-foreground"}>
+                        {completed ? "−" : ""}{money(payment.amountCents)}
+                      </span>
+                    </div>
+                  );
+                })}
+                {!payments.length ? <p className="text-sm text-muted-foreground">No payments have been posted to this account yet.</p> : null}
               </div>
             </div>
             <div className="rounded-xl border bg-background/40 p-4">
@@ -1540,6 +1608,10 @@ export function ParentPortalWorkspace({
                 </div>
               </div>
             ) : null}
+            <div className="pt-2">
+              <div className="font-medium">Invoice history</div>
+              <div className="text-xs text-muted-foreground">Invoice amounts are the original charges. Use the Balance due and Account ledger above for the amount owed after credits, voids, payments, and adjustments.</div>
+            </div>
             {invoices.map((invoice) => {
               const invoiceHasPendingPayment = Boolean(invoice.pendingPayment);
               return (
@@ -1588,43 +1660,6 @@ export function ParentPortalWorkspace({
               );
             })}
             {!invoices.length ? <p className="text-sm text-muted-foreground">No invoices are visible yet.</p> : null}
-            <div className="rounded-xl border bg-background/40 p-4">
-              <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                <ReceiptText className="size-4 text-primary" />
-                Recent payments
-              </div>
-              <div className="space-y-2">
-                {payments.slice(0, 5).map((payment) => (
-                  <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
-                    <span className="text-muted-foreground">
-                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · {paymentListLabel(payment, timeZone)}
-                    </span>
-                    <span className="font-medium">{money(payment.amountCents)}</span>
-                  </div>
-                ))}
-                {!payments.length ? <p className="text-sm text-muted-foreground">No payments are recorded yet.</p> : null}
-              </div>
-            </div>
-            <div className="rounded-xl border bg-background/40 p-4">
-              <div className="mb-3 text-sm font-medium">Ledger history</div>
-              <div className="space-y-2">
-                {ledgerEntries.slice(0, 6).map((entry) => (
-                  <div key={entry.id} className="grid gap-1 rounded-lg bg-background/35 p-3 text-sm sm:grid-cols-[1fr_auto]">
-                    <div>
-                      <div className="font-medium">{entry.description}</div>
-                      <div className="text-xs text-muted-foreground">{entry.type} · {formatDate(entry.effectiveAt)}</div>
-                    </div>
-                    <div className="text-right font-medium">
-                      {money(entry.amountCents)}
-                      <div className="text-xs text-muted-foreground">
-                        Balance {entry.balanceAfterCents === null ? "not set" : money(entry.balanceAfterCents)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {!ledgerEntries.length ? <p className="text-sm text-muted-foreground">No ledger entries are visible yet.</p> : null}
-              </div>
-            </div>
           </CardContent>
         </Card>
 

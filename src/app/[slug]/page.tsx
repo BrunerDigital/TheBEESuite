@@ -1933,7 +1933,6 @@ async function renderLivePage(
           },
           ledgerEntries: {
             orderBy: { effectiveAt: "desc" },
-            take: 20,
             select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
           },
         },

@@ -58,6 +58,28 @@ function parseCsv(text: string) {
   return rows;
 }
 
+export function preparedRenderedProcareDatasetCoverage(text: string) {
+  const rows = parseCsv(text);
+  const headers = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "").toLowerCase()) ?? [];
+  const coverageIndex = headers.indexOf("procare dataset coverage manifest");
+  const encoded = coverageIndex >= 0 ? rows[1]?.[coverageIndex]?.trim() ?? "" : "";
+  if (!encoded) return null;
+  try {
+    const coverage = JSON.parse(encoded) as unknown;
+    if (
+      !coverage
+      || typeof coverage !== "object"
+      || Array.isArray(coverage)
+      || !Array.isArray((coverage as Record<string, unknown>).sourceInventory)
+    ) {
+      throw new Error("The rendered ProCare coverage manifest is incomplete.");
+    }
+    return coverage as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "The rendered ProCare coverage manifest is invalid.");
+  }
+}
+
 function decode(buffer: Buffer) {
   if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) return buffer.subarray(2).toString("utf16le");
   try { return new TextDecoder("utf-8", { fatal: true }).decode(buffer); }

@@ -96,6 +96,13 @@ test("all resolved ProCare payer records are synchronized as guardians", () => {
   assert.match(postHandler, /externalGuardians\[0\]\s*\?\?\s*fallbackGuardians\[0\]/);
 });
 
+test("prepared rendered CSV imports preserve guarded-package readiness evidence", () => {
+  assert.match(route, /preparedRenderedProcareDatasetCoverage\(text\)/);
+  assert.match(route, /sourceType:\s*preparedRenderedCoverage\s*\?\s*["']procare_rendered_report_files["']/);
+  assert.match(route, /importMethod:\s*guardedRenderedImport\s*\?\s*["']guarded_rendered_package["']/);
+  assert.match(route, /excludedUnresolvedRows/);
+});
+
 test("review and commit use the same parent plan and verify family links before completing a row", () => {
   const preview = section(route, "async function previewImportRows", "async function importPayloadFromFiles");
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");

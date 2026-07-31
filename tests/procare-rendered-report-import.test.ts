@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildRenderedProcareReportRowsFromFiles } from "@/lib/procare-rendered-report-import";
+import {
+  buildRenderedProcareReportRowsFromFiles,
+  preparedRenderedProcareDatasetCoverage,
+} from "@/lib/procare-rendered-report-import";
 
 function csvRow(values: string[]) {
   return values.map((value) => `"${value.replaceAll('"', '""')}"`).join(",");
@@ -167,4 +170,17 @@ test("rendered account sheets carry payer identity from the account header onto 
   assert.equal(result.records[0]["guardian name"], "AnnMarie Cochran");
   assert.equal(result.records[0]["guardian phone"], "8285550100");
   assert.equal(result.records[0]["import warning"], undefined);
+});
+
+test("prepared rendered CSVs retain their reviewed source coverage manifest", () => {
+  const manifest = {
+    sourceInventory: [{ sourceName: "account.csv", reportKind: "rendered_account_information", rows: 1 }],
+    normalizedRows: { ready: 1, needsResolution: 2 },
+  };
+  const prepared = [
+    csvRow(["child name", "procare dataset coverage manifest"]),
+    csvRow(["Avery Smith", JSON.stringify(manifest)]),
+  ].join("\n");
+
+  assert.deepEqual(preparedRenderedProcareDatasetCoverage(prepared), manifest);
 });

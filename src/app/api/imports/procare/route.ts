@@ -41,7 +41,10 @@ import {
   decodeProcareTabularBuffer,
   expandProcareSourceEntries,
 } from "@/lib/procare-multi-report-import";
-import { buildRenderedProcareReportRowsFromFiles } from "@/lib/procare-rendered-report-import";
+import {
+  buildRenderedProcareReportRowsFromFiles,
+  preparedRenderedProcareDatasetCoverage,
+} from "@/lib/procare-rendered-report-import";
 import {
   mergeProcareGuardianImports,
   type ProcareGuardianImportRecord,
@@ -1445,7 +1448,14 @@ async function readImportText(files: FormDataEntryValue[], pastedCsv: string) {
       parsedRows: [headers, ...records.map((record) => headers.map((header) => record[header as keyof typeof record] ?? ""))],
     };
   }
-  return { text: decodeProcareTabularBuffer(buffer), filename: file.name || "unnamed-procare-export", sourceType: "csv_file", datasetCoverage: null };
+  const text = decodeProcareTabularBuffer(buffer);
+  const preparedRenderedCoverage = preparedRenderedProcareDatasetCoverage(text);
+  return {
+    text,
+    filename: file.name || "unnamed-procare-export",
+    sourceType: preparedRenderedCoverage ? "procare_rendered_report_files" : "csv_file",
+    datasetCoverage: preparedRenderedCoverage,
+  };
 }
 
 const importBackupInclude = {
@@ -1912,6 +1922,15 @@ async function POSTHandler(request: NextRequest) {
   if (!text) return NextResponse.json({ ok: false, error: "Upload ProCare CSV files, a ZIP export, or paste CSV text." }, { status: 400 });
 
   const rows = importPayload.parsedRows ?? parseImportRows(text);
+  const guardedRenderedImport = importPayload.sourceType === "procare_rendered_report_files" && Boolean(importPayload.datasetCoverage);
+  const normalizedCoverageRows = guardedRenderedImport
+    && importPayload.datasetCoverage
+    && typeof importPayload.datasetCoverage.normalizedRows === "object"
+    && importPayload.datasetCoverage.normalizedRows
+    && !Array.isArray(importPayload.datasetCoverage.normalizedRows)
+      ? importPayload.datasetCoverage.normalizedRows as Record<string, unknown>
+      : {};
+  const excludedUnresolvedRows = Math.max(Number(normalizedCoverageRows.needsResolution ?? 0) || 0, 0);
   const sourceHeaders = rows[0]?.map((header) => header.trim().replace(/^\ufeff/, "")) ?? [];
   const headerAnalysis = analyzeProcareHeaders(sourceHeaders);
   const headers = applyProcareFieldMapping(sourceHeaders, fieldMapping);
@@ -2061,6 +2080,8 @@ async function POSTHandler(request: NextRequest) {
       status: "processing",
       summary: {
         sourceType: importPayload.sourceType,
+        importMethod: guardedRenderedImport ? "guarded_rendered_package" : undefined,
+        excludedUnresolvedRows,
         sourceSha256,
         reviewFingerprint,
         mappingSignature,
@@ -3147,6 +3168,12 @@ async function POSTHandler(request: NextRequest) {
   const summary = {
     center: autoMap ? "Auto-mapped from ProCare export" : center.crmLocationId ?? center.name,
     sourceType: importPayload.sourceType,
+    importMethod: guardedRenderedImport
+      ? "guarded_rendered_package"
+      : typeof existingSummary.importMethod === "string" ? existingSummary.importMethod : undefined,
+    excludedUnresolvedRows: guardedRenderedImport
+      ? excludedUnresolvedRows
+      : Number(existingSummary.excludedUnresolvedRows ?? 0),
     filename: importPayload.filename,
     sourceSha256,
     reviewFingerprint,

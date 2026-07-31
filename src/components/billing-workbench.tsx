@@ -496,12 +496,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     setPaymentReviewMethod(method);
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedFamily) return setErrorMessage("Choose a family before managing payment information.");
+    if (action === "enable_autopay" && !window.confirm(
+      "Enable autopay for this family? The BEE Suite will use the one selected saved method for open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
+    )) return;
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     if (action === "setup" && paymentMethodCategory === "card") {
       const accepted = window.confirm(
-        "Card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
+        "Saving this card does not enable autopay. Card payments may include the approved processing recovery when the card is charged. Continue?",
       );
       if (!accepted) return;
     }
@@ -529,7 +532,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         window.location.href = json.url;
         return;
       }
-      setStatusMessage(action === "disable_autopay" ? "Autopay disabled for the selected family." : "Payment method settings updated.");
+      setStatusMessage(
+        action === "enable_autopay"
+          ? "Autopay enabled on the selected family payment method."
+          : action === "disable_autopay"
+            ? "Autopay disabled for the selected family."
+            : "Payment method settings updated. Autopay was not changed.",
+      );
       router.refresh();
     });
   }
@@ -855,9 +864,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitAssignmentChargeNow() {
     if (!selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId) {
-      return setErrorMessage("Choose a family, child, and tuition plan before charging tuition.");
+      return setErrorMessage("Choose a family, child, and tuition plan before creating the tuition invoice.");
     }
-    if (!confirmBillingAction("charge recurring tuition now", selectedAssignmentChild.fullName)) return;
+    const confirmed = window.confirm(
+      `Create one due-now tuition invoice for ${selectedAssignmentChild.fullName}? This does not charge Stripe immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
+    );
+    if (!confirmed) return;
     submit({
       mode: "single",
       familyId: selectedFamily.id,
@@ -872,7 +884,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitBatch() {
     const confirmed = window.confirm(
-      `You are about to run batch billing for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus}). Continue?`,
+      `Create batch invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus})? This does not charge Stripe immediately. Do not continue if recurring tuition already covers this billing period; due invoices may be collected later by autopay.`,
     );
     if (!confirmed) return;
     submit({
@@ -1332,7 +1344,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <div className="flex items-center gap-2 text-sm font-medium">
                 Family payment profile
                 <InfoTip label="About family payment profiles">
-                  Add or update a family&apos;s saved payment method, enable autopay, or open the secure payment method manager.
+                  Saving a method and enabling autopay are separate actions. One selected family method is used for saved-method charges or autopay.
                 </InfoTip>
               </div>
             </div>
@@ -1363,6 +1375,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || !selectedPaymentMethod?.hasStripeCustomer} onClick={() => manageFamilyPaymentMethod("portal")} variant="outline">
                 Manage Saved
+              </Button>
+              <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod} onClick={() => manageFamilyPaymentMethod("enable_autopay")} variant="outline">
+                Enable Autopay
               </Button>
               <Button className="w-full sm:w-auto" disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("disable_autopay")} variant="outline">
                 Disable Autopay
@@ -1769,8 +1784,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <DescriptionField value={description} setValue={setDescription} />
             <Button disabled={isPending || !centerId} onClick={submitBatch}>
               <Rows3 data-icon="inline-start" />
-              Run Batch
+              Create Batch Invoices
             </Button>
+            <p className="text-xs text-muted-foreground">
+              Batch creates invoices only. Never batch the same tuition period already handled by weekly recurring assignments. A due invoice can be collected later if that family separately has autopay enabled.
+            </p>
           </TabsContent>
 
           <TabsContent value="recurring" className="space-y-4 rounded-lg border bg-background/35 p-4">
@@ -1814,9 +1832,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 </Select>
               </div>
               <DisplayValue
-                label="Autobill"
+                label="Weekly invoice creation"
                 value={assignmentIsVoucherFunded ? "Not scheduled" : "Thursday"}
-                detail={assignmentIsVoucherFunded ? "$0 voucher assignment only" : "Runs automatically"}
+                detail={assignmentIsVoucherFunded ? "$0 voucher assignment only" : "Creates the following week's invoice"}
               />
               <div className="space-y-1">
                 <Label>Start week</Label>
@@ -1852,11 +1870,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               </Button>
               <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded} onClick={submitAssignmentChargeNow} variant="outline">
                 <ReceiptText data-icon="inline-start" />
-                Charge This Child Now
+                Create Invoice Now
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Positive tuition assignments create a Thursday invoice for the following week. Explicit $0.00 CCDF or voucher-funded assignments stay visible on the child but never create a family invoice or autopay attempt. Charge now is available only for positive family tuition.
+              Positive tuition assignments create a Thursday invoice for the following week. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments stay visible on the child but never create a family invoice or autopay attempt. Create invoice now is available only for positive family tuition.
             </p>
           </TabsContent>
 

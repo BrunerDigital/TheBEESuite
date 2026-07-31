@@ -51,13 +51,8 @@ export function paymentMethodManagementSummary(input: {
   const paymentMethodLast4 = clean(custom.stripePaymentMethodLast4);
   const savedAt = clean(custom.stripePaymentMethodSavedAt);
   const status = clean(custom.autopayStatus);
-  const managementStatus = clean(custom.paymentMethodManagementStatus);
   const enabled = custom.autopayEnabled === true || input.autopayPlaceholder === true;
-  const pending =
-    status === "pending" ||
-    managementStatus === "setup_session_created" ||
-    managementStatus === "setup_pending" ||
-    managementStatus === "payment_method_setup_pending";
+  const pending = status === "pending";
 
   return {
     autopayEnabled: enabled,
@@ -84,20 +79,18 @@ export function paymentMethodSetupExpirationPatch(input: {
 }): { autopayPlaceholder: boolean; customFields: Record<string, unknown> } {
   const current = fields(input.currentFields);
   const savedPaymentMethodId = clean(current.stripeDefaultPaymentMethodId);
-  const userDisabledAt = clean(current.autopayDisabledAt);
-  const userDisabledBy = clean(current.autopayDisabledByUserId);
   const hasSavedPaymentMethod = Boolean(savedPaymentMethodId);
-  const userDisabledAfterSave = Boolean(userDisabledAt || userDisabledBy);
+  const autopayEnabled = current.autopayEnabled === true;
 
-  if (hasSavedPaymentMethod && !userDisabledAfterSave) {
+  if (hasSavedPaymentMethod) {
     return {
-      autopayPlaceholder: true,
+      autopayPlaceholder: autopayEnabled,
       customFields: {
         ...current,
         stripeExpiredSetupCheckoutSessionId: input.sessionId,
         stripeEventId: input.stripeEventId,
-        autopayEnabled: true,
-        autopayStatus: "enabled",
+        autopayEnabled,
+        autopayStatus: autopayEnabled ? "enabled" : "disabled",
         paymentMethodManagementStatus: "payment_method_saved",
       },
     };
@@ -110,6 +103,7 @@ export function paymentMethodSetupExpirationPatch(input: {
       stripeSetupCheckoutSessionId: input.sessionId,
       stripeEventId: input.stripeEventId,
       paymentMethodManagementStatus: "setup_session_expired",
+      autopayEnabled: false,
       autopayStatus: "disabled",
     },
   };

@@ -10,7 +10,7 @@ import {
   type StripePaymentMethodCategory,
 } from "@/lib/integrations";
 import { PAYMENT_PROCESSING_RECOVERY_VERSION } from "@/lib/payment-disclosures";
-import { canCreatePaymentMethodManagementSession } from "@/lib/payment-method-management";
+import { canCreatePaymentMethodManagementSession, paymentMethodManagementSummary } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -33,7 +33,7 @@ function jsonObject(value: unknown): Record<string, unknown> {
 
 function actionFrom(value: unknown) {
   const action = clean(value).toLowerCase();
-  if (action === "portal" || action === "disable_autopay" || action === "setup") return action;
+  if (action === "portal" || action === "enable_autopay" || action === "disable_autopay" || action === "setup") return action;
   return "setup";
 }
 
@@ -169,6 +169,32 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: access.error }, { status: access.status });
   }
 
+  // Disabling collection must remain available even when a school's billing
+  // approval is paused. It never creates a Stripe object or moves money.
+  if (action === "disable_autopay") {
+    await prisma.billingAccount.update({
+      where: { id: billingAccount.id },
+      data: {
+        autopayPlaceholder: false,
+        customFields: {
+          ...currentFields,
+          autopayEnabled: false,
+          autopayStatus: "disabled",
+          autopayDisabledAt: new Date().toISOString(),
+          autopayDisabledByUserId: user.id,
+        },
+      },
+    });
+    await writeAuditLog(user, {
+      centerId,
+      action: "billing.autopay.disabled",
+      resource: "BillingAccount",
+      resourceId: billingAccount.id,
+      metadata: { familyId: billingAccount.familyId },
+    });
+    return NextResponse.json({ ok: true, status: "disabled" });
+  }
+
   if (
     action === "setup" &&
     paymentMethodCategory === "card" &&
@@ -195,28 +221,51 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: billingApproval.blockingReason, billingApproval }, { status: 403 });
   }
 
-  if (action === "disable_autopay") {
+  if (action === "enable_autopay") {
+    const paymentMethod = paymentMethodManagementSummary({
+      autopayPlaceholder: billingAccount.autopayPlaceholder,
+      customFields: currentFields,
+    });
+    if (!paymentMethod.hasStripeCustomer || !paymentMethod.hasSavedPaymentMethod) {
+      return NextResponse.json(
+        { ok: false, error: "Save and verify one family payment method before enabling autopay." },
+        { status: 400 },
+      );
+    }
+    const paymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
+    if ((connectedAccountId || paymentMethodConnectedAccountId) && connectedAccountId !== paymentMethodConnectedAccountId) {
+      return NextResponse.json(
+        { ok: false, error: "The saved payment method belongs to a different Stripe connected account. Replace it for this school before enabling autopay." },
+        { status: 409 },
+      );
+    }
+    const enabledAt = new Date().toISOString();
     await prisma.billingAccount.update({
       where: { id: billingAccount.id },
       data: {
-        autopayPlaceholder: false,
+        autopayPlaceholder: true,
         customFields: {
           ...currentFields,
-          autopayEnabled: false,
-          autopayStatus: "disabled",
-          autopayDisabledAt: new Date().toISOString(),
-          autopayDisabledByUserId: user.id,
+          autopayEnabled: true,
+          autopayStatus: "enabled",
+          autopayEnabledAt: enabledAt,
+          autopayEnabledByUserId: user.id,
+          autopayDisabledAt: null,
+          autopayDisabledByUserId: null,
         },
       },
     });
     await writeAuditLog(user, {
       centerId,
-      action: "billing.autopay.disabled",
+      action: "billing.autopay.enabled",
       resource: "BillingAccount",
       resourceId: billingAccount.id,
-      metadata: { familyId: billingAccount.familyId },
+      metadata: {
+        familyId: billingAccount.familyId,
+        stripeDefaultPaymentMethodId: paymentMethod.stripeDefaultPaymentMethodId,
+      },
     });
-    return NextResponse.json({ ok: true, status: "disabled" });
+    return NextResponse.json({ ok: true, status: "enabled" });
   }
 
   const existingCustomerId = stripeCustomerIdForAccount(currentFields, connectedAccountId);
@@ -296,7 +345,7 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       requestedByUserId: user.id,
-      enableAutopay: "true",
+      autopaySetupMode: "preserve",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
@@ -322,7 +371,6 @@ async function POSTHandler(request: NextRequest) {
         stripeSetupConnectedAccountId: connectedAccountId || null,
         paymentMethodManagementStatus: "setup_session_created",
         paymentMethodManagementUpdatedAt,
-        autopayStatus: "pending",
         ...(paymentMethodCategory === "card" && processingRecoveryAccepted
           ? {
               cardProcessingRecoveryAcceptedAt: paymentMethodManagementUpdatedAt,

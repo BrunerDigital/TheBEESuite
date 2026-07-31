@@ -31,6 +31,7 @@ type StripeCheckoutSessionCompleted = {
   metadata?: {
     source?: string;
     setupFlow?: string;
+    autopaySetupMode?: string;
     tenantId?: string;
     billingAccountId?: string;
     paymentScope?: string;
@@ -83,7 +84,10 @@ type StripeMetadata = {
   familyId?: string;
   centerId?: string;
   stripeConnectedAccountId?: string;
+  invoiceTotalCents?: string;
   invoiceAmountCents?: string;
+  accountCreditAppliedCents?: string;
+  stripeChargePrincipalCents?: string;
   parentSurchargeAmountCents?: string;
   parentProcessingRecoveryAmountCents?: string;
   beeSuitePaymentOperationsFeeAmountCents?: string;
@@ -853,7 +857,7 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       await recordStripeWebhookEvent(tx, event);
       const billingAccount = await tx.billingAccount.findUnique({
         where: { id: billingAccountId },
-        select: { customFields: true },
+        select: { autopayPlaceholder: true, customFields: true },
       });
       if (!billingAccount) return;
 
@@ -862,10 +866,15 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const previousPaymentMethodId = clean(currentFields.stripeDefaultPaymentMethodId);
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
+      const setupMode = clean(session.metadata?.autopaySetupMode);
+      const previouslyEnabled = currentFields.autopayEnabled === true || billingAccount.autopayPlaceholder === true;
+      const autopayEnabled = Boolean(paymentMethodId) && (
+        setupMode === "enable" ? true : setupMode === "disabled" ? false : previouslyEnabled
+      );
       await tx.billingAccount.update({
         where: { id: billingAccountId },
         data: {
-          autopayPlaceholder: Boolean(paymentMethodId),
+          autopayPlaceholder: autopayEnabled,
           customFields: {
             ...currentFields,
             ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),
@@ -881,8 +890,8 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             stripeSetupConnectedAccountId: connectedAccountId || null,
             stripeEventId: event.id,
             stripePaymentMethodSavedAt: new Date().toISOString(),
-            autopayEnabled: Boolean(paymentMethodId),
-            autopayStatus: paymentMethodId ? "enabled" : "pending",
+            autopayEnabled,
+            autopayStatus: autopayEnabled ? "enabled" : "disabled",
             paymentMethodManagementStatus: paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method",
           },
         },
@@ -1151,6 +1160,10 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
         return;
       }
 
+      const accountCreditAppliedCents = Math.max(
+        0,
+        Number(metadata.accountCreditAppliedCents || currentPaymentFields.accountCreditAppliedCents || 0) || 0,
+      );
       const guard = checkoutApplicationGuard({
         invoiceStatus: invoice.status,
         invoiceBillingAccountId: invoice.billingAccountId,
@@ -1158,6 +1171,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
         paymentStatus: currentPayment.status,
         paymentBillingAccountId: currentPayment.billingAccountId,
         paymentAmountCents: currentPayment.amountCents,
+        accountCreditAppliedCents,
       });
       if (!guard.ok) {
         ignoredReason = guard.reason;
@@ -1182,9 +1196,21 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
         return;
       }
 
+      const paidAt = new Date();
       const invoiceClaim = await tx.invoice.updateMany({
         where: { id: invoiceId, status: { not: PaymentStatus.PAID } },
-        data: { status: PaymentStatus.PAID },
+        data: {
+          status: PaymentStatus.PAID,
+          customFields: {
+            ...jsonObject(invoice.customFields),
+            status: "paid",
+            paidAt: paidAt.toISOString(),
+            paymentId,
+            paidWithAccountCredit: accountCreditAppliedCents > 0,
+            accountCreditAppliedCents,
+            stripeChargePrincipalCents: currentPayment.amountCents,
+          } as Prisma.InputJsonObject,
+        },
       });
       if (invoiceClaim.count !== 1) {
         ignoredReason = "invoice_already_paid";
@@ -1208,7 +1234,6 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
         return;
       }
 
-      const paidAt = new Date();
       const payment = await tx.payment.update({
         where: { id: paymentId },
         data: {
@@ -1222,7 +1247,9 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
             stripeEventCreatedAt: event.created ? new Date(event.created * 1000).toISOString() : null,
             stripePaymentIntentStatus: paymentIntent.status || null,
             stripeAmountTotalCents: paymentIntent.amount ?? null,
-            invoiceAmountCents: Number(metadata.invoiceAmountCents || 0) || null,
+            invoiceAmountCents: Number(metadata.invoiceAmountCents || invoice.totalCents || 0) || null,
+            accountCreditAppliedCents,
+            stripeChargePrincipalCents: currentPayment.amountCents,
             parentSurchargeAmountCents: Number(metadata.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(metadata.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
@@ -1253,6 +1280,9 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
             stripePaymentIntentId: paymentIntent.id,
             stripeAmountTotalCents: paymentIntent.amount ?? null,
             collectionMode: collectionMode || null,
+            invoiceAmountCents: Number(metadata.invoiceAmountCents || invoice.totalCents || 0) || null,
+            accountCreditAppliedCents,
+            stripeChargePrincipalCents: currentPayment.amountCents,
             parentSurchargeAmountCents: Number(metadata.parentSurchargeAmountCents || 0) || 0,
             parentProcessingRecoveryAmountCents: Number(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents || 0) || 0,
             beeSuitePaymentOperationsFeeAmountCents: Number(metadata.beeSuitePaymentOperationsFeeAmountCents || 0) || 0,
@@ -1260,6 +1290,27 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
           },
         },
       });
+      if (accountCreditAppliedCents > 0) {
+        await tx.ledgerEntry.create({
+          data: {
+            billingAccountId: payment.billingAccountId,
+            invoiceId,
+            type: "account_credit_application",
+            description: "Account credit applied to invoice",
+            amountCents: 0,
+            balanceAfterCents: updatedAccount.balanceCents,
+            sourceSystem: "bee_suite",
+            externalId: `account-credit:invoice:${invoiceId}`,
+            metadata: {
+              invoiceAmountCents: invoice.totalCents,
+              accountCreditAppliedCents,
+              stripeChargePrincipalCents: currentPayment.amountCents,
+              stripePaymentIntentId: paymentIntent.id,
+              stripeEventId: event.id,
+            },
+          },
+        });
+      }
       await applyRegistrationPaymentCompletion(tx, {
         invoiceId,
         paymentId: payment.id,

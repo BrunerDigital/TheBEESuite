@@ -17,10 +17,10 @@ const currentGuides = [
   "docs/sops/KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md",
 ];
 
-test("current guides are dated July 29 and exclude superseded workflow copy", () => {
+test("current guides are dated July 29 or later and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /July 29, 2026/, path);
+    assert.match(content, /July (?:29|30|31), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);

@@ -52,7 +52,7 @@ test("payment method summary labels saved cards without storing full numbers", (
   assert.equal(paymentMethodAutopayCategory(summary), "card");
 });
 
-test("payment method summary treats setup sessions as pending", () => {
+test("payment method setup status does not imply autopay is pending", () => {
   const summary = paymentMethodManagementSummary({
     autopayPlaceholder: false,
     customFields: {
@@ -63,7 +63,7 @@ test("payment method summary treats setup sessions as pending", () => {
   });
 
   assert.equal(summary.autopayEnabled, false);
-  assert.equal(summary.autopayStatus, "pending");
+  assert.equal(summary.autopayStatus, "disabled");
   assert.equal(summary.hasStripeCustomer, true);
   assert.equal(summary.hasSavedPaymentMethod, false);
   assert.equal(paymentMethodAutopayCategory(summary), "default");
@@ -129,7 +129,7 @@ test("setup expiration disables incomplete setup sessions without a saved method
   assert.equal(patch.customFields.autopayStatus, "disabled");
 });
 
-test("setup expiration does not re-enable a method a user disabled", () => {
+test("setup expiration preserves a saved method without re-enabling autopay", () => {
   const patch = paymentMethodSetupExpirationPatch({
     currentFields: {
       stripeCustomerId: "cus_123",
@@ -145,7 +145,8 @@ test("setup expiration does not re-enable a method a user disabled", () => {
   });
 
   assert.equal(patch.autopayPlaceholder, false);
-  assert.equal(patch.customFields.paymentMethodManagementStatus, "setup_session_expired");
+  assert.equal(patch.customFields.paymentMethodManagementStatus, "payment_method_saved");
+  assert.equal(patch.customFields.autopayEnabled, false);
   assert.equal(patch.customFields.autopayStatus, "disabled");
 });
 

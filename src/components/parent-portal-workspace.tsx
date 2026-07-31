@@ -807,15 +807,18 @@ export function ParentPortalWorkspace({
     });
   }
 
-  function managePaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
+  function managePaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!family) return showError("A family profile is required before saving payment methods.");
     if (action !== "setup" && !billingAccount) return showError("Save a payment method before managing autopay settings.");
     if (action === "setup" && paymentMethodCategory === "card") {
       const accepted = window.confirm(
-        "Card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
+        "Saving this card does not enable autopay. Card payments may include the approved processing recovery when the card is charged. Continue?",
       );
       if (!accepted) return;
     }
+    if (action === "enable_autopay" && !window.confirm(
+      "Enable autopay? The one selected saved method will pay open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
+    )) return;
     startTransition(async () => {
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
@@ -835,7 +838,7 @@ export function ParentPortalWorkspace({
         window.location.href = json.url;
         return;
       }
-      showStatus(action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated.");
+      showStatus(action === "enable_autopay" ? "Autopay enabled." : action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated. Autopay was not changed.");
       router.refresh();
     });
   }
@@ -1321,7 +1324,7 @@ export function ParentPortalWorkspace({
                   <div className="flex items-center gap-2 font-medium">
                     Payment Methods And Autopay
                     <InfoTip label="About payment methods and autopay">
-                      Save a debit/credit card or bank account if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block payment-method setup.
+                      Saving a debit/credit card or bank account does not enable autopay. Enable it separately, or make a one-time payment on an open invoice below.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -1335,7 +1338,7 @@ export function ParentPortalWorkspace({
                 <div className="flex flex-wrap gap-2">
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
                     <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Card" : "Set Up Card Autopay"}
+                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Saved Card" : "Save Card"}
                   </Button>
                   <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
                     <Building2 data-icon="inline-start" />
@@ -1348,6 +1351,14 @@ export function ParentPortalWorkspace({
                     variant="outline"
                   >
                     Manage Payment Method
+                  </Button>
+                  <Button
+                    className="w-full sm:w-auto"
+                    disabled={isPending || autopayStatus === "enabled" || !paymentMethodManagement?.hasSavedPaymentMethod}
+                    onClick={() => managePaymentMethod("enable_autopay")}
+                    variant="outline"
+                  >
+                    Enable Autopay
                   </Button>
                   <Button
                     className="w-full sm:w-auto"

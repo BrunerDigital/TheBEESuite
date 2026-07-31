@@ -207,8 +207,12 @@ export function FamilyStudentIntakeForm({ centers, compact = false }: Props) {
               {errorFor("familyName")}
             </div>
             <div className="space-y-1">
-              <Label>Opening balance</Label>
-              <Input value={startingBalanceDollars} onChange={(event) => setStartingBalanceDollars(event.target.value)} placeholder="Optional, e.g. 250" inputMode="decimal" />
+              <Label>Prior balance owed at cutover</Label>
+              <Input value={startingBalanceDollars} onChange={(event) => setStartingBalanceDollars(event.target.value)} placeholder="Leave blank or 0" inputMode="decimal" min="0" type="number" step="0.01" />
+              <p className="text-xs text-muted-foreground">
+                Use once for a new family only when they already owe a verified balance from before BEE Suite. Leave zero for weekly tuition, new charges, imported invoices, or an existing family.
+              </p>
+              {errorFor("startingBalanceDollars")}
             </div>
             <div className="space-y-1 md:col-span-2">
               <Label>Address</Label>

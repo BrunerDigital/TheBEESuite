@@ -56,7 +56,7 @@ export function PaymentMethodRequestForm({
   function startSetup(paymentMethodCategory: "link_bank" | "card") {
     if (paymentMethodCategory === "card") {
       const accepted = window.confirm(
-        "Debit/credit card autopay may include the approved card processing recovery when a payment is charged. Continue with card setup?",
+        "Saving this debit/credit card does not enable autopay. Card payments may include the approved processing recovery when the card is charged. Continue?",
       );
       if (!accepted) return;
     }
@@ -183,14 +183,14 @@ export function PaymentMethodRequestForm({
             <AlertCircle className="size-4" />
             <AlertTitle>Bank verification is pending</AlertTitle>
             <AlertDescription className="text-amber-100">
-              To enable ACH autopay, use The BEE Suite Instant Bank Login to verify your account through your bank now. Open invoices do not block bank verification, and you can still pay today by Instant Bank or Debit/Credit Card.
+              Use The BEE Suite Instant Bank Login to verify your account through your bank now. Verification saves the method but does not enable autopay; that is a separate choice in the parent portal or with your school. Open invoices do not block verification.
             </AlertDescription>
           </Alert>
         ) : null}
         {focus === "instant-bank" ? (
           <Alert className="border-sky-300/40 bg-sky-300/10 text-sky-50">
             <Building2 className="size-4" />
-            <AlertTitle>ACH autopay verification requested</AlertTitle>
+            <AlertTitle>Bank verification requested</AlertTitle>
             <AlertDescription className="text-sky-100">
               Select Verify Bank Instantly to complete ACH verification through The BEE Suite. You will log into your bank through the secure processor; The BEE Suite does not store your bank login, and any open invoices stay separate from this setup.
             </AlertDescription>
@@ -226,7 +226,7 @@ export function PaymentMethodRequestForm({
                 </InfoTip>
               </div>
               <p className="mt-2 text-xs text-zinc-400">
-                Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}.
+                Current saved method: {savedPaymentMethodLabel || "No saved payment method on file"}. Saving or replacing a method does not change autopay.
               </p>
             </div>
           </div>

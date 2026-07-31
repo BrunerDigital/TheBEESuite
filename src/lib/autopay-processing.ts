@@ -1,5 +1,9 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
 import {
+  allocateAccountCreditToInvoice,
+  availableAccountCreditCents,
+} from "@/lib/account-credit-autopay";
+import {
   isActiveStripeAutopayPayment,
   isActiveStripeCheckoutPayment,
   jsonRecord,
@@ -27,7 +31,10 @@ import {
   stripeConnectReadinessFromSnapshot,
 } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { applySucceededStripeInvoicePayment } from "@/lib/stripe-payment-application";
+import {
+  applyAccountCreditToInvoice,
+  applySucceededStripeInvoicePayment,
+} from "@/lib/stripe-payment-application";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
@@ -39,6 +46,9 @@ export type AutopayRunInvoiceResult = {
   centerId: string | null;
   centerName: string | null;
   amountCents: number;
+  invoiceAmountCents: number;
+  accountCreditAppliedCents: number;
+  stripeChargePrincipalCents: number;
   status: AutopayRunResultStatus;
   reason: string | null;
   paymentId: string | null;
@@ -159,6 +169,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         select: {
           id: true,
           familyId: true,
+          balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
           family: {
@@ -176,7 +187,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
   const billingAccountIds = unique(invoices.map((invoice) => invoice.billingAccountId));
   const familyCenterIds = unique(invoices.map((invoice) => invoice.billingAccount.family.centerId));
-  const [payments, centers] = await Promise.all([
+  const [payments, centers, openInvoiceTotals] = await Promise.all([
     billingAccountIds.length
       ? prisma.payment.findMany({
           where: {
@@ -205,6 +216,17 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           },
         })
       : [],
+    billingAccountIds.length
+      ? prisma.invoice.groupBy({
+          by: ["billingAccountId"],
+          where: {
+            billingAccountId: { in: billingAccountIds },
+            status: PaymentStatus.OPEN,
+            totalCents: { gt: 0 },
+          },
+          _sum: { totalCents: true },
+        })
+      : [],
   ]);
 
   const centersById = new Map(centers.map((center) => [center.id, center]));
@@ -216,6 +238,29 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     list.push(payment);
     paymentsByInvoiceId.set(invoiceId, list);
   }
+  const reservedCreditByAccountId = new Map<string, number>();
+  for (const payment of payments) {
+    if (!isActiveStripeAutopayPayment(payment)) continue;
+    const fields = jsonRecord(payment.customFields);
+    const reservedCents = Math.max(0, Number(fields.accountCreditAppliedCents) || 0);
+    if (!reservedCents) continue;
+    reservedCreditByAccountId.set(
+      payment.billingAccountId,
+      (reservedCreditByAccountId.get(payment.billingAccountId) ?? 0) + reservedCents,
+    );
+  }
+  const openInvoiceTotalByAccountId = new Map(
+    openInvoiceTotals.map((row) => [row.billingAccountId, row._sum.totalCents ?? 0]),
+  );
+  const availableCreditByAccountId = new Map<string, number>();
+  for (const invoice of invoices) {
+    if (availableCreditByAccountId.has(invoice.billingAccountId)) continue;
+    availableCreditByAccountId.set(invoice.billingAccountId, availableAccountCreditCents({
+      balanceCents: invoice.billingAccount.balanceCents,
+      openInvoiceTotalCents: openInvoiceTotalByAccountId.get(invoice.billingAccountId) ?? 0,
+      reservedCreditCents: reservedCreditByAccountId.get(invoice.billingAccountId) ?? 0,
+    }));
+  }
 
   const configCache = new Map<string, TenantStripeConfig>();
   const connectedAccountCache = new Map<string, {
@@ -224,20 +269,33 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     reason: string | null;
   }>();
   const results: AutopayRunInvoiceResult[] = [];
+  const blockedBillingAccountIds = new Set<string>();
 
   for (const invoice of invoices) {
     const family = invoice.billingAccount.family;
     const center = family.centerId ? centersById.get(family.centerId) : null;
-    const baseResult = {
+    let baseResult = {
       invoiceId: invoice.id,
       invoiceNumber: invoice.number,
       familyName: family.name,
       centerId: family.centerId,
       centerName: center?.name ?? null,
       amountCents: invoice.totalCents,
+      invoiceAmountCents: invoice.totalCents,
+      accountCreditAppliedCents: 0,
+      stripeChargePrincipalCents: invoice.totalCents,
       paymentId: null,
       stripePaymentIntentId: null,
     };
+
+    if (blockedBillingAccountIds.has(invoice.billingAccountId)) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "An earlier invoice for this family failed; account credit remains allocated to the oldest balance.",
+      });
+      continue;
+    }
 
     const attempts = paymentsByInvoiceId.get(invoice.id) ?? [];
     if (attempts.some((payment) => payment.status === PaymentStatus.PAID)) {
@@ -280,11 +338,87 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       });
       continue;
     }
+    const availableCreditCents = availableCreditByAccountId.get(invoice.billingAccountId) ?? 0;
+    const creditAllocation = allocateAccountCreditToInvoice({
+      invoiceTotalCents: invoice.totalCents,
+      availableCreditCents,
+    });
+    baseResult = {
+      ...baseResult,
+      amountCents: creditAllocation.stripeChargePrincipalCents,
+      accountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
+      stripeChargePrincipalCents: creditAllocation.stripeChargePrincipalCents,
+    };
+
+    if (creditAllocation.fullyCoveredByCredit) {
+      if (dryRun) {
+        availableCreditByAccountId.set(
+          invoice.billingAccountId,
+          Math.max(0, availableCreditCents - creditAllocation.accountCreditAppliedCents),
+        );
+        results.push({
+          ...baseResult,
+          status: "would_charge",
+          reason: "Account credit would pay this invoice in full; Stripe would not be charged.",
+        });
+        continue;
+      }
+
+      const application = await prisma.$transaction(async (tx) => {
+        const applied = await applyAccountCreditToInvoice(tx, { invoiceId: invoice.id });
+        if (applied.applied) {
+          await tx.auditLog.create({
+            data: {
+              tenantId: center.organization.tenantId,
+              centerId: center.id,
+              userId: input.requestedByUserId || null,
+              action: collectionMode === "stored_method"
+                ? "billing.stored_method.credit_applied"
+                : "billing.autopay.credit_applied",
+              resource: "Invoice",
+              resourceId: invoice.id,
+              metadata: jsonInput({
+                invoiceAmountCents: invoice.totalCents,
+                accountCreditAppliedCents: applied.accountCreditAppliedCents ?? invoice.totalCents,
+                stripeChargePrincipalCents: 0,
+                noStripePaymentSubmitted: true,
+              }),
+            },
+          });
+        }
+        return applied;
+      }, { maxWait: 10_000, timeout: 30_000 });
+
+      if (!application.applied) {
+        results.push({
+          ...baseResult,
+          status: "skipped",
+          reason: application.reason === "insufficient_account_credit"
+            ? "Account credit changed before it could be applied; the invoice was left open for a safe retry."
+            : `Account credit could not be applied: ${application.reason || "unknown_error"}.`,
+        });
+        continue;
+      }
+      availableCreditByAccountId.set(
+        invoice.billingAccountId,
+        Math.max(0, availableCreditCents - (application.accountCreditAppliedCents ?? invoice.totalCents)),
+      );
+      results.push({
+        ...baseResult,
+        amountCents: 0,
+        accountCreditAppliedCents: application.accountCreditAppliedCents ?? invoice.totalCents,
+        stripeChargePrincipalCents: 0,
+        status: "paid",
+        reason: "Invoice paid from account credit; Stripe was not charged.",
+      });
+      continue;
+    }
+
     const autopayPaymentMethodCategory = paymentMethodAutopayCategory(paymentMethod);
     let billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
     const cardRecoveryRequiresAcceptance =
       autopayPaymentMethodCategory === "card" &&
-      getStripeProcessingRecoveryAmount(invoice.totalCents, "card") > 0;
+      getStripeProcessingRecoveryAmount(creditAllocation.stripeChargePrincipalCents, "card") > 0;
     const oneTimeCardRecoveryAccepted =
       collectionMode === "stored_method" && input.cardProcessingRecoveryAccepted === true;
     if (cardRecoveryRequiresAcceptance && !clean(billingAccountFields.cardProcessingRecoveryAcceptedAt) && !oneTimeCardRecoveryAccepted) {
@@ -380,12 +514,16 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
       brandSlug: center.organization.brand?.slug,
       brandName: center.organization.brand?.name,
     });
-    const amounts = getStripeCheckoutAmounts(invoice.totalCents, {
+    const amounts = getStripeCheckoutAmounts(creditAllocation.stripeChargePrincipalCents, {
       paymentMethodCategory: autopayPaymentMethodCategory,
       waiveBeeSuitePaymentOperationsFee,
     });
 
     if (dryRun) {
+      availableCreditByAccountId.set(
+        invoice.billingAccountId,
+        Math.max(0, availableCreditCents - creditAllocation.accountCreditAppliedCents),
+      );
       results.push({ ...baseResult, status: "would_charge", reason: null });
       continue;
     }
@@ -406,7 +544,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const payment = await prisma.payment.create({
       data: {
         billingAccountId: invoice.billingAccountId,
-        amountCents: invoice.totalCents,
+        amountCents: creditAllocation.stripeChargePrincipalCents,
         status: PaymentStatus.DRAFT,
         provider: "stripe",
         externalIdPlaceholder: "payment_intent_pending",
@@ -415,7 +553,10 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           invoiceNumber: invoice.number,
           familyId: family.id,
           centerId: center.id,
+          invoiceTotalCents: invoice.totalCents,
           invoiceAmountCents: amounts.invoiceAmountCents,
+          accountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
+          stripeChargePrincipalCents: creditAllocation.stripeChargePrincipalCents,
           parentSurchargeAmountCents: amounts.parentSurchargeAmountCents,
           parentProcessingRecoveryAmountCents: amounts.parentProcessingRecoveryAmountCents,
           beeSuitePaymentOperationsFeeAmountCents: amounts.beeSuitePaymentOperationsFeeAmountCents,
@@ -459,7 +600,10 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         stripeCustomerId: scopedStripeCustomerId,
         stripeChargeType: connectedAccountId ? "direct" : "platform",
         collectionMode,
+        invoiceTotalCents: String(invoice.totalCents),
         invoiceAmountCents: String(amounts.invoiceAmountCents),
+        accountCreditAppliedCents: String(creditAllocation.accountCreditAppliedCents),
+        stripeChargePrincipalCents: String(creditAllocation.stripeChargePrincipalCents),
         parentSurchargeAmountCents: String(amounts.parentSurchargeAmountCents),
         parentProcessingRecoveryAmountCents: String(amounts.parentProcessingRecoveryAmountCents),
         beeSuitePaymentOperationsFeeAmountCents: String(amounts.beeSuitePaymentOperationsFeeAmountCents),
@@ -538,7 +682,9 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         metadata: jsonInput({
           paymentId: payment.id,
           stripePaymentIntentId: intent.paymentIntent?.id || null,
-          amountCents: invoice.totalCents,
+          invoiceAmountCents: invoice.totalCents,
+          accountCreditAppliedCents: creditAllocation.accountCreditAppliedCents,
+          stripeChargePrincipalCents: creditAllocation.stripeChargePrincipalCents,
           checkoutTotalCents: amounts.checkoutTotalCents,
           status: intentStatus,
           error: intent.ok ? null : intent.error || null,
@@ -554,12 +700,25 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         ? "processing"
         : "failed";
     const resultReason = appliedImmediately
-      ? "Payment confirmed and the Bee Suite ledger was updated."
+      ? creditAllocation.accountCreditAppliedCents > 0
+        ? "Account credit was applied first; Stripe charged only the remaining balance."
+        : "Payment confirmed and the Bee Suite ledger was updated."
       : accepted && intentStatus === "processing"
-        ? "Bank payment is processing; the ledger will update when Stripe confirms settlement."
+        ? creditAllocation.accountCreditAppliedCents > 0
+          ? "Account credit is reserved for this invoice; the remaining bank payment is processing."
+          : "Bank payment is processing; the ledger will update when Stripe confirms settlement."
         : immediateApplicationReason
           ? `Payment succeeded in Stripe but could not be applied automatically: ${immediateApplicationReason}.`
           : intent.error || `${collectionLabel} could not be submitted.`;
+
+    if (appliedImmediately || (accepted && intentStatus === "processing")) {
+      availableCreditByAccountId.set(
+        invoice.billingAccountId,
+        Math.max(0, availableCreditCents - creditAllocation.accountCreditAppliedCents),
+      );
+    } else if (resultStatus === "failed") {
+      blockedBillingAccountIds.add(invoice.billingAccountId);
+    }
 
     results.push({
       ...baseResult,

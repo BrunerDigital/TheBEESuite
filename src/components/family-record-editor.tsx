@@ -901,16 +901,21 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     });
   }
 
-  function manageFamilyPaymentMethod(action: "setup" | "portal" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
+  function manageFamilyPaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!selectedBillingAccount) {
       setStatusMessage("");
       setErrorMessage("Create a billing account before saving a family payment method.");
       return;
     }
     if (action !== "portal") {
-      const confirmed = window.confirm(
-        `You are editing the billing payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}. Continue?`,
-      );
+      const message = action === "enable_autopay"
+        ? `Enable autopay for ${selectedFamily?.name ?? "this family"}? The one selected saved method will pay open invoices on or after their due date; weekly invoices are created separately and amounts may vary.`
+        : action === "disable_autopay"
+          ? `Disable autopay for ${selectedFamily?.name ?? "this family"}? Saved payment information will remain available for deliberate one-time payments.`
+          : paymentMethodCategory === "card"
+            ? `Save or replace the family card for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. Card charges may include the approved processing recovery.`
+            : `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay.`;
+      const confirmed = window.confirm(message);
       if (!confirmed) return;
     }
     startTransition(async () => {
@@ -923,6 +928,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           billingAccountId: selectedBillingAccount.id,
           action,
           paymentMethodCategory,
+          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
           returnPath: "/family-detail",
         }),
       });
@@ -935,7 +941,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         window.location.href = json.url;
         return;
       }
-      setStatusMessage(action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated.");
+      setStatusMessage(action === "enable_autopay" ? "Autopay enabled." : action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated. Autopay was not changed.");
       router.refresh();
     });
   }
@@ -1256,6 +1262,13 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 variant="outline"
               >
                 Manage Saved Method
+              </Button>
+              <Button
+                disabled={isPending || selectedAutopayStatus === "enabled" || !selectedPaymentMethod?.hasSavedPaymentMethod}
+                onClick={() => manageFamilyPaymentMethod("enable_autopay")}
+                variant="outline"
+              >
+                Enable Autopay
               </Button>
               <Button
                 disabled={isPending || selectedAutopayStatus === "disabled" || !selectedBillingAccount}

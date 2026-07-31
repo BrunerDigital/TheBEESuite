@@ -1,4 +1,8 @@
 import { PaymentStatus, Prisma } from "@prisma/client";
+import {
+  allocateAccountCreditToInvoice,
+  availableAccountCreditCents,
+} from "@/lib/account-credit-autopay";
 import { checkoutApplicationGuard, jsonRecord } from "@/lib/billing-guardrails";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 
@@ -53,7 +57,7 @@ async function applyRegistrationPaymentCompletion(
   tx: Prisma.TransactionClient,
   input: {
     invoiceId: string;
-    paymentId: string;
+    paymentId: string | null;
     paidAt: Date;
     invoiceCustomFields: unknown;
   },
@@ -205,6 +209,144 @@ export type StripePaymentApplicationResult = {
   appliedInvoiceIds?: string[];
 };
 
+export async function applyAccountCreditToInvoice(
+  tx: Prisma.TransactionClient,
+  input: {
+    invoiceId: string;
+    appliedAt?: Date;
+  },
+): Promise<StripePaymentApplicationResult & {
+  accountCreditAppliedCents?: number;
+  stripeChargePrincipalCents?: number;
+}> {
+  const initialInvoice = await tx.invoice.findUnique({
+    where: { id: input.invoiceId },
+    select: { billingAccountId: true },
+  });
+  if (!initialInvoice) return { applied: false, reason: "invoice_not_found" };
+
+  await tx.$queryRaw(
+    Prisma.sql`SELECT "id" FROM "BillingAccount" WHERE "id" = ${initialInvoice.billingAccountId} FOR UPDATE`,
+  );
+
+  const [invoice, account, openInvoiceTotal, draftPayments] = await Promise.all([
+    tx.invoice.findUnique({
+      where: { id: input.invoiceId },
+      select: {
+        id: true,
+        status: true,
+        billingAccountId: true,
+        totalCents: true,
+        customFields: true,
+      },
+    }),
+    tx.billingAccount.findUnique({
+      where: { id: initialInvoice.billingAccountId },
+      select: { balanceCents: true },
+    }),
+    tx.invoice.aggregate({
+      where: {
+        billingAccountId: initialInvoice.billingAccountId,
+        status: PaymentStatus.OPEN,
+        totalCents: { gt: 0 },
+      },
+      _sum: { totalCents: true },
+    }),
+    tx.payment.findMany({
+      where: {
+        billingAccountId: initialInvoice.billingAccountId,
+        provider: "stripe",
+        status: PaymentStatus.DRAFT,
+      },
+      select: { customFields: true },
+    }),
+  ]);
+  if (!invoice || !account) {
+    return { applied: false, reason: invoice ? "billing_account_not_found" : "invoice_not_found" };
+  }
+  if (invoice.status !== PaymentStatus.OPEN) {
+    return { applied: false, reason: "invoice_already_paid", billingAccountId: invoice.billingAccountId };
+  }
+
+  const reservedCreditCents = draftPayments.reduce((total, payment) => {
+    const fields = jsonRecord(payment.customFields);
+    const status = clean(fields.status);
+    if (!status.endsWith("_pending") && !status.endsWith("_processing")) return total;
+    return total + centsFrom(fields.accountCreditAppliedCents);
+  }, 0);
+  const availableCreditCents = availableAccountCreditCents({
+    balanceCents: account.balanceCents,
+    openInvoiceTotalCents: openInvoiceTotal._sum.totalCents ?? 0,
+    reservedCreditCents,
+  });
+  const allocation = allocateAccountCreditToInvoice({
+    invoiceTotalCents: invoice.totalCents,
+    availableCreditCents,
+  });
+  if (!allocation.fullyCoveredByCredit) {
+    return {
+      applied: false,
+      reason: "insufficient_account_credit",
+      billingAccountId: invoice.billingAccountId,
+      accountCreditAppliedCents: allocation.accountCreditAppliedCents,
+      stripeChargePrincipalCents: allocation.stripeChargePrincipalCents,
+    };
+  }
+
+  const paidAt = input.appliedAt ?? new Date();
+  const invoiceFields = jsonRecord(invoice.customFields);
+  const claim = await tx.invoice.updateMany({
+    where: { id: invoice.id, status: PaymentStatus.OPEN },
+    data: {
+      status: PaymentStatus.PAID,
+      customFields: inputJson({
+        ...invoiceFields,
+        status: "paid",
+        paidAt: paidAt.toISOString(),
+        paidByAccountCredit: true,
+        accountCreditAppliedCents: allocation.accountCreditAppliedCents,
+        stripeChargePrincipalCents: 0,
+      }),
+    },
+  });
+  if (claim.count !== 1) {
+    return { applied: false, reason: "invoice_already_paid", billingAccountId: invoice.billingAccountId };
+  }
+
+  await tx.ledgerEntry.create({
+    data: {
+      billingAccountId: invoice.billingAccountId,
+      invoiceId: invoice.id,
+      paymentId: null,
+      type: "account_credit_application",
+      description: "Account credit applied",
+      amountCents: 0,
+      balanceAfterCents: account.balanceCents,
+      sourceSystem: "bee_suite",
+      externalId: `account-credit:invoice:${invoice.id}`,
+      metadata: inputJson({
+        accountCreditAppliedCents: allocation.accountCreditAppliedCents,
+        invoiceTotalCents: invoice.totalCents,
+        stripeChargePrincipalCents: 0,
+        fullyCoveredByCredit: true,
+      }),
+    },
+  });
+  await applyRegistrationPaymentCompletion(tx, {
+    invoiceId: invoice.id,
+    paymentId: null,
+    paidAt,
+    invoiceCustomFields: invoice.customFields,
+  });
+  return {
+    applied: true,
+    reason: null,
+    billingAccountId: invoice.billingAccountId,
+    accountCreditAppliedCents: allocation.accountCreditAppliedCents,
+    stripeChargePrincipalCents: 0,
+  };
+}
+
 export async function applySucceededStripeInvoicePayment(
   tx: Prisma.TransactionClient,
   input: {
@@ -238,6 +380,7 @@ export async function applySucceededStripeInvoicePayment(
     return { applied: false, reason: "payment_already_applied", billingAccountId: currentPayment.billingAccountId };
   }
 
+  const accountCreditAppliedCents = centsFrom(metadata.accountCreditAppliedCents);
   const guard = checkoutApplicationGuard({
     invoiceStatus: invoice.status,
     invoiceBillingAccountId: invoice.billingAccountId,
@@ -245,6 +388,7 @@ export async function applySucceededStripeInvoicePayment(
     paymentStatus: currentPayment.status,
     paymentBillingAccountId: currentPayment.billingAccountId,
     paymentAmountCents: currentPayment.amountCents,
+    accountCreditAppliedCents,
   });
   if (!guard.ok) {
     await tx.payment.update({
@@ -268,9 +412,22 @@ export async function applySucceededStripeInvoicePayment(
     return { applied: false, reason: guard.reason, billingAccountId: currentPayment.billingAccountId };
   }
 
+  const paidAt = input.appliedAt ?? new Date();
+  const invoiceFields = jsonRecord(invoice.customFields);
   const invoiceClaim = await tx.invoice.updateMany({
     where: { id: input.invoiceId, status: { not: PaymentStatus.PAID } },
-    data: { status: PaymentStatus.PAID },
+    data: {
+      status: PaymentStatus.PAID,
+      customFields: inputJson({
+        ...invoiceFields,
+        status: "paid",
+        paidAt: paidAt.toISOString(),
+        paymentId: input.paymentId,
+        paidWithAccountCredit: accountCreditAppliedCents > 0,
+        accountCreditAppliedCents,
+        stripeChargePrincipalCents: currentPayment.amountCents,
+      }),
+    },
   });
   if (invoiceClaim.count !== 1) {
     await tx.payment.update({
@@ -293,7 +450,6 @@ export async function applySucceededStripeInvoicePayment(
     return { applied: false, reason: "invoice_already_paid", billingAccountId: currentPayment.billingAccountId };
   }
 
-  const paidAt = input.appliedAt ?? new Date();
   const collectionMode = clean(metadata.collectionMode) || null;
   const payment = await tx.payment.update({
     where: { id: input.paymentId },
@@ -310,6 +466,9 @@ export async function applySucceededStripeInvoicePayment(
         stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
         stripeAppliedSynchronouslyAt: paidAt.toISOString(),
         invoiceAmountCents: centsFrom(metadata.invoiceAmountCents) || null,
+        invoiceTotalCents: centsFrom(metadata.invoiceTotalCents) || invoice.totalCents,
+        accountCreditAppliedCents,
+        stripeChargePrincipalCents: currentPayment.amountCents,
         parentSurchargeAmountCents: centsFrom(metadata.parentSurchargeAmountCents),
         parentProcessingRecoveryAmountCents: centsFrom(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents),
         beeSuitePaymentOperationsFeeAmountCents: centsFrom(metadata.beeSuitePaymentOperationsFeeAmountCents),
@@ -341,6 +500,9 @@ export async function applySucceededStripeInvoicePayment(
         stripeAmountTotalCents: input.stripeAmountTotalCents ?? null,
         stripeAppliedSynchronously: true,
         collectionMode,
+        invoiceTotalCents: invoice.totalCents,
+        accountCreditAppliedCents,
+        stripeChargePrincipalCents: payment.amountCents,
         parentSurchargeAmountCents: centsFrom(metadata.parentSurchargeAmountCents),
         parentProcessingRecoveryAmountCents: centsFrom(metadata.parentProcessingRecoveryAmountCents || metadata.parentSurchargeAmountCents),
         beeSuitePaymentOperationsFeeAmountCents: centsFrom(metadata.beeSuitePaymentOperationsFeeAmountCents),
@@ -348,6 +510,27 @@ export async function applySucceededStripeInvoicePayment(
       }),
     },
   });
+  if (accountCreditAppliedCents > 0) {
+    await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: payment.billingAccountId,
+        invoiceId: input.invoiceId,
+        paymentId: payment.id,
+        type: "account_credit_application",
+        description: "Account credit applied",
+        amountCents: 0,
+        balanceAfterCents: updatedAccount.balanceCents,
+        sourceSystem: "bee_suite",
+        externalId: `account-credit:invoice:${input.invoiceId}`,
+        metadata: inputJson({
+          accountCreditAppliedCents,
+          invoiceTotalCents: invoice.totalCents,
+          stripeChargePrincipalCents: payment.amountCents,
+          stripePaymentIntentId: input.stripePaymentIntentId,
+        }),
+      },
+    });
+  }
   await applyRegistrationPaymentCompletion(tx, {
     invoiceId: input.invoiceId,
     paymentId: payment.id,

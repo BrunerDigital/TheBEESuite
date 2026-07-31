@@ -74,6 +74,7 @@ async function POSTHandler(request: NextRequest) {
   if (!guardianEmail && !guardianPhone) errors.guardianEmail = "Parent email or phone is required.";
   if (!childName) errors.childName = "Child name is required.";
   if (!dateOfBirth) errors.dateOfBirth = "Child date of birth is required.";
+  if (startingBalanceCents < 0) errors.startingBalanceDollars = "Opening balance cannot be negative. Post a verified credit through the family ledger instead.";
   if (clean(body.checkInPin) && !checkInPin) errors.checkInPin = "Check-in PIN must be exactly 4 digits.";
   if (Object.keys(errors).length) {
     return NextResponse.json({ ok: false, error: "Please fix the highlighted fields.", errors }, { status: 400 });
@@ -97,19 +98,31 @@ async function POSTHandler(request: NextRequest) {
     }
   }
 
+  const existingFamilyMatch = guardianEmail
+    ? await prisma.family.findFirst({
+        where: {
+          centerId: center.id,
+          OR: [
+            { billingEmail: guardianEmail },
+            { guardians: { some: { email: guardianEmail } } },
+          ],
+        },
+        select: { id: true, name: true },
+      })
+    : null;
+  if (existingFamilyMatch && startingBalanceCents > 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Opening balance can only be entered once when a new family is created. Review the existing family ledger instead.",
+        errors: { startingBalanceDollars: "Leave this at zero for an existing family." },
+      },
+      { status: 409 },
+    );
+  }
+
   const result = await prisma.$transaction(async (tx) => {
-    const existingFamily = guardianEmail
-      ? await tx.family.findFirst({
-          where: {
-            centerId: center.id,
-            OR: [
-              { billingEmail: guardianEmail },
-              { guardians: { some: { email: guardianEmail } } },
-            ],
-          },
-          select: { id: true, name: true },
-        })
-      : null;
+    const existingFamily = existingFamilyMatch;
 
     const family = existingFamily
       ? await tx.family.update({

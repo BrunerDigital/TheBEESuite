@@ -89,6 +89,7 @@ export function checkoutApplicationGuard(input: {
   paymentStatus: PaymentStatus;
   paymentBillingAccountId: string;
   paymentAmountCents: number;
+  accountCreditAppliedCents?: number;
 }) {
   if (input.invoiceStatus === PaymentStatus.PAID) {
     return { ok: false as const, reason: "invoice_already_paid" };
@@ -99,7 +100,8 @@ export function checkoutApplicationGuard(input: {
   if (input.invoiceBillingAccountId !== input.paymentBillingAccountId) {
     return { ok: false as const, reason: "billing_account_mismatch" };
   }
-  if (input.invoiceTotalCents !== input.paymentAmountCents) {
+  const accountCreditAppliedCents = Math.max(0, Math.round(input.accountCreditAppliedCents ?? 0));
+  if (input.invoiceTotalCents !== input.paymentAmountCents + accountCreditAppliedCents) {
     return { ok: false as const, reason: "amount_mismatch" };
   }
   return { ok: true as const };

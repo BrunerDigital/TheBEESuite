@@ -144,7 +144,6 @@ async function POSTHandler(request: NextRequest) {
       select: { customFields: true },
     });
     const accountFields = jsonObject(billingAccount?.customFields);
-    const hasSavedPaymentMethod = Boolean(clean(accountFields.stripeDefaultPaymentMethodId));
     const accountCustomFields = {
       ...accountFields,
       tuitionAutobillEnabled: true,
@@ -156,11 +155,6 @@ async function POSTHandler(request: NextRequest) {
       tuitionAutobillAmountCents: plan.amountCents,
       tuitionAutobillUpdatedAt: updatedAt,
       tuitionAutobillUpdatedBy: updatedBy,
-      autopayEnabled: hasSavedPaymentMethod,
-      autopayStatus: hasSavedPaymentMethod ? "enabled" : "pending",
-      paymentMethodManagementStatus: hasSavedPaymentMethod
-        ? "tuition_autobill_ready"
-        : "tuition_autobill_needs_payment_method",
     } as Prisma.InputJsonObject;
 
     await tx.billingAccount.upsert({

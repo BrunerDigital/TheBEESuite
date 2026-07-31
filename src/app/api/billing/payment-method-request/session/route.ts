@@ -196,7 +196,7 @@ async function POSTHandler(request: NextRequest) {
       stripeConnectedAccountId: connectedAccountId || "",
       stripeCustomerId: customerId,
       recipientEmail: payload.email,
-      enableAutopay: "true",
+      autopaySetupMode: "preserve",
       preferredPaymentMethodCategory: paymentMethodCategory,
       bankAccountVerificationMethod: bankAccountVerificationMethod || "",
       environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
@@ -231,7 +231,6 @@ async function POSTHandler(request: NextRequest) {
         paymentMethodManagementUpdatedAt: updatedAt,
         paymentMethodRequestLastOpenedAt: updatedAt,
         paymentMethodRequestLastRecipientEmail: payload.email,
-        autopayStatus: "pending",
         ...(paymentMethodCategory === "card" && processingRecoveryAccepted
           ? {
               cardProcessingRecoveryAcceptedAt: updatedAt,

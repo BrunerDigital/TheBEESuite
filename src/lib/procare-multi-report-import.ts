@@ -332,17 +332,28 @@ const REPORT_DISTINCTIVE_COLUMNS: Record<ProcareReportKind, readonly string[]> =
 };
 
 const REPORT_MIN_DISTINCTIVE_MATCHES: Record<ProcareReportKind, number> = {
-  enrollment: 3,
+  enrollment: 2,
   parentinfo: 1,
   relationships: 1,
   childinfo: 1,
 };
+
+const PROCARE_TIME_CARD_COLUMNS = [
+  "Punch In Date/Time",
+  "Punch Out Date/Time",
+  "Clock In Date/Time",
+  "Clock Out Date/Time",
+] as const;
 
 function reportCandidate(sourceName: string, parsed: ParsedCsv, reportKind: ProcareReportKind): DetectedProcareReport | null {
   const canonicalized = canonicalizeReport(parsed, reportKind);
   const available = new Set(canonicalized.headers.map(normalizeColumnName));
   const required = PROCARE_MULTI_REPORT_COVERAGE_MANIFEST.reports[reportKind].requiredColumns;
   if (!required.every((column) => available.has(normalizeColumnName(column)))) return null;
+  if (
+    reportKind === "enrollment"
+    && PROCARE_TIME_CARD_COLUMNS.some((column) => available.has(normalizeColumnName(column)))
+  ) return null;
   const distinctiveMatches = REPORT_DISTINCTIVE_COLUMNS[reportKind]
     .filter((column) => available.has(normalizeColumnName(column))).length;
   if (distinctiveMatches < REPORT_MIN_DISTINCTIVE_MATCHES[reportKind]) return null;

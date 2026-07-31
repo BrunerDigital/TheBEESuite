@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { getStripeSecretKey, readStripeConnectedAccountId, retrieveStripeConnectedAccount } from "@/lib/integrations";
+import {
+  getStripeSecretKey,
+  listStripeConnectedAccountPayoutBanks,
+  readStripeConnectedAccountId,
+  retrieveStripeConnectedAccount,
+} from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromFields, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
@@ -74,6 +79,22 @@ async function GETHandler(request: NextRequest) {
 
   const readiness = stripeConnectReadinessFromSnapshot(retrieved.account);
   const billingApproval = stripeSchoolBillingApproval({ customFields: existingFields, centerName: center.name });
+  const payoutBanks = await listStripeConnectedAccountPayoutBanks({
+    accountId,
+    tenantId: user.tenantId,
+  });
+  const payoutBank = payoutBanks.defaultBank;
+  const payoutBankPatch = payoutBanks.ok
+    ? {
+        stripePayoutBankName: payoutBank?.bankName || null,
+        stripePayoutBankLast4: payoutBank?.last4 || null,
+        stripePayoutBankStatus: payoutBank?.status || null,
+        stripePayoutBankCurrency: payoutBank?.currency || null,
+        stripePayoutBankDefaultConfirmed: payoutBank?.defaultForCurrency === true,
+        stripePayoutBankCount: payoutBanks.banks.length,
+        stripePayoutBankLastSyncedAt: new Date().toISOString(),
+      }
+    : {};
 
   await prisma.center.update({
     where: { id: center.id },
@@ -83,6 +104,7 @@ async function GETHandler(request: NextRequest) {
         ...stripeConnectCustomFieldPatch(readiness),
         stripeMerchantCapabilityStatus: retrieved.account.merchantCapabilityStatus || null,
         stripeRecipientTransferStatus: retrieved.account.recipientTransferStatus || null,
+        ...payoutBankPatch,
       },
     },
   });
@@ -96,6 +118,8 @@ async function GETHandler(request: NextRequest) {
       stripeConnectedAccountId: accountId,
       status: readiness.status,
       requirementCount: retrieved.account.requirementFields.length,
+      payoutBankConfirmed: Boolean(payoutBank?.last4),
+      payoutBankCount: payoutBanks.banks.length,
     },
   });
 
@@ -107,6 +131,9 @@ async function GETHandler(request: NextRequest) {
     readiness,
     billingApproval,
     account: retrieved.account,
+    payoutBank,
+    payoutBankCount: payoutBanks.banks.length,
+    payoutBankError: payoutBanks.ok ? null : payoutBanks.error || "Payout bank could not be confirmed.",
   });
 }
 

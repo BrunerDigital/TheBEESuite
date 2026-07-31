@@ -5,10 +5,8 @@ import {
   BarChart3,
   Building2,
   CalendarDays,
-  Calculator,
   Camera,
   CheckCircle2,
-  Clock,
   Code2,
   ClipboardCheck,
   CreditCard,
@@ -16,37 +14,34 @@ import {
   LockKeyhole,
   Mail,
   MapPin,
-  Quote,
   School,
   ShieldCheck,
   Sparkles,
   TabletSmartphone,
-  TrendingUp,
   UsersRound,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { LandingHeroShowcase } from "@/components/landing-hero-showcase";
-import { LandingSavingsCalculator } from "@/components/landing-savings-calculator";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   ["Product", "#product"],
   ["How it works", "#workflows"],
-  ["Capacity", "#capacity-planning"],
-  ["Savings", "#savings"],
-  ["Schools", "#school-use"],
-  ["App", "/app"],
+  ["Roles", "#role-views"],
+  ["Billing", "#billing"],
+  ["Launch", "#product-maps"],
+  ["Guides", "/resources"],
   ["Registration", "/registration"],
   ["Trust", "#trust"],
 ];
 
 const heroProof = [
-  ["Role-safe web app", "Tenant, brand, owner group, school, and classroom scope"],
-  ["Enrollment to ops", "Inquiry, registration, family setup, billing, and reports"],
-  ["Human-reviewed AI", "Drafts and summaries with staff decision guardrails"],
+  ["Current product proof", "Light-mode desktop, iPad, and iPhone screens"],
+  ["Right view, every role", "Executive, director, teacher, and parent workspaces"],
+  ["Launch by feature", "Independent gates for access, kiosk, billing, and payments"],
 ];
 
 const heroLogo = {
@@ -100,8 +95,14 @@ const workflowCards = [
     steps: ["PIN check-in", "Teacher update", "Parent portal", "Daily report"],
   },
   {
+    title: "Billing and payments",
+    body: "School-scoped tuition assignments, Thursday invoice scheduling, payment methods, autopay, Terminal, and reconciliation stay connected to the right family and child.",
+    icon: CreditCard,
+    steps: ["Tuition assignment", "Weekly invoice", "Parent payment", "Reconciliation"],
+  },
+  {
     title: "Executive rollup",
-    body: "Operators see FTE, occupancy, conversion, revenue readiness, ratio snapshots, and action queues across every center.",
+    body: "Operators review FTE, enrollment health, school readiness, payroll reports, and action queues without losing location-level context.",
     icon: BarChart3,
     steps: ["FTE data", "Pipeline health", "Center snapshot", "Next action"],
   },
@@ -111,28 +112,34 @@ const workflowCards = [
     icon: ShieldCheck,
     steps: ["Tenant", "Brand", "Owner group", "Center"],
   },
+  {
+    title: "School-ready rollout",
+    body: "Setup, parent access, kiosk, billing, payments, migration, and wider rollout remain separate readiness decisions for each school.",
+    icon: CheckCircle2,
+    steps: ["Prepare", "Verify", "Train", "Approve"],
+  },
 ];
 
-const capacityPlanningCards = [
+const currentOperationsCards = [
   {
-    title: "30, 60, and 90 day room view",
-    body: "Directors can see where starts, withdrawals, birthdays, move-ups, capacity, and ratios may collide before a seat sits empty or a room drifts out of range.",
+    title: "School-linked registration",
+    body: "Public registration packets stay tied to the selected school, create director review work, and preserve the family and child context needed for enrollment.",
+    icon: FileCheck2,
+  },
+  {
+    title: "ProCare migration with review",
+    body: "Multi-report imports stage unresolved data, preserve relationship warnings, show progress, and require review before invitations or operational cutover.",
+    icon: Workflow,
+  },
+  {
+    title: "School-local daily operations",
+    body: "Attendance, teacher care times, payroll clocks, daily reports, and reporting periods use the school’s local operating context.",
     icon: CalendarDays,
   },
   {
-    title: "Waitlist fit with school context",
-    body: "Open seats are more useful when they are matched to program interest, child age, desired start date, required documents, and billing readiness.",
-    icon: UsersRound,
-  },
-  {
-    title: "Ratio and staffing early warnings",
-    body: "Enrollment planning is tied back to classroom ratios, teacher assignment, schedules, and licensed capacity instead of living in a separate spreadsheet.",
-    icon: ShieldCheck,
-  },
-  {
-    title: "A director answer screen",
-    body: "When a parent asks when a child can start, the school can answer from one planning surface instead of checking files, calendars, rosters, and inboxes.",
-    icon: Sparkles,
+    title: "Payment readiness by school",
+    body: "Card, bank, autopay, payout, and Terminal workflows remain gated until the school’s technical and business readiness is confirmed.",
+    icon: CreditCard,
   },
 ];
 
@@ -161,88 +168,81 @@ const trustCards = [
 ];
 
 const integrationCards = [
-  ["Migration intake", "Procare CSV import support helps schools move families, children, guardians, classrooms, staff, invoices, balances, and attendance into The BEE Suite.", Workflow],
-  ["Calendar and communication", "Tour events, school closures, staff-visible events, parent notices, Gmail inquiry intake, and message workflows keep teams out of scattered inboxes.", CalendarDays],
-  ["Accounting and payment runway", "Billing readiness, payout setup, invoice flows, parent payment methods, and export-friendly records keep financial operations connected.", CreditCard],
+  ["Migration intake", "ProCare report packages can be staged, validated, reviewed, and resumed without treating incomplete relationships as approved data.", Workflow],
+  ["School-scoped marketing accounts", "Authorized teams can connect supported social and paid-media accounts, choose the intended account, review connection status, and keep publishing and analytics tied to the correct school.", BarChart3],
+  ["Calendar and communication", "Tour events, closures, parent notices, inquiry routing, campaign drafts, and message workflows can be configured within the authorized school scope.", CalendarDays],
+  ["Accounting and payment runway", "Tuition assignments, invoice schedules, payout readiness, parent payment methods, Terminal, and reconciliation remain connected and school-gated.", CreditCard],
 ];
 
 const resourceCards = [
   ["State readiness", "Licensing, QRIS, funding, professional development, and required document rules can be tracked as school setup and compliance evidence.", MapPin],
   ["Credential visibility", "Staff profiles, background status, certifications, schedule rows, onboarding documents, and expiration reminders stay visible to authorized leaders.", UsersRound],
-  ["Launch checklist", "Each school can track classrooms, families, staff, registration packets, billing setup, integrations, forms, and smoke testing before going live.", CheckCircle2],
+  ["Independent launch gates", "Each school can verify setup, migration, parent access, kiosk, billing, payments, and broader rollout separately before promotion.", CheckCircle2],
 ];
 
 const explainerGraphics = [
-
   {
-    title: "Getting started platform map",
-    body: "Shows the current launch order across Vercel, Supabase, Stripe, messaging, Google/webhooks, OpenAI, Procare migration, school setup, and user training.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-getting-started-platform-map-2026-07-01.svg",
+    title: "School launch gates",
+    body: "Separates technical release from school readiness across setup, parent access, kiosk, billing, payments, migration, and wider rollout.",
+    src: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
     width: 1600,
     height: 1000,
   },
   {
-    title: "School launch swimlane",
-    body: "Breaks go-live into role-by-role steps for owners, directors, teachers, parents, billing/compliance users, and support so every handoff is explicit.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg",
+    title: "Parent access and installation",
+    body: "Shows the current invite, first-login, and install path across iPhone, iPad, Android, Fire tablet, and desktop.",
+    src: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
     width: 1600,
     height: 1000,
   },
   {
-    title: "Daily user quick start",
-    body: "A role-card graphic for the first actions directors, teachers, parents, billing users, executives, and support teams should take in the current app.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-daily-user-quick-start-2026-07-01.svg",
+    title: "Parent payment options",
+    body: "Explains card-first checkout, saved payment methods, one-time bank payments, autopay status, and exact-total review.",
+    src: "/brand/the-bee-suite/explainers/current/parent-payment-options.png",
     width: 1600,
     height: 1000,
   },
   {
-    title: "Childcare operating system",
-    body: "Shows how enrollment, operations, families, billing, reporting, and platform controls connect around one shared school record.",
-    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_01-childcare-operating-system_2026-06-08.png",
+    title: "Weekly tuition flow",
+    body: "Keeps the assigned child billing record as the source of truth from school selection through the Thursday invoice run.",
+    src: "/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png",
     width: 1600,
     height: 1000,
   },
   {
-    title: "Inquiry to enrolled family",
-    body: "Explains the website form, Location ID routing, CRM follow-up, family setup, and school operations handoff.",
-    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png",
+    title: "Director daily flow",
+    body: "Connects the morning school review, family and classroom follow-up, billing oversight, records, communication, and closeout.",
+    src: "/brand/the-bee-suite/explainers/current/director-daily-flow.png",
     width: 1600,
     height: 1000,
   },
   {
-    title: "Permission-safe data model",
-    body: "Clarifies why executives, directors, teachers, parents, auditors, and pickup users each see the right scope.",
-    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_03-permission-safe-data-model_2026-06-08.png",
+    title: "Teacher daily flow",
+    body: "Shows the iPad-first classroom rhythm for roster review, attendance, care logs, photos, incidents, messages, and daily reports.",
+    src: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
     width: 1600,
-    height: 1077,
+    height: 1000,
   },
   {
-    title: "School go-live setup path",
-    body: "Walks a new school through active location setup, director configuration, classrooms, families, billing, routing, and smoke testing.",
-    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_04-school-go-live-setup-path_2026-06-08.png",
+    title: "Kiosk pickup flow",
+    body: "Covers guardian PIN or QR verification, child selection, check-in or pickup, signatures, staff clocks, and escalation.",
+    src: "/brand/the-bee-suite/explainers/current/kiosk-pickup-flow.png",
     width: 1600,
-    height: 1001,
+    height: 1000,
   },
   {
-    title: "Daily operating loop",
-    body: "Frames the everyday school rhythm from morning command check through drop-off, teacher logs, parent communication, and closeout reporting.",
-    src: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_05-daily-operating-loop_2026-06-08.png",
+    title: "FTE reporting flow",
+    body: "Preserves the selected reporting week from school submission through executive review and follow-up.",
+    src: "/brand/the-bee-suite/explainers/current/fte-reporting-flow.png",
     width: 1600,
-    height: 1001,
+    height: 1000,
   },
   {
-    title: "Director dashboard guide",
-    body: "Gives directors a one-page operating guide for dashboard review, family records, tuition payments, parent follow-up, forms, and common billing FAQs.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png",
+    title: "Terminal payment flow",
+    body: "Shows the school-scoped Stripe Terminal path from reader registration through card-present payment and reconciliation.",
+    src: "/brand/the-bee-suite/explainers/current/terminal-payment-flow.png",
     width: 1600,
-    height: 3000,
-  },
-  {
-    title: "Parent portal guide",
-    body: "Shows parents how to set up their portal, see balances, pay by card or verified bank, manage payment info, complete forms, and use kiosk check-in/out.",
-    src: "/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png",
-    width: 1600,
-    height: 3000,
+    height: 1000,
   },
 ];
 
@@ -273,63 +273,6 @@ const schoolScenes = [
     alt: "Childcare directors collaborating at a laptop in a preschool office",
     metric: "One operating record",
     detail: "CRM, enrollment, documents, billing, and staffing",
-  },
-];
-
-const testimonials = [
-  {
-    quote: "The part that matters to franchisees is separation. I can see owner-group performance without giving every location access to every other school’s families, billing, or staffing details.",
-    person: "Megan L.",
-    role: "Multi-location childcare owner",
-    challenge: "Owner group visibility",
-  },
-  {
-    quote: "Our directors used to chase leads in email, text threads, and sticky notes. The BEE Suite gives them one place to see inquiry source, tour status, registration packet, and next follow-up.",
-    person: "Carlos R.",
-    role: "Regional childcare franchisee",
-    challenge: "Lead follow-up discipline",
-  },
-  {
-    quote: "Online registration is useful because it does not just collect a form. Approval creates the family record, document requests, checklist, parent portal invite, and billing next steps.",
-    person: "Dana M.",
-    role: "Center director",
-    challenge: "Enrollment handoff",
-  },
-  {
-    quote: "I need to know what is missing before a child starts: custody paperwork, immunizations, signatures, tuition setup, classroom assignment, and start date. The checklist makes that visible.",
-    person: "Rachel P.",
-    role: "Enrollment and front desk lead",
-    challenge: "Start-date readiness",
-  },
-  {
-    quote: "At the corporate level, the value is a cleaner operating rhythm. We can review FTE, pipeline, open documents, payments readiness, ratios, and location setup without asking schools for another spreadsheet.",
-    person: "Monica S.",
-    role: "Childcare brand operations",
-    challenge: "Executive rollup",
-  },
-  {
-    quote: "The teacher view is practical. I can add meals, naps, activities, photos, and notes during the day instead of reconstructing everything after pickup.",
-    person: "Taylor K.",
-    role: "Preschool classroom lead",
-    challenge: "Daily report accuracy",
-  },
-  {
-    quote: "For agencies supporting multiple providers, the document and compliance queues are the difference. It is easier to see which families, staff, or children need records before a visit or file review.",
-    person: "Nina H.",
-    role: "Family services and records support",
-    challenge: "Records readiness",
-  },
-  {
-    quote: "Medication logs, incident review, emergency drills, and staff credential reminders all reduce the number of places directors have to look before they know what needs attention.",
-    person: "Jordan C.",
-    role: "Childcare agency field support",
-    challenge: "Licensing support workflows",
-  },
-  {
-    quote: "The AI assistant helps with the blank-page problem. It can draft a warm parent reply or summarize a lead, but the school still makes the final call on sensitive issues.",
-    person: "Alyssa B.",
-    role: "Early learning agency staff",
-    challenge: "Human-reviewed communication",
   },
 ];
 
@@ -502,34 +445,6 @@ function SchoolSceneCard({
   );
 }
 
-function TestimonialCard({
-  quote,
-  person,
-  role,
-  challenge,
-}: {
-  quote: string;
-  person: string;
-  role: string;
-  challenge: string;
-}) {
-  return (
-    <GlassPanel className="relative flex h-full flex-col p-6 transition duration-300 hover:border-amber-300/30 hover:bg-white/[0.055]">
-      <div className="flex items-center justify-between gap-4">
-        <Quote className="size-7 shrink-0 text-amber-300" />
-        <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
-          {challenge}
-        </span>
-      </div>
-      <p className="mt-5 flex-1 text-base leading-7 text-zinc-200">{quote}</p>
-      <div className="mt-6 border-t border-white/10 pt-4">
-        <div className="text-sm font-semibold text-white">{person}</div>
-        <div className="mt-1 text-xs leading-5 text-zinc-500">{role}</div>
-      </div>
-    </GlassPanel>
-  );
-}
-
 export default function LandingPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#05070a] text-white">
@@ -578,11 +493,11 @@ export default function LandingPage() {
               priority
             />
             <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-300 sm:text-xl">
-              The secure, web-based, easy to use command center for childcare providers that need enrollment, tours, registration, attendance, parent communication, staffing, billing readiness, compliance support, and multi-location reporting in one role-safe workspace.
+              Childcare operations, in one role-safe suite. Connect enrollment, school-day work, family communication, billing, records, and multi-location reporting without losing the school and role context behind each decision.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button size="lg" className="h-12 px-5 text-sm shadow-[0_0_34px_rgba(245,181,27,0.25)]" nativeButton={false} render={<Link href="/onboarding" />}>
-                Request web app workspace
+                Request a workspace
                 <ArrowRight data-icon="inline-end" />
               </Button>
               <Button
@@ -592,7 +507,7 @@ export default function LandingPage() {
                 nativeButton={false}
                 render={<Link href="/registration" />}
               >
-                View registration flow
+                See the registration flow
               </Button>
               <Button
                 size="lg"
@@ -637,10 +552,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="The workflows connect instead of living in separate tabs."
-            body="Inquiry capture, online registration, classroom engagement, billing readiness, compliance work, reporting, and AI assistance share the same center record, so schools do less duplicate admin work."
+            title="The workflows connect around the same school record."
+            body="Inquiry capture, school-linked registration, classroom work, parent access, billing, reporting, and rollout readiness stay connected while each role works in the scope designed for it."
           />
-          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {workflowCards.map((workflow) => (
               <WorkflowGraphic key={workflow.title} {...workflow} />
             ))}
@@ -648,80 +563,79 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="capacity-planning" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
+      <section id="role-views" className="relative overflow-hidden border-y border-white/10 bg-[#080b0f] px-4 py-20 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(245,181,27,0.1),transparent_34%),radial-gradient(circle_at_88%_18%,rgba(56,189,248,0.08),transparent_24rem)]" />
-        <div className="relative mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div>
+        <div className="relative mx-auto max-w-[1400px]">
+          <div className="grid gap-8 lg:grid-cols-[0.72fr_1fr] lg:items-end">
             <SectionHeading
-              title="Capacity planning before empty seats cost the school."
-              body="The BEE Suite already tracks the pieces that make enrollment planning real: child age, program interest, classroom capacity, staff assignment, start dates, tours, registration status, billing readiness, and open documents. The next layer turns those signals into a forward-looking seat plan."
+              title="The right screen for every role and device."
+              body="Directors and executives work from desktop. Teachers use iPad-first classroom flows with desktop support. Parents can use iPhone, iPad, or desktop, with the phone experience kept focused on family tasks."
             />
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              {capacityPlanningCards.map((card) => (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                ["Directors + executives", "Desktop-first operating and reporting views."],
+                ["Teachers", "iPad-first classroom work, plus desktop access."],
+                ["Parents", "iPhone-first family portal, plus iPad and desktop."],
+              ].map(([title, body]) => (
+                <GlassPanel key={title} className="p-4">
+                  <div className="text-sm font-semibold text-amber-300">{title}</div>
+                  <p className="mt-2 text-xs leading-5 text-zinc-400">{body}</p>
+                </GlassPanel>
+              ))}
+            </div>
+          </div>
+          <div className="mt-10 grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+            <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
+              <Image
+                src="/brand/the-bee-suite/sop-graphics/current/role-device-standards-guide.png"
+                alt="The BEE Suite role and device standards for executives, directors, teachers, and parents"
+                width={1600}
+                height={1000}
+                className="h-auto w-full rounded-lg"
+              />
+            </GlassPanel>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              {currentOperationsCards.map((card) => (
                 <FeatureCard key={card.title} {...card} />
               ))}
             </div>
           </div>
-          <GlassPanel className="p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-sm font-semibold uppercase tracking-[0.18em] text-amber-300">Seat forecast</div>
-                <h3 className="mt-2 text-2xl font-semibold tracking-normal text-white">Director planning board</h3>
-                <p className="mt-2 text-sm leading-6 text-zinc-400">A clearer answer for openings, move-ups, waitlist fit, and ratio risk.</p>
-              </div>
-              <TrendingUp className="size-6 text-amber-300" />
-            </div>
-            <div className="mt-6 divide-y divide-white/10">
-              {[
-                ["Infants", "2 projected openings", "1 waitlist match", "Ratio review"],
-                ["Toddlers", "5 move-ups within 60 days", "4 tour families", "Staff ready"],
-                ["Preschool", "3 starts pending packets", "2 payment setups", "Docs needed"],
-                ["VPK", "Full today", "8 upcoming transitions", "Watch capacity"],
-              ].map(([room, signal, match, status]) => (
-                <div key={room} className="grid gap-3 py-4 sm:grid-cols-[0.8fr_1fr_1fr_0.8fr] sm:items-center">
-                  <div className="font-medium text-white">{room}</div>
-                  <div className="text-sm text-zinc-300">{signal}</div>
-                  <div className="text-sm text-zinc-400">{match}</div>
-                  <div className="text-sm font-medium text-amber-200">{status}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-3">
-              {[
-                ["90 days", "planning window"],
-                ["4 signals", "capacity, age, docs, billing"],
-                ["1 answer", "what can we offer this family?"],
-              ].map(([value, label]) => (
-                <div key={label}>
-                  <div className="text-2xl font-semibold text-white">{value}</div>
-                  <div className="mt-1 text-xs leading-5 text-zinc-500">{label}</div>
-                </div>
-              ))}
-            </div>
-          </GlassPanel>
         </div>
       </section>
 
-      <section id="savings" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-[1400px]">
-          <div className="grid gap-8 lg:grid-cols-[0.72fr_1fr] lg:items-end">
+      <section id="billing" className="relative bg-[#05070a] px-4 py-20 sm:px-6 lg:px-8">
+        <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.76fr_1fr] lg:items-start">
+          <div>
             <SectionHeading
-              title="A better savings calculator for real operating decisions."
-              body="Generic time-savings math is not enough for childcare. This estimate considers school count, children, staff, admin cost, tuition, and the seat visibility that comes from tying enrollment to rooms, billing, documents, and staff coverage."
+              title="Billing stays connected to the child, family, and school."
+              body="The assigned child billing record is the weekly tuition source of truth. Authorized teams can review invoices, payment status, saved methods, autopay, Terminal activity, and reconciliation without separating billing from the operating record."
             />
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="mt-8 space-y-4">
               {[
-                [Calculator, "Adjustable", "Use your own school, enrollment, staff, and tuition assumptions."],
-                [Clock, "Operational", "Includes enrollment, billing, classroom, and compliance admin drag."],
-                [TrendingUp, "Capacity-aware", "Separates labor savings from seats that need earlier visibility."],
-              ].map(([Icon, title, body]) => (
-                <FeatureCard key={title as string} title={title as string} body={body as string} icon={Icon as LucideIcon} />
+                ["Thursday invoice scheduling", "Eligible weekly tuition assignments create the following week’s invoice before the payment run."],
+                ["Parent payment choices", "Card-first checkout, saved card or bank, one-time bank payment, and autopay status remain visible in the family context."],
+                ["School-scoped Terminal", "Registered readers and card-present payments stay tied to the selected school and reconciliation view."],
+                ["Independent readiness gate", "No school is promoted for live payments until technical readiness and business approval are complete."],
+              ].map(([title, body]) => (
+                <div key={title} className="flex gap-4 border-b border-white/10 pb-4 last:border-0 last:pb-0">
+                  <CheckCircle2 className="mt-1 size-5 shrink-0 text-amber-300" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">{title}</div>
+                    <p className="mt-1 text-sm leading-6 text-zinc-400">{body}</p>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
-          <div className="mt-10">
-            <LandingSavingsCalculator />
-          </div>
+          <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
+            <Image
+              src="/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png"
+              alt="The BEE Suite weekly tuition flow"
+              width={1600}
+              height={1000}
+              className="h-auto w-full rounded-lg"
+            />
+          </GlassPanel>
         </div>
       </section>
 
@@ -731,14 +645,14 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <div className="grid gap-8 lg:grid-cols-[0.7fr_1fr] lg:items-end">
             <SectionHeading
-              title="Visual guides that make the platform easier to explain."
-              body="These product maps help new users, school leaders, franchise teams, and agency partners understand The BEE Suite before they touch the dashboard."
+              title="Current SOP graphics for the flows that need precision."
+              body="The current visual library covers launch gates, parent access, payment choices, weekly tuition, director and teacher routines, kiosk pickup, FTE reporting, and Terminal payments."
             />
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                ["Sales calls", "Show the full operating model without opening every tab."],
-                ["Onboarding", "Explain what schools configure before going live."],
-                ["Training", "Teach each role how their dashboard connects to the rest of the suite."],
+                ["Explain", "Show the exact sequence without opening every app surface."],
+                ["Prepare", "Make prerequisites and stop conditions visible before launch."],
+                ["Train", "Keep the instructions aligned with the current role and device."],
               ].map(([title, body]) => (
                 <GlassPanel key={title} className="p-4">
                   <div className="text-sm font-semibold text-amber-300">{title}</div>
@@ -763,7 +677,7 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             title="Designed for how schools actually use the system."
-            body="The BEE Suite is not just a back-office dashboard. It supports the lobby, classroom, enrollment desk, director office, and executive view with role-aware screens and workflows."
+            body="The BEE Suite supports the lobby, classroom, enrollment desk, billing workflow, director office, and executive view with role-aware screens and school-scoped records."
           />
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
             {schoolScenes.map((scene) => (
@@ -777,18 +691,18 @@ export default function LandingPage() {
         <div className="mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.82fr_1fr] lg:items-start">
           <div>
             <SectionHeading
-              title="Web-based now, split for role-specific app packaging."
-              body="The product stays one secure platform, but App Store entries should be role-specific. Parents need a focused phone app, teachers need classroom tablet flows, directors need school operations, and executives need multi-location controls without unrelated login copy."
+              title="Installable web access, organized by role."
+              body="The product stays one platform while each entry point remains focused. Parents use the family portal, teachers use classroom tools, directors use school operations, and executives use multi-location oversight."
             />
             <GlassPanel className="mt-8 p-5">
-              <div className="text-sm font-semibold text-amber-300">Native app path</div>
+              <div className="text-sm font-semibold text-amber-300">Current access path</div>
               <div className="mt-4 space-y-4 text-sm leading-6 text-zinc-300">
-                <p>1. Submit the parent app first with /parents as the native launch URL.</p>
-                <p>2. Keep teacher, director, and executive apps on their own role-specific login entries.</p>
-                <p>3. Package each app with its own bundle ID, screenshots, privacy answers, and review notes.</p>
+                <p>1. Open the role-specific sign-in or family invite link provided by the school.</p>
+                <p>2. Install the web app on a supported phone, tablet, or desktop when the role guide recommends it.</p>
+                <p>3. Keep each login tied to the intended school, classroom, family, or executive scope.</p>
               </div>
               <Button className="mt-5 h-10 px-4" nativeButton={false} render={<Link href="/app" />}>
-                Open app launcher
+                Open role access
                 <ArrowRight data-icon="inline-end" />
               </Button>
             </GlassPanel>
@@ -806,8 +720,8 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="Production onboarding starts with the pieces a provider actually needs."
-            body="A new operator can create a gated workspace, define the ownership container, complete brand and center setup, copy their inquiry form, invite users, and prepare payout onboarding before live parent workflows are enabled."
+            title="Prepare each school before promoting live workflows."
+            body="Workspace setup, school identity, classrooms, users, registration, migration, parent access, kiosk, billing, payments, and reporting can be prepared in sequence while each activation decision remains independent."
           />
           <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {setupCards.map(([title, body, Icon]) => (
@@ -822,13 +736,13 @@ export default function LandingPage() {
         <div className="relative mx-auto max-w-[1400px]">
           <SectionHeading
             align="center"
-            title="Trust, integrations, and state readiness built into the sales story."
-            body="Large competitors separate these into resource pages and marketplaces. The BEE Suite can make them part of the product promise: move data in cleanly, keep sensitive records role-gated, track readiness by school, and support the state-specific work directors actually manage."
+            title="Trust, integrations, and readiness stay inside the operating story."
+            body="Move data with review, keep sensitive records role-gated, configure provider connections within the intended school scope, and track readiness without implying that software makes legal, safety, custody, medical, billing, or licensing decisions."
           />
           <div className="mt-10 grid gap-5 lg:grid-cols-3">
             {[
               ["Trust posture", "What leaders need to know before sensitive family, child, billing, and staff data moves into a live system.", trustCards],
-              ["Integration runway", "The operational handoffs that keep enrollment, accounting, calendar, payments, messaging, and migration work connected.", integrationCards],
+              ["Integration runway", "The school-scoped connections that keep enrollment, marketing, accounting, calendar, payments, messaging, and migration work connected.", integrationCards],
               ["State-ready operations", "The licensing, funding, credential, and school setup evidence that directors need before audits and renewals.", resourceCards],
             ].map(([title, body, cards]) => (
               <GlassPanel key={title as string} className="p-5">
@@ -853,19 +767,43 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="testimonials" className="landing-parallax-band relative border-y border-white/10 px-4 py-20 sm:px-6 lg:px-8">
+      <section id="resources" className="landing-parallax-band relative border-y border-white/10 px-4 py-20 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-black/45" />
-        <div className="relative mx-auto max-w-[1400px]">
-          <SectionHeading
-            align="center"
-            title="Real feedback from the people who run childcare."
-            body="These are real customer reviews. Names and identifying details have been changed to protect customer privacy."
-          />
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {testimonials.map((testimonial) => (
-              <TestimonialCard key={testimonial.person} {...testimonial} />
-            ))}
+        <div className="relative mx-auto grid max-w-[1400px] gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
+          <div>
+            <SectionHeading
+              title="Current visual guides for the people who use the system."
+              body="The public resource library now uses the same current light-mode product screens as the app story: teacher iPad and desktop, director and executive desktop, and parent iPhone, iPad, and desktop."
+            />
+            <div className="mt-8 space-y-4">
+              {[
+                ["Role-specific", "Training stays focused on the actions and data each role is authorized to use."],
+                ["Device-specific", "Examples match the screen size people use most often for that workflow."],
+                ["Launch-aware", "Guides explain prerequisites and stop conditions without treating a software release as school approval."],
+              ].map(([title, body]) => (
+                <div key={title} className="flex gap-4">
+                  <CheckCircle2 className="mt-1 size-5 shrink-0 text-amber-300" />
+                  <div>
+                    <div className="text-sm font-semibold text-white">{title}</div>
+                    <p className="mt-1 text-sm leading-6 text-zinc-400">{body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button className="mt-8 h-11 px-5" nativeButton={false} render={<Link href="/resources" />}>
+              Open SOPs and guides
+              <ArrowRight data-icon="inline-end" />
+            </Button>
           </div>
+          <GlassPanel className="overflow-hidden border-amber-300/20 p-2">
+            <Image
+              src="/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png"
+              alt="The BEE Suite director desktop operations guide"
+              width={1600}
+              height={1000}
+              className="h-auto w-full rounded-lg"
+            />
+          </GlassPanel>
         </div>
       </section>
 
@@ -874,7 +812,7 @@ export default function LandingPage() {
           <div>
             <SectionHeading
               title="Executive reporting without losing the school-level truth."
-              body="The BEE Suite gives operators a fast view of enrollment health, inquiry conversion, school activity, open tasks, billing readiness, compliance work, and FTE reporting. Existing spreadsheets can remain a backup while the app becomes the daily operating view."
+              body="The BEE Suite gives operators a location-aware view of enrollment health, inquiry conversion, school activity, payroll reports, billing readiness, compliance work, and the selected FTE reporting period."
             />
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {reportingRows.map(([title, body]) => (
@@ -900,9 +838,9 @@ export default function LandingPage() {
             </div>
             <div className="grid gap-3 p-5">
               {[
-                ["Centers", "Ready", "Open and active locations only"],
-                ["Lead routing", "Live", "CRM, email, and Sheets backup"],
-                ["FTE source", "Rolling", "Latest compatible report tab"],
+                ["School scope", "Clear", "Authorized locations and requested filters only"],
+                ["FTE period", "Selected", "The submitted reporting week stays visible"],
+                ["Payroll history", "Managed", "Active employees in payroll output; former staff retained as history"],
                 ["AI guardrails", "Review", "Suggestions never make final decisions"],
               ].map(([label, value, detail]) => (
                 <div key={label} className="grid grid-cols-[1fr_auto] gap-4 rounded-xl border border-white/10 bg-black/20 p-4">
@@ -959,9 +897,9 @@ export default function LandingPage() {
         <div className="absolute bottom-0 right-0 h-48 w-72 opacity-30 hive-texture" />
         <div className="relative mx-auto flex max-w-[1400px] flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-3xl font-semibold tracking-normal">Ready to run enrollment from one command center?</h2>
+            <h2 className="text-3xl font-semibold tracking-normal">Ready to connect the whole school day?</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#29313a]">
-              Start the web app onboarding path for a childcare center, preschool, agency, franchise, or multi-location brand, or review the public registration packet.
+              Request a workspace for a childcare center, preschool, agency, franchise, or multi-location brand, or review the school-linked registration flow and current public guides.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -974,6 +912,9 @@ export default function LandingPage() {
             </Button>
             <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/registration" />}>
               Registration
+            </Button>
+            <Button variant="outline" className="h-11 border-[#101318]/30 bg-transparent px-5 hover:bg-[#101318]/10" nativeButton={false} render={<Link href="/resources" />}>
+              Guides
             </Button>
           </div>
         </div>

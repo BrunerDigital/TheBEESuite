@@ -4,6 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import {
   AlertCircle,
   BellRing,
@@ -47,6 +49,10 @@ import {
 import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import {
+  dailyReportTimedCareEvents,
+  sortDailyReportsChronologically,
+} from "@/lib/daily-report-ordering";
 
 type Child = {
   id: string;
@@ -140,6 +146,7 @@ type UniformProductOption = {
 type DailyReport = {
   id: string;
   date: string | Date;
+  sentAt?: string | Date | null;
   mood: string | null;
   teacherNote: string | null;
   suppliesNeeded: string | null;
@@ -302,9 +309,8 @@ function requiresDocumentSignature(document: { storageKey?: string | null }) {
   return signaturePendingStorageKeys.has((document.storageKey || "").trim().toLowerCase());
 }
 
-function formatDate(value: string | Date | null) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+function formatDateInTimeZone(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function money(cents: number) {
@@ -353,13 +359,13 @@ function isProcessingPayment(payment: Payment) {
   return payment.status === "DRAFT" && (status === "checkout_created" || status === "checkout_pending");
 }
 
-function paymentListLabel(payment: Payment) {
+function paymentListLabel(payment: Payment, timeZone: string) {
   if (isProcessingPayment(payment)) {
     const fields = paymentFields(payment);
     const category = textField(fields.paymentMethodCategory) || textField(fields.requestedPaymentMethodCategory);
     return `${paymentMethodCategoryLabel(category)} processing`;
   }
-  if (payment.status === "PAID") return `Paid · ${formatDate(payment.paidAt)}`;
+  if (payment.status === "PAID") return `Paid · ${formatDateInTimeZone(payment.paidAt, timeZone)}`;
   return payment.status.toLowerCase();
 }
 
@@ -376,9 +382,8 @@ function clampUniformQuantity(value: number) {
   return Math.min(MAX_UNIFORM_PURCHASE_QUANTITY, Math.max(1, Math.round(value)));
 }
 
-function formatTime(value: string | Date | null) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function formatTimeInTimeZone(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function renderableImageSrc(value: string | null | undefined) {
@@ -451,6 +456,9 @@ export function ParentPortalWorkspace({
   availableFamilies = [],
   demoMode,
 }: Props) {
+  const timeZone = useSchoolTimeZone();
+  const formatDate = (value: string | Date | null) => formatDateInTimeZone(value, timeZone);
+  const formatTime = (value: string | Date | null) => formatTimeInTimeZone(value, timeZone);
   const router = useRouter();
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -557,14 +565,14 @@ export function ParentPortalWorkspace({
     return Array.from(days.values())
       .map((day) => ({
         ...day,
-        reports: day.reports.toSorted((left, right) => dateTimestamp(right.date) - dateTimestamp(left.date)),
+        reports: sortDailyReportsChronologically(day.reports),
         media: day.media.toSorted((left, right) => dateTimestamp(right.createdAt) - dateTimestamp(left.createdAt)),
         totalItems: day.reports.length + day.activities.length + day.media.length,
       }))
       .toSorted((left, right) => right.key.localeCompare(left.key));
   }, [dailyReports, media]);
   const selectedUpdateDay = dailyUpdateDays.find((day) => day.key === selectedUpdateDayKey) ?? dailyUpdateDays[0] ?? null;
-  const latestReport = selectedUpdateDay?.reports[0] ?? dailyReports[0] ?? null;
+  const latestReport = selectedUpdateDay?.reports.at(-1) ?? dailyReports[0] ?? null;
 
   function showStatus(next: string) {
     setError("");
@@ -975,9 +983,9 @@ export function ParentPortalWorkspace({
       {demoMode ? (
         <Alert className="border-primary/30 bg-primary/10">
           <ShieldCheck className="size-4" />
-          <AlertTitle>Demo account data</AlertTitle>
+          <AlertTitle>Read-only workspace</AlertTitle>
           <AlertDescription>
-            This parent portal sample is visible only to demo accounts and is not saved as live family data.
+            This parent portal preview is read-only. Changes are not saved as live family data.
           </AlertDescription>
         </Alert>
       ) : null}
@@ -1080,39 +1088,42 @@ export function ParentPortalWorkspace({
               <CardDescription>Recent teacher notes and care details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(selectedUpdateDay?.reports ?? []).map((report, index) => (
-                <div
-                  key={report.id}
-                  className={`rounded-xl border p-4 ${index === 0 ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{report.child.fullName}</div>
-                      <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
+              {(selectedUpdateDay?.reports ?? []).map((report, index, reportsForDay) => {
+                const timedCareEvents = dailyReportTimedCareEvents(report);
+                const isLatest = index === reportsForDay.length - 1;
+                return (
+                  <div
+                    key={report.id}
+                    className={`rounded-xl border p-4 ${isLatest ? "bg-primary/10 shadow-sm" : "bg-background/40"}`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{report.child.fullName}</div>
+                        <div className="text-xs text-muted-foreground">{formatDate(report.date)}</div>
+                      </div>
+                      {isLatest ? <Badge>Latest</Badge> : null}
                     </div>
-                    {index === 0 ? <Badge>Latest</Badge> : null}
+                    <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
+                    {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
+                    <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+                      {report.meals?.map((meal) => (
+                        <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
+                      ))}
+                      {timedCareEvents.map((event) => event.kind === "nap" ? (
+                        <span key={`nap-${event.id}`}>Nap: {formatTime(event.startsAt)} - {formatTime(event.endsAt ?? null)}</span>
+                      ) : (
+                        <span key={`diaper-${event.id}`}>Potty/diaper: {event.type} · {formatTime(event.occurredAt)}{event.notes ? ` · ${event.notes}` : ""}</span>
+                      ))}
+                      {!report.naps?.length && /\bno nap\b/i.test(report.teacherNote ?? "") ? (
+                        <span>Nap: No nap today</span>
+                      ) : null}
+                      {report.activities?.slice(0, 4).map((activity) => (
+                        <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
+                      ))}
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm text-muted-foreground">{report.teacherNote ?? report.mood ?? "No teacher note added."}</p>
-                  {report.suppliesNeeded ? <Badge className="mt-3" variant="outline">Needs {report.suppliesNeeded}</Badge> : null}
-                  <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
-                    {report.meals?.map((meal) => (
-                      <span key={meal.id}>Meal: {meal.mealType} · {meal.food}{meal.amount ? ` · ${meal.amount}` : ""}</span>
-                    ))}
-                    {report.naps?.map((nap) => (
-                      <span key={nap.id}>Nap: {formatTime(nap.startsAt)} - {formatTime(nap.endsAt)}</span>
-                    ))}
-                    {!report.naps?.length && /\bno nap\b/i.test(report.teacherNote ?? "") ? (
-                      <span>Nap: No nap today</span>
-                    ) : null}
-                    {report.diapers?.map((diaper) => (
-                      <span key={diaper.id}>Potty/diaper: {diaper.type} · {formatTime(diaper.occurredAt)}{diaper.notes ? ` · ${diaper.notes}` : ""}</span>
-                    ))}
-                    {report.activities?.slice(0, 4).map((activity) => (
-                      <span key={activity.id}>Activity: {activity.title}{activity.notes ? ` · ${activity.notes}` : ""}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {!selectedUpdateDay?.reports.length ? (
                 <p className="text-sm text-muted-foreground">No daily report was shared for this day.</p>
               ) : null}
@@ -1310,7 +1321,7 @@ export function ParentPortalWorkspace({
                   <div className="flex items-center gap-2 font-medium">
                     Payment Methods And Autopay
                     <InfoTip label="About payment methods and autopay">
-                      Save a bank account or card if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block bank verification.
+                      Save a debit/credit card or bank account if you want autopay, or make a one-time payment on any open invoice below. Open invoices do not block payment-method setup.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -1322,13 +1333,13 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")}>
-                    <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
                     <CreditCard data-icon="inline-start" />
                     {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Autopay Card" : "Set Up Card Autopay"}
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                    <Building2 data-icon="inline-start" />
+                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
                   </Button>
                   <Button
                     className="w-full sm:w-auto"
@@ -1359,17 +1370,17 @@ export function ParentPortalWorkspace({
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")}>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")}>
+                      <CreditCard data-icon="inline-start" />
+                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    </Button>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")} variant="outline">
-                      <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                 </div>
@@ -1507,13 +1518,13 @@ export function ParentPortalWorkspace({
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("link_bank")}>
-                    <Building2 data-icon="inline-start" />
-                    Buy With Instant Bank
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("card")} variant="outline">
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("card")}>
                     <CreditCard data-icon="inline-start" />
                     Buy With Card
+                  </Button>
+                  <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || !selectedUniformProduct} onClick={() => buyUniform("link_bank")} variant="outline">
+                    <Building2 data-icon="inline-start" />
+                    Buy With Instant Bank
                   </Button>
                 </div>
               </div>
@@ -1533,22 +1544,21 @@ export function ParentPortalWorkspace({
                   </Badge>
                   <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "link_bank")}>
+                    <Button
+                      className="w-full sm:w-auto"
+                      disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment}
+                      onClick={() => payInvoice(invoice.id, "card")}
+                    >
+                      <CreditCard data-icon="inline-start" />
+                      Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                    </Button>
+                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       Instant Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
                       One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment}
-                      onClick={() => payInvoice(invoice.id, "card")}
-                      variant="outline"
-                    >
-                      <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
                     </Button>
                   </div>
                   {invoice.pendingPayment ? (
@@ -1562,11 +1572,6 @@ export function ParentPortalWorkspace({
                       cardRecovery: invoice.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice.totalCents),
                       formatMoney: money,
                     })}
-                    {invoice.checkoutOptions?.beeSuitePaymentOperationsFeeAmountCents ? (
-                      <span className="block">
-                        School-paid BEE Suite payment operations fee retained from payout: {money(invoice.checkoutOptions.beeSuitePaymentOperationsFeeAmountCents)}.
-                      </span>
-                    ) : null}
                   </div>
                 </div>
               );
@@ -1581,7 +1586,7 @@ export function ParentPortalWorkspace({
                 {payments.slice(0, 5).map((payment) => (
                   <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
                     <span className="text-muted-foreground">
-                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · {paymentListLabel(payment)}
+                      {payment.provider === "stripe" ? "Stripe" : payment.provider} · {paymentListLabel(payment, timeZone)}
                     </span>
                     <span className="font-medium">{money(payment.amountCents)}</span>
                   </div>

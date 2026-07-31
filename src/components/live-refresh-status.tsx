@@ -6,6 +6,8 @@ import { RefreshCw, WifiOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { cn } from "@/lib/utils";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 type SyncState = "idle" | "offline" | "signed-out" | "syncing";
 
@@ -27,15 +29,16 @@ function refreshIntervalMs(pathname: string, role?: string) {
   return 60_000;
 }
 
-function syncText(state: SyncState, lastSyncedAt: Date | null) {
+function syncText(state: SyncState, lastSyncedAt: Date | null, timeZone: string) {
   if (state === "offline") return "Offline";
   if (state === "signed-out") return "Session ended";
   if (state === "syncing") return "Syncing";
   if (!lastSyncedAt) return "Live";
-  return `Live ${lastSyncedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  return `Live ${formatZonedDateTime(lastSyncedAt, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "")}`;
 }
 
 export function LiveRefreshStatus({ role }: { role?: string }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const pathname = usePathname();
   const [state, setState] = useState<SyncState>("idle");
@@ -98,7 +101,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
 
   const offline = state === "offline" || state === "signed-out";
   const Icon = offline ? WifiOff : RefreshCw;
-  const statusText = mounted ? syncText(state, lastSyncedAt) : "Live";
+  const statusText = mounted ? syncText(state, lastSyncedAt, timeZone) : "Live";
 
   return (
     <Badge

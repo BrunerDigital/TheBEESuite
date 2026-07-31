@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 export type MedicationLogChildOption = {
   id: string;
@@ -19,13 +21,14 @@ export type MedicationLogChildOption = {
 };
 
 export function MedicationLogPanel({ childrenOptions }: { childrenOptions: MedicationLogChildOption[] }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [childId, setChildId] = useState(childrenOptions[0]?.id ?? "");
   const [medicationName, setMedicationName] = useState("");
   const [dosage, setDosage] = useState("");
   const [route, setRoute] = useState("");
-  const [administeredAt, setAdministeredAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [administeredAt, setAdministeredAt] = useState(() => zonedDateTimeLocalValue(new Date(), timeZone));
   const [status, setStatus] = useState("administered");
   const [notes, setNotes] = useState("");
   const [parentNotified, setParentNotified] = useState(false);
@@ -45,7 +48,7 @@ export function MedicationLogPanel({ childrenOptions }: { childrenOptions: Medic
           medicationName,
           dosage,
           route,
-          administeredAt,
+          administeredAt: zonedDateTimeLocalToUtc(administeredAt, timeZone)?.toISOString(),
           status,
           notes,
           parentNotified,

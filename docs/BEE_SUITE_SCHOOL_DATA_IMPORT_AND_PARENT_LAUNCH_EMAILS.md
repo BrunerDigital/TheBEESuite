@@ -1,6 +1,6 @@
 # The BEE Suite School Data Import and Parent Launch Email Kit
 
-**Updated:** July 16, 2026  
+**Updated:** July 29, 2026
 **Purpose:** Ready-to-send emails that guide a school from ProCare export through BEE Suite import, school setup, payment readiness, and parent portal launch.
 
 ## How to use this kit
@@ -356,7 +356,7 @@ The billing and implementation team must complete an approved test that includes
 1. Create or select a test invoice.
 2. Open it from an approved parent test account.
 3. Confirm the family, invoice number, due date, and amount.
-4. Test the approved bank-payment path.
+4. Test the approved card and bank-payment paths.
 5. Confirm the payment reaches the correct invoice only once.
 6. Confirm the invoice and ledger update after the Stripe event is processed.
 7. Confirm the connected school payout destination is correct.
@@ -366,16 +366,19 @@ The billing and implementation team must complete an approved test that includes
 
 Do not accept live payments if a test applies to the wrong invoice, applies twice, routes to the wrong account, or fails to reconcile.
 
-## 9. Decide how parents will verify their banks for ACH
+## 9. Confirm the parent card and bank choices
 
-Once live payments are approved, parents can verify their own bank account in either of these ways:
+The current payment flow presents card first and keeps secure bank choices available:
 
-- From the **Billing** area in their parent portal, by selecting **Verify Bank Instantly**; or
-- From a secure BEE Suite payment-method setup link sent by the school.
+- **Save Debit/Credit Card:** save a card for future payments or autopay
+- **Debit/Credit Card:** pay an open invoice by card
+- **Verify Bank Instantly:** save a bank for future use
+- **Instant Bank:** pay through a supported bank login
+- **One-Time Bank:** enter routing and account details for one payment
 
-The parent signs into the secure bank-verification page, chooses the checking account, confirms it, and returns to The BEE Suite. A pending bank setup or payment may take time to settle. Parents should not repeat the transaction while it is pending.
+Parents must review the exact total, processing recovery when shown, and disclosure before submitting a payment. A pending bank setup or payment may take time to settle; parents should not repeat the transaction while it is pending.
 
-Never ask a parent to send bank account numbers, routing numbers, bank passwords, or screenshots of banking credentials.
+Never ask a parent to send bank details, bank passwords, screenshots of banking credentials, or full card numbers.
 
 ## 10. Complete role and launch testing
 
@@ -396,7 +399,7 @@ Before launch:
 
 - Train directors on daily operations and escalations.
 - Train teachers on attendance, reports, incidents, media, and parent-visible content.
-- Train billing staff on invoices, payments, pending ACH, failed payments, and reconciliation.
+- Train billing staff on invoices, card payments, pending bank payments, failed payments, and reconciliation.
 - Confirm the parent instructions and invitation date.
 - Confirm the first-week support contact and support hours.
 - Record any feature that will remain disabled at launch.
@@ -415,7 +418,7 @@ Please reply with the checklist below:
 - [ ] Tuition, balances, and billing rules approved
 - [ ] Stripe school payout account shows charges and payouts enabled, or parent payments are intentionally disabled
 - [ ] Test payment and reconciliation passed, or parent payments are intentionally disabled
-- [ ] Parent ACH instructions approved
+- [ ] Parent card and bank instructions approved
 - [ ] Documents, messages, incidents, and notifications tested
 - [ ] Training and support plan confirmed
 - [ ] Parent invitation date approved and recorded
@@ -429,7 +432,7 @@ The BEE Suite Implementation Team
 
 ---
 
-# Email 4: Parent portal invitation and ACH bank verification
+# Email 4: Parent portal invitation and payment setup
 
 **Send this email only after Email 3 receives a GO decision.**
 
@@ -439,15 +442,15 @@ Hello Parents and Guardians,
 
 Your school is inviting you to The BEE Suite parent portal. The portal gives you one secure place to view your child's updates, messages, documents, invoices, and approved school information.
 
-## Set up your parent account
+## Sign in to your parent account
 
-1. Open the secure BEE Suite invitation link sent by your school.
-2. Confirm that the page shows your school.
-3. Create your password or complete the requested sign-in step.
-4. Sign in and confirm that you see the correct family and child or children.
+1. Open **https://thebeesuite.io/parents**.
+2. Confirm the address starts with `https://thebeesuite.io`. In Safari, stop and contact the school if the address bar says **Not Secure**.
+3. Sign in with your guardian email address and the school-issued first-login password included in your approved invitation.
+4. Confirm that you see the correct family and child or children.
 5. If any family or child information is wrong, stop and contact your school.
 
-You can also begin from **https://thebeesuite.io/parents**.
+You may keep the school-issued password or change it later in **Settings**. The invitation and password belong only to you and should not be forwarded.
 
 ## Review your portal
 
@@ -463,36 +466,36 @@ Please check:
 
 Use the contact-change request in the portal or contact the school if something needs to be corrected.
 
-## Verify your bank for ACH payments
+## Save a card or verify your bank
 
-Bank payment is the preferred payment method when available. It may help you avoid card-related processing recovery charges.
+The portal presents card first and keeps bank payment choices available.
 
-1. Open **Billing** in the parent portal.
-2. Review your family, invoice, due date, and amount.
-3. Select **Verify Bank Instantly**.
-4. Continue to the secure bank-verification screen.
-5. Search for your bank.
-6. Sign in through the secure bank portal.
-7. Choose the checking account you want to use.
-8. Confirm the account.
-9. Return to The BEE Suite.
-10. Wait for confirmation that your payment information was submitted.
-11. Confirm that your saved payment method or autopay status updates.
+To save a card:
 
-If your status says **Pending**, do not repeat the setup unless the school tells you the first attempt failed.
+1. Open **Payment Settings**.
+2. Select **Save Debit/Credit Card**.
+3. Complete the secure Stripe steps.
+4. Return to The BEE Suite and confirm the card shows as saved.
 
-## Pay an invoice by bank
+To save a bank:
 
-1. Open **Billing**.
-2. Select the open invoice.
-3. Confirm the invoice number, due date, and amount.
-4. Choose **Instant Bank**, **Pay With Instant Bank Login**, **One-Time Bank**, or **ACH**, depending on the options shown.
-5. Follow the secure bank instructions.
-6. Review the amount one more time.
-7. Submit the payment.
-8. Wait for the confirmation page.
+1. Open **Payment Settings**.
+2. Select **Verify Bank Instantly**.
+3. Complete the secure Stripe bank-verification steps.
+4. Return to The BEE Suite and confirm the bank shows as saved.
 
-ACH payments can take a few business days to settle. Do not pay the same invoice again while the first payment is processing.
+If your bank status says **Pending**, do not repeat the setup unless the school tells you the first attempt failed.
+
+## Pay an invoice
+
+1. Open **Billing** and select the open invoice.
+2. Confirm the family, invoice number, due date, and amount.
+3. Choose **Debit/Credit Card**, **Instant Bank**, or **One-Time Bank**.
+4. Follow the secure Stripe instructions.
+5. Review the exact total, processing recovery when shown, and disclosure.
+6. Submit the payment and wait for the confirmation page.
+
+Bank payments can take a few business days to settle. Do not pay the same invoice again while the first payment is processing.
 
 ## Important security reminders
 
@@ -525,7 +528,7 @@ Before sending any email in this kit:
 
 - The BEE Suite ProCare migration runbook: `docs/PROCARE_LOCATION_MIGRATION_RUNBOOK.md`
 - The BEE Suite ProCare field map: `docs/PROCARE_FIELD_COVERAGE.md`
-- School rollout checklist: `docs/SCHOOL_FULL_FEATURE_ROLLOUT_CHECKLIST_2026-06-08.md`
+- Production-readiness master: `docs/PRODUCTION_READINESS_MASTER_EXECUTION_TASK_2026-07-20.md`
 - Stripe payout setup: `docs/STRIPE_CONNECT_SETUP.md`
 - Parent ACH guide: `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md`
 - Parent portal SOP: `docs/sops/PARENT_PORTAL_SOP.md`

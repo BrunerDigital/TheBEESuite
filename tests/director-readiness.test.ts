@@ -53,9 +53,11 @@ test("family refund recovery never represents unrefundable value as a Stripe ref
   assert.equal(plan.remainingCents, 1_000);
   assert.deepEqual(plan.allocations.map((item) => [item.payment.id, item.amountCents]), [["payment_b", 1_500], ["payment_a", 2_500]]);
   const route = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
-  assert.match(route, /family credit or manual reimbursement/i);
-  assert.match(route, /Refund could not be issued/);
-  assert.match(route, /partial: totalCents < amountCents/);
+  const refundService = readFileSync("src/lib/family-refunds.ts", "utf8");
+  assert.match(route, /issueFamilyRefund/);
+  assert.match(refundService, /family credit or manual reimbursement/i);
+  assert.match(refundService, /Refund could not be issued/);
+  assert.match(refundService, /partial: totalCents < input\.amountCents/);
 });
 
 test("Director alert surfaces require authentication and preserve not-found recovery", () => {
@@ -65,4 +67,42 @@ test("Director alert surfaces require authentication and preserve not-found reco
   assert.match(summary, /Notification not found/);
   assert.match(preferences, /Authentication required/);
   assert.match(preferences, /canManageOperations/);
+});
+
+test("director setup edits are included in the main save and reconciled after persistence", () => {
+  const editableField = readFileSync("src/components/ui/editable-display-field.tsx", "utf8");
+  const setupComponent = readFileSync("src/components/school-setup-command-center.tsx", "utf8");
+  const setupRoute = readFileSync("src/app/api/school-setup/route.ts", "utf8");
+  const setupPage = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const checklistComponent = readFileSync("src/components/setup-checklist-panel.tsx", "utf8");
+  const checklistRoute = readFileSync("src/app/api/setup-checklist/route.ts", "utf8");
+
+  assert.match(editableField, /function updateDraft[\s\S]*onChange\(nextValue\)/);
+  assert.match(setupComponent, /setSavedValues\(canonicalValues\)/);
+  assert.match(setupComponent, /setSavedSchoolEin\(canonicalEin\)/);
+  assert.match(setupComponent, /router\.refresh\(\)/);
+  assert.match(setupComponent, /Unsaved changes/);
+  assert.match(setupRoute, /updateMany/);
+  assert.match(setupRoute, /updatedAt: center\.updatedAt/);
+  assert.match(setupRoute, /status: 409/);
+  assert.match(setupRoute, /sections: setup \? responseSections\(setup\)/);
+  assert.match(setupPage, /key=\{data\.centerId \?\? "no-school"\}/);
+  assert.match(checklistComponent, /disabled=\{automatic \|\| isPending\}/);
+  assert.match(checklistComponent, /Checklist progress saved/);
+  assert.match(checklistRoute, /updateMany/);
+  assert.match(checklistRoute, /updatedAt: existingUser\.updatedAt/);
+  assert.match(checklistRoute, /status: 409/);
+});
+
+test("classroom saves submit the shared form for every director-scoped school", () => {
+  const classroomSetup = readFileSync("src/components/classroom-setup-panel.tsx", "utf8");
+  const operationsRoute = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+
+  assert.match(
+    classroomSetup,
+    /<form[^>]+onSubmit=\{saveClassroom\}[\s\S]*?<Button type="submit"[^>]*>[\s\S]*?Save classroom/,
+  );
+  assert.match(classroomSetup, /entity: "classroom"/);
+  assert.match(operationsRoute, /entity === "classroom"/);
+  assert.match(operationsRoute, /prisma\.classroom\.create/);
 });

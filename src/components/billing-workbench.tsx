@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -20,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
 import { STUDENT_UNIFORM_SHIRT_BASE_NAME, STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE, STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT } from "@/lib/uniform-products";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 
 export type BillingWorkbenchFamily = {
   id: string;
@@ -111,6 +114,7 @@ export type BillingWorkbenchProduct = {
 
 export type BillingWorkbenchTuitionPlan = {
   id: string;
+  centerId: string;
   name: string;
   ageGroup: string;
   cadence: string;
@@ -122,12 +126,15 @@ type Props = {
   centers: BillingWorkbenchCenter[];
   products: BillingWorkbenchProduct[];
   tuitionPlans: BillingWorkbenchTuitionPlan[];
+  currentRole: string;
   initialFamilyId?: string;
   initialCenterId?: string;
+  initialChildId?: string;
   searchQuery?: string;
 };
 
 type DirectorPaymentMethod = "autopay" | "saved_method" | "card_checkout" | "instant_bank_checkout" | "ach_checkout";
+type TuitionFundingType = "family" | "voucher";
 
 type BillingWorkbenchOpenInvoice = NonNullable<NonNullable<BillingWorkbenchFamily["billingAccount"]>["openInvoices"]>[number];
 
@@ -263,7 +270,8 @@ function formatShortDate(value: Date | string | null | undefined) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-export function BillingWorkbench({ families, centers, products, tuitionPlans, initialFamilyId, initialCenterId, searchQuery }: Props) {
+export function BillingWorkbench({ families, centers, products, tuitionPlans, currentRole, initialFamilyId, initialCenterId, initialChildId, searchQuery }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const initialFamily = useMemo(
     () => pickInitialBillingFamily(families, initialFamilyId, searchQuery),
@@ -272,10 +280,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const initialCenter = initialCenterId && centers.some((center) => center.id === initialCenterId)
     ? initialCenterId
     : initialFamily?.centerId ?? centers[0]?.id ?? "";
+  const initialLocationTuitionPlans = tuitionPlans.filter((plan) => plan.centerId === initialCenter);
+  const initialAssignmentChild = initialFamily?.children.find((child) => child.id === initialChildId)
+    ?? initialFamily?.children[0]
+    ?? null;
+  const initialAssignment = initialAssignmentChild?.tuitionAssignment ?? null;
+  const initialAssignedPlan = initialLocationTuitionPlans.find((plan) => plan.id === initialAssignment?.tuitionPlanId) ?? null;
   const [centerId, setCenterId] = useState(initialCenter);
   const [familyId, setFamilyId] = useState(initialFamily?.id ?? "");
   const [chargeSource, setChargeSource] = useState("tuitionPlan");
-  const [tuitionPlanId, setTuitionPlanId] = useState(tuitionPlans[0]?.id ?? "");
+  const [tuitionPlanId, setTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
   const uniformShirtProduct = products.find((product) => product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE) ?? null;
   const [productId, setProductId] = useState(uniformShirtProduct?.id ?? products[0]?.id ?? "");
   const [productQuantity, setProductQuantity] = useState("1");
@@ -309,15 +323,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [invoiceEditorId, setInvoiceEditorId] = useState("");
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
-  const [assignmentChildId, setAssignmentChildId] = useState("");
-  const [assignmentEnabled, setAssignmentEnabled] = useState("true");
-  const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState("");
-  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState("");
-  const [assignmentDescription, setAssignmentDescription] = useState("");
-  const [planEditorId, setPlanEditorId] = useState(tuitionPlans[0]?.id ?? "new");
-  const [planName, setPlanName] = useState(tuitionPlans[0]?.name ?? "");
-  const [planAgeGroup, setPlanAgeGroup] = useState(tuitionPlans[0]?.ageGroup ?? defaultAgeGroupOptions[0]);
-  const [planAmountDollars, setPlanAmountDollars] = useState(tuitionPlans[0] ? String(tuitionPlans[0].amountCents / 100) : "");
+  const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
+  const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
+  const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
+  const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(initialAssignment?.startsPeriod ?? "");
+  const [assignmentDescription, setAssignmentDescription] = useState(initialAssignment?.description ?? initialAssignment?.tuitionPlanName ?? "");
+  const [planEditorId, setPlanEditorId] = useState(initialAssignedPlan?.id ?? "new");
+  const [planName, setPlanName] = useState(initialAssignedPlan?.name ?? "");
+  const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
+  const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
+  const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
@@ -330,13 +345,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     () => families.filter((family) => !centerId || family.centerId === centerId),
     [centerId, families],
   );
+  const locationTuitionPlans = useMemo(
+    () => tuitionPlans.filter((plan) => plan.centerId === centerId),
+    [centerId, tuitionPlans],
+  );
   const effectiveFamilyId = familyId && filteredFamilies.some((family) => family.id === familyId)
     ? familyId
     : filteredFamilies[0]?.id ?? "";
   const selectedFamily = filteredFamilies.find((family) => family.id === effectiveFamilyId) ?? null;
   const selectedCenter = centers.find((center) => center.id === centerId) ?? centers[0] ?? null;
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
-  const selectedPlan = tuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
+  const selectedPlan = locationTuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
   const selectedProduct = products.find((product) => product.id === productId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
   const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
@@ -344,7 +363,21 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     : selectedChildren[0]?.id ?? "";
   const selectedAssignmentChild = selectedChildren.find((child) => child.id === effectiveAssignmentChildId) ?? null;
   const selectedAssignment = selectedAssignmentChild?.tuitionAssignment ?? null;
-  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || tuitionPlans[0]?.id || "";
+  const activeWeeklyTuitionAssignments = selectedChildren.filter(
+    (child) => child.tuitionAssignment?.enabled
+      && typeof child.tuitionAssignment.amountCents === "number"
+      && child.tuitionAssignment.amountCents >= 0,
+  );
+  const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
+    (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
+    0,
+  );
+  const effectiveAssignmentPlanId = assignmentTuitionPlanId || selectedAssignment?.tuitionPlanId || "";
+  const effectiveAssignmentPlan = locationTuitionPlans.find((plan) => plan.id === effectiveAssignmentPlanId) ?? null;
+  const assignmentIsVoucherFunded = assignmentEnabled === "true" && (
+    effectiveAssignmentPlan?.amountCents === 0
+    || (effectiveAssignmentPlanId === planEditorId && planFundingType === "voucher")
+  );
   const effectiveAssignmentCadence = "weekly";
   const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
@@ -360,15 +393,16 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   const ageGroups = useMemo(
     () => mergeAgeGroupOptions(
       selectedCenter?.dashboardOptions?.ageGroups,
-      tuitionPlans.map((plan) => plan.ageGroup),
+      locationTuitionPlans.map((plan) => plan.ageGroup),
       families.flatMap((family) => family.children.map((child) => child.ageGroup)),
       planAgeGroup,
     ),
-    [families, planAgeGroup, selectedCenter, tuitionPlans],
+    [families, locationTuitionPlans, planAgeGroup, selectedCenter],
   );
   const familyBalanceCents = selectedFamily?.billingAccount?.balanceCents ?? 0;
   const openInvoices = selectedBillingAccount?.openInvoices ?? [];
   const refundablePayments = (selectedBillingAccount?.recentPayments ?? []).filter((payment) => payment.refundableCents > 0 && payment.stripePaymentIntentId);
+  const canApproveRefunds = ["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MANAGER"].includes(currentRole);
   const selectedRefundPaymentIds = refundPaymentIds.filter((id) => refundablePayments.some((payment) => payment.id === id));
   const visibleRefundableCents = refundablePayments.reduce((total, payment) => total + payment.refundableCents, 0);
   const selectedPaymentInvoiceId = paymentTarget.startsWith("invoice:") ? paymentTarget.slice("invoice:".length) : "";
@@ -430,7 +464,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
   function paymentMethodLabel(method: DirectorPaymentMethod) {
     if (method === "autopay") return "Run autopay";
     if (method === "saved_method") return "Charge saved method";
-    if (method === "card_checkout") return "Open card terminal";
+    if (method === "card_checkout") return "Open phone card checkout";
     if (method === "instant_bank_checkout") return "Instant bank checkout";
     return "ACH bank checkout";
   }
@@ -679,34 +713,65 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
 
   function handleCenterChange(value: string | null) {
     if (!value) return;
+    const nextPlans = tuitionPlans.filter((plan) => plan.centerId === value);
+    const nextFamily = families.find((family) => family.centerId === value) ?? null;
     setCenterId(value);
-    setFamilyId("");
+    setFamilyId(nextFamily?.id ?? "");
     setChildId("none");
     setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
-    setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    applyFamilyTuitionContext(nextFamily, nextPlans);
   }
 
   function handleFamilyChange(value: string | null) {
     if (!value) return;
+    const nextFamily = filteredFamilies.find((family) => family.id === value) ?? null;
     setFamilyId(value);
     setChildId("none");
     setAgencyChildId("none");
     setRefundPaymentIds([]);
     setRefundAmountDollars("");
-    setAssignmentChildId("");
     setInvoiceEditorId("");
     setInvoiceEditDraft(null);
+    applyFamilyTuitionContext(nextFamily, locationTuitionPlans);
   }
 
   function handleTuitionPlanChange(value: string | null) {
     if (!value) return;
     setTuitionPlanId(value);
-    const nextPlan = tuitionPlans.find((plan) => plan.id === value);
+    const nextPlan = locationTuitionPlans.find((plan) => plan.id === value);
     if (nextPlan) setAgeGroup(nextPlan.ageGroup || "all");
+  }
+
+  function applyFamilyTuitionContext(
+    family: BillingWorkbenchFamily | null,
+    availablePlans: BillingWorkbenchTuitionPlan[],
+    preferredChildId?: string,
+  ) {
+    const child = family?.children.find((item) => item.id === preferredChildId)
+      ?? family?.children[0]
+      ?? null;
+    const assignment = child?.tuitionAssignment ?? null;
+    const assignedPlan = availablePlans.find((plan) => plan.id === assignment?.tuitionPlanId) ?? null;
+
+    setAssignmentChildId(child?.id ?? "");
+    setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+    setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
+    setAssignmentStartPeriod(
+      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
+        ? assignment.startsPeriod
+        : currentPeriodForCadence("weekly"),
+    );
+    setAssignmentDescription(assignment?.description ?? assignment?.tuitionPlanName ?? "");
+    setTuitionPlanId(assignedPlan?.id ?? "");
+    setPlanEditorId(assignedPlan?.id ?? "new");
+    setPlanName(assignedPlan?.name ?? "");
+    setPlanAgeGroup(assignedPlan?.ageGroup ?? child?.ageGroup ?? defaultAgeGroupOptions[0]);
+    setPlanAmountDollars(assignedPlan ? String(assignedPlan.amountCents / 100) : "");
+    setPlanFundingType(assignedPlan?.amountCents === 0 ? "voucher" : "family");
   }
 
   function submit(payload: Record<string, unknown>) {
@@ -724,6 +789,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         skipped?: number;
         totalCents?: number;
         warning?: string | null;
+        pendingApproval?: boolean;
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || "Billing action could not be completed.");
@@ -749,7 +815,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       }
       if (payload.mode === "refundPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
-        setStatusMessage(json?.warning || `${total} family refund issued across the eligible original payment method(s).`);
+        setStatusMessage(
+          json?.pendingApproval
+            ? `${total} refund request submitted to executives for approval. No funds have been moved.`
+            : json?.warning || `${total} family refund issued across the eligible original payment method(s).`,
+        );
         setRefundAmountDollars("");
         setRefundReason("");
         setRefundPaymentIds([]);
@@ -869,7 +939,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
     const refundCents = dollarsToCents(refundAmountDollars);
     if (refundCents <= 0) return setErrorMessage("Enter a refund amount greater than zero.");
     if (!refundReason.trim()) return setErrorMessage("Enter a reason for the refund.");
-    if (!confirmBillingAction(`refund ${money(refundCents)} to ${selectedFamily.name}`)) return;
+    const action = canApproveRefunds ? "issue" : "request executive approval for";
+    if (!confirmBillingAction(`${action} a ${money(refundCents)} refund to ${selectedFamily.name}`)) return;
     submit({
       mode: "refundPayment",
       familyId: selectedFamily.id,
@@ -943,28 +1014,30 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
 
   function handleAssignmentChildChange(value: string | null) {
     if (!value) return;
-    const child = selectedChildren.find((item) => item.id === value);
-    const assignment = child?.tuitionAssignment;
-    setAssignmentChildId(value);
-    setAssignmentTuitionPlanId(assignment?.tuitionPlanId || tuitionPlans[0]?.id || "");
-    setAssignmentStartPeriod(
-      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
-        ? assignment.startsPeriod
-        : currentPeriodForCadence("weekly"),
-    );
-    setAssignmentDescription(assignment?.description || assignment?.tuitionPlanName || "");
-    setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+    applyFamilyTuitionContext(selectedFamily, locationTuitionPlans, value);
   }
 
   function handleAssignmentPlanChange(value: string | null) {
     if (!value) return;
+    const plan = locationTuitionPlans.find((item) => item.id === value);
     setAssignmentTuitionPlanId(value);
+    setTuitionPlanId(value);
     setAssignmentStartPeriod((current) => periodMatchesCadence(current, "weekly") ? current : currentPeriodForCadence("weekly"));
+    if (plan) {
+      setPlanEditorId(plan.id);
+      setPlanName(plan.name);
+      setPlanAgeGroup(plan.ageGroup);
+      setPlanAmountDollars(String(plan.amountCents / 100));
+      setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
+    }
   }
 
   function submitAssignment() {
-    if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving recurring tuition.");
-    if (!confirmBillingAction("save recurring tuition", selectedAssignmentChild.fullName)) return;
+    if (!selectedFamily || !selectedAssignmentChild) return setErrorMessage("Choose a family and child before saving tuition.");
+    const action = assignmentIsVoucherFunded
+      ? "save a $0 CCDF or voucher-funded tuition assignment"
+      : "save recurring tuition";
+    if (!confirmBillingAction(action, selectedAssignmentChild.fullName)) return;
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -987,8 +1060,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         return;
       }
       setStatusMessage(
-        assignmentEnabled === "true"
-          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Friday autobill is scheduled for the following week.`
+        assignmentIsVoucherFunded
+          ? `$0.00 CCDF or voucher-funded tuition saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled.`
+          : assignmentEnabled === "true"
+          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName}. Thursday autobill is scheduled for the following week.`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
     });
@@ -1001,18 +1076,37 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
       setPlanName("");
       setPlanAgeGroup(ageGroups[0] ?? defaultAgeGroupOptions[0]);
       setPlanAmountDollars("");
+      setPlanFundingType("family");
       return;
     }
-    const plan = tuitionPlans.find((item) => item.id === value);
+    const plan = locationTuitionPlans.find((item) => item.id === value);
     if (!plan) return;
     setPlanName(plan.name);
     setPlanAgeGroup(plan.ageGroup || ageGroups[0] || defaultAgeGroupOptions[0]);
     setPlanAmountDollars(String(plan.amountCents / 100));
+    setPlanFundingType(plan.amountCents === 0 ? "voucher" : "family");
+  }
+
+  function handlePlanFundingTypeChange(value: string | null) {
+    if (value !== "family" && value !== "voucher") return;
+    setPlanFundingType(value);
+    if (value === "voucher") {
+      setPlanAmountDollars("0.00");
+    } else if (dollarsToCents(planAmountDollars) <= 0) {
+      setPlanAmountDollars("");
+    }
   }
 
   function saveTuitionPlan() {
     if (!planName.trim() || !planAmountDollars.trim()) {
       return setErrorMessage("Tuition plan name and amount are required.");
+    }
+    const planAmountCents = dollarsToCents(planAmountDollars);
+    if (planFundingType === "family" && planAmountCents <= 0) {
+      return setErrorMessage("Family-paid tuition must be greater than $0. Choose CCDF / voucher-funded to save a $0.00 rate.");
+    }
+    if (planFundingType === "voucher" && planAmountCents !== 0) {
+      return setErrorMessage("CCDF / voucher-funded tuition must be saved at $0.00 family responsibility.");
     }
     startTransition(async () => {
       setStatusMessage("");
@@ -1023,10 +1117,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         body: JSON.stringify({
           entity: "tuitionPlan",
           id: planEditorId === "new" ? undefined : planEditorId,
+          centerId,
           name: planName,
           ageGroup: planAgeGroup,
           cadence: "weekly",
           amountDollars: planAmountDollars,
+          zeroDollarVoucher: planFundingType === "voucher",
         }),
       });
       const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
@@ -1034,7 +1130,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         setErrorMessage(json?.error || "Tuition plan could not be saved.");
         return;
       }
-      setStatusMessage(`Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`);
+      setStatusMessage(
+        planFundingType === "voucher"
+          ? `$0.00 CCDF / voucher rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
+          : `Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`,
+      );
       if (json?.record?.id) {
         setPlanEditorId(json.record.id);
         setTuitionPlanId(json.record.id);
@@ -1160,12 +1260,19 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             ) : null
           }
         >
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <SummaryMetric label="School" value={selectedCenter ? centerLabel(selectedCenter) : "Not selected"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccountLabel} detail={`Updated ${formatShortDate(selectedFamily?.updatedAt)}`} />
             <SummaryMetric label="Balance" value={money(familyBalanceCents)} detail={selectedPaymentMethod?.hasSavedPaymentMethod ? "Saved method on file" : "No saved method"} />
             <SummaryMetric label="Family contacts" value={`${selectedPaymentRequestEmailOptions.length} billing emails`} detail={selectedFamily?.billingEmail ?? "No billing email"} />
             <SummaryMetric label="Children" value={selectedChildSummary} detail={selectedChildren.map((child) => child.fullName).slice(0, 2).join(", ") || "No child records"} />
+            <SummaryMetric
+              label="Weekly tuition"
+              value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+              detail={activeWeeklyTuitionAssignments.length
+                ? activeWeeklyTuitionAssignments.map((child) => `${child.fullName} ${money(child.tuitionAssignment?.amountCents ?? 0)}`).join(" · ")
+                : "No saved child rate"}
+            />
           </div>
         </EntityHeader>
 
@@ -1242,7 +1349,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                     : "No saved payment method"}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${new Date(selectedPaymentMethod.lastUpdatedAt).toLocaleDateString()}` : "Families can also update this from the parent portal."}
+                {selectedPaymentMethod?.lastUpdatedAt ? `Updated ${formatZonedDateTime(selectedPaymentMethod.lastUpdatedAt, timeZone, { month: "short", day: "numeric", year: "numeric" })}` : "Families can also update this from the parent portal."}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1268,7 +1375,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <div className="flex items-center gap-2 text-sm font-medium">
                   Director payment terminal
                   <InfoTip label="About director payment actions">
-                    Choose total balance, an open invoice, or a custom amount, then charge a saved method or open the secure phone card terminal.
+                    Choose total balance, an open invoice, or a custom amount, then charge a saved method, use the in-person Stripe reader, or open secure phone checkout.
                   </InfoTip>
                 </div>
               </div>
@@ -1327,12 +1434,23 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   Run Autopay
                 </Button>
               ) : null}
+              {selectedCenter && selectedFamily && selectedBillingAccount ? (
+                <StripeTerminalPayment
+                  centerId={selectedCenter.id}
+                  billingAccountId={selectedBillingAccount.id}
+                  familyId={selectedFamily.id}
+                  invoiceId={selectedPaymentInvoice?.id || null}
+                  amountCents={directorPaymentAmountCents}
+                  description={paymentDescription}
+                  disabled={isPending || !selectedCheckoutReadiness?.canAcceptParentPayments}
+                />
+              ) : null}
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
                 onClick={() => openPaymentReview("card_checkout")}
               >
                 <CreditCard data-icon="inline-start" />
-                Open Card Terminal
+                Phone Card Checkout
               </Button>
               <Button
                 disabled={isPending || !selectedBillingAccount || directorPaymentAmountCents <= 0}
@@ -1354,7 +1472,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
             <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               Payment help
               <InfoTip label="Payment action help" side="right">
-                Use Open Card Terminal when a parent gives card details by phone. The director is sent to a secure processor page, so card numbers are never typed into or stored by The BEE Suite.
+                Use In-Person Card Reader when the parent is at the school. Use Phone Card Checkout when a parent gives card details by phone. In both flows, card numbers are handled by Stripe and never stored by The BEE Suite.
               </InfoTip>
             </div>
           </div>
@@ -1419,12 +1537,14 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
         <div className="rounded-lg border bg-background/35 p-4">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-medium">Tuition rate setup</div>
+              <div className="text-sm font-medium">
+                Tuition rate setup{selectedFamily ? ` · ${selectedFamily.name}` : ""}
+              </div>
               <p className="text-xs text-muted-foreground">
-                School users can add or edit weekly rates here. Assigned tuition autobills every Friday for the following week when the family has a saved payment method.
+                Choose or create a weekly school rate, including an explicit $0.00 family rate for CCDF or voucher-funded care, then save it to the intended child under Recurring.
               </p>
             </div>
-            <Badge variant="outline">School-managed rates</Badge>
+            <Badge variant="outline">{selectedFamily?.name ?? "Choose a family"}</Badge>
           </div>
           <div className="grid gap-3 md:grid-cols-6">
             <div className="space-y-1 md:col-span-2">
@@ -1433,7 +1553,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <SelectTrigger><SelectValue placeholder="New or existing rate" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="new">New tuition rate</SelectItem>
-                  {tuitionPlans.map((plan) => (
+                  {locationTuitionPlans.map((plan) => (
                     <SelectItem key={plan.id} value={plan.id}>
                       {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                     </SelectItem>
@@ -1457,8 +1577,24 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Amount</Label>
-              <Input inputMode="decimal" value={planAmountDollars} onChange={(event) => setPlanAmountDollars(event.target.value)} placeholder="250.00" />
+              <Label>Funding</Label>
+              <Select value={planFundingType} onValueChange={handlePlanFundingTypeChange}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="family">Family-paid</SelectItem>
+                  <SelectItem value="voucher">CCDF / voucher-funded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Family weekly amount</Label>
+              <Input
+                inputMode="decimal"
+                value={planAmountDollars}
+                disabled={planFundingType === "voucher"}
+                onChange={(event) => setPlanAmountDollars(event.target.value)}
+                placeholder="250.00"
+              />
             </div>
             <DisplayValue label="Cadence" value="Weekly" detail="Standard billing cycle" />
             <div className="flex items-end">
@@ -1492,7 +1628,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
               products={products}
-              tuitionPlans={tuitionPlans}
+              tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
@@ -1587,7 +1723,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
               products={products}
-              tuitionPlans={tuitionPlans}
+              tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
               selectedPlan={selectedPlan}
@@ -1646,7 +1782,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   <SelectContent>
                     {selectedChildren.map((child) => (
                       <SelectItem key={child.id} value={child.id}>
-                        {child.fullName}{child.tuitionAssignment?.enabled ? " · active" : ""}
+                        {child.fullName}{child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number"
+                          ? ` · ${money(child.tuitionAssignment.amountCents)}/week`
+                          : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1667,7 +1805,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <Select value={effectiveAssignmentPlanId} onValueChange={handleAssignmentPlanChange}>
                   <SelectTrigger><SelectValue placeholder="Choose plan" /></SelectTrigger>
                   <SelectContent>
-                    {tuitionPlans.map((plan) => (
+                    {locationTuitionPlans.map((plan) => (
                       <SelectItem key={plan.id} value={plan.id}>
                         {plan.name} · {plan.ageGroup} · {plan.cadence} · {money(plan.amountCents)}
                       </SelectItem>
@@ -1675,7 +1813,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                   </SelectContent>
                 </Select>
               </div>
-              <DisplayValue label="Autobill weekday" value="Friday" detail="Runs automatically" />
+              <DisplayValue
+                label="Autobill"
+                value={assignmentIsVoucherFunded ? "Not scheduled" : "Thursday"}
+                detail={assignmentIsVoucherFunded ? "$0 voucher assignment only" : "Runs automatically"}
+              />
               <div className="space-y-1">
                 <Label>Start week</Label>
                 <Input
@@ -1685,19 +1827,36 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 />
               </div>
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <DisplayValue
+                label="Customer weekly tuition"
+                value={selectedAssignment?.enabled && typeof selectedAssignment.amountCents === "number" ? money(selectedAssignment.amountCents) : "Not assigned"}
+                detail={selectedAssignment?.enabled && selectedAssignment.amountCents === 0
+                  ? `${selectedAssignment.tuitionPlanName ?? "Voucher-funded tuition"} · no family invoice`
+                  : selectedAssignment?.tuitionPlanName ?? "Saved on this child’s billing assignment"}
+              />
+              <DisplayValue
+                label="Family weekly total"
+                value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+                detail={`${activeWeeklyTuitionAssignments.length} saved child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`}
+              />
+            </div>
             <DescriptionField value={effectiveAssignmentDescription} setValue={setAssignmentDescription} />
             <div className="flex flex-wrap gap-2">
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild} onClick={submitAssignment}>
+              <Button
+                disabled={isPending || !selectedFamily || !selectedAssignmentChild || (assignmentEnabled === "true" && !effectiveAssignmentPlanId)}
+                onClick={submitAssignment}
+              >
                 <CalendarClock data-icon="inline-start" />
-                Save Recurring Tuition
+                Save Tuition Assignment
               </Button>
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId} onClick={submitAssignmentChargeNow} variant="outline">
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded} onClick={submitAssignmentChargeNow} variant="outline">
                 <ReceiptText data-icon="inline-start" />
                 Charge This Child Now
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tuition assignments create a Friday invoice for the following week and the daily autopay run charges families with saved methods as soon as the invoice is due. Charge now posts the selected rate immediately to the family balance and parent portal.
+              Positive tuition assignments create a Thursday invoice for the following week. Explicit $0.00 CCDF or voucher-funded assignments stay visible on the child but never create a family invoice or autopay attempt. Charge now is available only for positive family tuition.
             </p>
           </TabsContent>
 
@@ -1787,7 +1946,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
           <TabsContent value="refund" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <div>
               <div className="text-sm font-medium">Issue a family refund</div>
-              <p className="mt-1 text-xs text-muted-foreground">Enter the total amount for the family. Bee Suite can split it across eligible Stripe transactions; payment references are optional and are used first for record keeping.</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {canApproveRefunds
+                  ? "Executives can issue the approved total across eligible Stripe transactions. Payment references are optional and are used first for record keeping."
+                  : "Enter the requested total and reason. Bee Suite will notify executives; no money moves until an executive approves the request and records an approval reason."}
+              </p>
             </div>
             {refundablePayments.length ? (
               <>
@@ -1819,7 +1982,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, in
                 <div className="flex flex-wrap items-center gap-2">
                   <Button disabled={isPending || dollarsToCents(refundAmountDollars) <= 0 || !refundReason.trim()} onClick={submitRefundPayment} variant="destructive">
                     <RotateCcw data-icon="inline-start" />
-                    Issue Refund
+                    {canApproveRefunds ? "Issue Refund" : "Request Refund Approval"}
                   </Button>
                   <Badge variant="outline">{money(visibleRefundableCents)} shown as Stripe-refundable</Badge>
                 </div>

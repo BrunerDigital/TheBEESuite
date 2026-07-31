@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { centerServiceDayWindow, isLatePickup, readCenterTimeZone, readLatePickupCutoff } from "@/lib/attendance-state";
+import { centerServiceDayWindow, isLatePickup, readCenterLocationTimeZone, readCenterTimeZone, readLatePickupCutoff } from "@/lib/attendance-state";
 
 test("late pickup cutoff defaults and reads center customization", () => {
   assert.equal(readLatePickupCutoff(null), "18:00");
   assert.equal(readLatePickupCutoff({ latePickupCutoff: "17:45" }), "17:45");
   assert.equal(readLatePickupCutoff({ latePickupCutoff: "bad" }), "18:00");
+});
+
+test("payroll location timezone corrects a stale Pacific school setting", () => {
+  assert.equal(
+    readCenterLocationTimeZone({ timezone: "America/Los_Angeles", city: "Kokomo", state: "IN" }),
+    "America/Indiana/Indianapolis",
+  );
 });
 
 test("late pickup is evaluated in the center time zone", () => {

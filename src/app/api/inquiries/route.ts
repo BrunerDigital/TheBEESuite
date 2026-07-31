@@ -168,6 +168,7 @@ function normalizePayload(input: InquiryPayload) {
   const centerId = clean(input.centerId || input.center_id);
   const locationId = clean(input.locationId || input.location_id);
   const publicLocationId = clean(input.publicLocationId || input.public_location_id);
+  const brandName = clean(input.brandName || input.brand_name);
 
   return {
     parentName,
@@ -184,13 +185,13 @@ function normalizePayload(input: InquiryPayload) {
     postalCode: clean(input.postalCode || input.location_postal_code),
     locationPhone: clean(input.locationPhone || input.location_phone),
     pageUrl: clean(input.pageUrl || input.page_url),
-    leadSource: clean(input.leadSource || input.lead_source) || "Kid City USA Website Inquiry",
+    leadSource: clean(input.leadSource || input.lead_source) || (brandName ? `${brandName} Website Inquiry` : "Website Inquiry"),
     utmSource: clean(input.utmSource || input.utm_source),
     utmMedium: clean(input.utmMedium || input.utm_medium),
     utmCampaign: clean(input.utmCampaign || input.utm_campaign),
     utmTerm: clean(input.utmTerm || input.utm_term),
     utmContent: clean(input.utmContent || input.utm_content),
-    brandName: clean(input.brandName || input.brand_name),
+    brandName,
     company: clean(input.company),
     website: clean(input.website),
     turnstileToken: clean(input.turnstileToken || input.turnstile_token || input["cf-turnstile-response"]),
@@ -338,7 +339,7 @@ async function getIntakeCenter({
 
     if (strictLocationRouting) {
       throw new InquiryRoutingError(
-        "The selected Kid City USA location is not currently mapped in The BEE Suite. Please choose another location or contact the center.",
+        "The selected school is not currently mapped in The BEE Suite. Please choose another location or contact the center.",
         "unknown_kidcity_location",
       );
     }
@@ -359,7 +360,6 @@ async function getLocationNotificationEmails(centerId: string, centerEmail?: str
         role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
         user: {
           isActive: true,
-          email: { endsWith: "@kidcityusa.com" },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -376,7 +376,6 @@ async function getLocationNotificationEmails(centerId: string, centerEmail?: str
         centerId,
         user: {
           isActive: true,
-          email: { endsWith: "@kidcityusa.com" },
           role: { in: [UserRole.CENTER_DIRECTOR, UserRole.ASSISTANT_DIRECTOR, UserRole.BILLING_ADMIN] },
         },
       },

@@ -3,6 +3,8 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { AlertCircle, ArrowUpRight, Building2, CheckCircle2, CreditCard, GitMerge, Mail, Save, Trash2, UserPen } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -63,6 +65,16 @@ type ChildRecord = {
   allergies: AllergyRecord[];
   medicalNotes: MedicalNoteRecord[];
   documents: DocumentRecord[];
+  tuitionAssignment?: {
+    enabled: boolean;
+    tuitionPlanId: string | null;
+    tuitionPlanName: string | null;
+    cadence: string | null;
+    amountCents: number | null;
+    billingDay: number | null;
+    startsPeriod: string | null;
+    description: string | null;
+  } | null;
 };
 
 type AuthorizedPickupRecord = {
@@ -179,6 +191,7 @@ function toDateInput(value: Date | string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
+  if (date.getUTCFullYear() === 1900) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 }
@@ -215,6 +228,10 @@ function parentPortalStatusText(json: {
   return "";
 }
 
+function isValidGuardianEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase());
+}
+
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "Not set";
   const date = new Date(value);
@@ -227,17 +244,19 @@ function formatDate(value: string | Date | null | undefined) {
   }).format(date);
 }
 
-function formatActivityDate(value: string | Date | null | undefined) {
+function formatActivityDate(value: string | Date | null | undefined, timeZone: string) {
   if (!value) return "Not set";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
+  if (date.getUTCFullYear() === 1900) return "Missing DOB";
+  return formatZonedDateTime(date, timeZone, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(date);
+    timeZoneName: "short",
+  });
 }
 
 function money(cents: number) {
@@ -340,7 +359,7 @@ function pickInitialFamily(families: EditableFamilyRecord[], initialFamilyId?: s
     const bySearch = families.find((family) => familySearchText(family).includes(query));
     if (bySearch) return bySearch;
   }
-  return families[0] ?? null;
+  return families.find((family) => family.guardians.length > 0) ?? families[0] ?? null;
 }
 
 function pickInitialChild(family: EditableFamilyRecord | null, initialChildId?: string, searchQuery?: string) {
@@ -362,14 +381,19 @@ function familyProfileHref(family: EditableFamilyRecord | null | undefined) {
   return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
 }
 
-function familyBillingHref(family: EditableFamilyRecord | null | undefined) {
+function familyBillingHref(
+  family: EditableFamilyRecord | null | undefined,
+  child: ChildRecord | null | undefined,
+) {
   if (!family) return "/billing-invoices#billing-workbench";
   const params = new URLSearchParams({ familyId: family.id });
   if (family.centerId) params.set("centerId", family.centerId);
+  if (child?.id) params.set("childId", child.id);
   return `/billing-invoices?${params.toString()}#billing-workbench`;
 }
 
 export function FamilyRecordEditor({ families, centers, ageGroups: configuredAgeGroups, initialFamilyId, initialChildId, searchQuery }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const availableAgeGroups = useMemo(
     () => mergeAgeGroupOptions(
@@ -549,6 +573,19 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
   const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
   const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
+  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled
+    && typeof selectedChild.tuitionAssignment.amountCents === "number"
+    ? selectedChild.tuitionAssignment
+    : null;
+  const activeWeeklyTuitionAssignments = selectedFamily?.children.filter(
+    (child) => child.tuitionAssignment?.enabled
+      && typeof child.tuitionAssignment.amountCents === "number"
+      && child.tuitionAssignment.amountCents >= 0,
+  ) ?? [];
+  const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
+    (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
+    0,
+  );
   const selectedGuardianLabel = selectedGuardian?.fullName ?? (guardianName.trim() ? `${guardianName.trim()} (new parent)` : "No parent selected");
   const editingTargetLabel = selectedFamily
     ? `${selectedFamily.name} / ${selectedChild?.fullName ?? "family account"}`
@@ -1038,10 +1075,10 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           actions={
             selectedFamily ? (
               <>
-                <a href={familyBillingHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                <Link href={familyBillingHref(selectedFamily, selectedChild)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                   <CreditCard data-icon="inline-start" />
                   Open billing
-                </a>
+                </Link>
                 <Link href={familyProfileHref(selectedFamily)} className={buttonVariants({ variant: "outline", size: "sm" })}>
                   <ArrowUpRight data-icon="inline-start" />
                   View full profile
@@ -1052,7 +1089,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <SummaryMetric label="Record type" value="Family account" detail={`Updated ${selectedFamilyUpdatedAt}`} />
-            <SummaryMetric label="Selected child" value={selectedChildLabel} detail={selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"} />
+            <SummaryMetric
+              label="Selected child"
+              value={selectedChildLabel}
+              detail={selectedWeeklyTuition ? `${money(selectedWeeklyTuition.amountCents ?? 0)} weekly tuition` : selectedChild?.enrollmentStatus?.replaceAll("_", " ") ?? "Family-level edit"}
+            />
             <SummaryMetric label="Selected parent" value={selectedGuardianLabel} detail={selectedGuardian?.isBillingContact ? "Billing contact" : selectedGuardian?.relation ?? "Guardian"} />
             <SummaryMetric label="Billing account" value={selectedBillingAccount ? money(selectedBillingAccount.balanceCents) : "Not linked"} detail={`Autopay ${selectedAutopayStatus}`} />
             <SummaryMetric label="Records" value={`${selectedFamily?.children.length ?? 0} children`} detail={`${documentRecordCount} docs, ${selectedFamily?.guardians.length ?? 0} contacts`} />
@@ -1179,6 +1220,27 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                 {selectedBillingAccount ? <Badge variant="outline">Balance {money(selectedBillingAccount.balanceCents)}</Badge> : null}
               </div>
             </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <SummaryMetric
+                label="Family weekly tuition"
+                value={activeWeeklyTuitionAssignments.length ? money(familyWeeklyTuitionCents) : "Not assigned"}
+                detail={activeWeeklyTuitionAssignments.length
+                  ? `${activeWeeklyTuitionAssignments.length} active child rate${activeWeeklyTuitionAssignments.length === 1 ? "" : "s"}`
+                  : "Assign weekly tuition from Billing"}
+              />
+              <div className="rounded-lg border bg-card/50 p-3">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Weekly tuition by child</div>
+                <div className="mt-2 space-y-1 text-sm">
+                  {activeWeeklyTuitionAssignments.map((child) => (
+                    <div key={child.id} className="flex items-center justify-between gap-3">
+                      <span className="truncate">{child.fullName}</span>
+                      <span className="shrink-0 font-medium">{money(child.tuitionAssignment?.amountCents ?? 0)}/week</span>
+                    </div>
+                  ))}
+                  {!activeWeeklyTuitionAssignments.length ? <span className="text-muted-foreground">No weekly tuition assigned.</span> : null}
+                </div>
+              </div>
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button disabled={isPending || !selectedBillingAccount} onClick={() => manageFamilyPaymentMethod("setup", "link_bank")}>
                 <Building2 data-icon="inline-start" />
@@ -1266,10 +1328,22 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
         <section id="family-guardians" className="scroll-mt-36 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Parent / guardian contacts</div>
-            <Badge variant="outline">
-              {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
-            </Badge>
+            <div>
+              <div className="text-sm font-medium">
+                Parent / guardian contacts{selectedFamily ? ` for ${selectedFamily.name}` : ""}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These contacts belong to the selected family. Use the parent / guardian directory below to review every visible family.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
+              </Badge>
+              <Link href="#guardian-directory" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                View all contacts
+              </Link>
+            </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
@@ -1291,7 +1365,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Input value={guardianName} onChange={(event) => setGuardianName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Email</Label>
+              <Label>Email{isBillingContact ? " (required for payer portal)" : ""}</Label>
               <Input value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} type="email" />
             </div>
             <div className="space-y-1">
@@ -1329,9 +1403,18 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Badge variant="secondary" className="w-fit self-center">Portal linked</Badge>
             ) : null}
           </div>
+          {isBillingContact && !isValidGuardianEmail(guardianEmail) ? (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Billing contact email required</AlertTitle>
+              <AlertDescription>
+                Add this payer&apos;s personal email before saving. The parent portal invitation also requires a phone number with at least four digits.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={isPending || !selectedFamily || !guardianName.trim()}
+              disabled={isPending || !selectedFamily || !guardianName.trim() || (isBillingContact && !isValidGuardianEmail(guardianEmail))}
               onClick={() => postRecord({
                 entity: "guardian",
                 id: selectedGuardian?.id,
@@ -1543,6 +1626,20 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
         <section id="family-children" className="scroll-mt-36 space-y-3">
           <div className="text-sm font-medium">Child profile</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <SummaryMetric
+              label="Weekly tuition rate"
+              value={selectedWeeklyTuition ? money(selectedWeeklyTuition.amountCents ?? 0) : "Not assigned"}
+              detail={selectedWeeklyTuition?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
+            />
+            <SummaryMetric
+                label="Weekly billing"
+                value={selectedWeeklyTuition?.amountCents === 0 ? "Voucher funded" : selectedWeeklyTuition ? "Active" : "Not active"}
+                detail={selectedWeeklyTuition?.amountCents === 0
+                  ? "No family invoice or autopay"
+                  : selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
+              />
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label>Child</Label>
@@ -1972,7 +2069,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                         <Badge variant={note.restricted ? "secondary" : "outline"}>{note.restricted ? "Restricted" : "General"}</Badge>
                       </div>
                       <p className="leading-6 text-muted-foreground">{note.body}</p>
-                      <div className="mt-2 text-xs text-muted-foreground">{formatActivityDate(note.createdAt)}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{formatActivityDate(note.createdAt, timeZone)}</div>
                     </div>
                   ))}
                 </div>
@@ -1990,7 +2087,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                     <div key={item.id} className="grid gap-1 rounded-lg border bg-card/45 p-3 text-sm">
                       <div className="font-medium">{item.title}</div>
                       <div className="text-muted-foreground">{item.detail}</div>
-                      <div className="text-xs text-muted-foreground">{formatActivityDate(item.date)}</div>
+                      <div className="text-xs text-muted-foreground">{formatActivityDate(item.date, timeZone)}</div>
                     </div>
                   ))}
                 </div>

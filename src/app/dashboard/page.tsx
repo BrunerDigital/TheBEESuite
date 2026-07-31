@@ -2,6 +2,13 @@ import { redirect } from "next/navigation";
 import { EnrollmentStage, UserRole } from "@prisma/client";
 import { AppShell } from "@/components/app-shell";
 import { ExecutiveDashboard, type LiveDashboardData } from "@/components/dashboard";
+import {
+  accountsReceivableFamilySelect,
+  accountsReceivableSummaryFamilySelect,
+  buildAccountsReceivableSnapshot,
+  buildAccountsReceivableSummary,
+  canViewAccountBalances,
+} from "@/lib/accounts-receivable";
 import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
 import { canAccessAllCenters, canManageCrmLeads, canViewDemoFallbackData, getCurrentUser, getDashboardCenterScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { stageLabels } from "@/lib/crm";
@@ -12,11 +19,14 @@ import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { getFteDueState } from "@/lib/fte-report-guardrails";
 import { getCenterInquiryEmbedCode, getKidCityInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { prisma } from "@/lib/prisma";
+import { buildRegistrationShareUrl } from "@/lib/registration-sharing";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { dashboardLensesForRole } from "@/lib/rbac";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +40,10 @@ function recordFromJson(value: unknown): Record<string, unknown> {
 
 function metadataNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metadataString(value: unknown) {
+  return typeof value === "string" ? value : "";
 }
 
 function dateKey(value: Date | null | undefined) {
@@ -86,11 +100,16 @@ export default async function DashboardPage() {
     role: user.role,
     value: getDashboardWidgetPreferenceValue(dashboardPreferenceUser?.customFields),
   });
+  const visibleDashboardLenses = dashboardLensesForRole(user);
+  const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const directorChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "director_launch");
   const teacherChecklistCompletedIds = readCompletedSetupChecklistIds(dashboardPreferenceUser?.customFields, "teacher_profile");
   const brandName = tenantBrand?.brands[0]?.name || tenantBrand?.name || "The BEE Suite";
   const isKidCityWorkspace = /kid[-\s]*city/i.test(`${tenantBrand?.slug || ""} ${brandName}`);
   const showDemoFallbackData = canViewDemoFallbackData(user);
+  const displayText = (value: string) => showDemoFallbackData
+    ? removeDemoMarkersFromUserView(value)
+    : value;
   const centerIds = centers.map((center) => center.id);
   const scopedCenterFilter = centerIds.length ? { in: centerIds } : { in: ["__no_centers__"] };
   const allCentersAccess = canAccessAllCenters(user);
@@ -146,6 +165,8 @@ export default async function DashboardPage() {
     complianceTaskCount,
     incidentReviewCount,
     attendanceClassroomRows,
+    accountsReceivableFamilyRows,
+    executiveAccountsReceivableFamilyRows,
   ] = await Promise.all([
     prisma.child.count({
       where: {
@@ -214,7 +235,7 @@ export default async function DashboardPage() {
     prisma.staffProfile.count({
       where: {
         centerId: scopedCenterFilter,
-        user: { role: UserRole.TEACHER },
+        user: { role: UserRole.TEACHER, isActive: true },
       },
     }),
     prisma.billingAccount.aggregate({
@@ -248,7 +269,7 @@ export default async function DashboardPage() {
         _count: {
           select: {
             children: { where: currentEnrollmentWhere },
-            staff: { where: { user: { role: UserRole.TEACHER } } },
+            staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           },
         },
       },
@@ -364,6 +385,19 @@ export default async function DashboardPage() {
         },
       },
     }),
+    canViewAccountBalances(user) && !canSeeExecutiveMetrics
+      ? prisma.family.findMany({
+          where: { centerId: scopedCenterFilter },
+          orderBy: { name: "asc" },
+          select: accountsReceivableFamilySelect,
+        })
+      : Promise.resolve([]),
+    canViewAccountBalances(user) && canSeeExecutiveMetrics
+      ? prisma.family.findMany({
+          where: { centerId: scopedCenterFilter },
+          select: accountsReceivableSummaryFamilySelect,
+        })
+      : Promise.resolve([]),
   ]);
 
   const attendanceServiceDayByCenter = new Map(
@@ -423,17 +457,17 @@ export default async function DashboardPage() {
   }
   const attendanceScopeLabel = user.role === UserRole.TEACHER
     ? attendanceClassroomRows[0]
-      ? `${attendanceClassroomRows[0].center.crmLocationId ?? attendanceClassroomRows[0].center.name} - ${attendanceClassroomRows[0].name}`
+      ? `${displayText(attendanceClassroomRows[0].center.crmLocationId ?? attendanceClassroomRows[0].center.name)} - ${attendanceClassroomRows[0].name}`
       : "Assigned classroom not set"
     : centers.length === 1
-      ? `All classes at ${centers[0].crmLocationId ?? centers[0].name}`
+      ? `All classes at ${displayText(centers[0].crmLocationId ?? centers[0].name)}`
       : "All classes across visible schools";
   const attendanceSnapshot = buildDashboardAttendanceSnapshot({
     scopeLabel: attendanceScopeLabel,
     classrooms: attendanceClassroomRows.map((classroom) => ({
       id: classroom.id,
       name: classroom.name,
-      centerName: classroom.center.crmLocationId ?? classroom.center.name,
+      centerName: displayText(classroom.center.crmLocationId ?? classroom.center.name),
       children: classroom.children,
     })),
     latestLogByChild: latestDashboardCheckLogByChild,
@@ -478,7 +512,6 @@ export default async function DashboardPage() {
     enrolled: bucket.enrolled,
     revenue: bucket.revenue,
   }));
-  const visibleDashboardLenses = dashboardLensesForRole(user);
   const directorChecklistAutomaticCompletedIds = deriveDirectorLaunchAutoCompletedIds({
     centerCount: centers.length,
     classroomCount: classroomSnapshotRows.length,
@@ -500,7 +533,6 @@ export default async function DashboardPage() {
     dashboardConfigured: dashboardWidgetConfig.widgets.some((widget) => widget.visible),
     payoutReady: centers.some((center) => stripeConnectReadinessFromFields(center.customFields).status === "ready"),
   });
-  const canSeeExecutiveMetrics = visibleDashboardLenses.some((lens) => ["platform", "brand", "regional"].includes(lens));
   const fteDueState = getFteDueState(today);
   const [
     executiveClassroomRows,
@@ -509,8 +541,10 @@ export default async function DashboardPage() {
     executiveTourRows,
     executiveInvoiceRows,
     executiveFteRows,
+    executivePayrollSummaryRows,
     executiveExpiringDocumentRows,
     executivePendingIncidentRows,
+    executiveRefundRequestRows,
   ] = await Promise.all([
     prisma.classroom.findMany({
       where: { centerId: scopedCenterFilter },
@@ -522,7 +556,7 @@ export default async function DashboardPage() {
     }),
     prisma.staffProfile.groupBy({
       by: ["centerId"],
-      where: { centerId: scopedCenterFilter, user: { role: UserRole.TEACHER } },
+      where: { centerId: scopedCenterFilter, user: { role: UserRole.TEACHER, isActive: true } },
       _count: { _all: true },
     }),
     canSeeExecutiveMetrics ? prisma.lead.groupBy({
@@ -571,6 +605,17 @@ export default async function DashboardPage() {
         submittedBy: { select: { name: true, email: true } },
       },
     }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.auditLog.findMany({
+      where: {
+        tenantId: user.tenantId,
+        centerId: scopedCenterFilter,
+        action: "staff.payroll_summary.submitted",
+        resource: "StaffPayrollSummary",
+      },
+      orderBy: { createdAt: "desc" },
+      take: 250,
+      select: { id: true, centerId: true, resourceId: true, metadata: true, createdAt: true },
+    }) : Promise.resolve([]),
     canSeeExecutiveMetrics ? prisma.document.findMany({
       where: {
         expiresAt: {
@@ -606,6 +651,27 @@ export default async function DashboardPage() {
       },
       select: {
         classroom: { select: { centerId: true } },
+      },
+    }) : Promise.resolve([]),
+    canSeeExecutiveMetrics ? prisma.refundRequest.findMany({
+      where: {
+        centerId: scopedCenterFilter,
+        status: "pending",
+      },
+      orderBy: { requestedAt: "asc" },
+      take: 250,
+      select: {
+        id: true,
+        centerId: true,
+        familyId: true,
+        amountCents: true,
+        reason: true,
+        selectedPaymentIds: true,
+        requestedAt: true,
+        failureReason: true,
+        center: { select: { name: true, crmLocationId: true } },
+        family: { select: { name: true } },
+        requestedBy: { select: { name: true, email: true } },
       },
     }) : Promise.resolve([]),
   ]);
@@ -674,7 +740,7 @@ export default async function DashboardPage() {
     const pendingIncidentCount = pendingIncidentsByCenter.get(center.id) ?? 0;
     return {
       id: center.id,
-      name: center.crmLocationId ?? center.name,
+      name: displayText(center.crmLocationId ?? center.name),
       region: [center.city, center.state].filter(Boolean).join(", ") || "Region not set",
       children,
       capacity: capacityForCenter,
@@ -717,6 +783,56 @@ export default async function DashboardPage() {
       updatedAt: report.updatedAt.toISOString(),
     };
   });
+  const payrollSummaries = executivePayrollSummaryRows.map((row) => {
+    const metadata = recordFromJson(row.metadata);
+    const center = row.centerId ? executiveCenterById.get(row.centerId) : null;
+    return {
+      id: row.id,
+      submissionId: row.resourceId ?? row.id,
+      centerId: row.centerId ?? "",
+      schoolName: center?.crmLocationId ?? center?.name ?? "Unknown school",
+      periodStart: metadataString(metadata.periodStart),
+      periodEnd: metadataString(metadata.periodEnd),
+      employeeCount: metadataNumber(metadata.employeeCount) ?? 0,
+      totalMinutes: metadataNumber(metadata.totalMinutes) ?? 0,
+      regularMinutes: metadataNumber(metadata.regularMinutes) ?? 0,
+      overtimeMinutes: metadataNumber(metadata.overtimeMinutes) ?? 0,
+      openMinutes: metadataNumber(metadata.openMinutes) ?? 0,
+      estimatedGrossCents: metadataNumber(metadata.estimatedGrossCents),
+      employeeSummaries: Array.isArray(metadata.employeeSummaries)
+        ? metadata.employeeSummaries.map((value) => {
+            const employee = recordFromJson(value);
+            return {
+              employeeId: metadataString(employee.employeeId),
+              employeeName: metadataString(employee.employeeName) || "Unknown employee",
+              title: metadataString(employee.title),
+              department: metadataString(employee.department),
+              payCode: metadataString(employee.payCode),
+              totalMinutes: metadataNumber(employee.totalMinutes) ?? 0,
+              regularMinutes: metadataNumber(employee.regularMinutes) ?? 0,
+              overtimeMinutes: metadataNumber(employee.overtimeMinutes) ?? 0,
+              openMinutes: metadataNumber(employee.openMinutes) ?? 0,
+              estimatedGrossCents: metadataNumber(employee.estimatedGrossCents),
+            };
+          })
+        : [],
+      submittedBy: metadataString(metadata.submittedBy) || "Unknown",
+      submittedAt: metadataString(metadata.submittedAt) || row.createdAt.toISOString(),
+    };
+  });
+  const refundRequests = executiveRefundRequestRows.map((request) => ({
+    id: request.id,
+    centerId: request.centerId,
+    schoolName: displayText(request.center.crmLocationId ?? request.center.name),
+    familyId: request.familyId,
+    familyName: request.family.name,
+    amountCents: request.amountCents,
+    reason: request.reason,
+    paymentReferenceCount: request.selectedPaymentIds.length,
+    requestedBy: request.requestedBy.name || request.requestedBy.email,
+    requestedAt: request.requestedAt.toISOString(),
+    failureReason: request.failureReason,
+  }));
   type DashboardNotificationRow = { widgetId: DashboardWidgetId; text: string };
   const dashboardNotificationRows: Array<DashboardNotificationRow | null> = [
     unreadMessages ? { widgetId: "familyCommunication" as const, text: `${unreadMessages.toLocaleString()} parent messages need a response` } : null,
@@ -743,7 +859,7 @@ export default async function DashboardPage() {
     ? `Classroom snapshot: ${activeChildren.toLocaleString()} children are visible to your role, ${pendingIncidents.toLocaleString()} classroom incident items need attention, and ${unreadMessages.toLocaleString()} family messages are unread.`
     : `Live CRM snapshot: ${newLeadCount.toLocaleString()} leads are visible to your role, ${highIntentLeadCount.toLocaleString()} are high-fit, ${openTasks.toLocaleString()} follow-up tasks are open, and ${unreadMessages.toLocaleString()} family messages are unread.`;
   const centerEmbedCards = centers.map((center) => {
-    const displayName = [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")]
+    const displayName = [displayText(center.crmLocationId ?? center.name), [center.city, center.state].filter(Boolean).join(", ")]
       .filter(Boolean)
       .join(" · ");
     return {
@@ -755,13 +871,13 @@ export default async function DashboardPage() {
       embedCode: isKidCityWorkspace
         ? getKidCityLocationInquiryEmbedCode({
             centerId: center.id,
-            centerName: center.name,
+            centerName: displayText(center.name),
             crmLocationId: center.crmLocationId,
             locationId: center.locationId,
           })
         : getCenterInquiryEmbedCode({
             centerId: center.id,
-            centerName: center.name,
+            centerName: displayText(center.name),
             brandName,
           }),
     };
@@ -778,6 +894,34 @@ export default async function DashboardPage() {
         ]
       : centerEmbedCards
     : [];
+  const registrationShares = canManageCrmLeads(user)
+    ? centers.map((center) => ({
+        centerId: center.id,
+        schoolLabel: displayText(
+          center.crmLocationId
+            ?? [center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+        ),
+        registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(), center.id),
+      }))
+    : [];
+  const accountsReceivable = canViewAccountBalances(user) && !canSeeExecutiveMetrics
+    ? buildAccountsReceivableSnapshot(
+        accountsReceivableFamilyRows,
+        Object.fromEntries(
+          centers.map((center) => [center.id, displayText(center.crmLocationId ?? center.name)]),
+        ),
+        today,
+      )
+    : undefined;
+  const executiveAccountsReceivable = canSeeExecutiveMetrics
+    ? buildAccountsReceivableSummary(
+        executiveAccountsReceivableFamilyRows,
+        Object.fromEntries(
+          centers.map((center) => [center.id, displayText(center.crmLocationId ?? center.name)]),
+        ),
+        today,
+      )
+    : undefined;
   const live: LiveDashboardData = {
     kpis: [
       { label: "Active children", value: activeChildren.toLocaleString(), trend: `${centers.length} visible centers`, tone: "emerald" },
@@ -795,9 +939,9 @@ export default async function DashboardPage() {
       value: `${item._count._all.toLocaleString()} leads`,
     })),
     leadRows: recentDashboardLeads.map((lead) => ({
-      family: lead.familyName,
-      child: lead.childName || lead.ageGroupInterest || lead.programInterest || "Child details pending",
-      source: lead.leadSource || "Website/manual",
+      family: displayText(lead.familyName),
+      child: displayText(lead.childName || lead.ageGroupInterest || lead.programInterest || "Child details pending"),
+      source: displayText(lead.leadSource || "Website/manual"),
       stage: stageLabels[lead.stage],
       score: lead.score,
       desiredStart: lead.desiredStartDate
@@ -808,9 +952,9 @@ export default async function DashboardPage() {
         : [lead.programInterest, lead.ageGroupInterest].filter((tag): tag is string => Boolean(tag)),
     })),
     centers: executiveSchoolComparisons.slice(0, 6).map((center) => ({
-      name: center.name,
-      region: center.region,
-      director: user.name,
+      name: displayText(center.name),
+      region: displayText(center.region),
+      director: displayText(user.name),
       children: center.children,
       capacity: center.capacity,
       staff: center.staff,
@@ -818,7 +962,7 @@ export default async function DashboardPage() {
       compliance: center.compliance,
     })),
     classroomSnapshots: classroomSnapshotRows.map((classroom) => {
-      const staffAssigned = classroom._count.staff || 1;
+      const staffAssigned = classroom._count.staff;
       return {
         name: classroom.name,
         ageGroup: classroom.ageGroup,
@@ -828,10 +972,10 @@ export default async function DashboardPage() {
       };
     }),
     parentMessages: parentMessageRows.map((message) => ({
-      from: message.family?.name ?? message.sender?.name ?? "Parent message",
-      subject: message.subject ?? "Parent message",
+      from: displayText(message.family?.name ?? message.sender?.name ?? "Parent message"),
+      subject: displayText(message.subject ?? "Parent message"),
       status: message.priority === "high" || message.priority === "urgent" ? "Priority" : message.readAt ? "Reviewed" : "Open",
-      preview: message.body,
+      preview: displayText(message.body),
       sentiment: message.sentiment ?? (message.readAt ? "Reviewed" : "Unread"),
     })),
     aiHighlights,
@@ -849,7 +993,7 @@ export default async function DashboardPage() {
         title: "Teacher profile setup checklist",
         description: "Confirm your teacher account, classroom, roster, kiosk code, and classroom tablet workflows are ready.",
         completedIds: teacherChecklistCompletedIds,
-        graphicHref: "/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
+        graphicHref: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
       }] : []),
       ...(user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? [{
         key: "director_launch" as const,
@@ -857,12 +1001,15 @@ export default async function DashboardPage() {
         description: "Track the school-level setup work required before all BEE Suite features go live.",
         completedIds: directorChecklistCompletedIds,
         automaticCompletedIds: directorChecklistAutomaticCompletedIds,
-        graphicHref: "/brand/the-bee-suite/explainers/kid-city-director-setup-roadmap.svg",
+        graphicHref: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
       }] : []),
     ],
     aiSummary,
     inquiryEmbed: inquiryEmbeds[0],
     inquiryEmbeds,
+    registrationShares,
+    accountsReceivable,
+    executiveAccountsReceivable,
     executiveMetrics: canSeeExecutiveMetrics
       ? {
           currentWeekStart: fteDueState.weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
@@ -873,6 +1020,8 @@ export default async function DashboardPage() {
           schoolComparisons: executiveSchoolComparisons,
           weeklyFteTrend,
           fteSubmissions,
+          payrollSummaries,
+          refundRequests,
         }
       : undefined,
   };

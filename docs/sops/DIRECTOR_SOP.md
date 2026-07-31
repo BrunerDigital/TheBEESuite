@@ -1,12 +1,20 @@
 # Director SOP - The BEE Suite
 
-Last updated: June 26, 2026
+Last updated: July 29, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
 ## Visual Overview
 
-![Director dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png)
+![Director desktop operations guide](../../public/brand/the-bee-suite/sop-graphics/current/director-desktop-operations-guide.png)
+
+## Desktop Screenshots
+
+Use the desktop view for family, billing, staffing, and exception-review work.
+
+![Director daily reports workspace on desktop](../../public/brand/the-bee-suite/screenshots/current/director-desktop-reports-light.png)
+
+![Director billing and invoice workspace on desktop](../../public/brand/the-bee-suite/screenshots/current/director-desktop-billing-light.png)
 
 Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADMIN_SOP.md` for deeper billing/payment procedures.
 
@@ -42,14 +50,19 @@ Do not enter operational data if the wrong school, classroom, or family scope ap
 Use the family profile as the source of truth for parent portal access and child visibility.
 
 1. Open the family record.
-2. Confirm all guardians are listed with the correct relationship.
-3. Confirm each guardian's personal email address is accurate.
-4. Confirm each child is linked to the correct family and classroom.
-5. Review custody, pickup, allergy, medication, and media permission notes.
-6. Remove or deactivate outdated contacts instead of leaving confusing duplicate records.
-7. Save changes and refresh the record before inviting or training the family.
+2. Read the sticky `Currently editing family data` header before changing anything. Confirm the school, family, selected child, selected parent, billing account, and record counts.
+3. Use `View full profile` for the complete record and `Open billing` when the selected family or child needs billing work. These links preserve the current context.
+4. Confirm all guardians are listed with the correct relationship.
+5. Confirm each guardian's personal email address is accurate.
+6. Confirm each child is linked to the correct family and classroom.
+7. Review custody, pickup, allergy, medication, and media permission notes.
+8. Follow the school's approved access-removal process for outdated contacts; do not remove a guardian, payer, pickup, or emergency contact merely because the record looks duplicated.
+9. Save the specific section and confirm the success state before switching to another family, child, or guardian.
+10. Refresh or reopen the full profile before inviting or training the family.
 
 Stop and escalate if custody, pickup, or medical information conflicts with school paperwork.
+
+Weekly tuition is read from the selected child's billing assignment. The family view shows the total of active child assignments and a per-child breakdown. Directors should open Billing to change the assignment rather than typing another tuition amount into family or enrollment notes.
 
 ## Parent Portal Access
 
@@ -62,9 +75,9 @@ https://thebeesuite.io/login
 Parent login rules:
 
 - Username/email: the parent's personal email address on the guardian profile.
-- First access: the parent creates a private password from the one-time setup link sent to that email.
-- The setup link expires after one hour and cannot be reused; sending a new setup link revokes the prior unused setup link.
-- If the parent cannot log in, confirm the guardian email is correct and use a fresh setup/recovery link. Never send or request a password.
+- First access: the approved parent invitation includes the secure parent URL, guardian email, and a school-issued first-login password.
+- The parent may keep that password or choose a private password later from Parent Portal settings.
+- If the parent cannot log in, confirm the guardian email and family link, then use the approved resend/reset workflow. Never ask the parent to send a password back to the school.
 
 Director steps:
 
@@ -72,7 +85,7 @@ Director steps:
 2. Confirm the guardian email is present and spelled correctly.
 3. Confirm the guardian is connected to the correct family.
 4. Confirm the parent portal access action has been completed or send the parent portal invite.
-5. Tell the parent to open the private one-time setup link, create a password, and then use their guardian email at `https://thebeesuite.io/parents`. If the link expires, send a fresh link; never send or request a password.
+5. Tell the parent to use the guardian email and first-login password from the invitation at `https://thebeesuite.io/parents`. The parent may change the password later from settings.
 6. If the parent sees no family after login, verify the guardian-to-family link.
 
 Never give one guardian another guardian's login.
@@ -82,14 +95,17 @@ Never give one guardian another guardian's login.
 Billing users should review the ledger before sending payment instructions.
 
 1. Open the family billing or invoice view.
-2. Confirm the current balance, open invoices, credits, and recent payments.
-3. If the family owes money, open the invoice or payment action connected to that balance.
-4. Confirm the payment method offered to parents matches the school policy:
-   - ACH/bank payment is preferred when enabled.
-   - Card payment is optional if enabled.
+2. Confirm the header shows the intended school, family, billing account, and selected child.
+3. Confirm the current balance, active per-child weekly tuition, family weekly total, open invoices, credits, and recent payments.
+4. If the family owes money, open the invoice or payment action connected to that balance.
+5. Confirm the payment method offered to parents matches the school policy:
+   - Debit/credit card is presented first in the current parent flow.
+   - Instant Bank and One-Time Bank remain available when enabled.
    - Any fee or recovery disclosure must be shown before payment.
-5. For failed or pending payments, review the payment status before retrying.
-6. Do not mark an invoice paid manually unless the payment has been verified outside the app.
+6. For failed or pending payments, review the payment status before retrying.
+7. Do not mark an invoice paid manually unless the payment has been verified outside the app.
+8. Do not use `Charge This Child Now` unless an immediate invoice is intended and approved.
+9. Use `In-Person Card Reader` only with a reader assigned to the current school, a parent physically present, and a verified family/account amount.
 
 If Stripe checkout shows an error, capture the family name, invoice number, amount, payment method, time, and screenshot before escalating.
 

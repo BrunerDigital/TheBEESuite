@@ -67,10 +67,17 @@ test("school selectors require an exact unambiguous active-school identifier", (
 });
 
 test("module gates keep setup, invitations, kiosk, and billing separately controlled", () => {
-  const gates = buildModuleGates({ setupGaps: [], guardianCount: 3, guardianLoginCount: 2, guardianPinCount: 3 });
+  const gates = buildModuleGates({
+    setupGaps: [],
+    guardianCount: 3,
+    guardianEmailCount: 2,
+    guardianPhoneCount: 3,
+    guardianLoginCount: 0,
+    guardianPinCount: 3,
+  });
   assert.equal(gates.setup.status, "data_ready");
   assert.equal(gates["parent-invitations"].status, "blocked");
-  assert.deepEqual(gates["parent-invitations"].automatedGaps, ["1 guardian(s) are not linked to login users"]);
+  assert.deepEqual(gates["parent-invitations"].automatedGaps, ["1 guardian(s) need a valid invitation email"]);
   assert.equal(gates.kiosk.status, "manual_approval_required");
   assert.equal(gates.billing.status, "manual_approval_required");
   assert.equal(gates.billing.separateApprovalRequired, true);
@@ -79,6 +86,8 @@ test("module gates keep setup, invitations, kiosk, and billing separately contro
     setupGaps: ["school EIN/tax receipt details are not configured"],
     operationalActivationGaps: [],
     guardianCount: 2,
+    guardianEmailCount: 2,
+    guardianPhoneCount: 2,
     guardianLoginCount: 2,
     guardianPinCount: 2,
   });
@@ -86,4 +95,16 @@ test("module gates keep setup, invitations, kiosk, and billing separately contro
   assert.equal(identityGates["parent-invitations"].status, "manual_approval_required");
   assert.equal(identityGates.kiosk.status, "manual_approval_required");
   assert.equal(identityGates.billing.status, "blocked");
+
+  const importGates = buildModuleGates({
+    setupGaps: [],
+    guardianCount: 2,
+    guardianEmailCount: 2,
+    guardianPhoneCount: 2,
+    guardianLoginCount: 0,
+    guardianPinCount: 0,
+    invitationImportGaps: ["The linked ProCare import is not complete and error-free."],
+  });
+  assert.equal(importGates["parent-invitations"].status, "blocked");
+  assert.deepEqual(importGates["parent-invitations"].automatedGaps, ["The linked ProCare import is not complete and error-free."]);
 });

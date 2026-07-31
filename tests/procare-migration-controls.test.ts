@@ -24,6 +24,21 @@ test("reconciliation reports fail closed on differences and unavailable financia
   assert.equal(report.enforcement.cutoverAllowed, false);
 });
 
+test("reconciliation verifies imported emergency contacts and authorized pickups", () => {
+  const report = buildProcareReconciliationReport({
+    batchId: "batch_relationships",
+    batchStatus: "completed",
+    importedRows: 2,
+    errorRows: 0,
+    source: { emergencyContacts: 4, authorizedPickups: 3 },
+    target: { emergencyContacts: 4, authorizedPickups: 2 },
+  });
+
+  assert.equal(report.measures.find((item) => item.key === "emergencyContacts")?.status, "match");
+  assert.equal(report.measures.find((item) => item.key === "authorizedPickups")?.difference, -1);
+  assert.equal(report.decision, "needs_review");
+});
+
 test("rollback evidence identifies every missing approval and recovery reference", () => {
   const result = assessProcareRollbackEvidence({ batchId: "batch_synthetic", sourceSha256: "abc123" });
   assert.equal(result.complete, false);

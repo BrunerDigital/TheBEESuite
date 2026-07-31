@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  completeStripeConnectedAccountBusinessProfile,
   createStripeConnectedAccount,
+  createStripeExpressDashboardLoginLink,
+  createStripePayoutBankSelectionLink,
+  listStripeConnectedAccountPayoutBanks,
   retrieveStripeConnectedAccount,
   setStripeConnectedAccountDailyPayouts,
 } from "../src/lib/integrations";
@@ -10,6 +15,7 @@ import {
   STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS,
   normalizeStripeConnectSetupInput,
   stripeConnectSetupCustomFieldPatch,
+  verifyStripeConnectAccountBinding,
 } from "../src/lib/stripe-connect-setup";
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -94,6 +100,24 @@ test("Stripe Connect restricted key fix message names required permissions", () 
   assert.equal(STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE.includes("Connect-only write access is not enough"), true);
 });
 
+test("Stripe payout handoffs remain bound to the school's designated account", () => {
+  assert.deepEqual(
+    verifyStripeConnectAccountBinding("acct_school", "acct_school"),
+    { ok: true, accountId: "acct_school" },
+  );
+  assert.equal(verifyStripeConnectAccountBinding("acct_school", "acct_other").ok, false);
+  assert.equal(verifyStripeConnectAccountBinding("not-an-account", "not-an-account").ok, false);
+
+  for (const routePath of [
+    "src/app/api/billing/connect/onboard/route.ts",
+    "src/app/api/billing/connect/payout-account/route.ts",
+  ]) {
+    const route = readFileSync(routePath, "utf8");
+    assert.match(route, /retrieveStripeConnectedAccount\(accountId/, `${routePath} must retrieve the mapped account`);
+    assert.match(route, /verifyStripeConnectAccountBinding\(accountId/, `${routePath} must verify the exact account`);
+  }
+});
+
 test("Stripe connected account creation sends dashboard profile details to Accounts v2", async () => {
   const originalFetch = globalThis.fetch;
   let payload: Record<string, unknown> = {};
@@ -136,9 +160,12 @@ test("Stripe connected account creation sends dashboard profile details to Accou
     const profile = asRecord(defaults.profile);
 
     assert.equal(businessDetails.registered_name, "Kokomo School LLC");
+    assert.equal(businessDetails.phone, "+17655551234");
     assert.equal(businessAddress.line1, "123 Main Street");
     assert.equal(businessAddress.line2, "Suite 2");
     assert.equal(support.email, "families@example.com");
+    assert.equal(merchant.mcc, "8351");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
     assert.equal(support.url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.business_url, "https://kidcityusa.example/kokomo");
     assert.equal(profile.product_description, "Childcare tuition and registration fees.");
@@ -184,6 +211,180 @@ test("Stripe connected account payout schedule is set to daily automatic payouts
     assert.equal(stripeAccount, "acct_123");
     assert.equal(params.get("payments[payouts][schedule][interval]"), "daily");
     assert.equal(params.get("payments[settlement_timing][delay_days_override]"), "");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe connected account business completion supplies childcare merchant fields", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let payload: Record<string, unknown> = {};
+  let idempotencyKey = "";
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(url);
+    payload = JSON.parse(String(init?.body));
+    idempotencyKey = String((init?.headers as Record<string, string> | undefined)?.["Idempotency-Key"] ?? "");
+    return new Response(JSON.stringify({
+      id: "acct_123",
+      configuration: {
+        merchant: { capabilities: { card_payments: { status: "restricted" } } },
+        recipient: { capabilities: { stripe_balance: { stripe_transfers: { status: "restricted" } } } },
+      },
+      requirements: { entries: [{ description: "external_account" }] },
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await completeStripeConnectedAccountBusinessProfile({
+      accountId: "acct_123",
+      businessPhone: "+17655551234",
+      ein: "12-3456789",
+      idempotencyKey: "kidcity-account-profile-center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const configuration = asRecord(payload.configuration);
+    const merchant = asRecord(configuration.merchant);
+    const identity = asRecord(payload.identity);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.account?.detailsSubmitted, false);
+    assert.deepEqual(result.account?.requirementFields, ["external_account"]);
+    assert.equal(requestedUrl, "https://api.stripe.com/v2/core/accounts/acct_123");
+    assert.equal(merchant.mcc, "8351");
+    assert.equal(asRecord(merchant.statement_descriptor).descriptor, "KID CITY USA");
+    assert.equal(asRecord(identity.business_details).phone, "+17655551234");
+    assert.deepEqual(asRecord(identity.business_details).id_numbers, [{ type: "us_ein", value: "123456789" }]);
+    assert.equal(idempotencyKey, "kidcity-account-profile-center_123");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank selection opens the account-specific Express Dashboard", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+  let method = "";
+
+  globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+    requestedUrl = String(url);
+    method = String(init?.method);
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/express/acct_123/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripeExpressDashboardLoginLink({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.url, "https://connect.stripe.com/express/acct_123/secure");
+    assert.equal(requestedUrl, "https://api.stripe.com/v1/accounts/acct_123/login_links");
+    assert.equal(method, "POST");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank selection falls back to onboarding before the Express Dashboard is available", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrls.push(String(url));
+    if (requestedUrls.length === 1) {
+      return new Response(JSON.stringify({
+        error: { message: "Cannot create a login link for an account that has not completed onboarding." },
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({
+      url: "https://connect.stripe.com/setup/acct_123/secure",
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await createStripePayoutBankSelectionLink({
+      accountId: "acct_123",
+      refreshUrl: "https://thebeesuite.io/api/billing/connect/refresh?centerId=center_123",
+      returnUrl: "https://thebeesuite.io/billing-settings?stripeConnect=return&center=center_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.mode, "onboarding");
+    assert.equal(result.url, "https://connect.stripe.com/setup/acct_123/secure");
+    assert.equal(requestedUrls[0], "https://api.stripe.com/v1/accounts/acct_123/login_links");
+    assert.equal(requestedUrls[1], "https://api.stripe.com/v2/core/account_links");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Stripe payout bank lookup selects the default USD account for location confirmation", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = "";
+
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrl = String(url);
+    return new Response(JSON.stringify({
+      data: [
+        {
+          id: "ba_secondary",
+          object: "bank_account",
+          bank_name: "Corporate Bank",
+          last4: "1111",
+          currency: "usd",
+          country: "US",
+          status: "verified",
+          default_for_currency: false,
+        },
+        {
+          id: "ba_location",
+          object: "bank_account",
+          bank_name: "Corporate Bank",
+          last4: "7788",
+          currency: "usd",
+          country: "US",
+          status: "verified",
+          default_for_currency: true,
+        },
+      ],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await listStripeConnectedAccountPayoutBanks({
+      accountId: "acct_123",
+      credentials: { STRIPE_SECRET_KEY: "sk_tenant" },
+    });
+    const url = new URL(requestedUrl);
+
+    assert.equal(result.ok, true);
+    assert.equal(result.banks.length, 2);
+    assert.equal(result.defaultBank?.bankName, "Corporate Bank");
+    assert.equal(result.defaultBank?.last4, "7788");
+    assert.equal(url.pathname, "/v1/accounts/acct_123/external_accounts");
+    assert.equal(url.searchParams.get("object"), "bank_account");
   } finally {
     globalThis.fetch = originalFetch;
   }

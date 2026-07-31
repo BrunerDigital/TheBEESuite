@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { CANONICAL_APP_BASE_URL, getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 
 export const PAYMENT_METHOD_REQUEST_TOKEN_VERSION = 1;
@@ -217,18 +217,8 @@ export async function resolvePaymentMethodRequestShortLink(code: unknown, now = 
   return link.token;
 }
 
-function isLocalPaymentRequestHost(value: string) {
-  try {
-    const url = new URL(value);
-    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  } catch {
-    return false;
-  }
-}
-
 export function getPaymentMethodRequestAppBaseUrl(requestUrl?: string) {
-  const appBaseUrl = getAppBaseUrl(requestUrl);
-  return isLocalPaymentRequestHost(appBaseUrl) ? appBaseUrl : CANONICAL_APP_BASE_URL;
+  return getSecurePaymentAppBaseUrl(requestUrl);
 }
 
 export function buildPublicPaymentBrandAssetUrl(appBaseUrl: string, assetPath?: string | null) {
@@ -323,8 +313,8 @@ export function buildPaymentMethodRequestEmailText({
     `Hi ${recipientLabel || "there"},`,
     "",
     `${paymentMethodRequestBrandSender(centerLabel)} is asking you to complete tuition payment steps for ${familyName}.`,
-    "Start from the branded The BEE Suite link below to pay an open invoice, verify a bank account instantly with your bank login, or use a debit/credit card.",
-    "If you want autopay, you can also save a verified bank account or card from the same The BEE Suite form.",
+    "Start from the branded The BEE Suite link below to pay an open invoice by debit/credit card or verify a bank account instantly with your bank login.",
+    "If you want autopay, you can also save a card or verified bank account from the same The BEE Suite form.",
     "The BEE Suite and your school do not store your full card or bank details. Stripe may appear only as the regulated payment processor during the secure handoff.",
     "",
     `Open The BEE Suite tuition payment form: ${formUrl}`,

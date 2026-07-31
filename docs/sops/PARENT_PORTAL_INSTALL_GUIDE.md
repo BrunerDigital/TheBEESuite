@@ -1,21 +1,30 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: July 7, 2026
+Last updated: July 29, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
 ## What You Need
 
 - The guardian email address your school has on file.
-- Your parent portal password.
-- On your first visit, use the private one-time setup link from your school to create your password. The link expires after one hour and cannot be reused.
+- The first-login password included in the approved parent invitation from your school.
 - A phone, tablet, or computer with internet access.
 
 ## Visual Preview
 
-![Parent login](../../screenshots/bee-suite-login-desktop.png)
+![Parent access and secure installation flow](../../public/brand/the-bee-suite/explainers/current/parent-access-install.png)
 
-![Parent portal](../../screenshots/parent-portal.png)
+![Parent multi-device portal guide](../../public/brand/the-bee-suite/sop-graphics/current/parent-multidevice-portal-guide.png)
+
+## Parent Portal On Each Device
+
+The iPhone view is the primary parent training screen. The iPad and desktop captures show the same portal at wider breakpoints.
+
+![Parent portal overview on iPhone](../../public/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png)
+
+![Parent portal overview on iPad](../../public/brand/the-bee-suite/screenshots/current/parent-ipad-overview-light.png)
+
+![Parent portal overview on desktop](../../public/brand/the-bee-suite/screenshots/current/parent-desktop-overview-light.png)
 
 ## Start Here
 
@@ -25,7 +34,7 @@ Open:
 https://thebeesuite.io/parents
 ```
 
-If your school gave you a different branded link, use the school link.
+Use only the official secure address beginning with `https://thebeesuite.io`. If Safari or another browser says **Not Secure**, close that page and reopen the official address before signing in or installing.
 
 ## Install On iPhone Or iPad
 
@@ -33,12 +42,13 @@ Use Safari for the install step.
 
 1. Open Safari.
 2. Go to `https://thebeesuite.io/parents`.
-3. Tap the Share button.
-4. Scroll and tap `Add to Home Screen`.
-5. Confirm the name, such as `BEE Parents` or `BEE Suite Parent Portal`.
-6. Tap `Add`.
-7. Open the new icon from your home screen.
-8. Sign in with your guardian email and password.
+3. Confirm the address begins with `https://thebeesuite.io` and Safari does not say **Not Secure**.
+4. Tap the Share button.
+5. Scroll and tap `Add to Home Screen`.
+6. Confirm the name, such as `BEE Parents` or `BEE Suite Parent Portal`.
+7. Tap `Add`.
+8. Open the new icon from your home screen.
+9. Sign in with your guardian email and password.
 
 ## Install On Android Phone Or Tablet
 
@@ -78,10 +88,11 @@ Chrome and Edge may show an install icon in the address bar.
 
 1. Open the installed parent portal icon or go to `https://thebeesuite.io/parents`.
 2. Enter the personal email address on your guardian profile.
-3. Enter your password.
-4. Use the private password you created from your setup link. If you have not created one yet or forgot it, request a fresh recovery link.
-5. After login, open the parent portal.
-6. Confirm your child or children appear.
+3. On first access, enter the first-login password included in the approved school invitation.
+4. You may keep that password or choose a private password later from Parent Portal settings.
+5. If you forgot your current password, use the password recovery option.
+6. After login, open the parent portal.
+7. Confirm the correct school and child or children appear.
 
 If you log in but do not see your family, contact the school and ask them to confirm your guardian email is linked to the correct family.
 

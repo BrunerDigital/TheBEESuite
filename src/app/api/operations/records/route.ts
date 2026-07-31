@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { DocumentStatus, PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, canManageOperations, canManageStaffCompensation, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
-import { readCenterTimeZone } from "@/lib/attendance-state";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { hashStaffPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
@@ -32,6 +34,8 @@ import {
   ensureParentPortalLoginForGuardian,
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
+import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
+import { canSaveTuitionPlanAmount } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -315,6 +319,155 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Record management is not allowed for this role." }, { status: 403 });
   }
 
+  if (entity === "childStatusBulk") {
+    const change = buildBulkEnrollmentChange({
+      childIds: body.childIds,
+      enrollmentStatus: body.enrollmentStatus,
+      classroomId: body.classroomId,
+    });
+    if (!change.ok) return NextResponse.json({ ok: false, error: change.error }, { status: 400 });
+
+    const children = await prisma.child.findMany({
+      where: { id: { in: change.value.childIds } },
+      select: {
+        id: true,
+        fullName: true,
+        enrollmentStatus: true,
+        classroomId: true,
+        family: { select: { id: true, centerId: true } },
+      },
+    });
+    if (children.length !== change.value.childIds.length) {
+      return NextResponse.json({ ok: false, error: "One or more selected children could not be found." }, { status: 404 });
+    }
+    if (children.some((child) => !child.family.centerId || !canAccessCenter(user, child.family.centerId))) {
+      return NextResponse.json({ ok: false, error: "You do not have access to one or more selected children." }, { status: 403 });
+    }
+
+    const centerIds = [...new Set(children.map((child) => child.family.centerId).filter((value): value is string => Boolean(value)))];
+    if (change.value.classroomId) {
+      const classroom = await prisma.classroom.findUnique({
+        where: { id: change.value.classroomId },
+        select: { id: true, centerId: true },
+      });
+      if (!classroom || !canAccessCenter(user, classroom.centerId)) {
+        return NextResponse.json({ ok: false, error: "The selected classroom is not available." }, { status: 403 });
+      }
+      if (centerIds.some((selectedCenterId) => selectedCenterId !== classroom.centerId)) {
+        return NextResponse.json({ ok: false, error: "Every selected child must belong to the classroom's school." }, { status: 400 });
+      }
+    }
+
+    const previousStatuses = Object.fromEntries(children.map((child) => [child.id, child.enrollmentStatus]));
+    const updated = await prisma.child.updateMany({
+      where: { id: { in: change.value.childIds } },
+      data: {
+        enrollmentStatus: change.value.enrollmentStatus,
+        classroomId: change.value.classroomId,
+      },
+    });
+    await Promise.all(centerIds.map((selectedCenterId) => writeAuditLog(user, {
+      centerId: selectedCenterId,
+      action: "operations.child_status.bulk_updated",
+      resource: "Child",
+      resourceId: change.value.childIds.length === 1 ? change.value.childIds[0] : null,
+      metadata: {
+        childIds: change.value.childIds,
+        previousStatuses,
+        enrollmentStatus: change.value.enrollmentStatus,
+        classroomId: change.value.classroomId,
+        updatedCount: updated.count,
+      },
+    })));
+    revalidatePath("/", "layout");
+    return NextResponse.json({
+      ok: true,
+      entity,
+      mode: "updated",
+      updatedCount: updated.count,
+      enrollmentStatus: change.value.enrollmentStatus,
+      classroomId: change.value.classroomId,
+    });
+  }
+
+  if (entity === "staffPayrollSummary") {
+    const rawSummaries: unknown[] = Array.isArray(body.centerSummaries) ? body.centerSummaries : [];
+    if (!rawSummaries.length || rawSummaries.length > 250) {
+      return NextResponse.json({ ok: false, error: "At least one center payroll summary is required." }, { status: 400 });
+    }
+    const summaries = rawSummaries.map((value: unknown) => {
+      const row = jsonObject(value);
+      const rawEmployeeSummaries = Array.isArray(row.employeeSummaries) ? row.employeeSummaries : [];
+      return {
+        centerId: clean(row.centerId),
+        periodStart: clean(row.periodStart),
+        periodEnd: clean(row.periodEnd),
+        employeeCount: Math.max(0, intValue(row.employeeCount)),
+        totalMinutes: Math.max(0, intValue(row.totalMinutes)),
+        regularMinutes: Math.max(0, intValue(row.regularMinutes)),
+        overtimeMinutes: Math.max(0, intValue(row.overtimeMinutes)),
+        openMinutes: Math.max(0, intValue(row.openMinutes)),
+        estimatedGrossCents: row.estimatedGrossCents === null || row.estimatedGrossCents === undefined
+          ? null
+          : Math.max(0, intValue(row.estimatedGrossCents)),
+        employeeSummaries: rawEmployeeSummaries.slice(0, 500).map((value: unknown) => {
+          const employee = jsonObject(value);
+          return {
+            employeeId: clean(employee.employeeId),
+            employeeName: clean(employee.employeeName).slice(0, 160),
+            title: clean(employee.title).slice(0, 120),
+            department: clean(employee.department).slice(0, 160),
+            payCode: clean(employee.payCode).slice(0, 120),
+            totalMinutes: Math.max(0, intValue(employee.totalMinutes)),
+            regularMinutes: Math.max(0, intValue(employee.regularMinutes)),
+            overtimeMinutes: Math.max(0, intValue(employee.overtimeMinutes)),
+            openMinutes: Math.max(0, intValue(employee.openMinutes)),
+            estimatedGrossCents: employee.estimatedGrossCents === null || employee.estimatedGrossCents === undefined
+              ? null
+              : Math.max(0, intValue(employee.estimatedGrossCents)),
+          };
+        }),
+      };
+    });
+    if (summaries.some((summary) => {
+      const periodStart = parseDate(summary.periodStart);
+      const periodEnd = parseDate(summary.periodEnd);
+      return !summary.centerId || !periodStart || !periodEnd || periodStart > periodEnd;
+    })) {
+      return NextResponse.json({ ok: false, error: "Each payroll summary needs a center and valid pay-period dates." }, { status: 400 });
+    }
+    if (summaries.some((summary) => (
+      summary.employeeSummaries.length !== summary.employeeCount
+      || summary.employeeSummaries.some((employee) => !employee.employeeId || !employee.employeeName)
+    ))) {
+      return NextResponse.json({ ok: false, error: "Each payroll summary needs one valid summary for every employee." }, { status: 400 });
+    }
+    if (summaries.some((summary) => !canAccessCenter(user, summary.centerId))) {
+      return NextResponse.json({ ok: false, error: "You do not have access to one of the submitted centers." }, { status: 403 });
+    }
+    const uniqueCenterIds = [...new Set(summaries.map((summary) => summary.centerId))];
+    const centerCount = await prisma.center.count({
+      where: { id: { in: uniqueCenterIds }, organization: { tenantId: user.tenantId } },
+    });
+    if (centerCount !== uniqueCenterIds.length) {
+      return NextResponse.json({ ok: false, error: "One of the submitted centers could not be found." }, { status: 404 });
+    }
+    const submittedAt = new Date();
+    const submissionId = randomUUID();
+    await Promise.all(summaries.map((summary) => writeAuditLog(user, {
+      centerId: summary.centerId,
+      action: "staff.payroll_summary.submitted",
+      resource: "StaffPayrollSummary",
+      resourceId: submissionId,
+      metadata: {
+        ...summary,
+        submittedAt: submittedAt.toISOString(),
+        submittedBy: user.name || user.email,
+      } as Prisma.InputJsonObject,
+    })));
+    return NextResponse.json({ ok: true, entity, mode: "submitted", submissionId, submittedAt }, { status: 201 });
+  }
+
   let result: unknown;
   let login: TeacherLoginCredentials | undefined;
   let centerId: string | null = user.primaryCenterId;
@@ -542,6 +695,12 @@ async function POSTHandler(request: NextRequest) {
         : {}),
     };
     if (!data.fullName) return NextResponse.json({ ok: false, error: "Guardian name is required." }, { status: 400 });
+    if (data.isBillingContact && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email ?? "")) {
+      return NextResponse.json(
+        { ok: false, error: "A billing contact needs a valid email address before parent portal access can be prepared." },
+        { status: 400 },
+      );
+    }
     const guardian = id ? await prisma.guardian.update({ where: { id }, data }) : await prisma.guardian.create({ data });
     const defaultPinData = !guardian.checkInPinHash
       ? defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: user.id })
@@ -1174,7 +1333,7 @@ async function POSTHandler(request: NextRequest) {
     if (staff.user.role !== UserRole.TEACHER) {
       return NextResponse.json({ ok: false, error: "Only teacher profiles can use staff time clock actions." }, { status: 400 });
     }
-    const timeZone = readCenterTimeZone(staff.center);
+    const timeZone = readCenterLocationTimeZone(staff.center);
     centerId = staff.centerId;
 
     if (hasEventEditPayload) {
@@ -1409,13 +1568,25 @@ async function POSTHandler(request: NextRequest) {
     result = id ? await prisma.announcement.update({ where: { id }, data }) : await prisma.announcement.create({ data });
   } else if (entity === "campaign") {
     const brand = await prisma.brand.findFirst({ where: { tenantId: user.tenantId }, orderBy: { createdAt: "asc" }, select: { id: true } });
+    const campaignCenterId = canAccessAllCenters(user) ? clean(body.centerId) || null : user.primaryCenterId;
+    if (!canAccessAllCenters(user) && !campaignCenterId) {
+      return NextResponse.json({ ok: false, error: "A school assignment is required before managing campaigns." }, { status: 403 });
+    }
+    if (campaignCenterId && !canAccessCenter(user, campaignCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this campaign school." }, { status: 403 });
+    }
+    centerId = campaignCenterId;
     if (id) {
       const existing = await prisma.campaign.findUnique({
         where: { id },
-        select: { tenantId: true, brand: { select: { tenantId: true } } },
+        select: { tenantId: true, audience: true, brand: { select: { tenantId: true } } },
       });
       if (!existing || (existing.tenantId !== user.tenantId && existing.brand?.tenantId !== user.tenantId)) {
         return NextResponse.json({ ok: false, error: "Campaign not found for this tenant." }, { status: 404 });
+      }
+      const existingCenterId = clean(jsonObject(existing.audience).centerId);
+      if (!canAccessAllCenters(user) && existingCenterId !== campaignCenterId) {
+        return NextResponse.json({ ok: false, error: "Campaign not found for this school." }, { status: 404 });
       }
     }
     const draft = normalizeCampaignDraft({
@@ -1436,7 +1607,12 @@ async function POSTHandler(request: NextRequest) {
       subject: draft.subject,
       body: draft.body,
       templateKey: draft.templateKey,
-      audience: draft.audience ? draft.audience as Prisma.InputJsonObject : undefined,
+      audience: draft.audience || campaignCenterId
+        ? {
+            ...(draft.audience ?? {}),
+            ...(campaignCenterId ? { centerId: campaignCenterId } : {}),
+          } as Prisma.InputJsonObject
+        : undefined,
       status: draft.status,
       scheduledAt: draft.scheduledAt,
       metrics: id ? undefined : { createdFrom: "operations_record_api", templateKey: draft.templateKey },
@@ -1607,13 +1783,35 @@ async function POSTHandler(request: NextRequest) {
     if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Product name and amount are required." }, { status: 400 });
     result = id ? await prisma.product.update({ where: { id }, data }) : await prisma.product.create({ data });
   } else if (entity === "tuitionPlan") {
+    const requestedCenterId = clean(body.centerId);
+    if (!requestedCenterId) {
+      return NextResponse.json({ ok: false, error: "School is required for every tuition plan." }, { status: 400 });
+    }
+    if (!canAccessCenter(user, requestedCenterId)) {
+      return NextResponse.json({ ok: false, error: "You do not have access to this school's tuition plans." }, { status: 403 });
+    }
+    if (id) {
+      const existing = await prisma.tuitionPlan.findUnique({ where: { id }, select: { centerId: true } });
+      if (!existing) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+      if (existing.centerId && existing.centerId !== requestedCenterId) {
+        return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+      }
+    }
+    centerId = requestedCenterId;
     const data = {
+      centerId: requestedCenterId,
       name: clean(body.name),
       ageGroup: clean(body.ageGroup) || "Preschool",
       cadence: "weekly",
       amountCents: intValue(body.amountCents || Number(body.amountDollars) * 100),
     };
-    if (!data.name || data.amountCents <= 0) return NextResponse.json({ ok: false, error: "Plan name and amount are required." }, { status: 400 });
+    const zeroDollarVoucher = body.zeroDollarVoucher === true;
+    if (!data.name || !canSaveTuitionPlanAmount(data.amountCents, zeroDollarVoucher)) {
+      return NextResponse.json({
+        ok: false,
+        error: "Plan name and a positive amount are required unless this is explicitly marked as a $0 CCDF or voucher rate.",
+      }, { status: 400 });
+    }
     result = id ? await prisma.tuitionPlan.update({ where: { id }, data }) : await prisma.tuitionPlan.create({ data });
   } else if (entity === "review") {
     const requestedCenterId = clean(body.centerId) || null;

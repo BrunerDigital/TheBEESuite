@@ -23,6 +23,10 @@ export type StripeConnectSetupValidationResult = {
   errors: Partial<Record<keyof StripeConnectSetupDetails, string>>;
 };
 
+export type StripeConnectAccountBindingResult =
+  | { ok: true; accountId: string }
+  | { ok: false; error: string };
+
 export type StripeConnectSetupFallback = {
   name?: string | null;
   email?: string | null;
@@ -45,6 +49,9 @@ export const STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS = [
 
 export const STRIPE_CONNECT_RESTRICTED_KEY_FIX_MESSAGE =
   `The payment processor rejected payout setup because the restricted key is missing required permissions. In Stripe Dashboard > API keys, edit the restricted key and enable: ${STRIPE_CONNECT_RESTRICTED_KEY_PERMISSIONS.join(", ")}. This Accounts v2 flow creates and verifies /v2/core/accounts, so Connect-only write access is not enough. Then try Continue Secure Setup again.`;
+
+export const STRIPE_CONNECT_ACCOUNT_BINDING_ERROR =
+  "The school's designated payout account could not be verified for this workspace. Payout setup was stopped before any bank-account handoff. Confirm the school-to-Stripe account mapping, then try again.";
 
 const US_STATES = new Set([
   "AL",
@@ -155,6 +162,18 @@ function cleanUrl(value: unknown) {
   } catch {
     return "";
   }
+}
+
+export function verifyStripeConnectAccountBinding(
+  expectedAccountId: unknown,
+  retrievedAccountId: unknown,
+): StripeConnectAccountBindingResult {
+  const expected = cleanText(expectedAccountId, 255);
+  const retrieved = cleanText(retrievedAccountId, 255);
+  if (!expected.startsWith("acct_") || !retrieved.startsWith("acct_") || expected !== retrieved) {
+    return { ok: false, error: STRIPE_CONNECT_ACCOUNT_BINDING_ERROR };
+  }
+  return { ok: true, accountId: expected };
 }
 
 function isEmail(value: string) {

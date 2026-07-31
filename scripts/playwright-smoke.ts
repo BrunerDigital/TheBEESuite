@@ -59,6 +59,20 @@ function cleanUrl(value?: string) {
   return /^https?:\/\//i.test(cleaned) ? cleaned : "";
 }
 
+function unexpectedPageErrors(errors: string[], localServer: boolean) {
+  if (!localServer) return errors;
+  return errors.filter((message, index) => {
+    if (/\/_vercel\/insights\/script\.js.*MIME type/i.test(message)) return false;
+    if (
+      /Failed to load resource: the server responded with a status of 404/i.test(message) &&
+      /\/_vercel\/insights\/script\.js.*MIME type/i.test(errors[index + 1] ?? "")
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function startLocalServer(port: number) {
   const child = spawn(process.execPath, [nextBin, "start", "--hostname", "127.0.0.1", "--port", String(port)], {
     cwd: workspaceDir,
@@ -198,8 +212,9 @@ async function run() {
       await loggedIn.browser.close();
     }
 
-    if (pageErrors.length) {
-      throw new Error(`Browser console/page errors during smoke test:\n${pageErrors.join("\n")}`);
+    const unexpectedErrors = unexpectedPageErrors(pageErrors, !externalBaseUrl);
+    if (unexpectedErrors.length) {
+      throw new Error(`Browser console/page errors during smoke test:\n${unexpectedErrors.join("\n")}`);
     }
 
     console.log(`Smoke checks passed for ${baseUrl}.`);

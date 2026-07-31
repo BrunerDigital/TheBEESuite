@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { AnalyticsReportData } from "@/lib/reporting-analytics";
 import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 
 export type AnalyticsReportBuilderFilters = {
   range: string;
@@ -78,6 +79,7 @@ export function AnalyticsReportBuilder({
   data: AnalyticsReportData;
   filters: AnalyticsReportBuilderFilters;
 }) {
+  const timeZone = useSchoolTimeZone();
   const [range, setRange] = useState(filters.range || "365");
   const [start, setStart] = useState(filters.start);
   const [end, setEnd] = useState(filters.end);
@@ -155,7 +157,7 @@ export function AnalyticsReportBuilder({
           <h1>{reportLabel(report)} Report</h1>
           <p>{printFilterSummary}</p>
           <p>Loaded range: {formatDate(data.range.startDate)} to {formatDate(data.range.endDate)}</p>
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
         <h2>Summary</h2>
         <table>
@@ -305,7 +307,7 @@ export function AnalyticsReportBuilder({
                     <td>{hours(row.totalMinutes)}</td>
                     <td>{row.closedShiftCount} / {hours(row.closedShiftMinutes)}</td>
                     <td>{row.openShiftMinutes ? hours(row.openShiftMinutes) : "None"}</td>
-                    <td>{row.lastActionAt ? formatDate(row.lastActionAt) : "No history"}</td>
+                    <td>{row.lastActionAt ? formatPrintDateTime(row.lastActionAt, timeZone) : "No history"}</td>
                   </tr>
                 ))}
                 {!filteredStaffHours.length ? <tr><td colSpan={9}>No staff hour rows match the report filters.</td></tr> : null}
@@ -434,7 +436,7 @@ export function AnalyticsReportBuilder({
             <div className="font-medium">Definition and freshness</div>
             <p className="mt-1 text-muted-foreground">{reportDefinition.definition}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Source: {reportDefinition.source}. Data queried as of {formatPrintDateTime(new Date(data.generatedAt))}.
+              Source: {reportDefinition.source}. Data queried as of {formatPrintDateTime(new Date(data.generatedAt), timeZone)}.
             </p>
           </div>
         </CardContent>
@@ -668,7 +670,7 @@ export function AnalyticsReportBuilder({
                       <TableCell>{hours(row.totalMinutes)}</TableCell>
                       <TableCell>{row.closedShiftCount} / {hours(row.closedShiftMinutes)}</TableCell>
                       <TableCell>{row.openShiftMinutes ? hours(row.openShiftMinutes) : "None"}</TableCell>
-                      <TableCell>{row.lastActionAt ? formatDate(row.lastActionAt) : "No history"}</TableCell>
+                      <TableCell>{row.lastActionAt ? formatPrintDateTime(row.lastActionAt, timeZone) : "No history"}</TableCell>
                     </TableRow>
                   ))}
                   {!filteredStaffHours.length ? (

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { storeApps } from "@/lib/app-store-apps";
 
 const appIcon = "/brand/the-bee-suite/app-icon-yellow.png";
+const browserIcon = "/brand/the-bee-suite/browser-icon.png";
 const { parent, teacher, director, executive } = storeApps;
 
 export default function manifest(): MetadataRoute.Manifest {
@@ -36,7 +37,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
       {
-        src: "/brand/the-bee-suite/favicon.png",
+        src: browserIcon,
         sizes: "512x512",
         type: "image/png",
         purpose: "any",

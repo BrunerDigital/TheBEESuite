@@ -9,25 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 
 type Props = {
   credential: GuardianKioskCredential;
   showToken?: boolean;
 };
 
-function formatDateTime(value: string | null) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
-  }).format(new Date(value));
+function formatDateTime(value: string | null, timeZone: string) {
+  return formatZonedTimestamp(value, timeZone);
 }
 
 export function GuardianKioskCredentialCard({ credential, showToken = true }: Props) {
+  const timeZone = useSchoolTimeZone();
   const [qrImage, setQrImage] = useState<{ token: string; dataUrl: string }>({ token: "", dataUrl: "" });
   const [qrError, setQrError] = useState<{ token: string; message: string }>({ token: "", message: "" });
   const [copied, setCopied] = useState(false);
@@ -99,7 +94,7 @@ export function GuardianKioskCredentialCard({ credential, showToken = true }: Pr
           </div>
           <div className="space-y-2">
             <div className="grid gap-2 text-xs text-muted-foreground">
-              <span>PIN set: {formatDateTime(credential.pinSetAt)}</span>
+              <span>PIN set: {formatDateTime(credential.pinSetAt, timeZone)}</span>
               <span>Kiosk: {credential.kioskPath}</span>
             </div>
             <div className="flex flex-wrap gap-2">

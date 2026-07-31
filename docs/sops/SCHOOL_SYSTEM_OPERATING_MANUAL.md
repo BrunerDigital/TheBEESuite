@@ -1,6 +1,6 @@
 # The BEE Suite School System Operating Manual
 
-Last updated: July 7, 2026
+Last updated: July 29, 2026
 
 Audience: owners, executives, school directors, billing admins, training leads, and launch support.
 
@@ -12,9 +12,11 @@ The BEE Suite supports school operations, but it does not replace professional j
 
 ## Visual Launch Map
 
-![School launch swimlane](../../public/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg)
+![Independent school launch gates](../../public/brand/the-bee-suite/explainers/current/school-launch-gates.png)
 
-![Daily user quick start](../../public/brand/the-bee-suite/explainers/bee-suite-daily-user-quick-start-2026-07-01.svg)
+![Director daily operating flow](../../public/brand/the-bee-suite/explainers/current/director-daily-flow.png)
+
+![Role and device screenshot standard](../../public/brand/the-bee-suite/sop-graphics/current/role-device-standards-guide.png)
 
 ## System Map
 
@@ -26,7 +28,7 @@ flowchart LR
   C --> E["Parent portal"]
   C --> F["Billing and payments"]
   D --> G["Daily reports, media, incidents"]
-  E --> H["Messages, documents, ACH, acknowledgements"]
+  E --> H["Messages, documents, card/bank payments, acknowledgements"]
   F --> I["Invoices, autopay, reconciliation"]
   G --> J["Director review and compliance records"]
   I --> J
@@ -40,11 +42,11 @@ flowchart LR
 | School setup | Creates brand, center, classrooms, launch settings, payout owner, and setup checklist | Executive, director | `SCHOOL_SYSTEM_OPERATING_MANUAL.md`, `EXECUTIVE_ADMIN_SOP.md`, `DIRECTOR_SOP.md` |
 | Users and permissions | Creates role-scoped access for executives, directors, teachers, billing staff, parents, authorized pickups, and auditors | Executive, director | `EXECUTIVE_ADMIN_SOP.md`, `DIRECTOR_SOP.md` |
 | Enrollment CRM | Handles inquiries, lead routing, tours, pipeline stages, waitlist, registration, notes, tasks, and follow-up | Director, executive | `DIRECTOR_SOP.md`, `EXECUTIVE_ADMIN_SOP.md` |
-| Family records | Stores guardians, children, authorized pickups, emergency contacts, custody notes, medical notes, allergies, schedules, and classroom links | Director, assistant director | `DIRECTOR_SOP.md` |
+| Family records | Stores guardians, children, authorized pickups, emergency contacts, custody notes, medical notes, allergies, schedules, classroom links, and the visible family/child/billing context used while editing | Director, assistant director | `DIRECTOR_SOP.md` |
 | Classroom operations | Supports rosters, attendance, daily reports, media upload, incident creation, ratio warnings, and offline queue behavior | Teacher, director | `TEACHER_SOP.md`, `DIRECTOR_SOP.md` |
 | Lobby kiosk | Lets verified guardians check children in/out by PIN or QR; lets staff clock in/out by staff code | Director, guardian, staff | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 | Parent portal | Gives parents access to their own family dashboard, child updates, messages, photos, documents, invoices, payment options, and preferences | Parent, guardian | `PARENT_PORTAL_SOP.md`, `PARENT_PORTAL_INSTALL_GUIDE.md` |
-| Billing and invoices | Manages billing accounts, tuition plans, invoice creation, products/fees, subsidy notes, ledger, payments, dunning, and reconciliation | Billing admin, director | `BILLING_ADMIN_SOP.md`, `PARENT_ACH_PAYMENT_GUIDE.md` |
+| Billing and invoices | Manages billing accounts, canonical child-level weekly tuition assignments, family weekly totals, invoice creation, products/fees, subsidy notes, ledger, payments, dunning, and reconciliation | Billing admin, director | `BILLING_ADMIN_SOP.md`, `PARENT_ACH_PAYMENT_GUIDE.md` |
 | Payout readiness | Connects each school to the correct Stripe payout account before parent payments are enabled | Executive, billing admin | `EXECUTIVE_ADMIN_SOP.md`, `BILLING_ADMIN_SOP.md` |
 | Documents and forms | Requests, uploads, reviews, signs, approves, rejects, and tracks expirations for family, child, staff, and compliance records | Director, parent, staff | `DIRECTOR_SOP.md`, `PARENT_PORTAL_SOP.md` |
 | Incidents and media | Supports teacher submission, director review, parent acknowledgement, media permission review, and audit trail | Teacher, director, parent | `TEACHER_SOP.md`, `DIRECTOR_SOP.md`, `PARENT_PORTAL_SOP.md` |
@@ -63,7 +65,7 @@ Complete these items before using The BEE Suite as the daily system:
 4. Create director, assistant director, teacher, billing/admin, executive, and support users with the least access they need.
 5. Confirm parent guardian emails and family links before sending parent portal access.
 6. Set or confirm kiosk PINs and QR credentials before lobby check-in goes live.
-7. Load tuition plans, fees, discounts, subsidy/copay rules, ledger balances, and open invoices.
+7. Create tuition plans inside the correct school, assign the correct weekly rate to each child, and validate family totals, fees, discounts, subsidy/copay rules, ledger balances, and open invoices.
 8. Complete Stripe connected payout onboarding for the correct school before accepting parent payments.
 9. Approve payment disclosures, ACH/card policy, refund process, dispute process, and support owner.
 10. Test login, dashboard, family record, attendance, daily report, incident, parent portal, billing, document, and kiosk flows using approved test records.
@@ -85,11 +87,11 @@ flowchart TD
 
 | User type | What they need first | Primary daily workflow | Sendable guide |
 | --- | --- | --- | --- |
-| Executive or owner | Multi-location access, admin permissions, launch checklist, payout readiness | Review dashboards, FTE, school setup, integrations, access, and audit logs | `EXECUTIVE_ADMIN_SOP.md` |
+| Executive or owner | Multi-location access, admin permissions, launch checklist, payout readiness | Review dashboards, selected-period FTE, school setup, integrations, access, and audit logs | `EXECUTIVE_ADMIN_SOP.md` |
 | Director or assistant director | Correct school access, families, classrooms, teacher accounts, billing readiness | Run school dashboard, CRM, family records, parent access, classroom oversight, documents, messages, and escalations | `DIRECTOR_SOP.md` |
-| Billing admin | Billing access, ledgers, tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send ACH setup links, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
+| Billing admin | Billing access, ledgers, school-scoped tuition plans, payment readiness, approved policy | Create invoices, manage payment methods, send secure setup links, run school-scoped Terminal payments, reconcile payments, handle failed payments | `BILLING_ADMIN_SOP.md` |
 | Teacher | Teacher login, classroom assignment, roster, shift code if used | Attendance, daily reports, photos, incidents, messages, offline sync | `TEACHER_SOP.md` |
-| Parent or guardian | Guardian email linked to family, default or reset password, parent portal link | Install portal, view updates, message school, review documents, pay by ACH/card, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
+| Parent or guardian | Guardian email linked to family, school-issued first-login password, secure parent portal link | Install portal, view updates, message school, review documents, choose card/bank payment, acknowledge incidents | `PARENT_PORTAL_INSTALL_GUIDE.md`, `PARENT_ACH_PAYMENT_GUIDE.md`, `PARENT_PORTAL_SOP.md` |
 | Authorized pickup | Active PIN or QR credential, pickup authorization, correct school kiosk | Check child in/out, sign the kiosk, contact director for warnings | `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` |
 
 ## Launch Week Command Rhythm
@@ -102,16 +104,20 @@ Use this daily rhythm during the first week:
 4. End-of-day closeout: attendance complete, reports finished, incidents reviewed, payments checked, support issues logged.
 5. Executive review: FTE, cross-location blockers, access changes, payout/payment readiness, audit concerns.
 
+For family and billing work, staff should always confirm the visible school, family, child, guardian, and billing context before saving. Weekly tuition should be changed only through the selected child's billing assignment; family, child, enrollment, and billing views display that shared value.
+
 ## Live Payment Gate
 
 Do not ask parents to pay online until:
 
 - The school's Stripe connected payout account is ready.
 - Webhook reconciliation is configured and tested.
-- ACH, instant-bank, and card options match approved school policy.
+- Debit/credit card, Instant Bank, and One-Time Bank options match approved school policy and show any approved recovery before submission.
 - Parent processing recovery language is approved before card recovery is enabled.
 - Refunds, disputes, failed payments, duplicate payment handling, and support ownership are documented.
 - A billing smoke test passes for the school.
+
+Software deployment readiness does not open this gate. Billing, live payments, invitations, communications, kiosk, ProCare import/cutover, and school rollout require separate named-school approvals.
 
 ## Sensitive Data Rules
 
@@ -125,11 +131,9 @@ Do not ask parents to pay online until:
 
 Use these visuals in training decks and printed packets:
 
-![User dashboard views](../USER_DASHBOARD_VIEWS_GRAPHIC_2026-06-08.png)
+![Weekly tuition assignment and Thursday billing flow](../../public/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png)
 
-![Director dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png)
-
-![Parent dashboard guide](../../public/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png)
+![Selected-period weekly FTE flow](../../public/brand/the-bee-suite/explainers/current/fte-reporting-flow.png)
 
 ## Support Escalation Packet
 

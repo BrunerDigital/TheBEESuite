@@ -22,6 +22,7 @@ import {
   Sun,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { AccountsReceivableSheet } from "@/components/accounts-receivable-sheet";
 import { LiveRefreshStatus } from "@/components/live-refresh-status";
 import { ProfilePhotoUploader } from "@/components/profile-photo-uploader";
 import { Button } from "@/components/ui/button";
@@ -44,13 +45,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { clearClassroomOfflineQueues } from "@/lib/classroom-offline-queue";
+import { canViewAccountBalances, isExecutiveAccountBalanceView } from "@/lib/accounts-receivable";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { modules, navGroups } from "@/lib/demo-data";
+import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
 import { canAccessModule } from "@/lib/rbac";
-import type { WorkspaceBranding } from "@/lib/brand-assets";
+import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
+import { workspaceVisualDomain } from "@/lib/workspace-visual-domain";
+import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
 
 type ShellUser = {
   name: string;
@@ -60,7 +66,22 @@ type ShellUser = {
   centerIds?: string[];
   profilePhotoUrl?: string | null;
   branding?: WorkspaceBranding;
+  timeZone?: string;
+  timeZonesByCenterId?: Record<string, string>;
 };
+
+function canAccessShellModule(currentUser: ShellUser | undefined, slug: string) {
+  if (
+    slug === "corporate-billing"
+    && !canUseKidCityCorporateBilling(currentUser?.role, currentUser?.branding?.kind)
+  ) return false;
+  return canAccessModule(currentUser, slug);
+}
+
+function shellUserViewText(value: string, currentUser?: ShellUser) {
+  void currentUser;
+  return removeDemoMarkersFromUserView(value);
+}
 
 type NotificationSummary = {
   stats: {
@@ -99,24 +120,16 @@ type GlobalSearchResult = {
   badge?: string;
 };
 
-function notificationBodyUrl(body: string) {
-  return body.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null;
-}
-
-function storedNotificationHref(notification: NotificationSummary["notifications"][number]) {
-  if (notification.type === "payment_method_form") return notificationBodyUrl(notification.body) ?? "/parent-portal#billing";
-  return "/notifications";
-}
-
 function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
   return <BrandLogo href="/" branding={branding} size="md" />;
 }
 
 function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
-  const canViewEnrollment = canAccessModule(currentUser, "crm-leads");
+  const canViewEnrollment = canAccessShellModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
-  const canViewFteReports = canAccessModule(currentUser, "fte-reports");
+  const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
+  const notificationCenterHref = notificationCenterHrefForRole(currentUser?.role);
 
   function loadSummary() {
     let mounted = true;
@@ -234,10 +247,12 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
               className="block rounded-lg p-3 text-sm transition hover:bg-muted"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="font-medium">{item.title}</div>
+                <div className="font-medium">{shellUserViewText(item.title, currentUser)}</div>
                 <Badge variant={item.priority === "high" ? "destructive" : "outline"}>{item.priority}</Badge>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{item.body}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                {shellUserViewText(item.body, currentUser)}
+              </p>
             </Link>
           ))}
           {!items.length ? (
@@ -245,8 +260,8 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <Link href="/notifications" className="block p-3 text-sm font-medium text-primary hover:bg-muted">
-          Open notification center
+        <Link href={notificationCenterHref} className="block p-3 text-sm font-medium text-primary hover:bg-muted">
+          {notificationCenterHref === "/parent-portal" ? "Open parent portal" : "Open notification center"}
         </Link>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -259,7 +274,7 @@ function SidebarNav({ close, currentUser }: { close?: () => void; currentUser?: 
   const visibleNavGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter(([, slug]) => canAccessModule(currentUser, slug)),
+      items: group.items.filter(([, slug]) => canAccessShellModule(currentUser, slug)),
     }))
     .filter((group) => group.items.length);
 
@@ -335,14 +350,16 @@ function isParentFacingUser(currentUser?: ShellUser) {
 }
 
 function AccountMenu({ currentUser, onLogout }: { currentUser: ShellUser; onLogout: () => void }) {
+  const displayName = removeDemoMarkersFromUserView(currentUser.name);
+  const displayEmail = removeDemoMarkersFromUserView(currentUser.email);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Open account menu" className="overflow-hidden rounded-full p-0" />}>
-        <UserAvatar name={currentUser.name} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
+        <UserAvatar name={displayName} src={currentUser.profilePhotoUrl} size="md" className="border-0 shadow-none" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
         <div className="p-2">
-          <ProfilePhotoUploader name={currentUser.name} email={currentUser.email} profilePhotoUrl={currentUser.profilePhotoUrl} />
+          <ProfilePhotoUploader name={displayName} email={displayEmail} profilePhotoUrl={currentUser.profilePhotoUrl} />
         </div>
         <div className="px-3 pb-2">
           <span className="mt-1 block text-[0.65rem] font-normal text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</span>
@@ -399,6 +416,7 @@ function RoleBottomNav({ currentUser }: { currentUser?: ShellUser }) {
 
 export function AppShell({ children, currentUser }: { children: React.ReactNode; currentUser?: ShellUser }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResponse, setSearchResponse] = useState<{ query: string; results: GlobalSearchResult[]; error: string }>({
     query: "",
@@ -409,6 +427,9 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchUserEmail = currentUser?.email ?? "";
+  const displayUserName = currentUser
+    ? removeDemoMarkersFromUserView(currentUser.name)
+    : undefined;
   const trimmedSearchQuery = searchQuery.trim();
   const activeSearchResults = searchResponse.query === trimmedSearchQuery ? searchResponse.results : [];
   const activeSearchError = searchResponse.query === trimmedSearchQuery ? searchResponse.error : "";
@@ -416,17 +437,19 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   const hasRoleBottomNav = isTeacherUser(currentUser) || isParentFacingUser(currentUser);
   const parentFacing = isParentFacingUser(currentUser);
   const showWorkspaceTools = !parentFacing;
+  const showNotificationTools = Boolean(currentUser);
+  const visualDomain = workspaceVisualDomain(pathname, currentUser?.role);
   const visibleCommandItems = navGroups
     .flatMap((group) => group.items.map(([label, slug, Icon]) => ({ label, slug, Icon, group: group.title })))
-    .filter((item) => canAccessModule(currentUser, item.slug))
+    .filter((item) => canAccessShellModule(currentUser, item.slug))
     .slice(0, 12);
-  const searchDestination = canAccessModule(currentUser, "crm-leads")
+  const searchDestination = canAccessShellModule(currentUser, "crm-leads")
     ? "crm-leads"
-    : canAccessModule(currentUser, "parent-portal")
+    : canAccessShellModule(currentUser, "parent-portal")
       ? "parent-portal"
-      : canAccessModule(currentUser, "billing-invoices")
+      : canAccessShellModule(currentUser, "billing-invoices")
         ? "billing-invoices"
-        : canAccessModule(currentUser, "messages")
+        : canAccessShellModule(currentUser, "messages")
           ? "messages"
           : "dashboard";
   const searchPlaceholder = searchDestination === "crm-leads"
@@ -444,6 +467,22 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
     if (storedTheme === "dark") document.documentElement.classList.add("dark");
     if (storedTheme === "light") document.documentElement.classList.remove("dark");
   }, []);
+
+  useEffect(() => {
+    const branding = currentUser?.branding;
+    if (!branding) return;
+
+    const previousTitle = document.title;
+    const favicon = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const previousFavicon = favicon?.href;
+    document.title = `${branding.name} | The BEE Suite`;
+    if (favicon) favicon.href = branding.markSrc;
+
+    return () => {
+      document.title = previousTitle;
+      if (favicon && previousFavicon) favicon.href = previousFavicon;
+    };
+  }, [currentUser?.branding]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -517,7 +556,12 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
   }
 
   return (
-    <div className="min-h-screen">
+    <SchoolTimeZoneProvider timeZone={currentUser?.timeZone} timeZonesByCenterId={currentUser?.timeZonesByCenterId}>
+    <div
+      className="bee-app-frame min-h-screen"
+      data-module={visualDomain}
+      data-role={currentUser?.role ?? "PUBLIC"}
+    >
       <a href="#workspace-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground focus:shadow-xl">
         Skip to workspace content
       </a>
@@ -589,8 +633,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                             onClick={() => setSearchOpen(false)}
                           >
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm font-medium">{result.label}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                              <span className="block truncate text-sm font-medium">{shellUserViewText(result.label, currentUser)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail, currentUser)}</span>
                             </span>
                             {result.badge ? <Badge variant="outline" className="hidden shrink-0 sm:inline-flex">{result.badge}</Badge> : null}
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" aria-hidden="true" />
@@ -629,8 +673,8 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                         {activeSearchResults.slice(0, 6).map((result) => (
                           <Link key={result.id} href={result.href} onClick={() => setMobileSearchOpen(false)} className="flex items-center justify-between gap-3 rounded-lg p-3 text-sm transition hover:bg-primary/10">
                             <span className="min-w-0">
-                              <span className="block truncate font-medium">{result.label}</span>
-                              <span className="block truncate text-xs text-muted-foreground">{result.detail}</span>
+                              <span className="block truncate font-medium">{shellUserViewText(result.label, currentUser)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">{shellUserViewText(result.detail, currentUser)}</span>
                             </span>
                             <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
                           </Link>
@@ -679,7 +723,10 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   </DialogContent>
                 </Dialog>
               ) : null}
-              {showWorkspaceTools ? <NotificationDropdown currentUser={currentUser} /> : null}
+              {canViewAccountBalances(currentUser) ? (
+                <AccountsReceivableSheet executive={isExecutiveAccountBalanceView(currentUser)} />
+              ) : null}
+              {showNotificationTools ? <NotificationDropdown currentUser={currentUser} /> : null}
               <Button variant="outline" size="icon" aria-label="Toggle theme" onClick={toggleTheme}>
                 <Moon className="dark:hidden" />
                 <Sun className="hidden dark:block" />
@@ -692,7 +739,7 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
                   <div className="hidden items-center gap-2 sm:flex">
                     <AccountMenu currentUser={currentUser} onLogout={logout} />
                     <div className="rounded-lg border bg-card/70 px-3 py-1.5 text-right">
-                      <div className="text-xs font-medium leading-none">{currentUser.name}</div>
+                      <div className="text-xs font-medium leading-none">{displayUserName}</div>
                       <div className="mt-1 text-[0.65rem] text-muted-foreground">{currentUser.role.replaceAll("_", " ")}</div>
                     </div>
                     <Button variant="outline" size="icon" aria-label="Sign out" onClick={logout}>
@@ -713,5 +760,6 @@ export function AppShell({ children, currentUser }: { children: React.ReactNode;
       </div>
       <RoleBottomNav currentUser={currentUser} />
     </div>
+    </SchoolTimeZoneProvider>
   );
 }

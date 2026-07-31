@@ -290,8 +290,8 @@ export function AuthLikePage({ type, nextPath = "" }: { type: "login" | "forgot-
   }
 
   return (
-    <div className="grid min-h-screen place-items-center p-4">
-      <Card className="glass-panel w-full max-w-xl">
+    <div className="auth-halo-shell grid min-h-screen place-items-center p-4" data-portal={type}>
+      <Card className="auth-halo-card glass-panel w-full max-w-xl">
         <CardHeader className="text-center">
           <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground">
             <Sparkles />
@@ -308,7 +308,7 @@ export function AuthLikePage({ type, nextPath = "" }: { type: "login" | "forgot-
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" placeholder="director@kidcityusa.example" type="email" />
+            <Input id="email" placeholder="director@school.example" type="email" />
           </div>
           {!isForgot ? (
             <div className="flex flex-col gap-2">

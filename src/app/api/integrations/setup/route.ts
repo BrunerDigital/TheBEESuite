@@ -12,6 +12,7 @@ import {
   sanitizeIntegrationConfig,
 } from "@/lib/integration-setup";
 import { sanitizeCredentialInput, upsertTenantIntegrationCredentials } from "@/lib/integration-credentials";
+import { integrationScopeForUser } from "@/lib/integration-scope";
 import { prisma } from "@/lib/prisma";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -23,10 +24,15 @@ const allowedRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
   UserRole.CENTER_DIRECTOR,
+  UserRole.ASSISTANT_DIRECTOR,
 ]);
 
 function actionValue(value: unknown) {
   return value === "check" ? "check" : "save";
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -43,16 +49,26 @@ async function POSTHandler(request: NextRequest) {
   if (!provider) {
     return NextResponse.json({ ok: false, error: "Unknown integration provider." }, { status: 400 });
   }
-  if (user.role === UserRole.CENTER_DIRECTOR && !isMarketingIntegrationProvider(provider)) {
+  if ((user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR) && !isMarketingIntegrationProvider(provider)) {
     return NextResponse.json({ ok: false, error: "Directors can manage marketing connections only." }, { status: 403 });
+  }
+  const scope = integrationScopeForUser(user, provider);
+  if ((user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR) && isMarketingIntegrationProvider(provider) && !scope.centerId) {
+    return NextResponse.json({ ok: false, error: "A school assignment is required before managing marketing connections." }, { status: 403 });
   }
 
   const action = actionValue(body?.action);
   const credentialInput = sanitizeCredentialInput(provider, body?.credentials);
-  const existingCredentials = await prisma.integrationCredential.findMany({
-    where: { tenantId: user.tenantId, provider },
-    select: { key: true, lastFour: true, provider: true },
-  });
+  const [existingCredentials, existing] = await Promise.all([
+    prisma.integrationCredential.findMany({
+      where: { tenantId: user.tenantId, provider, scopeKey: scope.scopeKey },
+      select: { key: true, lastFour: true, provider: true },
+    }),
+    prisma.integration.findFirst({
+      where: { tenantId: user.tenantId, provider, scopeKey: scope.scopeKey },
+      orderBy: { lastSyncAt: "desc" },
+    }),
+  ]);
   const runtimeStatus = getIntegrationRuntimeStatus(
     provider,
     process.env,
@@ -63,41 +79,46 @@ async function POSTHandler(request: NextRequest) {
     ? runtimeStatus.configured ? "verified" : "needs_credentials"
     : normalizeIntegrationSetupStatus(body?.setupStatus);
   const config = sanitizeIntegrationConfig(provider, body?.config);
-  const configPlaceholder = integrationRecordConfig({
-    config,
-    checkedAt,
-    checkedById: checkedAt ? user.id : null,
-  });
+  const configPlaceholder = {
+    ...record(existing?.configPlaceholder),
+    ...integrationRecordConfig({
+      config,
+      checkedAt,
+      checkedById: checkedAt ? user.id : null,
+    }),
+  };
   const savedCredentialKeys = await upsertTenantIntegrationCredentials({
     tenantId: user.tenantId,
+    centerId: scope.centerId,
     provider,
     credentials: credentialInput,
     userId: user.id,
   });
 
-  const existing = await prisma.integration.findFirst({
-    where: { tenantId: user.tenantId, provider },
-    select: { id: true, lastSyncAt: true },
+  const saved = await prisma.integration.upsert({
+    where: {
+      tenantId_provider_scopeKey: {
+        tenantId: user.tenantId,
+        provider,
+        scopeKey: scope.scopeKey,
+      },
+    },
+    update: {
+      centerId: scope.centerId,
+      status: setupStatus,
+      configPlaceholder: configPlaceholder as Prisma.InputJsonValue,
+      ...(checkedAt ? { lastSyncAt: checkedAt } : {}),
+    },
+    create: {
+      tenantId: user.tenantId,
+      centerId: scope.centerId,
+      scopeKey: scope.scopeKey,
+      provider,
+      status: setupStatus,
+      configPlaceholder: configPlaceholder as Prisma.InputJsonValue,
+      lastSyncAt: checkedAt,
+    },
   });
-
-  const saved = existing
-    ? await prisma.integration.update({
-        where: { id: existing.id },
-        data: {
-          status: setupStatus,
-          configPlaceholder: configPlaceholder as Prisma.InputJsonValue,
-          ...(checkedAt ? { lastSyncAt: checkedAt } : {}),
-        },
-      })
-    : await prisma.integration.create({
-        data: {
-          tenantId: user.tenantId,
-          provider,
-          status: setupStatus,
-          configPlaceholder: configPlaceholder as Prisma.InputJsonValue,
-          lastSyncAt: checkedAt,
-        },
-      });
 
   await writeAuditLog(user, {
     action: action === "check" ? "integration.setup.checked" : "integration.setup.saved",
@@ -105,6 +126,7 @@ async function POSTHandler(request: NextRequest) {
     resourceId: saved.id,
     metadata: {
       provider,
+      centerId: scope.centerId,
       setupStatus,
       runtimeConfigured: runtimeStatus.configured,
       configKeys: Object.keys(config),
@@ -113,7 +135,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
   const credentials = await prisma.integrationCredential.findMany({
-    where: { tenantId: user.tenantId },
+    where: { tenantId: user.tenantId, scopeKey: scope.scopeKey },
     select: { provider: true, key: true, lastFour: true },
   });
 

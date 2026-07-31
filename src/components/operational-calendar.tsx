@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateKey } from "@/lib/zoned-date-time";
 
 export type CalendarEventRow = {
   id: string;
@@ -69,37 +71,30 @@ const weekdayOptions = [
   { value: "SU", label: "S" },
 ];
 
-function dateInputValue(offsetDays = 1) {
-  const value = new Date();
-  value.setDate(value.getDate() + offsetDays);
+function dateInputValue(timeZone: string, offsetDays = 1) {
+  const today = zonedDateKey(new Date(), timeZone);
+  const value = new Date(`${today}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + offsetDays);
   return value.toISOString().slice(0, 10);
 }
 
-function formatDateTime(value: string | null, allDay = false) {
+function formatDateTime(value: string | null, timeZone: string, allDay = false) {
   if (!value) return "Not set";
-  const date = new Date(value);
-  return new Intl.DateTimeFormat("en-US", allDay ? {
+  return formatZonedDateTime(value, allDay ? "UTC" : timeZone, allDay ? {
     month: "short",
     day: "numeric",
     year: "numeric",
-    timeZone: "UTC",
   } : {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "UTC",
-  }).format(date);
+    timeZoneName: "short",
+  });
 }
 
-function formatLastSync(value: string | null) {
-  if (!value) return "Not synced";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+function formatLastSync(value: string | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Not synced");
 }
 
 function eventTone(type: string) {
@@ -127,6 +122,7 @@ function recurrenceLabel(rule: string | null | undefined) {
 }
 
 export function OperationalCalendar({ centers, events, generatedAt, canManageCalendar, googleCalendar }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [centerId, setCenterId] = useState("all");
   const [type, setType] = useState("all");
@@ -139,7 +135,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
     centerId: defaultCenterId,
     eventType: "closure",
     title: "",
-    startsAt: dateInputValue(),
+    startsAt: dateInputValue(timeZone),
     endsAt: "",
     allDay: true,
     recurrenceFrequency: "none",
@@ -431,7 +427,7 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                   <Cloud className="mt-0.5 size-5 shrink-0 text-primary" />
                   <div>
                     <div className="font-medium">{googleCalendar.status}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">Last sync: {formatLastSync(googleCalendar.lastSyncAt)}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Last sync: {formatLastSync(googleCalendar.lastSyncAt, timeZone)}</div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {googleCalendar.configured ? <Badge>Configured</Badge> : <Badge variant="outline">Needs credentials</Badge>}
                       {googleCalendar.missingRequirements.map((requirement) => (
@@ -474,8 +470,8 @@ export function OperationalCalendar({ centers, events, generatedAt, canManageCal
                 {filteredEvents.map((event) => (
                   <TableRow key={event.id}>
                     <TableCell>
-                      <div className="font-medium">{formatDateTime(event.startsAt, event.allDay)}</div>
-                      {event.endsAt ? <div className="text-xs text-muted-foreground">Ends {formatDateTime(event.endsAt, event.allDay)}</div> : null}
+                      <div className="font-medium">{formatDateTime(event.startsAt, timeZone, event.allDay)}</div>
+                      {event.endsAt ? <div className="text-xs text-muted-foreground">Ends {formatDateTime(event.endsAt, timeZone, event.allDay)}</div> : null}
                     </TableCell>
                     <TableCell><Badge variant={eventTone(event.type)}>{event.type.replaceAll("_", " ")}</Badge></TableCell>
                     <TableCell>

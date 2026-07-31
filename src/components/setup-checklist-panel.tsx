@@ -34,6 +34,7 @@ export function SetupChecklistPanel({
   compact = false,
 }: Props) {
   const [completedIds, setCompletedIds] = useState(() => new Set(initialCompletedIds));
+  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const automaticIds = useMemo(() => new Set(automaticCompletedIds), [automaticCompletedIds]);
@@ -43,20 +44,27 @@ export function SetupChecklistPanel({
   const completedList = useMemo(() => Array.from(completedIds), [completedIds]);
 
   function persist(nextIds: Set<string>) {
+    setMessage("");
     setError("");
     startTransition(async () => {
-      const response = await fetch("/api/setup-checklist", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          key: checklistKey,
-          completedIds: Array.from(nextIds),
-        }),
-      });
-      const json = await response.json().catch(() => null) as { error?: string } | null;
-      if (!response.ok) {
+      try {
+        const response = await fetch("/api/setup-checklist", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: checklistKey,
+            completedIds: Array.from(nextIds),
+          }),
+        });
+        const json = await response.json().catch(() => null) as { error?: string; completedIds?: string[] } | null;
+        if (!response.ok) {
+          throw new Error(json?.error || "Checklist progress could not be saved.");
+        }
+        setCompletedIds(new Set(json?.completedIds ?? Array.from(nextIds)));
+        setMessage("Checklist progress saved.");
+      } catch (saveError) {
         setCompletedIds(new Set(completedList));
-        setError(json?.error || "Checklist progress could not be saved.");
+        setError(saveError instanceof Error ? saveError.message : "Checklist progress could not be saved.");
       }
     });
   }
@@ -125,7 +133,7 @@ export function SetupChecklistPanel({
                 )}
                 aria-pressed={done}
                 aria-label={automatic ? `Completed automatically: ${task.title}` : `${done ? "Mark incomplete" : "Mark complete"}: ${task.title}`}
-                disabled={automatic}
+                disabled={automatic || isPending}
               >
                 {done ? <CheckCircle2 className="size-4" /> : index + 1}
               </button>
@@ -148,6 +156,11 @@ export function SetupChecklistPanel({
         {error ? (
           <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive xl:col-span-2">
             {error}
+          </div>
+        ) : null}
+        {message ? (
+          <div role="status" aria-live="polite" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 xl:col-span-2">
+            {message}
           </div>
         ) : null}
     </CollapsibleCard>

@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth";
-import { getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import { normalizeIntegrationProvider, readIntegrationConfig, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
+import { integrationScopeForUser } from "@/lib/integration-scope";
+import { getMarketingConnection } from "@/lib/marketing-connection";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
@@ -44,11 +45,21 @@ async function POSTHandler(request: NextRequest) {
   const body = await request.json().catch(() => null) as Record<string, unknown> | null;
   const provider = normalizeIntegrationProvider(body?.provider);
   if (!provider || !SOCIAL_INTEGRATION_PROVIDERS.includes(provider)) return NextResponse.json({ ok: false, error: "Choose a supported social profile." }, { status: 400 });
+  const scope = integrationScopeForUser(user, provider);
+  if (!scope.centerId && (user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR)) {
+    return NextResponse.json({ ok: false, error: "A school assignment is required before syncing analytics." }, { status: 403 });
+  }
 
-  const integration = await prisma.integration.findFirst({ where: { tenantId: user.tenantId, provider }, orderBy: { lastSyncAt: "desc" } });
+  const connection = await getMarketingConnection({
+    tenantId: user.tenantId,
+    centerId: scope.centerId,
+    provider,
+    updatedById: user.id,
+  });
+  const integration = connection.integration;
   if (!integration) return NextResponse.json({ ok: false, error: "Connect this profile before syncing analytics." }, { status: 400 });
   const config = readIntegrationConfig(integration.configPlaceholder);
-  const credentials = await getTenantIntegrationCredentialMap(user.tenantId, provider);
+  const credentials = connection.credentials;
   let analytics: Record<string, number> = {};
 
   try {

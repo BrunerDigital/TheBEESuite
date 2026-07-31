@@ -2,16 +2,14 @@ const executiveFteRoles = new Set(["PLATFORM_OWNER", "BRAND_ADMIN", "REGIONAL_MA
 const fteReportingDeadlineDayOffset = 4;
 const fteReportingDeadlineHour = 12;
 const fteReportingDeadlineMinute = 0;
-const ftePreDeadlineEscalationHour = 8;
 const ftePostDeadlineEscalationHour = 17;
 const fteEscalationMinute = 0;
 
 export const FTE_REPORTING_DEADLINE_TIME_ZONE = "America/New_York";
 export const FTE_REPORTING_DEADLINE_LABEL = "Friday by 12:00 PM ET";
-export const FTE_PRE_DEADLINE_ESCALATION_LABEL = "Friday 8:00 AM ET";
-export const FTE_POST_DEADLINE_ESCALATION_LABEL = "Friday 5:00 PM ET";
+export const FTE_POST_DEADLINE_ESCALATION_LABEL = "Friday evening ET";
 
-export type FteExternalEscalationWindow = "friday_8am" | "friday_5pm";
+export type FteExternalEscalationWindow = "friday_5pm";
 
 export function isExecutiveFteManager(role?: string | null) {
   return Boolean(role && executiveFteRoles.has(role));
@@ -60,6 +58,18 @@ export function defaultFteWeekEnd(weekStart: Date) {
   const end = new Date(weekStart);
   end.setUTCDate(end.getUTCDate() + 6);
   return end;
+}
+
+export function fteReminderCoverageWhere(reminderWeekStart: Date) {
+  return {
+    OR: [
+      { weekStart: reminderWeekStart },
+      {
+        weekStart: { lte: reminderWeekStart },
+        weekEnd: { gte: reminderWeekStart },
+      },
+    ],
+  };
 }
 
 function timeZoneOffsetMs(date: Date, timeZone: string) {
@@ -129,20 +139,9 @@ function fteFridayEscalationAtForWeek(weekStart: Date, hour: number) {
 export function fteExternalEscalationWindow(now = new Date()) {
   const weekStart = startOfFteWeek(now);
   const dueAt = fteDueAtForWeek(weekStart);
-  const preDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePreDeadlineEscalationHour);
   const postDeadlineAt = fteFridayEscalationAtForWeek(weekStart, ftePostDeadlineEscalationHour);
 
   if (!isFridayInFteTimeZone(now)) return null;
-
-  if (now.getTime() >= preDeadlineAt.getTime() && now.getTime() < dueAt.getTime()) {
-    return {
-      key: "friday_8am" as const,
-      label: FTE_PRE_DEADLINE_ESCALATION_LABEL,
-      startsAt: preDeadlineAt,
-      weekStart,
-      deadlineAt: dueAt,
-    };
-  }
 
   if (now.getTime() >= postDeadlineAt.getTime()) {
     return {

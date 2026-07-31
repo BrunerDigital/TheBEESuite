@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
   defaultRecurringBillingPeriod,
+  isVoucherFundedTuitionAmount,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
@@ -91,10 +92,14 @@ async function POSTHandler(request: NextRequest) {
 
   const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
   if (!plan) return NextResponse.json({ ok: false, error: "Tuition plan not found." }, { status: 404 });
+  if (plan.centerId !== access.centerId) {
+    return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
+  }
   const cadence = WEEKLY_TUITION_AUTOBILL_CADENCE;
   const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
   const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
   const updatedAt = new Date().toISOString();
+  const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedChild = await tx.child.update({
@@ -109,6 +114,8 @@ async function POSTHandler(request: NextRequest) {
           tuitionPlanCadence: cadence,
           tuitionBillingCadence: cadence,
           tuitionPlanAmountCents: plan.amountCents,
+          tuitionFundingType: voucherFunded ? "voucher" : "family",
+          tuitionAutobillEligible: !voucherFunded,
           tuitionBillingDay: billingDay,
           tuitionBillingStartsPeriod: billingStartPeriod,
           tuitionBillingDescription: description || plan.name,
@@ -118,6 +125,19 @@ async function POSTHandler(request: NextRequest) {
       },
       select: { id: true, fullName: true, customFields: true },
     });
+
+    if (voucherFunded) {
+      await tx.billingAccount.upsert({
+        where: { familyId },
+        update: {},
+        create: {
+          familyId,
+          balanceCents: 0,
+          autopayPlaceholder: false,
+        },
+      });
+      return updatedChild;
+    }
 
     const billingAccount = await tx.billingAccount.findUnique({
       where: { familyId },
@@ -167,6 +187,8 @@ async function POSTHandler(request: NextRequest) {
       childId,
       tuitionPlanId: plan.id,
       amountCents: plan.amountCents,
+      fundingType: voucherFunded ? "voucher" : "family",
+      invoicesScheduled: !voucherFunded,
       cadence,
       billingDay,
       billingStartPeriod,

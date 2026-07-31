@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import type { FteReportRow } from "@/components/fte-report-form";
 import { aggregateFteWeeks, fteDateKey, latestFteReportsByCenter, latestFteReportsByCenterWeek } from "@/lib/fte-report-rollups";
 
@@ -142,6 +143,7 @@ function correctionFromReport(report: FteReportRow): InlineCorrectionState {
 }
 
 export function FteReportExplorer({ centers, reports }: Props) {
+  const timeZone = useSchoolTimeZone();
   const searchParams = useSearchParams();
   const requestedCenterId = searchParams.get("centerId") || ALL;
   const requestedWeekStart = searchParams.get("weekStart") || ALL;
@@ -334,7 +336,7 @@ export function FteReportExplorer({ centers, reports }: Props) {
         <header>
           <h1>Historical FTE Explorer</h1>
           <p>{printFilterSummary}</p>
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
         <h2>Summary</h2>
         <table>

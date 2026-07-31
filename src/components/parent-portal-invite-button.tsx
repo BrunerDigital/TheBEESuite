@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { AlertCircle, CheckCircle2, Copy, Send } from "lucide-react";
+import { AlertCircle, BookOpenText, CheckCircle2, Copy, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
   const [manualCopy, setManualCopy] = useState<ManualEmailCopy | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function submit() {
+  function submit(messageType: "invitation" | "guide") {
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -30,7 +30,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       const response = await fetch("/api/parent/invitations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ guardianId }),
+        body: JSON.stringify({ guardianId, messageType }),
       });
       const json = await response.json().catch(() => null) as { error?: string; auth?: { credentialCreated?: boolean }; manualCopy?: ManualEmailCopy } | null;
       setManualCopy(json?.manualCopy ?? null);
@@ -38,10 +38,14 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         setErrorMessage(json?.error || "Parent portal access could not be created.");
         return;
       }
+      if (messageType === "guide") {
+        setStatusMessage("The provider accepted the parent feature guide, FAQ, app-install, and payment-setup email.");
+        return;
+      }
       setStatusMessage(
         json?.auth?.credentialCreated
-          ? "The branded parent app invitation was sent with the login email, first-login password, kiosk PIN guidance, and portal overview."
-          : "The branded parent app invitation was resent and the first-login password was refreshed.",
+          ? "The provider accepted the welcome email. It includes the login, BusyBees first-login password, family check, kiosk PIN, iPhone and Android install steps, and secure payment setup."
+          : "The provider accepted the welcome reminder. The parent's current password was preserved; the email includes a forgot-password option, app-install steps, and secure payment setup.",
       );
     });
   }
@@ -72,7 +76,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
         {statusMessage ? (
           <Alert>
             <CheckCircle2 className="size-4" />
-            <AlertTitle>Portal access ready</AlertTitle>
+            <AlertTitle>Parent email accepted</AlertTitle>
             <AlertDescription>{statusMessage}</AlertDescription>
           </Alert>
         ) : null}
@@ -84,13 +88,28 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           </Alert>
         ) : null}
         <p className="text-xs leading-5 text-muted-foreground">
-          The guardian email is the login. The invitation explains the BusyBees first-login password, the phone-based kiosk PIN, ACH setup,
-          and the family tools available in the parent portal.
+          Before creating access or contacting the parent, BEE Suite checks the completed ProCare batch, all four source reports,
+          unresolved rows, family-child links, guardian identity, email, and phone. Accepted email is tracked separately from confirmed delivery.
         </p>
-        <Button disabled={isPending || !email} onClick={submit} className="w-full">
+        <Button disabled={isPending || !email} onClick={() => submit("invitation")} className="w-full">
           <Send data-icon="inline-start" />
           {linked ? "Resend Parent App Invite" : "Send Parent App Invite"}
         </Button>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={isPending || !email || !linked}
+          onClick={() => submit("guide")}
+          className="w-full"
+        >
+          <BookOpenText data-icon="inline-start" />
+          Send Parent Feature Guide & FAQ
+        </Button>
+        {!linked ? (
+          <p className="text-xs text-muted-foreground">
+            Send the parent app invite first. The feature guide is available after the guardian account is linked.
+          </p>
+        ) : null}
         {manualCopy ? (
           <Button type="button" variant="outline" onClick={copyInvitation} className="w-full">
             <Copy data-icon="inline-start" />

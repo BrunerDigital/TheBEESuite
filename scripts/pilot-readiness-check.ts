@@ -3,7 +3,13 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isActivePublicSchoolCandidate } from "@/lib/active-school-locations";
+import {
+  evaluateProcareInvitationBatchReadiness,
+  procareSourceFingerprintCollisionCenterIds,
+} from "@/lib/parent-invitation-readiness";
+import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { prisma } from "@/lib/prisma";
+import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { isSupabaseStorageConfigured } from "@/lib/supabase-storage";
@@ -43,6 +49,8 @@ export type CenterRolloutGap = {
   childCount: number;
   childrenWithoutClassroomCount: number;
   guardianCount: number;
+  guardianEmailCount: number;
+  guardianPhoneCount: number;
   guardianLoginCount: number;
   guardianPinCount: number;
   authorizedPickupCount: number;
@@ -189,14 +197,20 @@ export function buildModuleGates(input: {
   setupGaps: string[];
   operationalActivationGaps?: string[];
   guardianCount: number;
+  guardianEmailCount: number;
+  guardianPhoneCount: number;
   guardianLoginCount: number;
   guardianPinCount: number;
+  invitationImportGaps?: string[];
 }): CenterRolloutGap["moduleGates"] {
   const operationalActivationGaps = input.operationalActivationGaps ?? input.setupGaps;
-  const invitationGaps = [...operationalActivationGaps];
+  const invitationGaps = [...operationalActivationGaps, ...(input.invitationImportGaps ?? [])];
   if (input.guardianCount === 0) invitationGaps.push("no guardians available for invitation review");
-  if (input.guardianLoginCount < input.guardianCount) {
-    invitationGaps.push(`${input.guardianCount - input.guardianLoginCount} guardian(s) are not linked to login users`);
+  if (input.guardianEmailCount < input.guardianCount) {
+    invitationGaps.push(`${input.guardianCount - input.guardianEmailCount} guardian(s) need a valid invitation email`);
+  }
+  if (input.guardianPhoneCount < input.guardianCount) {
+    invitationGaps.push(`${input.guardianCount - input.guardianPhoneCount} guardian(s) need a phone with at least four digits`);
   }
   const kioskGaps = [...operationalActivationGaps];
   if (input.guardianCount === 0) kioskGaps.push("no guardians available for kiosk credential review");
@@ -215,7 +229,7 @@ export function buildModuleGates(input: {
       status: invitationGaps.length ? "blocked" : "manual_approval_required",
       automatedGaps: invitationGaps,
       separateApprovalRequired: true,
-      detail: "Invitation readiness never sends invitations and requires a separate director/corporate activation decision.",
+      detail: "Invitation readiness checks the completed ProCare source package plus guardian email/phone prerequisites. It never sends invitations and still requires a separate director/corporate activation decision.",
     },
     kiosk: {
       status: kioskGaps.length ? "blocked" : "manual_approval_required",
@@ -479,15 +493,15 @@ async function main() {
     }),
     prisma.family.findMany({
       where: { centerId: { in: activeLiveCenterIds } },
-      select: { id: true, centerId: true },
+      select: { id: true, centerId: true, sourceSystem: true },
     }),
     prisma.child.findMany({
       where: { family: { centerId: { in: activeLiveCenterIds } } },
-      select: { id: true, classroomId: true, family: { select: { centerId: true } } },
+      select: { id: true, classroomId: true, enrollmentStatus: true, familyId: true, family: { select: { centerId: true } } },
     }),
     prisma.guardian.findMany({
       where: { family: { centerId: { in: activeLiveCenterIds } } },
-      select: { userId: true, checkInPinHash: true, family: { select: { centerId: true } } },
+      select: { email: true, phone: true, userId: true, checkInPinHash: true, customFields: true, familyId: true, family: { select: { centerId: true } } },
     }),
     prisma.staffProfile.findMany({
       where: { centerId: { in: activeLiveCenterIds } },
@@ -506,6 +520,14 @@ async function main() {
       select: { centerId: true, role: true },
     }),
   ]);
+  // The production pool can be intentionally limited to one connection. Keep
+  // the summary-heavy import-batch read outside the parallel core-data reads so
+  // a large migration history cannot starve the other readiness queries.
+  const rolloutImportBatches = await prisma.procareImportBatch.findMany({
+    where: { centerId: { in: activeLiveCenterIds } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, centerId: true, status: true, summary: true },
+  });
 
   const familyCountByCenter = new Map<string, number>();
   for (const family of rolloutFamilies) {
@@ -515,22 +537,32 @@ async function main() {
 
   const childCountByCenter = new Map<string, number>();
   const childrenWithoutClassroomByCenter = new Map<string, number>();
+  const activeFamilyIds = new Set<string>();
   for (const child of rolloutChildren) {
     const centerId = child.family.centerId;
     if (!centerId) continue;
     childCountByCenter.set(centerId, (childCountByCenter.get(centerId) ?? 0) + 1);
+    if (isActiveProcareEnrollmentStatus(child.enrollmentStatus)) activeFamilyIds.add(child.familyId);
     if (!child.classroomId) {
       childrenWithoutClassroomByCenter.set(centerId, (childrenWithoutClassroomByCenter.get(centerId) ?? 0) + 1);
     }
   }
 
   const guardianCountByCenter = new Map<string, number>();
+  const guardianEmailCountByCenter = new Map<string, number>();
+  const guardianPhoneCountByCenter = new Map<string, number>();
   const guardianLoginCountByCenter = new Map<string, number>();
   const guardianPinCountByCenter = new Map<string, number>();
   for (const guardian of rolloutGuardians) {
     const centerId = guardian.family.centerId;
-    if (!centerId) continue;
+    if (!centerId || !activeFamilyIds.has(guardian.familyId) || parentPortalAccessDisabled(guardian.customFields)) continue;
     guardianCountByCenter.set(centerId, (guardianCountByCenter.get(centerId) ?? 0) + 1);
+    if (guardian.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guardian.email.trim())) {
+      guardianEmailCountByCenter.set(centerId, (guardianEmailCountByCenter.get(centerId) ?? 0) + 1);
+    }
+    if ((guardian.phone ?? "").replace(/\D/g, "").length >= 4) {
+      guardianPhoneCountByCenter.set(centerId, (guardianPhoneCountByCenter.get(centerId) ?? 0) + 1);
+    }
     if (guardian.userId) guardianLoginCountByCenter.set(centerId, (guardianLoginCountByCenter.get(centerId) ?? 0) + 1);
     if (guardian.checkInPinHash) guardianPinCountByCenter.set(centerId, (guardianPinCountByCenter.get(centerId) ?? 0) + 1);
   }
@@ -555,6 +587,23 @@ async function main() {
     directorAccessCountByCenter.set(grant.centerId, (directorAccessCountByCenter.get(grant.centerId) ?? 0) + 1);
   }
 
+  const latestImportBatchByCenter = new Map<string, (typeof rolloutImportBatches)[number]>();
+  for (const batch of rolloutImportBatches) {
+    const summary = batch.summary && typeof batch.summary === "object" && !Array.isArray(batch.summary)
+      ? batch.summary as Record<string, unknown>
+      : {};
+    const touchedCenterIds = Array.isArray(summary.centerIdsTouched)
+      ? summary.centerIdsTouched.filter((value): value is string => typeof value === "string")
+      : [];
+    const batchCenterIds = new Set([batch.centerId, ...touchedCenterIds]);
+    for (const centerId of batchCenterIds) {
+      if (activeLiveCenterIds.includes(centerId) && !latestImportBatchByCenter.has(centerId)) {
+        latestImportBatchByCenter.set(centerId, batch);
+      }
+    }
+  }
+  const sourceFingerprintCollisionCenterIds = procareSourceFingerprintCollisionCenterIds(rolloutImportBatches);
+
   const rolloutGapRows: CenterRolloutGap[] = rolloutCenters.map((center) => {
     const classroomCount = center._count.classrooms;
     const staffCount = center._count.staff;
@@ -563,6 +612,8 @@ async function main() {
     const childCount = childCountByCenter.get(center.id) ?? 0;
     const childrenWithoutClassroomCount = childrenWithoutClassroomByCenter.get(center.id) ?? 0;
     const guardianCount = guardianCountByCenter.get(center.id) ?? 0;
+    const guardianEmailCount = guardianEmailCountByCenter.get(center.id) ?? 0;
+    const guardianPhoneCount = guardianPhoneCountByCenter.get(center.id) ?? 0;
     const guardianLoginCount = guardianLoginCountByCenter.get(center.id) ?? 0;
     const guardianPinCount = guardianPinCountByCenter.get(center.id) ?? 0;
     const authorizedPickupCount = authorizedPickupCountByCenter.get(center.id) ?? 0;
@@ -585,7 +636,27 @@ async function main() {
     if (directorAccessCount === 0) setupGaps.push("no center director/billing access grant");
 
     const operationalActivationGaps = setupGaps.filter((gap) => gap !== "school EIN/tax receipt details are not configured");
-    const moduleGates = buildModuleGates({ setupGaps, operationalActivationGaps, guardianCount, guardianLoginCount, guardianPinCount });
+    const hasProcareFamilies = rolloutFamilies.some((family) => (
+      family.centerId === center.id && "sourceSystem" in family && family.sourceSystem === "procare"
+    ));
+    const importReadiness = hasProcareFamilies
+      ? evaluateProcareInvitationBatchReadiness(latestImportBatchByCenter.get(center.id) ?? null)
+      : { ok: true, blockers: [], importBatchId: null };
+    const moduleGates = buildModuleGates({
+      setupGaps,
+      operationalActivationGaps,
+      guardianCount,
+      guardianEmailCount,
+      guardianPhoneCount,
+      guardianLoginCount,
+      guardianPinCount,
+      invitationImportGaps: [
+        ...importReadiness.blockers,
+        ...(sourceFingerprintCollisionCenterIds.has(center.id)
+          ? ["the same ProCare source-file fingerprint was imported in a separate batch for another school"]
+          : []),
+      ],
+    });
     const gaps = Array.from(new Set(args.modules.flatMap((rolloutModule) => moduleGates[rolloutModule].automatedGaps)));
 
     return {
@@ -612,6 +683,8 @@ async function main() {
       childCount,
       childrenWithoutClassroomCount,
       guardianCount,
+      guardianEmailCount,
+      guardianPhoneCount,
       guardianLoginCount,
       guardianPinCount,
       authorizedPickupCount,

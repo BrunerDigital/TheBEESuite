@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { PaymentStatus, Prisma } from "@prisma/client";
+import { PaymentStatus, Prisma, UserRole } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { canAccessAllCenters, canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
@@ -12,11 +12,12 @@ import {
   normalizeBillingPeriod,
   normalizeRecurringBillingPeriod,
   parseCurrencyCents,
-  planFamilyRefundAllocations,
+  isVoucherFundedTuitionAmount,
 } from "@/lib/billing-workflows";
 import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
-import { createStripeRefund } from "@/lib/integrations";
+import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
+import { refundSubmissionMode } from "@/lib/refund-approval";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -91,7 +92,7 @@ async function assertFamilyAccess(user: CurrentBillingUser, familyId: string) {
   return { ok: true as const, family, centerId: family.centerId };
 }
 
-async function resolveCharge(body: Record<string, unknown>): Promise<
+async function resolveCharge(body: Record<string, unknown>, centerId: string): Promise<
   | { ok: true; charge: ChargeResolution }
   | { ok: false; status: number; error: string }
 > {
@@ -118,8 +119,11 @@ async function resolveCharge(body: Record<string, unknown>): Promise<
 
   if (chargeSource === "tuitionPlan" || tuitionPlanId) {
     if (!tuitionPlanId) return { ok: false, status: 400, error: "Tuition plan is required." };
-    const plan = await prisma.tuitionPlan.findUnique({ where: { id: tuitionPlanId } });
+    const plan = await prisma.tuitionPlan.findFirst({ where: { id: tuitionPlanId, centerId } });
     if (!plan) return { ok: false, status: 404, error: "Tuition plan not found." };
+    if (isVoucherFundedTuitionAmount(plan.amountCents)) {
+      return { ok: false, status: 400, error: "$0 CCDF or voucher tuition is saved for tracking and cannot create a family charge." };
+    }
     return {
       ok: true,
       charge: {
@@ -153,7 +157,7 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
   const familyAccess = await assertFamilyAccess(user, clean(body.familyId));
   if (!familyAccess.ok) return NextResponse.json({ ok: false, error: familyAccess.error }, { status: familyAccess.status });
 
-  const chargeResult = await resolveCharge(body);
+  const chargeResult = await resolveCharge(body, familyAccess.centerId);
   if (!chargeResult.ok) return NextResponse.json({ ok: false, error: chargeResult.error }, { status: chargeResult.status });
 
   const dueDate = parseDate(body.dueDate);
@@ -222,7 +226,7 @@ async function createBatchInvoices(user: CurrentBillingUser, body: Record<string
   const centerAccess = await assertCenterAccess(user, clean(body.centerId));
   if (!centerAccess.ok) return NextResponse.json({ ok: false, error: centerAccess.error }, { status: centerAccess.status });
 
-  const chargeResult = await resolveCharge(body);
+  const chargeResult = await resolveCharge(body, centerAccess.center.id);
   if (!chargeResult.ok) return NextResponse.json({ ok: false, error: chargeResult.error }, { status: chargeResult.status });
 
   const charge = chargeResult.charge;
@@ -601,116 +605,95 @@ async function refundStripePayment(user: CurrentBillingUser, body: Record<string
   const reason = clean(body.reason) || clean(body.description);
   if (!reason) return NextResponse.json({ ok: false, error: "Refund reason is required." }, { status: 400 });
 
-  const account = await prisma.billingAccount.findUnique({
-    where: { familyId },
-    select: {
-      id: true,
-      family: { select: { centerId: true, name: true } },
-      payments: {
-        where: { provider: "stripe", status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
-        orderBy: [{ paidAt: "desc" }, { id: "desc" }],
-        select: {
-          id: true, amountCents: true, status: true, externalIdPlaceholder: true, customFields: true,
-          ledgerEntries: { where: { invoiceId: { not: null } }, orderBy: { effectiveAt: "desc" }, take: 1, select: { invoiceId: true } },
-        },
-      },
-    },
-  });
-  if (!account) return NextResponse.json({ ok: false, error: "Family billing account not found." }, { status: 404 });
-  if (!account.family.centerId || !canAccessCenter(user, account.family.centerId)) {
-    return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
-  }
-
   const preferredIds = Array.isArray(body.paymentIds)
     ? body.paymentIds.map((value) => clean(value)).filter(Boolean)
     : clean(body.paymentId) ? [clean(body.paymentId)] : [];
-  const candidates = account.payments
-    .map((payment) => {
-      const fields = jsonObject(payment.customFields);
-      const refundedCents = Math.max(0, Number(fields.stripeAmountRefundedCents) || 0);
-      const paymentIntentId = clean(fields.stripePaymentIntentId) || (clean(payment.externalIdPlaceholder).startsWith("pi_") ? clean(payment.externalIdPlaceholder) : "");
-      return { ...payment, fields, refundedCents, refundableCents: Math.max(0, payment.amountCents - refundedCents), paymentIntentId };
-    })
-    .filter((payment) => payment.refundableCents > 0 && payment.paymentIntentId);
-  const refundPlan = planFamilyRefundAllocations(candidates, amountCents, preferredIds);
-  const availableCents = refundPlan.availableCents;
-  if (amountCents > availableCents) {
-    return NextResponse.json({
-      ok: false,
-      error: `Stripe can return ${moneyLabel(availableCents)} across this family's completed payments. Use a family credit or manual reimbursement for the remaining ${moneyLabel(amountCents - availableCents)}.`,
-      availableCents,
-    }, { status: 400 });
+  const validation = await validateFamilyRefundAvailability(user, {
+    familyId,
+    amountCents,
+    preferredPaymentIds: preferredIds,
+  });
+  if (!validation.ok) {
+    return NextResponse.json(
+      { ok: false, error: validation.error, availableCents: validation.availableCents },
+      { status: validation.status },
+    );
   }
 
-  const operationId = randomUUID();
-  const allocations: Array<{ paymentId: string; stripeRefundId: string; amountCents: number }> = [];
-  for (const planned of refundPlan.allocations) {
-    const payment = planned.payment;
-    const allocationCents = planned.amountCents;
-    const connectedAccountId = clean(payment.fields.stripeConnectedAccountId) || null;
-    const refund = await createStripeRefund({
-      paymentIntentId: payment.paymentIntentId,
-      amountCents: allocationCents,
-      reason,
-      connectedAccountId,
-      idempotencyKey: `billing-family-refund:${operationId}:${payment.id}`,
-      tenantId: user.tenantId,
-      metadata: { paymentId: payment.id, familyId, requestedByUserId: user.id, operationId },
+  if (refundSubmissionMode(user.role) === "request_approval") {
+    const refundRequest = await prisma.refundRequest.create({
+      data: {
+        tenantId: user.tenantId,
+        centerId: validation.centerId,
+        familyId,
+        requestedById: user.id,
+        amountCents,
+        reason,
+        selectedPaymentIds: preferredIds,
+      },
     });
-    if (!refund.ok || !refund.refund?.id) {
-      if (!allocations.length) return NextResponse.json({ ok: false, error: refund.error || "Refund could not be issued." }, { status: refund.configured ? 502 : 503 });
-      break;
-    }
-    const refundedAmountCents = refund.refund.amountCents;
-    const totalRefundedCents = payment.refundedCents + refundedAmountCents;
-    const invoiceId = payment.ledgerEntries[0]?.invoiceId ?? null;
-    await prisma.$transaction(async (tx) => {
-      const updatedAccount = await tx.billingAccount.update({ where: { id: account.id }, data: { balanceCents: { increment: refundedAmountCents } } });
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: totalRefundedCents >= payment.amountCents ? PaymentStatus.REFUNDED : PaymentStatus.PAID,
-          customFields: {
-            ...payment.fields,
-            stripeAmountRefundedCents: totalRefundedCents,
-            stripeFullyRefunded: totalRefundedCents >= payment.amountCents,
-            latestStripeRefundId: refund.refund!.id,
-            latestRefundReason: reason,
-            latestRefundedBy: user.email,
-            latestFamilyRefundOperationId: operationId,
-            status: totalRefundedCents >= payment.amountCents ? "refunded" : "partially_refunded",
+    const executiveUsers = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { role: UserRole.PLATFORM_OWNER },
+          {
+            tenantId: user.tenantId,
+            role: { in: [UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER] },
           },
-        },
-      });
-      if (invoiceId) await tx.invoice.update({ where: { id: invoiceId }, data: { status: PaymentStatus.OPEN } });
-      await tx.ledgerEntry.create({
-        data: {
-          billingAccountId: account.id, invoiceId, paymentId: payment.id, type: "refund", description: `Refund: ${reason}`,
-          amountCents: refundedAmountCents, balanceAfterCents: updatedAccount.balanceCents, sourceSystem: "stripe",
-          externalId: `stripe-refund:${refund.refund!.id}`,
-          metadata: { stripeRefundId: refund.refund!.id, stripePaymentIntentId: payment.paymentIntentId, refundReason: reason, refundedBy: user.email, totalRefundedCents, familyRefundOperationId: operationId },
-        },
-      });
+        ],
+      },
+      select: { id: true },
     });
-    allocations.push({ paymentId: payment.id, stripeRefundId: refund.refund.id, amountCents: refundedAmountCents });
+    if (executiveUsers.length) {
+      await prisma.notification.createMany({
+        data: executiveUsers.map((executive) => ({
+          userId: executive.id,
+          title: "Refund approval required",
+          body: `${user.name || user.email} requested a ${moneyLabel(amountCents)} refund for ${validation.familyName}. Open the executive dashboard to approve or deny it with a reason.`,
+          type: "refund_approval",
+          priority: "high",
+          dedupeKey: `refund-approval:${refundRequest.id}:${executive.id}`,
+        })),
+        skipDuplicates: true,
+      });
+    }
+    await writeAuditLog(user, {
+      centerId: validation.centerId,
+      action: "billing.refund.requested",
+      resource: "RefundRequest",
+      resourceId: refundRequest.id,
+      metadata: {
+        familyId,
+        amountCents,
+        reason,
+        selectedPaymentIds: preferredIds,
+        notifiedExecutiveCount: executiveUsers.length,
+      },
+    });
+    return NextResponse.json({
+      ok: true,
+      pendingApproval: true,
+      requestId: refundRequest.id,
+      totalCents: amountCents,
+      notifiedExecutiveCount: executiveUsers.length,
+    });
   }
 
-  const totalCents = allocations.reduce((total, allocation) => total + allocation.amountCents, 0);
-  await writeAuditLog(user, {
-    centerId: account.family.centerId,
-    action: "billing.family.refunded",
-    resource: "Family",
-    resourceId: familyId,
-    metadata: { requestedAmountCents: amountCents, refundedAmountCents: totalCents, reason, familyId, operationId, paymentIds: allocations.map((item) => item.paymentId), stripeRefundIds: allocations.map((item) => item.stripeRefundId) },
+  const result = await issueFamilyRefund(user, {
+    familyId,
+    amountCents,
+    reason,
+    preferredPaymentIds: preferredIds,
+    operationId: randomUUID(),
   });
-  return NextResponse.json({
-    ok: true,
-    totalCents,
-    requestedCents: amountCents,
-    allocations,
-    partial: totalCents < amountCents,
-    warning: totalCents < amountCents ? `${moneyLabel(totalCents)} was sent before Stripe stopped the remaining allocation.` : null,
-  });
+  if (!result.ok) {
+    return NextResponse.json(
+      { ok: false, error: result.error, availableCents: result.availableCents },
+      { status: result.status },
+    );
+  }
+  return NextResponse.json(result);
 }
 
 async function updateInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {

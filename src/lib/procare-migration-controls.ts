@@ -13,6 +13,9 @@ export function buildProcareReconciliationReport(input: {
   batchStatus: string;
   importedRows: number;
   errorRows: number;
+  reviewedRows?: number;
+  disposedRows?: number;
+  unresolvedRows?: number;
   source: Record<string, number | null | undefined>;
   target: Record<string, number | null | undefined>;
 }) {
@@ -20,6 +23,8 @@ export function buildProcareReconciliationReport(input: {
     ["families", "Families"],
     ["children", "Children"],
     ["guardians", "Guardians"],
+    ["emergencyContacts", "Emergency contacts"],
+    ["authorizedPickups", "Authorized pickups"],
     ["staff", "Staff"],
     ["classrooms", "Classrooms"],
     ["balanceCents", "Balances (cents)"],
@@ -49,7 +54,15 @@ export function buildProcareReconciliationReport(input: {
     batchStatus: input.batchStatus,
     importedRows: input.importedRows,
     errorRows: input.errorRows,
-    decision: input.errorRows === 0 && unresolved.length === 0 ? "reconciled" : "needs_review",
+    reviewedRows: input.reviewedRows ?? input.importedRows + input.errorRows,
+    disposedRows: input.disposedRows ?? 0,
+    unresolvedRows: input.unresolvedRows ?? 0,
+    decision: input.errorRows === 0
+      && (input.disposedRows ?? 0) === 0
+      && (input.unresolvedRows ?? 0) === 0
+      && unresolved.length === 0
+      ? "reconciled"
+      : "needs_review",
     measures,
     enforcement: {
       cutoverAllowed: false,

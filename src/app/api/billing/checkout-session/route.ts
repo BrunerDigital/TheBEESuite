@@ -32,7 +32,7 @@ import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts"
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -57,7 +57,7 @@ function checkoutCollectionMode(value: unknown, requestedPaymentMethodCategory: 
 }
 
 function requestBaseUrl(request: NextRequest) {
-  return getAppBaseUrl(request.url);
+  return getSecurePaymentAppBaseUrl(request.url);
 }
 
 function safeReturnPath(value: unknown, fallback: string) {

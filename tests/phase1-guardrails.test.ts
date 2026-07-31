@@ -30,7 +30,12 @@ import {
 import { checkRateLimit } from "../src/lib/rate-limit";
 import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
-import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
+import {
+  getDatabaseUrl,
+  getRuntimeDatabaseUrl,
+  hasDatabaseConfig,
+  hasSupabaseAuthConfig,
+} from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import {
   buildParentPortalInvitationHtml,
@@ -65,9 +70,9 @@ import { loginHrefForNextPath, resolvePortalPostLoginPath, resolvePostLoginPath,
 import { buildStoreAppManifest, storeApps } from "../src/lib/app-store-apps";
 import { buildVisibleMessageWhere } from "../src/lib/message-visibility";
 
-test("password reset gate blocks parent credential transitions but keeps teacher PIN accounts separate", () => {
+test("password reset gate remains mandatory for staff roles but optional for parents and teachers", () => {
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: true }), false);
-  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), true);
+  assert.equal(requiresPasswordResetGate({ role: UserRole.PARENT_GUARDIAN, mustResetPassword: true }), false);
   assert.equal(requiresPasswordResetGate({ role: UserRole.CENTER_DIRECTOR, mustResetPassword: true }), true);
   assert.equal(requiresPasswordResetGate({ role: UserRole.TEACHER, mustResetPassword: false }), false);
 });
@@ -399,6 +404,21 @@ test("public parent links never expose Vercel deployment hosts", () => {
     canonicalizePublicUrl("https://the-bee-suite-beta.vercel.app/parent-portal"),
     "https://thebeesuite.io/parent-portal",
   );
+  assert.equal(
+    canonicalizePublicUrl("http://thebeesuite.io/parents"),
+    "https://thebeesuite.io/parents",
+  );
+  assert.equal(
+    canonicalizePublicUrl("https://www.thebeesuite.io/parents"),
+    "https://thebeesuite.io/parents",
+  );
+  assert.equal(
+    buildPublicAppBaseUrl({
+      configuredAppUrl: "http://www.thebeesuite.io",
+      requestUrl: "http://www.thebeesuite.io/api/parent/invitations",
+    }),
+    CANONICAL_APP_BASE_URL,
+  );
 
   assert.equal(
     buildPasswordResetRedirectUrl({
@@ -418,29 +438,23 @@ test("public parent links never expose Vercel deployment hosts", () => {
   );
 });
 
-test("external payment session callbacks use the branded app base URL", () => {
+test("external payment session callbacks use the canonical secure payment URL", () => {
   const externalSessionRoutes = [
     "src/app/api/billing/checkout-session/route.ts",
     "src/app/api/billing/family-payment/route.ts",
     "src/app/api/billing/payment-method-request/checkout/route.ts",
     "src/app/api/billing/payment-method-session/route.ts",
     "src/app/api/billing/payment-method-request/session/route.ts",
+    "src/app/api/billing/software-payment-method/route.ts",
     "src/app/api/billing/connect/onboard/route.ts",
     "src/app/api/billing/connect/refresh/route.ts",
     "src/app/api/terminal-store/checkout-session/route.ts",
   ];
-  const securePaymentRequestRoutes = new Set([
-    "src/app/api/billing/payment-method-request/checkout/route.ts",
-    "src/app/api/billing/payment-method-request/session/route.ts",
-  ]);
 
   for (const route of externalSessionRoutes) {
     const source = readFileSync(route, "utf8");
-    if (securePaymentRequestRoutes.has(route)) {
-      assert.match(source, /getPaymentMethodRequestAppBaseUrl\(request\.url\)/, `${route} must use the secure payment request app URL helper`);
-    } else {
-      assert.match(source, /getAppBaseUrl\(request\.url\)/, `${route} must use the branded public app URL helper`);
-    }
+    assert.match(source, /getSecurePaymentAppBaseUrl\(request\.url\)/, `${route} must use the canonical secure payment URL helper`);
+    assert.doesNotMatch(source, /getAppBaseUrl\(request\.url\)/, `${route} must not trust a configurable or request-derived payment callback host`);
     assert.doesNotMatch(source, /request\.nextUrl\.origin/, `${route} must not leak deployment preview origins to external providers`);
   }
 });
@@ -457,10 +471,14 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
   assert.equal(buildParentPortalUrl("https://thebeesuite.io/"), "https://thebeesuite.io/parent-portal");
   assert.match(text, /Email: taylor@example\.com/);
   assert.match(text, /First-login password: BusyBees/);
-  assert.match(text, /required to choose a private password immediately/);
+  assert.match(text, /can keep this password or choose a private password anytime/);
   assert.match(text, /last 4 digits of your phone number/);
-  assert.match(text, /bank account for ACH payments/);
+  assert.match(text, /Complete these steps in order/);
+  assert.match(text, /Stop and contact the school before continuing if anything is wrong/);
+  assert.match(text, /billing or payment setup only if your school separately tells you/);
   assert.match(text, /reports, incidents, photos/);
+  assert.match(text, /use only an address beginning with https:\/\/thebeesuite\.io/);
+  assert.match(text, /Safari says Not Secure/);
   assert.doesNotMatch(text, /vercel\.app/i);
 
   const html = buildParentPortalInvitationHtml({
@@ -476,9 +494,10 @@ test("parent portal invite copy explains the app login, kiosk PIN, ACH, and fami
     },
   });
   assert.match(html, /https:\/\/thebeesuite\.io\/brand\/kid-city-usa\/logo-horizontal\.png/);
-  assert.match(html, /Open the Parent App/);
+  assert.match(html, /Start Parent Setup/);
+  assert.match(html, /Complete these steps in order/);
   assert.match(html, /BusyBees/);
-  assert.match(html, /required to choose a private password immediately/);
+  assert.match(html, /can keep this password or choose a private password anytime/);
 });
 
 test("parent document request emails use guardian personal emails and private password copy", () => {
@@ -1001,11 +1020,47 @@ test("readiness guard requires a Supabase URL for Auth readiness", () => {
   }), true);
 });
 
-test("readiness guard accepts Vercel Postgres database URL aliases", () => {
+test("readiness guard accepts Vercel Postgres aliases and prefers a transaction pooler", () => {
   assert.equal(hasDatabaseConfig({}), false);
   assert.equal(getDatabaseUrl({ POSTGRES_PRISMA_URL: " postgresql://pooled " }), "postgresql://pooled");
+  assert.equal(
+    getDatabaseUrl({ DATABASE_URL: "postgresql://direct", POSTGRES_PRISMA_URL: "postgresql://pooled" }),
+    "postgresql://pooled",
+  );
   assert.equal(hasDatabaseConfig({ POSTGRES_URL: "postgresql://direct" }), true);
   assert.equal(getDatabaseUrl({ DATABASE_URL: "postgresql://primary", POSTGRES_URL: "postgresql://direct" }), "postgresql://primary");
+  assert.equal(
+    getDatabaseUrl({
+      POSTGRES_PRISMA_URL: "postgresql://postgres@db.example.supabase.co:5432/postgres",
+      DATABASE_URL: "postgresql://postgres@db.example.supabase.co:5432/postgres",
+      POSTGRES_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres",
+    }),
+    "postgresql://postgres@example.pooler.supabase.com:6543/postgres",
+  );
+});
+
+test("runtime database URL configures Prisma for transaction pooling without overriding explicit limits", () => {
+  const pooled = getRuntimeDatabaseUrl({
+    DATABASE_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres?sslmode=require",
+  });
+  assert.ok(pooled);
+
+  const pooledUrl = new URL(pooled);
+  assert.equal(pooledUrl.searchParams.get("pgbouncer"), "true");
+  assert.equal(pooledUrl.searchParams.get("connection_limit"), "5");
+  assert.equal(pooledUrl.searchParams.get("pool_timeout"), "20");
+
+  const explicitlyTuned = getRuntimeDatabaseUrl({
+    DATABASE_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres?connection_limit=3&pool_timeout=30",
+    PRISMA_CONNECTION_LIMIT: "7",
+    PRISMA_POOL_TIMEOUT: "40",
+  });
+  assert.ok(explicitlyTuned);
+
+  const explicitlyTunedUrl = new URL(explicitlyTuned);
+  assert.equal(explicitlyTunedUrl.searchParams.get("pgbouncer"), "true");
+  assert.equal(explicitlyTunedUrl.searchParams.get("connection_limit"), "3");
+  assert.equal(explicitlyTunedUrl.searchParams.get("pool_timeout"), "30");
 });
 
 test("signature requests require valid family child target and recipient", () => {

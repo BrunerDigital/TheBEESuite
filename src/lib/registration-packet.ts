@@ -6,6 +6,20 @@ export function shouldInviteParentOnRegistrationApproval(value: unknown) {
   return value === true;
 }
 
+export function registrationReviewTransitionError(
+  currentStatus: RegistrationReviewStatus,
+  nextStatus: "APPROVED" | "REJECTED",
+) {
+  const requestedStatus = nextStatus.toLowerCase();
+  if (currentStatus === requestedStatus) {
+    return `This registration has already been ${currentStatus}. Refresh the dashboard to see the saved review.`;
+  }
+  if (currentStatus === "approved") {
+    return "An approved registration cannot be reviewed again. Update the created family and enrollment records instead.";
+  }
+  return null;
+}
+
 export type RegistrationPacketPayload = {
   centerId: string;
   primaryGuardianName: string;
@@ -201,6 +215,21 @@ type PacketSection = {
   id: string;
   label: string;
   fields: PacketField[];
+};
+
+export type RegistrationReviewPreview = {
+  sections: Array<{
+    id: string;
+    label: string;
+    destination: string;
+    fields: Array<{
+      key: keyof RegistrationPacketPayload;
+      label: string;
+      value: string;
+      sensitive: boolean;
+    }>;
+  }>;
+  destinations: string[];
 };
 
 export const registrationScheduleDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
@@ -418,7 +447,7 @@ export function kidCityRegistrationPacketSchema() {
   return {
     version: 3,
     source: "public_online_registration",
-    title: "Kid City USA Online Registration Packet - Florida March 2026",
+    title: "Online Registration Packet - Florida March 2026",
     sections: kidCityRegistrationPacketSections,
   };
 }
@@ -479,6 +508,232 @@ export function registrationSubmissionSummary(data: unknown) {
   const start = cleanText(record.desiredStartDate) || "Start not set";
   const review = registrationReviewFromData(data);
   return `${child} · ${guardian} · ${program} · ${start} · ${review.status}`;
+}
+
+const registrationSectionDestinations: Record<string, string> = {
+  school_program: "Child profile and documents-pending enrollment",
+  guardians_billing: "Family billing profile and guardian records",
+  child_information: "Child and family profiles",
+  child_profile: "Child care profile",
+  medical_safety: "Restricted child health records and family custody notes",
+  emergency_pickups: "Emergency contacts and authorized pickup records",
+  permissions: "Child permissions and enrollment document requests",
+  food_media_uniforms: "Child operations profile and family meal-benefit record",
+  financial_handbook_acknowledgments: "Family acknowledgments, signatures, and enrollment document requests",
+};
+
+const restrictedPreviewFields = new Set<keyof RegistrationPacketPayload>([
+  "primaryGuardianDriverLicense",
+  "primaryGuardianSocialSecurityNumber",
+  "secondaryGuardianDriverLicense",
+  "secondaryGuardianSocialSecurityNumber",
+  "insurancePolicyNumber",
+  "mealApplicationCaseNumberSnap",
+  "mealApplicationCaseNumberTanf",
+  "mealApplicationHouseholdMembers",
+  "mealApplicationAdultIncome",
+  "mealApplicationLastFourSsn",
+]);
+
+function registrationPreviewValue(key: keyof RegistrationPacketPayload, value: unknown) {
+  if (restrictedPreviewFields.has(key)) {
+    return packetHasValue(value) ? "Provided — retained in the restricted registration packet" : "";
+  }
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.map(cleanText).filter(Boolean).join(", ");
+  return cleanText(value);
+}
+
+export function buildRegistrationReviewPreview(data: unknown): RegistrationReviewPreview {
+  const record = asRecord(data);
+  const sections = kidCityRegistrationPacketSections
+    .map((section) => ({
+      id: section.id,
+      label: section.label,
+      destination: registrationSectionDestinations[section.id] ?? "Restricted registration packet",
+      fields: section.fields
+        .filter((field) => Object.prototype.hasOwnProperty.call(record, field.key))
+        .map((field) => ({
+          key: field.key,
+          label: field.label,
+          value: registrationPreviewValue(field.key, record[field.key]),
+          sensitive: restrictedPreviewFields.has(field.key),
+        }))
+        .filter((field) => field.value.length > 0),
+    }))
+    .filter((section) => section.fields.length > 0);
+
+  return {
+    sections,
+    destinations: Array.from(new Set(sections.map((section) => section.destination))),
+  };
+}
+
+export function buildRegistrationFamilyCustomFields(
+  packet: RegistrationPacketPayload,
+  input: { submissionId: string; reviewedAt: string },
+) {
+  return {
+    registrationSubmissionId: input.submissionId,
+    registrationReviewedAt: input.reviewedAt,
+    billingContactName: packet.billingContactName,
+    billingContactPhone: packet.billingContactPhone,
+    childAddress: packet.childAddress,
+    siblingNamesAges: packet.siblingNamesAges,
+    registrationAcknowledgments: {
+      handbook: packet.handbookAcknowledgment,
+      emergencyProcedures: packet.emergencyProceduresAcknowledgment,
+      tuitionPolicy: packet.tuitionPolicyAcknowledgment,
+      disciplinePolicy: packet.disciplinePolicyAcknowledgment,
+      expulsionPolicy: packet.expulsionPolicyAcknowledgment,
+      mandatoryReporting: packet.mandatoryReportingAcknowledgment,
+      healthPolicy: packet.healthPolicyAcknowledgment,
+      collectionResponsibility: packet.collectionResponsibilityAcknowledgment,
+      informationAccuracy: packet.policyAcknowledgment,
+      electronicSignatureConsent: packet.eSignatureConsent,
+      signatureName: packet.signatureName,
+      signatureDate: packet.signatureDate,
+    },
+    mealBenefitApplication: {
+      requested: packet.mealBenefitApplicationNeeded,
+      caseNumberSnapProvidedOnPacket: Boolean(packet.mealApplicationCaseNumberSnap),
+      caseNumberTanfProvidedOnPacket: Boolean(packet.mealApplicationCaseNumberTanf),
+      childStatuses: packet.mealApplicationChildStatuses,
+      attendedThisCenter: packet.mealApplicationAttendedThisCenter,
+      headStartPreK: packet.mealApplicationHeadStartPreK,
+      childIncome: packet.mealApplicationChildIncome,
+      householdMembers: packet.mealApplicationHouseholdMembers,
+      adultIncome: packet.mealApplicationAdultIncome,
+      lastFourSsnProvidedOnPacket: Boolean(packet.mealApplicationLastFourSsn),
+      noSsn: packet.mealApplicationNoSsn,
+      ethnicity: packet.mealApplicationEthnicity,
+      race: packet.mealApplicationRace,
+      signatureName: packet.mealApplicationSignatureName,
+      signatureDate: packet.mealApplicationSignatureDate,
+    },
+  };
+}
+
+export function buildRegistrationGuardianCustomFields(
+  packet: RegistrationPacketPayload,
+  guardian: "primary" | "secondary",
+  input: { submissionId: string; inviteParent: boolean },
+) {
+  const primary = guardian === "primary";
+  return {
+    registrationSubmissionId: input.submissionId,
+    address: primary ? packet.primaryGuardianAddress : packet.secondaryGuardianAddress,
+    homePhone: primary ? packet.primaryGuardianHomePhone : packet.secondaryGuardianHomePhone,
+    workPhone: primary ? packet.primaryGuardianWorkPhone : packet.secondaryGuardianWorkPhone,
+    cellPhoneCarrier: primary ? packet.primaryGuardianCellPhoneCarrier : packet.secondaryGuardianCellPhoneCarrier,
+    driverLicenseProvidedOnPacket: Boolean(
+      primary ? packet.primaryGuardianDriverLicense : packet.secondaryGuardianDriverLicense,
+    ),
+    socialSecurityNumberProvidedOnPacket: Boolean(
+      primary ? packet.primaryGuardianSocialSecurityNumber : packet.secondaryGuardianSocialSecurityNumber,
+    ),
+    parentPortalInvite: { status: input.inviteParent ? "pending" : "not_requested" },
+  };
+}
+
+export function buildRegistrationChildCustomFields(
+  packet: RegistrationPacketPayload,
+  input: { submissionId: string },
+) {
+  return {
+    registrationSubmissionId: input.submissionId,
+    childSex: packet.childSex,
+    childAddress: packet.childAddress,
+    childPrimaryLanguage: packet.childPrimaryLanguage,
+    childLivesWith: packet.childLivesWith,
+    previousCareProgram: packet.previousCareProgram,
+    siblingNamesAges: packet.siblingNamesAges,
+    dayStructure: packet.dayStructure,
+    newSituationNotes: packet.newSituationNotes,
+    appetiteNotes: packet.appetiteNotes,
+    feedsSelf: packet.feedsSelf,
+    foodLikes: packet.foodLikes,
+    foodDislikes: packet.foodDislikes,
+    napSchedule: packet.napSchedule,
+    nightSleepSchedule: packet.nightSleepSchedule,
+    sleepItems: packet.sleepItems,
+    napHints: packet.napHints,
+    favoriteActivities: packet.favoriteActivities,
+    developmentSkills: packet.developmentSkills,
+    toiletingStatus: packet.toiletingStatus,
+    bathroomRequest: packet.bathroomRequest,
+    bathroomHelpNeeded: packet.bathroomHelpNeeded,
+    toiletingRoutine: packet.toiletingRoutine,
+    goalsExpectations: packet.goalsExpectations,
+    friendsAtCenter: packet.friendsAtCenter,
+    childPersonality: packet.childPersonality,
+    otherHelpfulInfo: packet.otherHelpfulInfo,
+    participationInterests: packet.participationInterests,
+    participationOther: packet.participationOther,
+    photoVideoReleaseChoice: packet.photoVideoReleaseChoice,
+    transportationPermission: packet.transportationPermission,
+    sunscreenPermission: packet.sunscreenPermission,
+    waterActivityPermission: packet.waterActivityPermission,
+    emergencyMedicalPermission: packet.emergencyMedicalPermission,
+    firstAidEmergencyConsent: packet.firstAidEmergencyConsent,
+    floridaKnowYourChildcareAcknowledgment: packet.floridaKnowYourChildcareAcknowledgment,
+    floridaDistractedAdultAcknowledgment: packet.floridaDistractedAdultAcknowledgment,
+    dcfInspectionAccessAcknowledgment: packet.dcfInspectionAccessAcknowledgment,
+    physicalImmunizationThirtyDayAcknowledgment: packet.physicalImmunizationThirtyDayAcknowledgment,
+    foodProgramPermission: packet.foodProgramPermission,
+    nutritionPolicyAcknowledgment: packet.nutritionPolicyAcknowledgment,
+    foodActivityPermission: packet.foodActivityPermission,
+    foodActivityAllergyChoice: packet.foodActivityAllergyChoice,
+    foodActivityRestrictedItems: packet.foodActivityRestrictedItems,
+    uniformOrder: {
+      blackQuantity: packet.uniformBlackQuantity,
+      blackSize: packet.uniformBlackSize,
+      yellowQuantity: packet.uniformYellowQuantity,
+      yellowSize: packet.uniformYellowSize,
+      paymentChoice: packet.uniformPaymentChoice,
+      paymentAmount: packet.uniformPaymentAmount,
+      comments: packet.uniformComments,
+    },
+    immunizationStatus: packet.immunizationStatus,
+    immunizationExpirationDate: packet.immunizationExpirationDate,
+    physicalExpirationDate: packet.physicalExpirationDate,
+    elc4cExpirationDate: packet.elc4cExpirationDate,
+    hospitalPreference: packet.hospitalPreference,
+    insuranceCompany: packet.insuranceCompany,
+    insurancePolicyNumberProvidedOnPacket: Boolean(packet.insurancePolicyNumber),
+    financialAgreementInitials: {
+      paymentFees: packet.financialAgreementPaymentFeesInitials,
+      absenteePolicy: packet.financialAgreementAbsenteePolicyInitials,
+      registrationFee: packet.financialAgreementRegistrationFeeInitials,
+      returnedPayment: packet.financialAgreementReturnedPaymentInitials,
+      discharge: packet.financialAgreementDischargeInitials,
+      withdrawal: packet.financialAgreementWithdrawalInitials,
+      latePickup: packet.financialAgreementLatePickupInitials,
+      collection: packet.financialAgreementCollectionInitials,
+      uniform: packet.financialAgreementUniformInitials,
+      finalTerms: packet.financialAgreementFinalTermsInitials,
+    },
+  };
+}
+
+export function registrationGuardianIsBillingContact(
+  packet: RegistrationPacketPayload,
+  guardian: "primary" | "secondary",
+) {
+  const billingEmail = normalizeEmailText(packet.billingContactEmail);
+  const billingName = cleanText(packet.billingContactName).toLowerCase();
+  const guardianEmail = normalizeEmailText(
+    guardian === "primary" ? packet.primaryGuardianEmail : packet.secondaryGuardianEmail,
+  );
+  const guardianName = cleanText(
+    guardian === "primary" ? packet.primaryGuardianName : packet.secondaryGuardianName,
+  ).toLowerCase();
+
+  if (!billingEmail && !billingName) return guardian === "primary";
+  return Boolean(
+    (billingEmail && guardianEmail && billingEmail === guardianEmail)
+      || (billingName && guardianName && billingName === guardianName),
+  );
 }
 
 export function parsePacketContactLines(text: string) {

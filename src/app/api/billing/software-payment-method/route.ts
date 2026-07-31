@@ -3,9 +3,9 @@ import { Prisma } from "@prisma/client";
 import { canAccessCenter, canManageBilling, canManageOperations, getCurrentUser } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createStripeCustomer, createStripeSetupCheckoutSession, type StripePaymentMethodCategory } from "@/lib/integrations";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const runtime = "nodejs";
 
@@ -35,6 +35,18 @@ async function POSTHandler(request: NextRequest) {
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
 
   const fields = jsonObject(center.customFields);
+  const requested = clean(body.method);
+  const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
+  if (paymentMethodCategory === "ach" && !clean(fields.stripePayoutBankLast4)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Connect and confirm this school's payout bank first. Software-fee authorization is separate from the payout destination.",
+      },
+      { status: 409 },
+    );
+  }
+
   let customerId = clean(fields.stripeSoftwareCustomerId);
   if (!customerId) {
     const customer = await createStripeCustomer({
@@ -49,9 +61,7 @@ async function POSTHandler(request: NextRequest) {
     customerId = customer.id;
   }
 
-  const requested = clean(body.method);
-  const paymentMethodCategory: StripePaymentMethodCategory = requested === "card" ? "card" : requested === "ach" ? "ach" : "default";
-  const baseUrl = getAppBaseUrl(request.url);
+  const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const session = await createStripeSetupCheckoutSession({
     customerId,
     paymentMethodCategory,

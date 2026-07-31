@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { AlertCircle, ArrowRightLeft, CheckCircle2, MapPin, Move, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -60,9 +62,8 @@ type LocalMove = Pick<
   "currentClassroomId" | "currentClassroomName" | "areaName" | "status" | "movedAt" | "movedByName" | "reason"
 >;
 
-function formatTime(value: string | Date | null) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function formatTime(value: string | Date | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "");
 }
 
 function liveLocationFor(child: ChildLocationTrackerChild) {
@@ -100,6 +101,7 @@ export function ChildLocationTrackerPanel({
   title = "Live Child Location Tracker",
   description = "Move children between current classrooms or school areas without changing their enrolled classroom.",
 }: Props) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [localMoves, setLocalMoves] = useState<Record<string, LocalMove>>({});
   const [selectedChildId, setSelectedChildId] = useState(trackedChildren[0]?.id ?? "");
@@ -239,7 +241,7 @@ export function ChildLocationTrackerPanel({
         </div>
         <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
           <span>Assigned: {child.assignedClassroomName ?? "Unassigned"}</span>
-          <span>Now: {currentLocationLabel(child)}{child.movedAt ? ` · ${formatTime(child.movedAt)}` : ""}</span>
+          <span>Now: {currentLocationLabel(child)}{child.movedAt ? ` · ${formatTime(child.movedAt, timeZone)}` : ""}</span>
           {child.reason ? <span>Reason: {child.reason}</span> : null}
         </div>
       </button>

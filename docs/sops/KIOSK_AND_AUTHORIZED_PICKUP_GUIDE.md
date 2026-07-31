@@ -1,6 +1,6 @@
 # Kiosk And Authorized Pickup Guide - The BEE Suite
 
-Last updated: July 7, 2026
+Last updated: July 29, 2026
 
 Audience: directors, front desk staff, parents, guardians, authorized pickups, and staff using the lobby kiosk.
 
@@ -10,7 +10,7 @@ The lobby kiosk lets verified adults check children in or out and lets staff clo
 
 ## Visual Overview
 
-![Lobby check-in](../../public/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png)
+![Kiosk and authorized pickup flow](../../public/brand/the-bee-suite/explainers/current/kiosk-pickup-flow.png)
 
 ## Director Setup
 
@@ -24,6 +24,7 @@ The lobby kiosk lets verified adults check children in or out and lets staff clo
 8. Test one check-in and check-out with an approved test record.
 
 Do not run the lobby kiosk until `PIN_HASH_SECRET` or the approved production secret is configured.
+Do not activate the kiosk merely because setup or training passed. The named school still needs its separate dated kiosk/PIN approval.
 
 ## Parent Or Authorized Pickup Check-In
 

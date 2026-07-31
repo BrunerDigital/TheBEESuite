@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { IScannerControls } from "@zxing/browser";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 
 type VerificationMethod = "pin" | "qr";
 type KioskMode = "family" | "staff";
@@ -69,6 +70,7 @@ type Props = {
     id: string;
     name: string;
     place: string;
+    timeZone: string;
   };
 };
 
@@ -80,9 +82,8 @@ function actionLabel(type?: string) {
   return "No kiosk action today";
 }
 
-function clockLabel(value?: string | null) {
-  if (!value) return "No staff clock event today";
-  return new Intl.DateTimeFormat("en", { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+function clockLabel(value: string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "No staff clock event today");
 }
 
 function money(cents: number) {
@@ -400,9 +401,9 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
   }
 
   return (
-    <main className="min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
+    <main className="kiosk-halo-shell min-h-dvh select-none bg-background p-2 text-foreground sm:p-3 lg:p-4">
       <div className="mx-auto flex min-h-[calc(100dvh-1rem)] max-w-6xl flex-col gap-3 sm:min-h-[calc(100dvh-1.5rem)] lg:min-h-[calc(100dvh-2rem)]">
-        <section className="rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
+        <section className="kiosk-halo-header rounded-2xl border bg-card/90 p-3 shadow-2xl shadow-black/20 sm:p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <Badge className="mb-2">
@@ -418,7 +419,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                 Today
               </div>
               <div className="text-xl font-semibold">
-                {new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(new Date())}
+                {formatZonedDateTime(new Date(), center.timeZone, { weekday: "short", month: "short", day: "numeric" })}
               </div>
               <Badge variant="outline" className="justify-center">
                 Auto-reset {idleSecondsRemaining}s
@@ -446,7 +447,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
         ) : null}
 
         <div className="grid flex-1 gap-3 lg:grid-cols-[20rem_1fr] 2xl:grid-cols-[24rem_1fr]">
-          <Card className="glass-panel">
+          <Card className="kiosk-halo-panel glass-panel">
             <CardHeader className="p-4 pb-2">
               <CardTitle>{kioskMode === "family" ? (credentialMode === "pin" ? "Enter 4 digit PIN" : "Scan QR code") : "Staff clock-in/out"}</CardTitle>
               <CardDescription>
@@ -601,7 +602,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
             </CardContent>
           </Card>
 
-          <Card className="glass-panel">
+          <Card className="kiosk-halo-panel glass-panel">
             <CardHeader className="p-4 pb-2">
               <CardTitle>
                 {kioskMode === "staff"
@@ -645,7 +646,7 @@ export function KioskCheckIn({ center, initialMode = "family" }: Props) {
                           </Badge>
                         </div>
                         <div className="mt-2 text-sm text-muted-foreground">
-                          Last event: {clockLabel(staffLookup.staff.clock.lastActionAt)}
+                          Last event: {clockLabel(staffLookup.staff.clock.lastActionAt, center.timeZone)}
                         </div>
                       </div>
                     </div>

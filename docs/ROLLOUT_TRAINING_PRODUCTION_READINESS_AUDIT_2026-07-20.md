@@ -28,8 +28,8 @@ A rollout record coordinates evidence; it does not replace the underlying setup,
 - `SCHOOL_ROLLOUT_READINESS_CHECKLIST_2026-07-18.md`
 - `KIDCITY_ALL_SCHOOLS_DEPLOYMENT_PLAN_2026-07-09.md`
 - `KIDCITY_CORPORATE_ROLLOUT_CHECKLIST_2026-07-07.md`
-- `kidcity-enterprise-rollout/DIRECTOR_IMPLEMENTATION_GUIDE.md`
-- `kidcity-enterprise-rollout/RISK_CONTINGENCY_ROLLBACK.md`
+- `sops/DIRECTOR_SOP.md`
+- `RELEASE_STOP_CONDITIONS_AND_ROLLBACK_DECISION.md`
 - `SUPPORT_ESCALATION_GUIDE.md`
 - role quick starts and SOPs for executive/admin, director, billing, teacher, parent, and kiosk users
 - `BEE_SUITE_SCHOOL_DATA_IMPORT_AND_PARENT_LAUNCH_EMAILS.md`

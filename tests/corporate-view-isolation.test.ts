@@ -40,7 +40,10 @@ test("tenant-wide corporate query scopes retain all authorized tenant centers an
     billingAccount: { is: { family: { is: { centerId: expectedCenterFilter } } } },
   });
   assert.deepEqual(visibleAttendanceWhere(tenantACenters), {
-    classroom: { is: { centerId: expectedCenterFilter } },
+    OR: [
+      { classroom: { is: { centerId: expectedCenterFilter } } },
+      { classroomId: null, child: { is: { family: { is: { centerId: expectedCenterFilter } } } } },
+    ],
   });
 });
 

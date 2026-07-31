@@ -4,24 +4,28 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DEFAULT_SCHOOL_TIME_ZONE, useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedTimestamp } from "@/lib/zoned-date-time";
 
-export function formatPrintDateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
+export function formatPrintDateTime(value: Date | string | null | undefined, timeZone = DEFAULT_SCHOOL_TIME_ZONE) {
+  return formatZonedTimestamp(value, timeZone);
 }
 
 export function ReportPrintStyles() {
   return (
     <style>{`
       @media print {
+        @page {
+          margin: 0.35in;
+        }
+
         body.bee-report-printing * {
           visibility: hidden !important;
+        }
+
+        body.bee-report-printing > *:not(:has(.bee-print-report-active)),
+        body.bee-report-printing *:has(.bee-print-report-active) > *:not(:has(.bee-print-report-active)):not(.bee-print-report-active) {
+          display: none !important;
         }
 
         body.bee-report-printing .bee-print-report-active,
@@ -31,11 +35,11 @@ export function ReportPrintStyles() {
 
         body.bee-report-printing .bee-print-report-active {
           display: block !important;
-          position: absolute !important;
-          inset: 0 auto auto 0 !important;
+          position: static !important;
           width: 100% !important;
-          min-height: 100% !important;
-          padding: 0.25in !important;
+          min-height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
           background: #ffffff !important;
           color: #111827 !important;
           font-family: Arial, sans-serif !important;
@@ -147,6 +151,7 @@ export function ReportPrintAction({
   disabled?: boolean;
   children: ReactNode;
 }) {
+  const timeZone = useSchoolTimeZone();
   const { active, generatedAt, print } = usePrintableReport();
 
   return (
@@ -160,7 +165,7 @@ export function ReportPrintAction({
         <header>
           <h1>{reportTitle}</h1>
           {meta.flatMap((item) => (item ? [item] : [])).map((item) => <p key={item}>{item}</p>)}
-          <p>Generated: {formatPrintDateTime(generatedAt)}</p>
+          <p>Generated: {formatPrintDateTime(generatedAt, timeZone)}</p>
         </header>
         {children}
       </PrintableReport>

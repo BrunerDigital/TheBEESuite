@@ -177,6 +177,7 @@ async function generateOperationsSummary(
   const checkedInChildren = Array.from(latestChecks.values()).filter((log) => log.type === "check_in").length;
   const staffClockedIn = staffProfiles.filter((staff) => readStaffClockState(staff.customFields).status === "clocked_in").length;
   const { title, body: summaryBody } = buildAiOperationsSummary({
+    timeZone: user.timeZone,
     scopeLabel,
     generatedAt: now,
     leadCount,

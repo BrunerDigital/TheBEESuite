@@ -8,7 +8,7 @@ import {
   type FteEscalationPreference,
   type FteEscalationRecipient,
 } from "@/lib/fte-escalations";
-import { fteExternalEscalationWindow, getFteDueState } from "@/lib/fte-report-guardrails";
+import { fteExternalEscalationWindow, fteReminderCoverageWhere, getFteDueState } from "@/lib/fte-report-guardrails";
 import { recordCommunicationSmsDeliveryAttempt, recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail, sendSms, uniqueEmails } from "@/lib/integrations";
 import { notificationDedupeKey, notificationExpiresAt } from "@/lib/notification-policy";
@@ -72,14 +72,14 @@ async function GETHandler(request: NextRequest) {
       smsAttempted: 0,
       smsSent: 0,
       smsSkipped: 0,
-      skipReason: "FTE reminders only run during the Friday reminder windows.",
+      skipReason: "FTE reminders only run during the Friday evening reminder window.",
     });
   }
 
   const missingCenters = await prisma.center.findMany({
     where: {
       status: { not: "closed" },
-      fteReports: { none: { weekStart: dueState.weekStart } },
+      fteReports: { none: fteReminderCoverageWhere(dueState.weekStart) },
     },
     select: {
       id: true,

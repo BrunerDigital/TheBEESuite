@@ -54,7 +54,10 @@ import {
 } from "@/components/school-setup-command-center";
 import { TeacherMobileWorkspace } from "@/components/teacher-mobile-workspace";
 import { modules } from "@/lib/demo-data";
+import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
+import { aiSummaryWhereForViewer } from "@/lib/ai-summary-scope";
 import { canAccessAllCenters, canManageClassroomTasks, canManageOperations, canManageStaffCompensation, canViewDemoFallbackData, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate, type CurrentUser } from "@/lib/auth";
+import { canManageExecutiveMarketingPortfolio } from "@/lib/executive-marketing";
 import { enrollmentStages, stageLabels } from "@/lib/crm";
 import {
   executiveAnnouncementDemoRows,
@@ -64,18 +67,21 @@ import {
   executiveParentPortalDemo,
 } from "@/lib/executive-demo-data";
 import {
+  closedEnrollmentChildWhere,
   currentlyEnrolledChildWhere,
-  currentlyEnrolledStatusValues,
   isCurrentlyEnrolledChildRecord,
   isCurrentlyEnrolledStatus,
+  summarizeEnrollmentLifecycleCounts,
 } from "@/lib/enrollment-status";
+import { SCHOOL_DASHBOARD_LIST_LIMIT } from "@/lib/dashboard-query-limits";
 import { getFteDueState, startOfFteWeek } from "@/lib/fte-report-guardrails";
 import { aggregateFteWeeks, latestFteReportsByCenter, latestFteReportsForWeek } from "@/lib/fte-report-rollups";
 import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
-import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
+import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
+import { integrationScopeForUser } from "@/lib/integration-scope";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
 import {
@@ -147,8 +153,10 @@ import { terminalStoreCatalog } from "@/lib/terminal-store";
 import { STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES, studentUniformProductOptions } from "@/lib/uniform-products";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
+import { canUseKidCityCorporateBilling } from "@/lib/brand-assets";
 import {
   asRecord,
+  buildRegistrationReviewPreview,
   cleanText,
   registrationReviewFromData,
   registrationSubmissionSummary,
@@ -156,7 +164,8 @@ import {
 } from "@/lib/registration-packet";
 import { registrationPaymentFromData } from "@/lib/registration-billing";
 import { createAssetHubSignedUrl, createProfilePhotoSignedUrl, isSupabaseStorageConfigured, signChildMediaRecords, signDocumentRecords } from "@/lib/supabase-storage";
-import { centerServiceDayWindow, latestLogMap } from "@/lib/attendance-state";
+import { centerServiceDayWindow, latestLogMap, readCenterLocationTimeZone } from "@/lib/attendance-state";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { readStaffClockState, readStaffClockSummary, readStaffContactEmail, readStaffKioskPinHash } from "@/lib/staff-kiosk";
 import { estimatedHourlyGrossPayCents, readStaffCompensation } from "@/lib/staff-compensation";
 import { uniqueSmsRecipients } from "@/lib/twilio-messaging";
@@ -165,8 +174,20 @@ export const dynamic = "force-dynamic";
 
 const centerIdFilter = visibleCenterIdFilter;
 
-async function signedProfilePhotoUrl(customFields: unknown, role: UserRole) {
-  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
+function safeFormSubmissionDetails(data: unknown) {
+  const keys = Object.entries(asRecord(data))
+    .filter(([, value]) => value !== null && value !== undefined && value !== "" && (!Array.isArray(value) || value.length > 0))
+    .map(([key]) => key)
+    .slice(0, 8);
+  return keys.length ? `Submitted fields: ${keys.join(", ")}` : "No submitted values";
+}
+
+async function signedProfilePhotoUrl(
+  customFields: unknown,
+  role: UserRole,
+  brandKind: CurrentUser["branding"]["kind"],
+) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role, brandKind);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
@@ -184,10 +205,6 @@ export function generateStaticParams() {
     { slug: "forgot-password" },
     { slug: "parent-portal" },
   ];
-}
-
-function notCurrentlyEnrolledChildWhere(): Prisma.ChildWhereInput {
-  return { enrollmentStatus: { notIn: currentlyEnrolledStatusValues() } };
 }
 
 function visibleTeacherStaffWhere(scopedCenterIds: ReturnType<typeof centerIdFilter>): Prisma.StaffProfileWhereInput {
@@ -221,7 +238,7 @@ async function getVisibleCenters(user: CurrentUser) {
       _count: {
         select: {
           leads: true,
-          staff: { where: { user: { role: UserRole.TEACHER } } },
+          staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           classrooms: true,
           calendarEvents: true,
         },
@@ -249,16 +266,18 @@ async function getFamilyIntakeCenters(user: CurrentUser) {
 
   return centers.map((center) => ({
     id: center.id,
-    name: [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    name: removeDemoMarkersFromUserView(
+      [center.crmLocationId ?? center.name, [center.city, center.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "),
+    ),
     classrooms: center.classrooms,
   }));
 }
 
 function formatCenterName(center: { name: string; crmLocationId: string | null; city?: string | null; state?: string | null }) {
-  return [
+  return removeDemoMarkersFromUserView([
     center.crmLocationId ?? center.name,
     [center.city, center.state].filter(Boolean).join(", "),
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" · "));
 }
 
 function centerLocationData(center: { ownerGroup?: { name: string; ownerType?: string | null } | null }) {
@@ -411,14 +430,15 @@ function safeAuthNextPath(value: string | string[] | undefined) {
   return path;
 }
 
-function formatSavedAt(value: string | null) {
+function formatSavedAt(value: string | null, timeZone: string) {
   if (!value) return null;
-  return new Intl.DateTimeFormat("en", {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZoneName: "short",
+  });
 }
 
 function serializeFteReport(report: {
@@ -448,7 +468,7 @@ function serializeFteReport(report: {
   return {
     id: report.id,
     centerId: report.centerId,
-    centerName: report.center.crmLocationId ?? report.center.name,
+    centerName: removeDemoMarkersFromUserView(report.center.crmLocationId ?? report.center.name),
     locationData: stringField(metadata.locationData) || centerLocationData(report.center),
     weekStart: report.weekStart.toISOString(),
     weekEnd: report.weekEnd?.toISOString() ?? null,
@@ -743,6 +763,9 @@ async function renderLivePage(
   const tenantWide = canAccessAllCenters(user);
   const allCenters = tenantWide;
   const showDemoFallbackData = canViewDemoFallbackData(user);
+  const userViewText = (value: string) => showDemoFallbackData
+    ? removeDemoMarkersFromUserView(value)
+    : value;
   const centers = await getVisibleCenters(user);
   const visibleCenterIds = centers.map((center) => center.id);
   const scopedCenterIds = visibleCenterIdFilter(visibleCenterIds);
@@ -804,8 +827,8 @@ async function renderLivePage(
       prisma.child.count({ where: { ...currentlyEnrolledChildWhere(), family: { centerId: selectedCenter.id } } }),
       prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } } } }),
       prisma.guardian.count({ where: { family: { centerId: selectedCenter.id, children: { some: currentlyEnrolledChildWhere() } }, userId: { not: null } } }),
-      prisma.staffProfile.count({ where: { centerId: selectedCenter.id } }),
-      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id } }),
+      prisma.staffProfile.count({ where: { centerId: selectedCenter.id, user: { isActive: true } } }),
+      prisma.staffSchedule.count({ where: { centerId: selectedCenter.id, staff: { user: { isActive: true } } } }),
       prisma.tuitionPlan.count(),
       prisma.product.count(),
       prisma.billingAccount.count({ where: { family: { centerId: selectedCenter.id } } }),
@@ -1025,7 +1048,7 @@ async function renderLivePage(
       completedSections,
       totalSections: sections.length,
       blockingSections,
-      lastCapturedAt: formatSavedAt(schoolSetup.capturedAt),
+      lastCapturedAt: formatSavedAt(schoolSetup.capturedAt, readCenterLocationTimeZone(selectedCenter)),
       schoolEin: selectedCenter ? readSchoolEin(selectedCenter.customFields) : null,
       stats: [
         { label: "Classrooms", value: String(classroomCount), detail: `${selectedCenter?.licensedCapacity ?? 0} licensed capacity` },
@@ -1041,7 +1064,7 @@ async function renderLivePage(
       directorChecklistAutomaticCompletedIds,
     };
 
-    return <SchoolSetupCommandCenter data={data} />;
+    return <SchoolSetupCommandCenter key={data.centerId ?? "no-school"} data={data} />;
   }
 
   if (slug === "multi-location-dashboard") {
@@ -1049,7 +1072,7 @@ async function renderLivePage(
       prisma.lead.count({ where: leadWhere }),
       prisma.lead.count({ where: { ...leadWhere, score: { gte: 75 } } }),
       prisma.tour.count({ where: { centerId: scopedCenterIds, startsAt: { gte: today } } }),
-      prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER } } }),
+      prisma.staffProfile.count({ where: { centerId: scopedCenterIds, user: { role: UserRole.TEACHER, isActive: true } } }),
       getKidCityFteSnapshot(centers),
       getFteReports(visibleCenterIds, executiveFteReportTake(visibleCenterIds.length)),
       buildFtePrefills(centers),
@@ -1062,6 +1085,7 @@ async function renderLivePage(
     return (
       <MultiLocationDashboardPage
         data={{
+          brandName: user.branding.name,
           centers,
           stats: {
             centers: centers.length,
@@ -1212,6 +1236,7 @@ async function renderLivePage(
               status: submission.status,
               reviewStatus: registrationReviewFromData(submission.data).status,
               registrationPayment: registrationPaymentFromData(submission.data),
+              preview: buildRegistrationReviewPreview(submission.data),
               submittedAt: submission.submittedAt,
               summary: registrationSubmissionSummary(submission.data),
               childFullName: cleanText(record.childFullName) || "Child",
@@ -1515,7 +1540,15 @@ async function renderLivePage(
     return (
       <CalendarPage
         data={{
-          centers: centers.map((center) => ({ id: center.id, name: formatCenterName(center) })),
+          centers: centers.map((center) => ({
+            id: center.id,
+            name: formatCenterName(center),
+            city: center.city,
+            state: center.state,
+            postalCode: center.postalCode,
+            timezone: center.timezone,
+            customFields: center.customFields,
+          })),
           events,
           generatedAt: today.toISOString(),
           canManageCalendar: canManageOperations(user),
@@ -1567,13 +1600,13 @@ async function renderLivePage(
     const requestedFamilyId = firstSearchParam(searchParams.familyId) || "";
     const familyWhere: Prisma.FamilyWhereInput = { centerId: scopedCenterIds };
     const currentChildWhere = currentlyEnrolledChildWhere();
-    const graduatedChildWhere = notCurrentlyEnrolledChildWhere();
+    const closedChildWhere = closedEnrollmentChildWhere();
     const currentFamilyWhere: Prisma.FamilyWhereInput = { ...familyWhere, children: { some: currentChildWhere } };
-    const graduatedFamilyWhere: Prisma.FamilyWhereInput = {
+    const closedFamilyWhere: Prisma.FamilyWhereInput = {
       AND: [
         familyWhere,
         { children: { none: currentChildWhere } },
-        { children: { some: graduatedChildWhere } },
+        { children: { some: closedChildWhere } },
       ],
     };
     const familyInclude = {
@@ -1604,25 +1637,30 @@ async function renderLivePage(
       },
       _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
     } satisfies Prisma.FamilyInclude;
-    const [families, allFamilies, total, withCustodyNotes, children, guardians, graduated, graduatedFamilies, intakeCenters, requestNotes] = await Promise.all([
+    const [families, allFamilies, total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentStatusRows, intakeCenters, requestNotes] = await Promise.all([
       prisma.family.findMany({
         where: currentFamilyWhere,
         orderBy: { createdAt: "desc" },
-        take: 100,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
       prisma.family.findMany({
         where: familyWhere,
         orderBy: { createdAt: "desc" },
-        take: 250,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: familyInclude,
       }),
       prisma.family.count({ where: currentFamilyWhere }),
+      prisma.family.count({ where: familyWhere }),
       prisma.family.count({ where: { ...currentFamilyWhere, custodyNotes: { not: null } } }),
       prisma.child.count({ where: { ...currentChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
       prisma.guardian.count({ where: { family: { is: currentFamilyWhere } } }),
-      prisma.child.count({ where: { ...graduatedChildWhere, family: { is: { centerId: scopedCenterIds } } } }),
-      prisma.family.count({ where: graduatedFamilyWhere }),
+      prisma.family.count({ where: closedFamilyWhere }),
+      prisma.child.groupBy({
+        by: ["enrollmentStatus"],
+        where: { family: { is: { centerId: scopedCenterIds } } },
+        _count: { _all: true },
+      }),
       getFamilyIntakeCenters(user),
       prisma.note.findMany({
         where: {
@@ -1669,12 +1707,16 @@ async function renderLivePage(
     });
     const centerNameById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     function serializeFamilyForClient(family: (typeof allFamilies)[number], options: { currentChildrenOnly: boolean }) {
+      const visibleChildren = options.currentChildrenOnly
+        ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
+        : family.children;
       return {
         ...family,
         centerName: family.centerId ? centerNameById.get(family.centerId) ?? null : null,
-        children: options.currentChildrenOnly
-          ? family.children.filter((child) => isCurrentlyEnrolledChildRecord(child))
-          : family.children,
+        children: visibleChildren.map((child) => ({
+          ...child,
+          tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
+        })),
         billingAccount: family.billingAccount
           ? {
               id: family.billingAccount.id,
@@ -1717,6 +1759,7 @@ async function renderLivePage(
       allFamiliesWithRequested.flatMap((family) => family.children.map((child) => child.ageGroup)),
       intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
     );
+    const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, children);
 
     return (
       <FamilyProfilesPage
@@ -1728,7 +1771,7 @@ async function renderLivePage(
           intakeCenters,
           ageGroups: familyAgeGroups,
           guardianChangeRequests,
-          stats: { total, withCustodyNotes, children, guardians, graduated, graduatedFamilies },
+          stats: { total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentLifecycle },
         }}
       />
     );
@@ -1737,17 +1780,17 @@ async function renderLivePage(
   if (slug === "child-profile") {
     const childWhere = visibleChildWhere(visibleCenterIds);
     const currentChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
-    const graduatedChildWhere: Prisma.ChildWhereInput = { AND: [childWhere, notCurrentlyEnrolledChildWhere()] };
     const currentChildRelationWhere: Prisma.ChildWhereInput = { AND: [childWhere, currentlyEnrolledChildWhere()] };
-    const [children, allChildren, total, graduated, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
+    const [children, allChildren, total, allTotal, enrollmentStatusRows, allergies, restrictedMedicalNotes, intakeCenters] = await Promise.all([
       prisma.child.findMany({
         where: currentChildWhere,
         orderBy: { fullName: "asc" },
-        take: 150,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
-          family: { select: { name: true, centerId: true, custodyNotes: true } },
+          family: { select: { id: true, name: true, centerId: true, custodyNotes: true } },
           classroom: {
             select: {
+              id: true,
               name: true,
               center: { select: { name: true, crmLocationId: true } },
             },
@@ -1758,11 +1801,12 @@ async function renderLivePage(
       prisma.child.findMany({
         where: childWhere,
         orderBy: { fullName: "asc" },
-        take: 300,
+        take: SCHOOL_DASHBOARD_LIST_LIMIT,
         include: {
-          family: { select: { name: true, centerId: true, custodyNotes: true } },
+          family: { select: { id: true, name: true, centerId: true, custodyNotes: true } },
           classroom: {
             select: {
+              id: true,
               name: true,
               center: { select: { name: true, crmLocationId: true } },
             },
@@ -1771,13 +1815,19 @@ async function renderLivePage(
         },
       }),
       prisma.child.count({ where: currentChildWhere }),
-      prisma.child.count({ where: graduatedChildWhere }),
+      prisma.child.count({ where: childWhere }),
+      prisma.child.groupBy({
+        by: ["enrollmentStatus"],
+        where: childWhere,
+        _count: { _all: true },
+      }),
       prisma.allergy.count({ where: { child: currentChildRelationWhere } }),
       prisma.childMedicalNote.count({ where: { restricted: true, child: currentChildRelationWhere } }),
       getFamilyIntakeCenters(user),
     ]);
+    const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, total);
 
-    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, graduated, allergies, restrictedMedicalNotes } }} />;
+    return <ChildProfilesPage data={{ children, allChildren, intakeCenters, stats: { total, allTotal, enrollmentLifecycle, allergies, restrictedMedicalNotes } }} />;
   }
 
   if (slug === "parent-portal") {
@@ -1901,6 +1951,7 @@ async function renderLivePage(
         select: {
           id: true,
           date: true,
+          sentAt: true,
           mood: true,
           teacherNote: true,
           suppliesNeeded: true,
@@ -2232,7 +2283,7 @@ async function renderLivePage(
         center: { select: { state: true, licensedCapacity: true, customFields: true } },
         _count: {
           select: {
-            staff: { where: { user: { role: UserRole.TEACHER } } },
+            staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } },
           },
         },
       },
@@ -2307,9 +2358,9 @@ async function renderLivePage(
     return (
       <TeacherMobileWorkspace
         roster={roster}
-        teacherName={user.name}
+        teacherName={userViewText(user.name)}
         teacherProfile={{
-          name: user.name,
+          name: userViewText(user.name),
           loginEmail: user.email,
           contactEmail: staffProfile ? readStaffContactEmail(staffProfile.customFields) : null,
           phone: staffProfile?.phone ?? null,
@@ -2545,6 +2596,17 @@ async function renderLivePage(
 
     const signedMessages = await Promise.all(messages.map(async (message) => ({
       ...message,
+      subject: message.subject ? userViewText(message.subject) : null,
+      body: userViewText(message.body),
+      family: message.family
+        ? { ...message.family, name: userViewText(message.family.name) }
+        : null,
+      sender: message.sender
+        ? { ...message.sender, name: userViewText(message.sender.name) }
+        : null,
+      assignedTo: message.assignedTo
+        ? { ...message.assignedTo, name: userViewText(message.assignedTo.name) }
+        : null,
       attachments: await signMessageAttachmentsFromMetadata(message.metadata),
       replyHref: messageReplyHref(message),
     })));
@@ -2553,7 +2615,7 @@ async function renderLivePage(
     const centerLabelById = new Map(centers.map((center) => [center.id, formatCenterName(center)]));
     const familyOptions = families.map((family) => ({
       id: family.id,
-      name: family.name,
+      name: userViewText(family.name),
       billingEmail: family.billingEmail,
       centerId: family.centerId,
       centerLabel: family.centerId ? centerLabelById.get(family.centerId) ?? null : null,
@@ -2656,7 +2718,10 @@ async function renderLivePage(
           familyOptions: demoMode ? [] : familyOptions,
           templates: templateOptions,
           mergeFields: messageMergeFields,
-          staffOptions: staffUsers,
+          staffOptions: staffUsers.map((staffUser) => ({
+            ...staffUser,
+            name: userViewText(staffUser.name),
+          })),
           replyDraft: requestedReplyToMessageId
             ? {
                 replyToMessageId: requestedReplyToMessageId,
@@ -2742,9 +2807,18 @@ async function renderLivePage(
   }
 
   if (slug === "campaigns") {
-    const campaignWhere: Prisma.CampaignWhereInput = {
+    const tenantCampaignWhere: Prisma.CampaignWhereInput = {
       OR: [{ tenantId: user.tenantId }, { brand: { is: { tenantId: user.tenantId } } }],
     };
+    const campaignWhere: Prisma.CampaignWhereInput = canAccessAllCenters(user)
+      ? tenantCampaignWhere
+      : {
+          AND: [
+            tenantCampaignWhere,
+            { audience: { path: ["centerId"], equals: user.primaryCenterId ?? "__no_authorized_center__" } },
+          ],
+        };
+    const marketingScope = integrationScopeForUser(user, "meta_ads");
     const [campaigns, total, active, draft, paused, scheduled, sent, integrationRecords, integrationCredentials] = await Promise.all([
       prisma.campaign.findMany({
         where: campaignWhere,
@@ -2765,11 +2839,19 @@ async function renderLivePage(
       prisma.campaign.count({ where: { ...campaignWhere, status: "scheduled" } }),
       prisma.campaign.count({ where: { ...campaignWhere, status: "sent" } }),
       prisma.integration.findMany({
-        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        where: {
+          tenantId: user.tenantId,
+          provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+          scopeKey: marketingScope.scopeKey,
+        },
         select: { id: true, provider: true, status: true, configPlaceholder: true, lastSyncAt: true },
       }),
       prisma.integrationCredential.findMany({
-        where: { tenantId: user.tenantId, provider: { in: MARKETING_INTEGRATION_PROVIDERS } },
+        where: {
+          tenantId: user.tenantId,
+          provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+          scopeKey: marketingScope.scopeKey,
+        },
         select: { provider: true, key: true, lastFour: true },
       }),
     ]);
@@ -2777,16 +2859,27 @@ async function renderLivePage(
     const setupViews = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
     const marketingConnections = setupViews
       .filter((integration) => AD_INTEGRATION_PROVIDERS.includes(integration.provider))
-      .map((integration) => ({
-        provider: integration.provider,
-        name: integration.name,
-        purpose: integration.purpose,
-        status: integration.status,
-        setupStatus: integration.setupStatus,
-        configured: integration.env.configured,
-        accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
-        lastSyncAt: integration.lastSyncAt,
-      }));
+      .map((integration) => {
+        const stored = integrationRecords.find((record) => record.provider === integration.provider);
+        const analytics = recordFromJson(recordFromJson(stored?.configPlaceholder).adAnalytics);
+        return {
+          provider: integration.provider,
+          name: integration.name,
+          purpose: integration.purpose,
+          status: integration.status,
+          setupStatus: integration.setupStatus,
+          configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
+          accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
+          analytics: {
+            spend: typeof analytics.spend === "number" ? analytics.spend : 0,
+            impressions: typeof analytics.impressions === "number" ? analytics.impressions : 0,
+            clicks: typeof analytics.clicks === "number" ? analytics.clicks : 0,
+            leads: typeof analytics.leads === "number" ? analytics.leads : 0,
+            campaignCount: Array.isArray(analytics.campaigns) ? analytics.campaigns.length : 0,
+          },
+          lastSyncAt: integration.lastSyncAt,
+        };
+      });
     const socialConnections = setupViews
       .filter((integration) => SOCIAL_INTEGRATION_PROVIDERS.includes(integration.provider))
       .map((integration) => {
@@ -2805,7 +2898,7 @@ async function renderLivePage(
           provider: integration.provider,
           name: integration.name,
           purpose: integration.purpose,
-          configured: integration.env.configured,
+          configured: integration.env.configured && hasRequiredMarketingAccountConfig(integration.provider, integration.config),
           availableChannels,
           accountLabel: typeof integration.config.accountLabel === "string" ? integration.config.accountLabel : "",
           profileHandle: typeof integration.config.profileHandle === "string" ? integration.config.profileHandle : "",
@@ -2971,7 +3064,7 @@ async function renderLivePage(
                 },
               },
               payments: {
-                where: { provider: "stripe", status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
+                where: { provider: { in: ["stripe", "stripe_terminal"] }, status: { in: [PaymentStatus.PAID, PaymentStatus.REFUNDED] } },
                 orderBy: [{ paidAt: "desc" }, { id: "desc" }],
                 take: 20,
                 select: {
@@ -2994,7 +3087,11 @@ async function renderLivePage(
         },
       }),
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }], take: 100 }),
-      prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { name: "asc" }], take: 100 }),
+      prisma.tuitionPlan.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
+        take: 500,
+      }),
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
     ]);
@@ -3074,6 +3171,7 @@ async function renderLivePage(
     );
     const requestedBillingFamilyId = firstSearchParam(searchParams.familyId) || "";
     const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
+    const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
 
     return (
@@ -3087,9 +3185,11 @@ async function renderLivePage(
           initialSelection: {
             familyId: requestedBillingFamilyId,
             centerId: requestedBillingCenterId,
+            childId: requestedBillingChildId,
             searchQuery: requestedBillingSearch,
           },
           workbench: {
+            currentRole: user.role,
             families: billingFamilies.map((family) => ({
               ...family,
               billingAccount: family.billingAccount
@@ -3154,7 +3254,9 @@ async function renderLivePage(
               }),
             })),
             products: billingProducts,
-            tuitionPlans,
+            tuitionPlans: tuitionPlans.filter(
+              (plan): plan is typeof plan & { centerId: string } => Boolean(plan.centerId),
+            ),
           },
           invoices: invoices.map((invoice) => ({
             id: invoice.id,
@@ -3476,7 +3578,14 @@ async function renderLivePage(
     const aiDayStart = new Date();
     aiDayStart.setHours(0, 0, 0, 0);
     const [summaries, suggestions, aiLeads, aiFamilies, unreadMessages, openInvoices, overdueInvoices, pendingIncidents, upcomingTours, aiCheckLogs, aiStaff, classroomCapacity, openComplianceTasks, overdueInvoiceTotal] = await Promise.all([
-      prisma.aiSummary.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
+      prisma.aiSummary.findMany({
+        where: aiSummaryWhereForViewer({
+          hasTenantWideAccess: tenantWide,
+          visibleCenterIds,
+        }),
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
       prisma.aiSuggestion.findMany({ orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.lead.findMany({
         where: leadWhere,
@@ -3542,7 +3651,7 @@ async function renderLivePage(
         select: { childId: true, type: true, occurredAt: true },
       }),
       prisma.staffProfile.findMany({
-        where: { centerId: scopedCenterIds },
+        where: { centerId: scopedCenterIds, user: { isActive: true } },
         select: { customFields: true },
       }),
       prisma.classroom.aggregate({
@@ -3780,7 +3889,11 @@ async function renderLivePage(
   if (slug === "billing-settings") {
     const [products, tuitionPlans, subscriptions, billingCenters] = await Promise.all([
       prisma.product.findMany({ orderBy: [{ type: "asc" }, { name: "asc" }] }),
-      prisma.tuitionPlan.findMany({ orderBy: [{ ageGroup: "asc" }, { amountCents: "asc" }] }),
+      prisma.tuitionPlan.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { amountCents: "asc" }],
+        include: { center: { select: { id: true, name: true, crmLocationId: true } } },
+      }),
       prisma.subscriptionPlaceholder.findMany({ orderBy: [{ status: "asc" }, { name: "asc" }] }),
       prisma.center.findMany({
         where: getLeadScopeWhere(user),
@@ -3812,10 +3925,8 @@ async function renderLivePage(
           centers: billingCenters,
           stripeConfigured,
           webhookConfigured: stripeWebhookConfigured,
-          tuitionFeatureFeeBps: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_BPS || "150", 10) || 150,
           parentProcessingRecoveryApproved: isStripeParentProcessingRecoveryApproved(),
           parentSurchargeBps: getStripeCardProcessingRecoveryBps(),
-          tuitionFeatureFeeFixedCents: Number.parseInt(process.env.STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS || "0", 10) || 0,
           parentSurchargeFixedCents: getStripeCardProcessingRecoveryFixedCents(),
         }}
       />
@@ -3823,6 +3934,7 @@ async function renderLivePage(
   }
 
   if (slug === "corporate-billing") {
+    if (!canUseKidCityCorporateBilling(user.role, user.branding.kind)) notFound();
     const kidCitySoftwareInvoice = await getKidCitySoftwareInvoiceSnapshot(prisma);
     return <CorporateBillingPage data={{ kidCitySoftwareInvoice }} />;
   }
@@ -4062,6 +4174,7 @@ async function renderLivePage(
     return (
       <TeamPermissionsPage
         data={{
+          brandName: user.branding.name,
           users,
           roleCounts: roleCounts.map((role) => ({ role: role.role, count: role._count._all })),
           deviceSessions: deviceSessions.map((session) => ({
@@ -4163,7 +4276,7 @@ async function renderLivePage(
           licensedCapacity: true,
           ownerGroupId: true,
           ownerGroup: { select: { name: true, ownerType: true } },
-          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER } } }, classrooms: true } },
+          _count: { select: { leads: true, staff: { where: { user: { role: UserRole.TEACHER, isActive: true } } }, classrooms: true } },
         },
       }),
       prisma.user.findMany({
@@ -4207,6 +4320,7 @@ async function renderLivePage(
     return (
       <AgencyAdminPage
         data={{
+          brandName: user.branding.name,
           stats: {
             organizations,
             centers: adminCenters.length,
@@ -4392,6 +4506,15 @@ async function renderLivePage(
   }
 
   if (slug === "integrations") {
+    const marketingScope = integrationScopeForUser(user, "meta_ads");
+    const canManageMarketingPortfolio = canManageExecutiveMarketingPortfolio(user.role);
+    const integrationScopeWhere = {
+      tenantId: user.tenantId,
+      OR: [
+        { provider: { in: MARKETING_INTEGRATION_PROVIDERS }, scopeKey: marketingScope.scopeKey },
+        { provider: { notIn: MARKETING_INTEGRATION_PROVIDERS }, scopeKey: "tenant" },
+      ],
+    } satisfies Prisma.IntegrationWhereInput;
     const deliveryWhere: Prisma.IntegrationDeliveryWhereInput = user.role === UserRole.PLATFORM_OWNER
       ? {}
       : tenantWide
@@ -4399,7 +4522,7 @@ async function renderLivePage(
         : { centerId: scopedCenterIds };
     const acceptedStaleBefore = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const sendGridWhere: Prisma.IntegrationDeliveryWhereInput = { ...deliveryWhere, provider: "sendgrid" };
-    const [totalDeliveries, deliveredDeliveries, acceptedDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, acceptedStaleDeliveries, deferredDeliveries, suppressedDeliveries, bouncedDeliveries, recentDeliveries, integrationRecords, integrationCredentials] = await Promise.all([
+    const [totalDeliveries, deliveredDeliveries, acceptedDeliveries, pendingDeliveries, failedDeliveries, skippedDeliveries, acceptedStaleDeliveries, deferredDeliveries, suppressedDeliveries, bouncedDeliveries, recentDeliveries, integrationRecords, integrationCredentials, marketingPortfolioCenters, centerMarketingRecords, centerMarketingCredentials] = await Promise.all([
       prisma.integrationDelivery.count({ where: deliveryWhere }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "delivered" } }),
       prisma.integrationDelivery.count({ where: { ...deliveryWhere, status: "accepted" } }),
@@ -4432,7 +4555,7 @@ async function renderLivePage(
         },
       }),
       prisma.integration.findMany({
-        where: { tenantId: user.tenantId },
+        where: integrationScopeWhere,
         select: {
           id: true,
           provider: true,
@@ -4442,11 +4565,68 @@ async function renderLivePage(
         },
       }),
       prisma.integrationCredential.findMany({
-        where: { tenantId: user.tenantId },
+        where: integrationScopeWhere,
         select: { provider: true, key: true, lastFour: true },
       }),
+      canManageMarketingPortfolio
+        ? prisma.center.findMany({
+            where: { status: "active", organization: { tenantId: user.tenantId } },
+            orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
+            select: { id: true, name: true, crmLocationId: true, city: true, state: true },
+          })
+        : Promise.resolve([]),
+      canManageMarketingPortfolio
+        ? prisma.integration.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+              centerId: { not: null },
+            },
+            select: {
+              id: true,
+              centerId: true,
+              provider: true,
+              status: true,
+              configPlaceholder: true,
+              lastSyncAt: true,
+            },
+          })
+        : Promise.resolve([]),
+      canManageMarketingPortfolio
+        ? prisma.integrationCredential.findMany({
+            where: {
+              tenantId: user.tenantId,
+              provider: { in: MARKETING_INTEGRATION_PROVIDERS },
+              centerId: { not: null },
+            },
+            select: { centerId: true, provider: true, key: true, lastFour: true },
+          })
+        : Promise.resolve([]),
     ]);
     const setupIntegrations = buildIntegrationSetupViews(integrationRecords, process.env, integrationCredentials);
+    const executiveMarketing = canManageMarketingPortfolio
+      ? {
+          centers: marketingPortfolioCenters.map((center) => {
+            const records = centerMarketingRecords.filter((record) => record.centerId === center.id);
+            const credentials = centerMarketingCredentials.filter((credential) => credential.centerId === center.id);
+            const views = buildIntegrationSetupViews(records, process.env, credentials)
+              .filter((view) => MARKETING_INTEGRATION_PROVIDERS.includes(view.provider));
+            return {
+              ...center,
+              connections: views
+                .filter((view) => view.id)
+                .map((view) => ({
+                  provider: view.provider,
+                  configured: view.env.configured && hasRequiredMarketingAccountConfig(view.provider, view.config),
+                  accountLabel: typeof view.config.accountLabel === "string" ? view.config.accountLabel : "",
+                  setupStatus: view.setupStatus,
+                  lastSyncAt: typeof view.lastSyncAt === "string" ? view.lastSyncAt : null,
+                })),
+            };
+          }),
+          managerConnections: setupIntegrations.filter((view) => MARKETING_INTEGRATION_PROVIDERS.includes(view.provider)),
+        }
+      : undefined;
 
     return (
       <IntegrationsPage
@@ -4466,8 +4646,9 @@ async function renderLivePage(
           },
           recentDeliveries,
           setupIntegrations,
-          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR,
-          manageableProviders: user.role === UserRole.CENTER_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
+          executiveMarketing,
+          canManageSetup: user.role === UserRole.PLATFORM_OWNER || user.role === UserRole.BRAND_ADMIN || user.role === UserRole.REGIONAL_MANAGER || user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR,
+          manageableProviders: user.role === UserRole.CENTER_DIRECTOR || user.role === UserRole.ASSISTANT_DIRECTOR ? MARKETING_INTEGRATION_PROVIDERS : undefined,
           integrations: setupIntegrations.map((integration) => ({
             name: integration.name,
             purpose: integration.purpose,
@@ -4486,7 +4667,7 @@ async function renderLivePage(
     const [leads, highIntentLeads, staff, classrooms, toursUpcoming, openTasks, recentLeads, fteReports, ftePrefills, staffClockProfiles] = await Promise.all([
       prisma.lead.count({ where: centerWhere }),
       prisma.lead.count({ where: { ...centerWhere, score: { gte: 75 } } }),
-      center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER } } }) : 0,
+      center ? prisma.staffProfile.count({ where: { centerId: center.id, user: { role: UserRole.TEACHER, isActive: true } } }) : 0,
       center ? prisma.classroom.count({ where: { centerId: center.id } }) : 0,
       center
         ? prisma.tour.count({
@@ -5083,7 +5264,7 @@ async function renderLivePage(
         ...profile,
         user: {
           ...profile.user,
-          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields, profile.user.role),
+          profilePhotoUrl: await signedProfilePhotoUrl(profile.user.customFields, profile.user.role, user.branding.kind),
         },
       })),
     );
@@ -5141,10 +5322,18 @@ async function renderLivePage(
         data={{
           forms,
           submissions: submissions.map((submission) => ({
-            ...submission,
+            id: submission.id,
+            status: submission.status,
+            submittedAt: submission.submittedAt,
+            signaturePlaceholder: submission.signaturePlaceholder,
+            form: submission.form,
             reviewStatus: registrationReviewFromData(submission.data).status,
             registrationPayment: registrationPaymentFromData(submission.data),
             summary: registrationSubmissionSummary(submission.data),
+            details: safeFormSubmissionDetails(submission.data),
+            preview: submission.form.type === "online_registration"
+              ? buildRegistrationReviewPreview(submission.data)
+              : undefined,
           })),
         }}
       />

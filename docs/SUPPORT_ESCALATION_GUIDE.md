@@ -1,6 +1,6 @@
 # Support Escalation Guide
 
-Last updated: June 1, 2026
+Last updated: July 29, 2026
 
 Use this for live-school support during the Kid City USA pilot and future customer rollouts.
 

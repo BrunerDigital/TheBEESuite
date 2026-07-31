@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SOCIAL_CHANNELS, type SocialChannel } from "@/lib/social-publishing";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 export type SocialConnection = {
   provider: string;
@@ -24,12 +26,13 @@ export type SocialConnection = {
   lastSyncAt: Date | string | null;
 };
 
-function localFutureValue() {
+function localFutureValue(timeZone: string) {
   const date = new Date(Date.now() + 60 * 60 * 1000);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  return zonedDateTimeLocalValue(date, timeZone);
 }
 
 export function SocialPublishingStudio({ connections }: { connections: SocialConnection[] }) {
+  const timeZone = useSchoolTimeZone();
   const [profiles, setProfiles] = useState(connections);
   const configuredChannels = new Set(profiles.flatMap((item) => item.configured ? item.availableChannels : []));
   const [channels, setChannels] = useState<SocialChannel[]>([]);
@@ -37,7 +40,7 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
   const [text, setText] = useState("");
   const [mediaUrl, setMediaUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
-  const [scheduledAt, setScheduledAt] = useState(localFutureValue);
+  const [scheduledAt, setScheduledAt] = useState(() => localFutureValue(timeZone));
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -53,7 +56,7 @@ export function SocialPublishingStudio({ connections }: { connections: SocialCon
       const response = await fetch("/api/marketing/social-posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, channels, title, text, mediaUrl, linkUrl, scheduledAt: mode === "schedule" ? new Date(scheduledAt).toISOString() : undefined }),
+        body: JSON.stringify({ mode, channels, title, text, mediaUrl, linkUrl, scheduledAt: mode === "schedule" ? zonedDateTimeLocalToUtc(scheduledAt, timeZone)?.toISOString() : undefined }),
       });
       const json = await response.json().catch(() => null) as { error?: string; status?: string; results?: Array<{ ok: boolean; channel: string; error?: string }> } | null;
       if (!response.ok && response.status !== 207) {

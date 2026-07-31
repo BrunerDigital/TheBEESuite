@@ -1,13 +1,13 @@
 # Mobile App Physical-Device Evidence Packet
 
-Use one copy per release candidate and platform. Use fake review data only. Attach screenshots/log exports separately; do not place passwords, signing keys, provisioning profiles, service-account files, device tokens, or private child/family data in this packet.
+Use one copy per release candidate, platform, and role app. Use fake review data only. Attach screenshots/log exports separately; do not place passwords, signing keys, provisioning profiles, service-account files, device tokens, or private child/family data in this packet.
 
 ## Release identity
 
 | Field | Evidence |
 | --- | --- |
 | Platform | Apple TestFlight / Google Play internal test |
-| App | BEE Suite Parent Portal |
+| App | BEE Suite Parent Portal / BEE Suite Teacher Portal |
 | Bundle/application ID | |
 | Marketing version | |
 | Build/version code | |
@@ -36,18 +36,18 @@ Record `PASS`, `FAIL`, or `BLOCKED`, evidence link, defect ID, and retest for ev
 | # | Action and expected result | Result/evidence |
 | --- | --- | --- |
 | 1 | Install from TestFlight or Google Play internal testing. Confirm publisher, name, icon, version, and clean first launch. | |
-| 2 | Launch online. Parent-only login appears; no other-role entry point or unexpected permission prompt appears. | |
+| 2 | Launch online. The selected role login appears; no other-role entry point or unexpected permission prompt appears. | |
 | 3 | Open Privacy and Support before login. Both load, support contact works, and no authentication loop occurs. | |
 | 4 | Attempt one invalid login. A safe, recoverable error appears without account enumeration or instability. | |
-| 5 | Sign in with the fake linked-parent account. `/parent-portal` shows only the intended fake family and children. | |
+| 5 | Sign in with the fake review account. Parent: `/parent-portal` shows only the intended fake family and children. Teacher: `/teacher-portal` shows only the intended fake classroom and staff context. | |
 | 6 | Background for 30 seconds, resume, and navigate back/forward. Session/navigation remain safe and arbitrary hosts cannot open inside the app. | |
-| 7 | Review dashboard, child summary, daily report/media, messages, documents, incident acknowledgement, notification preferences, billing/invoice history, and support. | |
+| 7 | Parent: review dashboard, child summary, daily report/media, messages, documents, incident acknowledgement, notification preferences, billing/invoice history, and support. Teacher: review classroom workspace, roster, attendance, daily report, media upload, incident documentation, profile readiness, and support. | |
 | 8 | Upload one fake image and allowed fake document. Camera/photo prompts appear only when invoked; denial is recoverable; unsupported files fail safely. | |
 | 9 | Open a non-destructive Stripe handoff only if the fake account supports it. Cancel and return safely; verify no charge was created. | |
 | 10 | Disable network and relaunch. The local connection-required state appears without leaking cached sensitive content. Restore network and recover. | |
 | 11 | Exercise password-reset/invitation links in the approved v1 mode. While deep links are deferred, HTTPS browser fallback reaches the correct parent path. | |
 | 12 | Change in-app notification preferences and create/read a fake in-app alert. No native push prompt or APNs/FCM delivery claim appears while deferred. | |
-| 13 | Open the deletion-request flow. Confirm retention warning and recovery; do not approve deletion or mutate production data for this test. | |
+| 13 | Parent: open the deletion-request flow. Confirm retention warning and recovery; do not approve deletion or mutate production data for this test. Teacher: confirm account/support escalation guidance for teacher access changes. | |
 | 14 | Sign out. Back navigation, relaunch, and protected URLs do not reveal authenticated content. | |
 | 15 | Reinstall/update from the distribution track and repeat launch/login/logout. Record crash, performance, console, and store diagnostics evidence. | |
 
@@ -75,4 +75,3 @@ Record `PASS`, `FAIL`, or `BLOCKED`, evidence link, defect ID, and retest for ev
 | Privacy/security reconciliation | | | |
 | Release owner | | | |
 | Final result: GO / NO-GO | | | |
-

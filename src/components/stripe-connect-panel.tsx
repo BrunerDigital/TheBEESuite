@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BadgeDollarSign, CheckCircle2, CreditCard, Landmark, LockKeyhole, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,10 +38,8 @@ type StripeConnectPanelProps = {
   centers: StripeConnectCenter[];
   stripeConfigured: boolean;
   webhookConfigured: boolean;
-  tuitionFeatureFeeBps: number;
   parentProcessingRecoveryApproved: boolean;
   parentSurchargeBps: number;
-  tuitionFeatureFeeFixedCents: number;
   parentSurchargeFixedCents: number;
 };
 
@@ -70,6 +68,14 @@ function maskedAccount(center: StripeConnectCenter) {
   return `${accountId.slice(0, 8)}...${accountId.slice(-4)}`;
 }
 
+function payoutBankLabel(center: StripeConnectCenter) {
+  const centerFields = fields(center.customFields);
+  const bankName = text(centerFields.stripePayoutBankName);
+  const last4 = text(centerFields.stripePayoutBankLast4);
+  if (last4) return `${bankName || "Bank account"} •••• ${last4}`;
+  return maskedAccount(center) === "Not connected" ? "Not connected" : "Choose bank for this school";
+}
+
 function percentFromBps(bps: number) {
   return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
 }
@@ -90,14 +96,13 @@ export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
-  tuitionFeatureFeeBps,
   parentProcessingRecoveryApproved,
   parentSurchargeBps,
-  tuitionFeatureFeeFixedCents,
   parentSurchargeFixedCents,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
+  const payoutWindowRef = useRef<Window | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [localCenters, setLocalCenters] = useState(centers);
   const [setupCenterId, setSetupCenterId] = useState<string | null>(null);
@@ -221,6 +226,56 @@ export function StripeConnectPanel({
     }
   }
 
+  async function openPayoutBankSelection(center: StripeConnectCenter) {
+    if (payoutWindowRef.current && !payoutWindowRef.current.closed) {
+      payoutWindowRef.current.close();
+    }
+
+    const windowName = `stripe-payout-${center.id}-${Date.now()}`;
+    const stripeWindow = window.open("about:blank", windowName);
+    if (!stripeWindow) {
+      setMessage("Allow pop-ups for The BEE Suite, then choose the payout bank again.");
+      return;
+    }
+    stripeWindow.opener = null;
+    payoutWindowRef.current = stripeWindow;
+    stripeWindow.document.title = `Opening payout setup for ${center.name}`;
+    stripeWindow.document.body.textContent = `Opening a fresh secure payout setup for ${center.name}...`;
+
+    setBusyCenterId(center.id);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/billing/connect/payout-account", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-store",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ centerId: center.id }),
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok || !json.url) {
+        throw new Error(json.error || "Stripe payout settings could not be opened.");
+      }
+      if (json.centerId !== center.id) {
+        throw new Error("Stripe payout setup returned the wrong school. Close the window and try again.");
+      }
+      stripeWindow.location.replace(json.url as string);
+      setMessage(
+        json.mode === "onboarding"
+          ? `A fresh one-time Stripe onboarding session opened for ${center.name}. Enter this school's exact routing and account numbers, or select Skip for now and return later.`
+          : `A fresh account-specific Stripe session opened for ${center.name}. Enter or confirm this location's payout bank, then return here and select Check.`,
+      );
+    } catch (error) {
+      stripeWindow.close();
+      payoutWindowRef.current = null;
+      setMessage(error instanceof Error ? error.message : "Stripe payout settings could not be opened.");
+    } finally {
+      setBusyCenterId(null);
+    }
+  }
+
   const syncStatus = useCallback(async (centerId: string) => {
     setBusyCenterId(centerId);
     setMessage(null);
@@ -248,11 +303,24 @@ export function StripeConnectPanel({
               stripePayoutRequirementFields: json.account.requirementFields,
               stripePayoutStatus: text(readiness.status) || json.status,
               stripeConnectLastSyncedAt: new Date().toISOString(),
+              stripePayoutBankName: json.payoutBank?.bankName ?? null,
+              stripePayoutBankLast4: json.payoutBank?.last4 ?? null,
+              stripePayoutBankStatus: json.payoutBank?.status ?? null,
+              stripePayoutBankCurrency: json.payoutBank?.currency ?? null,
+              stripePayoutBankDefaultConfirmed: json.payoutBank?.defaultForCurrency === true,
+              stripePayoutBankCount: json.payoutBankCount ?? 0,
+              stripePayoutBankLastSyncedAt: new Date().toISOString(),
             },
           };
         }));
       }
-      setMessage("Payout status updated.");
+      setMessage(
+        json.payoutBankError
+          ? `Payout status updated, but the bank destination could not be confirmed: ${json.payoutBankError}`
+          : json.payoutBank?.last4
+            ? `Payout status updated. ${json.payoutBank.bankName || "Bank account"} ending ${json.payoutBank.last4} is selected for this school.`
+            : "Payout status updated. Choose and confirm a payout bank for this school.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Payout status could not be checked.");
     } finally {
@@ -293,6 +361,7 @@ export function StripeConnectPanel({
 
   const setupBusy = Boolean(setupCenter && busyCenterId === setupCenter.id);
   const setupDialogTitle = setupCenter ? `The BEE Suite payout setup for ${setupCenter.name}` : "The BEE Suite payout setup";
+  const setupAccountLabel = setupCenter ? maskedAccount(setupCenter) : "Not connected";
 
   function setupFieldError(field: keyof StripeConnectSetupDetails) {
     const error = setupErrors[field];
@@ -333,13 +402,8 @@ export function StripeConnectPanel({
             </Badge>
             <CardTitle>School payout accounts</CardTitle>
             <CardDescription className="mt-2 max-w-3xl">
-              The BEE Suite platform account can collect parent payments, retain the configured school-paid tuition payments feature fee, and route the remaining funds to each school&apos;s connected payout account.
+              The BEE Suite platform account can collect parent payments and route funds to each school&apos;s connected payout account.
             </CardDescription>
-          </div>
-          <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Tuition feature fee</div>
-            <div className="text-2xl font-semibold">{percentFromBps(tuitionFeatureFeeBps)}{centsLabel(tuitionFeatureFeeFixedCents)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">School-paid BEE Suite fee retained from tuition payout</div>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
             <div className="font-medium">Parent card recovery</div>
@@ -392,6 +456,12 @@ export function StripeConnectPanel({
         ) : null}
 
         {message ? <div className="rounded-xl border bg-background/50 p-3 text-sm text-muted-foreground">{message}</div> : null}
+        <div className="flex gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6 text-muted-foreground">
+          <Landmark className="mt-0.5 size-5 shrink-0 text-primary" />
+          <span>
+            Open one school at a time and enter the exact routing and account numbers for that location. This avoids the shared bank-login selector reusing the wrong account. You may select Skip for now and return later; bank setup never blocks login to The BEE Suite. After connecting a bank, select Check to confirm its name and last four digits.
+          </span>
+        </div>
 
         <Dialog open={Boolean(setupCenterId)} onOpenChange={(open) => {
           if (!open && !setupBusy) closeSetupDialog();
@@ -400,7 +470,7 @@ export function StripeConnectPanel({
             <DialogHeader>
               <DialogTitle>{setupDialogTitle}</DialogTitle>
               <DialogDescription>
-                Save the school&apos;s Bee Suite payout profile before the secure processor handoff.
+                Review the selected school and its designated Stripe Connect account before the secure handoff.
               </DialogDescription>
             </DialogHeader>
             {setupForm ? (
@@ -411,8 +481,16 @@ export function StripeConnectPanel({
                 <div className="flex gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm leading-6 text-muted-foreground">
                   <BadgeDollarSign className="mt-0.5 size-4 shrink-0 text-primary" />
                   <span>
-                    Directors stay inside The BEE Suite until the final required verification step. The hosted handoff may show processor-required branding, disclosures, and identity prompts.
+                    Executives and authorized school administrators stay inside The BEE Suite until the final required verification step. The hosted handoff may show processor-required branding, disclosures, identity prompts, and bank-account fields.
                   </span>
+                </div>
+                <div className="rounded-lg border bg-background/50 p-3 text-sm leading-6">
+                  <div className="font-medium">{setupCenter?.name}</div>
+                  <div className="text-muted-foreground">
+                    {setupAccountLabel === "Not connected"
+                      ? "No account is mapped yet. Continuing creates this school's designated connected account and binds onboarding to it."
+                      : `Designated account: ${setupAccountLabel}. Continuing updates only this mapped account; it does not switch the school to another account.`}
+                  </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   {setupInput("legalBusinessName", "Legal business name", { autoComplete: "organization" })}
@@ -468,7 +546,7 @@ export function StripeConnectPanel({
                     Cancel
                   </Button>
                   <Button type="submit" disabled={setupBusy}>
-                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue Secure Setup" : "Save Bee Suite Profile"}
+                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue to Stripe Requirements" : "Save Bee Suite Profile"}
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </DialogFooter>
@@ -483,10 +561,10 @@ export function StripeConnectPanel({
               <TableHead>School</TableHead>
               <TableHead>Location ID</TableHead>
               <TableHead>Payout contact</TableHead>
-              <TableHead>Payout account</TableHead>
+              <TableHead>Payout destination</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Requirements</TableHead>
-              <TableHead>Software fee method</TableHead>
+              <TableHead>BEE Suite fee method (not payouts)</TableHead>
               <TableHead className="text-right">Action</TableHead>
             </TableRow>
           </TableHeader>
@@ -498,17 +576,25 @@ export function StripeConnectPanel({
               const centerFields = fields(center.customFields);
               const softwareMethodType = text(centerFields.stripeSoftwarePaymentMethodType);
               const softwareLast4 = text(centerFields.stripeSoftwarePaymentMethodLast4);
+              const hasConfirmedPayoutBank = Boolean(text(centerFields.stripePayoutBankLast4));
               const softwareMethodLabel = softwareMethodType === "us_bank_account"
                 ? `${text(centerFields.stripeSoftwarePaymentMethodBankName) || "Bank account"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
                 : softwareMethodType === "card"
                   ? `${text(centerFields.stripeSoftwarePaymentMethodBrand) || "Card"}${softwareLast4 ? ` •••• ${softwareLast4}` : ""}`
-                  : hasAccount ? "Payout bank preferred · authorization required" : "Add after payout setup";
+                  : hasConfirmedPayoutBank
+                    ? "Separate authorization required for BEE Suite fees"
+                    : hasAccount
+                      ? "Complete payout bank first"
+                      : "Add after payout setup";
               return (
                 <TableRow key={center.id}>
                   <TableCell className="font-medium">{center.name}</TableCell>
                   <TableCell>{center.crmLocationId ?? "Not mapped"}</TableCell>
                   <TableCell>{center.email ?? "Add school email"}</TableCell>
-                  <TableCell>{maskedAccount(center)}</TableCell>
+                  <TableCell className="max-w-48 whitespace-normal">
+                    <div className="text-xs font-medium">{payoutBankLabel(center)}</div>
+                    {hasAccount ? <div className="mt-1 text-[11px] text-muted-foreground">{maskedAccount(center)}</div> : null}
+                  </TableCell>
                   <TableCell><Badge variant={statusVariant(status)}>{status}</Badge></TableCell>
                   <TableCell className="max-w-xs whitespace-normal text-xs text-muted-foreground">
                     {readiness.requirementFields.length
@@ -521,9 +607,9 @@ export function StripeConnectPanel({
                   <TableCell className="max-w-xs whitespace-normal">
                     <div className="text-xs font-medium">{softwareMethodLabel}</div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasAccount} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
+                      <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured || !hasConfirmedPayoutBank} onClick={() => startSoftwarePaymentSetup(center.id, "ach")}>
                         <BadgeDollarSign data-icon="inline-start" />
-                        {softwareMethodType ? "Use bank" : "Authorize bank"}
+                        {softwareMethodType ? "Change fee bank" : hasConfirmedPayoutBank ? "Authorize fee bank" : "Available after payout bank"}
                       </Button>
                       <Button type="button" size="sm" variant="outline" disabled={busyCenterId === center.id || !stripeConfigured} onClick={() => startSoftwarePaymentSetup(center.id, "card")}>
                         <CreditCard data-icon="inline-start" />
@@ -532,7 +618,18 @@ export function StripeConnectPanel({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {hasAccount ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => openPayoutBankSelection(center)}
+                          disabled={busyCenterId === center.id || !stripeConfigured}
+                        >
+                          <Landmark data-icon="inline-start" />
+                          {hasConfirmedPayoutBank ? "Change payout bank" : "Connect payout bank"}
+                        </Button>
+                      ) : null}
                       {hasAccount ? (
                         <Button
                           type="button"
@@ -548,10 +645,11 @@ export function StripeConnectPanel({
                       <Button
                         type="button"
                         size="sm"
+                        variant={hasAccount ? "outline" : "default"}
                         onClick={() => openSetupDialog(center)}
                         disabled={busyCenterId === center.id}
                       >
-                        {hasAccount ? "Continue" : "Set up"}
+                        {hasAccount ? "Requirements" : "Set up"}
                         <ArrowUpRight data-icon="inline-end" />
                       </Button>
                     </div>
@@ -569,7 +667,7 @@ export function StripeConnectPanel({
 
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-primary" />
-          Parent payments are blocked for a school until its payout account exists and the processor reports that payouts are enabled. Account links are single-use and should only be opened from this authenticated Bee Suite screen.
+          Parent payments are blocked until the designated school account has submitted its required details, has no outstanding requirements, and Stripe reports both charges and payouts enabled. Stripe Dashboard links are account-specific and should only be opened from this authenticated Bee Suite screen.
         </div>
         <div className="flex gap-3 rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
           <CreditCard className="mt-0.5 size-5 shrink-0 text-primary" />
@@ -578,7 +676,7 @@ export function StripeConnectPanel({
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. The BEE Suite tuition payments feature fee is school-paid and retained from the school&apos;s tuition payout. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
         {!parentProcessingRecoveryApproved ? (
           <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">

@@ -34,6 +34,11 @@ yarn-error.log*
 # Generated handoff/import/export outputs
 /outputs/
 
+# Local ProCare exports and prepared import packages contain private family data.
+# Keep the source files local; only commit sanitized fixtures and documentation.
+/docs/*[Pp]ro[Cc]are [Ee]xport*/
+/docs/*[Pp]ro[Cc]are [Ii]mport [Pp]repared*/
+
 # Supabase local CLI state
 /supabase/.temp/
 

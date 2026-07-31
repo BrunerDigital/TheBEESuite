@@ -38,7 +38,7 @@ import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } fro
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
-import { getAppBaseUrl } from "@/lib/supabase-auth";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 
 export const runtime = "nodejs";
 
@@ -587,8 +587,8 @@ async function POSTHandler(request: NextRequest) {
     centerName: center.name,
     customerId: stripeCustomerId,
     customerEmail: billingAccount.family.billingEmail,
-    successUrl: `${getAppBaseUrl(request.url)}${successPath}`,
-    cancelUrl: `${getAppBaseUrl(request.url)}${cancelPath}`,
+    successUrl: `${getSecurePaymentAppBaseUrl(request.url)}${successPath}`,
+    cancelUrl: `${getSecurePaymentAppBaseUrl(request.url)}${cancelPath}`,
     metadata: {
       ...metadata,
       paymentId: payment.id,

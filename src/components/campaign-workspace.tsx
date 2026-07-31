@@ -3,7 +3,9 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, BarChart3, CalendarClock, CheckCircle2, CopyCheck, Library, LineChart, Link2, Save, Send } from "lucide-react";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
+import { ArrowRight, BarChart3, CalendarClock, CheckCircle2, CopyCheck, Library, LineChart, Link2, RefreshCw, Save, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,6 +43,13 @@ export type CampaignWorkspaceData = {
     setupStatus: string;
     configured: boolean;
     accountLabel: string;
+    analytics: {
+      spend: number;
+      impressions: number;
+      clicks: number;
+      leads: number;
+      campaignCount: number;
+    };
     lastSyncAt: Date | string | null;
   }>;
   socialConnections: SocialConnection[];
@@ -62,19 +71,8 @@ function textValue(value: unknown) {
   return typeof value === "string" || typeof value === "number" ? String(value) : "";
 }
 
-function formatDate(value: Date | string | null) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Not set"
-    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
-}
-
-function localDateTimeValue(value: Date | string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+function formatDate(value: Date | string | null, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Not set");
 }
 
 function reportMetric(metrics: unknown, key: string) {
@@ -102,6 +100,7 @@ function currency(value: number) {
 }
 
 export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const firstCampaign = data.campaigns[0] ?? null;
   const [selectedId, setSelectedId] = useState(firstCampaign?.id ?? "");
@@ -112,17 +111,26 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
   const [subject, setSubject] = useState(firstCampaign?.subject ?? campaignTemplates[0]?.subject ?? "");
   const [body, setBody] = useState(firstCampaign?.body ?? campaignTemplates[0]?.body ?? "");
   const [status, setStatus] = useState(firstCampaign?.status ?? "draft");
-  const [scheduledAt, setScheduledAt] = useState(localDateTimeValue(firstCampaign?.scheduledAt ?? null));
+  const [scheduledAt, setScheduledAt] = useState(firstCampaign?.scheduledAt ? zonedDateTimeLocalValue(firstCampaign.scheduledAt, timeZone) : "");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
-  const connectedPlatforms = data.marketingConnections.filter((connection) => connection.configured);
-  const campaignTotals = data.campaigns.reduce((totals, campaign) => ({
+  const [adConnections, setAdConnections] = useState(data.marketingConnections);
+  const connectedPlatforms = adConnections.filter((connection) => connection.configured);
+  const savedCampaignTotals = data.campaigns.reduce((totals, campaign) => ({
     spend: totals.spend + numericMetric(campaign.metrics, ["spend", "amountSpent", "cost"]),
     impressions: totals.impressions + numericMetric(campaign.metrics, ["impressions", "views"]),
     clicks: totals.clicks + numericMetric(campaign.metrics, ["clicks", "linkClicks"]),
     leads: totals.leads + numericMetric(campaign.metrics, ["leads", "conversions", "inquiries"]),
   }), { spend: 0, impressions: 0, clicks: 0, leads: 0 });
+  const connectedAdTotals = adConnections.reduce((totals, connection) => ({
+    spend: totals.spend + connection.analytics.spend,
+    impressions: totals.impressions + connection.analytics.impressions,
+    clicks: totals.clicks + connection.analytics.clicks,
+    leads: totals.leads + connection.analytics.leads,
+  }), { spend: 0, impressions: 0, clicks: 0, leads: 0 });
+  const hasSyncedAdData = Object.values(connectedAdTotals).some((value) => value > 0);
+  const campaignTotals = hasSyncedAdData ? connectedAdTotals : savedCampaignTotals;
 
   const selectedCampaign = useMemo(
     () => data.campaigns.find((campaign) => campaign.id === selectedId) ?? null,
@@ -138,7 +146,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
     setSubject(campaign.subject ?? "");
     setBody(campaign.body ?? "");
     setStatus(campaign.status);
-    setScheduledAt(localDateTimeValue(campaign.scheduledAt));
+    setScheduledAt(campaign.scheduledAt ? zonedDateTimeLocalValue(campaign.scheduledAt, timeZone) : "");
     setMessage("");
     setError("");
   }
@@ -171,7 +179,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
         subject,
         body,
         status: nextStatus,
-        scheduledAt: scheduledAt || undefined,
+        scheduledAt: scheduledAt ? zonedDateTimeLocalToUtc(scheduledAt, timeZone)?.toISOString() : undefined,
       }),
     });
     const json = await response.json().catch(() => null) as { error?: string; record?: { id?: string } } | null;
@@ -223,6 +231,48 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
     });
   }
 
+  function syncAdAnalytics(provider: string) {
+    startTransition(async () => {
+      setMessage("");
+      setError("");
+      const response = await fetch("/api/marketing/ad-analytics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        analytics?: {
+          spend: number;
+          impressions: number;
+          clicks: number;
+          leads: number;
+          campaigns?: unknown[];
+          syncedAt?: string;
+        };
+      } | null;
+      if (!response.ok || !json?.analytics) {
+        setError(json?.error || "Advertising analytics could not be synced.");
+        return;
+      }
+      const analytics = json.analytics;
+      setAdConnections((current) => current.map((connection) => connection.provider === provider
+        ? {
+            ...connection,
+            analytics: {
+              spend: analytics.spend,
+              impressions: analytics.impressions,
+              clicks: analytics.clicks,
+              leads: analytics.leads,
+              campaignCount: analytics.campaigns?.length ?? 0,
+            },
+            lastSyncAt: analytics.syncedAt ?? new Date().toISOString(),
+          }
+        : connection));
+      setMessage("Advertising analytics refreshed.");
+    });
+  }
+
   return (
     <div className="space-y-6">
       <section className="overflow-hidden rounded-2xl border bg-card/80 shadow-xl shadow-black/10">
@@ -257,7 +307,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
             <p className="mt-2 text-sm leading-6 text-muted-foreground">No ad account is connected yet. Choose a platform to open its exact configuration in Settings & Setup. Campaign editing and Bee Suite email reporting remain available while you connect external channels.</p>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            {data.marketingConnections.map((connection) => (
+            {adConnections.map((connection) => (
               <Button key={connection.provider} variant="outline" className="h-auto justify-between py-3" render={<Link href={`/billing-settings?view=integrations&provider=${connection.provider}`} />}>
                 <span className="text-left"><span className="block font-medium">{connection.name}</span><span className="block text-xs text-muted-foreground">Configure account</span></span>
                 <ArrowRight className="size-4" />
@@ -268,16 +318,31 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
       ) : null}
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        {data.marketingConnections.map((connection) => (
+        {adConnections.map((connection) => (
           <div key={connection.provider} className="rounded-xl border bg-card/70 p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="font-medium">{connection.name}</div>
               {connection.configured ? <CheckCircle2 className="size-4 text-emerald-500" /> : <Link2 className="size-4 text-muted-foreground" />}
             </div>
             <div className="mt-1 min-h-9 text-xs leading-4 text-muted-foreground">{connection.accountLabel || connection.purpose}</div>
+            {connection.configured ? (
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <div><span className="text-muted-foreground">Spend</span><div className="font-semibold">{currency(connection.analytics.spend)}</div></div>
+                <div><span className="text-muted-foreground">Leads</span><div className="font-semibold">{compactNumber(connection.analytics.leads)}</div></div>
+                <div><span className="text-muted-foreground">Clicks</span><div className="font-semibold">{compactNumber(connection.analytics.clicks)}</div></div>
+                <div><span className="text-muted-foreground">Campaigns</span><div className="font-semibold">{connection.analytics.campaignCount}</div></div>
+              </div>
+            ) : null}
             <div className="mt-3 flex items-center justify-between gap-2">
               <Badge variant={connection.configured ? "default" : "outline"}>{connection.configured ? "Connected" : "Setup needed"}</Badge>
-              <Link className="text-xs font-medium text-primary hover:underline" href={`/billing-settings?view=integrations&provider=${connection.provider}`}>{connection.configured ? "Manage" : "Connect"}</Link>
+              <div className="flex items-center gap-2">
+                {connection.configured ? (
+                  <button type="button" disabled={isPending} onClick={() => syncAdAnalytics(connection.provider)} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50">
+                    <RefreshCw className="size-3" /> Sync
+                  </button>
+                ) : null}
+                <Link className="text-xs font-medium text-primary hover:underline" href={`/billing-settings?view=integrations&provider=${connection.provider}`}>{connection.configured ? "Manage" : "Connect"}</Link>
+              </div>
             </div>
           </div>
         ))}
@@ -432,7 +497,7 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                   Last Delivery
                 </div>
                 <div className="space-y-1 text-muted-foreground">
-                  <div>Sent: {formatDate(selectedCampaign?.sentAt ?? null)}</div>
+                  <div>Sent: {formatDate(selectedCampaign?.sentAt ?? null, timeZone)}</div>
                   <div>Recipients: {reportMetric(selectedCampaign?.metrics, "lastRecipientCount")}</div>
                   <div>Status: {reportMetric(selectedCampaign?.metrics, "lastDeliveryStatus")}</div>
                 </div>
@@ -494,8 +559,8 @@ export function CampaignWorkspace({ data }: { data: CampaignWorkspaceData }) {
                         <div className="text-xs text-muted-foreground">{campaign.brand?.name ?? "Tenant-wide"} · {campaign.type}</div>
                       </TableCell>
                       <TableCell>{textValue(asRecord(campaign.audience).label) || "All eligible"}</TableCell>
-                      <TableCell>{formatDate(campaign.scheduledAt)}</TableCell>
-                      <TableCell>{formatDate(campaign.sentAt)}</TableCell>
+                      <TableCell>{formatDate(campaign.scheduledAt, timeZone)}</TableCell>
+                      <TableCell>{formatDate(campaign.sentAt, timeZone)}</TableCell>
                       <TableCell>{reportMetric(campaign.metrics, "platform") === "None" ? campaign.type : reportMetric(campaign.metrics, "platform")}</TableCell>
                       <TableCell>{currency(numericMetric(campaign.metrics, ["spend", "amountSpent", "cost"]))}</TableCell>
                       <TableCell>

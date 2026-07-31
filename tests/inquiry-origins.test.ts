@@ -22,15 +22,19 @@ test("inquiry origin defaults include live website and Bee Suite domains", () =>
   );
 });
 
-test("configured inquiry origins trim whitespace and trailing slashes", () => {
+test("configured inquiry origins extend trusted defaults and normalize additional origins", () => {
   const env = {
-    INQUIRY_ALLOWED_ORIGINS: " https://kidcityusa.com/ , https://thebeesuite.io/ ",
+    INQUIRY_ALLOWED_ORIGINS: " https://kidcityusa.com/ , https://forms.example.test/ ",
   };
 
   assert.deepEqual(getConfiguredInquiryAllowedOrigins(env), [
     "https://kidcityusa.com",
+    "https://www.kidcityusa.com",
     "https://thebeesuite.io",
+    "https://www.thebeesuite.io",
+    "https://forms.example.test",
   ]);
   assert.equal(isAllowedInquiryOrigin("https://thebeesuite.io", env), true);
+  assert.equal(isAllowedInquiryOrigin("https://forms.example.test", env), true);
   assert.equal(isAllowedInquiryOrigin("https://example.com", env), false);
 });

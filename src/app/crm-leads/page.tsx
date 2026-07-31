@@ -6,6 +6,7 @@ import { CrmWorkspace } from "@/components/crm/crm-workspace";
 import { canViewCrmLeads, getCurrentUser, getLeadScopeWhere, requiresPasswordResetGate } from "@/lib/auth";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { prisma } from "@/lib/prisma";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,12 @@ export default async function CrmLeadsPage({
   return (
     <AppShell currentUser={user}>
       <ConsolidatedWorkspaceNav workspace="enrollment" activeView="leads" />
-      <CrmWorkspace initialLeads={leads} centers={centers} currentUser={user} />
+      <CrmWorkspace
+        initialLeads={leads}
+        centers={centers}
+        appBaseUrl={getAppBaseUrl()}
+        currentUser={user}
+      />
     </AppShell>
   );
 }

@@ -1,5 +1,9 @@
 import { UserRole } from "@prisma/client";
 import { getStripeSecretKey, type IntegrationSendResult } from "@/lib/integrations";
+import {
+  invalidPaymentRedirectUrl,
+  isSecurePaymentUrl,
+} from "@/lib/payment-redirect-security";
 
 export type TerminalStoreCategory = "reader" | "accessory";
 
@@ -199,6 +203,9 @@ export async function createTerminalStoreCheckoutSession({
   if (!apiKey) {
     return { ok: false, configured: false, provider: "stripe", error: "Payment processor is not configured." };
   }
+  if (invalidPaymentRedirectUrl(successUrl, cancelUrl)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment return links must use secure HTTPS URLs." };
+  }
 
   const totals = terminalStoreOrderTotals(items);
   if (!totals.items.length || totals.subtotalCents <= 0) {
@@ -270,6 +277,9 @@ export async function createTerminalStoreCheckoutSession({
       stripeBaseSubtotalCents: totals.stripeBaseSubtotalCents,
       markupCents: totals.markupCents,
     };
+  }
+  if (!isSecurePaymentUrl(json.url)) {
+    return { ok: false, configured: true, provider: "stripe", error: "Payment processor returned an insecure checkout URL." };
   }
 
   return {

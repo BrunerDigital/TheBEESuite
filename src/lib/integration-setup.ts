@@ -1,4 +1,6 @@
 import { credentialPresenceFromKeys, integrationCredentialFields, type IntegrationCredentialField, type IntegrationCredentialPresence } from "@/lib/integration-credentials";
+import { marketingOAuthStatus, type MarketingOAuthStatus } from "@/lib/marketing-oauth";
+import type { MarketingAccountCandidate } from "@/lib/marketing-account-discovery";
 
 export type IntegrationProvider = "supabase" | "sendgrid" | "google_sheets" | "google_calendar" | "openai" | "stripe" | "twilio" | "meta_ads" | "google_ads" | "tiktok_ads" | "linkedin_ads" | "microsoft_ads" | "meta_social" | "linkedin_social" | "google_business" | "tiktok_social" | "pinterest_social" | "x_social";
 
@@ -23,6 +25,28 @@ export const MARKETING_INTEGRATION_PROVIDERS: IntegrationProvider[] = [...AD_INT
 
 export function isMarketingIntegrationProvider(provider: IntegrationProvider) {
   return MARKETING_INTEGRATION_PROVIDERS.includes(provider);
+}
+
+function hasString(config: Record<string, string | boolean>, key: string) {
+  return typeof config[key] === "string" && String(config[key]).trim().length > 0;
+}
+
+export function hasRequiredMarketingAccountConfig(
+  provider: IntegrationProvider,
+  config: Record<string, string | boolean>,
+) {
+  if (!isMarketingIntegrationProvider(provider)) return true;
+  if (provider === "meta_ads" || provider === "linkedin_ads") return hasString(config, "adAccountId");
+  if (provider === "google_ads") return hasString(config, "customerId");
+  if (provider === "tiktok_ads") return hasString(config, "advertiserId");
+  if (provider === "microsoft_ads") return hasString(config, "accountId");
+  if (provider === "meta_social") return hasString(config, "facebookPageId") || hasString(config, "instagramAccountId");
+  if (provider === "linkedin_social") return hasString(config, "organizationId");
+  if (provider === "google_business") return hasString(config, "accountId") && hasString(config, "locationId");
+  if (provider === "tiktok_social") return hasString(config, "openId");
+  if (provider === "pinterest_social") return hasString(config, "boardId");
+  if (provider === "x_social") return hasString(config, "userId");
+  return false;
 }
 
 export type IntegrationDisplayStatus = "Connected" | "Configured" | "Missing" | "Placeholder";
@@ -65,6 +89,8 @@ export type StoredIntegrationSetup = {
   status: string;
   configPlaceholder: unknown;
   lastSyncAt: Date | string | null;
+  centerId?: string | null;
+  scopeKey?: string;
 };
 
 export type IntegrationSetupView = {
@@ -80,6 +106,13 @@ export type IntegrationSetupView = {
   credentialFields: IntegrationCredentialField[];
   credentials: IntegrationCredentialPresence[];
   env: IntegrationRuntimeStatus;
+  oauth: MarketingOAuthStatus & {
+    connected: boolean;
+    expiresAt: string | null;
+    accountSelectionRequired: boolean;
+    discoveryError: string;
+  };
+  availableAccounts: MarketingAccountCandidate[];
   lastSyncAt: Date | string | null;
 };
 
@@ -279,7 +312,7 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     envRequirements: [{ label: "LinkedIn access token", names: ["LINKEDIN_SOCIAL_ACCESS_TOKEN"] }],
     fields: [
       { key: "organizationId", label: "Organization ID", type: "text", placeholder: "Organization ID" },
-      { key: "vanityName", label: "Page vanity name", type: "text", placeholder: "kid-city-usa" },
+      { key: "vanityName", label: "Page vanity name", type: "text", placeholder: "school-brand" },
       { key: "accountLabel", label: "Profile label", type: "text", placeholder: "School LinkedIn Page" },
       { key: "notes", label: "Setup notes", type: "textarea", placeholder: "Community Management approval notes" },
     ],
@@ -595,6 +628,22 @@ export function buildIntegrationSetupViews(
       env,
       providerCredentials.map((credential) => credential.key),
     );
+    const oauthStatus = marketingOAuthStatus(definition.provider, env);
+    const storedRecord = existing?.configPlaceholder && typeof existing.configPlaceholder === "object" && !Array.isArray(existing.configPlaceholder)
+      ? existing.configPlaceholder as Record<string, unknown>
+      : {};
+    const oauthRecord = storedRecord.oauth && typeof storedRecord.oauth === "object" && !Array.isArray(storedRecord.oauth)
+      ? storedRecord.oauth as Record<string, unknown>
+      : {};
+    const availableAccounts = Array.isArray(storedRecord.availableAccounts)
+      ? storedRecord.availableAccounts.flatMap((value) => {
+          const account = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+          const id = typeof account.id === "string" ? account.id : "";
+          const label = typeof account.label === "string" ? account.label : "";
+          const kind = typeof account.kind === "string" ? account.kind : "";
+          return id && label ? [{ id, label, kind }] : [];
+        })
+      : [];
     return {
       id: existing?.id ?? null,
       provider: definition.provider,
@@ -608,6 +657,14 @@ export function buildIntegrationSetupViews(
       credentialFields,
       credentials: credentialPresence,
       env: runtime,
+      oauth: {
+        ...oauthStatus,
+        connected: typeof oauthRecord.connectedAt === "string",
+        expiresAt: typeof oauthRecord.expiresAt === "string" ? oauthRecord.expiresAt : null,
+        accountSelectionRequired: oauthRecord.accountSelectionRequired === true,
+        discoveryError: typeof oauthRecord.discoveryError === "string" ? oauthRecord.discoveryError : "",
+      },
+      availableAccounts,
       lastSyncAt: existing?.lastSyncAt ? new Date(existing.lastSyncAt).toISOString() : null,
     };
   });

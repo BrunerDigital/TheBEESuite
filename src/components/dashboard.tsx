@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowUpRight,
@@ -14,7 +15,13 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
+import {
+  AccountsReceivablePanel,
+  ExecutiveAccountsReceivablePanel,
+} from "@/components/accounts-receivable-panel";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime } from "@/lib/zoned-date-time";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,16 +30,23 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
+import { RegistrationShareCard } from "@/components/registration-share-card";
+import { RefundApprovalQueue, type ExecutiveRefundRequest } from "@/components/refund-approval-queue";
 import { SetupChecklistPanel } from "@/components/setup-checklist-panel";
 import { CollapsibleCard, WorkspaceBoard, type WorkspaceBoardItem } from "@/components/workspace-preferences";
 import type { DashboardAttendanceSnapshot, DashboardAttendanceSnapshotRow } from "@/lib/dashboard-attendance-snapshot";
+import type { AccountsReceivableSnapshot, AccountsReceivableSummary } from "@/lib/accounts-receivable";
 import type { DashboardWidgetId, DashboardWidgetView } from "@/lib/dashboard-widgets";
 import { prioritizeFteFollowUp } from "@/lib/corporate-dashboard";
+import { formatMoneyCents } from "@/lib/staff-compensation";
 import { analytics, centers, classrooms, kpis, leads, messages, notifications, pipelineStages } from "@/lib/demo-data";
 import { directorLaunchChecklistTasks, teacherProfileChecklistTasks, type SetupChecklistKey } from "@/lib/setup-checklists";
+import { formatStaffDecimalHours } from "@/lib/staff-kiosk";
 import { cn } from "@/lib/utils";
 
 const iconMap = [Baby, Users, CalendarCheck, BadgeDollarSign, CheckCircle2, ShieldAlert, MessageSquare, FileWarning];
@@ -78,6 +92,8 @@ export type LiveDashboardData = {
   visibleLenses?: readonly DashboardLens[];
   dashboardWidgets?: DashboardWidgetView[];
   dashboardWidgetRoleLabel?: string;
+  accountsReceivable?: AccountsReceivableSnapshot;
+  executiveAccountsReceivable?: AccountsReceivableSummary;
   inquiryEmbed?: {
     title: string;
     description: string;
@@ -87,6 +103,11 @@ export type LiveDashboardData = {
     title: string;
     description: string;
     embedCode: string;
+  }>;
+  registrationShares?: Array<{
+    centerId: string;
+    schoolLabel: string;
+    registrationUrl: string;
   }>;
   setupChecklists?: Array<{
     key: SetupChecklistKey;
@@ -148,6 +169,35 @@ export type LiveDashboardData = {
       submittedAt: string;
       updatedAt: string;
     }>;
+    payrollSummaries: Array<{
+      id: string;
+      submissionId: string;
+      centerId: string;
+      schoolName: string;
+      periodStart: string;
+      periodEnd: string;
+      employeeCount: number;
+      totalMinutes: number;
+      regularMinutes: number;
+      overtimeMinutes: number;
+      openMinutes: number;
+      estimatedGrossCents: number | null;
+      employeeSummaries: Array<{
+        employeeId: string;
+        employeeName: string;
+        title: string;
+        department: string;
+        payCode: string;
+        totalMinutes: number;
+        regularMinutes: number;
+        overtimeMinutes: number;
+        openMinutes: number;
+        estimatedGrossCents: number | null;
+      }>;
+      submittedBy: string;
+      submittedAt: string;
+    }>;
+    refundRequests: ExecutiveRefundRequest[];
   };
 };
 
@@ -175,11 +225,8 @@ function formatDashboardNumber(value: number | null | undefined) {
   return value === null || value === undefined ? "Not set" : value.toLocaleString();
 }
 
-function formatDashboardDateTime(value: string | null | undefined) {
-  if (!value) return "Not set";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Not set";
-  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+function formatDashboardDateTime(value: string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
 }
 
 function ExecutiveLensDashboard({
@@ -187,12 +234,30 @@ function ExecutiveLensDashboard({
   metrics,
   trendData,
   actionQueue,
+  accountsReceivable,
 }: {
   lens: Exclude<DashboardLens, "director" | "billing" | "teacher" | "parent" | "pickup">;
   metrics: NonNullable<LiveDashboardData["executiveMetrics"]>;
   trendData: typeof analytics;
   actionQueue: DashboardNotification[];
+  accountsReceivable?: AccountsReceivableSummary;
 }) {
+  const timeZone = useSchoolTimeZone();
+  const [payrollSchoolFilter, setPayrollSchoolFilter] = useState("all");
+  const [selectedPayrollSummaryId, setSelectedPayrollSummaryId] = useState<string | null>(null);
+  const {
+    active: payrollPrintActive,
+    generatedAt: payrollPrintGeneratedAt,
+    print: printPayrollReport,
+  } = usePrintableReport();
+  const payrollSchools = [...new Map(metrics.payrollSummaries.map((summary) => [
+    summary.centerId,
+    { centerId: summary.centerId, schoolName: summary.schoolName },
+  ])).values()].sort((left, right) => left.schoolName.localeCompare(right.schoolName));
+  const filteredPayrollSummaries = payrollSchoolFilter === "all"
+    ? metrics.payrollSummaries
+    : metrics.payrollSummaries.filter((summary) => summary.centerId === payrollSchoolFilter);
+  const selectedPayrollSummary = metrics.payrollSummaries.find((summary) => summary.id === selectedPayrollSummaryId) ?? null;
   const sortedByOccupancy = [...metrics.schoolComparisons].sort((left, right) => right.occupancy - left.occupancy).slice(0, 10);
   const sortedByRevenue = [...metrics.schoolComparisons].sort((left, right) => right.revenueDollars - left.revenueDollars).slice(0, 8);
   const sortedByLeads = [...metrics.schoolComparisons].sort((left, right) => right.leads - left.leads).slice(0, 8);
@@ -247,13 +312,62 @@ function ExecutiveLensDashboard({
           </div>
           <div className="rounded-xl border bg-background/50 p-4">
             <div className="text-xs text-muted-foreground">Executive actions</div>
-            <div className="mt-2 text-3xl font-semibold">{actionQueue.length}</div>
+            <div className="mt-2 text-3xl font-semibold">{actionQueue.length + metrics.refundRequests.length}</div>
             <p className="mt-1 text-xs text-muted-foreground">FTE, compliance, enrollment, billing, and parent-response queue</p>
-            <Progress className="mt-3" value={Math.min(actionQueue.length * 12, 100)} />
+            <Progress className="mt-3" value={Math.min((actionQueue.length + metrics.refundRequests.length) * 12, 100)} />
           </div>
         </CollapsibleCard>
       ),
     },
+    {
+      id: "refund-approval-queue",
+      title: "Refund approval queue",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-refund-approval-queue`}
+          className="glass-panel"
+          title="Refund approval queue"
+          description="Review director refund requests. Approval sends the refund; denial leaves the family ledger unchanged. Every decision requires a reason."
+        >
+          <RefundApprovalQueue requests={metrics.refundRequests} />
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "executive-all-location-records",
+      title: "All-location records",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-all-location-records`}
+          className="glass-panel"
+          title="All-location records"
+          description="Open tenant-wide operational records for every school available to executive users."
+          contentClassName="flex flex-wrap gap-2"
+        >
+          <Button variant="outline" nativeButton={false} render={<Link href="/billing-invoices" />}>Accounts and ledgers</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/family-detail" />}>Families and children</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/classroom-dashboard" />}>Classrooms</Button>
+          <Button variant="outline" nativeButton={false} render={<Link href="/staff" />}>Teachers and staff</Button>
+        </CollapsibleCard>
+      ),
+    },
+    ...(accountsReceivable ? [{
+      id: "executive-account-balances",
+      title: "Accounts receivable by school",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-executive-account-balances`}
+          className="glass-panel"
+          title="Accounts receivable by school"
+          description="Family balances across every school visible to this executive login."
+        >
+          <ExecutiveAccountsReceivablePanel summary={accountsReceivable} />
+        </CollapsibleCard>
+      ),
+    } satisfies WorkspaceBoardItem] : []),
     {
       id: "weekly-fte-progress",
       title: "Weekly FTE progress",
@@ -391,7 +505,7 @@ function ExecutiveLensDashboard({
                         </TableCell>
                         <TableCell>
                           <div className="text-sm">{submission.submittedBy}</div>
-                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(submission.updatedAt)}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(submission.updatedAt, timeZone)}</div>
                         </TableCell>
                       </TableRow>
                     );
@@ -401,6 +515,91 @@ function ExecutiveLensDashboard({
             </div>
           ) : (
             <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No school FTE submissions are visible yet.</p>
+          )}
+        </CollapsibleCard>
+      ),
+    },
+    {
+      id: "payroll-summary-submissions",
+      title: "Payroll summaries",
+      className: "xl:col-span-2 2xl:col-span-3",
+      children: (
+        <CollapsibleCard
+          id={`dashboard-${lens}-payroll-summary-submissions`}
+          className="glass-panel"
+          title="Payroll summaries"
+          description="Payroll summaries sent by directors for executive review, including totals for each employee."
+        >
+          {metrics.payrollSummaries.length ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="w-full max-w-sm space-y-1">
+                  <div className="text-xs font-medium uppercase text-muted-foreground">School</div>
+                  <Select value={payrollSchoolFilter} onValueChange={(value) => value && setPayrollSchoolFilter(value)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All visible schools</SelectItem>
+                      {payrollSchools.map((school) => (
+                        <SelectItem key={school.centerId} value={school.centerId}>{compactSchoolName(school.schoolName)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  {filteredPayrollSummaries.length} submitted report{filteredPayrollSummaries.length === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="max-h-[30rem] overflow-auto rounded-xl border bg-background/40">
+              <Table>
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead>School</TableHead>
+                    <TableHead>Pay period</TableHead>
+                    <TableHead className="text-right">Employees</TableHead>
+                    <TableHead className="text-right">Regular / OT</TableHead>
+                    <TableHead className="text-right">Total / open</TableHead>
+                    <TableHead className="text-right">Est. gross</TableHead>
+                    <TableHead>Submitted</TableHead>
+                    <TableHead className="text-right">Report</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredPayrollSummaries.map((summary) => (
+                      <TableRow key={summary.id}>
+                        <TableCell className="font-medium">{compactSchoolName(summary.schoolName)}</TableCell>
+                        <TableCell>{summary.periodStart} to {summary.periodEnd}</TableCell>
+                        <TableCell className="text-right">{summary.employeeCount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">
+                          {formatStaffDecimalHours(summary.regularMinutes)} / {formatStaffDecimalHours(summary.overtimeMinutes)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatStaffDecimalHours(summary.totalMinutes)} / {formatStaffDecimalHours(summary.openMinutes)}
+                        </TableCell>
+                        <TableCell className="text-right">{formatMoneyCents(summary.estimatedGrossCents)}</TableCell>
+                        <TableCell>
+                          <div>{summary.submittedBy}</div>
+                          <div className="text-xs text-muted-foreground">{formatDashboardDateTime(summary.submittedAt, timeZone)}</div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setSelectedPayrollSummaryId(summary.id)}>
+                            Open report
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                  ))}
+                  {!filteredPayrollSummaries.length ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-6 text-center text-muted-foreground">
+                        No payroll reports have been submitted for this school.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+              </div>
+            </div>
+          ) : (
+            <p className="rounded-xl border bg-background/40 p-4 text-sm text-muted-foreground">No payroll summaries have been sent yet.</p>
           )}
         </CollapsibleCard>
       ),
@@ -512,7 +711,132 @@ function ExecutiveLensDashboard({
   ];
 
   return (
-    <WorkspaceBoard storageId={`dashboard-${lens}-executive`} className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3" items={executiveItems} />
+    <>
+      <ReportPrintStyles />
+      <WorkspaceBoard storageId={`dashboard-${lens}-executive`} className="grid gap-6 xl:grid-cols-2 2xl:grid-cols-3" items={executiveItems} />
+      <Dialog open={Boolean(selectedPayrollSummary)} onOpenChange={(open) => {
+        if (!open) setSelectedPayrollSummaryId(null);
+      }}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Payroll report</DialogTitle>
+            <DialogDescription>
+              {selectedPayrollSummary
+                ? `${compactSchoolName(selectedPayrollSummary.schoolName)} · ${selectedPayrollSummary.periodStart} to ${selectedPayrollSummary.periodEnd}`
+                : "Submitted payroll report"}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPayrollSummary ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/20 p-3 text-sm">
+                <div>
+                  <div className="font-medium">{selectedPayrollSummary.employeeCount} employees · {formatStaffDecimalHours(selectedPayrollSummary.totalMinutes)} total hours</div>
+                  <div className="text-muted-foreground">Submitted by {selectedPayrollSummary.submittedBy} on {formatDashboardDateTime(selectedPayrollSummary.submittedAt, timeZone)}</div>
+                </div>
+                <Button type="button" variant="outline" onClick={printPayrollReport}>
+                  <Printer data-icon="inline-start" />
+                  Print report
+                </Button>
+              </div>
+              {selectedPayrollSummary.employeeSummaries.length ? (
+                <div className="overflow-x-auto rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Department / pay code</TableHead>
+                      <TableHead className="text-right">Regular</TableHead>
+                      <TableHead className="text-right">OT</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Open</TableHead>
+                      <TableHead className="text-right">Est. gross</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedPayrollSummary.employeeSummaries.map((employee) => (
+                      <TableRow key={employee.employeeId}>
+                        <TableCell>
+                          <div className="font-medium">{employee.employeeName}</div>
+                          <div className="text-xs text-muted-foreground">{employee.title}</div>
+                        </TableCell>
+                        <TableCell>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.regularMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.overtimeMinutes)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatStaffDecimalHours(employee.totalMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatStaffDecimalHours(employee.openMinutes)}</TableCell>
+                        <TableCell className="text-right">{formatMoneyCents(employee.estimatedGrossCents)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                  <div className="font-semibold">This is an older total-only submission.</div>
+                  <p className="mt-1">
+                    Employee details were not stored when this report was submitted. The school must send this payroll summary again to create the full employee list.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+      <PrintableReport active={payrollPrintActive && Boolean(selectedPayrollSummary)} label="Printable payroll report">
+        {selectedPayrollSummary ? (
+          <>
+            <header>
+              <h1>Payroll Report</h1>
+              <p>{selectedPayrollSummary.schoolName}</p>
+              <p>Pay period: {selectedPayrollSummary.periodStart} to {selectedPayrollSummary.periodEnd}</p>
+              <p>Submitted by {selectedPayrollSummary.submittedBy}: {formatPrintDateTime(selectedPayrollSummary.submittedAt, timeZone)}</p>
+              <p>Printed: {formatPrintDateTime(payrollPrintGeneratedAt, timeZone)}</p>
+            </header>
+            <h2>Employee payroll summary</h2>
+            {selectedPayrollSummary.employeeSummaries.length ? (
+              <table>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Department / pay code</th>
+                  <th>Regular</th>
+                  <th>OT</th>
+                  <th>Total</th>
+                  <th>Open</th>
+                  <th>Estimated gross</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPayrollSummary.employeeSummaries.map((employee) => (
+                  <tr key={employee.employeeId}>
+                    <td>{employee.employeeName}{employee.title ? ` · ${employee.title}` : ""}</td>
+                    <td>{[employee.department, employee.payCode].filter(Boolean).join(" · ")}</td>
+                    <td>{formatStaffDecimalHours(employee.regularMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.overtimeMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.totalMinutes)}</td>
+                    <td>{formatStaffDecimalHours(employee.openMinutes)}</td>
+                    <td>{formatMoneyCents(employee.estimatedGrossCents)}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <th colSpan={2}>School total</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.regularMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.overtimeMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.totalMinutes)}</th>
+                  <th>{formatStaffDecimalHours(selectedPayrollSummary.openMinutes)}</th>
+                  <th>{formatMoneyCents(selectedPayrollSummary.estimatedGrossCents)}</th>
+                </tr>
+              </tbody>
+              </table>
+            ) : (
+              <p>
+                Employee details are unavailable for this older total-only submission. Resend the payroll summary from the school workspace to create the full employee list.
+              </p>
+            )}
+          </>
+        ) : null}
+      </PrintableReport>
+    </>
   );
 }
 
@@ -659,6 +983,7 @@ function AttendanceSnapshotCard({
 }
 
 export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
+  const timeZone = useSchoolTimeZone();
   const dashboardKpis = live?.kpis ?? kpis;
   const dashboardPipeline = live?.pipelineStages ?? pipelineStages;
   const dashboardCenters = live?.centers ?? centers;
@@ -708,7 +1033,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
       ? classrooms
       : [];
   const attendanceSnapshot = live?.attendanceSnapshot ?? (showDemoFallbackData ? {
-    scopeLabel: "Demo school",
+    scopeLabel: "All classes at Kid City USA - Little Harbor",
     total: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
     present: classroomSnapshots.reduce((sum, room) => sum + Number(room.present), 0),
     checkedOut: 0,
@@ -717,7 +1042,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     rows: classroomSnapshots.map((room) => ({
       classroomId: String(room.name),
       classroomName: String(room.name),
-      centerName: "Kid City USA - Demo",
+      centerName: "Kid City USA - Little Harbor",
       total: Number(room.present),
       present: Number(room.present),
       checkedOut: 0,
@@ -730,8 +1055,6 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : showDemoFallbackData
       ? messages
       : [];
-  const isClassroomDemo = showDemoFallbackData && !live?.classroomSnapshots?.length;
-  const isParentMessageDemo = showDemoFallbackData && !live?.parentMessages?.length;
   const aiSummary = live?.aiSummary ??
     "Your visible centers are operating inside configured workflow targets. Prioritize high-fit inquiries, review open tasks, and confirm sensitive actions before sending messages or changing records.";
   const aiHighlights = live?.aiHighlights?.length
@@ -739,7 +1062,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : showDemoFallbackData
       ? ["4 high-fit leads", "8 expiring docs", "2 open seats"]
       : [];
-  const asOfLabel = live?.asOfLabel ?? "Demo workspace";
+  const asOfLabel = live?.asOfLabel ?? "Current workspace";
   const maxRevenue = Math.max(...dashboardAnalytics.map((point) => point.revenue), 1);
   const maxFunnelCount = Math.max(...dashboardAnalytics.flatMap((point) => [point.leads, point.tours, point.enrolled]), 1);
   const openSeatsByAgeGroup = Array.from(
@@ -759,6 +1082,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
     : live?.inquiryEmbed
       ? [live.inquiryEmbed]
       : [];
+  const registrationShares = live?.registrationShares ?? [];
   const setupChecklists = live?.setupChecklists ?? [];
   const barHeight = (value: number, max: number) => `${value ? Math.max((value / max) * 100, 6) : 0}%`;
   const kpiValue = (label: string, fallback = "0") => dashboardKpis.find((kpi) => kpi.label === label)?.value ?? fallback;
@@ -767,6 +1091,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const showEnrollment = isWidgetVisible("enrollmentPipeline");
   const showClassroomCapacity = isWidgetVisible("classroomCapacity");
   const showFamilyCommunication = isWidgetVisible("familyCommunication");
+  const showAccountsReceivable = isWidgetVisible("billingRevenue")
+    && Boolean(live?.accountsReceivable || live?.executiveAccountsReceivable);
   const showExecutiveRollup = isWidgetVisible("executiveRollup");
   const isTeacherDashboard = visibleLenses.length === 1 && visibleLenses.includes("teacher");
   const isBillingDashboard = visibleLenses.length === 1 && visibleLenses.includes("billing");
@@ -876,7 +1202,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           <h1>The BEE Suite Dashboard Snapshot</h1>
           <p>Scope: {dashboardPrintScope}</p>
           <p>As of: {asOfLabel}</p>
-          <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+          <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
         </header>
         <h2>KPI Summary</h2>
         <table>
@@ -988,7 +1314,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                     <td>{formatDashboardNumber(submission.newStarts)}</td>
                     <td>{formatDashboardNumber(submission.withdrawals)}</td>
                     <td>{submission.status}</td>
-                    <td>{formatDashboardDateTime(submission.updatedAt)}</td>
+                    <td>{formatDashboardDateTime(submission.updatedAt, timeZone)}</td>
                   </tr>
                 ))}
                 {!live.executiveMetrics.fteSubmissions.length ? <tr><td colSpan={10}>No FTE submissions are visible.</td></tr> : null}
@@ -1217,6 +1543,25 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
         aiSummary={aiSummary}
       />
 
+      {registrationShares.length && isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
+        <section className="grid gap-4" aria-labelledby="registration-sharing-heading">
+          <div>
+            <h2 id="registration-sharing-heading" className="text-xl font-semibold">Registration and enrollment forms</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Send or copy a school-specific registration packet. These links do not use the inquiry form&apos;s location picker.
+            </p>
+          </div>
+          {registrationShares.map((share) => (
+            <RegistrationShareCard
+              key={share.centerId}
+              centerId={share.centerId}
+              schoolLabel={share.schoolLabel}
+              registrationUrl={share.registrationUrl}
+            />
+          ))}
+        </section>
+      ) : null}
+
       {inquiryEmbeds.length && isAnyWidgetVisible(["enrollmentPipeline", "toursAndTasks"]) ? (
         <div className="grid gap-4">
           {inquiryEmbeds.map((embed) => (
@@ -1288,6 +1633,27 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         </CollapsibleCard>
                       ),
                     } satisfies WorkspaceBoardItem] : []),
+                    ...(showAccountsReceivable && (live?.accountsReceivable || live?.executiveAccountsReceivable) ? [{
+                      id: "school-account-balances",
+                      title: live.accountsReceivable ? "School account balances" : "Accounts receivable by school",
+                      className: "xl:col-span-2",
+                      children: (
+                        <CollapsibleCard
+                          id="dashboard-director-account-balances"
+                          className="glass-panel"
+                          title={live.accountsReceivable ? "School account balances" : "Accounts receivable by school"}
+                          description={live.accountsReceivable
+                            ? "Every family account, with balances owed listed first"
+                            : "Family balances across every school visible to this executive login"}
+                        >
+                          {live.accountsReceivable ? (
+                            <AccountsReceivablePanel snapshot={live.accountsReceivable} />
+                          ) : live.executiveAccountsReceivable ? (
+                            <ExecutiveAccountsReceivablePanel summary={live.executiveAccountsReceivable} />
+                          ) : null}
+                        </CollapsibleCard>
+                      ),
+                    } satisfies WorkspaceBoardItem] : []),
                     ...(isAnyWidgetVisible(["classroomCapacity", "staffingRatios"]) ? [{
                       id: "capacity-by-classroom",
                       title: "Capacity by classroom",
@@ -1297,7 +1663,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           className="glass-panel"
                           contentClassName="flex flex-col gap-4"
                           title="Capacity by classroom"
-                          description={isClassroomDemo ? "Demo account preview; no live classrooms are populated yet" : "Open seats and ratio pulse"}
+                          description="Open seats and ratio pulse"
                         >
                           {classroomSnapshots.slice(0, 6).map((room) => (
                             <div key={room.name} className="flex flex-col gap-2">
@@ -1465,11 +1831,11 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                         className="glass-panel"
                         contentClassName="flex flex-col gap-4"
                         title="Parent messages"
-                        description={isParentMessageDemo ? "Demo account preview; no live parent conversations are populated yet" : "Unread and priority conversations"}
+                        description="Unread and priority conversations"
                       >
-                        {parentMessages.map((message) => (
+                        {parentMessages.map((message, index) => (
                           <Link
-                            key={message.subject}
+                            key={`${message.from}-${message.subject}-${index}`}
                             href={withQueryParam("/messages", "q", message.from)}
                             className="group flex gap-3 rounded-lg p-1 transition hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label={`Open message from ${message.from}`}
@@ -1514,10 +1880,28 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   metrics={executiveMetrics}
                   trendData={dashboardAnalytics}
                   actionQueue={actionQueue}
+                  accountsReceivable={live?.executiveAccountsReceivable}
                 />
               ),
             } satisfies WorkspaceBoardItem] : []),
-            ...(!isExecutiveLens ? visibleConfiguredWidgets.map((widget) => {
+            ...(!isExecutiveLens && tab === "billing" && showAccountsReceivable && live?.accountsReceivable ? [{
+              id: "billing-school-account-balances",
+              title: "School account balances",
+              className: "md:col-span-3",
+              children: (
+                <CollapsibleCard
+                  id="dashboard-billing-account-balances"
+                  className="glass-panel"
+                  title="School account balances"
+                  description="Every family account, with balances owed listed first"
+                >
+                  <AccountsReceivablePanel snapshot={live.accountsReceivable} />
+                </CollapsibleCard>
+              ),
+            } satisfies WorkspaceBoardItem] : []),
+            ...(!isExecutiveLens ? visibleConfiguredWidgets
+              .filter((widget) => !(tab === "billing" && showAccountsReceivable && widget.id === "billingRevenue"))
+              .map((widget) => {
               const summary = widgetSummaries[widget.id];
               return {
                 id: `${tab}-widget-${widget.id}`,

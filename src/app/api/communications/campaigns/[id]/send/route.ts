@@ -56,6 +56,10 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
   if (campaign.tenantId !== user.tenantId && campaign.brand?.tenantId !== user.tenantId) {
     return NextResponse.json({ ok: false, error: "You do not have access to this campaign." }, { status: 403 });
   }
+  const campaignCenterId = clean(asRecord(campaign.audience).centerId);
+  if (!canAccessAllCenters(user) && (!campaignCenterId || !user.centerIds.includes(campaignCenterId))) {
+    return NextResponse.json({ ok: false, error: "Campaign not found for this school." }, { status: 404 });
+  }
   if (campaign.type && !["email", "newsletter", "nurture", "review_request", "survey"].includes(campaign.type.toLowerCase())) {
     return NextResponse.json({ ok: false, error: "Only email-style campaigns can be sent through SendGrid." }, { status: 400 });
   }
@@ -86,7 +90,14 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
         tenantId: user.tenantId,
         subject: draft.subject,
         body: draft.body,
-        ...(draft.audience ? { audience: draft.audience as Prisma.InputJsonObject } : {}),
+        ...(draft.audience || campaignCenterId
+          ? {
+              audience: {
+                ...(draft.audience ?? {}),
+                ...(campaignCenterId ? { centerId: campaignCenterId } : {}),
+              } as Prisma.InputJsonObject,
+            }
+          : {}),
         status: "scheduled",
         scheduledAt: draft.scheduledAt,
         metrics,

@@ -82,6 +82,7 @@ type Props = {
   centers: CenterOption[];
   ownerGroups: OwnerGroupOption[];
   users: UserOption[];
+  brandName: string;
 };
 
 type ExecutiveActionResponse = {
@@ -179,7 +180,7 @@ function statusLabel(status: string) {
   return status.replaceAll("_", " ");
 }
 
-export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
+export function ExecutiveAdminConsole({ centers, ownerGroups, users, brandName }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
@@ -726,7 +727,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 School Lifecycle
               </CardTitle>
               <CardDescription>
-                {activeSchools.length} active school{activeSchools.length === 1 ? "" : "s"} are available to dashboards, CRM routing, and the Kid City USA inquiry dropdown. Archived schools stay visible here for recovery.
+                {activeSchools.length} active school{activeSchools.length === 1 ? "" : "s"} are available to dashboards and CRM routing for {brandName}. Archived schools stay visible here for recovery.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -922,7 +923,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="space-y-1">
                   <Label>School name</Label>
-                  <Input value={centerForm.name} onChange={(event) => setCenterField("name", event.target.value)} placeholder="Kid City USA - New Location" />
+                  <Input value={centerForm.name} onChange={(event) => setCenterField("name", event.target.value)} placeholder={`${brandName} - New Location`} />
                 </div>
                 <div className="space-y-1">
                   <Label>Location ID</Label>
@@ -933,7 +934,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                 </div>
                 <div className="space-y-1">
                   <Label>Routing email</Label>
-                  <Input value={centerForm.email} onChange={(event) => setCenterField("email", event.target.value)} placeholder="school@kidcityusa.com" type="email" />
+                  <Input value={centerForm.email} onChange={(event) => setCenterField("email", event.target.value)} placeholder="school@example.com" type="email" />
                 </div>
                 <div className="space-y-1">
                   <Label>Phone</Label>
@@ -1054,7 +1055,7 @@ export function ExecutiveAdminConsole({ centers, ownerGroups, users }: Props) {
                   <Select value={userForm.accessScopeType} onValueChange={(value) => setUserField("accessScopeType", value ?? userForm.accessScopeType)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="TENANT">All Kid City USA locations</SelectItem>
+                      <SelectItem value="TENANT">All {brandName} locations</SelectItem>
                       <SelectItem value="OWNER_GROUP">Owner group</SelectItem>
                       <SelectItem value="CENTER">Single location</SelectItem>
                     </SelectContent>

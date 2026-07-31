@@ -1,12 +1,22 @@
 # Teacher SOP - The BEE Suite
 
-Last updated: June 26, 2026
+Last updated: July 29, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 
 ## Visual Overview
 
-![Teacher mobile workflow](../../screenshots/teacher-mobile.png)
+![Teacher classroom device guide](../../public/brand/the-bee-suite/sop-graphics/current/teacher-classroom-device-guide.png)
+
+## Device Screenshots
+
+Use the iPad view for classroom work and the desktop view for office or planning work.
+
+![Teacher classroom roster on iPad](../../public/brand/the-bee-suite/screenshots/current/teacher-ipad-roster-light.png)
+
+![Teacher daily report workflow on iPad](../../public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png)
+
+![Teacher classroom roster on desktop](../../public/brand/the-bee-suite/screenshots/current/teacher-desktop-roster-light.png)
 
 Use `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` for staff kiosk clock-in/out details.
 
@@ -19,12 +29,12 @@ This SOP explains what teachers should do in The BEE Suite each day and when the
 Have these ready:
 
 - Your BEE Suite username or work email.
-- Your temporary password, if the director gave you one.
+- Your school-issued first-login password, if the director gave you one.
 - Your 4 digit staff kiosk code, if your school uses staff clock-in/out.
 - Your assigned classroom name.
 - Your scheduled shift.
 
-Generated teacher logins commonly use `BusyBees` as the temporary password unless the director tells you otherwise.
+Use only the first-login password issued directly by the school. Change it when the sign-in flow requires it, and never share it with another staff member.
 
 ## Login
 
@@ -56,6 +66,7 @@ Attendance must match the child's real classroom status.
 3. Mark the correct status: present, absent, sick, vacation, checked in, or checked out.
 4. Save the update.
 5. Confirm the child card or attendance list reflects the change.
+6. Read displayed times in the school's local timezone and report any time that appears shifted or grouped under the wrong school day.
 
 Stop and ask a director before changing attendance for a child who is not assigned to your classroom.
 
@@ -68,7 +79,8 @@ Daily reports should be accurate, timely, and parent-ready.
 3. Use individual child reports for child-specific information.
 4. Use group actions only when the same entry truly applies to the selected children.
 5. Review spelling, tone, and sensitive details before saving or sending.
-6. Confirm whether the report is parent-facing before submitting.
+6. Watch the visible saved/unsaved state and confirm the entry saved before changing children or leaving the page.
+7. Confirm whether the report is parent-facing before submitting.
 
 Do not include another child's name or private information in a parent-facing report.
 
@@ -113,7 +125,8 @@ If the tablet loses connection, The BEE Suite may queue actions.
 2. Do not repeat the same action multiple times.
 3. Keep the tablet open until connection returns.
 4. Use sync or retry if the app provides that option.
-5. Tell the director if queued actions do not sync.
+5. Wait for the queue to confirm the action synced; repeated taps can create conflicting attempts even when the server rejects duplicates.
+6. Tell the director if queued actions do not sync.
 
 ## End-Of-Shift Checklist
 

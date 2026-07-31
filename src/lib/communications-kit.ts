@@ -24,7 +24,7 @@ export const communicationsKitTemplates: CommunicationsTemplate[] = [
   { id: "kit-teacher-invite", name: "Teacher invitation and daily workflow", audience: "teachers", category: "staff", subject: "Your {{center.name}} teacher dashboard", body: "Hi {{sender.name}},\n\nYour teacher dashboard is ready. Sign in through https://thebeesuite.io/teachers. Start each day by reviewing the assigned classroom and attendance. During the day, record care activities and approved media. Before checkout, complete each child’s daily report and escalate incidents, medication, custody, or safety concerns to a director.\n\nNever share login credentials or use another staff member’s account.", mergeFields: ["sender.name", "center.name"] },
   { id: "kit-fte-weekly", name: "Weekly FTE review and submission", audience: "schools", category: "fte_reports", subject: "Weekly FTE review is ready for {{center.name}}", body: "Hello {{sender.name}},\n\nBefore submitting this week’s FTE report, reconcile active enrollment, full-time and part-time schedules, age-group totals, attendance exceptions, licensed capacity, occupancy, billing totals, accounts receivable, new starts, and withdrawals. Resolve any variance shown on the form.\n\nSubmit only after director review. Approved reports require the executive correction workflow.\n\nOpen FTE Reports: https://thebeesuite.io/fte-reports", mergeFields: ["sender.name", "center.name"] },
   { id: "kit-school-billing", name: "School billing close procedure", audience: "schools", category: "billing", subject: "Billing close checklist for {{center.name}}", body: "Hello {{sender.name}},\n\nFor the weekly billing close: review draft and open invoices; confirm tuition and fee line items; reconcile successful, pending, failed, refunded, and agency payments; review credits and family balances; document approved adjustments; and follow up on modest outstanding balances using the school’s policy.\n\nDo not mark an invoice paid until the payment is confirmed. Keep subsidy and parent-responsibility balances clearly separated.", mergeFields: ["sender.name", "center.name"] },
-  { id: "kit-executive-review", name: "Executive multi-location review", audience: "executives", category: "reporting", subject: "Kid City USA weekly operating review", body: "Hello {{sender.name}},\n\nReview the multi-location dashboard for enrollment and occupancy, FTE submission status, attendance exceptions, staffing and ratios, billing collections and AR, compliance tasks, incidents awaiting review, document expirations, and open CRM follow-up.\n\nUse executive correction and approval workflows for audited changes. Export reports only when needed and handle child, family, staff, and billing data according to role and retention requirements.", mergeFields: ["sender.name"] },
+  { id: "kit-executive-review", name: "Executive multi-location review", audience: "executives", category: "reporting", subject: "Weekly operating review", body: "Hello {{sender.name}},\n\nReview the multi-location dashboard for enrollment and occupancy, FTE submission status, attendance exceptions, staffing and ratios, billing collections and AR, compliance tasks, incidents awaiting review, document expirations, and open CRM follow-up.\n\nUse executive correction and approval workflows for audited changes. Export reports only when needed and handle child, family, staff, and billing data according to role and retention requirements.", mergeFields: ["sender.name"] },
 ];
 
 export const processFaqs = [
@@ -49,15 +49,15 @@ export const processFaqs = [
 ] as const;
 
 const guideByCategory: Record<string, string> = {
-  onboarding: "/brand/the-bee-suite/explainers/bee-suite-parent-dashboard-guide-2026-06-25.png",
-  enrollment: "/brand/the-bee-suite/explainers/BEE_SUITE_EXPLAINER_02-inquiry-to-enrolled-family_2026-06-08.png",
+  onboarding: "/brand/the-bee-suite/explainers/current/parent-access-install.png",
+  enrollment: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
   billing: "/brand/the-bee-suite/usage/bee-suite-director-operations.png",
   attendance: "/brand/the-bee-suite/usage/bee-suite-lobby-check-in.png",
   classroom: "/brand/the-bee-suite/usage/bee-suite-classroom-daily-updates.png",
-  staff: "/brand/the-bee-suite/explainers/kid-city-teacher-profile-setup-roadmap.svg",
-  school_setup: "/brand/the-bee-suite/explainers/bee-suite-school-launch-swimlane-2026-07-01.svg",
-  fte_reports: "/brand/the-bee-suite/explainers/bee-suite-director-dashboard-guide-2026-06-25.png",
-  reporting: "/brand/the-bee-suite/explainers/bee-suite-getting-started-platform-map-2026-07-01.svg",
+  staff: "/brand/the-bee-suite/explainers/current/teacher-daily-flow.png",
+  school_setup: "/brand/the-bee-suite/explainers/current/school-launch-gates.png",
+  fte_reports: "/brand/the-bee-suite/explainers/current/fte-reporting-flow.png",
+  reporting: "/brand/the-bee-suite/explainers/current/director-daily-flow.png",
 };
 
 function escapeHtml(value: string) {

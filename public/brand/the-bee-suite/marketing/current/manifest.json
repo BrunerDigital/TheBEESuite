@@ -1,0 +1,775 @@
+{
+  "title": "The BEE Suite Social and Paid Creative Pack",
+  "createdAt": "2026-07-29",
+  "releaseVersion": "current",
+  "strategy": "Warm Command Center with current product proof",
+  "landingPage": "https://thebeesuite.io",
+  "concepts": [
+    {
+      "id": "one-suite-school-day",
+      "audience": "Childcare owners, operators, and center directors",
+      "goal": "Broad awareness and qualified workspace requests",
+      "copy": {
+        "eyebrow": "BUILT FOR REAL SCHOOL DAYS",
+        "headline": "One suite for the whole school day.",
+        "body": "Connect directors, classrooms, families, billing readiness, and reporting in one role-safe workspace.",
+        "cta": "See The BEE Suite",
+        "organicCaption": "Childcare teams should not have to rebuild the school day across disconnected tabs. The BEE Suite connects director operations, classroom work, parent updates, billing readiness, and reporting in one role-safe workspace.",
+        "paidPrimary": "Bring the school day into one connected operating workspace built for childcare owners, directors, teachers, and families.",
+        "paidHeadline": "One suite for the whole school day",
+        "paidDescription": "Childcare CRM and operations built around real roles and real school workflows.",
+        "hashtags": [
+          "#ChildcareOperations",
+          "#ChildcareCRM",
+          "#EarlyEducation",
+          "#SchoolLeadership"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Bring the school day into one connected operating workspace built for childcare owners, directors, teachers, and families.",
+            "headline": "One suite for the whole school day",
+            "description": "Childcare CRM and operations built around real roles and real school workflows."
+          },
+          "linkedin": {
+            "introText": "Bring the school day into one connected operating workspace built for childcare owners, directors, teachers, and families.",
+            "headline": "One suite for the whole school day"
+          },
+          "tiktok": {
+            "hook": "One suite for the whole school day.",
+            "caption": "Childcare CRM and operations built around real roles and real school workflows. #ChildcareOperations #ChildcareCRM #EarlyEducation"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "One Suite for Childcare",
+              "Connect the Whole School Day",
+              "Childcare Operations, Clear",
+              "One Workspace for Every Role",
+              "See The BEE Suite"
+            ],
+            "longHeadline": "Connect the whole childcare day in one role-safe operating workspace",
+            "descriptions": [
+              "Connect directors, classrooms, families, billing readiness, and reporting.",
+              "Give every role a clear workspace built around the real childcare day.",
+              "Bring school operations and family workflows into one connected suite.",
+              "Explore childcare CRM and operations designed around real school roles."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png",
+          "deviceOrType": "DIRECTOR DESKTOP"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png",
+          "deviceOrType": "TEACHER IPAD"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png",
+          "deviceOrType": "PARENT IPHONE"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-dashboard-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "one-suite-school-day--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "one-suite-school-day--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "one-suite-school-day--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "one-suite-school-day--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "one-suite-school-day--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "one-suite-school-day--google-landscape-clean.png"
+        }
+      ]
+    },
+    {
+      "id": "parents-informed-teachers-focused",
+      "audience": "Center directors, education leaders, and school operators",
+      "goal": "Feature awareness and teacher-parent workflow interest",
+      "copy": {
+        "eyebrow": "CLASSROOM TO FAMILY",
+        "headline": "Parents stay informed. Teachers stay focused.",
+        "body": "Daily reports and classroom updates move through one clear, school-approved family workflow.",
+        "cta": "See the daily flow",
+        "organicCaption": "The daily report should support the classroom—not interrupt it. Teachers record the day on iPad, and families review clear updates from the same school-approved portal.",
+        "paidPrimary": "Give teachers a practical classroom workflow and families a clearer place to review daily updates.",
+        "paidHeadline": "Parents informed. Teachers focused.",
+        "paidDescription": "Connect classroom documentation with the family portal.",
+        "hashtags": [
+          "#ChildcareTeachers",
+          "#ParentCommunication",
+          "#PreschoolLeadership",
+          "#EdTech"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Give teachers a practical classroom workflow and families a clearer place to review daily updates.",
+            "headline": "Parents informed. Teachers focused.",
+            "description": "Connect classroom documentation with the family portal."
+          },
+          "linkedin": {
+            "introText": "Give teachers a practical classroom workflow and families a clearer place to review daily updates.",
+            "headline": "Parents informed. Teachers focused."
+          },
+          "tiktok": {
+            "hook": "Parents stay informed. Teachers stay focused.",
+            "caption": "Connect classroom documentation with the family portal. #ChildcareTeachers #ParentCommunication #PreschoolLeadership"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "Keep Families Informed",
+              "Help Teachers Stay Focused",
+              "A Clearer Daily Report",
+              "Connect Classroom to Family",
+              "See the Daily Flow"
+            ],
+            "longHeadline": "Connect classroom documentation with a clear family daily-report workflow",
+            "descriptions": [
+              "Give teachers a practical iPad workflow and families a clear mobile view.",
+              "Move daily reports through one school-approved classroom-to-family flow.",
+              "Help teachers document the day without losing focus on the classroom.",
+              "Give families one clear place to review school-approved daily updates."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png",
+          "deviceOrType": "TEACHER IPAD"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-overview-light.png",
+          "deviceOrType": "PARENT IPHONE"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/teacher-ipad-daily-report-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "parents-informed-teachers-focused--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "parents-informed-teachers-focused--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "parents-informed-teachers-focused--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "parents-informed-teachers-focused--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "parents-informed-teachers-focused--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "parents-informed-teachers-focused--google-landscape-clean.png"
+        }
+      ]
+    },
+    {
+      "id": "right-view-every-role",
+      "audience": "Multi-location owners, franchise teams, and operational leaders",
+      "goal": "Differentiate role-safe, school-scoped operations",
+      "copy": {
+        "eyebrow": "ROLE-SAFE BY DESIGN",
+        "headline": "The right view for every role.",
+        "body": "Executives, directors, teachers, and parents each work in the scope designed for them.",
+        "cta": "Explore role-safe operations",
+        "organicCaption": "Every childcare role needs a different view. Owners need rollups. Directors need school operations. Teachers need classroom tools. Parents need their family portal. The BEE Suite is designed around those boundaries.",
+        "paidPrimary": "Give every role the tools and school context they need—without flattening the organization into one shared view.",
+        "paidHeadline": "The right view for every role",
+        "paidDescription": "Role-safe childcare operations from executive oversight to family updates.",
+        "hashtags": [
+          "#ChildcareLeadership",
+          "#MultiLocation",
+          "#RoleBasedAccess",
+          "#ChildcareTechnology"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Give every role the tools and school context they need—without flattening the organization into one shared view.",
+            "headline": "The right view for every role",
+            "description": "Role-safe childcare operations from executive oversight to family updates."
+          },
+          "linkedin": {
+            "introText": "Give every role the tools and school context they need—without flattening the organization into one shared view.",
+            "headline": "The right view for every role"
+          },
+          "tiktok": {
+            "hook": "The right view for every role.",
+            "caption": "Role-safe childcare operations from executive oversight to family updates. #ChildcareLeadership #MultiLocation #RoleBasedAccess"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "The Right View for Every Role",
+              "Role-Safe Childcare Tools",
+              "Clear Access by School Role",
+              "One Suite, Purpose-Built Views",
+              "Explore Role-Safe Operations"
+            ],
+            "longHeadline": "Give executives, directors, teachers, and parents the right view for their role",
+            "descriptions": [
+              "Keep each role in the school and family context designed for its work.",
+              "Support executive, director, teacher, and parent workflows in one suite.",
+              "Build clearer childcare operations around role and school boundaries.",
+              "Explore purpose-built views for every role across the childcare day."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/sop-graphics/current/role-device-standards-guide.png",
+          "deviceOrType": "ROLE + DEVICE STANDARD"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-dashboard-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "right-view-every-role--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "right-view-every-role--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "right-view-every-role--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "right-view-every-role--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "right-view-every-role--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "right-view-every-role--google-landscape-clean.png"
+        }
+      ]
+    },
+    {
+      "id": "every-school-clearly",
+      "audience": "Childcare groups, franchise operators, and executive teams",
+      "goal": "Generate interest from multi-location buyers",
+      "copy": {
+        "eyebrow": "MULTI-LOCATION CLARITY",
+        "headline": "See every school without losing the details.",
+        "body": "Executive dashboards and FTE reporting keep location-level truth visible across the organization.",
+        "cta": "See the executive view",
+        "organicCaption": "Multi-location visibility should not erase school-level truth. The BEE Suite helps executive teams review organization-wide signals while keeping each location’s reporting and operating context intact.",
+        "paidPrimary": "Review school-level operations and reporting from one executive workspace built for multi-location childcare.",
+        "paidHeadline": "See every school clearly",
+        "paidDescription": "Executive visibility with location-level context.",
+        "hashtags": [
+          "#ChildcareBusiness",
+          "#FranchiseOperations",
+          "#MultiLocation",
+          "#ExecutiveDashboard"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Review school-level operations and reporting from one executive workspace built for multi-location childcare.",
+            "headline": "See every school clearly",
+            "description": "Executive visibility with location-level context."
+          },
+          "linkedin": {
+            "introText": "Review school-level operations and reporting from one executive workspace built for multi-location childcare.",
+            "headline": "See every school clearly"
+          },
+          "tiktok": {
+            "hook": "See every school without losing the details.",
+            "caption": "Executive visibility with location-level context. #ChildcareBusiness #FranchiseOperations #MultiLocation"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "See Every School Clearly",
+              "Multi-Location Childcare View",
+              "Executive Visibility by School",
+              "Keep Location Context Clear",
+              "Explore the Executive View"
+            ],
+            "longHeadline": "Review multi-location childcare operations without losing school-level context",
+            "descriptions": [
+              "Review organization-wide signals while keeping each school clearly in view.",
+              "Bring executive dashboards and FTE reporting into one operating workspace.",
+              "See location-level reporting and operational context across the organization.",
+              "Explore an executive workspace designed for multi-location childcare teams."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-dashboard-light.png",
+          "deviceOrType": "EXECUTIVE DASHBOARD"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-fte-light.png",
+          "deviceOrType": "FTE REPORTING"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/executive-desktop-dashboard-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "every-school-clearly--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "every-school-clearly--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "every-school-clearly--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "every-school-clearly--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "every-school-clearly--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "every-school-clearly--google-landscape-clean.png"
+        }
+      ]
+    },
+    {
+      "id": "billing-connected",
+      "audience": "Owners, directors, and childcare billing teams",
+      "goal": "Build consideration for billing and family payment workflows",
+      "copy": {
+        "eyebrow": "CONNECTED BILLING WORKFLOW",
+        "headline": "Billing belongs in the same operating record.",
+        "body": "Review weekly tuition, invoices, payment status, and family history in one school-scoped workflow.",
+        "cta": "Explore connected billing",
+        "organicCaption": "Tuition setup, invoice creation, payment status, and family history work better when they stay connected to the right child and school record.",
+        "paidPrimary": "Keep weekly tuition, family invoices, payment status, and school context connected in one childcare operations workspace.",
+        "paidHeadline": "A more connected billing workflow",
+        "paidDescription": "School-scoped billing context from assignment to family history.",
+        "hashtags": [
+          "#ChildcareBilling",
+          "#ChildcareManagement",
+          "#SchoolOperations",
+          "#ParentPortal"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Keep weekly tuition, family invoices, payment status, and school context connected in one childcare operations workspace.",
+            "headline": "A more connected billing workflow",
+            "description": "School-scoped billing context from assignment to family history."
+          },
+          "linkedin": {
+            "introText": "Keep weekly tuition, family invoices, payment status, and school context connected in one childcare operations workspace.",
+            "headline": "A more connected billing workflow"
+          },
+          "tiktok": {
+            "hook": "Billing belongs in the same operating record.",
+            "caption": "School-scoped billing context from assignment to family history. #ChildcareBilling #ChildcareManagement #SchoolOperations"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "Connect Childcare Billing",
+              "Keep Tuition Context Clear",
+              "A Clearer Billing Workflow",
+              "Billing in the School Record",
+              "Explore Connected Billing"
+            ],
+            "longHeadline": "Keep weekly tuition, invoices, payment status, and family history connected",
+            "descriptions": [
+              "Review tuition, invoices, payment status, and family history in one workflow.",
+              "Keep childcare billing connected to the right child and school record.",
+              "Give authorized teams clearer school-scoped context around family billing.",
+              "Explore a connected billing workflow built into childcare operations."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/explainers/current/weekly-tuition-flow.png",
+          "deviceOrType": "WEEKLY TUITION FLOW"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/parent-iphone-billing-light.png",
+          "deviceOrType": "PARENT BILLING"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-billing-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "billing-connected--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "billing-connected--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "billing-connected--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "billing-connected--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "billing-connected--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "billing-connected--google-landscape-clean.png"
+        }
+      ]
+    },
+    {
+      "id": "launch-by-feature",
+      "audience": "Owners, directors, implementation teams, and childcare brands",
+      "goal": "Communicate deliberate implementation and rollout control",
+      "copy": {
+        "eyebrow": "SCHOOL-READY ROLLOUT",
+        "headline": "Launch by feature. Grow with confidence.",
+        "body": "Use independent readiness gates for setup, parent access, kiosk, billing, payments, and rollout.",
+        "cta": "See the launch framework",
+        "organicCaption": "A software release is not the same as a school launch. The BEE Suite rollout framework keeps setup, parent access, kiosk, billing, payments, and wider rollout as separate readiness decisions.",
+        "paidPrimary": "Roll out childcare operations deliberately with independent readiness gates for each school and feature.",
+        "paidHeadline": "Launch by feature",
+        "paidDescription": "A school-ready rollout framework for childcare teams.",
+        "hashtags": [
+          "#ChildcareImplementation",
+          "#SchoolOperations",
+          "#ChangeManagement",
+          "#ChildcareLeadership"
+        ],
+        "platformCopy": {
+          "meta": {
+            "primaryText": "Roll out childcare operations deliberately with independent readiness gates for each school and feature.",
+            "headline": "Launch by feature",
+            "description": "A school-ready rollout framework for childcare teams."
+          },
+          "linkedin": {
+            "introText": "Roll out childcare operations deliberately with independent readiness gates for each school and feature.",
+            "headline": "Launch by feature"
+          },
+          "tiktok": {
+            "hook": "Launch by feature. Grow with confidence.",
+            "caption": "A school-ready rollout framework for childcare teams. #ChildcareImplementation #SchoolOperations #ChangeManagement"
+          },
+          "google": {
+            "businessName": "The BEE Suite",
+            "shortHeadlines": [
+              "Launch Childcare Tech Clearly",
+              "Roll Out by School and Feature",
+              "Use Independent Launch Gates",
+              "A School-Ready Rollout",
+              "See the Launch Framework"
+            ],
+            "longHeadline": "Use independent readiness gates for every school, feature, and rollout stage",
+            "descriptions": [
+              "Separate setup, parent access, kiosk, billing, payments, and rollout gates.",
+              "Give each school and feature a clear readiness decision before launch.",
+              "Use a deliberate framework for childcare software implementation.",
+              "Explore a school-ready rollout framework built for childcare teams."
+            ]
+          }
+        }
+      },
+      "sourceAssets": [
+        {
+          "path": "public/brand/the-bee-suite/explainers/current/school-launch-gates.png",
+          "deviceOrType": "LAUNCH GATES"
+        },
+        {
+          "path": "public/brand/the-bee-suite/screenshots/current/director-desktop-reports-light.png",
+          "deviceOrType": "GOOGLE CLEAN IMAGE SOURCE"
+        }
+      ],
+      "exports": [
+        {
+          "format": "square",
+          "dimensions": "1080x1080",
+          "placements": [
+            "Instagram feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "launch-by-feature--square.png"
+        },
+        {
+          "format": "portrait",
+          "dimensions": "1080x1350",
+          "placements": [
+            "Instagram portrait feed",
+            "Facebook feed",
+            "LinkedIn feed"
+          ],
+          "file": "launch-by-feature--portrait.png"
+        },
+        {
+          "format": "story",
+          "dimensions": "1080x1920",
+          "placements": [
+            "Instagram Stories",
+            "Facebook Stories",
+            "Instagram Reels",
+            "TikTok video end card"
+          ],
+          "file": "launch-by-feature--story.png"
+        },
+        {
+          "format": "landscape",
+          "dimensions": "1200x628",
+          "placements": [
+            "LinkedIn sponsored content",
+            "Facebook link ad"
+          ],
+          "file": "launch-by-feature--landscape.png"
+        },
+        {
+          "format": "google-square-clean",
+          "dimensions": "1200x1200",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "launch-by-feature--google-square-clean.png"
+        },
+        {
+          "format": "google-landscape-clean",
+          "dimensions": "1200x628",
+          "placements": [
+            "Google Demand Gen image asset",
+            "Google responsive display image asset"
+          ],
+          "file": "launch-by-feature--google-landscape-clean.png"
+        }
+      ]
+    }
+  ],
+  "guardrails": [
+    "All user-facing copy, logos, dimensions, and safe zones are deterministic.",
+    "Every product image comes from the approved current light-mode screenshot and SOP graphic set.",
+    "Google clean image candidates contain one intact light-mode product screenshot and no added logo, headline, CTA, button, or collage.",
+    "No customer results, prices, testimonials, certifications, or compliance guarantees are claimed.",
+    "Sensitive decisions remain with authorized staff; creative does not imply autonomous legal, medical, safety, custody, billing, licensing, or compliance decisions.",
+    "Campaign activation, budgets, targeting, and destination tracking require separate approval."
+  ]
+}

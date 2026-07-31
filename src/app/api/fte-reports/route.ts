@@ -463,6 +463,8 @@ async function POSTHandler(request: NextRequest) {
       preregisteredChildren,
       prefillSource: clean(body.source),
       enrollmentVariance: enrolledCount - ageGroupCount,
+      selectedReportWeekStart: weekStart.toISOString().slice(0, 10),
+      selectedReportWeekEnd: weekEnd?.toISOString().slice(0, 10) ?? null,
       requestedCenterId,
       resolvedCenterId: centerId,
     },
@@ -543,6 +545,9 @@ async function POSTHandler(request: NextRequest) {
     resourceId: report.id,
     metadata: {
       weekStart: report.weekStart.toISOString(),
+      weekEnd: report.weekEnd?.toISOString() ?? null,
+      selectedReportWeekStart: weekStart.toISOString().slice(0, 10),
+      selectedReportWeekEnd: weekEnd?.toISOString().slice(0, 10) ?? null,
       fteCount: report.fteCount,
       accountReceivableAmount,
       selfPayerBillAmount,

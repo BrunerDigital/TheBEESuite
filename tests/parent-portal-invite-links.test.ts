@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   getPasswordResetRedirectUrl,
@@ -51,4 +52,23 @@ test("parent portal invite links fall back to request origin", () => {
     getPasswordResetRedirectUrl("https://pilot.thebeesuite.io/api/auth/forgot-password", PARENT_PORTAL_SETUP_PATH),
     "https://pilot.thebeesuite.io/reset-password?next=%2Fparent-portal%2Fsetup",
   );
+});
+
+test("direct parent invitations preflight ProCare data and activate prepared accounts only when invited", () => {
+  const source = readFileSync(new URL("../src/app/api/parent/invitations/route.ts", import.meta.url), "utf8");
+  assert.match(source, /evaluateParentInvitationReadiness/);
+  assert.match(source, /buildParentLoginSetupUrl/);
+  assert.match(source, /preparedWithoutInvite/);
+  assert.match(source, /resetToInitialPassword:\s*preparedWithoutInvite/);
+  assert.match(source, /parentPortalInvitationSentFields/);
+  assert.match(source, /provisioned\.status\s*>=\s*400/);
+});
+
+test("payer portal preparation is explicit, audited, and cannot send invitations", () => {
+  const source = readFileSync(new URL("../scripts/prepare-payer-portal-accounts.ts", import.meta.url), "utf8");
+  assert.match(source, /--acknowledge-no-invites/);
+  assert.match(source, /prepareWithoutInvite:\s*!existingUser/);
+  assert.match(source, /parent_portal\.payer_account_prepared/);
+  assert.match(source, /invitationSent:\s*false/);
+  assert.doesNotMatch(source, /sendEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
 });

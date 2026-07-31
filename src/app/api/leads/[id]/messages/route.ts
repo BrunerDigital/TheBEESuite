@@ -70,7 +70,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
 
   const { id } = await context.params;
   const body = await request.json();
-  const subject = clean(body.subject) || "Kid City USA enrollment follow-up";
+  const subject = clean(body.subject) || `${user.branding.name} enrollment follow-up`;
   const message = clean(body.message);
   let attachments: EmailAttachment[] = [];
 
@@ -118,7 +118,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     subject,
     text: message,
     replyTo,
-    fromName: "Kid City USA",
+    fromName: user.branding.name,
     categories: ["lead_email"],
     customArgs: { leadId: lead.id, centerId: lead.centerId },
     tenantId: user.tenantId,
@@ -139,7 +139,7 @@ async function POSTHandler(request: NextRequest, context: RouteContext) {
     subject,
     text: message,
     replyTo,
-    fromName: "Kid City USA",
+    fromName: user.branding.name,
     result: email,
     maxAttempts: attachments.length ? 1 : undefined,
     metadata: attachments.length ? { attachmentCount: attachments.length, attachments: attachmentMetadata } : undefined,

@@ -8,6 +8,7 @@ import { loginHrefForNextPath } from "@/lib/login-routing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { createProfilePhotoSignedUrl, isSupabaseStorageConfigured } from "@/lib/supabase-storage";
+import { readCenterLocationTimeZone } from "@/lib/attendance-state";
 
 export const SESSION_COOKIE = "bee_suite_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -37,10 +38,12 @@ export type CurrentUser = {
   accessGrantCount: number;
   profilePhotoUrl: string | null;
   branding: WorkspaceBranding;
+  timeZone?: string;
+  timeZonesByCenterId?: Record<string, string>;
 };
 
 export function requiresPasswordResetGate(user: { mustResetPassword: boolean; role: UserRole }) {
-  return user.mustResetPassword && user.role !== UserRole.TEACHER;
+  return user.mustResetPassword && user.role !== UserRole.TEACHER && user.role !== UserRole.PARENT_GUARDIAN;
 }
 
 const tenantWideAccessRoles = new Set<UserRole>([
@@ -48,6 +51,11 @@ const tenantWideAccessRoles = new Set<UserRole>([
   UserRole.BRAND_ADMIN,
   UserRole.REGIONAL_MANAGER,
   UserRole.READ_ONLY_AUDITOR,
+]);
+
+const executiveTenantWideRoles = new Set<UserRole>([
+  UserRole.BRAND_ADMIN,
+  UserRole.REGIONAL_MANAGER,
 ]);
 
 const leadWriteRoles = new Set<UserRole>([
@@ -164,8 +172,12 @@ export function createSessionToken(user: Pick<CurrentUser, "id" | "email" | "rol
   return `${data}.${sign(data)}`;
 }
 
-async function resolveCurrentUserProfilePhotoUrl(customFields: unknown, role: UserRole) {
-  const fallbackUrl = defaultProfilePhotoUrlForRole(role);
+async function resolveCurrentUserProfilePhotoUrl(
+  customFields: unknown,
+  role: UserRole,
+  branding: WorkspaceBranding,
+) {
+  const fallbackUrl = defaultProfilePhotoUrlForRole(role, branding.kind);
   const storageKey = readProfilePhotoStorageKey(customFields);
   if (storageKey && isSupabaseStorageConfigured()) {
     try {
@@ -307,6 +319,13 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     const allCenters = await prisma.center.findMany({ select: { id: true } });
     centerIds = allCenters.map((center) => center.id);
     accessScope = "platform";
+  } else if (executiveTenantWideRoles.has(user.role)) {
+    const tenantCenters = await prisma.center.findMany({
+      where: { organization: { tenantId: user.tenantId } },
+      select: { id: true },
+    });
+    centerIds = tenantCenters.map((center) => center.id);
+    accessScope = "tenant";
   } else if (activeGrants.length) {
     const allowBroadGrantAccess = canUseTenantWideAccessRole(user.role) && !hasProfileCenterAssignment;
     const grantCenterIds = await resolveAccessGrantCenterIds(user.tenantId, activeGrants, user.role, {
@@ -326,6 +345,22 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     accessScope = "tenant";
   }
 
+  const timeZoneCenters = centerIds.length
+    ? await prisma.center.findMany({
+        where: { id: { in: centerIds } },
+        select: { id: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+      })
+    : [];
+  const timeZonesByCenterId = Object.fromEntries(timeZoneCenters.map((center) => [center.id, readCenterLocationTimeZone(center)]));
+  const branding = resolveWorkspaceBranding({
+    tenantName: user.tenant.name,
+    tenantSlug: user.tenant.slug,
+    brandName,
+    brandSlug: user.organization?.brand?.slug,
+    organizationName: user.organization?.name,
+    email: user.email,
+  });
+
   return {
     id: user.id,
     tenantId: user.tenantId,
@@ -340,15 +375,10 @@ export async function getCurrentUser(options: { allowPasswordResetRequired?: boo
     deviceSessionId: session.deviceSessionId ?? null,
     accessScope,
     accessGrantCount: activeGrants.length,
-    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role),
-    branding: resolveWorkspaceBranding({
-      tenantName: user.tenant.name,
-      tenantSlug: user.tenant.slug,
-      brandName,
-      brandSlug: user.organization?.brand?.slug,
-      organizationName: user.organization?.name,
-      email: user.email,
-    }),
+    profilePhotoUrl: await resolveCurrentUserProfilePhotoUrl(user.customFields, user.role, branding),
+    branding,
+    timeZone: timeZonesByCenterId[centerIds[0] ?? ""] || "America/New_York",
+    timeZonesByCenterId,
   };
 }
 

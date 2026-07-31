@@ -53,11 +53,11 @@ const loginCopy: Record<LoginPortal, {
     heroFooter: "Family data remains connected to the school records already assigned to your account.",
     heroItems: ["Child updates", "Messages", "Tuition"],
     cardTitle: "Log in to your parent portal",
-    cardDescription: "Use the parent or guardian email on file. For your first login, use the BusyBees password in your school invitation, then choose a private password.",
+    cardDescription: "Use the parent or guardian email on file. For your first login, use the BusyBees password in your school invitation. You can change it later in Parent Portal settings.",
     emailLabel: "Parent login email",
     emailPlaceholder: "parent@example.com",
     passwordPlaceholder: "BusyBees for first login",
-    helpText: "First visit: sign in with your guardian email and BusyBees. You will be required to choose a private password immediately. If you already changed it or forgot it, use Forgot password.",
+    helpText: "First visit: sign in with your guardian email and BusyBees. You can change it anytime in Parent Portal settings. If you already changed it or forgot it, use Forgot password.",
   },
   teachers: {
     heroTitle: "Open your teacher workspace.",
@@ -146,8 +146,8 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
   }
 
   return (
-    <div className="grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]">
-      <section className="hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 xl:flex">
+    <div className="auth-halo-shell grid min-h-screen bg-slate-950 p-4 text-white xl:grid-cols-[1fr_0.86fr]" data-portal={portal}>
+      <section className="auth-halo-story hidden min-h-[calc(100vh-2rem)] flex-col justify-between rounded-2xl border border-white/10 bg-[linear-gradient(145deg,#020617,#172033_58%,#3b2a09)] p-8 xl:flex">
         <BrandLogo href="/" size="md" compact={parentSetupFlow} priority />
         <div className="max-w-xl">
           <h1 className="text-5xl font-semibold leading-tight tracking-normal">
@@ -171,7 +171,7 @@ export function LoginForm({ portal: portalInput = "general", defaultNextPath }: 
       </section>
 
       <section className="grid place-items-center px-0 py-6 sm:px-6 xl:px-10">
-        <Card className="w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
+        <Card className="auth-halo-card w-full max-w-xl rounded-2xl border-white/10 bg-white text-slate-950 shadow-2xl shadow-black/30">
           <CardHeader className="text-center">
             <Link href="/" className="mx-auto block w-fit xl:hidden" aria-label="The BEE Suite home">
               <BrandIcon className="size-14 rounded-2xl" priority />

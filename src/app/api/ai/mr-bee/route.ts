@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canAccessCenter, getCurrentUser } from "@/lib/auth";
+import {
+  buildRegistrationLeadSuggestion,
+  buildRegistrationShareUrl,
+  type RegistrationLeadSuggestion,
+} from "@/lib/registration-sharing";
+import { getAppBaseUrl } from "@/lib/supabase-auth";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -21,26 +27,28 @@ function buildDraft({
   centerName,
   purpose,
   contextPrompt,
+  brandName,
 }: {
   familyName: string;
   program?: string | null;
   centerName: string;
   purpose: string;
   contextPrompt?: string;
+  brandName: string;
 }) {
   const normalizedPurpose = purpose || "follow_up";
   const programText = program || "childcare";
   const context = sentence(contextPrompt || "");
 
   if (normalizedPurpose === "tour_reminder") {
-    return `Hi ${familyName}, this is Kid City USA with a friendly reminder about your interest in ${programText} at ${centerName}. ${context || "We would love to help answer questions and confirm the best next step for your family."}`;
+    return `Hi ${familyName}, this is ${brandName} with a friendly reminder about your interest in ${programText} at ${centerName}. ${context || "We would love to help answer questions and confirm the best next step for your family."}`;
   }
 
   if (normalizedPurpose === "application_reminder") {
-    return `Hi ${familyName}, this is Kid City USA checking in on your ${programText} application for ${centerName}. ${context || "If you need help with any next steps or documents, our team is happy to support you."}`;
+    return `Hi ${familyName}, this is ${brandName} checking in on your ${programText} application for ${centerName}. ${context || "If you need help with any next steps or documents, our team is happy to support you."}`;
   }
 
-  return `Hi ${familyName}, this is Kid City USA following up on your ${programText} inquiry for ${centerName}. ${context || "We would be happy to answer questions, confirm availability, or help schedule your next step."}`;
+  return `Hi ${familyName}, this is ${brandName} following up on your ${programText} inquiry for ${centerName}. ${context || "We would be happy to answer questions, confirm availability, or help schedule your next step."}`;
 }
 
 function buildDraftOptions({
@@ -50,6 +58,8 @@ function buildDraftOptions({
   centerName,
   purpose,
   contextPrompt,
+  registrationSuggestion,
+  brandName,
 }: {
   familyName: string;
   childName?: string | null;
@@ -57,6 +67,8 @@ function buildDraftOptions({
   centerName: string;
   purpose: string;
   contextPrompt?: string;
+  registrationSuggestion?: RegistrationLeadSuggestion | null;
+  brandName: string;
 }) {
   const programText = program || "childcare";
   const childLine = childName ? ` for ${childName}` : "";
@@ -65,26 +77,27 @@ function buildDraftOptions({
     ? `Tour follow-up for ${centerName}`
     : purpose === "application_reminder"
       ? `Application next steps for ${centerName}`
-      : `Kid City USA ${programText} follow-up`;
+      : `${brandName} ${programText} follow-up`;
   const nextStep = context || "We can answer questions, confirm availability, or help schedule the next step for your family.";
 
-  return [
+  const generalSuggestions = [
     {
       label: "Warm follow-up",
       subject: baseSubject,
-      body: `Hi ${familyName},\n\nThank you for your interest in ${programText}${childLine} at ${centerName}. ${nextStep}\n\nThank you,\nKid City USA`,
+      body: `Hi ${familyName},\n\nThank you for your interest in ${programText}${childLine} at ${centerName}. ${nextStep}\n\nThank you,\n${brandName}`,
     },
     {
       label: "Quick next step",
       subject: baseSubject,
-      body: `Hi ${familyName},\n\nI wanted to follow up on your ${programText} inquiry for ${centerName}. ${nextStep}\n\nPlease reply here when you have a moment, and we will help with the next step.\n\nThank you,\nKid City USA`,
+      body: `Hi ${familyName},\n\nI wanted to follow up on your ${programText} inquiry for ${centerName}. ${nextStep}\n\nPlease reply here when you have a moment, and we will help with the next step.\n\nThank you,\n${brandName}`,
     },
     {
       label: "Director personal",
       subject: baseSubject,
-      body: `Hi ${familyName},\n\nThis is Kid City USA checking in about ${programText}${childLine}. ${nextStep}\n\nWe would be happy to connect directly and make the enrollment process easier for you.\n\nThank you,\nKid City USA`,
+      body: `Hi ${familyName},\n\nThis is ${brandName} checking in about ${programText}${childLine}. ${nextStep}\n\nWe would be happy to connect directly and make the enrollment process easier for you.\n\nThank you,\n${brandName}`,
     },
   ];
+  return registrationSuggestion ? [registrationSuggestion, ...generalSuggestions] : generalSuggestions;
 }
 
 async function POSTHandler(request: NextRequest) {
@@ -124,12 +137,31 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "You do not have access to this lead." }, { status: 403 });
   }
 
-  const suggestion = buildDraft({
+  const registrationSuggestion = buildRegistrationLeadSuggestion({
+    familyName: lead.familyName,
+    childName: lead.childName,
+    program: lead.programInterest,
+    schoolLabel: lead.center.crmLocationId ?? lead.center.name,
+    registrationUrl: buildRegistrationShareUrl(getAppBaseUrl(request.url), lead.centerId),
+    stage: lead.stage,
+    contextPrompt: `${purpose} ${contextPrompt}`,
+    customFields: lead.customFields,
+    brandName: user.branding.name,
+  });
+  const explicitlyRequestedRegistration = /\b(registration|application|enroll(?:ment)?|paperwork|form)\b/i.test(
+    `${purpose} ${contextPrompt}`,
+  );
+  const suggestion = registrationSuggestion && (
+    explicitlyRequestedRegistration
+    || lead.stage === "APPLICATION_SENT"
+    || lead.stage === "APPLICATION_STARTED"
+  ) ? registrationSuggestion.body : buildDraft({
     familyName: lead.familyName,
     program: lead.programInterest,
     centerName: lead.center.crmLocationId ?? lead.center.name,
     purpose,
     contextPrompt,
+    brandName: user.branding.name,
   });
   const suggestions = wantsOptions
     ? buildDraftOptions({
@@ -139,6 +171,8 @@ async function POSTHandler(request: NextRequest) {
         centerName: lead.center.crmLocationId ?? lead.center.name,
         purpose,
         contextPrompt,
+        registrationSuggestion,
+        brandName: user.branding.name,
       })
     : null;
 
@@ -150,12 +184,15 @@ async function POSTHandler(request: NextRequest) {
         centerId: lead.centerId,
         purpose,
         contextPrompt: contextPrompt || null,
+        leadStage: lead.stage,
+        registrationSuggestionIncluded: Boolean(registrationSuggestion),
+        registrationAlreadyShared: registrationSuggestion?.label === "Registration reminder",
         generatedBy: "rule_based_guardrailed_draft",
       },
       suggestion: suggestions ? JSON.stringify(suggestions) : suggestion,
       status: "pending_review",
       guardrailNote:
-        "Mr. Bee drafts are suggestions only. A staff member must review before sending. Do not use AI to make safety, medical, custody, legal, billing, or compliance decisions.",
+        "Mr. Bee drafts are suggestions only. A staff member must review before sending. Registration links are school-specific and do not confirm enrollment. Do not use AI to make safety, medical, custody, legal, billing, or compliance decisions.",
     },
   });
 

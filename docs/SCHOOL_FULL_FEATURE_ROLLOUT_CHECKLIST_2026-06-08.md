@@ -1,5 +1,7 @@
 # School Full-Feature Rollout Checklist
 
+> Historical rollout snapshot. Use `docs/sops/README.md` and the current dated readiness records for live decisions. Setup, parent invitations, kiosk/PIN, billing, payments, ProCare retirement, mobile stores, and wider-wave approval remain independent gates; `HELD OFF` is not `PASS`.
+
 Last updated: June 9, 2026
 
 Purpose: track everything that must be complete before a school can use the full BEE Suite feature set live: executive/admin, director operations, CRM, enrollment, FTE, ProCare cutover, attendance/kiosk, teacher workflows, parent portal, billing/payments, documents, compliance, messaging, reporting, integrations, and support.
@@ -9,7 +11,6 @@ Status legend:
 - `[ ]` Still needs build work, real school data, vendor setup, legal/accounting approval, production validation, or school signoff.
 
 Source references:
-- `docs/UPDATED_COMPLETION_CHECKLIST_2026-06-04.md`
 - `docs/APP_COMPLETION_CHECKLIST.md`
 - `docs/ROLE_SMOKE_TEST_REPORT_2026-06-05.md`
 - `docs/OWNER_ACTION_ITEMS.md`
@@ -40,7 +41,7 @@ A school is not considered fully live until all of these are true:
 - [ ] Confirm every ProCare field used by schools is mapped, transformed, or intentionally excluded.
 - [ ] Replace remaining demo-login classroom, family, parent, and teacher fallbacks with real imported school data.
 - [ ] Complete Stripe connected account onboarding for every school or payout owner before enabling live parent checkout.
-- [ ] Complete legal/accounting review of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, including card processing recovery, refunds, disputes, debit/prepaid handling, and parent-facing disclosures. ACH and instant bank remain parent-fee-free.
+- [ ] Complete legal/accounting review of `docs/PAYMENT_PROCESSING_RECOVERY_REVIEW.md`, including card processing recovery, refunds, disputes, debit/prepaid handling, ACH/instant-bank treatment, and parent-facing disclosures. Parent instructions must use the exact checkout total and avoid an unconditional fee-free promise.
 - [ ] Run a formal Supabase advisor/security review after the latest schema migrations.
 - [ ] Add production error monitoring and uptime monitoring.
 - [ ] Run full role-by-role credentialed production smoke tests after the account/data setup pass.
@@ -187,8 +188,9 @@ Complete this for each school before that school uses operational modules live.
 - [x] Lead notes, tasks, messages, tours, duplicate detection, merge, assignments, saved views, exports, and nurture steps exist.
 - [x] Online registration page and API exist.
 - [ ] Install the latest BEE Suite inquiry embed on each live school website or landing page.
-- [ ] Submit one test inquiry per school or per approved rollout group after installing the embed.
-- [ ] Confirm test inquiry appears in CRM, backup Google Sheet, global notification recipients, and correct school notification recipients.
+- [ ] Verify the embed, public locations, routing audit, and approved-origin `OPTIONS` preflight without creating a lead.
+- [ ] If separately approved, submit one synthetic inquiry per school or approved rollout group and record the authorized fixture plus expected email/Google Sheet side effects.
+- [ ] Confirm an approved synthetic inquiry appears in CRM, backup Google Sheet, global notification recipients, and correct school notification recipients.
 - [ ] Remove or archive old CRM forms/webhooks after BEE Suite routing is confirmed.
 - [x] Load the Kid City USA operational online registration field map, application review workflow, enrollment checklist, and document/signature request setup.
 - [ ] Provide final legal registration PDFs, policy acknowledgement text, school-specific packet documents, and any required state/licensing language for production use.

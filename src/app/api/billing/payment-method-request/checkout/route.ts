@@ -26,11 +26,11 @@ import {
 import {
   buildPaymentMethodRequestCheckoutBranding,
   buildPublicPaymentBrandAssetUrl,
-  getPaymentMethodRequestAppBaseUrl,
   PAYMENT_METHOD_REQUEST_EMAIL_PURPOSE,
   paymentMethodRequestRecipientOptions,
   validatePaymentMethodRequestToken,
 } from "@/lib/payment-method-request-forms";
+import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
@@ -337,7 +337,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
 
-  const baseUrl = getPaymentMethodRequestAppBaseUrl(request.url);
+  const baseUrl = getSecurePaymentAppBaseUrl(request.url);
   const formPath = `/payment-method-form/${encodeURIComponent(token)}`;
   const centerLabel = center.crmLocationId ?? center.name;
   const branding = resolveWorkspaceBranding({

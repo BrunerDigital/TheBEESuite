@@ -13,6 +13,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { buildReviewRequestCopy } from "@/lib/marketing-workflows";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 
 type CenterOption = {
   id: string;
@@ -69,11 +71,8 @@ function numberValue(value: unknown, fallback = 0) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-function formatDate(value: Date | string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "Unknown"
-    : new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(date);
+function formatDate(value: Date | string, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" }, "Unknown");
 }
 
 function npsStats(survey: SurveyRow) {
@@ -118,6 +117,7 @@ function ReviewDraftButton({ review }: { review: ReviewRow }) {
 }
 
 export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [reviewCenterId, setReviewCenterId] = useState("all");
   const [reviewUrl, setReviewUrl] = useState("");
@@ -164,7 +164,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
           subject: reviewSubject,
           body: reviewBody,
           reviewUrl,
-          sendAt: reviewSendAt || undefined,
+          sendAt: reviewSendAt ? zonedDateTimeLocalToUtc(reviewSendAt, timeZone)?.toISOString() : undefined,
           limit: reviewLimit,
         }),
       });
@@ -287,7 +287,7 @@ export function ReputationWorkspace({ data }: { data: ReputationWorkspaceData })
                     <TableRow key={review.id}>
                       <TableCell>
                         <div className="font-medium">{review.source}</div>
-                        <div className="text-xs text-muted-foreground">{review.center?.name ?? "Tenant-wide"} · {formatDate(review.createdAt)}</div>
+                        <div className="text-xs text-muted-foreground">{review.center?.name ?? "Tenant-wide"} · {formatDate(review.createdAt, timeZone)}</div>
                       </TableCell>
                       <TableCell>{review.rating}/5</TableCell>
                       <TableCell className="max-w-sm whitespace-normal text-muted-foreground">{review.body ?? ""}</TableCell>

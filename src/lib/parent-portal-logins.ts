@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { isEmail } from "@/lib/integrations";
@@ -67,12 +68,16 @@ export function parentPortalLinkedFields({
   linkedBy,
   linkedReason = "default_parent_portal_access",
   registrationApproval = false,
+  inviteMode = PARENT_PORTAL_INVITE_MODE,
+  preparedWithoutInvite = false,
 }: {
   customFields: unknown;
   loginEmail: string;
   linkedBy?: string | null;
   linkedReason?: string;
   registrationApproval?: boolean;
+  inviteMode?: string;
+  preparedWithoutInvite?: boolean;
 }) {
   const fields = asRecord(customFields);
   const parentPortal = asRecord(fields.parentPortal);
@@ -84,9 +89,28 @@ export function parentPortalLinkedFields({
       accessDisabled: false,
       linkedAt: new Date().toISOString(),
       linkedBy: linkedBy || linkedReason,
-      inviteMode: PARENT_PORTAL_INVITE_MODE,
+      inviteMode,
       loginEmail,
       registrationApproval: registrationApproval || parentPortal.registrationApproval === true,
+      ...(preparedWithoutInvite
+        ? {
+            preparedWithoutInvite: true,
+            preparedWithoutInviteAt: new Date().toISOString(),
+          }
+        : {}),
+    },
+  } as Prisma.InputJsonObject;
+}
+
+export function parentPortalInvitationSentFields(customFields: unknown) {
+  const fields = asRecord(customFields);
+  const parentPortal = asRecord(fields.parentPortal);
+  return {
+    ...fields,
+    parentPortal: {
+      ...parentPortal,
+      preparedWithoutInvite: false,
+      invitationSentAt: new Date().toISOString(),
     },
   } as Prisma.InputJsonObject;
 }
@@ -97,12 +121,16 @@ export async function ensureParentPortalLoginForGuardian({
   linkedReason,
   registrationApproval = false,
   resetToInitialPassword = false,
+  inviteMode = PARENT_PORTAL_INVITE_MODE,
+  prepareWithoutInvite = false,
 }: {
   guardianId: string;
   linkedBy?: string | null;
   linkedReason?: string;
   registrationApproval?: boolean;
   resetToInitialPassword?: boolean;
+  inviteMode?: string;
+  prepareWithoutInvite?: boolean;
 }): Promise<ParentPortalProvisionResult> {
   const guardian = await prisma.guardian.findUnique({
     where: { id: guardianId },
@@ -146,7 +174,9 @@ export async function ensureParentPortalLoginForGuardian({
   const authUser = await upsertSupabaseAuthUserWithPassword({
     email,
     name: guardian.fullName,
-    password: DEFAULT_PARENT_INITIAL_PASSWORD,
+    password: prepareWithoutInvite
+      ? randomBytes(48).toString("base64url")
+      : DEFAULT_PARENT_INITIAL_PASSWORD,
     role: UserRole.PARENT_GUARDIAN,
     source: PARENT_PORTAL_INVITE_MODE,
     updateExistingPassword: resetToInitialPassword,
@@ -160,7 +190,7 @@ export async function ensureParentPortalLoginForGuardian({
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
       organizationId: center.organizationId,
-      ...(credentialCreated || resetToInitialPassword || (existingUser && !existingUser.isActive) ? { mustResetPassword: true } : {}),
+      mustResetPassword: prepareWithoutInvite,
       sessionVersion: { increment: 1 },
     },
     create: {
@@ -170,7 +200,7 @@ export async function ensureParentPortalLoginForGuardian({
       name: guardian.fullName,
       role: UserRole.PARENT_GUARDIAN,
       isActive: true,
-      mustResetPassword: true,
+      mustResetPassword: prepareWithoutInvite,
     },
     select: { id: true },
   });
@@ -199,6 +229,8 @@ export async function ensureParentPortalLoginForGuardian({
         linkedBy,
         linkedReason,
         registrationApproval,
+        inviteMode,
+        preparedWithoutInvite: prepareWithoutInvite,
       }),
     },
   })));

@@ -46,6 +46,17 @@ test("teacher daily report parser accepts multi-child tablet batches", () => {
   assert.equal(parsed.report.meals.length, 1);
 });
 
+test("teacher daily report interprets timezone-less diaper times in the school's timezone", () => {
+  const parsed = parseTeacherDailyReportPayload({
+    childId: "child_1",
+    date: "2026-07-22T12:00:00",
+    diapers: [{ type: "Wet", occurredAt: "2026-07-22T11:20", notes: "Changed" }],
+  }, { timeZone: "America/Indiana/Indianapolis" });
+
+  if (!parsed.ok) assert.fail(parsed.error);
+  assert.equal(parsed.report.diapers[0]?.occurredAt.toISOString(), "2026-07-22T15:20:00.000Z");
+});
+
 test("teacher daily report parser keeps quick meal presets without saving blank default rows", () => {
   const parsed = parseTeacherDailyReportPayload({
     childId: "child_1",

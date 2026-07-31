@@ -12,6 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
 export type EmergencyDrillCenterOption = {
   id: string;
@@ -32,14 +34,14 @@ export type EmergencyDrillLogRow = {
   createdBy: { name: string; email: string } | null;
 };
 
-function dateTime(value: Date | string | null | undefined) {
-  if (!value) return "Not set";
-  return new Intl.DateTimeFormat("en", {
+function dateTime(value: Date | string | null | undefined, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZoneName: "short",
+  });
 }
 
 function centerLabel(center: Pick<EmergencyDrillCenterOption, "name" | "crmLocationId">) {
@@ -55,11 +57,12 @@ export function EmergencyDrillLogPanel({
   drillLogs: EmergencyDrillLogRow[];
   canManage: boolean;
 }) {
+  const timeZone = useSchoolTimeZone();
   const router = useRouter();
   const [rows, setRows] = useState(drillLogs);
   const [centerId, setCenterId] = useState(centers[0]?.id ?? "");
   const [drillType, setDrillType] = useState("Fire drill");
-  const [conductedAt, setConductedAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [conductedAt, setConductedAt] = useState(() => zonedDateTimeLocalValue(new Date(), timeZone));
   const [durationMinutes, setDurationMinutes] = useState("");
   const [participants, setParticipants] = useState("");
   const [outcome, setOutcome] = useState("completed");
@@ -80,7 +83,7 @@ export function EmergencyDrillLogPanel({
         body: JSON.stringify({
           centerId,
           drillType,
-          conductedAt,
+          conductedAt: zonedDateTimeLocalToUtc(conductedAt, timeZone)?.toISOString(),
           durationMinutes,
           participants,
           outcome,
@@ -201,12 +204,12 @@ export function EmergencyDrillLogPanel({
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.id}>
-                <TableCell>{dateTime(row.conductedAt)}</TableCell>
+                <TableCell>{dateTime(row.conductedAt, timeZone)}</TableCell>
                 <TableCell className="font-medium">{centerLabel(row.center)}</TableCell>
                 <TableCell>{row.drillType}</TableCell>
                 <TableCell><Badge variant={row.outcome === "completed" ? "default" : "outline"}>{row.outcome}</Badge></TableCell>
                 <TableCell>{row.participants ?? "Not recorded"}</TableCell>
-                <TableCell>{dateTime(row.nextDueAt)}</TableCell>
+                <TableCell>{dateTime(row.nextDueAt, timeZone)}</TableCell>
               </TableRow>
             ))}
             {!rows.length ? (

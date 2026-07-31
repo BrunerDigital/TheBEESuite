@@ -3,7 +3,7 @@ function clean(value: unknown) {
 }
 
 export const WEEKLY_TUITION_AUTOBILL_CADENCE = "weekly" as const;
-export const WEEKLY_TUITION_AUTOBILL_DAY = 5;
+export const WEEKLY_TUITION_AUTOBILL_DAY = 4;
 
 export function parseCurrencyCents(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.round(value * 100);
@@ -11,6 +11,14 @@ export function parseCurrencyCents(value: unknown) {
   if (!normalized) return 0;
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
+}
+
+export function canSaveTuitionPlanAmount(amountCents: number, zeroDollarVoucher: boolean) {
+  return Number.isInteger(amountCents) && (amountCents > 0 || (amountCents === 0 && zeroDollarVoucher));
+}
+
+export function isVoucherFundedTuitionAmount(amountCents: number) {
+  return Number.isInteger(amountCents) && amountCents === 0;
 }
 
 export function normalizeAgencyPaymentMetadata(input: {
@@ -188,6 +196,13 @@ export function recurringDueDateForPeriod(period: string, billingDay: number, ca
   const dueDate = new Date(weekOneMonday);
   dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7) + normalizeWeeklyBillingDay(billingDay) - 1);
   return dueDate;
+}
+
+export function weeklyTuitionChargeDateForPeriod(period: string) {
+  const followingWeekMonday = recurringDueDateForPeriod(period, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  const chargeDate = new Date(followingWeekMonday);
+  chargeDate.setUTCDate(followingWeekMonday.getUTCDate() - 4);
+  return chargeDate;
 }
 
 export function shouldCreateRecurringTuitionInvoice(input: {

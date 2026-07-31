@@ -1,5 +1,7 @@
 # Legal, Privacy, And Security Review
 
+> Historical review snapshot. For current July 27 payment operations, use `docs/sops/BILLING_ADMIN_SOP.md` and `docs/sops/PARENT_ACH_PAYMENT_GUIDE.md`. The parent flow now presents debit/credit card first while approved bank options remain available; this file does not authorize a school payment launch.
+
 Review date: June 9, 2026
 
 Scope: internal product, engineering, privacy, and security readiness review for The BEE Suite before broader public SaaS launch and full-feature school rollout.

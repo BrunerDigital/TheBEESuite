@@ -1,5 +1,6 @@
 export const DEFAULT_PROFILE_PHOTO_URL = "/brand/the-bee-suite/mr-bee-profile.png";
 export const KID_CITY_PROFILE_PHOTO_URL = "/brand/kid-city-usa/kid-city-usa-profile.jpg";
+export const MISS_HONEYS_PROFILE_PHOTO_URL = "/brand/miss-honeys-learning-center/logo-transparent.png";
 export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 export const MANAGEMENT_PROFILE_PHOTO_ROLES = [
@@ -17,8 +18,15 @@ export function usesManagementProfilePhoto(role: string) {
 
 const KID_CITY_FAMILY_AND_TEACHER_ROLES = new Set(["TEACHER", "PARENT_GUARDIAN", "AUTHORIZED_PICKUP"]);
 
-export function defaultProfilePhotoUrlForRole(role: string) {
-  return KID_CITY_FAMILY_AND_TEACHER_ROLES.has(role) ? KID_CITY_PROFILE_PHOTO_URL : DEFAULT_PROFILE_PHOTO_URL;
+export function defaultProfilePhotoUrlForRole(
+  role: string,
+  brandKind: "bee-suite" | "kid-city-usa" | "miss-honeys-learning-center" = "kid-city-usa",
+) {
+  if (brandKind === "miss-honeys-learning-center") return MISS_HONEYS_PROFILE_PHOTO_URL;
+  if (brandKind === "kid-city-usa" && KID_CITY_FAMILY_AND_TEACHER_ROLES.has(role)) {
+    return KID_CITY_PROFILE_PHOTO_URL;
+  }
+  return DEFAULT_PROFILE_PHOTO_URL;
 }
 
 const allowedProfilePhotoTypes = new Set(["image/jpeg", "image/png", "image/webp"]);

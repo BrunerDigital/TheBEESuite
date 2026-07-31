@@ -67,9 +67,9 @@ export type ModuleSlug =
 
 export const centers = [
   {
-    name: "Kid City USA - Demo",
-    region: "Demo Campus",
-    director: "Demo School Director",
+    name: "Kid City USA - Little Harbor",
+    region: "Central Florida",
+    director: "School Director",
     children: 57,
     capacity: 79,
     staff: 14,
@@ -352,7 +352,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Roll up enrollment, occupancy, staffing, compliance reminders, and revenue trends across every owned center.",
     owner: "Brand admin, franchise admin, regional manager",
-    metrics: ["1 demo location", "79 licensed capacity", "14 staff", "94% documentation health"],
+    metrics: ["1 location", "79 licensed capacity", "14 staff", "94% documentation health"],
     features: ["Center comparison table", "Regional occupancy trend", "At-risk enrollment flags", "Open seat forecast"],
     records: centers.map((center) => `${center.name}: ${center.children}/${center.capacity} children`),
     ai: "Highlights centers with preventable enrollment leakage or expiring staff documentation.",
@@ -569,7 +569,7 @@ export const modules: ModuleDefinition[] = [
     description:
       "Daily sheets for meals, bottles, naps, diapers/potty, activities, mood, notes, photos, supplies, and reminders.",
     owner: "Teacher, parent/guardian",
-    metrics: ["10 demo reports", "4 in progress", "6 sent", "2 need supplies"],
+    metrics: ["10 reports", "4 in progress", "6 sent", "2 need supplies"],
     features: ["Meals and bottles", "Nap tracking", "Activities and mood", "Teacher notes and photos"],
     records: ["Sofia: cheerful, 1 nap, lunch finished", "Ari: needs extra clothes", "Mia: potty progress note"],
     ai: "Can polish parent-facing notes while preserving teacher intent.",
@@ -751,7 +751,7 @@ export const modules: ModuleDefinition[] = [
     owner: "Platform owner, brand/franchise admin",
     metrics: ["1 brand", "Live centers", "10 roles", "Audit logged"],
     features: ["Location lifecycle", "Owner group containers", "User and password controls", "Impersonation audit warning"],
-    records: ["Kid City USA Enterprises", "Kid City USA - Demo", "Feature flag: Kiosk preview"],
+    records: ["Kid City USA Enterprises", "Kid City USA - Little Harbor", "Feature flag: Kiosk preview"],
     sensitive: true,
   },
   {

@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import type { LoginPortal } from "@/lib/login-routing";
 
 const appIcon = "/brand/the-bee-suite/app-icon-yellow.png";
-const favicon = "/brand/the-bee-suite/favicon.png";
+const favicon = "/brand/the-bee-suite/browser-icon.png";
 
 export type StoreAppKey = "parent" | "teacher" | "director" | "executive";
 
@@ -61,8 +61,8 @@ export const storeApps = {
   teacher: {
     key: "teacher",
     portal: "teachers",
-    appStoreName: "BEE Suite Teacher",
-    displayName: "BEE Suite",
+    appStoreName: "BEE Suite Teacher Portal",
+    displayName: "BEE Teacher",
     shortName: "BEE Teachers",
     bundleId: "com.brunerdigital.thebeesuite.teacher",
     sku: "BEE-SUITE-TEACHER-IOS",

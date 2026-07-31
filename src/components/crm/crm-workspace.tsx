@@ -3,6 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useSchoolTimeZone } from "@/components/school-time-zone-context";
+import { formatZonedDateTime, zonedDateTimeLocalToUtc } from "@/lib/zoned-date-time";
 import {
   ArrowRight,
   Bot,
@@ -39,6 +41,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatPrintDateTime, PrintableReport, ReportPrintStyles, usePrintableReport } from "@/components/printable-report";
 import { crmPipelineStageDisclosure, enrollmentStages, stageLabels } from "@/lib/crm";
 import { registrationHandoffHref } from "@/lib/registration-handoff";
+import {
+  buildRegistrationLeadSuggestion,
+  buildRegistrationShareUrl,
+} from "@/lib/registration-sharing";
+import type { WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 
 type CenterOption = {
@@ -145,10 +152,12 @@ type CrmSavedView = {
 type Props = {
   initialLeads: CrmLead[];
   centers: CenterOption[];
+  appBaseUrl: string;
   currentUser: {
     name: string;
     role: string;
     centerIds: string[];
+    branding: WorkspaceBranding;
   };
 };
 
@@ -180,21 +189,22 @@ const createdRangeLabels: Record<CreatedRangeFilter, string> = {
   "90": "Last 90 days",
 };
 
-function safeDate(value: string | Date) {
-  return new Intl.DateTimeFormat("en", {
+function safeDate(value: string | Date, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     year: "numeric",
-  }).format(new Date(value));
+  });
 }
 
-function formatTourDate(value: string | Date) {
-  return new Intl.DateTimeFormat("en", {
+function formatTourDate(value: string | Date, timeZone: string) {
+  return formatZonedDateTime(value, timeZone, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZoneName: "short",
+  });
 }
 
 function dateInputValue(value: string | Date | null | undefined) {
@@ -219,36 +229,51 @@ function getLeadOwner(lead?: CrmLead | null) {
     : typeof ownerEmail === "string" ? ownerEmail : "";
 }
 
-function makeMrBeeDraft(lead?: CrmLead) {
+function makeMrBeeDraft(lead: CrmLead | undefined, brandName: string) {
   if (!lead) return "Choose a lead and Mr. Bee will draft a warm, human-reviewed follow-up.";
 
-  return `Hi ${lead.familyName}, this is Kid City USA following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
+  return `Hi ${lead.familyName}, this is ${brandName} following up on your ${lead.programInterest ?? "childcare"} inquiry for ${lead.center.name}. We would be happy to answer questions, confirm availability, or help schedule your next step.`;
 }
 
-function makeLeadEmailOptions(lead?: CrmLead): LeadEmailSuggestion[] {
+function makeLeadEmailOptions(
+  lead: CrmLead | undefined,
+  appBaseUrl: string,
+  brandName: string,
+): LeadEmailSuggestion[] {
   if (!lead) return [];
   const program = lead.programInterest ?? "childcare";
   const childLine = lead.childName ? ` for ${lead.childName}` : "";
   const centerName = lead.center.crmLocationId ?? lead.center.name;
-  const subject = `Kid City USA ${program} follow-up`;
+  const subject = `${brandName} ${program} follow-up`;
 
-  return [
+  const generalSuggestions = [
     {
       label: "Warm follow-up",
       subject,
-      body: `Hi ${lead.familyName},\n\nThank you for your interest in ${program}${childLine} at ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nThank you for your interest in ${program}${childLine} at ${centerName}. We would be happy to answer questions, confirm availability, or help schedule your next step.\n\nThank you,\n${brandName}`,
     },
     {
       label: "Tour next step",
       subject: `Tour availability for ${centerName}`,
-      body: `Hi ${lead.familyName},\n\nI wanted to follow up on your ${program} inquiry${childLine}. If you would like to tour ${centerName}, reply with a few times that work well and our team can help coordinate the visit.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nI wanted to follow up on your ${program} inquiry${childLine}. If you would like to tour ${centerName}, reply with a few times that work well and our team can help coordinate the visit.\n\nThank you,\n${brandName}`,
     },
     {
       label: "Application help",
       subject: `Enrollment next steps for ${centerName}`,
-      body: `Hi ${lead.familyName},\n\nThis is Kid City USA checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\nKid City USA`,
+      body: `Hi ${lead.familyName},\n\nThis is ${brandName} checking in to see if you need help with the next enrollment step for ${program}${childLine}. Our team can answer questions about availability, paperwork, or start dates.\n\nThank you,\n${brandName}`,
     },
   ];
+  const registrationSuggestion = buildRegistrationLeadSuggestion({
+    familyName: lead.familyName,
+    childName: lead.childName,
+    program: lead.programInterest,
+    schoolLabel: centerName,
+    registrationUrl: buildRegistrationShareUrl(appBaseUrl, lead.center.id),
+    stage: lead.stage,
+    customFields: lead.customFields,
+    brandName,
+  });
+  return registrationSuggestion ? [registrationSuggestion, ...generalSuggestions] : generalSuggestions;
 }
 
 function formatBytes(value: number) {
@@ -356,7 +381,7 @@ function leadTimeline(details: LeadDetails | null): LeadTimelineItem[] {
   });
 }
 
-function makeCsvRows(leads: CrmLead[]) {
+function makeCsvRows(leads: CrmLead[], timeZone: string) {
   const headers = [
     "Family Name",
     "Child Name",
@@ -389,7 +414,7 @@ function makeCsvRows(leads: CrmLead[]) {
     getLeadOwner(lead),
     lead.leadSource,
     dateInputValue(lead.desiredStartDate),
-    safeDate(lead.createdAt),
+    safeDate(lead.createdAt, timeZone),
     lead.center.name,
     lead.center.crmLocationId,
     lead.center.city,
@@ -451,7 +476,9 @@ function subscribeCrmSavedViews(callback: () => void) {
   };
 }
 
-export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
+export function CrmWorkspace({ initialLeads, centers, appBaseUrl, currentUser }: Props) {
+  const timeZone = useSchoolTimeZone();
+  const brandName = currentUser.branding.name;
   const searchParams = useSearchParams();
   const routeQuery = searchParams.get("q") ?? "";
   const [leads, setLeads] = useState(initialLeads);
@@ -486,10 +513,12 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   const [taskDueAt, setTaskDueAt] = useState("");
   const [tourStartsAt, setTourStartsAt] = useState("");
   const [tourNotes, setTourNotes] = useState("");
-  const [emailSubject, setEmailSubject] = useState("Kid City USA enrollment follow-up");
-  const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0]));
+  const [emailSubject, setEmailSubject] = useState(`${brandName} enrollment follow-up`);
+  const [emailDraft, setEmailDraft] = useState(makeMrBeeDraft(initialLeads[0], brandName));
   const [emailPurposePrompt, setEmailPurposePrompt] = useState("");
-  const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(() => makeLeadEmailOptions(initialLeads[0]));
+  const [emailSuggestions, setEmailSuggestions] = useState<LeadEmailSuggestion[]>(
+    () => makeLeadEmailOptions(initialLeads[0], appBaseUrl, brandName),
+  );
   const [emailAttachments, setEmailAttachments] = useState<EmailComposerAttachment[]>([]);
   const { active: printActive, generatedAt: printGeneratedAt, print: printReport } = usePrintableReport();
   const [editForm, setEditForm] = useState({
@@ -595,9 +624,9 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
   function selectLead(lead: CrmLead) {
     setSelectedLeadId(lead.id);
     setSelectedLeadDetails(null);
-    setEmailSubject(`Kid City USA ${lead.programInterest ?? "enrollment"} follow-up`);
-    setEmailDraft(makeMrBeeDraft(lead));
-    setEmailSuggestions(makeLeadEmailOptions(lead));
+    setEmailSubject(`${brandName} ${lead.programInterest ?? "enrollment"} follow-up`);
+    setEmailDraft(makeMrBeeDraft(lead, brandName));
+    setEmailSuggestions(makeLeadEmailOptions(lead, appBaseUrl, brandName));
     setEmailAttachments([]);
     setEditForm({
       familyName: lead.familyName,
@@ -664,7 +693,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       showError("No visible leads to export.");
       return;
     }
-    const csv = makeCsvRows(filteredLeads);
+    const csv = makeCsvRows(filteredLeads, timeZone);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -737,8 +766,8 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const json = (await response.json()) as { lead: CrmLead };
       setLeads((current) => current.map((lead) => (lead.id === selectedLead.id ? json.lead : lead)));
       setSelectedLeadDetails((current) => (current ? { ...current, ...json.lead } : current));
-      setEmailDraft(makeMrBeeDraft(json.lead));
-      setEmailSuggestions(makeLeadEmailOptions(json.lead));
+      setEmailDraft(makeMrBeeDraft(json.lead, brandName));
+      setEmailSuggestions(makeLeadEmailOptions(json.lead, appBaseUrl, brandName));
       showStatus("Lead details updated and audit logged.");
     });
   }
@@ -843,7 +872,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const response = await fetch(`/api/leads/${selectedLead.id}/tours`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startsAt: tourStartsAt, notes: tourNotes }),
+        body: JSON.stringify({ startsAt: zonedDateTimeLocalToUtc(tourStartsAt, timeZone)?.toISOString(), notes: tourNotes }),
       });
 
       if (!response.ok) {
@@ -936,7 +965,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
       const json = (await response.json()) as { suggestions?: LeadEmailSuggestion[]; guardrailNote?: string };
       const nextSuggestions = Array.isArray(json.suggestions) && json.suggestions.length
         ? json.suggestions
-        : makeLeadEmailOptions(selectedLead);
+        : makeLeadEmailOptions(selectedLead, appBaseUrl, brandName);
       setEmailSuggestions(nextSuggestions);
       showStatus("Message options generated. Review one before sending.");
     });
@@ -1014,6 +1043,53 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
     });
   }
 
+  function sendRegistrationForm() {
+    if (!selectedLead) return;
+
+    startTransition(async () => {
+      const response = await fetch("/api/registration/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          centerId: selectedLead.center.id,
+          leadId: selectedLead.id,
+        }),
+      });
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        registrationUrl?: string;
+        lead?: Pick<CrmLead, "id" | "stage" | "customFields"> | null;
+        note?: LeadNote | null;
+      } | null;
+
+      if (!response.ok) {
+        showError(json?.error || "The registration form could not be sent.");
+        return;
+      }
+
+      const nextLead = json?.lead
+        ? { ...selectedLead, stage: json.lead.stage, customFields: json.lead.customFields }
+        : selectedLead;
+      setLeads((current) => current.map((lead) => lead.id === nextLead.id ? nextLead : lead));
+      setSelectedLeadDetails((current) => current
+        ? {
+            ...current,
+            stage: nextLead.stage,
+            customFields: nextLead.customFields,
+            notes: json?.note ? [json.note, ...current.notes] : current.notes,
+          }
+        : current);
+      setEmailSuggestions(makeLeadEmailOptions(nextLead, appBaseUrl, brandName));
+      showStatus("School-specific registration form sent and logged on this CRM lead.");
+    });
+  }
+
+  async function copyRegistrationLink() {
+    if (!selectedLead) return;
+    await navigator.clipboard.writeText(buildRegistrationShareUrl(appBaseUrl, selectedLead.center.id));
+    showStatus("School-specific registration link copied.");
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <ReportPrintStyles />
@@ -1025,7 +1101,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
               <p className="mt-1 text-xs">{printFilterSummary}</p>
             </div>
             <div className="text-right text-xs">
-              <p>Generated: {formatPrintDateTime(printGeneratedAt)}</p>
+              <p>Generated: {formatPrintDateTime(printGeneratedAt, timeZone)}</p>
               <p>{filteredLeads.length.toLocaleString()} inquiries</p>
               <p>Printed by: {currentUser.name}</p>
             </div>
@@ -1062,7 +1138,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                   <td>{lead.score}</td>
                   <td>{lead.leadSource || "Unknown"}</td>
                   <td>{dateInputValue(lead.desiredStartDate) || "Not set"}</td>
-                  <td>{safeDate(lead.createdAt)}</td>
+                  <td>{safeDate(lead.createdAt, timeZone)}</td>
                   <td>{getCenterLabel(lead.center)}</td>
                 </tr>
               ))}
@@ -1073,7 +1149,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
         <div className="grid gap-0 xl:grid-cols-[1fr_22rem]">
           <div className="p-5 sm:p-6">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-primary text-primary-foreground">Kid City USA Live CRM</Badge>
+              <Badge className="bg-primary text-primary-foreground">{brandName} Live CRM</Badge>
               <Badge variant="outline">SaaS tenant-ready</Badge>
               <Badge variant="secondary">{filteredLeads.length.toLocaleString()} visible leads</Badge>
               <Badge variant="outline">
@@ -1090,7 +1166,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                   Live lead intake, school routing, manual lead entry, pipeline movement,
-                  and Mr. Bee communication support for Kid City USA’s first rollout.
+                  and Mr. Bee communication support for {brandName} enrollment operations.
                 </p>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
@@ -1136,7 +1212,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
               value={emailPurposePrompt}
               onChange={(event) => setEmailPurposePrompt(event.target.value)}
               aria-label="Email purpose for Mr. Bee"
-              placeholder="Tell Mr. Bee the purpose of this email, such as invite them to tour, request missing paperwork, explain availability, or follow up after a call."
+              placeholder="Tell Mr. Bee the purpose, such as invite them to tour, send the school registration form, request paperwork, explain availability, or follow up after a call."
             />
             <div className="mt-3 grid gap-2">
               <Button variant="outline" disabled={!selectedLead || isPending} onClick={generateEmailSuggestions}>
@@ -1417,7 +1493,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                         <span>{lead.leadSource ?? "Unknown source"}</span>
-                        <span>{safeDate(lead.createdAt)}</span>
+                        <span>{safeDate(lead.createdAt, timeZone)}</span>
                       </div>
                     </button>
                   ))}
@@ -1558,23 +1634,53 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                       </Button>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    nativeButton={false}
-                    render={(
-                      <Link
-                        href={registrationHandoffHref(selectedLead.center.id)}
-                        target="_blank"
-                        rel="noreferrer"
-                      />
-                    )}
-                  >
-                    Open school application
-                    <ArrowRight data-icon="inline-end" />
-                  </Button>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Opens the public registration packet with this lead&apos;s school preselected. Enrollment still requires director review and approval.
-                  </p>
+                  <div className="grid gap-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
+                    <div>
+                      <div className="text-sm font-medium">Registration and enrollment form</div>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        Send this lead the form linked directly to {getCenterLabel(selectedLead.center)}.
+                        The send is logged on the lead and moves early-stage leads to Application Sent.
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button
+                        size="sm"
+                        disabled={!selectedLead.email || isPending}
+                        onClick={sendRegistrationForm}
+                      >
+                        <Send data-icon="inline-start" />
+                        Send registration form
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void copyRegistrationLink()}>
+                        <Clipboard data-icon="inline-start" />
+                        Copy registration link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="sm:col-span-2"
+                        nativeButton={false}
+                        render={(
+                          <Link
+                            href={registrationHandoffHref(selectedLead.center.id)}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                        )}
+                      >
+                        Preview school application
+                        <ArrowRight data-icon="inline-end" />
+                      </Button>
+                    </div>
+                    {!selectedLead.email ? (
+                      <p className="text-xs text-destructive">
+                        Add a valid lead email before sending. The link can still be copied.
+                      </p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Submitting the form sends the packet to the director for confirmation. It does not confirm enrollment.
+                    </p>
+                  </div>
                   {duplicateCandidates.length ? (
                     <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 p-3">
                       <div className="flex items-start gap-2">
@@ -1783,7 +1889,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                     <div className="mt-3 flex flex-col gap-2">
                       {(selectedLeadDetails?.tours ?? []).slice(0, 4).map((tour) => (
                         <div key={tour.id} className="rounded-lg border bg-card/60 p-2">
-                          <div className="text-xs font-medium">{formatTourDate(tour.startsAt)}</div>
+                          <div className="text-xs font-medium">{formatTourDate(tour.startsAt, timeZone)}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
                             {tour.status}{tour.notes ? ` - ${tour.notes}` : ""}
                           </div>
@@ -1804,7 +1910,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                         <div key={task.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs font-medium">{task.title}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {task.dueAt ? safeDate(task.dueAt) : "No due date"} · {task.status}
+                            {task.dueAt ? safeDate(task.dueAt, timeZone) : "No due date"} · {task.status}
                           </div>
                         </div>
                       ))}
@@ -1831,7 +1937,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                             {item.body}
                           </div>
                           <div className="mt-1 text-[0.65rem] text-muted-foreground">
-                            {item.at ? (item.kind === "tour" ? formatTourDate(item.at) : safeDate(item.at)) : "No date"}
+                            {item.at ? (item.kind === "tour" ? formatTourDate(item.at, timeZone) : safeDate(item.at, timeZone)) : "No date"}
                           </div>
                         </div>
                       ))}
@@ -1850,7 +1956,7 @@ export function CrmWorkspace({ initialLeads, centers, currentUser }: Props) {
                         <div key={note.id} className="rounded-lg border bg-card/60 p-2">
                           <div className="text-xs leading-5">{note.body}</div>
                           <div className="mt-1 text-[0.7rem] text-muted-foreground">
-                            {note.user?.name ?? "System"} · {safeDate(note.createdAt)}
+                            {note.user?.name ?? "System"} · {safeDate(note.createdAt, timeZone)}
                           </div>
                         </div>
                       ))}

@@ -1,5 +1,7 @@
 # Post-Release Smoke Checklist
 
+Last updated: July 24, 2026
+
 Run only after a separately authorized release. Use approved test tenants/accounts and non-destructive fixtures; never use Kokomo for destructive testing.
 
 ## Deployment identity
@@ -13,6 +15,7 @@ Run only after a separately authorized release. Use approved test tenants/accoun
 - [ ] Authorized operator confirms `/api/system/readiness`: zero blocked checks; warnings reviewed and accepted.
 - [ ] Homepage and `/parents`, `/teachers`, `/directors`, `/executives` render expected login/entry states.
 - [ ] `npm run test:smoke` passes against the production URL.
+- [ ] If inquiry origins changed, approved `OPTIONS /api/inquiries` preflights return 204 and echo the exact allowed origin; no lead is created.
 - [ ] Vercel runtime/build logs show no new unexplained errors; request/deployment IDs retained.
 - [ ] Uptime/error monitoring sees the release and alerts remain armed.
 
@@ -23,8 +26,10 @@ Run only after a separately authorized release. Use approved test tenants/accoun
 - [ ] Teacher: correct classroom/roster scope and approved fixture workflow passes.
 - [ ] Parent: linked test family sees only its children; approved setup/read workflow passes.
 - [ ] Public/CRM and kiosk: only if changed and with approved non-live fixtures.
+- [ ] Public survey: focused tests pass; use an approved synthetic active survey only if mutation evidence is required. Never submit feedback to a real family survey for smoke testing.
 - [ ] Every changed route/workflow has an explicit expected result and evidence link.
 - [ ] No cross-school exposure, unexpected email/SMS, live charge, payout, invitation, or destructive write occurred.
+- [ ] No ProCare preview/import, billing/payment activation, invitation, communication, kiosk activation, or school rollout gate changed merely because the deployment passed.
 
 ## Operations observation
 

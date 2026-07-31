@@ -42,6 +42,10 @@ import {
   expandProcareSourceEntries,
 } from "@/lib/procare-multi-report-import";
 import { buildRenderedProcareReportRowsFromFiles } from "@/lib/procare-rendered-report-import";
+import {
+  mergeProcareGuardianImports,
+  type ProcareGuardianImportRecord,
+} from "@/lib/procare-guardian-merge";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -210,15 +214,7 @@ type ProcareRelationshipRecord = {
   guardian?: boolean;
 };
 
-type ProcareGuardianImport = {
-  name: string;
-  guardianEmail: string;
-  guardianPhone: string;
-  externalId: string | null;
-  relation: string;
-  billingContact: boolean;
-  employer: string;
-};
+type ProcareGuardianImport = ProcareGuardianImportRecord;
 
 function procareRelationshipRecords(rawData: Record<string, string>): ProcareRelationshipRecord[] {
   try {
@@ -288,32 +284,7 @@ function procareGuardianImports(rawData: Record<string, string>, childPersonExte
     });
   }
 
-  const uniqueGuardians = new Map<string, ProcareGuardianImport>();
-  for (const guardian of guardianImports) {
-    if (!guardian.name && !guardian.guardianEmail && !guardian.guardianPhone) continue;
-    const identity = guardian.externalId
-      ? `id:${guardian.externalId.toLowerCase()}`
-      : guardian.guardianEmail
-        ? `email:${guardian.guardianEmail}`
-        : guardian.guardianPhone
-          ? `phone:${guardian.guardianPhone.replace(/\D/g, "") || guardian.guardianPhone.toLowerCase()}`
-          : `name:${guardian.name.toLowerCase()}`;
-    const existing = uniqueGuardians.get(identity);
-    if (!existing) {
-      uniqueGuardians.set(identity, guardian);
-      continue;
-    }
-    uniqueGuardians.set(identity, {
-      name: existing.name || guardian.name,
-      guardianEmail: existing.guardianEmail || guardian.guardianEmail,
-      guardianPhone: existing.guardianPhone || guardian.guardianPhone,
-      externalId: existing.externalId || guardian.externalId,
-      relation: /^(secondary\s+)?guardian$/i.test(existing.relation) && guardian.relation ? guardian.relation : existing.relation,
-      billingContact: existing.billingContact || guardian.billingContact,
-      employer: existing.employer || guardian.employer,
-    });
-  }
-  return [...uniqueGuardians.values()];
+  return mergeProcareGuardianImports(guardianImports);
 }
 
 function splitPeopleList(input: string) {
@@ -2485,9 +2456,9 @@ async function POSTHandler(request: NextRequest) {
         const fallbackGuardianMatchers = [
           guardianEmail ? { email: guardianEmail } : undefined,
           guardianPhone ? { phone: guardianPhone } : undefined,
-          name ? { fullName: name } : undefined,
+          !externalId && name ? { fullName: name } : undefined,
         ].filter(Boolean) as Array<{ email?: string; phone?: string; fullName?: string }>;
-        const fallbackGuardians = externalId || !fallbackGuardianMatchers.length
+        const fallbackGuardians = !fallbackGuardianMatchers.length
           ? []
           : await prisma.guardian.findMany({
               where: { familyId: family.id, OR: fallbackGuardianMatchers },
@@ -2505,8 +2476,11 @@ async function POSTHandler(request: NextRequest) {
         if (fallbackGuardians.length > 1) {
           throw new Error("Multiple guardians match this row without a ProCare Person ID. Add the relationship ID before importing.");
         }
+        if (externalGuardians[0] && fallbackGuardians[0] && externalGuardians[0].id !== fallbackGuardians[0].id) {
+          throw new Error("The ProCare Person ID and parent contact fields match different guardians. Resolve the guardian records before importing.");
+        }
         const existingGuardian = externalId
-          ? externalGuardians[0] ?? null
+          ? externalGuardians[0] ?? fallbackGuardians[0] ?? null
           : fallbackGuardians[0] ?? null;
         const guardianMetadata = metadataFromRow(rawData, { mappedCenterId: targetCenter.id, accountExternalId });
         if (!existingGuardian) {

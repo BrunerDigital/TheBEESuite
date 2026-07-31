@@ -251,6 +251,13 @@ type Props = {
   invoices: Invoice[];
   payments?: Payment[];
   ledgerEntries?: LedgerEntry[];
+  latestLedgerEntry?: LedgerEntry | null;
+  ledgerPagination?: {
+    page: number;
+    pageSize: number;
+    hasPrevious: boolean;
+    hasNext: boolean;
+  };
   dailyReports: DailyReport[];
   incidents: Incident[];
   messages: Array<{ id: string; subject: string | null; body: string; createdAt: string | Date; attachments?: MessageAttachmentView[] }>;
@@ -449,6 +456,8 @@ export function ParentPortalWorkspace({
   invoices,
   payments = [],
   ledgerEntries = [],
+  latestLedgerEntry = null,
+  ledgerPagination,
   dailyReports,
   incidents,
   messages,
@@ -513,7 +522,7 @@ export function ParentPortalWorkspace({
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
   const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
-  const latestLedgerEntry = ledgerEntries[0] ?? null;
+  const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
@@ -1321,11 +1330,11 @@ export function ParentPortalWorkspace({
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Latest account activity</div>
-                {latestLedgerEntry ? (
+                {latestAccountLedgerEntry ? (
                   <>
-                    <div className="mt-1 truncate font-medium">{latestLedgerEntry.description}</div>
+                    <div className="mt-1 truncate font-medium">{latestAccountLedgerEntry.description}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {money(latestLedgerEntry.amountCents)} · Balance {latestLedgerEntry.balanceAfterCents === null ? "not set" : money(latestLedgerEntry.balanceAfterCents)}
+                      {money(latestAccountLedgerEntry.amountCents)} · Balance {latestAccountLedgerEntry.balanceAfterCents === null ? "not set" : money(latestAccountLedgerEntry.balanceAfterCents)}
                     </div>
                   </>
                 ) : (
@@ -1363,6 +1372,35 @@ export function ParentPortalWorkspace({
                 ))}
                 {!ledgerEntries.length ? <p className="text-sm text-muted-foreground">No ledger entries are visible yet.</p> : null}
               </div>
+              {ledgerPagination && (ledgerPagination.hasPrevious || ledgerPagination.hasNext) ? (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    Page {ledgerPagination.page} · Up to {ledgerPagination.pageSize} entries per page
+                  </p>
+                  <div className="flex gap-2">
+                    {ledgerPagination.hasPrevious ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/parent-portal?familyId=${encodeURIComponent(family?.id ?? "")}&ledgerPage=${ledgerPagination.page - 1}`} />}
+                      >
+                        Previous
+                      </Button>
+                    ) : null}
+                    {ledgerPagination.hasNext ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        nativeButton={false}
+                        render={<Link href={`/parent-portal?familyId=${encodeURIComponent(family?.id ?? "")}&ledgerPage=${ledgerPagination.page + 1}`} />}
+                      >
+                        Next
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3 flex items-center gap-2 text-sm font-medium">

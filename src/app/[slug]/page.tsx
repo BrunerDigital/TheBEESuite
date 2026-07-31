@@ -424,6 +424,13 @@ function firstSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+const PARENT_LEDGER_PAGE_SIZE = 50;
+
+function boundedPage(value: string | string[] | undefined) {
+  const parsed = Number.parseInt(firstSearchParam(value) || "1", 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 1_000 ? parsed : 1;
+}
+
 function safeAuthNextPath(value: string | string[] | undefined) {
   const path = firstSearchParam(value) || "";
   if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/login")) return "";
@@ -1832,6 +1839,7 @@ async function renderLivePage(
 
   if (slug === "parent-portal") {
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
+    const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN
       ? await prisma.family.findMany({
           where: {
@@ -1897,7 +1905,7 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [billingAccount, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
+    const [billingAccount, latestLedgerEntry, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -1932,10 +1940,17 @@ async function renderLivePage(
             },
           },
           ledgerEntries: {
-            orderBy: { effectiveAt: "desc" },
+            orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
+            skip: (requestedLedgerPage - 1) * PARENT_LEDGER_PAGE_SIZE,
+            take: PARENT_LEDGER_PAGE_SIZE + 1,
             select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
           },
         },
+      }),
+      prisma.ledgerEntry.findFirst({
+        where: { billingAccount: { familyId } },
+        orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
+        select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
       }),
       prisma.invoice.findMany({
         where: { billingAccount: { familyId } },
@@ -2196,7 +2211,14 @@ async function renderLivePage(
         invoices={invoicesWithCheckout}
         checkoutReadiness={parentCheckoutReadiness}
         payments={billingAccount?.payments ?? []}
-        ledgerEntries={billingAccount?.ledgerEntries ?? []}
+        latestLedgerEntry={latestLedgerEntry}
+        ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}
+        ledgerPagination={{
+          page: requestedLedgerPage,
+          pageSize: PARENT_LEDGER_PAGE_SIZE,
+          hasPrevious: requestedLedgerPage > 1,
+          hasNext: (billingAccount?.ledgerEntries.length ?? 0) > PARENT_LEDGER_PAGE_SIZE,
+        }}
         dailyReports={dailyReports}
         incidents={incidents}
         messages={signedMessages}

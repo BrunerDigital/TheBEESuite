@@ -18,11 +18,27 @@ test("the parent portal places authoritative account activity ahead of invoice h
   assert.match(source, /Posted payments and credits are included\./);
 });
 
-test("the parent portal query does not truncate the family ledger", () => {
+test("the parent portal query paginates the family ledger with a stable bounded window", () => {
   const source = readFileSync("src/app/[slug]/page.tsx", "utf8");
   const parentPortal = source.slice(source.indexOf('if (slug === "parent-portal")'), source.indexOf('if (slug === "center-dashboard")'));
   const ledgerSelection = parentPortal.match(/ledgerEntries:\s*\{[\s\S]*?select:\s*\{[^}]*balanceAfterCents[^}]*\}/)?.[0] ?? "";
 
   assert.ok(ledgerSelection);
-  assert.doesNotMatch(ledgerSelection, /take:/);
+  assert.match(source, /const PARENT_LEDGER_PAGE_SIZE = 50/);
+  assert.match(ledgerSelection, /orderBy:\s*\[\{ effectiveAt: "desc" \}, \{ id: "desc" \}\]/);
+  assert.match(ledgerSelection, /skip:\s*\(requestedLedgerPage - 1\) \* PARENT_LEDGER_PAGE_SIZE/);
+  assert.match(ledgerSelection, /take:\s*PARENT_LEDGER_PAGE_SIZE \+ 1/);
+  assert.match(parentPortal, /ledgerEntries\.slice\(0, PARENT_LEDGER_PAGE_SIZE\)/);
+  assert.match(parentPortal, /hasNext:\s*\(billingAccount\?\.ledgerEntries\.length \?\? 0\) > PARENT_LEDGER_PAGE_SIZE/);
+});
+
+test("the parent portal keeps latest activity accurate while browsing older ledger pages", () => {
+  const page = readFileSync("src/app/[slug]/page.tsx", "utf8");
+  const workspace = readFileSync("src/components/parent-portal-workspace.tsx", "utf8");
+
+  assert.match(page, /prisma\.ledgerEntry\.findFirst\([\s\S]*?billingAccount:\s*\{ familyId \}/);
+  assert.match(page, /latestLedgerEntry=\{latestLedgerEntry\}/);
+  assert.match(workspace, /latestAccountLedgerEntry = latestLedgerEntry \?\? ledgerEntries\[0\] \?\? null/);
+  assert.match(workspace, /Page \{ledgerPagination\.page\}/);
+  assert.match(workspace, /ledgerPage=\$\{ledgerPagination\.page \+ 1\}/);
 });

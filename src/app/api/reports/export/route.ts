@@ -10,11 +10,12 @@ import {
   type ReportKind,
 } from "@/lib/reporting-analytics";
 import { canAccessModule } from "@/lib/rbac";
+import { REPORT_KINDS } from "@/lib/reporting-analytics-shared";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
-const reportKinds = new Set<ReportKind>(["lead_funnel", "attendance", "billing", "messages", "staff_hours"]);
+const reportKinds = new Set<ReportKind>(REPORT_KINDS);
 const reportFormats = new Set<ReportFormat>(["csv", "pdf"]);
 
 function safeFilename(value: string) {
@@ -49,6 +50,7 @@ async function GETHandler(request: NextRequest) {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}.pdf"`,
+        "Cache-Control": "private, no-store",
       },
     });
   }
@@ -57,6 +59,7 @@ async function GETHandler(request: NextRequest) {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="${filename}.csv"`,
+      "Cache-Control": "private, no-store",
     },
   });
 }

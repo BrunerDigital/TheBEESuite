@@ -3,7 +3,10 @@ import { centerServiceDayWindow, readCenterTimeZone } from "@/lib/attendance-sta
 import { getLeadScopeWhere, type CurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { REPORT_DEFINITIONS, type ReportKind } from "@/lib/reporting-analytics-shared";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
+import { readSchoolEin } from "@/lib/school-tax-id";
 import { formatStaffDecimalHours, readStaffClockState, readStaffClockSummary } from "@/lib/staff-kiosk";
+import { zonedDateKey } from "@/lib/zoned-date-time";
 
 export { REPORT_DEFINITIONS } from "@/lib/reporting-analytics-shared";
 export type { ReportKind } from "@/lib/reporting-analytics-shared";
@@ -16,7 +19,25 @@ export type ReportCenterOption = {
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  schoolEin?: string | null;
   timezone: string;
+};
+
+export type EnrollmentStatusReportRow = {
+  childId: string;
+  centerId: string;
+  centerLabel: string;
+  groupLabel: string;
+  groupSortOrder: number;
+  statusDate: string | null;
+  childName: string;
+  gender: string;
+  dateOfBirth: string | null;
+  ageInMonths: number | null;
+  ageLabel: string;
+  enrollmentStatus: string;
 };
 
 export type LeadSourceReportRow = {
@@ -99,6 +120,7 @@ export type AnalyticsReportData = {
     centerLabels: string[];
   };
   centers: ReportCenterOption[];
+  enrollmentStatus: EnrollmentStatusReportRow[];
   leadSources: LeadSourceReportRow[];
   funnelStages: FunnelStageReportRow[];
   attendanceTrends: AttendanceTrendReportRow[];
@@ -122,6 +144,7 @@ export type AnalyticsReportData = {
     staffHoursMinutes: number;
     staffOpenShiftMinutes: number;
     staffClockedIn: number;
+    currentEnrollmentCount: number;
   };
 };
 
@@ -232,7 +255,7 @@ async function getAccessibleCenters(user: CurrentUser) {
   const centers = await prisma.center.findMany({
     where: { ...getLeadScopeWhere(user), status: { not: "closed" } },
     orderBy: [{ state: "asc" }, { city: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, crmLocationId: true, city: true, state: true, postalCode: true, timezone: true, customFields: true },
+    select: { id: true, name: true, crmLocationId: true, address: true, city: true, state: true, postalCode: true, phone: true, timezone: true, customFields: true },
   });
   return centers.map((center) => ({
     id: center.id,
@@ -241,8 +264,107 @@ async function getAccessibleCenters(user: CurrentUser) {
     city: center.city,
     state: center.state,
     postalCode: center.postalCode,
+    address: center.address,
+    phone: center.phone,
+    schoolEin: readSchoolEin(center.customFields),
     timezone: readCenterTimeZone(center),
   }));
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function cleanText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+export function readEnrollmentReportGender(customFields: unknown) {
+  const fields = record(customFields);
+  const rawData = record(fields.rawData);
+  const sourceFields = record(fields.sourceFields);
+  const value = cleanText(
+    fields.gender ?? fields.sex ?? fields.childGender
+    ?? rawData.gender ?? rawData.Gender ?? rawData.sex ?? rawData.Sex
+    ?? sourceFields.gender ?? sourceFields.sex,
+  );
+  const normalized = value.toLowerCase().replace(/[^a-z]/g, "");
+  if (normalized === "f" || normalized === "female") return "Female";
+  if (normalized === "m" || normalized === "male") return "Male";
+  if (normalized === "nonbinary" || normalized === "nonbinarygender") return "Nonbinary";
+  return value || "Not set";
+}
+
+export function childAgeInMonths(dateOfBirth: Date, asOf: Date, timeZone = "UTC") {
+  const [birthYear, birthMonth, birthDay] = zonedDateKey(dateOfBirth, "UTC").split("-").map(Number);
+  const [asOfYear, asOfMonth, asOfDay] = zonedDateKey(asOf, timeZone).split("-").map(Number);
+  return ((asOfYear - birthYear) * 12) + (asOfMonth - birthMonth) - (asOfDay < birthDay ? 1 : 0);
+}
+
+export function childAgeLabel(ageInMonths: number | null) {
+  if (ageInMonths === null) return "DOB needs review";
+  return `${Math.floor(ageInMonths / 12)} Yr - ${ageInMonths % 12} Mo`;
+}
+
+function enrollmentGroupSortOrder(label: string, ageInMonths: number | null) {
+  const normalized = label.toLowerCase();
+  if (/infant|baby/.test(normalized)) return 0;
+  if (/\bone\b|toddler/.test(normalized)) return 12;
+  if (/\btwo\b|twos|2['’]?s/.test(normalized)) return 24;
+  if (/\bthree\b|threes|3['’]?s/.test(normalized)) return 36;
+  if (/\bfour\b|fours|4['’]?s|preschool/.test(normalized)) return 48;
+  if (/pre.?k|vpk/.test(normalized)) return 54;
+  if (/school.?age|after.?school/.test(normalized)) return 60;
+  return ageInMonths ?? 999;
+}
+
+type EnrollmentStatusChild = {
+  id: string;
+  fullName: string;
+  dateOfBirth: Date;
+  startDate: Date | null;
+  ageGroup: string;
+  enrollmentStatus: string;
+  customFields: unknown;
+  family: { centerId: string | null };
+  classroom: { name: string; ageGroup: string; centerId: string } | null;
+};
+
+export function buildEnrollmentStatusReportRows(
+  children: EnrollmentStatusChild[],
+  centerById: Map<string, ReportCenterOption>,
+  asOf: Date,
+) {
+  return children.flatMap((child): EnrollmentStatusReportRow[] => {
+    const centerId = child.family.centerId;
+    if (!centerId || !child.classroom || child.classroom.centerId !== centerId || !centerById.has(centerId)) return [];
+    const fields = record(child.customFields);
+    const missingDob = fields.dateOfBirthMissing === true || child.dateOfBirth.getUTCFullYear() <= 1900;
+    const center = centerById.get(centerId)!;
+    const ageInMonths = missingDob ? null : childAgeInMonths(child.dateOfBirth, asOf, center.timezone);
+    if (ageInMonths !== null && (ageInMonths < 0 || ageInMonths > 120)) return [];
+    const groupLabel = cleanText(child.classroom.name) || cleanText(child.classroom.ageGroup) || cleanText(child.ageGroup) || "Unassigned";
+    return [{
+      childId: child.id,
+      centerId,
+      centerLabel: center.label,
+      groupLabel,
+      groupSortOrder: enrollmentGroupSortOrder(groupLabel, ageInMonths),
+      statusDate: child.startDate?.toISOString() ?? null,
+      childName: child.fullName,
+      gender: readEnrollmentReportGender(child.customFields),
+      dateOfBirth: missingDob ? null : child.dateOfBirth.toISOString(),
+      ageInMonths,
+      ageLabel: childAgeLabel(ageInMonths),
+      enrollmentStatus: child.enrollmentStatus,
+    }];
+  }).sort((left, right) =>
+    left.centerLabel.localeCompare(right.centerLabel)
+    || left.groupSortOrder - right.groupSortOrder
+    || left.groupLabel.localeCompare(right.groupLabel)
+    || String(left.statusDate ?? "9999").localeCompare(String(right.statusDate ?? "9999"))
+    || left.childName.localeCompare(right.childName),
+  );
 }
 
 function scopedCenterIds(centers: ReportCenterOption[], centerId?: string | null) {
@@ -578,6 +700,7 @@ export async function buildAnalyticsReportData(
   };
 
   const [
+    enrollmentChildren,
     leads,
     attendanceRecords,
     checkLogs,
@@ -586,6 +709,27 @@ export async function buildAnalyticsReportData(
     messages,
     staffProfiles,
   ] = await Promise.all([
+    prisma.child.findMany({
+      where: {
+        ...currentlyEnrolledChildWhere(),
+        family: { is: { centerId: selectedCenterFilter } },
+        classroom: { is: { centerId: selectedCenterFilter } },
+        OR: [{ startDate: null }, { startDate: { lte: endDate } }],
+      },
+      orderBy: [{ classroom: { name: "asc" } }, { startDate: "asc" }, { fullName: "asc" }],
+      take: 10_000,
+      select: {
+        id: true,
+        fullName: true,
+        dateOfBirth: true,
+        startDate: true,
+        ageGroup: true,
+        enrollmentStatus: true,
+        customFields: true,
+        family: { select: { centerId: true } },
+        classroom: { select: { name: true, ageGroup: true, centerId: true } },
+      },
+    }),
     prisma.lead.findMany({
       where: leadWhere,
       orderBy: { createdAt: "desc" },
@@ -688,6 +832,7 @@ export async function buildAnalyticsReportData(
     }),
   ]);
 
+  const enrollmentStatus = buildEnrollmentStatusReportRows(enrollmentChildren, centerById, endDate);
   const { leadSources, funnelStages } = buildLeadReports(leads, centerById);
   const attendanceTrends = buildAttendanceReports({ attendanceRecords, checkLogs, centerById, daily });
   const billing = buildBillingReports({ invoices, payments, centerById, daily, now });
@@ -709,6 +854,7 @@ export async function buildAnalyticsReportData(
       centerLabels: selectedCenterIds.map((centerId) => centerById.get(centerId)?.label ?? centerId),
     },
     centers,
+    enrollmentStatus,
     leadSources,
     funnelStages,
     attendanceTrends,
@@ -732,6 +878,7 @@ export async function buildAnalyticsReportData(
       staffHoursMinutes: staffHours.reduce((sum, row) => sum + row.totalMinutes, 0),
       staffOpenShiftMinutes: staffHours.reduce((sum, row) => sum + row.openShiftMinutes, 0),
       staffClockedIn: staffHours.filter((row) => row.status === "clocked_in").length,
+      currentEnrollmentCount: enrollmentStatus.length,
     },
   };
 }
@@ -744,6 +891,23 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
     centers: data.scope.centerLabels,
     ...REPORT_DEFINITIONS[kind],
   };
+  if (kind === "enrollment_status") {
+    return {
+      title: "Enrollment Status Summary",
+      traceability,
+      headers: ["Center", "Classroom / age group", "Status date", "Child's name", "Gender", "DOB", "Child's age", "Enrollment status"],
+      rows: data.enrollmentStatus.map((row) => [
+        row.centerLabel,
+        row.groupLabel,
+        row.statusDate?.slice(0, 10) ?? "Not set",
+        row.childName,
+        row.gender,
+        row.dateOfBirth?.slice(0, 10) ?? "Needs review",
+        row.ageLabel,
+        row.enrollmentStatus.replaceAll("_", " "),
+      ]),
+    };
+  }
   if (kind === "lead_funnel") {
     return {
       title: "Lead Source And Funnel Conversion",
@@ -887,31 +1051,52 @@ function wrapText(text: string, length = 92) {
 }
 
 export function reportRowsToPdf(input: ReportRows, generatedAt = new Date(input.traceability.generatedAt)) {
-  const lines = [
+  const reportHeader = [
     input.title,
     `Generated ${generatedAt.toISOString()}`,
     `Range ${input.traceability.startDate} to ${input.traceability.endDate}`,
     `Centers ${input.traceability.centers.join(" | ")}`,
     `Source ${input.traceability.source}`,
     `Definition ${input.traceability.definition}`,
-    input.headers.join(" | "),
-    ...input.rows.slice(0, 120).flatMap((row) => wrapText(row.map((cell) => String(cell ?? "")).join(" | "))),
-  ];
-  const contentLines = lines.slice(0, 68);
-  const stream = [
-    "BT",
-    "/F1 10 Tf",
-    "40 760 Td",
-    ...contentLines.map((line, index) => `${index === 0 ? "" : "0 -12 Td"}(${pdfEscape(line)}) Tj`),
-    "ET",
-  ].join("\n");
-  const objects = [
+  ].flatMap((line) => wrapText(line, 126));
+  const columnHeader = input.headers.join(" | ");
+  const rowLines = input.rows.flatMap((row) => wrapText(row.map((cell) => String(cell ?? "")).join(" | "), 126));
+  const firstPageCapacity = 45;
+  const nextPageCapacity = 50;
+  const pageRows: string[][] = [];
+  pageRows.push(rowLines.slice(0, firstPageCapacity));
+  for (let offset = firstPageCapacity; offset < rowLines.length; offset += nextPageCapacity) {
+    pageRows.push(rowLines.slice(offset, offset + nextPageCapacity));
+  }
+  if (!pageRows.length) pageRows.push([]);
+
+  const pageCount = pageRows.length;
+  const pageObjectIds = pageRows.map((_, index) => 4 + (index * 2));
+  const objects: string[] = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageCount} >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
   ];
+
+  pageRows.forEach((rows, index) => {
+    const pageNumber = index + 1;
+    const pageId = 4 + (index * 2);
+    const contentId = pageId + 1;
+    const contentLines = index === 0
+      ? [...reportHeader, `Page ${pageNumber} of ${pageCount}`, columnHeader, ...rows]
+      : [input.title, `Page ${pageNumber} of ${pageCount}`, columnHeader, ...rows];
+    const stream = [
+      "BT",
+      "/F1 8 Tf",
+      "32 578 Td",
+      ...contentLines.map((line, lineIndex) => `${lineIndex === 0 ? "" : "0 -10 Td"}(${pdfEscape(line)}) Tj`),
+      "ET",
+    ].join("\n");
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 792 612] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`,
+      `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+    );
+  });
   let body = "%PDF-1.4\n";
   const offsets = [0];
   objects.forEach((object, index) => {

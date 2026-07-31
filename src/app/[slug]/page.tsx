@@ -143,6 +143,7 @@ import { invoicePurposeLabel } from "@/lib/product-billing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
+import { isReportKind } from "@/lib/reporting-analytics-shared";
 import { loginHrefForNextPath } from "@/lib/login-routing";
 import { canAccessModule } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
@@ -3461,6 +3462,8 @@ async function renderLivePage(
   }
 
   if (slug === "analytics") {
+    const requestedReportParam = firstSearchParam(searchParams.report) || "";
+    const requestedReport = isReportKind(requestedReportParam) ? requestedReportParam : "lead_funnel";
     const requestedRange = firstSearchParam(searchParams.range) || "365";
     const requestedStart = firstSearchParam(searchParams.start) || "";
     const requestedEnd = firstSearchParam(searchParams.end) || "";
@@ -3495,6 +3498,7 @@ async function renderLivePage(
         data={{
           reports,
           filters: {
+            report: requestedReport,
             range: requestedRange,
             start: requestedStart || reports.range.startDate.slice(0, 10),
             end: requestedEnd || reports.range.endDate.slice(0, 10),

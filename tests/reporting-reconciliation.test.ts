@@ -22,10 +22,11 @@ const data: AnalyticsReportData = {
     { id: "school_a", name: "School A", label: "IN | School A", timezone: "America/Indiana/Indianapolis" },
     { id: "school_b", name: "School B", label: "IN | School B", timezone: "America/Indiana/Indianapolis" },
   ],
+  enrollmentStatus: [],
   leadSources: [{ source: "Website", centerId: "school_a", centerLabel: "IN | School A", leads: 4, tours: 2, applications: 1, enrolled: 1, waitlisted: 0, conversionRate: 25 }],
   funnelStages: [{ stage: "ENROLLED", count: 1, share: 25 }],
   attendanceTrends: [], billing: [], messages: [], staffHours: [],
-  totals: { leadCount: 4, enrolledCount: 1, leadConversionRate: 25, presentCount: 0, absentCount: 0, attendanceRate: 0, invoiceCents: 0, paidCents: 0, openCents: 0, overdueCents: 0, parentMessages: 0, unreadMessages: 0, avgResponseHours: null, staffHoursMinutes: 0, staffOpenShiftMinutes: 0, staffClockedIn: 0 },
+  totals: { leadCount: 4, enrolledCount: 1, leadConversionRate: 25, presentCount: 0, absentCount: 0, attendanceRate: 0, invoiceCents: 0, paidCents: 0, openCents: 0, overdueCents: 0, parentMessages: 0, unreadMessages: 0, avgResponseHours: null, staffHoursMinutes: 0, staffOpenShiftMinutes: 0, staffClockedIn: 0, currentEnrollmentCount: 0 },
 };
 
 test("CSV export rows are equivalent to the displayed report rows and retain traceability", () => {

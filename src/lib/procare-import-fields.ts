@@ -225,6 +225,7 @@ export function procareChildPreferredName(rawData: ProcareImportRecord) {
 export function procareClassroomName(rawData: ProcareImportRecord) {
   return procarePlacementValue(rawData, [
     "classroom",
+    "primary classroom",
     "classroom name",
     "room",
     "room name",

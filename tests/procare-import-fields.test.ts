@@ -19,6 +19,7 @@ test("ProCare import fields ignore placeholder values from exported reports", ()
   assert.equal(cleanProcareImportValue("-------"), "");
   assert.equal(procareValue({ classroom: "-------", room: "Preschool 1" }, ["classroom", "room"]), "Preschool 1");
   assert.equal(procareClassroomName({ classroom: "-------", "primary work area": "Toddler A" }), "Toddler A");
+  assert.equal(procareClassroomName({ "primary classroom": "Honey Bees (Twos)" }), "Honey Bees (Twos)");
   assert.equal(procareAgeGroup({ "age group": "-------", classroom: "-------" }), "Unassigned");
   assert.equal(procareClassroomName({ classroom: "Unknown", room: "Toddler 1" }), "Toddler 1");
 });

@@ -4,12 +4,19 @@ import { writeAuditLog } from "@/lib/audit";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import {
+  buildParentLoginUrl,
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
+  buildParentPortalGuideHtml,
+  buildParentPortalGuideText,
   buildParentLoginSetupUrl,
+  buildParentPortalUrl,
   DIRECT_PARENT_PORTAL_INVITE_MODE,
 } from "@/lib/parent-portal-invitations";
-import { ensureParentPortalLoginForGuardian } from "@/lib/parent-portal-logins";
+import {
+  ensureParentPortalLoginForGuardian,
+  parentPortalInvitationSentFields,
+} from "@/lib/parent-portal-logins";
 import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readiness";
 import { canInviteGuardianToPortal } from "@/lib/portal-guardrails";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -29,6 +36,12 @@ function normalizeEmail(value: unknown) {
   return clean(value).toLowerCase();
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -37,6 +50,7 @@ async function POSTHandler(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const guardianId = clean(body.guardianId);
+  const messageType = clean(body.messageType) || "invitation";
   const temporaryPassword = clean(body.temporaryPassword);
 
   if (!guardianId) {
@@ -47,6 +61,9 @@ async function POSTHandler(request: NextRequest) {
       { ok: false, error: "Custom temporary passwords are not accepted. Parent access uses the school-issued first-login password." },
       { status: 400 },
     );
+  }
+  if (messageType !== "invitation" && messageType !== "guide") {
+    return NextResponse.json({ ok: false, error: "Unsupported parent email type." }, { status: 400 });
   }
 
   const guardian = await prisma.guardian.findUnique({
@@ -117,6 +134,93 @@ async function POSTHandler(request: NextRequest) {
   }
 
   try {
+    const appBaseUrl = getAppBaseUrl(request.url);
+    const branding = resolveWorkspaceBranding({
+      tenantName: center.organization.tenant.name,
+      tenantSlug: center.organization.tenant.slug,
+      brandName: center.organization.brand?.name,
+      brandSlug: center.organization.brand?.slug,
+      organizationName: center.organization.name,
+    });
+    const centerLabel = center.crmLocationId ?? center.name;
+
+    if (messageType === "guide") {
+      if (!guardian.userId || existingUser?.id !== guardian.userId) {
+        return NextResponse.json(
+          { ok: false, error: "Create and link the parent portal account before sending the feature guide." },
+          { status: 409 },
+        );
+      }
+
+      const loginUrl = buildParentLoginUrl(appBaseUrl);
+      const portalUrl = buildParentPortalUrl(appBaseUrl);
+      const guideText = buildParentPortalGuideText({
+        guardianName: guardian.fullName,
+        centerLabel,
+        loginUrl,
+        portalUrl,
+      });
+      const guideHtml = buildParentPortalGuideHtml({
+        guardianName: guardian.fullName,
+        centerLabel,
+        loginUrl,
+        portalUrl,
+        branding,
+      });
+      const subject = `${centerLabel}: parent app guide, features, and FAQ`;
+      const manualCopy = buildManualEmailCopy({ to: email, subject, body: guideText });
+      const emailCopy = await sendEmail({
+        to: [email],
+        subject,
+        text: guideText,
+        html: guideHtml,
+        fromName: branding.name,
+        disableClickTracking: true,
+        categories: ["parent_guide_email"],
+        customArgs: { guardianId: guardian.id, familyId: guardian.familyId, centerId: center.id },
+        tenantId: user.tenantId,
+      });
+      await recordEmailDeliveryAttempt({
+        tenantId: user.tenantId,
+        centerId: center.id,
+        purpose: "parent_guide_email",
+        to: [email],
+        subject,
+        text: guideText,
+        html: guideHtml,
+        fromName: branding.name,
+        result: emailCopy,
+        metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
+      });
+      await writeAuditLog(user, {
+        centerId: center.id,
+        action: "parent_portal.guide_sent",
+        resource: "Guardian",
+        resourceId: guardian.id,
+        metadata: {
+          familyId: guardian.familyId,
+          parentUserId: guardian.userId,
+          email,
+          emailBrand: branding.kind,
+          emailAcceptedByProvider: emailCopy.ok,
+        },
+      });
+
+      if (!emailCopy.ok) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: emailCopy.error || "The parent guide email could not be sent. Use the manual email copy provided.",
+            emailCopy,
+            manualCopy,
+          },
+          { status: 502 },
+        );
+      }
+
+      return NextResponse.json({ ok: true, messageType, emailCopy, manualCopy });
+    }
+
     const tenantCenters = await prisma.center.findMany({
       where: { organization: { tenantId: center.organization.tenantId } },
       select: { id: true },
@@ -181,11 +285,12 @@ async function POSTHandler(request: NextRequest) {
       return NextResponse.json({ ok: false, error: "Add a phone number with at least 4 digits before sending the parent app invite." }, { status: 400 });
     }
 
+    const preparedWithoutInvite = record(record(guardian.customFields).parentPortal).preparedWithoutInvite === true;
     const provisioned = await ensureParentPortalLoginForGuardian({
       guardianId: guardian.id,
       linkedBy: user.email,
       linkedReason: "direct_parent_invitation",
-      resetToInitialPassword: false,
+      resetToInitialPassword: preparedWithoutInvite,
       inviteMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
     });
     if (!provisioned.ok) {
@@ -198,31 +303,24 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const updatedGuardian = await prisma.guardian.findUnique({ where: { id: guardian.id } });
-    const appBaseUrl = getAppBaseUrl(request.url);
     const loginUrl = buildParentLoginSetupUrl(appBaseUrl);
-    const branding = resolveWorkspaceBranding({
-      tenantName: center.organization.tenant.name,
-      tenantSlug: center.organization.tenant.slug,
-      brandName: center.organization.brand?.name,
-      brandSlug: center.organization.brand?.slug,
-      organizationName: center.organization.name,
-    });
+    const initialPasswordIssued = provisioned.credentialCreated || preparedWithoutInvite;
     const invitationText = buildParentPortalInvitationText({
       guardianName: guardian.fullName,
-      centerLabel: center.crmLocationId ?? center.name,
+      centerLabel,
       email,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued,
     });
     const invitationHtml = buildParentPortalInvitationHtml({
       guardianName: guardian.fullName,
-      centerLabel: center.crmLocationId ?? center.name,
+      centerLabel,
       email,
       loginUrl,
-      initialPasswordIssued: provisioned.credentialCreated,
+      initialPasswordIssued,
       branding,
     });
-    const subject = `${center.crmLocationId ?? center.name}: finish your parent app setup`;
+    const subject = `${centerLabel}: welcome to The BEE Suite parent app`;
     const manualCopy = buildManualEmailCopy({ to: email, subject, body: invitationText });
     const emailCopy = await sendEmail({
       to: [email],
@@ -248,6 +346,17 @@ async function POSTHandler(request: NextRequest) {
       metadata: { guardianId: guardian.id, familyId: guardian.familyId, brand: branding.kind },
     });
 
+    if (emailCopy.ok) {
+      const linkedGuardians = await prisma.guardian.findMany({
+        where: { id: { in: provisioned.linkedGuardianIds } },
+        select: { id: true, customFields: true },
+      });
+      await prisma.$transaction(linkedGuardians.map((item) => prisma.guardian.update({
+        where: { id: item.id },
+        data: { customFields: parentPortalInvitationSentFields(item.customFields) },
+      })));
+    }
+
     await writeAuditLog(user, {
       centerId: center.id,
       action: "parent_portal.guardian_invited",
@@ -259,7 +368,7 @@ async function POSTHandler(request: NextRequest) {
         email,
         authMode: DIRECT_PARENT_PORTAL_INVITE_MODE,
         credentialCreated: provisioned.credentialCreated,
-        initialPasswordIssued: provisioned.credentialCreated,
+        initialPasswordIssued,
         kioskPinDefaultedFromPhone: Boolean(defaultPinData),
         emailBrand: branding.kind,
         emailAcceptedByProvider: emailCopy.ok,

@@ -18,7 +18,7 @@ test("rendered ProCare reports join account, child, relationship, and balance da
       6: "[SMITH]",
       9: "Smith, Jordan",
       10: "1 Main St",
-      11: "parent@example.test\nCell 828 555-0100",
+      11: "parent82@example.test\nCell 828 555-0100",
       15: "Smith, Avery",
       17: "Preschool",
       18: "DOB: 1/2/2022",
@@ -38,7 +38,7 @@ test("rendered ProCare reports join account, child, relationship, and balance da
         15: "Smith, Jordan",
         16: "Mom",
         18: "Lives With Emergency Pickup",
-        19: "parent@example.test\nCell 828 555-0100",
+        19: "parent82@example.test\nCell 828 555-0100",
       }),
     ].join("\n"))],
     ["balances.csv", Buffer.from(row({
@@ -62,12 +62,15 @@ test("rendered ProCare reports join account, child, relationship, and balance da
   assert.equal(result.records[0]["account id"], "SMITH");
   assert.equal(result.records[0]["child name"], "Avery Smith");
   assert.equal(result.records[0].balance, "125.50");
+  assert.equal(result.records[0]["guardian email"], "parent82@example.test");
+  assert.equal(result.records[0]["guardian phone"], "8285550100");
   assert.equal(result.records[0]["procare rendered source match"], "name_and_dob");
   assert.equal(result.records[0]["import warning"], undefined);
-  const relationships = JSON.parse(result.records[0]["procare relationship records"]) as Array<{ guardian: boolean; emergency: boolean; authorizedPickup: boolean }>;
+  const relationships = JSON.parse(result.records[0]["procare relationship records"]) as Array<{ guardian: boolean; emergency: boolean; authorizedPickup: boolean; phone: string }>;
   assert.deepEqual(relationships.map(({ guardian, emergency, authorizedPickup }) => ({ guardian, emergency, authorizedPickup })), [
     { guardian: true, emergency: true, authorizedPickup: true },
   ]);
+  assert.equal(relationships[0].phone, "8285550100");
   assert.equal(result.datasetCoverage.sourceInventory.find((item) => item.sourceName === "payment history.csv")?.reportKind, "evidence_only");
 });
 

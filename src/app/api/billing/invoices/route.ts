@@ -12,6 +12,7 @@ import {
   normalizeBillingPeriod,
   normalizeRecurringBillingPeriod,
   parseCurrencyCents,
+  isVoucherFundedTuitionAmount,
 } from "@/lib/billing-workflows";
 import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
@@ -120,6 +121,9 @@ async function resolveCharge(body: Record<string, unknown>, centerId: string): P
     if (!tuitionPlanId) return { ok: false, status: 400, error: "Tuition plan is required." };
     const plan = await prisma.tuitionPlan.findFirst({ where: { id: tuitionPlanId, centerId } });
     if (!plan) return { ok: false, status: 404, error: "Tuition plan not found." };
+    if (isVoucherFundedTuitionAmount(plan.amountCents)) {
+      return { ok: false, status: 400, error: "$0 CCDF or voucher tuition is saved for tracking and cannot create a family charge." };
+    }
     return {
       ok: true,
       charge: {

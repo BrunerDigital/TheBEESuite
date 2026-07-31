@@ -16,6 +16,7 @@ import { ParentPortalInviteButton } from "@/components/parent-portal-invite-butt
 import { CUSTODY_WARNING_LABEL, custodyWarningPreview, hasCustodyWarning } from "@/lib/custody-visibility";
 import { BULK_ENROLLMENT_STATUSES } from "@/lib/child-enrollment-bulk";
 import { isCurrentlyEnrolledChildRecord, normalizedEnrollmentStatus, type EnrollmentLifecycleCounts } from "@/lib/enrollment-status";
+import { familiesForCompleteRecordEditing } from "@/lib/family-profile-visibility";
 
 type IntakeCenter = { id: string; name: string; classrooms: Array<{ id: string; name: string; ageGroup: string }> };
 
@@ -61,6 +62,10 @@ function formatDate(value: Date | string | null | undefined) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function hasPortalPhone(phone: string | null | undefined) {
+  return (phone?.replace(/\D/g, "").length ?? 0) >= 4;
 }
 
 type PastEnrollmentRow = {
@@ -346,11 +351,47 @@ export function FamilyProfilesEnrollmentPanel({
   );
   const [showOtherStatuses, setShowOtherStatuses] = useState(requestedFamilyHasOtherStatus || requestedPastView);
   const effectiveShowOtherStatuses = showOtherStatuses || requestedFamilyHasOtherStatus || requestedPastView;
-  const requestedFamily = requestedFamilyId ? allFamilies.find((family) => family.id === requestedFamilyId) ?? null : null;
-  const editorFamilies = requestedFamilyHasOtherStatus && requestedFamily ? [requestedFamily] : currentFamilies;
+  const editorFamilies = familiesForCompleteRecordEditing({
+    currentFamilies,
+    allFamilies,
+    requestedFamilyId,
+  });
+  const [guardianDirectorySearch, setGuardianDirectorySearch] = useState("");
   const visibleFamilies = currentFamilies;
   const visibleFamilyCount = currentFamilyCount;
   const hasVisibleGuardians = visibleFamilies.some((family) => family.guardians.length);
+  const allGuardianDirectoryRows = useMemo(
+    () => visibleFamilies
+      .flatMap((family) => family.guardians.map((guardian) => ({
+        ...guardian,
+        familyId: family.id,
+        familyName: family.name,
+      })))
+      .sort((left, right) => (
+        Number(Boolean(right.isBillingContact && !right.email)) - Number(Boolean(left.isBillingContact && !left.email))
+        || Number(Boolean(right.isBillingContact && !hasPortalPhone(right.phone))) - Number(Boolean(left.isBillingContact && !hasPortalPhone(left.phone)))
+        || Number(Boolean(right.isBillingContact)) - Number(Boolean(left.isBillingContact))
+        || left.fullName.localeCompare(right.fullName)
+        || left.familyName.localeCompare(right.familyName)
+      )),
+    [visibleFamilies],
+  );
+  const guardianDirectoryRows = useMemo(() => {
+    const query = guardianDirectorySearch.trim().toLocaleLowerCase();
+    if (!query) return allGuardianDirectoryRows;
+    return allGuardianDirectoryRows.filter((guardian) => [
+      guardian.fullName,
+      guardian.familyName,
+      guardian.relation,
+      guardian.email,
+      guardian.phone,
+    ].some((value) => value?.toLocaleLowerCase().includes(query)));
+  }, [allGuardianDirectoryRows, guardianDirectorySearch]);
+  const familiesWithoutGuardians = visibleFamilies.filter((family) => family.guardians.length === 0).length;
+  const contactsWithoutEmailOrPhone = allGuardianDirectoryRows.filter((guardian) => !guardian.email && !guardian.phone).length;
+  const billingGuardians = allGuardianDirectoryRows.filter((guardian) => guardian.isBillingContact);
+  const billingGuardiansMissingEmail = billingGuardians.filter((guardian) => !guardian.email).length;
+  const billingGuardiansMissingPhone = billingGuardians.filter((guardian) => guardian.email && !hasPortalPhone(guardian.phone)).length;
   const pastEnrollmentRows = useMemo<PastEnrollmentRow[]>(() => allFamilies.flatMap((family) => family.children
     .filter((child) => !isCurrentlyEnrolledChildRecord(child))
     .map((child) => ({
@@ -439,7 +480,7 @@ export function FamilyProfilesEnrollmentPanel({
                       {family.children.map((child) => (
                         <div key={child.id}>
                           {child.fullName} ({child.ageGroup})
-                          {child.tuitionAssignment?.enabled && child.tuitionAssignment.amountCents
+                          {child.tuitionAssignment?.enabled && typeof child.tuitionAssignment.amountCents === "number"
                             ? <span className="ml-1 text-xs font-medium text-muted-foreground">· {money(child.tuitionAssignment.amountCents)}/week</span>
                             : null}
                         </div>
@@ -485,6 +526,119 @@ export function FamilyProfilesEnrollmentPanel({
         </CardContent>
       </Card>
 
+      <Card id="guardian-directory" className="glass-panel scroll-mt-36">
+        <CardHeader>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Parent / Guardian Directory</CardTitle>
+              <CardDescription>
+                All imported and manually entered contacts for the currently visible school families. Billing contacts need their own email and phone before an invitation can be reviewed; the invitation action also checks source completeness and duplicate identity.
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline">{allGuardianDirectoryRows.length.toLocaleString()} contacts</Badge>
+              {familiesWithoutGuardians ? (
+                <Badge variant="secondary">
+                  {familiesWithoutGuardians.toLocaleString()} famil{familiesWithoutGuardians === 1 ? "y" : "ies"} need{familiesWithoutGuardians === 1 ? "s" : ""} a guardian
+                </Badge>
+              ) : null}
+              {contactsWithoutEmailOrPhone ? (
+                <Badge variant="secondary">
+                  {contactsWithoutEmailOrPhone.toLocaleString()} need email or phone
+                </Badge>
+              ) : null}
+              {billingGuardiansMissingEmail ? (
+                <Badge variant="destructive">
+                  {billingGuardiansMissingEmail.toLocaleString()} payer{billingGuardiansMissingEmail === 1 ? "" : "s"} need email
+                </Badge>
+              ) : null}
+              {billingGuardiansMissingPhone ? (
+                <Badge variant="secondary">
+                  {billingGuardiansMissingPhone.toLocaleString()} payer{billingGuardiansMissingPhone === 1 ? "" : "s"} need phone
+                </Badge>
+              ) : null}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <Input
+              value={guardianDirectorySearch}
+              onChange={(event) => setGuardianDirectorySearch(event.target.value)}
+              placeholder="Search guardian, family, relationship, email, or phone"
+              aria-label="Search parent and guardian directory"
+            />
+            {guardianDirectorySearch.trim() ? (
+              <p className="text-xs text-muted-foreground">
+                Showing {guardianDirectoryRows.length.toLocaleString()} of {allGuardianDirectoryRows.length.toLocaleString()} contacts.
+              </p>
+            ) : null}
+            <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Parent / guardian</TableHead>
+                  <TableHead>Family</TableHead>
+                  <TableHead>Relationship</TableHead>
+                  <TableHead>Billing</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Portal</TableHead>
+                  <TableHead>Open</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {guardianDirectoryRows.map((guardian) => (
+                  <TableRow key={guardian.id}>
+                    <TableCell className="font-medium">{guardian.fullName}</TableCell>
+                    <TableCell>{guardian.familyName}</TableCell>
+                    <TableCell>{guardian.relation || "Not specified"}</TableCell>
+                    <TableCell>
+                      {guardian.isBillingContact ? <Badge variant="secondary">Pays bills</Badge> : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className={guardian.isBillingContact && !guardian.email ? "font-medium text-destructive" : undefined}>
+                        {guardian.email || (guardian.isBillingContact ? "Email required for payer" : "No email")}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{guardian.phone || "No phone"}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={guardian.userId ? "secondary" : guardian.isBillingContact && !guardian.email ? "destructive" : "outline"}>
+                        {guardian.userId
+                          ? "Portal linked"
+                          : !guardian.email
+                            ? "Email required"
+                            : !hasPortalPhone(guardian.phone)
+                              ? "Phone required"
+                              : "Contact ready"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/family-detail?familyId=${encodeURIComponent(guardian.familyId)}#family-guardians`}
+                        className={buttonVariants({ variant: "outline", size: "sm" })}
+                      >
+                        <ArrowUpRight data-icon="inline-start" />
+                        Family
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {!guardianDirectoryRows.length ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-muted-foreground">
+                      {allGuardianDirectoryRows.length
+                        ? "No parent or guardian contacts match this search."
+                        : "No parent or guardian contacts are visible for this school scope."}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
+              </TableBody>
+            </Table>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Lobby Kiosk Credentials</CardTitle>
@@ -516,8 +670,8 @@ export function FamilyProfilesEnrollmentPanel({
         <CardHeader>
           <CardTitle>Parent Portal Access</CardTitle>
           <CardDescription>
-            Send parent portal login emails for linked parent accounts. Parents sign in with their guardian email and the school
-            private password from a one-time setup link, then only see family records connected through that guardian profile.
+            Create parent portal access with the guardian email and BusyBees first-login password, send the welcome and app-install
+            steps, or send the separate parent feature guide and FAQ after the account is linked.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 lg:grid-cols-2">

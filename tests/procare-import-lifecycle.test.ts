@@ -89,8 +89,11 @@ test("all resolved ProCare payer records are synchronized as guardians", () => {
   const postHandler = section(route, "async function POSTHandler", "async function PATCHHandler");
   assert.match(route, /procare account person records/);
   assert.match(route, /person type/);
+  assert.match(route, /mergeProcareGuardianImports\(guardianImports\)/);
   assert.match(postHandler, /procareGuardianImports\(\s*rawData,\s*childPersonExternalId/);
   assert.match(postHandler, /await syncGuardian\(guardian\)/);
+  assert.match(postHandler, /externalGuardians\.length\s*\|\|\s*!fallbackGuardianMatchers\.length/);
+  assert.match(postHandler, /externalGuardians\[0\]\s*\?\?\s*fallbackGuardians\[0\]/);
 });
 
 test("review and commit use the same parent plan and verify family links before completing a row", () => {

@@ -2,7 +2,7 @@ const CACHE_NAME = "bee-suite-app-shell-v1";
 const APP_SHELL_URLS = [
   "/app",
   "/brand/the-bee-suite/app-icon-yellow.png",
-  "/brand/the-bee-suite/favicon.png",
+  "/brand/the-bee-suite/browser-icon.png",
   "/brand/the-bee-suite/logo-primary-horizontal-white.png",
 ];
 

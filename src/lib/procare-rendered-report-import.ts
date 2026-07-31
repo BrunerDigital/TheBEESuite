@@ -75,9 +75,9 @@ function dateIn(input: string) { return input.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})
 function genderIn(input: string) { return input.match(/^(male|female|nonbinary|non-binary)\b/i)?.[1] ?? ""; }
 function emailIn(input: string) { return input.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0]?.toLowerCase() ?? ""; }
 function phoneIn(input: string) {
-  const line = input.split(/\r?\n/).find((part) => /(?:cell|home|work|phone)|\d{3}\D*\d{3}\D*\d{4}/i.test(part)) ?? "";
-  const digits = line.replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(0, 10) : "";
+  const withoutEmails = input.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, " ");
+  const match = withoutEmails.match(/(?:\+?1[\s.-]*)?(?:\(\s*(\d{3})\s*\)|(\d{3}))[\s.-]*(\d{3})[\s.-]*(\d{4})/);
+  return match ? `${match[1] || match[2]}${match[3]}${match[4]}` : "";
 }
 function stableId(...parts: string[]) {
   return createHash("sha256").update(parts.map((part) => part.trim().toLowerCase()).join("\0")).digest("hex").slice(0, 24);

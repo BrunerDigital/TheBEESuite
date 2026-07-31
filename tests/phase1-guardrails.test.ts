@@ -30,7 +30,12 @@ import {
 import { checkRateLimit } from "../src/lib/rate-limit";
 import { isSameAccessGrantTarget } from "../src/lib/access-grant-guardrails";
 import { resolveSignatureRecipient, validateSignatureChildTarget } from "../src/lib/document-guardrails";
-import { getDatabaseUrl, hasDatabaseConfig, hasSupabaseAuthConfig } from "../src/lib/readiness-guardrails";
+import {
+  getDatabaseUrl,
+  getRuntimeDatabaseUrl,
+  hasDatabaseConfig,
+  hasSupabaseAuthConfig,
+} from "../src/lib/readiness-guardrails";
 import { parseOperationalDate } from "../src/lib/date-guardrails";
 import {
   buildParentPortalInvitationHtml,
@@ -1015,11 +1020,47 @@ test("readiness guard requires a Supabase URL for Auth readiness", () => {
   }), true);
 });
 
-test("readiness guard accepts Vercel Postgres database URL aliases", () => {
+test("readiness guard accepts Vercel Postgres aliases and prefers a transaction pooler", () => {
   assert.equal(hasDatabaseConfig({}), false);
   assert.equal(getDatabaseUrl({ POSTGRES_PRISMA_URL: " postgresql://pooled " }), "postgresql://pooled");
+  assert.equal(
+    getDatabaseUrl({ DATABASE_URL: "postgresql://direct", POSTGRES_PRISMA_URL: "postgresql://pooled" }),
+    "postgresql://pooled",
+  );
   assert.equal(hasDatabaseConfig({ POSTGRES_URL: "postgresql://direct" }), true);
   assert.equal(getDatabaseUrl({ DATABASE_URL: "postgresql://primary", POSTGRES_URL: "postgresql://direct" }), "postgresql://primary");
+  assert.equal(
+    getDatabaseUrl({
+      POSTGRES_PRISMA_URL: "postgresql://postgres@db.example.supabase.co:5432/postgres",
+      DATABASE_URL: "postgresql://postgres@db.example.supabase.co:5432/postgres",
+      POSTGRES_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres",
+    }),
+    "postgresql://postgres@example.pooler.supabase.com:6543/postgres",
+  );
+});
+
+test("runtime database URL configures Prisma for transaction pooling without overriding explicit limits", () => {
+  const pooled = getRuntimeDatabaseUrl({
+    DATABASE_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres?sslmode=require",
+  });
+  assert.ok(pooled);
+
+  const pooledUrl = new URL(pooled);
+  assert.equal(pooledUrl.searchParams.get("pgbouncer"), "true");
+  assert.equal(pooledUrl.searchParams.get("connection_limit"), "5");
+  assert.equal(pooledUrl.searchParams.get("pool_timeout"), "20");
+
+  const explicitlyTuned = getRuntimeDatabaseUrl({
+    DATABASE_URL: "postgresql://postgres@example.pooler.supabase.com:6543/postgres?connection_limit=3&pool_timeout=30",
+    PRISMA_CONNECTION_LIMIT: "7",
+    PRISMA_POOL_TIMEOUT: "40",
+  });
+  assert.ok(explicitlyTuned);
+
+  const explicitlyTunedUrl = new URL(explicitlyTuned);
+  assert.equal(explicitlyTunedUrl.searchParams.get("pgbouncer"), "true");
+  assert.equal(explicitlyTunedUrl.searchParams.get("connection_limit"), "3");
+  assert.equal(explicitlyTunedUrl.searchParams.get("pool_timeout"), "30");
 });
 
 test("signature requests require valid family child target and recipient", () => {

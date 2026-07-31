@@ -228,6 +228,10 @@ function parentPortalStatusText(json: {
   return "";
 }
 
+function isValidGuardianEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim().toLowerCase());
+}
+
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "Not set";
   const date = new Date(value);
@@ -355,7 +359,7 @@ function pickInitialFamily(families: EditableFamilyRecord[], initialFamilyId?: s
     const bySearch = families.find((family) => familySearchText(family).includes(query));
     if (bySearch) return bySearch;
   }
-  return families[0] ?? null;
+  return families.find((family) => family.guardians.length > 0) ?? families[0] ?? null;
 }
 
 function pickInitialChild(family: EditableFamilyRecord | null, initialChildId?: string, searchQuery?: string) {
@@ -569,11 +573,14 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     (selectedFamily?.children.reduce((count, child) => count + child.documents.length, 0) ?? 0);
   const selectedCenterLabel = selectedCenter?.name ?? selectedFamily?.centerName ?? "School not set";
   const selectedChildLabel = selectedChild?.fullName ?? (childName.trim() ? `${childName.trim()} (new child)` : "No child selected");
-  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled && selectedChild.tuitionAssignment.amountCents
+  const selectedWeeklyTuition = selectedChild?.tuitionAssignment?.enabled
+    && typeof selectedChild.tuitionAssignment.amountCents === "number"
     ? selectedChild.tuitionAssignment
     : null;
   const activeWeeklyTuitionAssignments = selectedFamily?.children.filter(
-    (child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0,
+    (child) => child.tuitionAssignment?.enabled
+      && typeof child.tuitionAssignment.amountCents === "number"
+      && child.tuitionAssignment.amountCents >= 0,
   ) ?? [];
   const familyWeeklyTuitionCents = activeWeeklyTuitionAssignments.reduce(
     (total, child) => total + (child.tuitionAssignment?.amountCents ?? 0),
@@ -1321,10 +1328,22 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
         <section id="family-guardians" className="scroll-mt-36 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Parent / guardian contacts</div>
-            <Badge variant="outline">
-              {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
-            </Badge>
+            <div>
+              <div className="text-sm font-medium">
+                Parent / guardian contacts{selectedFamily ? ` for ${selectedFamily.name}` : ""}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                These contacts belong to the selected family. Use the parent / guardian directory below to review every visible family.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                {selectedFamily?.guardians.length ?? 0} contact{selectedFamily?.guardians.length === 1 ? "" : "s"}
+              </Badge>
+              <Link href="#guardian-directory" className={buttonVariants({ variant: "outline", size: "sm" })}>
+                View all contacts
+              </Link>
+            </div>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
@@ -1346,7 +1365,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Input value={guardianName} onChange={(event) => setGuardianName(event.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Email</Label>
+              <Label>Email{isBillingContact ? " (required for payer portal)" : ""}</Label>
               <Input value={guardianEmail} onChange={(event) => setGuardianEmail(event.target.value)} type="email" />
             </div>
             <div className="space-y-1">
@@ -1384,9 +1403,18 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               <Badge variant="secondary" className="w-fit self-center">Portal linked</Badge>
             ) : null}
           </div>
+          {isBillingContact && !isValidGuardianEmail(guardianEmail) ? (
+            <Alert variant="destructive">
+              <AlertCircle className="size-4" />
+              <AlertTitle>Billing contact email required</AlertTitle>
+              <AlertDescription>
+                Add this payer&apos;s personal email before saving. The parent portal invitation also requires a phone number with at least four digits.
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={isPending || !selectedFamily || !guardianName.trim()}
+              disabled={isPending || !selectedFamily || !guardianName.trim() || (isBillingContact && !isValidGuardianEmail(guardianEmail))}
               onClick={() => postRecord({
                 entity: "guardian",
                 id: selectedGuardian?.id,
@@ -1605,10 +1633,12 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
               detail={selectedWeeklyTuition?.tuitionPlanName ?? "Manage this child’s recurring rate in Billing"}
             />
             <SummaryMetric
-              label="Weekly billing"
-              value={selectedWeeklyTuition ? "Active" : "Not active"}
-              detail={selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
-            />
+                label="Weekly billing"
+                value={selectedWeeklyTuition?.amountCents === 0 ? "Voucher funded" : selectedWeeklyTuition ? "Active" : "Not active"}
+                detail={selectedWeeklyTuition?.amountCents === 0
+                  ? "No family invoice or autopay"
+                  : selectedWeeklyTuition?.startsPeriod ? `Starts ${selectedWeeklyTuition.startsPeriod}` : "No recurring start week"}
+              />
           </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">

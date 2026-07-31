@@ -13,6 +13,14 @@ export function parseCurrencyCents(value: unknown) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
 }
 
+export function canSaveTuitionPlanAmount(amountCents: number, zeroDollarVoucher: boolean) {
+  return Number.isInteger(amountCents) && (amountCents > 0 || (amountCents === 0 && zeroDollarVoucher));
+}
+
+export function isVoucherFundedTuitionAmount(amountCents: number) {
+  return Number.isInteger(amountCents) && amountCents === 0;
+}
+
 export function normalizeAgencyPaymentMetadata(input: {
   agencyName?: unknown;
   authorizationNumber?: unknown;

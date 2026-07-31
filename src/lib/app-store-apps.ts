@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import type { LoginPortal } from "@/lib/login-routing";
 
 const appIcon = "/brand/the-bee-suite/app-icon-yellow.png";
-const favicon = "/brand/the-bee-suite/favicon.png";
+const favicon = "/brand/the-bee-suite/browser-icon.png";
 
 export type StoreAppKey = "parent" | "teacher" | "director" | "executive";
 

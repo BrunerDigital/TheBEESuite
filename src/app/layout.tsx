@@ -8,6 +8,8 @@ import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
+const browserIcon = "/brand/the-bee-suite/browser-icon.png";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -29,8 +31,8 @@ export const metadata: Metadata = {
     canonical: "/",
   },
   icons: {
-    shortcut: [{ url: "/favicon.ico" }],
-    icon: [{ url: "/brand/the-bee-suite/favicon.png", sizes: "512x512", type: "image/png" }],
+    shortcut: [{ url: browserIcon, sizes: "512x512", type: "image/png" }],
+    icon: [{ url: browserIcon, sizes: "512x512", type: "image/png" }],
     apple: [{ url: "/brand/the-bee-suite/app-icon-yellow.png", sizes: "1024x1024", type: "image/png" }],
   },
   appleWebApp: {

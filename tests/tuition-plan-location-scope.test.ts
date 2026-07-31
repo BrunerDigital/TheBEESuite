@@ -38,3 +38,21 @@ test("billing views load visible locations only and the workbench switches plan 
   assert.match(workbench, /centerId,[\s\S]*name: planName/);
   assert.match(settings, /<TableHead>School<\/TableHead>/);
 });
+
+test("$0 CCDF and voucher rates remain visible assignments without creating family charges", () => {
+  const records = readFileSync("src/app/api/operations/records/route.ts", "utf8");
+  const assignments = readFileSync("src/app/api/billing/tuition-assignments/route.ts", "utf8");
+  const invoices = readFileSync("src/app/api/billing/invoices/route.ts", "utf8");
+  const scheduler = readFileSync("src/app/api/cron/tuition-billing/route.ts", "utf8");
+  const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
+
+  assert.match(records, /zeroDollarVoucher = body\.zeroDollarVoucher === true/);
+  assert.match(records, /canSaveTuitionPlanAmount\(data\.amountCents, zeroDollarVoucher\)/);
+  assert.match(assignments, /tuitionFundingType: voucherFunded \? "voucher" : "family"/);
+  assert.match(assignments, /tuitionAutobillEligible: !voucherFunded/);
+  assert.match(assignments, /if \(voucherFunded\)/);
+  assert.match(invoices, /\$0 CCDF or voucher tuition is saved for tracking and cannot create a family charge/);
+  assert.match(scheduler, /snapshotAmountCents <= 0/);
+  assert.match(workbench, /CCDF \/ voucher-funded/);
+  assert.match(workbench, /never create a family invoice or autopay attempt/);
+});

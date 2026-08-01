@@ -33,7 +33,11 @@
       "extensions": [
         "dbaeumer.vscode-eslint",
         "Prisma.prisma",
-        "ms-playwright.playwright"
+        "bradlc.vscode-tailwindcss",
+        "ms-playwright.playwright",
+        "GitHub.vscode-pull-request-github",
+        "GitHub.vscode-github-actions",
+        "dotenv.dotenv-vscode"
       ]
     }
   }

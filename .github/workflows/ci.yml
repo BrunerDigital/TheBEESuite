@@ -24,20 +24,5 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Audit production dependencies
-        run: npm audit --omit=dev
-
-      - name: Generate Prisma client
-        run: npm run db:generate
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-      - name: Build
-        run: npm run vercel-build
+      - name: Run production validation gate
+        run: npm run cloud:validate

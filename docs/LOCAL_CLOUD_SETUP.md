@@ -1,6 +1,6 @@
 # Local Cloud Setup
 
-This workspace is configured for working directly on The BEE Suite `main` branch with GitHub, Vercel, and Supabase connected.
+This workspace is configured for connected development without using the production `main` branch as a working branch.
 
 ## Current Cloud Targets
 
@@ -42,10 +42,11 @@ From the repo root:
 ```powershell
 git switch main
 git pull --ff-only origin main
-npm install
+npm ci
 npm run cloud:link
 npm run cloud:env
 npm run cloud:status
+npm run work:quick -- <short-slug>
 npm run cloud:dev
 ```
 
@@ -63,17 +64,21 @@ This machine also uses `.env.development.local` for non-secret localhost URL ove
 - `npm run cloud:dev` starts Next.js with the local `.env.local` file.
 - `npm run cloud:status` checks local Git, Vercel, Supabase MCP, env, and CLI setup.
 - `npm run cloud:validate` runs the production safety gate: audit, Prisma generate, lint, typecheck, tests, and Next build.
+- `npm run work:quick -- <slug>` creates a clean short-lived branch for quick work in the current checkout.
+- `npm run work:tree -- <slug>` creates an isolated sibling worktree for a larger local task.
 
 ## Safety Rules While Schools Are Live
 
-- Work on `main` only when intentionally changing the live production branch.
-- Run `npm run cloud:validate` before pushing to `main`.
+- Keep `main` clean and synchronized; make changes only on `work/cloud-*` or `work/local-*` branches.
+- Run `npm run cloud:validate` before opening or merging a pull request.
 - Treat local writes as production-impacting whenever `.env.local` comes from `npm run cloud:env`.
 - Keep local URL overrides such as `APP_URL` and `NEXT_PUBLIC_APP_URL` in `.env.development.local`, not `.env.local`.
 - Keep `.env.local`, `.env.preview.pulled.local`, and `.env.production.pulled.local` out of Git.
 - `.mcp.json` points Supabase MCP at production in read-only mode. Do not remove `read_only=true` for routine app work.
 - For schema changes, create a tested migration first, run Supabase advisors, and only then apply to production.
 - Do not run data repair scripts against production unless the exact target data and rollback path are known.
+
+See `docs/CLOUD_LOCAL_WORKFLOW.md` for the complete parallel cloud/local workflow and production verification sequence.
 
 ## Authentication Checks
 

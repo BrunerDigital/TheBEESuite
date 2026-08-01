@@ -2,7 +2,7 @@
 
 Childcare CRM, school operations, billing, parent portal, teacher portal, and executive reporting platform.
 
-Last refreshed: July 24, 2026
+Last refreshed: July 31, 2026
 
 The BEE Suite is a multi-tenant, white-label operating system for childcare brands and schools. It supports inquiry intake, enrollment, families, children, classrooms, staffing, tuition billing, Stripe Connect payout setup, parent communications, documents, compliance workflows, FTE reporting, role-specific portals, and human-reviewed AI assistance.
 
@@ -68,6 +68,7 @@ Open `http://localhost:3000`.
 Use `.env.example` as the safe template. Do not commit `.env.local`, pulled production env files, SendGrid env files, or machine-specific Supabase/Vercel temp state.
 
 For machine setup details, see [docs/LOCAL_CLOUD_SETUP.md](docs/LOCAL_CLOUD_SETUP.md).
+For parallel Codespace quick fixes and isolated local worktrees, see [docs/CLOUD_LOCAL_WORKFLOW.md](docs/CLOUD_LOCAL_WORKFLOW.md).
 
 ## Common Commands
 
@@ -77,6 +78,8 @@ npm run typecheck
 npm test
 npm run vercel-build
 npm run cloud:validate
+npm run work:quick -- <slug>
+npm run work:tree -- <slug>
 npm run test:smoke
 ```
 

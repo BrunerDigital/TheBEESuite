@@ -47,10 +47,18 @@ const lines = [];
 const branch = run("git", ["branch", "--show-current"]);
 const remote = run("git", ["remote", "get-url", "origin"]);
 const status = run("git", ["status", "--short"]);
+const head = run("git", ["rev-parse", "HEAD"]);
+const upstream = run("git", ["rev-parse", "@{upstream}"]);
+const branchReady = branch === "main" || branch.startsWith("work/");
 
-lines.push(statusLine(branch === "main", "Git branch", branch || "unknown"));
+lines.push(statusLine(branchReady, "Git branch", branch || "unknown"));
 lines.push(statusLine(remote === expected.gitRemote, "GitHub remote", remote || "missing"));
 lines.push(statusLine(!status, "Working tree", status ? "has local changes" : "clean"));
+lines.push(
+  upstream
+    ? statusLine(head === upstream, "Upstream sync", head === upstream ? "current" : "local and remote differ")
+    : formatLine("INFO", "Upstream sync", "publish this branch with git push -u origin HEAD")
+);
 
 if (existsSync(".vercel/project.json")) {
   const project = readJson(".vercel/project.json");

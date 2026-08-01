@@ -1,6 +1,6 @@
 # The BEE Suite Codespaces Setup
 
-This repository now provides the Node 24, GitHub CLI, Docker, Vercel, and Supabase tooling needed for a consistent cloud development environment.
+This repository provides Node 24, GitHub CLI, Docker, pinned Vercel commands, and read-only Supabase MCP access for a consistent cloud development environment.
 
 ## One-time setup
 
@@ -22,10 +22,12 @@ Supabase production credentials come from the Vercel environment pull and remain
 
 ## Normal change and release flow
 
-1. Create a focused branch instead of changing `main` directly.
+1. From clean, synchronized `main`, run `npm run work:quick -- <slug>`.
 2. Make the change and run `npm run cloud:validate`.
 3. Push the branch and verify its Vercel preview deployment.
 4. Merge only after CI and the preview flow pass.
 5. Verify the production deployment, `https://thebeesuite.io/api/health`, logs, and the changed live workflow.
 
 Use `npm run codespace:setup` at any time for a quick authentication and linkage check. It prints status only and does not reveal secret values.
+
+See `docs/CLOUD_LOCAL_WORKFLOW.md` for the parallel Codespace/local worktree model and cleanup rules.

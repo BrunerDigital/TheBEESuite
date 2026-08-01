@@ -2,6 +2,7 @@ import "./load-env";
 import { EnrollmentStage, Prisma, UserRole } from "@prisma/client";
 import { readFileSync } from "node:fs";
 import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
+import { resolveKidCityLegacyLeadCenterId } from "@/lib/kidcity-legacy-center-aliases";
 import { prisma } from "@/lib/prisma";
 
 type NormalizedLocation = {
@@ -248,6 +249,12 @@ async function ensureLeadLocationQueues(
   );
 
   for (const crmLocationId of crmLocationIds) {
+    const canonicalCenterId = resolveKidCityLegacyLeadCenterId(centerMap, crmLocationId);
+    if (canonicalCenterId) {
+      centerMap.set(crmLocationId, canonicalCenterId);
+      continue;
+    }
+
     const existing = await prisma.center.findFirst({
       where: { organizationId, crmLocationId },
       select: { id: true },

@@ -49,6 +49,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "kidcity:prepare-crm": "python scripts/prepare-kidcity-crm-export.py",
     "kidcity:import-crm": "tsx -r tsconfig-paths/register scripts/import-kidcity-crm.ts",
+    "kidcity:merge-legacy-lead-queues": "tsx -r tsconfig-paths/register scripts/merge-kidcity-legacy-lead-queues.ts",
     "kidcity:create-auth-users": "tsx scripts/create-kidcity-auth-users.ts",
     "kidcity:ensure-executives": "tsx -r tsconfig-paths/register scripts/ensure-kidcity-executives.ts",
     "kidcity:audit-executives": "tsx -r tsconfig-paths/register scripts/audit-kidcity-executive-access.ts",

@@ -33,6 +33,7 @@ export function inspectDeploymentOps(root = workspaceRoot) {
   }
 
   const migrationRoot = resolve(root, "prisma", "migrations");
+  const supabaseMigrationRoot = resolve(root, "supabase", "migrations");
   const migrations = readdirSync(migrationRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
@@ -42,8 +43,20 @@ export function inspectDeploymentOps(root = workspaceRoot) {
     if (!existsSync(resolve(migrationRoot, migration, "migration.sql"))) failures.push(`migration.sql is missing: ${migration}`);
   }
 
+  const migrationKey = (name) => name.replace(/\.sql$/, "").replace(/^\d+_/, "");
+  const supabaseMigrationKeys = new Set(
+    readdirSync(supabaseMigrationRoot, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".sql"))
+      .map((entry) => migrationKey(entry.name))
+  );
+  const missingSupabaseMirrors = migrations.filter((migration) => !supabaseMigrationKeys.has(migrationKey(migration)));
+  if (missingSupabaseMirrors.length) {
+    failures.push(`Prisma migrations missing from the Supabase ledger: ${missingSupabaseMirrors.join(", ")}`);
+  }
+
   notes.push(`${implemented.length} cron handlers match ${configured.length} configured cron paths.`);
   notes.push(`${migrations.length} Prisma migration directories contain migration.sql files.`);
+  notes.push(`${migrations.length - missingSupabaseMirrors.length} Prisma migrations have a Supabase ledger mirror.`);
   notes.push("This static check does not query a database, apply migrations, verify backups, or prove cron execution.");
   return { ok: failures.length === 0, failures, notes };
 }

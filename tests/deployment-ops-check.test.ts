@@ -10,10 +10,12 @@ function fixture(options: { scheduleCron?: boolean; protectCron?: boolean } = {}
   const root = mkdtempSync(join(tmpdir(), "bee-ops-check-"));
   mkdirSync(join(root, "src/app/api/cron/example"), { recursive: true });
   mkdirSync(join(root, "prisma/migrations/20260720000000_example"), { recursive: true });
+  mkdirSync(join(root, "supabase/migrations"), { recursive: true });
   writeFileSync(join(root, "package.json"), JSON.stringify({ scripts: { "vercel-build": "prisma generate && npm run lint && npm run typecheck && npm test && next build" } }));
   writeFileSync(join(root, "vercel.json"), JSON.stringify({ crons: options.scheduleCron === false ? [] : [{ path: "/api/cron/example", schedule: "0 0 * * *" }] }));
   writeFileSync(join(root, "src/app/api/cron/example/route.ts"), options.protectCron === false ? "export const GET = () => null;" : "process.env.CRON_SECRET; request.headers.get('authorization');");
   writeFileSync(join(root, "prisma/migrations/20260720000000_example/migration.sql"), "SELECT 1;");
+  writeFileSync(join(root, "supabase/migrations/20260720000000_example.sql"), "SELECT 1;");
   return root;
 }
 
@@ -29,4 +31,14 @@ test("deployment ops check rejects unscheduled or unprotected cron handlers", ()
   const unprotected = inspectDeploymentOps(fixture({ protectCron: false }));
   assert.equal(unprotected.ok, false);
   assert.match(unprotected.failures.join("\n"), /does not enforce CRON_SECRET/);
+});
+
+test("deployment ops check rejects a Prisma migration missing from the Supabase ledger", () => {
+  const root = fixture();
+  mkdirSync(join(root, "prisma/migrations/20260721000000_missing"), { recursive: true });
+  writeFileSync(join(root, "prisma/migrations/20260721000000_missing/migration.sql"), "SELECT 2;");
+
+  const result = inspectDeploymentOps(root);
+  assert.equal(result.ok, false);
+  assert.match(result.failures.join("\n"), /missing from the Supabase ledger.*20260721000000_missing/);
 });

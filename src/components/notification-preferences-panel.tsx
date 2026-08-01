@@ -205,7 +205,7 @@ export function NotificationPreferencesPanel({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Email, SMS, and push defaults by role plus user-specific overrides.</CardDescription>
+            <CardDescription>Email, SMS, and app-alert defaults by role plus user-specific overrides.</CardDescription>
           </div>
           <Badge variant="outline">
             <Bell data-icon="inline-start" />
@@ -269,12 +269,12 @@ export function NotificationPreferencesPanel({
           <span className="font-medium text-foreground">Bulk channel:</span>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("emailEnabled", true)}>Email on</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", true)}>SMS on</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("pushEnabled", true)}>In-app on</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("pushEnabled", true)}>App alerts on</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => setChannelForAll("smsEnabled", false)}>SMS off</Button>
           <span>
             {targetMode === "role"
               ? "Role defaults apply tenant-wide unless a user has an override."
-              : "User overrides win over role defaults for the selected person."}
+              : "User overrides win over role defaults for the selected person."} App alerts always appear in the app; enabled devices also receive Web Push.
           </span>
         </div>
         <Table>
@@ -284,7 +284,7 @@ export function NotificationPreferencesPanel({
               <TableHead>Resolved from</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>SMS</TableHead>
-              <TableHead>In-app</TableHead>
+              <TableHead>App alerts</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

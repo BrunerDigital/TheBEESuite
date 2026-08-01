@@ -47,7 +47,7 @@ test("mobile store configuration audit passes", { skip: !nativeProjectPresent },
   assert.match(output, /DEFERRED Android native target is not present/);
 });
 
-test("v1 UI describes database alerts as in-app notifications, not native push", () => {
+test("web push is distinct from deferred native APNs and FCM", () => {
   const messagePanel = readFileSync("src/components/message-reply-panel.tsx", "utf8");
   const preferencePanel = readFileSync("src/components/notification-preferences-panel.tsx", "utf8");
   const integrationRoute = readFileSync("src/app/api/integrations/push/route.ts", "utf8");
@@ -55,9 +55,10 @@ test("v1 UI describes database alerts as in-app notifications, not native push",
   assert.doesNotMatch(messagePanel, /push\/in-app notifications/i);
   assert.doesNotMatch(messagePanel, /Queue push\/in-app/i);
   assert.match(messagePanel, /in-app notifications queued/i);
-  assert.match(preferencePanel, /In-app on/);
-  assert.match(preferencePanel, /<TableHead>In-app<\/TableHead>/);
+  assert.match(preferencePanel, /App alerts on/);
+  assert.match(preferencePanel, /<TableHead>App alerts<\/TableHead>/);
   assert.doesNotMatch(integrationRoute, /PUSH_PROVIDER_KEY/);
-  assert.match(integrationRoute, /configured:\s*false/);
-  assert.match(integrationRoute, /deliveryMode:\s*"in_app_only"/);
+  assert.match(integrationRoute, /getWebPushConfiguration/);
+  assert.match(integrationRoute, /web_push_and_in_app/);
+  assert.match(integrationRoute, /in_app_only/);
 });

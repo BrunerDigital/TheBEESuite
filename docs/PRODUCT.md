@@ -49,7 +49,7 @@ These capabilities have foundations in the app, but should not be treated as bro
 ## Known Limitations
 
 - Workflow builder foundations exist, but a full no-code automation builder and marketplace of reusable automation templates are future scope.
-- Native iOS/Android apps, true mobile push notifications, and offline-native sync are future scope; current access is web/PWA oriented.
+- Installed web/PWA access supports consent-based Web Push, notification-center delivery, and supported icon badges once VAPID configuration and device verification are complete. Native iOS/Android APNs/FCM adapters and offline-native sync remain future store-specific scope.
 - Google Calendar, Google Business Profile, Meta Lead Ads, Zapier/webhook, and other provider integrations need tenant-specific credential setup and production validation before being called complete.
 - OpenAI/Mr. Bee assistance should remain human-reviewed and gated by sensitive-output rules before broad use.
 - Licensing exports, jurisdiction-specific compliance configuration, curriculum/lesson planning, developmental milestones, meal planning/CACFP, payroll-provider exports, and multi-state compliance packs remain roadmap items.

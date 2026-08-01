@@ -95,6 +95,9 @@ Messaging/integrations:
 
 - `SENDGRID_API_KEY`
 - `SENDGRID_FROM_EMAIL`
+- `WEB_PUSH_VAPID_PUBLIC_KEY`
+- `WEB_PUSH_VAPID_PRIVATE_KEY`
+- `WEB_PUSH_VAPID_SUBJECT`
 - Twilio account/auth/from/webhook settings
 - Google Sheets/Calendar credentials where enabled
 - `OPENAI_API_KEY` when Mr. Bee features are enabled

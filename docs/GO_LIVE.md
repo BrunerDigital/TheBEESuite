@@ -191,7 +191,7 @@ Configure the Twilio sender or Messaging Service with these production callbacks
 
 Use `TWILIO_MESSAGING_SERVICE_SID` in production when available; `TWILIO_FROM_NUMBER` remains the fallback sender.
 
-Push notifications currently create in-app notifications and expose a provider hook through `PUSH_PROVIDER_KEY`.
+Installed browser/Home Screen apps use standards-based Web Push when `WEB_PUSH_VAPID_PUBLIC_KEY`, `WEB_PUSH_VAPID_PRIVATE_KEY`, and `WEB_PUSH_VAPID_SUBJECT` are configured. In-app notifications remain authoritative, permission is user-initiated, and native App Store APNs/FCM capabilities remain a separate release gate.
 Signature requests create document records and send email when SendGrid is configured; DocuSign-style API credentials can be added with `DOCUSIGN_INTEGRATION_KEY` / `SIGNATURE_PROVIDER_API_KEY`.
 
 Do not enable live payments for families until tuition policies, refund handling, connected account ownership, Stripe dispute/negative-balance responsibilities, webhook retries, school payout support procedures, and platform fee rules are approved.

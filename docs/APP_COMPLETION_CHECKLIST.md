@@ -256,7 +256,8 @@ Status legend:
 
 ## Parent Engagement Portal
 
-- [ ] Add push notifications/native app strategy.
+- [x] Add consent-based Web Push, notification-center delivery, logout cleanup, and installed-app icon badging for supported PWA/Home Screen devices.
+- [ ] Add native APNs/FCM adapters only when the corresponding store apps and capabilities are approved.
 - [x] Parent portal page exists.
 - [x] Parent portal workspace component exists.
 - [x] Parent contact request API exists.

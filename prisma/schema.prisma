@@ -74,6 +74,7 @@ model Tenant {
   surveys                 Survey[]
   messageTemplates        MessageTemplate[]
   notificationPreferences NotificationPreference[]
+  webPushSubscriptions    WebPushSubscription[]
   ownerGroups             OwnerGroup[]
   accessGrants            UserAccessGrant[]
   brandAssets             BrandAsset[]
@@ -265,6 +266,7 @@ model User {
   auditLogs                 AuditLog[]
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
+  webPushSubscriptions      WebPushSubscription[]
   medicationLogs            MedicationLog[]
   createdEmergencyDrillLogs EmergencyDrillLog[]       @relation("EmergencyDrillCreatedBy")
   assignedComplianceTasks   ComplianceTask[]          @relation("ComplianceTaskAssignee")
@@ -328,9 +330,10 @@ model DeviceSession {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  user      User   @relation("UserDeviceSessions", fields: [userId], references: [id])
-  tenant    Tenant @relation(fields: [tenantId], references: [id])
-  revokedBy User?  @relation("DeviceSessionRevokedBy", fields: [revokedById], references: [id])
+  user                 User                  @relation("UserDeviceSessions", fields: [userId], references: [id])
+  tenant               Tenant                @relation(fields: [tenantId], references: [id])
+  revokedBy            User?                 @relation("DeviceSessionRevokedBy", fields: [revokedById], references: [id])
+  webPushSubscriptions WebPushSubscription[]
 
   @@index([tenantId, lastSeenAt])
   @@index([userId, revokedAt])
@@ -1420,10 +1423,63 @@ model Notification {
   archivedAt DateTime?
   createdAt  DateTime  @default(now())
 
-  user User? @relation(fields: [userId], references: [id])
+  user              User?             @relation(fields: [userId], references: [id])
+  webPushDeliveries WebPushDelivery[]
 
   @@index([userId, archivedAt, expiresAt, createdAt])
   @@index([type, createdAt])
+}
+
+model WebPushSubscription {
+  id              String    @id @default(cuid())
+  tenantId        String
+  userId          String
+  deviceSessionId String?
+  endpointHash    String    @unique
+  endpoint        String
+  p256dh          String
+  auth            String
+  expiresAt       DateTime?
+  userAgentHash   String?
+  platform        String    @default("web")
+  isActive        Boolean   @default(true)
+  lastSeenAt      DateTime  @default(now())
+  lastSuccessAt   DateTime?
+  lastFailureAt   DateTime?
+  failureCount    Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceSession DeviceSession?    @relation(fields: [deviceSessionId], references: [id], onDelete: SetNull)
+  deliveries    WebPushDelivery[]
+
+  @@index([tenantId, userId, isActive])
+  @@index([deviceSessionId, isActive])
+}
+
+model WebPushDelivery {
+  id             String    @id @default(cuid())
+  notificationId String
+  subscriptionId String
+  status         String    @default("pending")
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now())
+  lastAttemptAt  DateTime?
+  deliveredAt    DateTime?
+  failedAt       DateTime?
+  responseStatus Int?
+  errorCode      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  notification Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  subscription WebPushSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, subscriptionId])
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([subscriptionId, status])
 }
 
 model NotificationPreference {

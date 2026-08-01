@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { CheckCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { dispatchNotificationsChanged } from "@/lib/notification-client-events";
 
 type Props = {
   notificationId?: string;
@@ -30,6 +31,7 @@ export function NotificationReadAction({ notificationId, readAt, label = "Mark r
         setError(json?.error || "Notification could not be updated.");
         return;
       }
+      dispatchNotificationsChanged();
       router.refresh();
     });
   }

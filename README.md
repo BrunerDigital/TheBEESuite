@@ -109,7 +109,7 @@ Start from `.env.example`. Important production groups:
 - App/auth: `APP_URL`, `NEXT_PUBLIC_APP_URL`, `AUTH_SECRET`, `AUTH_PASSWORD_RESET_REDIRECT_URL`
 - Supabase/Postgres: `DATABASE_URL`, `POSTGRES_URL`, `POSTGRES_PRISMA_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - Stripe: `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`, Connect/payment fee settings, payout settings, and `STRIPE_ACCOUNTS_V2_API_VERSION=2026-06-24.dahlia`
-- Messaging: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, Twilio account/auth/from/webhook settings
+- Messaging: `SENDGRID_API_KEY`, `SENDGRID_FROM_EMAIL`, Twilio account/auth/from/webhook settings, and server-only Web Push VAPID keys
 - Operations: `CRON_SECRET`, `OPENAI_API_KEY`, Google Sheets/Calendar credentials where enabled
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), [docs/STRIPE_CONNECT.md](docs/STRIPE_CONNECT.md), and [docs/STRIPE_CONNECT_SETUP.md](docs/STRIPE_CONNECT_SETUP.md).

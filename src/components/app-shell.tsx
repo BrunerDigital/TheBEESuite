@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -51,12 +51,14 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { modules, navGroups } from "@/lib/demo-data";
 import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
+import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notification-client-events";
 import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
 import { cn } from "@/lib/utils";
 import { removeDemoMarkersFromUserView } from "@/lib/user-view-text";
 import { workspaceVisualDomain } from "@/lib/workspace-visual-domain";
 import { SchoolTimeZoneProvider } from "@/components/school-time-zone-context";
+import { WebPushControl } from "@/components/web-push-control";
 
 type ShellUser = {
   name: string;
@@ -131,25 +133,61 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
   const notificationCenterHref = notificationCenterHrefForRole(currentUser?.role);
 
-  function loadSummary() {
+  const syncAppBadge = useCallback((count: number) => {
+    if (count > 0 && "setAppBadge" in navigator) {
+      void navigator.setAppBadge(count).catch(() => undefined);
+    } else if (count === 0 && "clearAppBadge" in navigator) {
+      void navigator.clearAppBadge().catch(() => undefined);
+    }
+  }, []);
+
+  const loadSummary = useCallback(() => {
     let mounted = true;
     fetch("/api/notifications/summary")
       .then((response) => response.json())
       .then((json) => {
-        if (mounted && json?.ok) setSummary(json as NotificationSummary);
+        if (mounted && json?.ok) {
+          const nextSummary = json as NotificationSummary;
+          setSummary(nextSummary);
+          syncAppBadge(nextSummary.stats.unread);
+        }
       })
       .catch(() => undefined);
     return () => {
       mounted = false;
     };
-  }
+  }, [syncAppBadge]);
 
   useEffect(() => {
     const cleanup = loadSummary();
     return () => {
       cleanup();
     };
-  }, []);
+  }, [loadSummary]);
+
+  useEffect(() => {
+    const refresh = () => void loadSummary();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const refreshFromServiceWorker = (event: MessageEvent) => {
+      if (event.data?.type === "bee-suite-notification") refresh();
+    };
+    const timer = window.setInterval(refresh, 60_000);
+
+    window.addEventListener("focus", refresh);
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    navigator.serviceWorker?.addEventListener("message", refreshFromServiceWorker);
+
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      navigator.serviceWorker?.removeEventListener("message", refreshFromServiceWorker);
+    };
+  }, [loadSummary]);
 
   async function markMineRead() {
     await fetch("/api/notifications/summary", {
@@ -210,6 +248,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
               Mark my notifications read
             </Button>
           ) : null}
+          <WebPushControl />
           {summary ? (
             <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
               {canViewEnrollment ? (

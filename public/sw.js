@@ -59,3 +59,80 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+
+function safeNotificationPayload(event) {
+  const fallback = {
+    title: "The BEE Suite",
+    body: "A new update is ready in The BEE Suite.",
+    url: "/notifications",
+    tag: "bee-suite-update",
+    badgeCount: 1,
+    icon: "/brand/the-bee-suite/app-icon-yellow.png",
+    badge: "/brand/the-bee-suite/browser-icon.png",
+  };
+
+  if (!event.data) return fallback;
+  try {
+    const payload = event.data.json();
+    return payload && typeof payload === "object" ? { ...fallback, ...payload } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeNotificationUrl(value) {
+  if (typeof value !== "string") return "/notifications";
+  try {
+    const url = new URL(value, self.location.origin);
+    if (url.origin !== self.location.origin) return "/notifications";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/notifications";
+  }
+}
+
+self.addEventListener("push", (event) => {
+  const payload = safeNotificationPayload(event);
+  const badgeCount = Number(payload.badgeCount);
+  const tasks = [
+    self.registration.showNotification(
+      typeof payload.title === "string" && payload.title ? payload.title : "The BEE Suite",
+      {
+        body: typeof payload.body === "string" ? payload.body : "A new update is ready in The BEE Suite.",
+        icon: typeof payload.icon === "string" ? payload.icon : "/brand/the-bee-suite/app-icon-yellow.png",
+        badge: typeof payload.badge === "string" ? payload.badge : "/brand/the-bee-suite/browser-icon.png",
+        tag: typeof payload.tag === "string" ? payload.tag : "bee-suite-update",
+        data: {
+          url: safeNotificationUrl(payload.url),
+          notificationId: typeof payload.notificationId === "string" ? payload.notificationId : null,
+        },
+        renotify: true,
+      },
+    ),
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      for (const client of windows) client.postMessage({ type: "bee-suite-notification" });
+    }),
+  ];
+
+  if (Number.isFinite(badgeCount) && badgeCount >= 0 && "setAppBadge" in self.navigator) {
+    tasks.push(self.navigator.setAppBadge(Math.floor(badgeCount)));
+  }
+
+  event.waitUntil(Promise.all(tasks));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetPath = safeNotificationUrl(event.notification.data?.url);
+  const targetUrl = new URL(targetPath, self.location.origin).href;
+
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      await existing.navigate(targetUrl);
+      return existing.focus();
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
+});

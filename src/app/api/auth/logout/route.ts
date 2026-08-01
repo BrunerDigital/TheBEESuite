@@ -8,17 +8,45 @@ export const runtime = "nodejs";
 async function POSTHandler() {
   const session = await getSession();
   if (session?.deviceSessionId) {
-    await prisma.deviceSession.updateMany({
-      where: {
-        id: session.deviceSessionId,
-        userId: session.userId,
-        revokedAt: null,
-      },
-      data: {
-        revokedAt: new Date(),
-        revokedById: session.userId,
-      },
-    }).catch(() => undefined);
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.webPushDelivery.updateMany({
+        where: {
+          subscription: {
+            deviceSessionId: session.deviceSessionId,
+            userId: session.userId,
+          },
+          status: { in: ["pending", "processing", "retry"] },
+        },
+        data: {
+          status: "cancelled",
+          failedAt: now,
+          errorCode: "device_session_logout",
+        },
+      }),
+      prisma.webPushSubscription.updateMany({
+        where: {
+          deviceSessionId: session.deviceSessionId,
+          userId: session.userId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          lastSeenAt: now,
+        },
+      }),
+      prisma.deviceSession.updateMany({
+        where: {
+          id: session.deviceSessionId,
+          userId: session.userId,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: now,
+          revokedById: session.userId,
+        },
+      }),
+    ]).catch(() => undefined);
   }
 
   const response = NextResponse.json({ ok: true });

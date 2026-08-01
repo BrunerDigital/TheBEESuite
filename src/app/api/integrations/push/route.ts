@@ -3,6 +3,7 @@ import { canAccessAllCenters, canManageOperations, getCurrentUser } from "@/lib/
 import { writeAuditLog } from "@/lib/audit";
 import { notificationTargetGuard } from "@/lib/notification-guardrails";
 import { prisma } from "@/lib/prisma";
+import { getWebPushConfiguration } from "@/lib/web-push";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -76,6 +77,8 @@ async function POSTHandler(request: NextRequest) {
       priority,
     },
   });
+  const webPush = getWebPushConfiguration();
+  const webPushEligible = Boolean(targetUserId && webPush.configured);
 
   await writeAuditLog(user, {
     centerId: user.primaryCenterId,
@@ -83,8 +86,10 @@ async function POSTHandler(request: NextRequest) {
     resource: "Notification",
     resourceId: notification.id,
     metadata: {
-      provider: "in_app_notification",
+      provider: webPushEligible ? "web_push" : "in_app_notification",
       nativePushConfigured: false,
+      webPushConfigured: webPush.configured,
+      webPushEligible,
       targetUserId,
     },
   });
@@ -92,9 +97,9 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     notification,
-    configured: false,
-    provider: "in_app_notification",
-    deliveryMode: "in_app_only",
+    configured: webPush.configured,
+    provider: webPushEligible ? "web_push" : "in_app_notification",
+    deliveryMode: webPushEligible ? "web_push_and_in_app" : "in_app_only",
   }, { status: 201 });
 }
 

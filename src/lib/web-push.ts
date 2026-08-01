@@ -274,10 +274,13 @@ async function dispatchCandidate(
     return "skipped" as const;
   }
 
+  const tenantPreferences = preferences.filter(
+    (preference) => preference.tenantId === user.tenantId,
+  );
   const channels = resolveNotificationPreferenceChannels({
     type: preferenceType,
     target: { mode: "user", userId: user.id, role: user.role },
-    preferences,
+    preferences: tenantPreferences,
   });
   if (!channels.pushEnabled) {
     await skipDelivery(candidate.id, "push_preference_disabled", now);

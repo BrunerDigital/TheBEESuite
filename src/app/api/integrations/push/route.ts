@@ -78,6 +78,7 @@ async function POSTHandler(request: NextRequest) {
     },
   });
   const webPush = getWebPushConfiguration();
+  const webPushEligible = Boolean(targetUserId && webPush.configured);
 
   await writeAuditLog(user, {
     centerId: user.primaryCenterId,
@@ -85,9 +86,10 @@ async function POSTHandler(request: NextRequest) {
     resource: "Notification",
     resourceId: notification.id,
     metadata: {
-      provider: webPush.configured ? "web_push" : "in_app_notification",
+      provider: webPushEligible ? "web_push" : "in_app_notification",
       nativePushConfigured: false,
       webPushConfigured: webPush.configured,
+      webPushEligible,
       targetUserId,
     },
   });
@@ -96,8 +98,8 @@ async function POSTHandler(request: NextRequest) {
     ok: true,
     notification,
     configured: webPush.configured,
-    provider: webPush.configured ? "web_push" : "in_app_notification",
-    deliveryMode: webPush.configured ? "web_push_and_in_app" : "in_app_only",
+    provider: webPushEligible ? "web_push" : "in_app_notification",
+    deliveryMode: webPushEligible ? "web_push_and_in_app" : "in_app_only",
   }, { status: 201 });
 }
 

@@ -71,6 +71,7 @@ test("web push outbox queues only new user-bound notifications for active scoped
 test("subscription, logout, dispatcher, and service worker keep device delivery bounded", () => {
   const subscriptionRoute = readFileSync("src/app/api/notifications/push-subscription/route.ts", "utf8");
   const logoutRoute = readFileSync("src/app/api/auth/logout/route.ts", "utf8");
+  const integrationRoute = readFileSync("src/app/api/integrations/push/route.ts", "utf8");
   const dispatcher = readFileSync("src/lib/web-push.ts", "utf8");
   const serviceWorker = readFileSync("public/sw.js", "utf8");
   const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: Array<{ path: string; schedule: string }> };
@@ -83,9 +84,12 @@ test("subscription, logout, dispatcher, and service worker keep device delivery 
   assert.match(logoutRoute, /device_session_logout/);
   assert.match(logoutRoute, /webPushSubscription\.updateMany/);
   assert.match(dispatcher, /subscription\.tenantId !== user\.tenantId/);
+  assert.match(dispatcher, /preference\.tenantId === user\.tenantId/);
   assert.match(dispatcher, /push_preference_disabled/);
   assert.match(dispatcher, /webPushBody\(preferenceType\)/);
   assert.doesNotMatch(dispatcher, /body:\s*notification\.body/);
+  assert.match(integrationRoute, /Boolean\(targetUserId && webPush\.configured\)/);
+  assert.match(integrationRoute, /deliveryMode: webPushEligible \? "web_push_and_in_app" : "in_app_only"/);
   assert.match(serviceWorker, /addEventListener\("push"/);
   assert.match(serviceWorker, /showNotification/);
   assert.match(serviceWorker, /setAppBadge/);

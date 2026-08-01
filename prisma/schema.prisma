@@ -1456,6 +1456,7 @@ model WebPushSubscription {
   deliveries    WebPushDelivery[]
 
   @@index([tenantId, userId, isActive])
+  @@index([userId, isActive])
   @@index([deviceSessionId, isActive])
 }
 

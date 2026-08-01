@@ -34,7 +34,7 @@ WEB_PUSH_VAPID_PRIVATE_KEY=<private key>
 WEB_PUSH_VAPID_SUBJECT=mailto:support@thebeesuite.io
 ```
 
-Then apply `20260731193000_web_push_notifications`, deploy the same commit, and confirm `/api/cron/web-push` runs once per minute with Vercel's `CRON_SECRET` authorization.
+Then apply `20260801044520_web_push_notifications` and `20260801044601_web_push_subscription_user_index`, deploy the same commit, and confirm `/api/cron/web-push` runs once per minute with Vercel's `CRON_SECRET` authorization.
 
 Changing the VAPID key invalidates existing browser subscriptions. The UI removes a mismatched subscription and asks the user to enable alerts again.
 

@@ -46,12 +46,15 @@ test("push copy is generic and role links stay inside the application", () => {
 
 test("web push outbox queues only new user-bound notifications for active scoped subscriptions", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8");
-  const migration = readFileSync("prisma/migrations/20260731193000_web_push_notifications/migration.sql", "utf8");
-  const mirror = readFileSync("supabase/migrations/20260731193000_web_push_notifications.sql", "utf8");
+  const migration = readFileSync("prisma/migrations/20260801044520_web_push_notifications/migration.sql", "utf8");
+  const mirror = readFileSync("supabase/migrations/20260801044520_web_push_notifications.sql", "utf8");
+  const userIndexMigration = readFileSync("prisma/migrations/20260801044601_web_push_subscription_user_index/migration.sql", "utf8");
+  const userIndexMirror = readFileSync("supabase/migrations/20260801044601_web_push_subscription_user_index.sql", "utf8");
 
   assert.match(schema, /model WebPushSubscription/);
   assert.match(schema, /model WebPushDelivery/);
   assert.equal(mirror, migration);
+  assert.equal(userIndexMirror, userIndexMigration);
   assert.match(migration, /AFTER INSERT ON public\."Notification"/);
   assert.match(migration, /IF NEW\."userId" IS NULL/);
   assert.match(migration, /subscription\."isActive" = true/);
@@ -62,6 +65,7 @@ test("web push outbox queues only new user-bound notifications for active scoped
   assert.match(migration, /ALTER TABLE public\."WebPushDelivery" ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /SECURITY DEFINER\s+SET search_path = pg_catalog, pg_temp/);
   assert.match(migration, /REVOKE ALL ON FUNCTION public\.queue_web_push_delivery\(\) FROM PUBLIC/);
+  assert.match(userIndexMigration, /"WebPushSubscription_userId_isActive_idx"/);
 });
 
 test("subscription, logout, dispatcher, and service worker keep device delivery bounded", () => {

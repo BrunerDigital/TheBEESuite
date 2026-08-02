@@ -90,3 +90,45 @@ test("inquiry routing returns null when no candidate matches selected location i
 
   assert.equal(selected, null);
 });
+
+test("inquiry routing accepts a saved legacy location alias", () => {
+  const selected = selectPreferredInquiryCenter(
+    [{
+      id: "sarasota",
+      status: "active",
+      crmLocationId: "Kid City USA - FL | Sarasota",
+      locationId: "Kid City USA - FL | Sarasota",
+      name: "Kid City USA - Sarasota",
+      customFields: { locationAliases: ["FL | Sarasota"] },
+    }],
+    ["FL | Sarasota"],
+  );
+
+  assert.equal(selected?.id, "sarasota");
+});
+
+test("inquiry routing fails closed when a legacy alias matches two active schools", () => {
+  const selected = selectPreferredInquiryCenter(
+    [
+      {
+        id: "first",
+        status: "active",
+        crmLocationId: "Brand - FL | First",
+        locationId: "Brand - FL | First",
+        name: "First",
+        customFields: { locationAliases: ["FL | Shared"] },
+      },
+      {
+        id: "second",
+        status: "active",
+        crmLocationId: "Brand - FL | Second",
+        locationId: "Brand - FL | Second",
+        name: "Second",
+        customFields: { locationAliases: ["FL | Shared"] },
+      },
+    ],
+    ["FL | Shared"],
+  );
+
+  assert.equal(selected, null);
+});

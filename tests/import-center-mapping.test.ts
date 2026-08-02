@@ -14,6 +14,7 @@ const longmont = {
   locationId: "Kid City USA - Longmont",
   city: "Longmont",
   state: "CO",
+  customFields: { locationAliases: ["Legacy Longmont Queue"] },
 };
 
 test("center aliases include branded, CRM, and city-only Longmont variants", () => {
@@ -21,6 +22,7 @@ test("center aliases include branded, CRM, and city-only Longmont variants", () 
   assert.ok(centerAliasKeys(longmont).includes("kid city usa longmont"));
   assert.ok(centerAliasKeys(longmont).includes("co longmont"));
   assert.ok(centerAliasKeys(longmont).includes("longmont"));
+  assert.ok(centerAliasKeys(longmont).includes("legacy longmont queue"));
 });
 
 test("Procare branded school names resolve to Bee Suite center records", () => {
@@ -29,6 +31,7 @@ test("Procare branded school names resolve to Bee Suite center records", () => {
   assert.equal(resolveImportCenter(centerByAlias, "Kid City USA Longmont")?.id, "center-longmont");
   assert.equal(resolveImportCenter(centerByAlias, "Kid City USA - Longmont")?.id, "center-longmont");
   assert.equal(resolveImportCenter(centerByAlias, "CO | Longmont")?.id, "center-longmont");
+  assert.equal(resolveImportCenter(centerByAlias, "Legacy Longmont Queue")?.id, "center-longmont");
 });
 
 test("ambiguous city-only aliases are not auto-mapped", () => {

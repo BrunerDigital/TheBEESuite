@@ -1,8 +1,11 @@
+import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
+
 export type IntakeCenterMatchCandidate = {
   crmLocationId: string | null;
   locationId: string | null;
   name: string;
   status: string | null;
+  customFields?: unknown;
 };
 
 function normalize(value: string) {
@@ -13,7 +16,8 @@ function matchRank(center: IntakeCenterMatchCandidate, keys: Set<string>) {
   if (center.crmLocationId && keys.has(normalize(center.crmLocationId))) return 0;
   if (center.locationId && keys.has(normalize(center.locationId))) return 1;
   if (keys.has(normalize(center.name))) return 2;
-  return 3;
+  if (locationAliasesFromCustomFields(center.customFields).some((alias) => keys.has(normalize(alias)))) return 3;
+  return 4;
 }
 
 export function selectPreferredInquiryCenter<T extends IntakeCenterMatchCandidate>(
@@ -22,7 +26,7 @@ export function selectPreferredInquiryCenter<T extends IntakeCenterMatchCandidat
 ) {
   const keys = new Set(locationIds.map(normalize).filter(Boolean));
   const ranked = centers
-    .filter((center) => matchRank(center, keys) < 3)
+    .filter((center) => matchRank(center, keys) < 4)
     .map((center, index) => ({
       center,
       index,
@@ -34,6 +38,13 @@ export function selectPreferredInquiryCenter<T extends IntakeCenterMatchCandidat
       left.matchRank - right.matchRank ||
       left.index - right.index,
     );
+
+  if (
+    ranked[0]
+    && ranked[1]
+    && ranked[0].activeRank === ranked[1].activeRank
+    && ranked[0].matchRank === ranked[1].matchRank
+  ) return null;
 
   return ranked[0]?.center ?? null;
 }

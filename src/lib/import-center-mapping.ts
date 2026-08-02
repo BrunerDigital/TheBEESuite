@@ -1,3 +1,5 @@
+import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
+
 export type ImportCenterLike = {
   id: string;
   name: string;
@@ -5,6 +7,7 @@ export type ImportCenterLike = {
   locationId: string | null;
   city: string | null;
   state: string | null;
+  customFields?: unknown;
 };
 
 export type CenterAliasMap<TCenter extends ImportCenterLike> = Map<string, TCenter | null>;
@@ -36,6 +39,7 @@ export function centerAliasKeys(center: ImportCenterLike) {
     center.locationId,
     [center.city, center.state].filter(Boolean).join(" "),
     [center.name, center.city, center.state].filter(Boolean).join(" "),
+    ...locationAliasesFromCustomFields(center.customFields),
   ];
 
   return [...new Set(aliases.flatMap(importLocationKeyVariants))];

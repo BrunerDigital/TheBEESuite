@@ -416,6 +416,7 @@ type ImportCenter = {
   locationId: string | null;
   city: string | null;
   state: string | null;
+  customFields: Prisma.JsonValue | null;
 };
 
 type TeacherCenterGrantDb = Pick<Prisma.TransactionClient, "userAccessGrant">;
@@ -1897,6 +1898,7 @@ async function POSTHandler(request: NextRequest) {
       locationId: true,
       city: true,
       state: true,
+      customFields: true,
     },
   });
   const visibleCenters: ImportCenter[] = visibleCenterRows.map(({ organization, ...item }) => ({

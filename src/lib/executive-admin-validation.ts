@@ -45,7 +45,7 @@ export function validateExecutiveCenterForm(input: {
     errors.push(`Location ID is required for active schools. Use ${CRM_LOCATION_ID_EXAMPLE}.`);
   }
   if (crmLocationId && !isValidCrmLocationId(crmLocationId)) {
-    errors.push(`Location ID must use ST | City format, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
+    errors.push(`Location ID must use Brand - ST | City format, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
   }
   if (email && !isExecutiveEmail(email)) errors.push("Routing email must be a valid email address.");
   if (capacityText) {

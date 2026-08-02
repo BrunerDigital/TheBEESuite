@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { EnrollmentStage, type Prisma } from "@prisma/client";
+import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
 
 type GmailRow = {
   ID: string;
@@ -21,6 +22,7 @@ type CenterMatch = {
   status: string;
   crmLocationId: string | null;
   locationId: string | null;
+  customFields: unknown;
 };
 
 type ParsedInquiry = {
@@ -381,7 +383,8 @@ function centerMatches(center: CenterMatch, inquiry: ParsedInquiry) {
   return Boolean(
     (center.crmLocationId && keys.has(centerKey(center.crmLocationId))) ||
       (center.locationId && keys.has(centerKey(center.locationId))) ||
-      keys.has(centerKey(center.name)),
+      keys.has(centerKey(center.name)) ||
+      locationAliasesFromCustomFields(center.customFields).some((alias) => keys.has(centerKey(alias))),
   );
 }
 
@@ -443,7 +446,12 @@ function sqlLocationKeysExpression(alias: string) {
 function sqlCenterMatchClause(keysAlias: string) {
   return `lower(regexp_replace(coalesce(c."crmLocationId", ''), '\\s*\\|\\s*', ' | ', 'g')) = any(${keysAlias})
        or lower(regexp_replace(coalesce(c."locationId", ''), '\\s*\\|\\s*', ' | ', 'g')) = any(${keysAlias})
-       or lower(regexp_replace(coalesce(c.name, ''), '\\s*\\|\\s*', ' | ', 'g')) = any(${keysAlias})`;
+       or lower(regexp_replace(coalesce(c.name, ''), '\\s*\\|\\s*', ' | ', 'g')) = any(${keysAlias})
+       or exists (
+         select 1
+         from jsonb_array_elements_text(coalesce(c."customFields"->'locationAliases', '[]'::jsonb)) as center_alias(value)
+         where lower(regexp_replace(center_alias.value, '\\s*\\|\\s*', ' | ', 'g')) = any(${keysAlias})
+       )`;
 }
 
 function buildSqlDryRun(uniqueParsed: ParsedInquiry[], batch: number, batchSize: number) {
@@ -908,6 +916,7 @@ async function main() {
       status: true,
       crmLocationId: true,
       locationId: true,
+      customFields: true,
     },
   });
 

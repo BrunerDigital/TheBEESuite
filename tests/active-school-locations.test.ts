@@ -23,27 +23,28 @@ type PublicLocationFile = {
   }>;
 };
 
-test("active school location IDs normalize to ST pipe City format", () => {
+test("active school location IDs normalize legacy and branded formats", () => {
   assert.deepEqual(parseCrmLocationId("fl| Sarasota"), {
+    brandName: null,
     state: "FL",
     city: "Sarasota",
     crmLocationId: "FL | Sarasota",
   });
   assert.equal(normalizeCrmLocationId(" IN   |   McCordsville "), "IN | McCordsville");
-  assert.equal(normalizeCrmLocationId("Kid City USA - Sarasota"), "");
+  assert.equal(normalizeCrmLocationId("Kid City USA - FL | Sarasota"), "Kid City USA - FL | Sarasota");
 });
 
 test("active public school candidates require active status and a valid CRM location ID", () => {
   assert.equal(isActivePublicSchoolCandidate({
     status: "active",
-    crmLocationId: "FL | Sarasota",
-    locationId: "Kid City USA - Sarasota",
+    crmLocationId: "Kid City USA - FL | Sarasota",
+    locationId: "Kid City USA - FL | Sarasota",
     name: "Kid City USA - Sarasota",
   }), true);
   assert.equal(isActivePublicSchoolCandidate({
     status: "lead_queue",
-    crmLocationId: "FL | Sarasota",
-    locationId: "Kid City USA - Sarasota",
+    crmLocationId: "Kid City USA - FL | Sarasota",
+    locationId: "Kid City USA - FL | Sarasota",
     name: "Kid City USA - Sarasota",
   }), false);
   assert.equal(isActivePublicSchoolCandidate({
@@ -68,8 +69,8 @@ test("public Kid City location serialization feeds the inquiry dropdown", () => 
   });
 
   assert.deepEqual(location, {
-    crmLocationId: "FL | Sarasota",
-    locationId: "FL | Sarasota",
+    crmLocationId: "Kid City USA - FL | Sarasota",
+    locationId: "Kid City USA - FL | Sarasota",
     name: "Kid City USA - Sarasota",
     address: "374 Scott Ave",
     city: "Sarasota",
@@ -80,13 +81,13 @@ test("public Kid City location serialization feeds the inquiry dropdown", () => 
   assert.equal(defaultCenterNameFromCrmLocationId("FL | Sarasota"), "Kid City USA - Sarasota");
 });
 
-test("static Kid City fallback locations include Vero Beach for the website dropdown", () => {
+test("static Kid City fallback locations use the canonical branded Vero Beach ID", () => {
   const file = JSON.parse(readFileSync("public/kidcity-locations.json", "utf8")) as PublicLocationFile;
-  const location = file.locations.find((item) => item.crmLocationId === "FL | Vero Beach");
+  const location = file.locations.find((item) => item.crmLocationId === "Kid City USA - FL | Vero Beach");
 
   assert.deepEqual(location, {
-    crmLocationId: "FL | Vero Beach",
-    locationId: "FL | Vero Beach",
+    crmLocationId: "Kid City USA - FL | Vero Beach",
+    locationId: "Kid City USA - FL | Vero Beach",
     name: "Kid City USA - Vero Beach",
     address: "760 20th Avenue",
     city: "Vero Beach",
@@ -135,18 +136,18 @@ test("live Kid City location API results keep static locations missing from the 
   const merged = mergePublicKidCityLocations(liveLocations, staticLocations);
 
   assert.deepEqual(merged.map((location) => location.crmLocationId), [
-    "FL | Sarasota",
-    "FL | Vero Beach",
+    "Kid City USA - FL | Sarasota",
+    "Kid City USA - FL | Vero Beach",
   ]);
   assert.equal(
-    merged.find((location) => location.crmLocationId === "FL | Sarasota")?.name,
+    merged.find((location) => location.crmLocationId === "Kid City USA - FL | Sarasota")?.name,
     "Live Kid City USA - Sarasota",
   );
 });
 
-test("WordPress Avada inquiry snippet includes Vero Beach in the location dropdown", () => {
+test("WordPress Avada inquiry snippet uses the branded Vero Beach location ID", () => {
   const snippet = readFileSync("wordpress-avada/kidcity-inquiry-form-bee-suite.html", "utf8");
 
-  assert.match(snippet, /<option value="FL \| Vero Beach"[^>]*>FL \| Vero Beach<\/option>/);
+  assert.match(snippet, /<option value="Kid City USA - FL \| Vero Beach"[^>]*>Kid City USA - FL \| Vero Beach<\/option>/);
   assert.match(snippet, /data-location-name="Kid City USA - Vero Beach"/);
 });

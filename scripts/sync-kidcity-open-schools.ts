@@ -2,6 +2,10 @@ import "./load-env";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Prisma, PrismaClient } from "@prisma/client";
+import {
+  canonicalSchoolLocationId,
+  locationAliasesFromCustomFields,
+} from "@/lib/school-location-identifiers";
 
 type PublicLocation = {
   crmLocationId: string;
@@ -53,24 +57,46 @@ async function main() {
   let updated = 0;
 
   for (const location of locations) {
+    const canonicalId = canonicalSchoolLocationId({
+      brandName: "Kid City USA",
+      brandSlug: "kid-city-usa",
+      crmLocationId: location.crmLocationId,
+    });
+    if (!canonicalId) throw new Error(`Invalid Kid City location identifier: ${location.crmLocationId}`);
     const matchers: Prisma.CenterWhereInput[] = [
+      { crmLocationId: canonicalId },
+      { locationId: canonicalId },
       { crmLocationId: location.crmLocationId },
       { locationId: location.locationId },
       { name: location.name },
     ];
     if (location.address) matchers.push({ address: location.address });
 
-    const existing = await prisma.center.findFirst({
+    const matches = await prisma.center.findMany({
       where: {
+        organizationId,
         OR: matchers,
       },
-      select: { id: true, customFields: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, status: true, crmLocationId: true, locationId: true, customFields: true },
     });
+    const activeMatches = matches.filter((center) => center.status === "active");
+    if (activeMatches.length > 1 || (!activeMatches.length && matches.length > 1)) {
+      throw new Error(`${location.crmLocationId} matches multiple school profiles; reconcile them before syncing.`);
+    }
+    const existing = activeMatches[0] ?? matches[0] ?? null;
+    const locationAliases = Array.from(new Set([
+      ...locationAliasesFromCustomFields(existing?.customFields),
+      clean(existing?.crmLocationId),
+      clean(existing?.locationId),
+      clean(location.crmLocationId),
+      clean(location.locationId),
+    ].filter((value) => value && value !== canonicalId)));
 
     const commonData = {
       name: location.name,
-      crmLocationId: location.crmLocationId,
-      locationId: location.locationId,
+      crmLocationId: canonicalId,
+      locationId: canonicalId,
       address: clean(location.address) || null,
       city: clean(location.city) || null,
       state: clean(location.state) || null,
@@ -84,6 +110,8 @@ async function main() {
           : {}),
         openSchoolsSync: true,
         openSchoolsSyncedAt: new Date().toISOString(),
+        canonicalLocationIdVersion: 1,
+        locationAliases,
       },
     };
 

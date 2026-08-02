@@ -11,6 +11,7 @@ import {
   type KidCityLegacyCenterAlias,
 } from "@/lib/kidcity-legacy-center-aliases";
 import { prisma } from "@/lib/prisma";
+import { locationAliasesFromCustomFields } from "@/lib/school-location-identifiers";
 
 const TENANT_SLUG = "kid-city-usa";
 const REPAIR_SOURCE = "kidcity_legacy_lead_queue_merge_2026_08_01";
@@ -60,6 +61,10 @@ const EXPECTED_CENTER_UNIQUE_INDEXES = new Set([
 
 type Database = Prisma.TransactionClient | typeof prisma;
 type CenterRow = Center | null;
+
+function centerIdentifierKey(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
 
 type MergePair = {
   alias: KidCityLegacyCenterAlias;
@@ -312,24 +317,29 @@ async function readPlan(db: Database): Promise<MergePlan> {
   const tenant = await db.tenant.findUnique({ where: { slug: TENANT_SLUG }, select: { id: true } });
   invariant(tenant, `Tenant ${TENANT_SLUG} was not found.`);
 
-  const identifiers = Array.from(new Set(KIDCITY_LEGACY_CENTER_ALIASES.flatMap((alias) => [
-    alias.sourceCrmLocationId,
-    alias.targetCrmLocationId,
-  ])));
   const centers = await db.center.findMany({
-    where: {
-      organization: { tenantId: tenant.id },
-      crmLocationId: { in: identifiers },
-    },
+    where: { organization: { tenantId: tenant.id } },
   });
-  const centersByCrmId = Map.groupBy(centers, (center) => center.crmLocationId ?? "");
+  const centersByIdentifier = new Map<string, Center[]>();
+  for (const center of centers) {
+    for (const identifier of new Set([
+      center.crmLocationId,
+      center.locationId,
+      ...locationAliasesFromCustomFields(center.customFields),
+    ].filter((value): value is string => Boolean(value)))) {
+      const key = centerIdentifierKey(identifier);
+      const matches = centersByIdentifier.get(key) ?? [];
+      if (!matches.some((item) => item.id === center.id)) matches.push(center);
+      centersByIdentifier.set(key, matches);
+    }
+  }
   const errors: string[] = [];
   const pendingBase: Array<{ alias: KidCityLegacyCenterAlias; source: NonNullable<CenterRow>; target: NonNullable<CenterRow> }> = [];
   const alreadyMerged: KidCityLegacyCenterAlias[] = [];
 
   for (const alias of KIDCITY_LEGACY_CENTER_ALIASES) {
-    const sources = centersByCrmId.get(alias.sourceCrmLocationId) ?? [];
-    const targets = centersByCrmId.get(alias.targetCrmLocationId) ?? [];
+    const sources = centersByIdentifier.get(centerIdentifierKey(alias.sourceCrmLocationId)) ?? [];
+    const targets = centersByIdentifier.get(centerIdentifierKey(alias.targetCrmLocationId)) ?? [];
     if (targets.length !== 1) {
       errors.push(`${alias.targetCrmLocationId}: expected one canonical center, found ${targets.length}`);
       continue;

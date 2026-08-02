@@ -124,7 +124,7 @@ export function parseExecutiveBulkImportCsv(csvText: string) {
       errors: [],
     };
 
-    if (type === "location" && !row.crmLocationId) row.errors.push("Location rows need a valid ST | City Location ID.");
+    if (type === "location" && !row.crmLocationId) row.errors.push("Location rows need a valid Brand - ST | City Location ID.");
     if (type === "location" && !row.name) row.errors.push("Location rows need a school name.");
     if (type === "user" && !row.email && row.role.toUpperCase() !== "TEACHER") row.errors.push("User rows need an email.");
     if (type === "user" && !row.name) row.errors.push("User rows need a name.");

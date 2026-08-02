@@ -4,14 +4,17 @@ import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 const DOMAIN = "@kidcityusa.com";
-// This is the shared initial password explicitly assigned to Kid City school dashboards.
-// Do not inherit a stale deployment default here; the rollout must be deterministic.
-const password = "BusyBees";
+const apply = process.argv.includes("--apply");
+const confirmed = process.argv.includes("--confirm-kidcity-school-login-sync");
+const password = process.env.KIDCITY_DEFAULT_PASSWORD;
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SECRET_KEY;
 
 if (!supabaseUrl || !serviceRoleKey) {
   throw new Error("Supabase URL and service-role credentials are required.");
+}
+if (apply && (!confirmed || !password)) {
+  throw new Error("Apply mode requires --confirm-kidcity-school-login-sync and KIDCITY_DEFAULT_PASSWORD.");
 }
 
 async function main() {
@@ -49,7 +52,7 @@ async function main() {
   const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (error) throw error;
   const authByEmail = new Map(data.users.map((user) => [user.email?.trim().toLowerCase(), user]));
-  const results: Array<{ email: string; status: "created" | "updated"; centers: string[] }> = [];
+  const results: Array<{ email: string; status: "created" | "updated" | "would_create" | "would_update"; centers: string[] }> = [];
 
   for (const user of users) {
     const email = user.email.trim().toLowerCase();
@@ -69,9 +72,14 @@ async function main() {
       bee_suite_center_ids: centerIds,
     };
 
+    if (!apply) {
+      results.push({ email, status: existing ? "would_update" : "would_create", centers: centerNames });
+      continue;
+    }
+
     if (existing) {
       const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
-        password,
+        password: password!,
         email_confirm: true,
         user_metadata: userMetadata,
         app_metadata: appMetadata,
@@ -82,7 +90,7 @@ async function main() {
     } else {
       const { error: createError } = await supabase.auth.admin.createUser({
         email,
-        password,
+        password: password!,
         email_confirm: true,
         user_metadata: userMetadata,
         app_metadata: appMetadata,
@@ -105,14 +113,17 @@ async function main() {
     return ok ? [] : [user.email];
   });
 
-  if (failures.length) throw new Error(`Auth verification failed for: ${failures.join(", ")}`);
+  if (apply && failures.length) throw new Error(`Auth verification failed for: ${failures.join(", ")}`);
   console.log(JSON.stringify({
-    ok: true,
+    ok: apply ? failures.length === 0 : true,
+    dryRun: !apply,
     schoolUsers: users.length,
     locationsCovered: new Set(users.flatMap((user) => user.accessGrants.map((grant) => grant.centerId))).size,
     created: results.filter((result) => result.status === "created").length,
     updated: results.filter((result) => result.status === "updated").length,
-    verified: users.length,
+    wouldCreate: results.filter((result) => result.status === "would_create").length,
+    wouldUpdate: results.filter((result) => result.status === "would_update").length,
+    verified: apply ? users.length : 0,
     accounts: results,
   }, null, 2));
 }

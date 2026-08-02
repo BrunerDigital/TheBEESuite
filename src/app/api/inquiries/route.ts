@@ -69,6 +69,7 @@ type IntakeCenter = {
   email: string | null;
   status: string | null;
   tenantId: string;
+  customFields: unknown;
 };
 
 type IntakeCenterRecord = {
@@ -78,6 +79,7 @@ type IntakeCenterRecord = {
   locationId: string | null;
   email: string | null;
   status: string | null;
+  customFields: unknown;
   organization: {
     tenantId: string;
   };
@@ -100,6 +102,7 @@ const intakeCenterSelect = {
   locationId: true,
   email: true,
   status: true,
+  customFields: true,
   organization: {
     select: {
       tenantId: true,
@@ -116,6 +119,7 @@ function toIntakeCenter(center: IntakeCenterRecord): IntakeCenter {
     email: center.email,
     status: center.status,
     tenantId: center.organization.tenantId,
+    customFields: center.customFields,
   };
 }
 
@@ -305,11 +309,13 @@ async function getIntakeCenter({
   publicLocationId,
   centerId,
   strictLocationRouting,
+  brandName,
 }: {
   locationId: string;
   publicLocationId?: string;
   centerId?: string;
   strictLocationRouting: boolean;
+  brandName?: string;
 }): Promise<IntakeCenter> {
   const requestedCenterId = clean(centerId);
   if (requestedCenterId) {
@@ -336,6 +342,23 @@ async function getIntakeCenter({
     const routedCenter = selectPreferredInquiryCenter(routedCenters, locationIds);
 
     if (routedCenter) return toIntakeCenter(routedCenter);
+
+    const brandText = `${brandName ?? ""} ${locationIds.join(" ")}`;
+    const tenantSlug = strictLocationRouting || /kid city usa/i.test(brandText)
+      ? "kid-city-usa"
+      : /miss honey'?s learning center/i.test(brandText)
+        ? "miss-honeys-learning-center"
+        : null;
+    const aliasCandidates = await prisma.center.findMany({
+      where: {
+        status: { not: "closed" },
+        ...(tenantSlug ? { organization: { tenant: { slug: tenantSlug } } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+      select: intakeCenterSelect,
+    });
+    const aliasCenter = selectPreferredInquiryCenter(aliasCandidates, locationIds);
+    if (aliasCenter) return toIntakeCenter(aliasCenter);
 
     if (strictLocationRouting) {
       throw new InquiryRoutingError(
@@ -490,6 +513,7 @@ async function POSTHandler(request: NextRequest) {
       publicLocationId: payload.publicLocationId,
       centerId: payload.centerId,
       strictLocationRouting: isKidCityInquiry(payload),
+      brandName: payload.brandName,
     });
     const locationRecipients = await getLocationNotificationEmails(center.id, center.email);
     const [parentFirstName, ...parentLastNameParts] = payload.parentName.split(/\s+/);

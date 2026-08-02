@@ -11,6 +11,12 @@ import { type AccessGrantTarget } from "@/lib/access-grant-guardrails";
 import { parseExecutiveBulkImportCsv, type ExecutiveBulkImportRow } from "@/lib/executive-bulk-import";
 import { prisma } from "@/lib/prisma";
 import {
+  canonicalSchoolLocationId,
+  locationAliasesFromCustomFields,
+  locationIdentifierCandidates,
+  normalizeLocationIdentifier,
+} from "@/lib/school-location-identifiers";
+import {
   getPasswordResetRedirectUrl,
   requestSupabasePasswordReset,
   upsertSupabaseAuthUserWithPassword,
@@ -118,14 +124,14 @@ async function getDefaultOrganization(tenantId: string, preferredOrganizationId?
       ...(preferredOrganizationId ? { id: preferredOrganizationId } : {}),
     },
     orderBy: { createdAt: "asc" },
-    include: { brand: { select: { id: true, name: true, settings: true } } },
+    include: { brand: { select: { id: true, name: true, slug: true, settings: true } } },
   });
   if (organization) return organization;
 
   const fallback = await prisma.organization.findFirst({
     where: { tenantId },
     orderBy: { createdAt: "asc" },
-    include: { brand: { select: { id: true, name: true, settings: true } } },
+    include: { brand: { select: { id: true, name: true, slug: true, settings: true } } },
   });
   if (!fallback) throw new Error("No organization is available for this tenant.");
   return fallback;
@@ -233,30 +239,44 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
   const requestedStatus = clean(payload.status) || "active";
   if (!editableCenterStatuses.has(requestedStatus)) throw new Error("Unsupported location status.");
 
+  const organization = await getDefaultOrganization(actor.tenantId, clean(payload.organizationId) || actor.organizationId);
   const rawCrmLocationId = clean(payload.crmLocationId);
-  const crmLocationId = normalizeCrmLocationId(rawCrmLocationId);
+  const normalizedInputLocationId = normalizeCrmLocationId(rawCrmLocationId);
   if (liveCenterStatuses.has(requestedStatus) && !rawCrmLocationId) {
-    throw new Error(`Location ID is required for active schools. Use ST | City, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
+    throw new Error(`Location ID is required for active schools. Use Brand - ST | City, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
   }
-  if (rawCrmLocationId && !crmLocationId) {
-    throw new Error(`Location ID must use ST | City format, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
+  if (rawCrmLocationId && !normalizedInputLocationId) {
+    throw new Error(`Location ID must use Brand - ST | City format, for example ${CRM_LOCATION_ID_EXAMPLE}.`);
   }
+  const crmLocationId = normalizedInputLocationId
+    ? canonicalSchoolLocationId({
+        brandName: organization.brand?.name ?? organization.name,
+        brandSlug: organization.brand?.slug,
+        crmLocationId: normalizedInputLocationId,
+      }) ?? ""
+    : "";
+  if (normalizedInputLocationId && !crmLocationId) throw new Error("The organization needs a brand before a school Location ID can be saved.");
 
   const parsedCrmLocation = parseCrmLocationId(crmLocationId);
   const name = clean(payload.name) || defaultCenterNameFromCrmLocationId(crmLocationId);
   if (!name) throw new Error("Location name is required.");
 
-  const organization = await getDefaultOrganization(actor.tenantId, clean(payload.organizationId) || actor.organizationId);
   const ownerGroup = await getOwnerGroup(actor.tenantId, organization.id, clean(payload.ownerGroupId));
-  const locationId = clean(payload.locationId) || crmLocationId;
+  const locationId = crmLocationId;
   const email = clean(payload.email).toLowerCase();
   const status = requestedStatus;
   if (email && !isEmail(email)) throw new Error("A valid location email is required.");
 
+  let existingCenter: {
+    id: string;
+    crmLocationId: string | null;
+    locationId: string | null;
+    customFields: Prisma.JsonValue | null;
+  } | null = null;
   if (centerId) {
-    const existingCenter = await prisma.center.findFirst({
+    existingCenter = await prisma.center.findFirst({
       where: { id: centerId, organization: { tenantId: actor.tenantId } },
-      select: { id: true },
+      select: { id: true, crmLocationId: true, locationId: true, customFields: true },
     });
     if (!existingCenter) throw new Error("Center not found.");
     if (!canAccessCenter(actor, centerId)) throw new Error("You do not have access to update this center.");
@@ -278,6 +298,17 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
     if (existing) throw new Error(`A live location already uses that ID: ${existing.name}`);
   }
 
+  const locationAliases = Array.from(new Set([
+    ...locationAliasesFromCustomFields(existingCenter?.customFields),
+    existingCenter?.crmLocationId ?? "",
+    existingCenter?.locationId ?? "",
+    rawCrmLocationId,
+    clean(payload.locationId),
+  ].filter((value) => value && value !== crmLocationId)));
+  const existingFields = existingCenter?.customFields && typeof existingCenter.customFields === "object" && !Array.isArray(existingCenter.customFields)
+    ? existingCenter.customFields as Prisma.JsonObject
+    : {};
+
   const data = {
     organizationId: organization.id,
     ownerGroupId: ownerGroup.id,
@@ -293,6 +324,11 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
     status,
     sourceSystem: "bee_suite_executive_admin",
     licensedCapacity: parseCapacity(payload.licensedCapacity),
+    customFields: {
+      ...existingFields,
+      canonicalLocationIdVersion: 1,
+      locationAliases,
+    },
   };
 
   const center = centerId
@@ -305,7 +341,7 @@ async function saveCenter(payload: Payload, actor: Awaited<ReturnType<typeof req
         data: {
           ...data,
           externalId: crmLocationId || locationId || null,
-          customFields: { createdFromExecutiveConsole: true, createdById: actor.id },
+          customFields: { ...data.customFields, createdFromExecutiveConsole: true, createdById: actor.id },
         },
         include: { organization: { include: { brand: { include: { settings: true } } } } },
       });
@@ -849,26 +885,36 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
   if (rows.length > 250) throw new Error("Executive bulk import is limited to 250 rows per batch.");
 
   const results: Array<{ rowNumber: number; type: string; ok: boolean; id?: string; error?: string; loginEmail?: string }> = [];
-  const centerIdsByLocation = new Map<string, string>();
+  const centerIdsByLocation = new Map<string, string | null>();
+  const addCenterAlias = (identifier: string, centerId: string) => {
+    const key = normalizeLocationIdentifier(identifier);
+    if (!key) return;
+    const existing = centerIdsByLocation.get(key);
+    if (existing && existing !== centerId) centerIdsByLocation.set(key, null);
+    else if (!centerIdsByLocation.has(key)) centerIdsByLocation.set(key, centerId);
+  };
+  const resolveCenterId = (...identifiers: string[]) => {
+    for (const identifier of identifiers) {
+      const key = normalizeLocationIdentifier(identifier);
+      if (!key || !centerIdsByLocation.has(key)) continue;
+      const centerId = centerIdsByLocation.get(key);
+      if (!centerId) throw new Error(`Location ID is ambiguous: ${identifier}`);
+      return centerId;
+    }
+    return "";
+  };
   const existingCenters = await prisma.center.findMany({
-    where: {
-      organization: { tenantId: actor.tenantId },
-      OR: [
-        { crmLocationId: { in: rows.map((row) => row.crmLocationId).filter(Boolean) } },
-        { locationId: { in: rows.map((row) => row.locationId).filter(Boolean) } },
-      ],
-    },
-    select: { id: true, crmLocationId: true, locationId: true },
+    where: { organization: { tenantId: actor.tenantId } },
+    select: { id: true, name: true, crmLocationId: true, locationId: true, customFields: true },
   });
   for (const center of existingCenters) {
-    if (center.crmLocationId) centerIdsByLocation.set(center.crmLocationId, center.id);
-    if (center.locationId) centerIdsByLocation.set(center.locationId, center.id);
+    for (const identifier of locationIdentifierCandidates(center)) addCenterAlias(identifier, center.id);
   }
 
   for (const row of rows.filter((item) => item.type === "location")) {
     try {
       if (row.errors.length) throw new Error(row.errors.join(" "));
-      const existingCenterId = centerIdsByLocation.get(row.crmLocationId) ?? centerIdsByLocation.get(row.locationId) ?? "";
+      const existingCenterId = resolveCenterId(row.crmLocationId, row.locationId);
       const result = await saveCenter({
         centerId: existingCenterId,
         name: row.name,
@@ -884,8 +930,10 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
         licensedCapacity: row.licensedCapacity,
         ownerGroupId: row.ownerGroupId,
       }, actor);
-      if (result.center.crmLocationId) centerIdsByLocation.set(result.center.crmLocationId, result.center.id);
-      if (result.center.locationId) centerIdsByLocation.set(result.center.locationId, result.center.id);
+      addCenterAlias(row.crmLocationId, result.center.id);
+      addCenterAlias(row.locationId, result.center.id);
+      if (result.center.crmLocationId) addCenterAlias(result.center.crmLocationId, result.center.id);
+      if (result.center.locationId) addCenterAlias(result.center.locationId, result.center.id);
       results.push({ rowNumber: row.rowNumber, type: row.type, ok: true, id: result.center.id });
     } catch (error) {
       results.push({ rowNumber: row.rowNumber, type: row.type, ok: false, error: error instanceof Error ? error.message : "Location import failed." });
@@ -896,7 +944,7 @@ async function bulkImport(payload: Payload, actor: Awaited<ReturnType<typeof req
     try {
       if (row.errors.length) throw new Error(row.errors.join(" "));
       const centerId = row.accessScopeType === "CENTER"
-        ? centerIdsByLocation.get(row.crmLocationId) ?? centerIdsByLocation.get(row.locationId) ?? ""
+        ? resolveCenterId(row.crmLocationId, row.locationId)
         : "";
       const result = await saveUser({
         name: row.name,

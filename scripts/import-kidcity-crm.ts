@@ -4,6 +4,11 @@ import { readFileSync } from "node:fs";
 import { KID_CITY_USA_BRANDING } from "@/lib/brand-assets";
 import { resolveKidCityLegacyLeadCenterId } from "@/lib/kidcity-legacy-center-aliases";
 import { prisma } from "@/lib/prisma";
+import {
+  canonicalSchoolLocationId,
+  locationAliasesFromCustomFields,
+  locationIdentifierCandidates,
+} from "@/lib/school-location-identifiers";
 
 type NormalizedLocation = {
   crmLocationId: string;
@@ -179,22 +184,52 @@ async function upsertCenters(organizationId: string, locations: NormalizedLocati
   const centerMap = new Map<string, string>();
 
   for (const location of locations) {
-    const existing = await prisma.center.findFirst({
+    const canonicalId = canonicalSchoolLocationId({
+      brandName: "Kid City USA",
+      brandSlug: "kid-city-usa",
+      crmLocationId: location.crmLocationId,
+    });
+    if (!canonicalId) throw new Error(`Invalid Kid City location identifier: ${location.crmLocationId}`);
+    const matchers: Prisma.CenterWhereInput[] = [
+      { crmLocationId: canonicalId },
+      { locationId: canonicalId },
+      { crmLocationId: location.crmLocationId },
+      { locationId: location.locationId },
+      { name: location.name },
+    ];
+    if (location.address) matchers.push({ address: location.address });
+    const matches = await prisma.center.findMany({
       where: {
         organizationId,
-        OR: [
-          { crmLocationId: location.crmLocationId },
-          { locationId: location.locationId },
-        ],
+        OR: matchers,
       },
-      select: { id: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, status: true, crmLocationId: true, locationId: true, customFields: true },
     });
+    const activeMatches = matches.filter((center) => center.status === "active");
+    if (activeMatches.length > 1 || (!activeMatches.length && matches.length > 1)) {
+      throw new Error(`${location.crmLocationId} matches multiple school profiles; reconcile them before importing.`);
+    }
+    const existing = activeMatches[0] ?? matches[0] ?? null;
+    const existingFields = existing?.customFields && typeof existing.customFields === "object" && !Array.isArray(existing.customFields)
+      ? existing.customFields as Prisma.JsonObject
+      : {};
+    const importedFields = location.customFields && typeof location.customFields === "object" && !Array.isArray(location.customFields)
+      ? location.customFields as Prisma.InputJsonObject
+      : {};
+    const locationAliases = Array.from(new Set([
+      ...locationAliasesFromCustomFields(existing?.customFields),
+      existing?.crmLocationId ?? "",
+      existing?.locationId ?? "",
+      location.crmLocationId,
+      location.locationId,
+    ].map((value) => value.trim()).filter((value) => value && value !== canonicalId)));
 
     const data = {
       organizationId,
       name: location.name,
-      crmLocationId: location.crmLocationId,
-      locationId: location.locationId,
+      crmLocationId: canonicalId,
+      locationId: canonicalId,
       address: location.address || null,
       city: location.city || null,
       state: location.state || null,
@@ -204,7 +239,12 @@ async function upsertCenters(organizationId: string, locations: NormalizedLocati
       status: "active",
       sourceSystem: "kidcity_legacy_crm",
       externalId: location.crmLocationId,
-      customFields: location.customFields ?? {},
+      customFields: {
+        ...existingFields,
+        ...importedFields,
+        canonicalLocationIdVersion: 1,
+        locationAliases,
+      },
     };
 
     const center = existing
@@ -213,6 +253,15 @@ async function upsertCenters(organizationId: string, locations: NormalizedLocati
 
     centerMap.set(location.crmLocationId, center.id);
     centerMap.set(location.locationId, center.id);
+    centerMap.set(canonicalId, center.id);
+  }
+
+  const allCenters = await prisma.center.findMany({
+    where: { organizationId },
+    select: { id: true, name: true, crmLocationId: true, locationId: true, customFields: true },
+  });
+  for (const center of allCenters) {
+    for (const identifier of locationIdentifierCandidates(center)) centerMap.set(identifier, center.id);
   }
 
   const unassigned =
@@ -238,7 +287,6 @@ async function upsertCenters(organizationId: string, locations: NormalizedLocati
 }
 
 async function ensureLeadLocationQueues(
-  organizationId: string,
   centerMap: Map<string, string>,
   leads: NormalizedLead[],
 ) {
@@ -248,42 +296,22 @@ async function ensureLeadLocationQueues(
       .filter((value) => value && !centerMap.has(value)),
   );
 
+  const unresolved: string[] = [];
+
   for (const crmLocationId of crmLocationIds) {
     const canonicalCenterId = resolveKidCityLegacyLeadCenterId(centerMap, crmLocationId);
     if (canonicalCenterId) {
       centerMap.set(crmLocationId, canonicalCenterId);
       continue;
     }
-
-    const existing = await prisma.center.findFirst({
-      where: { organizationId, crmLocationId },
-      select: { id: true },
-    });
-
-    const center =
-      existing ??
-      (await prisma.center.create({
-        data: {
-          organizationId,
-          name: `Kid City USA - ${crmLocationId.replace(/^[A-Z]{2}\\s\\|\\s/, "")}`,
-          crmLocationId,
-          locationId: crmLocationId,
-          licensedCapacity: 0,
-          status: "lead_queue",
-          sourceSystem: "kidcity_legacy_crm",
-          externalId: crmLocationId,
-          customFields: {
-            importNote:
-              "Created from a legacy lead CRM location ID that did not have a matching full location profile in the export.",
-          },
-        },
-        select: { id: true },
-      }));
-
-    centerMap.set(crmLocationId, center.id);
+    unresolved.push(crmLocationId);
   }
 
-  return crmLocationIds.size;
+  if (unresolved.length) {
+    throw new Error(`Unresolved CRM school IDs: ${unresolved.sort().join(", ")}. No lead queues were created; add a proven school alias first.`);
+  }
+
+  return 0;
 }
 
 async function upsertUsers(
@@ -377,7 +405,6 @@ async function main() {
   const { tenant, organization } = await ensureOrg();
   const centerMap = await upsertCenters(organization.id, normalized.locations);
   const leadOnlyCenters = await ensureLeadLocationQueues(
-    organization.id,
     centerMap,
     normalized.leads,
   );

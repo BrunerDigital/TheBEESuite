@@ -1,4 +1,10 @@
-export const CRM_LOCATION_ID_EXAMPLE = "FL | Sarasota";
+import {
+  canonicalSchoolLocationId,
+  cleanLocationIdentifier,
+  parseSchoolLocationIdentifier,
+} from "@/lib/school-location-identifiers";
+
+export const CRM_LOCATION_ID_EXAMPLE = "Kid City USA - FL | Sarasota";
 
 export type CenterPublicLocationInput = {
   crmLocationId: string | null;
@@ -23,21 +29,25 @@ export type PublicKidCityLocation = {
   phone: string;
 };
 
-function clean(value: string | null | undefined) {
-  return (value ?? "").trim().replace(/\s+/g, " ");
+const clean = cleanLocationIdentifier;
+
+function canonicalKidCityLocationId(value: string | null | undefined) {
+  return canonicalSchoolLocationId({
+    brandName: "Kid City USA",
+    brandSlug: "kid-city-usa",
+    crmLocationId: value,
+  });
 }
 
 export function parseCrmLocationId(value: string | null | undefined) {
-  const match = clean(value).match(/^([A-Za-z]{2})\s*\|\s*(.+)$/);
-  if (!match) return null;
-
-  const city = clean(match[2]);
-  if (!city) return null;
+  const parsed = parseSchoolLocationIdentifier(value);
+  if (!parsed) return null;
 
   return {
-    state: match[1].toUpperCase(),
-    city,
-    crmLocationId: `${match[1].toUpperCase()} | ${city}`,
+    brandName: parsed.brandName,
+    state: parsed.state,
+    city: parsed.location,
+    crmLocationId: parsed.canonicalId,
   };
 }
 
@@ -51,7 +61,7 @@ export function isValidCrmLocationId(value: string | null | undefined) {
 
 export function defaultCenterNameFromCrmLocationId(value: string | null | undefined) {
   const parsed = parseCrmLocationId(value);
-  return parsed ? `Kid City USA - ${parsed.city}` : "";
+  return parsed ? `${parsed.brandName ?? "Kid City USA"} - ${parsed.city}` : "";
 }
 
 export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput) {
@@ -60,12 +70,14 @@ export function isActivePublicSchoolCandidate(center: CenterPublicLocationInput)
 
 export function toPublicKidCityLocation(center: CenterPublicLocationInput): PublicKidCityLocation {
   const parsed = parseCrmLocationId(center.crmLocationId);
-  const crmLocationId = parsed?.crmLocationId ?? clean(center.crmLocationId);
+  const crmLocationId = parsed
+    ? canonicalKidCityLocationId(parsed.crmLocationId) ?? parsed.crmLocationId
+    : clean(center.crmLocationId);
   const name = clean(center.name) || defaultCenterNameFromCrmLocationId(crmLocationId);
 
   return {
     crmLocationId,
-    locationId: clean(center.locationId) || crmLocationId,
+    locationId: crmLocationId,
     name,
     address: clean(center.address),
     city: clean(center.city) || parsed?.city || "",
@@ -85,7 +97,20 @@ export function comparePublicKidCityLocations(
 }
 
 function publicLocationKey(location: PublicKidCityLocation) {
-  return normalizeCrmLocationId(location.crmLocationId) || clean(location.crmLocationId).toLowerCase();
+  const canonical = canonicalKidCityLocationId(location.crmLocationId);
+  return normalizeCrmLocationId(canonical) || clean(canonical ?? location.crmLocationId).toLowerCase();
+}
+
+function canonicalizeKidCityPublicLocation(location: PublicKidCityLocation): PublicKidCityLocation {
+  const canonicalId = canonicalKidCityLocationId(location.crmLocationId)
+    ?? canonicalKidCityLocationId(location.locationId)
+    ?? clean(location.crmLocationId)
+    ?? clean(location.locationId);
+  return {
+    ...location,
+    crmLocationId: canonicalId,
+    locationId: canonicalId,
+  };
 }
 
 export function mergePublicKidCityLocations(
@@ -94,12 +119,14 @@ export function mergePublicKidCityLocations(
 ) {
   const locationsByCrmId = new Map<string, PublicKidCityLocation>();
 
-  for (const location of staticLocations) {
+  for (const item of staticLocations) {
+    const location = canonicalizeKidCityPublicLocation(item);
     const key = publicLocationKey(location);
     if (key) locationsByCrmId.set(key, location);
   }
 
-  for (const location of liveLocations) {
+  for (const item of liveLocations) {
+    const location = canonicalizeKidCityPublicLocation(item);
     const key = publicLocationKey(location);
     if (key) locationsByCrmId.set(key, location);
   }

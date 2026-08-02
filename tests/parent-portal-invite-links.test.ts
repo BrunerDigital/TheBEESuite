@@ -72,3 +72,18 @@ test("payer portal preparation is explicit, audited, and cannot send invitations
   assert.match(source, /invitationSent:\s*false/);
   assert.doesNotMatch(source, /sendEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
 });
+
+test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {
+  const source = readFileSync(new URL("../scripts/prepare-tyler-parent-portal-accounts.ts", import.meta.url), "utf8");
+  assert.match(source, /CENTER_LOCATION_ID = "TX \| Tyler"/);
+  assert.match(source, /IMPORT_SOURCE = "tyler_procare_cross_report_import_2026_07_31"/);
+  assert.match(source, /EXPECTED_ENROLLED_CHILDREN = 133/);
+  assert.match(source, /EXPECTED_ENROLLED_FAMILIES = 98/);
+  assert.match(source, /--confirm-tx-tyler/);
+  assert.match(source, /--acknowledge-no-invites/);
+  assert.match(source, /--recover-prepared-auth-orphan/);
+  assert.match(source, /--repair-interrupted-preparation-flags/);
+  assert.match(source, /prepareWithoutInvite: !account\.appUserExists \|\| !account\.authUserExists/);
+  assert.match(source, /invitationSent: false/);
+  assert.doesNotMatch(source, /sendEmail|inviteUserByEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
+});

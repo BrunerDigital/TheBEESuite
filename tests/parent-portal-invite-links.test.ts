@@ -67,7 +67,11 @@ test("direct parent invitations preflight ProCare data and activate prepared acc
 test("payer portal preparation is explicit, audited, and cannot send invitations", () => {
   const source = readFileSync(new URL("../scripts/prepare-payer-portal-accounts.ts", import.meta.url), "utf8");
   assert.match(source, /--acknowledge-no-invites/);
-  assert.match(source, /prepareWithoutInvite:\s*!existingUser/);
+  assert.match(source, /prepareWithoutInvite:\s*!existingUser \|\| !existingAuthEmails\.has\(email\)/);
+  assert.match(source, /--include-authorized-pickups/);
+  assert.match(source, /--exclude-tx-tyler/);
+  assert.match(source, /pickupExternalIds\.has\(clean\(guardian\.externalId\)\)/);
+  assert.match(source, /Supabase Auth account exists without a matching app parent user/);
   assert.match(source, /parent_portal\.payer_account_prepared/);
   assert.match(source, /invitationSent:\s*false/);
   assert.doesNotMatch(source, /sendEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);

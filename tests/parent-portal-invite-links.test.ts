@@ -102,7 +102,7 @@ test("production payer invitation waves are corporate-scoped, explicit, and API-
   assert.doesNotMatch(source, /sendEmail|ensureParentPortalLoginForGuardian/);
 });
 
-test("all-location imported parent waves require direct source identity and explicit live authorization", () => {
+test("all-location imported parent waves require concrete relationship safety and explicit live authorization", () => {
   const source = readFileSync(new URL("../scripts/send-imported-parent-invitation-wave.ts", import.meta.url), "utf8");
   assert.match(source, /--confirm-all-imported-locations/);
   assert.match(source, /--scope-miss-honeys/);
@@ -116,20 +116,20 @@ test("all-location imported parent waves require direct source identity and expl
   assert.match(source, /trial_setup/);
   assert.match(source, /Expected exactly one active center-director audit actor/);
   assert.match(source, /scope === "miss_honeys"/);
-  assert.match(source, /hasOnlyActiveVerifiedChildren/);
+  assert.match(source, /hasActiveChild/);
   assert.match(source, /scope !== "miss_honeys" && matches\.some/);
   assert.match(source, /verifiedParentPayer/);
   assert.match(source, /exactAuthorizedPickup/);
-  assert.match(source, /evaluateProcareInvitationBatchReadiness/);
-  assert.match(source, /procareImportBatch\.findMany/);
-  assert.match(source, /latestBatchByFamilyId/);
+  assert.doesNotMatch(source, /evaluateProcareInvitationBatchReadiness/);
+  assert.doesNotMatch(source, /procareImportBatch\.findMany/);
+  assert.doesNotMatch(source, /latestBatchByFamilyId/);
   assert.match(source, /alreadyInvitedOutsideCurrentReadiness/);
-  assert.match(source, /verified_guardian_source_id_required/);
-  assert.match(source, /verified_family_source_id_required/);
-  assert.match(source, /all_active_children_verified_required/);
-  assert.match(source, /reviewed_import_batch_required/);
+  assert.doesNotMatch(source, /verified_guardian_source_id_required/);
+  assert.doesNotMatch(source, /verified_family_source_id_required/);
+  assert.doesNotMatch(source, /all_active_children_verified_required/);
+  assert.doesNotMatch(source, /reviewed_import_batch_required/);
   assert.match(source, /directProfileEvidenceAuthorizedByUser/);
-  assert.match(source, /active_verified_child_required/);
+  assert.match(source, /active_child_required/);
   assert.match(source, /cross_center_email/);
   assert.match(source, /conflicting_guardian_identity/);
   assert.match(source, /parentPortalAccessDisabled/);

@@ -85,14 +85,11 @@ import { integrationScopeForUser } from "@/lib/integration-scope";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
 import { complianceTaskNeedsReminder } from "@/lib/compliance-workflows";
 import {
-  getStripeCheckoutAmounts,
   getStripeCardProcessingRecoveryBps,
   getStripeCardProcessingRecoveryFixedCents,
   getStripeSecretKey,
-  getStripePaymentMethodConfigurationId,
   getStripeWebhookSecret,
   isStripeParentProcessingRecoveryApproved,
-  shouldWaiveStripePaymentOperationsFee,
 } from "@/lib/integrations";
 import { getKidCitySoftwareFeeUnitAmountCents, getKidCitySoftwareInvoiceSnapshot } from "@/lib/kidcity-software-billing";
 import { countCenterBillableUsers } from "@/lib/school-software-subscriptions";
@@ -139,6 +136,11 @@ import { readCenterLicensingConfiguration } from "@/lib/licensing-config";
 import { activeNotificationWhere } from "@/lib/notification-policy";
 import { paymentDunningSummary } from "@/lib/payment-dunning";
 import { paymentMethodManagementSummary } from "@/lib/payment-method-management";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentVisibleBillingBalanceCents,
+} from "@/lib/parent-billing-visibility";
 import { invoicePurposeLabel } from "@/lib/product-billing";
 import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfilePhotoUrl } from "@/lib/profile-photo";
 import { prisma } from "@/lib/prisma";
@@ -1906,7 +1908,16 @@ async function renderLivePage(
 
     const familyId = family?.id ?? "__no_family__";
     const childIds = family?.children.map((child) => child.id) ?? [];
-    const [billingAccount, latestLedgerEntry, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
+    const agencyOnlyLedgerWhere: Prisma.LedgerEntryWhereInput = {
+      OR: [
+        { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+        { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+      ],
+    };
+    const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
+      NOT: agencyOnlyLedgerWhere,
+    };
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -1916,6 +1927,7 @@ async function renderLivePage(
           customFields: true,
           payments: {
             where: {
+              NOT: { provider: AGENCY_LEDGER_SOURCE_SYSTEM },
               OR: [
                 { status: PaymentStatus.PAID },
                 {
@@ -1941,23 +1953,28 @@ async function renderLivePage(
             },
           },
           ledgerEntries: {
+            where: parentVisibleLedgerWhere,
             orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
             skip: (requestedLedgerPage - 1) * PARENT_LEDGER_PAGE_SIZE,
             take: PARENT_LEDGER_PAGE_SIZE + 1,
-            select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
+            select: { id: true, type: true, description: true, amountCents: true, effectiveAt: true },
           },
         },
       }),
       prisma.ledgerEntry.findFirst({
-        where: { billingAccount: { familyId } },
+        where: { billingAccount: { familyId }, AND: [parentVisibleLedgerWhere] },
         orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
-        select: { id: true, type: true, description: true, amountCents: true, balanceAfterCents: true, effectiveAt: true },
+        select: { id: true, type: true, description: true, amountCents: true, effectiveAt: true },
+      }),
+      prisma.ledgerEntry.findMany({
+        where: { billingAccount: { familyId }, AND: [agencyOnlyLedgerWhere] },
+        select: { type: true, sourceSystem: true, amountCents: true },
       }),
       prisma.invoice.findMany({
         where: { billingAccount: { familyId } },
         orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
         take: 20,
-        select: { id: true, number: true, status: true, dueDate: true, totalCents: true, customFields: true },
+        select: { id: true, number: true, status: true, dueDate: true, customFields: true },
       }),
       prisma.dailyReport.findMany({
         where: { childId: { in: childIds.length ? childIds : ["__none__"] } },
@@ -2124,65 +2141,34 @@ async function renderLivePage(
           },
         })
       : null;
-    const waiveBeeSuitePaymentOperationsFee = shouldWaiveStripePaymentOperationsFee({
-      tenantSlug: familyCenter?.organization.tenant.slug,
-      tenantName: familyCenter?.organization.tenant.name,
-      brandSlug: familyCenter?.organization.brand?.slug,
-      brandName: familyCenter?.organization.brand?.name,
-    });
-    const pendingPaymentByInvoiceId = new Map<string, ReturnType<typeof activeStripeCheckoutPaymentSummary>>();
+    const pendingPaymentByInvoiceId = new Map<string, Omit<ReturnType<typeof activeStripeCheckoutPaymentSummary>, "amountCents">>();
     for (const payment of billingAccount?.payments ?? []) {
       if (!isActiveStripeCheckoutPayment(payment)) continue;
       const fields = jsonRecord(payment.customFields);
       const invoiceId = stringField(fields.invoiceId);
       if (!invoiceId || pendingPaymentByInvoiceId.has(invoiceId)) continue;
-      pendingPaymentByInvoiceId.set(invoiceId, activeStripeCheckoutPaymentSummary(payment));
+      const summary = activeStripeCheckoutPaymentSummary(payment);
+      pendingPaymentByInvoiceId.set(invoiceId, {
+        id: summary.id,
+        status: summary.status,
+        paymentMethodCategory: summary.paymentMethodCategory,
+        requestedPaymentMethodCategory: summary.requestedPaymentMethodCategory,
+        bankAccountVerificationMethod: summary.bankAccountVerificationMethod,
+        stripeCheckoutSessionId: summary.stripeCheckoutSessionId,
+        stripePaymentIntentId: summary.stripePaymentIntentId,
+        stripePaymentIntentStatus: summary.stripePaymentIntentStatus,
+        stripePaymentStatus: summary.stripePaymentStatus,
+      });
     }
-    const invoicesWithCheckout = invoices.map((invoice) => {
+    const parentInvoices = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
-      const purposeLabel = invoicePurposeLabel(invoiceFields);
-      const achAmounts = getStripeCheckoutAmounts(invoice.totalCents, {
-        paymentMethodCategory: "ach",
-        waiveBeeSuitePaymentOperationsFee,
-      });
-      const cardAmounts = getStripeCheckoutAmounts(invoice.totalCents, {
-        paymentMethodCategory: "card",
-        waiveBeeSuitePaymentOperationsFee,
-      });
-      const instantBankAmounts = getStripeCheckoutAmounts(invoice.totalCents, {
-        paymentMethodCategory: "link_bank",
-        waiveBeeSuitePaymentOperationsFee,
-      });
       return {
         id: invoice.id,
         number: invoice.number,
         status: invoice.status,
         dueDate: invoice.dueDate,
-        totalCents: invoice.totalCents,
-        purposeLabel,
+        purposeLabel: invoicePurposeLabel(invoiceFields),
         pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
-        checkoutOptions: {
-          ach: {
-            checkoutTotalCents: achAmounts.checkoutTotalCents,
-            parentProcessingRecoveryAmountCents: achAmounts.parentProcessingRecoveryAmountCents,
-            applicationFeeAmountCents: achAmounts.applicationFeeAmountCents,
-            paymentMethodConfigurationReady: Boolean(getStripePaymentMethodConfigurationId("ach")),
-          },
-          instantBank: {
-            checkoutTotalCents: instantBankAmounts.checkoutTotalCents,
-            parentProcessingRecoveryAmountCents: instantBankAmounts.parentProcessingRecoveryAmountCents,
-            applicationFeeAmountCents: instantBankAmounts.applicationFeeAmountCents,
-            paymentMethodConfigurationReady: true,
-          },
-          card: {
-            checkoutTotalCents: cardAmounts.checkoutTotalCents,
-            parentProcessingRecoveryAmountCents: cardAmounts.parentProcessingRecoveryAmountCents,
-            applicationFeeAmountCents: cardAmounts.applicationFeeAmountCents,
-            paymentMethodConfigurationReady: Boolean(getStripePaymentMethodConfigurationId("card")),
-          },
-          beeSuitePaymentOperationsFeeAmountCents: achAmounts.beeSuitePaymentOperationsFeeAmountCents,
-          beeSuitePaymentOperationsFeeWaived: waiveBeeSuitePaymentOperationsFee,
-        },
       };
     });
     const stripeConfigured = Boolean(await getStripeSecretKey({ tenantId: user.tenantId }));
@@ -2195,6 +2181,12 @@ async function renderLivePage(
     });
     const parentReplyToMessageId = firstSearchParam(searchParams.replyToMessageId) || "";
     const parentReplySubject = firstSearchParam(searchParams.subject) || "";
+    const parentBalanceCents = billingAccount
+      ? parentVisibleBillingBalanceCents({
+          accountBalanceCents: billingAccount.balanceCents,
+          agencyLedgerEntries,
+        })
+      : 0;
 
     return (
       <ParentPortalWorkspace
@@ -2202,14 +2194,14 @@ async function renderLivePage(
         family={parentPortalFamily}
         billingAccount={billingAccount ? {
           id: billingAccount.id,
-          balanceCents: billingAccount.balanceCents,
+          balanceCents: parentBalanceCents,
           autopayPlaceholder: billingAccount.autopayPlaceholder,
           paymentMethodManagement: paymentMethodManagementSummary({
             autopayPlaceholder: billingAccount.autopayPlaceholder,
             customFields: billingAccount.customFields,
           }),
         } : null}
-        invoices={invoicesWithCheckout}
+        invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
         payments={billingAccount?.payments ?? []}
         latestLedgerEntry={latestLedgerEntry}

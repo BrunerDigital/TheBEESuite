@@ -158,6 +158,18 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const { invoice, centerId } = access;
+  const productCheckoutBranding = invoiceProductCheckoutBranding({
+    invoiceNumber: invoice.number,
+    familyName: invoice.billingAccount.family.name,
+    customFields: invoice.customFields,
+    items: invoice.items,
+  });
+  if (userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding) {
+    return NextResponse.json(
+      { ok: false, error: "Refresh the parent portal and pay the family balance shown there." },
+      { status: 409 },
+    );
+  }
   if (invoice.status === PaymentStatus.PAID) {
     return NextResponse.json({ ok: false, error: "This invoice is already paid." }, { status: 400 });
   }
@@ -287,12 +299,6 @@ async function POSTHandler(request: NextRequest) {
     waiveBeeSuitePaymentOperationsFee,
   });
   const billingAccountFields = jsonRecord(invoice.billingAccount.customFields);
-  const productCheckoutBranding = invoiceProductCheckoutBranding({
-    invoiceNumber: invoice.number,
-    familyName: invoice.billingAccount.family.name,
-    customFields: invoice.customFields,
-    items: invoice.items,
-  });
   const productCheckoutMetadata = invoiceProductStripeMetadata(invoice.customFields);
   const paymentDescription = productCheckoutBranding?.paymentDescription;
   let stripeCustomerId = stripeCustomerIdForAccount(billingAccountFields, connectedAccountId);

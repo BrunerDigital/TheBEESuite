@@ -280,6 +280,12 @@ export function evaluateParentInvitationReadiness(
   if (!isProcareRecord(input.guardian) || !clean(input.guardian.externalId)) {
     blockers.push("The guardian is not linked to a verified ProCare person ID.");
   }
+  const activeChildren = input.family.children.filter((child) => (
+    isActiveProcareEnrollmentStatus(child.enrollmentStatus)
+  ));
+  if (activeChildren.some((child) => !isProcareRecord(child) || !clean(child.externalId))) {
+    blockers.push("Every active child must retain a verified ProCare child ID.");
+  }
   const importedChildren = input.family.children.filter(isProcareRecord);
   if (!importedChildren.length || importedChildren.some((child) => !clean(child.externalId))) {
     blockers.push("Every imported child must retain a verified ProCare child ID.");

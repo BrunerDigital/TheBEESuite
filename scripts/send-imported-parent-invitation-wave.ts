@@ -7,6 +7,7 @@ import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
+import { evaluateProcareInvitationBatchReadiness } from "@/lib/parent-invitation-readiness";
 import {
   buildParentLoginSetupUrl,
   buildParentPortalInvitationHtml,
@@ -26,16 +27,24 @@ import { getSupabaseAuthConfig, verifySupabasePassword } from "@/lib/supabase-au
 
 const APPLY_FLAG = "--apply";
 const CONFIRM_FLAG = "--confirm-all-imported-locations";
+const MISS_HONEYS_SCOPE_FLAG = "--scope-miss-honeys";
+const CONFIRM_MISS_HONEYS_FLAG = "--confirm-miss-honeys-locations";
 const WAIVE_DIRECTOR_FLAG = "--acknowledge-director-confirmation-waived";
 const REPAIR_FLAG = "--repair-interrupted-preparation-flags";
+const RETRY_UNCONFIGURED_PROVIDER_FLAG = "--retry-unconfigured-provider-skips";
 const DEFAULT_BASE_URL = "https://thebeesuite.io";
 const CORPORATE_ACTOR_EMAIL = "corpschools@kidcityusa.com";
+
+type WaveScope = "kid_city" | "miss_honeys";
 
 type Args = {
   apply: boolean;
   confirmed: boolean;
+  confirmedScope: WaveScope | null;
   directorConfirmationWaived: boolean;
   repairInterruptedPreparation: boolean;
+  retryUnconfiguredProviderSkips: boolean;
+  scope: WaveScope;
 };
 
 type GuardianRecord = Awaited<ReturnType<typeof loadGuardianRecords>>[number];
@@ -52,6 +61,7 @@ type CandidateGroup = {
   appUserExists: boolean;
   authUserExists: boolean;
   preparedWithoutInvite: boolean;
+  retryUnconfiguredProviderSkip: boolean;
 };
 
 function clean(value: unknown) {
@@ -99,23 +109,40 @@ function parseArgs(argv = process.argv.slice(2)): Args {
   const args: Args = {
     apply: false,
     confirmed: false,
+    confirmedScope: null,
     directorConfirmationWaived: false,
     repairInterruptedPreparation: false,
+    retryUnconfiguredProviderSkips: false,
+    scope: "kid_city",
   };
   for (const arg of argv) {
     if (arg === APPLY_FLAG) args.apply = true;
-    else if (arg === CONFIRM_FLAG) args.confirmed = true;
+    else if (arg === CONFIRM_FLAG) {
+      args.confirmed = true;
+      args.confirmedScope = "kid_city";
+    }
+    else if (arg === MISS_HONEYS_SCOPE_FLAG) args.scope = "miss_honeys";
+    else if (arg === CONFIRM_MISS_HONEYS_FLAG) {
+      args.confirmed = true;
+      args.confirmedScope = "miss_honeys";
+    }
     else if (arg === WAIVE_DIRECTOR_FLAG) args.directorConfirmationWaived = true;
     else if (arg === REPAIR_FLAG) args.repairInterruptedPreparation = true;
+    else if (arg === RETRY_UNCONFIGURED_PROVIDER_FLAG) args.retryUnconfiguredProviderSkips = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
-  if (args.apply && (!args.confirmed || !args.directorConfirmationWaived)) {
-    throw new Error(`Production sending requires ${APPLY_FLAG} ${CONFIRM_FLAG} ${WAIVE_DIRECTOR_FLAG}.`);
+  if (args.apply && (
+    !args.confirmed
+    || args.confirmedScope !== args.scope
+    || !args.directorConfirmationWaived
+  )) {
+    const scopeConfirmFlag = args.scope === "miss_honeys" ? CONFIRM_MISS_HONEYS_FLAG : CONFIRM_FLAG;
+    throw new Error(`Production sending requires ${APPLY_FLAG} ${scopeConfirmFlag} ${WAIVE_DIRECTOR_FLAG}.`);
   }
   return args;
 }
 
-async function loadTargetCenters() {
+async function loadTargetCenters(scope: WaveScope) {
   const importedCenterIds = (await prisma.family.findMany({
     where: { sourceSystem: { equals: "procare", mode: "insensitive" }, centerId: { not: null } },
     select: { centerId: true },
@@ -124,8 +151,10 @@ async function loadTargetCenters() {
   return prisma.center.findMany({
     where: {
       id: { in: importedCenterIds },
-      status: "active",
-      organization: { tenant: { slug: "kid-city-usa" } },
+      status: scope === "miss_honeys" ? { in: ["active", "trial_setup"] } : "active",
+      organization: {
+        tenant: { slug: scope === "miss_honeys" ? "miss-honeys-learning-center" : "kid-city-usa" },
+      },
     },
     select: {
       id: true,
@@ -156,6 +185,7 @@ async function loadGuardianRecords(centerIds: string[]) {
           children: {
             select: {
               id: true,
+              fullName: true,
               enrollmentStatus: true,
               sourceSystem: true,
               externalId: true,
@@ -177,6 +207,8 @@ async function loadMatchingGuardians(candidateEmails: string[]) {
         include: {
           children: {
             select: {
+              id: true,
+              fullName: true,
               enrollmentStatus: true,
               sourceSystem: true,
               externalId: true,
@@ -202,10 +234,12 @@ function verifiedParentPayer(guardian: Pick<GuardianRecord, "isBillingContact" |
   return guardian.isBillingContact || exactAuthorizedPickup(guardian);
 }
 
-function hasActiveVerifiedChild(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
-  return guardian.family.children.some((child) => (
+function hasOnlyActiveVerifiedChildren(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
+  const activeChildren = guardian.family.children.filter((child) => (
     isActiveProcareEnrollmentStatus(child.enrollmentStatus)
-    && clean(child.sourceSystem).toLowerCase() === "procare"
+  ));
+  return activeChildren.length > 0 && activeChildren.every((child) => (
+    clean(child.sourceSystem).toLowerCase() === "procare"
     && Boolean(clean(child.externalId))
   ));
 }
@@ -248,18 +282,20 @@ function groupByKey<T>(items: T[], keyFor: (item: T) => string) {
   return groups;
 }
 
-async function buildPlan() {
-  const allCenters = await loadTargetCenters();
+async function buildPlan({ retryUnconfiguredProviderSkips = false, scope = "kid_city" as WaveScope } = {}) {
+  const allCenters = await loadTargetCenters(scope);
   const centers = allCenters.filter((center) => !isNonProductionCenter(center));
-  if (!centers.length) throw new Error("No active imported Kid City centers were found.");
+  if (!centers.length) throw new Error("No imported centers were found for the requested invitation scope.");
   const centerById = new Map(centers.map((center) => [center.id, center]));
   const tenantIds = new Set(centers.map((center) => center.organization.tenantId));
-  if (tenantIds.size !== 1) throw new Error("Imported Kid City centers resolved outside one tenant.");
+  if (tenantIds.size !== 1) throw new Error("Imported centers resolved outside one tenant.");
   const tenantId = centers[0].organization.tenantId;
   const guardians = await loadGuardianRecords(centers.map((center) => center.id));
   const directRecords = guardians.filter(verifiedParentPayer);
-  const candidateEmails = [...new Set(directRecords.map((guardian) => email(guardian.email)).filter(validEmail))];
-  const [matchingGuardians, users, authUsers, deliveries] = await Promise.all([
+  const scopedDirectRecords = directRecords;
+  const familyIds = [...new Set(scopedDirectRecords.map((guardian) => guardian.familyId))];
+  const candidateEmails = [...new Set(scopedDirectRecords.map((guardian) => email(guardian.email)).filter(validEmail))];
+  const [matchingGuardians, users, authUsers, deliveries, importBatches] = await Promise.all([
     loadMatchingGuardians(candidateEmails),
     prisma.user.findMany({
       where: { email: { in: candidateEmails } },
@@ -268,18 +304,39 @@ async function buildPlan() {
     listAuthUsers(),
     prisma.integrationDelivery.findMany({
       where: { centerId: { in: centers.map((center) => center.id) }, purpose: "parent_invitation_email" },
-      select: { centerId: true, status: true, payload: true },
+      select: { centerId: true, status: true, payload: true, lastError: true },
+    }),
+    prisma.procareImportBatch.findMany({
+      where: { rows: { some: { createdFamilyId: { in: familyIds } } } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        status: true,
+        summary: true,
+        rows: {
+          where: { createdFamilyId: { in: familyIds } },
+          select: { createdFamilyId: true },
+        },
+      },
     }),
   ]);
   const matchingByEmail = groupByKey(matchingGuardians, (guardian) => email(guardian.email));
   const userByEmail = new Map(users.map((user) => [email(user.email), user]));
+  const latestBatchByFamilyId = new Map<string, (typeof importBatches)[number]>();
+  for (const batch of importBatches) {
+    for (const row of batch.rows) {
+      if (row.createdFamilyId && !latestBatchByFamilyId.has(row.createdFamilyId)) {
+        latestBatchByFamilyId.set(row.createdFamilyId, batch);
+      }
+    }
+  }
   const deliveriesByEmail = new Map<string, typeof deliveries>();
   for (const delivery of deliveries) {
     for (const recipient of recipientsFromPayload(delivery.payload)) {
       deliveriesByEmail.set(recipient, [...(deliveriesByEmail.get(recipient) ?? []), delivery]);
     }
   }
-  const groupedRecords = groupByKey(directRecords, (guardian) => {
+  const groupedRecords = groupByKey(scopedDirectRecords, (guardian) => {
     const normalized = email(guardian.email);
     return normalized && guardian.family.centerId
       ? `${guardian.family.centerId}\u0000${normalized}`
@@ -291,8 +348,7 @@ async function buildPlan() {
   const groupResults: Array<{ centerId: string; emailValid: boolean; status: "eligible" | "interrupted" | "already_invited" | "blocked"; reasons: string[] }> = [];
 
   for (const group of groupedRecords.values()) {
-    const preparedReference = group.find((guardian) => parentPortalFields(guardian.customFields).preparedWithoutInvite === true);
-    const reference = preparedReference ?? group[0];
+    const reference = group.find((guardian) => phoneReady(guardian.phone)) ?? group[0];
     const centerId = reference.family.centerId ?? "unassigned";
     const center = centerById.get(centerId);
     const normalizedEmail = email(reference.email);
@@ -302,16 +358,25 @@ async function buildPlan() {
     for (const guardian of group) {
       if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.externalId)) reasons.add("verified_guardian_source_id_required");
       if (clean(guardian.family.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.family.externalId)) reasons.add("verified_family_source_id_required");
-      if (!hasActiveVerifiedChild(guardian)) reasons.add("active_verified_child_required");
-      if (!phoneReady(guardian.phone)) reasons.add("phone_with_four_digits_required");
+      if (!hasOnlyActiveVerifiedChildren(guardian)) reasons.add("all_active_children_verified_required");
       if (parentPortalAccessDisabled(guardian.customFields)) reasons.add("parent_portal_disabled");
+    }
+    if (!group.some((guardian) => phoneReady(guardian.phone))) reasons.add("phone_with_four_digits_required");
+    for (const familyId of new Set(group.map((guardian) => guardian.familyId))) {
+      const batch = latestBatchByFamilyId.get(familyId);
+      const readiness = evaluateProcareInvitationBatchReadiness(
+        batch ? { id: batch.id, status: batch.status, summary: batch.summary } : null,
+      );
+      if (!readiness.ok) reasons.add("reviewed_import_batch_required");
     }
 
     const matches = matchingByEmail.get(normalizedEmail) ?? [];
     if (validEmail(normalizedEmail)) {
       if (!matches.length) reasons.add("matching_guardian_missing");
       if (matches.some((guardian) => guardian.family.centerId !== centerId)) reasons.add("cross_center_email");
-      if (matches.some((guardian) => !identityCompatible(reference, guardian))) reasons.add("conflicting_guardian_identity");
+      if (scope !== "miss_honeys" && matches.some((guardian) => !identityCompatible(reference, guardian))) {
+        reasons.add("conflicting_guardian_identity");
+      }
       if (matches.some((guardian) => !verifiedParentPayer(guardian))) reasons.add("matching_guardian_outside_verified_parent_payer_scope");
       if (matches.some((guardian) => (
         clean(guardian.sourceSystem).toLowerCase() !== "procare"
@@ -329,14 +394,26 @@ async function buildPlan() {
     if (appUser && !appUser.isActive) reasons.add("app_user_inactive");
     if (authUser && !activeAuthUser(authUser)) reasons.add("supabase_auth_user_inactive");
     if (authUser && !appUser) reasons.add("supabase_auth_orphan");
-    if (group.some((guardian) => guardian.userId && guardian.userId !== appUser?.id)) reasons.add("guardian_user_link_collision");
+    if (matches.some((guardian) => guardian.userId && guardian.userId !== appUser?.id)) reasons.add("guardian_user_link_collision");
 
     const prior = deliveriesByEmail.get(normalizedEmail) ?? [];
-    const invitationMarkedSent = group.some((guardian) => Boolean(parentPortalFields(guardian.customFields).invitationSentAt));
+    const unconfiguredProviderSkips = prior.filter((delivery) => (
+      delivery.status === "skipped" && delivery.lastError === "SendGrid is not configured."
+    ));
+    const otherPriorFailures = prior.filter((delivery) => (
+      delivery.status === "failed"
+      || (delivery.status === "skipped" && delivery.lastError !== "SendGrid is not configured.")
+    ));
+    const sameCenterMatches = matches.filter((guardian) => guardian.family.centerId === centerId);
+    const invitationMarkedSent = sameCenterMatches.some((guardian) => Boolean(parentPortalFields(guardian.customFields).invitationSentAt));
     if (invitationMarkedSent || prior.some((delivery) => ["accepted", "delivered", "pending"].includes(delivery.status))) reasons.add("already_invited");
-    if (prior.some((delivery) => ["failed", "skipped"].includes(delivery.status))) reasons.add("prior_delivery_requires_manual_review");
+    if (otherPriorFailures.length || (unconfiguredProviderSkips.length && !retryUnconfiguredProviderSkips)) {
+      reasons.add("prior_delivery_requires_manual_review");
+    }
 
-    const preparedWithoutInvite = Boolean(preparedReference);
+    const preparedWithoutInvite = sameCenterMatches.some((guardian) => (
+      parentPortalFields(guardian.customFields).preparedWithoutInvite === true
+    ));
     if (preparedWithoutInvite && (!appUser || !appUser.mustResetPassword)) reasons.add("interrupted_preparation_flags");
 
     const candidate: CandidateGroup = {
@@ -349,6 +426,7 @@ async function buildPlan() {
       appUserExists: Boolean(appUser),
       authUserExists: Boolean(authUser),
       preparedWithoutInvite,
+      retryUnconfiguredProviderSkip: unconfiguredProviderSkips.length > 0,
     };
     const reasonList = [...reasons].sort();
     if (!reasonList.length) {
@@ -376,6 +454,13 @@ async function buildPlan() {
       importedParentPayerRecords: directRecords.filter((guardian) => guardian.family.centerId === center.id).length,
       validUniqueEmails: centerGroups.filter((group) => group.emailValid).length,
       alreadyInvited: centerGroups.filter((group) => group.status === "already_invited").length,
+      alreadyInvitedOutsideCurrentReadiness: centerGroups.filter((group) => (
+        group.status === "already_invited"
+        && group.reasons.some((reason) => [
+          "all_active_children_verified_required",
+          "reviewed_import_batch_required",
+        ].includes(reason))
+      )).length,
       eligibleInvitations: centerGroups.filter((group) => group.status === "eligible").length,
       interruptedPreparationRepairs: centerGroups.filter((group) => group.status === "interrupted").length,
       blockedUniqueProfiles: centerGroups.filter((group) => group.status === "blocked").length,
@@ -388,19 +473,33 @@ async function buildPlan() {
     eligible,
     interrupted,
     summary: {
-      scope: "All active Kid City locations with imported ProCare family data; director confirmation waived by explicit user authorization",
+      scope: scope === "miss_honeys"
+        ? "All Miss Honey's locations with imported ProCare family data; trial-setup invitation and director-confirmation gates explicitly authorized by the user"
+        : "All active Kid City locations with imported ProCare family data; director confirmation waived by explicit user authorization",
       targetLocations: schools.length,
       sendableNow: eligible.length,
       sendableAfterInterruptedRepair: interrupted.length,
       blockedUniqueProfiles: groupResults.filter((group) => group.status === "blocked").length,
+      alreadyInvitedOutsideCurrentReadiness: groupResults.filter((group) => (
+        group.status === "already_invited"
+        && group.reasons.some((reason) => [
+          "all_active_children_verified_required",
+          "reviewed_import_batch_required",
+        ].includes(reason))
+      )).length,
       schools,
     },
   };
 }
 
-async function repairInterruptedPreparation(plan: Awaited<ReturnType<typeof buildPlan>>, actorUserId: string) {
+async function repairInterruptedPreparation(
+  plan: Awaited<ReturnType<typeof buildPlan>>,
+  actorUserIdByCenter: Map<string, string>,
+) {
   for (const candidate of plan.interrupted) {
     if (!candidate.appUserId) throw new Error("Interrupted preparation repair is missing an app user.");
+    const actorUserId = actorUserIdByCenter.get(candidate.centerId);
+    if (!actorUserId) throw new Error(`No authorized audit actor is available for center ${candidate.centerId}.`);
     await prisma.user.update({
       where: { id: candidate.appUserId },
       data: { mustResetPassword: true, sessionVersion: { increment: 1 } },
@@ -414,7 +513,7 @@ async function repairInterruptedPreparation(plan: Awaited<ReturnType<typeof buil
       metadata: {
         familyId: candidate.familyId,
         parentUserId: candidate.appUserId,
-        corporateActorUserId: actorUserId,
+        authorizedActorUserId: actorUserId,
         invitationSent: false,
         directorConfirmationWaivedByUser: true,
       },
@@ -424,7 +523,8 @@ async function repairInterruptedPreparation(plan: Awaited<ReturnType<typeof buil
 
 function deliveryDedupeKey(candidate: CandidateGroup) {
   const emailHash = createHash("sha256").update(candidate.email).digest("hex").slice(0, 24);
-  return `parent-invite:imported-wave:20260803:${candidate.centerId}:${emailHash}`;
+  const retrySuffix = candidate.retryUnconfiguredProviderSkip ? ":retry-unconfigured-provider" : "";
+  return `parent-invite:imported-wave:20260803:${candidate.centerId}:${emailHash}${retrySuffix}`;
 }
 
 async function sendCandidate({ candidate, center, actorUserId }: { candidate: CandidateGroup; center: CenterRecord; actorUserId: string }) {
@@ -526,6 +626,7 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
       brand: branding.kind,
       authorizedImportedWave: true,
       directorConfirmationWaivedByUser: true,
+      retryUnconfiguredProviderSkip: candidate.retryUnconfiguredProviderSkip,
     },
   });
 
@@ -555,10 +656,11 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
       kioskPinDefaultedFromPhone,
       emailBrand: branding.kind,
       emailAcceptedByProvider: emailResult.ok,
-      corporateActorUserId: actorUserId,
+      authorizedActorUserId: actorUserId,
       sourceEvidence: "verified_procare_guardian_or_payer_family_link",
       directorConfirmationWaivedByUser: true,
       billingCutoverApproved,
+      retryUnconfiguredProviderSkip: candidate.retryUnconfiguredProviderSkip,
     },
   });
   if (!emailResult.ok) return { accepted: false, initialPasswordIssued };
@@ -569,10 +671,15 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
   return { accepted: true, initialPasswordIssued };
 }
 
-async function sendWave(plan: Awaited<ReturnType<typeof buildPlan>>, actorUserId: string) {
+async function sendWave(
+  plan: Awaited<ReturnType<typeof buildPlan>>,
+  actorUserIdByCenter: Map<string, string>,
+) {
   const resultByCenter = new Map<string, { accepted: number; failed: number; initialPasswordVerified: number; existingAccountInvites: number }>();
   let consecutiveFailures = 0;
   for (const center of plan.centers) {
+    const actorUserId = actorUserIdByCenter.get(center.id);
+    if (!actorUserId) throw new Error(`No authorized audit actor is available for center ${center.id}.`);
     const candidates = plan.eligible.filter((candidate) => candidate.centerId === center.id);
     const result = { accepted: 0, failed: 0, initialPasswordVerified: 0, existingAccountInvites: 0 };
     resultByCenter.set(center.id, result);
@@ -615,29 +722,70 @@ async function sendWave(plan: Awaited<ReturnType<typeof buildPlan>>, actorUserId
   };
 }
 
+async function loadActorUserIds(plan: Awaited<ReturnType<typeof buildPlan>>, scope: WaveScope) {
+  if (scope === "kid_city") {
+    const corporateActor = await prisma.user.findUnique({
+      where: { email: CORPORATE_ACTOR_EMAIL },
+      select: { id: true, tenantId: true, isActive: true },
+    });
+    if (!corporateActor || !corporateActor.isActive || corporateActor.tenantId !== plan.tenantId) {
+      throw new Error("The active Kid City corporate audit actor is unavailable.");
+    }
+    return new Map(plan.centers.map((center) => [center.id, corporateActor.id]));
+  }
+
+  const grants = await prisma.userAccessGrant.findMany({
+    where: {
+      centerId: { in: plan.centers.map((center) => center.id) },
+      scopeType: "CENTER",
+      role: UserRole.CENTER_DIRECTOR,
+      user: { isActive: true, tenantId: plan.tenantId },
+    },
+    select: { centerId: true, userId: true },
+  });
+  const actorUserIdByCenter = new Map<string, string>();
+  for (const center of plan.centers) {
+    const matches = grants.filter((grant) => grant.centerId === center.id);
+    if (matches.length !== 1) {
+      throw new Error(`Expected exactly one active center-director audit actor for ${center.crmLocationId ?? center.name}.`);
+    }
+    actorUserIdByCenter.set(center.id, matches[0].userId);
+  }
+  return actorUserIdByCenter;
+}
+
 async function main() {
   const args = parseArgs();
-  let plan = await buildPlan();
+  const planOptions = {
+    retryUnconfiguredProviderSkips: args.retryUnconfiguredProviderSkips,
+    scope: args.scope,
+  };
+  let plan = await buildPlan(planOptions);
   console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry-run", ...plan.summary }, null, 2));
   if (!args.apply) return;
-
-  const corporateActor = await prisma.user.findUnique({
-    where: { email: CORPORATE_ACTOR_EMAIL },
-    select: { id: true, tenantId: true, isActive: true },
-  });
-  if (!corporateActor || !corporateActor.isActive || corporateActor.tenantId !== plan.tenantId) {
-    throw new Error("The active Kid City corporate audit actor is unavailable.");
+  if (plan.summary.alreadyInvitedOutsideCurrentReadiness) {
+    throw new Error("Previously invited imported parent profiles require manual readiness review before another live wave.");
   }
+
+  const platformSendGridConfigured = Boolean(
+    clean(process.env.SENDGRID_API_KEY).length > 10
+    && validEmail(clean(process.env.SENDGRID_FROM_EMAIL)),
+  );
+  if (!platformSendGridConfigured) {
+    throw new Error("Live sending requires a configured platform SendGrid key and sender address.");
+  }
+
+  const actorUserIdByCenter = await loadActorUserIds(plan, args.scope);
   if (plan.interrupted.length) {
     if (!args.repairInterruptedPreparation) throw new Error(`${plan.interrupted.length} interrupted preparation records require ${REPAIR_FLAG}.`);
-    await repairInterruptedPreparation(plan, corporateActor.id);
-    plan = await buildPlan();
+    await repairInterruptedPreparation(plan, actorUserIdByCenter);
+    plan = await buildPlan(planOptions);
     if (plan.interrupted.length) throw new Error("Interrupted preparation repairs did not clear every safe candidate.");
     console.log(JSON.stringify({ mode: "post-repair", ...plan.summary }, null, 2));
   }
   if (!plan.eligible.length) throw new Error("No safe unsent imported parent invitations remain.");
-  const result = await sendWave(plan, corporateActor.id);
-  const postPlan = await buildPlan();
+  const result = await sendWave(plan, actorUserIdByCenter);
+  const postPlan = await buildPlan(planOptions);
   console.log(JSON.stringify({
     mode: "apply-result",
     ...result,

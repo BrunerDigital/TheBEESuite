@@ -404,7 +404,9 @@ async function main() {
       }
     }
     invariant(result, `Portal preparation returned no result for ${account.familyName}.`);
-    invariant(result.ok, `Portal preparation failed for ${account.familyName}: ${result.reason}`);
+    if (!result.ok) {
+      throw new Error(`Portal preparation failed for ${account.familyName}: ${result.reason}`);
+    }
     invariant(result.linkedGuardianIds.every((guardianId) => (
       allGuardians.find((guardian) => guardian.id === guardianId)?.family.centerId === center.id
     )), `Portal preparation for ${account.familyName} crossed the Tyler center boundary.`);

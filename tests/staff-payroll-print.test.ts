@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import {
   buildPayrollDayRows,
   clampClockEditDateTimeToPayPeriod,
+  clockEditRowsFromSavedEvents,
   clockEditRowsForEditor,
   filterClockEditRowsByPayPeriod,
 } from "@/components/staff-management-panel";
@@ -82,6 +83,17 @@ test("staff clock punches are viewed by pay period without dropping other period
       .map((row) => row.id),
     ["before", "start", "end", "after"],
   );
+});
+
+test("saved clock rows keep their editor identity while displaying canonical school-local time", () => {
+  const rows = clockEditRowsFromSavedEvents(
+    [{ action: "clock_in", occurredAt: "2026-03-08T07:30:00.000Z", timeZone: "America/Indiana/Indianapolis", notes: null }],
+    "America/Indiana/Indianapolis",
+    [{ id: "edited-row", action: "clock_in", occurredAt: "2026-03-08T02:30", notes: "" }],
+  );
+
+  assert.equal(rows[0]?.id, "edited-row");
+  assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30");
 });
 
 test("timestamp entry points use school-local conversion rather than browser-local parsing", async () => {

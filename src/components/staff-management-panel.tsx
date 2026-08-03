@@ -90,7 +90,7 @@ type PayrollShiftRow = StaffClockShift & {
   overtimeMinutes: number;
 };
 
-type ClockEditRow = {
+export type ClockEditRow = {
   id: string;
   action: StaffClockAction;
   occurredAt: string;
@@ -230,6 +230,27 @@ function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): C
     .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
+      action: event.action,
+      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
+      notes: event.notes ?? "",
+    }));
+}
+
+export function clockEditRowsFromSavedEvents(
+  events: StaffClockEvent[],
+  timeZone: string,
+  existingRows: readonly ClockEditRow[],
+) {
+  const rowIdByOccurredAt = new Map<string, string>();
+  for (const row of existingRows) {
+    const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
+    if (occurredAt) rowIdByOccurredAt.set(occurredAt.toISOString(), row.id);
+  }
+  return [...events]
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .map((event, index) => ({
+      id: rowIdByOccurredAt.get(new Date(event.occurredAt).toISOString())
+        ?? `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
       occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
       notes: event.notes ?? "",
@@ -654,7 +675,11 @@ export function StaffManagementPanel({
       setStatusMessage(`${clockTeacher.user.name} ${clockAction === "clock_in" ? "clocked in" : "clocked out"}.`);
       setClockNotes("");
       if (json?.record?.customFields !== undefined) {
-        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
+        setClockEditRows(clockEditRowsFromSavedEvents(
+          readStaffClockState(json.record.customFields).events,
+          clockTimeZone,
+          clockEditRows,
+        ));
       }
       router.refresh();
     });
@@ -777,9 +802,13 @@ export function StaffManagementPanel({
       setStatusMessage(`${clockTeacher.user.name}'s time card was saved.`);
       setClockEditsDirty(false);
       setClockEditMessage(`${clockTeacher.user.name}'s punches are saved.`);
-      // Keep local row IDs after the server accepts the same normalized events so an
-      // out-of-period punch remains visible with the explicit saved confirmation.
-      setClockEditRows(sortClockEditRows(submittedRows));
+      if (json?.record?.customFields !== undefined) {
+        setClockEditRows(clockEditRowsFromSavedEvents(
+          readStaffClockState(json.record.customFields).events,
+          clockTimeZone,
+          submittedRows,
+        ));
+      }
       router.refresh();
     });
   }

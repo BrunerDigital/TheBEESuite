@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { credentialEnvValue, getTenantIntegrationCredentialMap } from "@/lib/integration-credentials";
 import {
   PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION,
@@ -2758,26 +2758,34 @@ export function verifyStripeSignature({
   secret: string;
   toleranceSeconds?: number;
 }) {
-  if (!signature) return false;
+  if (!signature || !secret) return false;
 
   const parts = signature.split(",").reduce<{ timestamp?: string; signatures: string[] }>((acc, part) => {
-    const [key, ...rest] = part.split("=");
-    const value = rest.join("=");
+    const [rawKey, ...rest] = part.split("=");
+    const key = rawKey.trim();
+    const value = rest.join("=").trim();
     if (key === "t") acc.timestamp = value;
     if (key === "v1" && value) acc.signatures.push(value);
     return acc;
   }, { signatures: [] });
+  if (!parts.timestamp || !/^\d+$/.test(parts.timestamp) || !parts.signatures.length) return false;
   const timestamp = Number(parts.timestamp);
-  if (!timestamp || !parts.signatures.length) return false;
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) return false;
 
   if (Math.abs(Date.now() / 1000 - timestamp) > toleranceSeconds) return false;
 
   const expected = createHmac("sha256", secret)
     .update(`${timestamp}.${payload}`)
-    .digest("hex");
-  const expectedBuffer = Buffer.from(expected);
+    .digest();
   return parts.signatures.some((signed) => {
-    const actualBuffer = Buffer.from(signed);
-    return expectedBuffer.length === actualBuffer.length && timingSafeEqual(expectedBuffer, actualBuffer);
+    if (!/^[0-9a-f]{64}$/i.test(signed)) return false;
+    const actual = Buffer.from(signed, "hex");
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
   });
+}
+
+export function stripeWebhookSecretFingerprint(secret: string) {
+  const cleaned = secret.trim();
+  if (!cleaned) return null;
+  return createHash("sha256").update(cleaned).digest("hex").slice(0, 12);
 }

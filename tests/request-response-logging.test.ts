@@ -176,6 +176,35 @@ test("SendGrid webhook logs redact signatures, recipients, ids, and provider fai
   assert.equal(serialized.includes('"status":"failed"'), true);
 });
 
+test("Stripe webhook logging omits the complete request payload", async () => {
+  const rawPayload = JSON.stringify({
+    id: "evt_sensitive_fixture",
+    type: "checkout.session.completed",
+    data: { object: { customer_email: "parent@example.com", metadata: { internalReference: "do-not-log" } } },
+  });
+  const request = new Request("https://app.test/api/billing/stripe-webhook", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Content-Length": String(Buffer.byteLength(rawPayload)),
+      "Stripe-Signature": "t=123,v1=secret-signature",
+    },
+    body: rawPayload,
+  });
+  const payload = await buildApiLogPayload(request, "POST", Response.json({ ok: true }), Date.now(), { omitRequestBody: true });
+  const serialized = JSON.stringify(payload);
+
+  assert.deepEqual(payload.request.body, {
+    omitted: "sensitive_route",
+    contentType: "application/json",
+    contentLength: Buffer.byteLength(rawPayload),
+  });
+  assert.equal(serialized.includes("evt_sensitive_fixture"), false);
+  assert.equal(serialized.includes("secret-signature"), false);
+  assert.equal(serialized.includes("parent@example.com"), false);
+  assert.equal(serialized.includes("do-not-log"), false);
+});
+
 test("operational error logs redact messages and metadata", () => {
   const original = console.error;
   const lines: string[] = [];

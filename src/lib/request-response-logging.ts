@@ -50,8 +50,12 @@ type RedactionOptions = {
 };
 
 type BodySample =
-  | { omitted: "empty" | "unsupported_content_type" | "too_large" | "unknown_size" | "unreadable"; contentType?: string; contentLength?: number | null }
+  | { omitted: "empty" | "unsupported_content_type" | "too_large" | "unknown_size" | "unreadable" | "sensitive_route"; contentType?: string; contentLength?: number | null }
   | { contentType: string; value: unknown };
+
+type ApiLoggingOptions = {
+  omitRequestBody?: boolean;
+};
 
 type LogPayload = {
   event: "api.request";
@@ -272,7 +276,21 @@ export function logOperationalError(context: string, error: unknown, metadata: R
   );
 }
 
-export async function buildApiLogPayload(request: Request, method: string, response: Response, startedAt: number): Promise<LogPayload> {
+function omittedRequestBody(request: Request): BodySample {
+  return {
+    omitted: "sensitive_route",
+    contentType: contentType(request.headers) ?? undefined,
+    contentLength: contentLength(request.headers),
+  };
+}
+
+export async function buildApiLogPayload(
+  request: Request,
+  method: string,
+  response: Response,
+  startedAt: number,
+  options: ApiLoggingOptions = {},
+): Promise<LogPayload> {
   const url = new URL(request.url);
   return {
     event: "api.request",
@@ -284,7 +302,7 @@ export async function buildApiLogPayload(request: Request, method: string, respo
       contentType: contentType(request.headers),
       contentLength: contentLength(request.headers),
       headers: redactHeadersForOperationalLog(request.headers),
-      body: await sampleBody(request),
+      body: options.omitRequestBody ? omittedRequestBody(request) : await sampleBody(request),
     },
     response: {
       status: response.status,
@@ -298,14 +316,14 @@ export async function buildApiLogPayload(request: Request, method: string, respo
   };
 }
 
-export function withApiLogging<T extends ApiRouteHandler>(method: string, handler: T): T {
+export function withApiLogging<T extends ApiRouteHandler>(method: string, handler: T, options: ApiLoggingOptions = {}): T {
   return (async (...args: Parameters<T>) => {
     const startedAt = Date.now();
     const request = requestFromArgs(args);
 
     try {
       const response = await handler(...args);
-      if (request) logPayload(await buildApiLogPayload(request, method, response, startedAt));
+      if (request) logPayload(await buildApiLogPayload(request, method, response, startedAt, options));
       return response;
     } catch (error) {
       if (request) {
@@ -320,7 +338,7 @@ export function withApiLogging<T extends ApiRouteHandler>(method: string, handle
             contentType: contentType(request.headers),
             contentLength: contentLength(request.headers),
             headers: redactHeadersForOperationalLog(request.headers),
-            body: await sampleBody(request),
+            body: options.omitRequestBody ? omittedRequestBody(request) : await sampleBody(request),
           },
           durationMs: Date.now() - startedAt,
           userAgentHash: hashForLog(request.headers.get("user-agent")),

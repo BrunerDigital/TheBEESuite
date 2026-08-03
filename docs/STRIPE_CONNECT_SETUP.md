@@ -8,9 +8,10 @@ Add these to the Vercel production environment:
 
 ```text
 STRIPE_SECRET_KEY
+STRIPE_PLATFORM_WEBHOOK_SECRET
 STRIPE_WEBHOOK_SECRET
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-STRIPE_ACCOUNTS_V2_API_VERSION=2026-04-22.dahlia
+STRIPE_ACCOUNTS_V2_API_VERSION=2026-06-24.dahlia
 STRIPE_APPLICATION_FEE_BPS=0
 STRIPE_APPLICATION_FEE_FIXED_CENTS=0
 STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=false
@@ -74,17 +75,29 @@ Create a Stripe webhook endpoint:
 https://thebeesuite.io/api/billing/stripe-webhook
 ```
 
-Subscribe to:
+The route supports this reconciliation matrix across the platform, Connect snapshot, and Accounts v2 thin destinations:
 
 ```text
 checkout.session.completed
 checkout.session.async_payment_succeeded
 checkout.session.async_payment_failed
+checkout.session.expired
+payment_intent.succeeded
+payment_intent.payment_failed
+invoice.paid
+invoice.payment_failed
+invoice.payment_action_required
+customer.subscription.created
+customer.subscription.updated
+customer.subscription.deleted
+charge.refunded
+charge.dispute.created
 account.updated
+v2.core.account.updated
 v2.core.account[requirements].updated
 ```
 
-Copy the signing secret into `STRIPE_WEBHOOK_SECRET`, then redeploy.
+Do not assume those events share one destination or signing secret. Each Stripe destination has a unique secret, including destinations with the same URL. Put the live `Your account` destination secret in `STRIPE_PLATFORM_WEBHOOK_SECRET`. `STRIPE_WEBHOOK_SECRET` remains a legacy compatibility candidate. A tenant integration credential is valid only when it represents an explicitly inventoried tenant/Connect destination; it is not a connected account's API key and it is not interchangeable with a CLI listener secret. After any Vercel Production environment change, create a new production deployment because existing deployments retain their previous environment values.
 
 ## School Payout Onboarding
 

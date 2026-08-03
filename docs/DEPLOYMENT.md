@@ -87,9 +87,12 @@ Stripe:
 
 - `STRIPE_SECRET_KEY`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PLATFORM_WEBHOOK_SECRET` (preferred; exact secret for the production "Your account" destination)
+- `STRIPE_WEBHOOK_SECRET` (legacy compatibility candidate; never use a Stripe CLI or unrelated destination secret)
 - Stripe Connect, fee, payment method configuration, and payout readiness settings from `.env.example`
 - `STRIPE_ACCOUNTS_V2_API_VERSION=2026-06-24.dahlia`
+
+Every Stripe event destination has its own `whsec_` signing secret, even when multiple destinations use the same URL. Record the destination ID, scope (`Your account` versus `Connected accounts`), payload style (snapshot versus thin), and a one-way secret fingerprint in the release evidence. Production environment changes apply only to the next deployment, so a secret correction and its code release must be built and promoted together. Use `node --env-file=<approved-env-file> --import tsx scripts/stripe-webhook-readiness.ts --expected-platform-fingerprint=<12-hex-fingerprint>` without printing the secret.
 
 Messaging/integrations:
 

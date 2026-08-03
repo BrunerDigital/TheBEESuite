@@ -111,6 +111,25 @@ function appendPasswordResetNextPath(resetUrl: string, nextPath?: string | null)
   }
 }
 
+function securePasswordResetUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+    if (isLoopback && process.env.NODE_ENV === "production") {
+      const canonical = new URL(CANONICAL_APP_BASE_URL);
+      url.protocol = canonical.protocol;
+      url.hostname = canonical.hostname;
+      url.port = canonical.port;
+    } else if (url.protocol === "http:" && !isLoopback) {
+      url.protocol = "https:";
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 export function buildPasswordResetRedirectUrl({
   configuredRedirectUrl,
   appBaseUrl,
@@ -124,7 +143,7 @@ export function buildPasswordResetRedirectUrl({
 }) {
   const configured = canonicalizePublicUrl(configuredRedirectUrl);
   const resetUrl = configured || `${canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl)}/reset-password`;
-  return appendPasswordResetNextPath(resetUrl, nextPath);
+  return appendPasswordResetNextPath(securePasswordResetUrl(resetUrl), nextPath);
 }
 
 export function getPasswordResetRedirectUrl(requestUrl?: string, nextPath?: string | null) {
@@ -142,7 +161,7 @@ export function getParentPortalSetupUrl(requestUrl?: string) {
 }
 
 export function getParentPortalPasswordResetRedirectUrl(requestUrl?: string) {
-  const resetUrl = new URL(`${getAppBaseUrl(requestUrl)}/reset-password`);
+  const resetUrl = new URL(securePasswordResetUrl(`${getAppBaseUrl(requestUrl)}/reset-password`));
   resetUrl.searchParams.set("next", PARENT_PORTAL_SETUP_PATH);
   return resetUrl.toString();
 }
@@ -159,7 +178,7 @@ export function buildPasswordResetTokenUrl({
   nextPath?: string | null;
 }) {
   const baseUrl = canonicalizePublicUrl(appBaseUrl) || getAppBaseUrl(requestUrl);
-  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/reset-password`);
+  const url = new URL(securePasswordResetUrl(`${baseUrl.replace(/\/+$/, "")}/reset-password`));
   url.searchParams.set("token_hash", tokenHash);
   url.searchParams.set("type", "recovery");
   const safeNext = safePasswordResetNextPath(nextPath);

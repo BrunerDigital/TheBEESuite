@@ -411,6 +411,43 @@ test("password reset redirects can safely return invited parents to the portal",
   assert.equal(safePasswordResetNextPath("/login?next=/parent-portal"), "");
 });
 
+test("password reset links stay HTTPS on every public host", () => {
+  assert.equal(
+    buildPasswordResetRedirectUrl({
+      configuredRedirectUrl: "http://auth.example.com/reset-password",
+      nextPath: PARENT_PORTAL_PATH,
+    }),
+    "https://auth.example.com/reset-password?next=%2Fparent-portal",
+  );
+
+  assert.equal(
+    buildPasswordResetTokenUrl({
+      appBaseUrl: "http://pilot.example.com",
+      tokenHash: "hash_123",
+    }),
+    "https://pilot.example.com/reset-password?token_hash=hash_123&type=recovery",
+  );
+
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = mutableEnv.NODE_ENV;
+  try {
+    mutableEnv.NODE_ENV = "test";
+    assert.equal(
+      buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
+      "http://localhost:3000/reset-password",
+    );
+
+    mutableEnv.NODE_ENV = "production";
+    assert.equal(
+      buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
+      "https://thebeesuite.io/reset-password",
+    );
+  } finally {
+    if (originalNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+    else mutableEnv.NODE_ENV = originalNodeEnv;
+  }
+});
+
 test("public parent links never expose Vercel deployment hosts", () => {
   assert.equal(
     buildPublicAppBaseUrl({

@@ -20,6 +20,8 @@ test("withdrawn children are fingerprinted before and after the transaction", ()
 test("billing consolidation preserves reviewed balances and avoids invoices and payments", () => {
   assert.match(source, /balanceCents: 99_000/);
   assert.match(source, /balanceAfterCents: 99_000/);
+  assert.match(source, /type: "family_account_consolidation"/);
+  assert.match(source, /ledgerTotal === 99_000/);
   assert.match(source, /final\.balanceCents === 9_500/);
   assert.doesNotMatch(source, /tx\.invoice\.(?:create|update|delete)/);
   assert.doesNotMatch(source, /tx\.payment\.(?:create|update|delete)/);

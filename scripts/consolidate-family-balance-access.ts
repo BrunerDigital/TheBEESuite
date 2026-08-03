@@ -168,8 +168,15 @@ async function consolidate() {
       await tx.billingAccount.update({ where: { id: IDS.jurgensBilling }, data: { balanceCents: 99_000, customFields: mergedFields(jurgensBilling.customFields, "consolidate_jurgens_accounts_2248_2374") } });
       await tx.billingAccount.delete({ where: { id: IDS.jurgensShellBilling } });
     } else {
-      const final = await tx.billingAccount.findUnique({ where: { id: IDS.jurgensBilling }, include: { _count: { select: { ledgerEntries: true } } } });
-      invariant(final?.balanceCents === 99_000 && final._count.ledgerEntries === 2, "Jurgens is neither in reviewed nor final state.");
+      const final = await tx.billingAccount.findUnique({ where: { id: IDS.jurgensBilling }, include: { ledgerEntries: { select: { amountCents: true, externalId: true } } } });
+      invariant(final, "Jurgens consolidated billing account is missing.");
+      const ledgerTotal = final.ledgerEntries.reduce((sum, item) => sum + item.amountCents, 0);
+      if (final.balanceCents === 30_000 && ledgerTotal === 30_000 && final.ledgerEntries.some((item) => item.externalId === "cordera-pdf-balance:2026-08-09:cmsdev8u000036ah41hhxiwl5")) {
+        await tx.ledgerEntry.create({ data: { billingAccountId: IDS.jurgensBilling, type: "family_account_consolidation", description: "Preserve hidden and visible Jurgens ProCare account balances after household consolidation", amountCents: 69_000, balanceAfterCents: 99_000, effectiveAt: new Date(), sourceSystem: SOURCE, externalId: "jurgens-account-consolidation:2026-08-03:2248+2374", metadata: { hiddenAccountId: "2248", visibleAccountId: "2374", invoicesMutated: false, paymentsMutated: false } } });
+        await tx.billingAccount.update({ where: { id: IDS.jurgensBilling }, data: { balanceCents: 99_000, customFields: mergedFields(final.customFields, "restore_consolidated_jurgens_balance") } });
+      } else {
+        invariant(final.balanceCents === 99_000 && ledgerTotal === 99_000, "Jurgens is neither in reviewed nor final state.");
+      }
     }
     await tx.family.update({ where: { id: IDS.jurgensShell }, data: { centerId: null, name: "[Merged] Jurgens hidden account", externalId: "merged:2248", customFields: mergedFields(jurgensShell.customFields, "archive_jurgens_shell") } });
     await tx.family.update({ where: { id: IDS.jurgensFamily }, data: { customFields: mergedFields(jurgensFamily.customFields, "consolidate_jurgens_accounts_2248_2374") } });

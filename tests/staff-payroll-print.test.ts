@@ -96,6 +96,33 @@ test("saved clock rows keep their editor identity while displaying canonical sch
   assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30");
 });
 
+test("manual punch visibility protection is school-agnostic", () => {
+  const schools = [
+    { timeZone: "America/Indiana/Indianapolis", startDate: "2026-08-03", endDate: "2026-08-16" },
+    { timeZone: "America/Chicago", startDate: "2026-08-02", endDate: "2026-08-15" },
+    { timeZone: "America/Denver", startDate: "2026-08-01", endDate: "2026-08-14" },
+  ];
+
+  for (const [index, school] of schools.entries()) {
+    const rowId = `school-${index}-manual-punch`;
+    const localValue = "2026-07-31T08:00";
+    const savedInstant = zonedDateTimeLocalToUtc(localValue, school.timeZone);
+    assert.ok(savedInstant);
+
+    const savedRows = clockEditRowsFromSavedEvents(
+      [{ action: "clock_in", occurredAt: savedInstant.toISOString(), timeZone: school.timeZone, notes: "Manual correction" }],
+      school.timeZone,
+      [{ id: rowId, action: "clock_in", occurredAt: localValue, notes: "Manual correction" }],
+    );
+
+    assert.equal(savedRows[0]?.id, rowId);
+    assert.deepEqual(
+      clockEditRowsForEditor(savedRows, school.startDate, school.endDate, new Set([rowId])).map((row) => row.id),
+      [rowId],
+    );
+  }
+});
+
 test("timestamp entry points use school-local conversion rather than browser-local parsing", async () => {
   const files = [
     "src/components/campaign-workspace.tsx",

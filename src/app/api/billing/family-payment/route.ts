@@ -285,7 +285,7 @@ async function POSTHandler(request: NextRequest) {
   const savedPaymentMethodConnectedAccountId = clean(billingAccountFields.stripeDefaultPaymentMethodConnectedAccountId);
   if (method === "saved_method" && connectedAccountId && savedPaymentMethodConnectedAccountId && savedPaymentMethodConnectedAccountId !== connectedAccountId) {
     return NextResponse.json(
-      { ok: false, error: "The saved payment method belongs to a different Stripe account. Replace the family payment method before charging it." },
+      { ok: false, error: "The saved payment method belongs to a different school payout account. Replace the family payment method before charging it." },
       { status: 400 },
     );
   }
@@ -381,7 +381,7 @@ async function POSTHandler(request: NextRequest) {
   if (method === "saved_method") {
     if (!canChargeSavedPaymentMethod(savedPaymentMethod) || !savedPaymentMethod.stripeDefaultPaymentMethodId) {
       return NextResponse.json(
-        { ok: false, error: "This family does not have a selected payment method saved in Stripe." },
+        { ok: false, error: "This family does not have a selected payment method saved yet." },
         { status: 400 },
       );
     }

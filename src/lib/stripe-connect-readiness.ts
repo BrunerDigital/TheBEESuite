@@ -91,12 +91,12 @@ export function stripeConnectReadinessFromFields(customFields: unknown): StripeC
     status === "ready"
       ? null
       : status === "not_started"
-        ? "This school needs Stripe payout onboarding before parent checkout can open."
+        ? "This school needs secure payout onboarding before parent checkout can open."
         : requirementFields.length
-          ? "Stripe still needs required payout account information."
+          ? "The payment processor still needs required payout account information."
           : status === "charges_pending"
-            ? "Stripe has not enabled charges for this school account yet."
-            : "Stripe has not enabled payouts for this school account yet.";
+            ? "The payment processor has not enabled charges for this school account yet."
+            : "The payment processor has not enabled payouts for this school account yet.";
 
   return {
     accountId,
@@ -141,10 +141,10 @@ export function stripeCheckoutReadiness(input: {
 
   if (!input.stripeConfigured) {
     canAcceptParentPayments = false;
-    blockingReason = "Stripe platform keys are missing, so parent checkout is disabled.";
+    blockingReason = "Payment processor keys are missing, so parent checkout is disabled.";
   } else if (!input.webhookConfigured) {
     canAcceptParentPayments = false;
-    blockingReason = "Stripe webhook signing secret is missing, so payment reconciliation is disabled.";
+    blockingReason = "The payment processor webhook signing secret is missing, so payment reconciliation is disabled.";
   } else if (allowPlatformOnlyPayments && !connect.accountId) {
     canAcceptParentPayments = true;
     blockingReason = null;

@@ -30,7 +30,7 @@ test("payment recovery summary states bank payments are parent-fee-free", () => 
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown in Stripe Checkout before payment.",
+    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown on the secure payment review screen before submission.",
   );
 });
 
@@ -43,6 +43,6 @@ test("payment recovery summary does not change when ACH recovery is zero", () =>
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown in Stripe Checkout before payment.",
+    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown on the secure payment review screen before submission.",
   );
 });

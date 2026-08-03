@@ -42,7 +42,7 @@ test("approved ProCare parent welcome email explains the transition and guarded 
     assert.match(copy, /Add to Home Screen/i);
     assert.match(copy, /Android/i);
     assert.match(copy, /card or bank option/i);
-    assert.match(copy, /secure Stripe/i);
+    assert.match(copy, /secure payment form/i);
     assert.match(copy, /Do not create another family or child record/i);
     assert.doesNotMatch(copy, /vercel\.app/i);
   }
@@ -107,6 +107,7 @@ test("parent feature guide provides an FAQ and operating SOP without resetting c
     assert.match(copy, /Do not add a duplicate/i);
     assert.match(copy, /payment/i);
     assert.match(copy, /never (send|include).*password/i);
+    assert.doesNotMatch(copy, /BusyBees/i);
   }
 });
 

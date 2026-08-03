@@ -19,5 +19,5 @@ export function paymentProcessingRecoverySummary({
   cardRecovery: number;
   formatMoney: (cents: number) => string;
 }) {
-  return `ACH and instant bank have no parent processing recovery; estimated card processing recovery ${formatMoney(cardRecovery)}. Exact totals are shown in Stripe Checkout before payment.`;
+  return `ACH and instant bank have no parent processing recovery; estimated card processing recovery ${formatMoney(cardRecovery)}. Exact totals are shown on the secure payment review screen before submission.`;
 }

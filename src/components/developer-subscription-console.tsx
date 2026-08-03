@@ -113,7 +113,7 @@ export function DeveloperSubscriptionConsole({
         <CardDescription>
           Recurring monthly billing is quantity-based on active director,
           assistant director, and billing administrator accounts. Sync after
-          access changes; Stripe invoices and retries run automatically.
+          access changes; processor invoices and retries run automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">

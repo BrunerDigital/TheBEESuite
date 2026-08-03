@@ -49,6 +49,7 @@ import {
 import type { MessageAttachmentView } from "@/lib/message-attachments";
 import { replySubject } from "@/lib/message-reply-routing";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
+import { isParentVisiblePayment } from "@/lib/parent-billing-visibility";
 import {
   dailyReportTimedCareEvents,
   sortDailyReportsChronologically,
@@ -69,7 +70,6 @@ type Child = {
 
 type PendingInvoicePayment = {
   id: string;
-  amountCents: number | null;
   status: string | null;
   paymentMethodCategory: string | null;
   requestedPaymentMethodCategory: string | null;
@@ -85,31 +85,9 @@ type Invoice = {
   number: string;
   status: string;
   dueDate: string | Date;
-  totalCents: number;
   purposeLabel?: string | null;
+  productCheckoutAvailable?: boolean;
   pendingPayment?: PendingInvoicePayment | null;
-  checkoutOptions?: {
-    ach: {
-      checkoutTotalCents: number;
-      parentProcessingRecoveryAmountCents: number;
-      applicationFeeAmountCents: number;
-      paymentMethodConfigurationReady: boolean;
-    };
-    instantBank: {
-      checkoutTotalCents: number;
-      parentProcessingRecoveryAmountCents: number;
-      applicationFeeAmountCents: number;
-      paymentMethodConfigurationReady: boolean;
-    };
-    card: {
-      checkoutTotalCents: number;
-      parentProcessingRecoveryAmountCents: number;
-      applicationFeeAmountCents: number;
-      paymentMethodConfigurationReady: boolean;
-    };
-    beeSuitePaymentOperationsFeeAmountCents: number;
-    beeSuitePaymentOperationsFeeWaived: boolean;
-  };
 };
 
 type Payment = {
@@ -126,8 +104,6 @@ type LedgerEntry = {
   id: string;
   type: string;
   description: string;
-  amountCents: number;
-  balanceAfterCents: number | null;
   effectiveAt: string | Date;
 };
 
@@ -380,7 +356,6 @@ function paymentProviderLabel(provider: string) {
   if (provider === "stripe") return "Online payment";
   if (provider === "stripe_terminal") return "In-person card payment";
   if (provider === "manual_check") return "Check payment";
-  if (provider === "subsidy_agency") return "Agency payment";
   return provider.replaceAll("_", " ");
 }
 
@@ -514,15 +489,19 @@ export function ParentPortalWorkspace({
   const [isPending, startTransition] = useTransition();
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
-  const payableOpenInvoices = useMemo(() => openInvoices.filter((invoice) => !invoice.pendingPayment), [openInvoices]);
+  const balanceCents = billingAccount?.balanceCents ?? 0;
+  const payableOpenInvoices = useMemo(
+    () => balanceCents > 0 ? openInvoices.filter((invoice) => !invoice.pendingPayment) : [],
+    [balanceCents, openInvoices],
+  );
   const pendingOpenInvoices = useMemo(() => openInvoices.filter((invoice) => invoice.pendingPayment), [openInvoices]);
   const nextOpenInvoice = useMemo(
     () => payableOpenInvoices.slice().sort((left, right) => new Date(left.dueDate).getTime() - new Date(right.dueDate).getTime())[0] ?? null,
     [payableOpenInvoices],
   );
   const firstPendingOpenInvoice = pendingOpenInvoices[0] ?? null;
-  const balanceCents = billingAccount?.balanceCents ?? openInvoices.reduce((sum, invoice) => sum + invoice.totalCents, 0);
   const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
+  const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
@@ -711,19 +690,19 @@ export function ParentPortalWorkspace({
     });
   }
 
-  function payInvoice(invoiceId: string, paymentMethodCategory: "ach" | "card" | "link_bank") {
+  function payFamilyBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (checkoutBlocked) {
       return showError(checkoutReadiness.blockingReason || "Parent payments are not ready for this school yet.");
     }
-    const invoice = invoices.find((item) => item.id === invoiceId);
-    if (invoice?.pendingPayment) {
-      return showError(pendingPaymentMessage(invoice.pendingPayment));
+    if (!family || !billingAccount) {
+      return showError("Your family billing account is not available yet.");
+    }
+    if (balanceCents <= 0) {
+      return showError("There is no family balance to pay.");
     }
     const recoveryAmount = paymentMethodCategory === "card"
-      ? invoice?.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice?.totalCents ?? 0)
-      : paymentMethodCategory === "link_bank"
-        ? invoice?.checkoutOptions?.instantBank.parentProcessingRecoveryAmountCents ?? invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0)
-        : invoice?.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice?.totalCents ?? 0);
+      ? estimatedCardRecovery(balanceCents)
+      : estimatedAchRecovery(balanceCents);
     if (recoveryAmount > 0) {
       const accepted = window.confirm(
         `${paymentMethodCategory === "card" ? "Debit/credit card" : paymentMethodCategory === "link_bank" ? "Instant bank" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
@@ -731,10 +710,18 @@ export function ParentPortalWorkspace({
       if (!accepted) return;
     }
     startTransition(async () => {
-      const response = await fetch("/api/billing/checkout-session", {
+      const method = paymentMethodCategory === "card"
+        ? "card_checkout"
+        : paymentMethodCategory === "link_bank" ? "instant_bank_checkout" : "ach_checkout";
+      const response = await fetch("/api/billing/family-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId, paymentMethodCategory }),
+        body: JSON.stringify({
+          billingAccountId: billingAccount.id,
+          familyId: family.id,
+          method,
+          returnPath: "/parent-portal",
+        }),
       });
       const json = await response.json().catch(() => null) as { error?: string; url?: string; configured?: boolean } | null;
       if (!response.ok || !json?.url) {
@@ -746,7 +733,36 @@ export function ParentPortalWorkspace({
 
   function payBalance(paymentMethodCategory: "ach" | "card" | "link_bank") {
     if (!nextOpenInvoice) return showError("There is no open invoice to pay.");
-    payInvoice(nextOpenInvoice.id, paymentMethodCategory);
+    payFamilyBalance(paymentMethodCategory);
+  }
+
+  function payProductInvoice(invoiceId: string, paymentMethodCategory: "card" | "link_bank") {
+    if (checkoutBlocked) {
+      return showError(checkoutReadiness.blockingReason || "Parent payments are not ready for this school yet.");
+    }
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    if (!invoice?.productCheckoutAvailable || invoice.status !== "OPEN") {
+      return showError("This product invoice is not available for checkout.");
+    }
+    if (invoice.pendingPayment) {
+      return showError(pendingPaymentMessage(invoice.pendingPayment));
+    }
+    startTransition(async () => {
+      const response = await fetch("/api/billing/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId,
+          paymentMethodCategory,
+          returnPath: "/parent-portal",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!response.ok || !json?.url) {
+        return showError(json?.error || "Product checkout could not be opened.");
+      }
+      window.location.href = json.url;
+    });
   }
 
   function selectUniformColor(color: "Black" | "Yellow") {
@@ -1326,7 +1342,7 @@ export function ParentPortalWorkspace({
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
                 <div className="mt-1 text-2xl font-semibold">{money(balanceCents)}</div>
-                <div className="mt-1 text-xs text-muted-foreground">Posted payments and credits are included.</div>
+                <div className="mt-1 text-xs text-muted-foreground">Only your family responsibility is included.</div>
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Latest account activity</div>
@@ -1334,7 +1350,7 @@ export function ParentPortalWorkspace({
                   <>
                     <div className="mt-1 truncate font-medium">{latestAccountLedgerEntry.description}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {money(latestAccountLedgerEntry.amountCents)} · Balance {latestAccountLedgerEntry.balanceAfterCents === null ? "not set" : money(latestAccountLedgerEntry.balanceAfterCents)}
+                      {formatDate(latestAccountLedgerEntry.effectiveAt)}
                     </div>
                   </>
                 ) : (
@@ -1353,7 +1369,7 @@ export function ParentPortalWorkspace({
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3">
                 <div className="font-medium">Account ledger</div>
-                <div className="text-xs text-muted-foreground">The same charges, credits, payments, adjustments, and running balances used by your school.</div>
+                <div className="text-xs text-muted-foreground">Family-responsible charges, credits, payments, and adjustments. Agency subsidy activity remains visible to your school.</div>
               </div>
               <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1">
                 {ledgerEntries.map((entry) => (
@@ -1361,12 +1377,6 @@ export function ParentPortalWorkspace({
                     <div>
                       <div className="font-medium">{entry.description}</div>
                       <div className="text-xs text-muted-foreground">{entry.type.replaceAll("_", " ")} · {formatDate(entry.effectiveAt)}</div>
-                    </div>
-                    <div className="text-right font-medium">
-                      {money(entry.amountCents)}
-                      <div className="text-xs text-muted-foreground">
-                        Balance {entry.balanceAfterCents === null ? "not set" : money(entry.balanceAfterCents)}
-                      </div>
                     </div>
                   </div>
                 ))}
@@ -1408,7 +1418,7 @@ export function ParentPortalWorkspace({
                 Recent payments
               </div>
               <div className="space-y-2">
-                {payments.slice(0, 5).map((payment) => {
+                {parentVisiblePayments.slice(0, 5).map((payment) => {
                   const completed = payment.status === "PAID";
                   return (
                     <div key={payment.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
@@ -1421,7 +1431,7 @@ export function ParentPortalWorkspace({
                     </div>
                   );
                 })}
-                {!payments.length ? <p className="text-sm text-muted-foreground">No payments have been posted to this account yet.</p> : null}
+                {!parentVisiblePayments.length ? <p className="text-sm text-muted-foreground">No family payments have been posted to this account yet.</p> : null}
               </div>
             </div>
             <div className="rounded-xl border bg-background/40 p-4">
@@ -1483,27 +1493,34 @@ export function ParentPortalWorkspace({
                   <div>
                     <div className="text-xs text-muted-foreground">Pay today</div>
                     <div className="font-medium">
-                      {nextOpenInvoice.purposeLabel ? `${nextOpenInvoice.purposeLabel} · ` : ""}{nextOpenInvoice.number} · due {formatDate(nextOpenInvoice.dueDate)} · {money(nextOpenInvoice.totalCents)}
+                      Family balance {money(balanceCents)} · {nextOpenInvoice.number} due {formatDate(nextOpenInvoice.dueDate)}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("card")}>
                       <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.card.checkoutTotalCents) : ""}
+                      Debit/Credit Card
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("link_bank")} variant="outline">
                       <Building2 data-icon="inline-start" />
-                      Instant Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
+                      Instant Bank
                     </Button>
                     <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payBalance("ach")} variant="outline">
                       <Building2 data-icon="inline-start" />
-                      Pay by Bank {nextOpenInvoice.checkoutOptions ? money(nextOpenInvoice.checkoutOptions.ach.checkoutTotalCents) : ""}
+                      Pay by Bank
                     </Button>
                   </div>
                 </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {paymentProcessingRecoverySummary({
+                    achRecovery: estimatedAchRecovery(balanceCents),
+                    cardRecovery: estimatedCardRecovery(balanceCents),
+                    formatMoney: money,
+                  })}
+                </div>
                 {openInvoices.length > 1 ? (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    {openInvoices.length} open invoices are listed below for separate checkout and receipt tracking.
+                    {openInvoices.length} open invoice records are listed below. Checkout uses only the family balance shown here.
                   </div>
                 ) : null}
               </div>
@@ -1648,7 +1665,7 @@ export function ParentPortalWorkspace({
             ) : null}
             <div className="pt-2">
               <div className="font-medium">Invoice history</div>
-              <div className="text-xs text-muted-foreground">Invoice amounts are the original charges. Use the Balance due and Account ledger above for the amount owed after credits, voids, payments, and adjustments.</div>
+              <div className="text-xs text-muted-foreground">Invoice records are listed without agency subsidy amounts. Use the family Balance due and Account ledger above for what you owe.</div>
             </div>
             {invoices.map((invoice) => {
               const invoiceHasPendingPayment = Boolean(invoice.pendingPayment);
@@ -1663,37 +1680,23 @@ export function ParentPortalWorkspace({
                   <Badge variant={invoiceHasPendingPayment ? "secondary" : invoice.status === "OPEN" ? "outline" : "default"}>
                     {invoiceHasPendingPayment ? "PROCESSING" : invoice.status}
                   </Badge>
-                  <div className="text-lg font-semibold">{money(invoice.totalCents)}</div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      className="w-full sm:w-auto"
-                      disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment}
-                      onClick={() => payInvoice(invoice.id, "card")}
-                    >
-                      <CreditCard data-icon="inline-start" />
-                      Debit/Credit Card {invoice.checkoutOptions ? money(invoice.checkoutOptions.card.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "link_bank")} variant="outline">
-                      <Building2 data-icon="inline-start" />
-                      Instant Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.instantBank.checkoutTotalCents) : ""}
-                    </Button>
-                    <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked || invoice.status !== "OPEN" || invoiceHasPendingPayment} onClick={() => payInvoice(invoice.id, "ach")} variant="outline">
-                      <Building2 data-icon="inline-start" />
-                      One-Time Bank {invoice.checkoutOptions ? money(invoice.checkoutOptions.ach.checkoutTotalCents) : ""}
-                    </Button>
-                  </div>
+                  {invoice.productCheckoutAvailable && invoice.status === "OPEN" && !invoiceHasPendingPayment ? (
+                    <div className="flex basis-full flex-wrap gap-2 sm:justify-end">
+                      <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payProductInvoice(invoice.id, "card")}>
+                        <CreditCard data-icon="inline-start" />
+                        Pay Product by Card
+                      </Button>
+                      <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payProductInvoice(invoice.id, "link_bank")} variant="outline">
+                        <Building2 data-icon="inline-start" />
+                        Pay Product by Bank
+                      </Button>
+                    </div>
+                  ) : null}
                   {invoice.pendingPayment ? (
                     <div className="basis-full rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
                       {pendingPaymentMessage(invoice.pendingPayment)}
                     </div>
                   ) : null}
-                  <div className="basis-full text-xs text-muted-foreground sm:text-right">
-                    {paymentProcessingRecoverySummary({
-                      achRecovery: invoice.checkoutOptions?.ach.parentProcessingRecoveryAmountCents ?? estimatedAchRecovery(invoice.totalCents),
-                      cardRecovery: invoice.checkoutOptions?.card.parentProcessingRecoveryAmountCents ?? estimatedCardRecovery(invoice.totalCents),
-                      formatMoney: money,
-                    })}
-                  </div>
                 </div>
               );
             })}

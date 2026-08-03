@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentStatus, Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
-import { canAccessCenter, canManageBilling, getCurrentUser } from "@/lib/auth";
+import { canAccessCenter, canManageBilling, getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
   activeStripeCheckoutPaymentMessage,
   activeStripeCheckoutPaymentSummary,
@@ -31,6 +31,12 @@ import {
   paymentMethodAutopayCategory,
   paymentMethodManagementSummary,
 } from "@/lib/payment-method-management";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentPaymentAmountCents,
+} from "@/lib/parent-billing-visibility";
+import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { resolveStripeCheckoutDraftBlocker } from "@/lib/stripe-checkout-drafts";
@@ -75,7 +81,13 @@ function checkoutCategory(method: FamilyPaymentMethod): StripePaymentMethodCateg
   return "default";
 }
 
-function checkoutCollectionMode(method: FamilyPaymentMethod, value: unknown) {
+function checkoutCollectionMode(method: FamilyPaymentMethod, value: unknown, userCanManageBilling: boolean) {
+  if (!userCanManageBilling) {
+    if (method === "card_checkout") return "parent_card_checkout";
+    if (method === "instant_bank_checkout") return "parent_instant_bank_checkout";
+    if (method === "ach_checkout") return "parent_ach_checkout";
+    return "parent_checkout";
+  }
   const requested = clean(value);
   if (requested.startsWith("director_")) return requested;
   if (method === "card_checkout") return "director_card_terminal";
@@ -111,7 +123,9 @@ async function POSTHandler(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
-  if (!canManageBilling(user)) {
+  const userCanManageBilling = canManageBilling(user);
+  const userIsParentGuardian = isParentGuardian(user);
+  if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
   }
 
@@ -119,10 +133,11 @@ async function POSTHandler(request: NextRequest) {
   const billingAccountId = clean(body.billingAccountId);
   const familyId = clean(body.familyId);
   const method = familyPaymentMethod(body.method);
-  const returnPath = safeReturnPath(body.returnPath, "/billing-invoices");
-  const description = clean(body.description) || "Tuition payment";
-  const source = clean(body.source) || "director_dashboard";
-  const collectionMode = checkoutCollectionMode(method, body.collectionMode);
+  const parentCheckout = userIsParentGuardian && !userCanManageBilling;
+  const returnPath = safeReturnPath(body.returnPath, parentCheckout ? "/parent-portal" : "/billing-invoices");
+  const description = parentCheckout ? "Family balance payment" : clean(body.description) || "Tuition payment";
+  const source = parentCheckout ? "parent_portal" : clean(body.source) || "director_dashboard";
+  const collectionMode = checkoutCollectionMode(method, body.collectionMode, userCanManageBilling);
 
   const billingAccount = await prisma.billingAccount.findFirst({
     where: billingAccountId ? { id: billingAccountId } : { familyId },
@@ -133,6 +148,7 @@ async function POSTHandler(request: NextRequest) {
           name: true,
           billingEmail: true,
           centerId: true,
+          guardians: { select: { userId: true } },
         },
       },
     },
@@ -140,12 +156,63 @@ async function POSTHandler(request: NextRequest) {
   if (!billingAccount) {
     return NextResponse.json({ ok: false, error: "Billing account not found." }, { status: 404 });
   }
-  if (!billingAccount.family.centerId || !canAccessCenter(user, billingAccount.family.centerId)) {
+  const centerId = billingAccount.family.centerId;
+  const accessGuard = canAccessFamilyRecord({
+    isParentGuardian: userIsParentGuardian,
+    isLinkedGuardian: billingAccount.family.guardians.some((guardian) => guardian.userId === user.id),
+    hasCenterAccess: Boolean(centerId && canAccessCenter(user, centerId)),
+  });
+  if (!accessGuard.ok || !centerId) {
     return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
+  }
+  if (parentCheckout && method === "saved_method") {
+    return NextResponse.json({ ok: false, error: "Parents must confirm payment through secure checkout." }, { status: 400 });
+  }
+
+  const draftStripePayments = await prisma.payment.findMany({
+    where: {
+      billingAccountId: billingAccount.id,
+      provider: "stripe",
+      status: PaymentStatus.DRAFT,
+    },
+    select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
+  });
+  const activeInvoicePayment = parentCheckout
+    ? draftStripePayments.find((item) => {
+        const fields = jsonRecord(item.customFields);
+        return isActiveStripeCheckoutPayment(item) && Boolean(fields.invoiceId);
+      })
+    : null;
+  if (activeInvoicePayment) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "An invoice checkout is already processing. Complete or cancel it before paying the family balance.",
+        paymentId: activeInvoicePayment.id,
+      },
+      { status: 409 },
+    );
   }
 
   const requestedAmountCents = parseAmountCents(body);
-  const amountCents = requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
+  const agencyLedgerEntries = parentCheckout
+    ? await prisma.ledgerEntry.findMany({
+        where: {
+          billingAccountId: billingAccount.id,
+          OR: [
+            { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+            { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+          ],
+        },
+        select: { type: true, sourceSystem: true, amountCents: true },
+      })
+    : [];
+  const amountCents = parentCheckout
+    ? parentPaymentAmountCents({
+        accountBalanceCents: billingAccount.balanceCents,
+        agencyLedgerEntries,
+      })
+    : requestedAmountCents > 0 ? requestedAmountCents : billingAccount.balanceCents;
   if (amountCents <= 0) {
     return NextResponse.json({ ok: false, error: "Payment amount must be greater than zero." }, { status: 400 });
   }
@@ -166,7 +233,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const center = await prisma.center.findUnique({
-    where: { id: billingAccount.family.centerId },
+    where: { id: centerId },
     select: {
       id: true,
       name: true,
@@ -512,14 +579,6 @@ async function POSTHandler(request: NextRequest) {
     });
   }
 
-  const draftStripePayments = await prisma.payment.findMany({
-    where: {
-      billingAccountId: billingAccount.id,
-      provider: "stripe",
-      status: PaymentStatus.DRAFT,
-    },
-    select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
-  });
   const activeFamilyPayment = draftStripePayments.find((item) => {
     const fields = jsonRecord(item.customFields);
     return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";

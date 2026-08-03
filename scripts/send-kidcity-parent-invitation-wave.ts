@@ -108,7 +108,6 @@ async function resolveTargetCenters() {
 async function loadCandidateGuardians(centerIds: string[]) {
   return prisma.guardian.findMany({
     where: {
-      isBillingContact: true,
       family: { centerId: { in: centerIds } },
     },
     include: {
@@ -133,11 +132,27 @@ async function loadCandidateGuardians(centerIds: string[]) {
               externalId: true,
             },
           },
+          pickups: {
+            select: {
+              sourceSystem: true,
+              externalId: true,
+            },
+          },
         },
       },
     },
     orderBy: [{ family: { centerId: "asc" } }, { id: "asc" }],
   });
+}
+
+function isParentPayerGuardian(guardian: CandidateGuardian) {
+  if (guardian.isBillingContact) return true;
+  const externalId = clean(guardian.externalId);
+  if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !externalId) return false;
+  return guardian.family.pickups.some((pickup) => (
+    clean(pickup.sourceSystem).toLowerCase() === "procare"
+    && clean(pickup.externalId) === externalId
+  ));
 }
 
 function guardianIdentity(guardian: Pick<CandidateGuardian, "id" | "familyId" | "fullName" | "email" | "phone" | "sourceSystem" | "externalId">) {
@@ -176,7 +191,7 @@ async function buildPlan() {
     where: { organization: { tenantId } },
     select: { id: true },
   })).map((center) => center.id);
-  const guardians = await loadCandidateGuardians(centerIds);
+  const guardians = (await loadCandidateGuardians(centerIds)).filter(isParentPayerGuardian);
   const familyIds = [...new Set(guardians.map((guardian) => guardian.familyId))];
   const candidateEmails = [...new Set(guardians.map((guardian) => email(guardian.email)).filter(validEmail))];
 
@@ -263,18 +278,30 @@ async function buildPlan() {
       relevantImportBatch: batch ? { id: batch.id, status: batch.status, summary: batch.summary } : null,
     });
     const prior = deliveryByEmail.get(normalizedEmail) ?? [];
+    const existingLinkedAccountReady = Boolean(
+      guardian.userId
+      && guardian.user?.id === guardian.userId
+      && guardian.user.role === UserRole.PARENT_GUARDIAN
+      && guardian.user.isActive
+      && guardian.user.tenantId === tenantId
+      && email(guardian.user.email) === normalizedEmail
+      && authEmails.has(normalizedEmail),
+    );
     const reasons = [
       ...readiness.blockers,
       ...(!guardian.family.children.some((child) => isActiveProcareEnrollmentStatus(child.enrollmentStatus)) ? ["no_active_enrollment"] : []),
       ...(!validEmail(normalizedEmail) ? ["invalid_email"] : []),
       ...(parentPortalAccessDisabled(guardian.customFields) ? ["portal_disabled"] : []),
-      ...(portal.preparedWithoutInvite === true ? [] : [portal.invitationSentAt ? "already_invited" : "not_prepared_for_invite"]),
+      ...(portal.invitationSentAt
+        ? ["already_invited"]
+        : portal.preparedWithoutInvite === true
+          ? guardian.user?.mustResetPassword ? [] : ["prepared_password_reset_flag_missing"]
+          : existingLinkedAccountReady ? [] : ["not_prepared_for_invite"]),
       ...(guardian.userId && guardian.user?.id === guardian.userId ? [] : ["app_user_link_missing"]),
       ...(guardian.user?.role === UserRole.PARENT_GUARDIAN ? [] : ["app_user_role_invalid"]),
       ...(guardian.user?.isActive ? [] : ["app_user_inactive"]),
       ...(guardian.user?.tenantId === tenantId ? [] : ["app_user_tenant_mismatch"]),
       ...(email(guardian.user?.email) === normalizedEmail ? [] : ["app_user_email_mismatch"]),
-      ...(guardian.user?.mustResetPassword ? [] : ["prepared_password_reset_flag_missing"]),
       ...(authEmails.has(normalizedEmail) ? [] : ["supabase_auth_user_missing"]),
       ...(matches.every((item) => item.family.centerId === guardian.family.centerId) ? [] : ["cross_center_email"]),
       ...(matches.every((item) => !parentPortalAccessDisabled(item.customFields)) ? [] : ["matching_guardian_portal_disabled"]),
@@ -295,17 +322,17 @@ async function buildPlan() {
   const schoolPlan = targets.map(({ location, center }) => ({
     location,
     centerId: center.id,
-    payerRecords: guardians.filter((guardian) => guardian.family.centerId === center.id).length,
+    parentPayerRecords: guardians.filter((guardian) => guardian.family.centerId === center.id).length,
     uniqueInvitations: candidates.filter((guardian) => guardian.family.centerId === center.id).length,
-    blockedPayerRecords: blockedByCenter.get(center.id) ?? 0,
+    blockedParentPayerRecords: blockedByCenter.get(center.id) ?? 0,
   }));
   return {
     tenantId,
     targets,
     candidates,
     summary: {
-      scope: "Kid City corporate payer accounts; Kokomo excluded",
-      subjectPattern: "<school>: welcome to The BEE Suite parent app",
+      scope: "Kid City corporate parent/payer accounts; Kokomo excluded",
+      subjectPattern: "<school>: your BEE Suite Parent Portal is ready",
       targetSchools: schoolPlan,
       uniqueInvitations: candidates.length,
       blockedReasons: Object.fromEntries([...blockers].sort((left, right) => right[1] - left[1])),
@@ -369,6 +396,7 @@ async function sendWave(args: Args, plan: Awaited<ReturnType<typeof buildPlan>>)
   const results = {
     accepted: 0,
     busyBeesVerified: 0,
+    existingAccountInvites: 0,
     deferred: 0,
     failures: {} as Record<string, number>,
   };
@@ -392,11 +420,15 @@ async function sendWave(args: Args, plan: Awaited<ReturnType<typeof buildPlan>>)
     if (response.ok && body.ok === true) {
       results.accepted += 1;
       consecutiveSystemFailures = 0;
-      const loginWorks = await verifySupabasePassword(email(guardian.email), DEFAULT_PARENT_INITIAL_PASSWORD);
-      if (!loginWorks) {
-        throw new Error(`Critical stop: BusyBees verification failed immediately after accepted invite ${results.accepted}.`);
+      if (parentPortalFields(guardian.customFields).preparedWithoutInvite === true) {
+        const loginWorks = await verifySupabasePassword(email(guardian.email), DEFAULT_PARENT_INITIAL_PASSWORD);
+        if (!loginWorks) {
+          throw new Error(`Critical stop: first-login password verification failed immediately after accepted invite ${results.accepted}.`);
+        }
+        results.busyBeesVerified += 1;
+      } else {
+        results.existingAccountInvites += 1;
       }
-      results.busyBeesVerified += 1;
       continue;
     }
 
@@ -448,7 +480,11 @@ async function main() {
   if (result.accepted !== plan.candidates.length - result.deferred) {
     throw new Error("The production wave did not accept every non-deferred invitation.");
   }
-  if (result.busyBeesVerified !== result.accepted || result.auditCount !== result.accepted || result.remainingPrepared !== 0) {
+  if (
+    result.busyBeesVerified + result.existingAccountInvites !== result.accepted
+    || result.auditCount !== result.accepted
+    || result.remainingPrepared !== 0
+  ) {
     throw new Error("Post-send account or audit verification failed.");
   }
 }

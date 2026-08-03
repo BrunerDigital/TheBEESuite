@@ -24,6 +24,7 @@ import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { getAppBaseUrl } from "@/lib/supabase-auth";
 import { buildManualEmailCopy } from "@/lib/manual-email-copy";
 import { prisma } from "@/lib/prisma";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -98,6 +99,7 @@ async function POSTHandler(request: NextRequest) {
       id: true,
       name: true,
       crmLocationId: true,
+      customFields: true,
       organizationId: true,
       organization: {
         select: {
@@ -143,6 +145,13 @@ async function POSTHandler(request: NextRequest) {
       organizationName: center.organization.name,
     });
     const centerLabel = center.crmLocationId ?? center.name;
+    const transitioningFromProcare =
+      guardian.family.sourceSystem?.toLowerCase() === "procare" ||
+      guardian.family.children.some((child) => child.sourceSystem?.toLowerCase() === "procare");
+    const billingCutoverApproved = transitioningFromProcare && stripeSchoolBillingApproval({
+      customFields: center.customFields,
+      centerName: center.name,
+    }).approved;
 
     if (messageType === "guide") {
       if (!guardian.userId || existingUser?.id !== guardian.userId) {
@@ -311,6 +320,8 @@ async function POSTHandler(request: NextRequest) {
       email,
       loginUrl,
       initialPasswordIssued,
+      transitioningFromProcare,
+      billingCutoverApproved,
     });
     const invitationHtml = buildParentPortalInvitationHtml({
       guardianName: guardian.fullName,
@@ -318,9 +329,11 @@ async function POSTHandler(request: NextRequest) {
       email,
       loginUrl,
       initialPasswordIssued,
+      transitioningFromProcare,
+      billingCutoverApproved,
       branding,
     });
-    const subject = `${centerLabel}: welcome to The BEE Suite parent app`;
+    const subject = `${centerLabel}: your BEE Suite Parent Portal is ready`;
     const manualCopy = buildManualEmailCopy({ to: email, subject, body: invitationText });
     const emailCopy = await sendEmail({
       to: [email],

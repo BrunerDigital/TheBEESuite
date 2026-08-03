@@ -44,8 +44,8 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
       }
       setStatusMessage(
         json?.auth?.credentialCreated
-          ? "The provider accepted the welcome email. It includes the login, BusyBees first-login password, family check, kiosk PIN, iPhone and Android install steps, and secure payment setup."
-          : "The provider accepted the welcome reminder. The parent's current password was preserved; the email includes a forgot-password option, app-install steps, and secure payment setup.",
+          ? "The provider accepted the welcome email. It includes the login email and first-login password, ProCare transition and tuition guidance when applicable, family check, kiosk PIN, browser-install steps, and secure payment setup."
+          : "The provider accepted the welcome reminder. The parent's current password was preserved; the email includes ProCare transition and tuition guidance when applicable, a forgot-password option, browser-install steps, and secure payment setup.",
       );
     });
   }

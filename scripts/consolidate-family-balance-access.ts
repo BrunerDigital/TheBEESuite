@@ -197,7 +197,9 @@ async function invite(guardianId: string) {
   const text = buildParentPortalInvitationText({ guardianName: existing.fullName, centerLabel, email: existing.email, loginUrl, initialPasswordIssued: true, transitioningFromProcare: true, billingCutoverApproved: false });
   const html = buildParentPortalInvitationHtml({ guardianName: existing.fullName, centerLabel, email: existing.email, loginUrl, initialPasswordIssued: true, transitioningFromProcare: true, billingCutoverApproved: false, branding });
   const subject = `${centerLabel}: your BEE Suite Parent Portal is ready`;
-  const dedupeKey = `parent-invite:family-balance-access:20260803:${guardianId}`;
+  const dedupeBase = `parent-invite:family-balance-access:20260803:${guardianId}`;
+  const priorAttempts = await prisma.integrationDelivery.count({ where: { dedupeKey: { startsWith: dedupeBase } } });
+  const dedupeKey = priorAttempts === 0 ? dedupeBase : `${dedupeBase}:retry-${priorAttempts}`;
   const result = await sendEmail({ to: [existing.email], subject, text, html, fromName: branding.name, disableClickTracking: true, categories: ["parent_invitation_email"], customArgs: { guardianId, familyId: existing.familyId, centerId: center.id, authorizedFamilyBalanceAccess: true }, tenantId: center.organization.tenantId });
   await recordEmailDeliveryAttempt({ tenantId: center.organization.tenantId, centerId: center.id, dedupeKey, purpose: "parent_invitation_email", to: [existing.email], subject, text, html, fromName: branding.name, result, metadata: { guardianId, familyId: existing.familyId, source: SOURCE, userAuthorizedLiveInvitation: true } });
   invariant(result.ok, `Email provider did not accept invitation for ${guardianId}.`);

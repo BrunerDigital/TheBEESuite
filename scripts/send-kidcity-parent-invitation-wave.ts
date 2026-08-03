@@ -2,6 +2,11 @@ import "./load-env";
 import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readiness";
+import {
+  kidCityCorporateRolloutSchools,
+  normalizeRolloutEmail,
+  rolloutSchoolEmailCandidates,
+} from "@/lib/kidcity-corporate-rollout";
 import { DEFAULT_PARENT_INITIAL_PASSWORD } from "@/lib/parent-portal-invitations";
 import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
@@ -80,15 +85,16 @@ async function resolveTargetCenters() {
     },
   });
   const resolved = TARGET_LOCATIONS.map((location) => {
-    const normalized = location.toLowerCase();
-    const center = centers.find((candidate) => {
-      const haystack = `${candidate.name} ${candidate.crmLocationId ?? ""} ${candidate.email ?? ""}`.toLowerCase();
-      if (location === "Canton NC") return haystack.includes("canton");
-      if (location === "Beach Blvd") return haystack.includes("jacksonville") && haystack.includes("beach");
-      return haystack.includes(normalized);
-    });
-    if (!center) throw new Error(`Target corporate school was not found: ${location}.`);
-    return { location, center };
+    const rolloutMatches = kidCityCorporateRolloutSchools.filter((school) => school.location === location);
+    if (rolloutMatches.length !== 1) {
+      throw new Error(`Target corporate rollout mapping is not unique: ${location}.`);
+    }
+    const expectedEmails = new Set(rolloutSchoolEmailCandidates(rolloutMatches[0]));
+    const centerMatches = centers.filter((center) => expectedEmails.has(normalizeRolloutEmail(center.email)));
+    if (centerMatches.length !== 1) {
+      throw new Error(`Target corporate school must resolve to exactly one active center: ${location}.`);
+    }
+    return { location, center: centerMatches[0] };
   });
   if (new Set(resolved.map((item) => item.center.id)).size !== resolved.length) {
     throw new Error("Target corporate schools resolved to duplicate center records.");

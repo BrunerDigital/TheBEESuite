@@ -82,6 +82,8 @@ test("production payer invitation waves are corporate-scoped, explicit, and API-
   assert.match(source, /--apply/);
   assert.match(source, /--confirm-production-send/);
   assert.match(source, /TARGET_LOCATIONS = \["Beach Blvd", "Oakleaf", "Canton NC"\]/);
+  assert.match(source, /rolloutSchoolEmailCandidates/);
+  assert.match(source, /centerMatches\.length !== 1/);
   assert.match(source, /isBillingContact:\s*true/);
   assert.match(source, /preparedWithoutInvite/);
   assert.match(source, /prior_delivery_pending_retry/);

@@ -4,6 +4,8 @@ import { readFile } from "node:fs/promises";
 import {
   buildPayrollDayRows,
   clampClockEditDateTimeToPayPeriod,
+  clockEditRowsFromSavedEvents,
+  clockEditRowsForEditor,
   filterClockEditRowsByPayPeriod,
 } from "@/components/staff-management-panel";
 import { formatZonedTimestamp, zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
@@ -75,6 +77,23 @@ test("staff clock punches are viewed by pay period without dropping other period
     clampClockEditDateTimeToPayPeriod("2026-07-30T09:15", "2026-07-06", "2026-07-19"),
     "2026-07-19T09:15",
   );
+
+  assert.deepEqual(
+    clockEditRowsForEditor(punches, "2026-07-06", "2026-07-19", new Set(["before", "after"]))
+      .map((row) => row.id),
+    ["before", "start", "end", "after"],
+  );
+});
+
+test("saved clock rows keep their editor identity while displaying canonical school-local time", () => {
+  const rows = clockEditRowsFromSavedEvents(
+    [{ action: "clock_in", occurredAt: "2026-03-08T07:30:00.000Z", timeZone: "America/Indiana/Indianapolis", notes: null }],
+    "America/Indiana/Indianapolis",
+    [{ id: "edited-row", action: "clock_in", occurredAt: "2026-03-08T02:30", notes: "" }],
+  );
+
+  assert.equal(rows[0]?.id, "edited-row");
+  assert.equal(rows[0]?.occurredAt, "2026-03-08T03:30");
 });
 
 test("timestamp entry points use school-local conversion rather than browser-local parsing", async () => {
@@ -145,4 +164,6 @@ test("manual payroll edits cannot be lost by switching staff before saving", asy
   assert.match(source, /for \(const row of clockEditRows\)/);
   assert.match(source, /sortClockEditRows\(visibleClockEditRows\)/);
   assert.match(source, /outside this period preserved/);
+  assert.match(source, /outside this period kept visible/);
+  assert.match(source, /stays visible until you change the pay period or employee/);
 });

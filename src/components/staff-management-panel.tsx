@@ -90,7 +90,7 @@ type PayrollShiftRow = StaffClockShift & {
   overtimeMinutes: number;
 };
 
-type ClockEditRow = {
+export type ClockEditRow = {
   id: string;
   action: StaffClockAction;
   occurredAt: string;
@@ -198,6 +198,18 @@ export function filterClockEditRowsByPayPeriod<T extends { occurredAt: string }>
   });
 }
 
+export function clockEditRowsForEditor<T extends { id: string; occurredAt: string }>(
+  rows: readonly T[],
+  startDate: string,
+  endDate: string,
+  keptVisibleRowIds: ReadonlySet<string>,
+) {
+  const payPeriodRowIds = new Set(
+    filterClockEditRowsByPayPeriod(rows, startDate, endDate).map((row) => row.id),
+  );
+  return rows.filter((row) => payPeriodRowIds.has(row.id) || keptVisibleRowIds.has(row.id));
+}
+
 export function clampClockEditDateTimeToPayPeriod(localValue: string, startDate: string, endDate: string) {
   const dateKey = localValue.slice(0, 10);
   if (
@@ -218,6 +230,27 @@ function clockEditRowsFromEvents(events: StaffClockEvent[], timeZone: string): C
     .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
     .map((event, index) => ({
       id: `clock-event-${index}-${event.occurredAt}`,
+      action: event.action,
+      occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
+      notes: event.notes ?? "",
+    }));
+}
+
+export function clockEditRowsFromSavedEvents(
+  events: StaffClockEvent[],
+  timeZone: string,
+  existingRows: readonly ClockEditRow[],
+) {
+  const rowIdByOccurredAt = new Map<string, string>();
+  for (const row of existingRows) {
+    const occurredAt = zonedDateTimeLocalToUtc(row.occurredAt, timeZone);
+    if (occurredAt) rowIdByOccurredAt.set(occurredAt.toISOString(), row.id);
+  }
+  return [...events]
+    .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+    .map((event, index) => ({
+      id: rowIdByOccurredAt.get(new Date(event.occurredAt).toISOString())
+        ?? `clock-event-${index}-${event.occurredAt}`,
       action: event.action,
       occurredAt: zonedDateTimeLocalValue(event.occurredAt, timeZone),
       notes: event.notes ?? "",
@@ -377,6 +410,7 @@ export function StaffManagementPanel({
   const [clockEditRows, setClockEditRows] = useState<ClockEditRow[]>(() =>
     clockEditRowsFromEvents(readStaffClockState(allTeacherRows[0]?.customFields).events, readCenterLocationTimeZone(centerById.get(allTeacherRows[0]?.centerId ?? ""))),
   );
+  const [keptVisibleClockEditRowIds, setKeptVisibleClockEditRowIds] = useState<Set<string>>(() => new Set());
   const [clockEditsDirty, setClockEditsDirty] = useState(false);
   const [clockEditMessage, setClockEditMessage] = useState("");
   const defaultPayrollTimeZone = readCenterLocationTimeZone(centers[0]);
@@ -415,10 +449,15 @@ export function StaffManagementPanel({
   const payrollPeriodLabel = payrollRangeIsValid
     ? `${formatShortDate(`${payrollStartDate}T12:00:00Z`, "UTC")} to ${formatShortDate(`${payrollEndDate}T12:00:00Z`, "UTC")}`
     : "Select a valid pay period";
-  const visibleClockEditRows = useMemo(
+  const payPeriodClockEditRows = useMemo(
     () => filterClockEditRowsByPayPeriod(clockEditRows, payrollStartDate, payrollEndDate),
     [clockEditRows, payrollEndDate, payrollStartDate],
   );
+  const visibleClockEditRows = useMemo(
+    () => clockEditRowsForEditor(clockEditRows, payrollStartDate, payrollEndDate, keptVisibleClockEditRowIds),
+    [clockEditRows, keptVisibleClockEditRowIds, payrollEndDate, payrollStartDate],
+  );
+  const visibleOutsidePayPeriodClockEditRowCount = visibleClockEditRows.length - payPeriodClockEditRows.length;
   const hiddenClockEditRowCount = clockEditRows.length - visibleClockEditRows.length;
   const staffHoursRows = useMemo(() => {
     return activeStaff
@@ -636,13 +675,23 @@ export function StaffManagementPanel({
       setStatusMessage(`${clockTeacher.user.name} ${clockAction === "clock_in" ? "clocked in" : "clocked out"}.`);
       setClockNotes("");
       if (json?.record?.customFields !== undefined) {
-        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
+        setClockEditRows(clockEditRowsFromSavedEvents(
+          readStaffClockState(json.record.customFields).events,
+          clockTimeZone,
+          clockEditRows,
+        ));
       }
       router.refresh();
     });
   }
 
   function updateClockEditRow(rowId: string, patch: Partial<ClockEditRow>) {
+    setKeptVisibleClockEditRowIds((current) => {
+      if (current.has(rowId)) return current;
+      const next = new Set(current);
+      next.add(rowId);
+      return next;
+    });
     setClockEditsDirty(true);
     setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) =>
@@ -651,6 +700,12 @@ export function StaffManagementPanel({
   }
 
   function addClockEditRow() {
+    const rowId = clockEditRowId();
+    setKeptVisibleClockEditRowIds((current) => {
+      const next = new Set(current);
+      next.add(rowId);
+      return next;
+    });
     setClockEditsDirty(true);
     setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) => {
@@ -658,7 +713,7 @@ export function StaffManagementPanel({
       return [
         ...current,
         {
-          id: clockEditRowId(),
+          id: rowId,
           action: nextClockEditAction(currentPeriodRows),
           occurredAt: clampClockEditDateTimeToPayPeriod(
             zonedDateTimeLocalValue(new Date(), clockTimeZone),
@@ -672,6 +727,12 @@ export function StaffManagementPanel({
   }
 
   function removeClockEditRow(rowId: string) {
+    setKeptVisibleClockEditRowIds((current) => {
+      if (!current.has(rowId)) return current;
+      const next = new Set(current);
+      next.delete(rowId);
+      return next;
+    });
     setClockEditsDirty(true);
     setClockEditMessage("Unsaved changes. Save this time card before selecting another employee.");
     setClockEditRows((current) => current.filter((row) => row.id !== rowId));
@@ -685,12 +746,14 @@ export function StaffManagementPanel({
     setClockStaffId(staffId);
     const teacher = allTeacherRows.find((row) => row.id === staffId);
     setClockEditRows(clockEditRowsFromEvents(readStaffClockState(teacher?.customFields).events, readCenterLocationTimeZone(centerById.get(teacher?.centerId ?? ""))));
+    setKeptVisibleClockEditRowIds(new Set());
     setClockEditMessage("");
   }
 
   function reloadSavedClockEdits() {
     if (!clockTeacher) return;
     setClockEditRows(clockEditRowsFromEvents(clockState.events, clockTimeZone));
+    setKeptVisibleClockEditRowIds(new Set());
     setClockEditsDirty(false);
     setClockEditMessage("Reloaded the saved punches.");
   }
@@ -715,6 +778,7 @@ export function StaffManagementPanel({
         notes: row.notes.trim() || null,
       });
     }
+    const submittedRows = clockEditRows;
 
     startTransition(async () => {
       setStatusMessage("");
@@ -739,12 +803,24 @@ export function StaffManagementPanel({
       setClockEditsDirty(false);
       setClockEditMessage(`${clockTeacher.user.name}'s punches are saved.`);
       if (json?.record?.customFields !== undefined) {
-        setClockEditRows(clockEditRowsFromEvents(readStaffClockState(json.record.customFields).events, clockTimeZone));
-      } else {
-        setClockEditRows(sortClockEditRows(clockEditRows));
+        setClockEditRows(clockEditRowsFromSavedEvents(
+          readStaffClockState(json.record.customFields).events,
+          clockTimeZone,
+          submittedRows,
+        ));
       }
       router.refresh();
     });
+  }
+
+  function changePayrollStartDate(value: string) {
+    setKeptVisibleClockEditRowIds(new Set());
+    setPayrollStartDate(value);
+  }
+
+  function changePayrollEndDate(value: string) {
+    setKeptVisibleClockEditRowIds(new Set());
+    setPayrollEndDate(value);
   }
 
   function printTimeCards() {
@@ -1222,7 +1298,9 @@ export function StaffManagementPanel({
                     <Pencil className="size-4" />
                     Pay period punches
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">Manual payroll corrections for saved clock history.</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Manual payroll corrections for saved clock history. A punch you add or change stays visible until you change the pay period or employee.
+                  </p>
                 </div>
                 <Button type="button" variant="outline" size="sm" disabled={isPending || !clockTeacher} onClick={addClockEditRow}>
                   <Clock data-icon="inline-start" />
@@ -1246,7 +1324,7 @@ export function StaffManagementPanel({
                     type="date"
                     value={payrollStartDate}
                     disabled={clockEditsDirty}
-                    onChange={(event) => setPayrollStartDate(event.target.value)}
+                    onChange={(event) => changePayrollStartDate(event.target.value)}
                   />
                 </div>
                 <div className="space-y-1">
@@ -1255,7 +1333,7 @@ export function StaffManagementPanel({
                     type="date"
                     value={payrollEndDate}
                     disabled={clockEditsDirty}
-                    onChange={(event) => setPayrollEndDate(event.target.value)}
+                    onChange={(event) => changePayrollEndDate(event.target.value)}
                   />
                 </div>
               </div>
@@ -1277,6 +1355,7 @@ export function StaffManagementPanel({
                           <select
                             className={nativeSelectClassName}
                             value={row.action}
+                            disabled={isPending}
                             onChange={(event) => updateClockEditRow(row.id, { action: event.target.value as StaffClockAction })}
                           >
                             <option value="clock_in">Clock in</option>
@@ -1287,12 +1366,14 @@ export function StaffManagementPanel({
                           <Input
                             type="datetime-local"
                             value={row.occurredAt}
+                            disabled={isPending}
                             onChange={(event) => updateClockEditRow(row.id, { occurredAt: event.target.value })}
                           />
                         </td>
                         <td className="px-3 py-2">
                           <Input
                             value={row.notes}
+                            disabled={isPending}
                             onChange={(event) => updateClockEditRow(row.id, { notes: event.target.value })}
                             placeholder="Optional note"
                           />
@@ -1321,7 +1402,8 @@ export function StaffManagementPanel({
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="space-y-1 text-xs">
                   <div className={clockEditsDirty ? "font-medium text-amber-700 dark:text-amber-300" : "text-muted-foreground"}>
-                    {visibleClockEditRows.length} punch{visibleClockEditRows.length === 1 ? "" : "es"} in this pay period
+                    {payPeriodClockEditRows.length} punch{payPeriodClockEditRows.length === 1 ? "" : "es"} in this pay period
+                    {visibleOutsidePayPeriodClockEditRowCount > 0 ? ` · ${visibleOutsidePayPeriodClockEditRowCount} outside this period kept visible` : ""}
                     {hiddenClockEditRowCount > 0 ? ` · ${hiddenClockEditRowCount} outside this period preserved` : ""}
                     {" · "}{clockEditsDirty ? "Unsaved changes" : "No unsaved changes"}
                   </div>
@@ -1458,11 +1540,11 @@ export function StaffManagementPanel({
               </div>
               <div className="space-y-1">
                 <Label>Start</Label>
-                <Input type="date" value={payrollStartDate} disabled={clockEditsDirty} onChange={(event) => setPayrollStartDate(event.target.value)} />
+                <Input type="date" value={payrollStartDate} disabled={clockEditsDirty} onChange={(event) => changePayrollStartDate(event.target.value)} />
               </div>
               <div className="space-y-1">
                 <Label>End</Label>
-                <Input type="date" value={payrollEndDate} disabled={clockEditsDirty} onChange={(event) => setPayrollEndDate(event.target.value)} />
+                <Input type="date" value={payrollEndDate} disabled={clockEditsDirty} onChange={(event) => changePayrollEndDate(event.target.value)} />
               </div>
               <Button type="button" variant="outline" disabled={!payrollRangeIsValid || !staffHoursRows.length} onClick={printTimeCards}>
                 <Printer data-icon="inline-start" />

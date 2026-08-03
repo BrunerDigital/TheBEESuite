@@ -45,7 +45,8 @@ function getSupabaseAdminClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("Supabase admin configuration is missing.");
-  if (!url.includes(EXPECTED_SUPABASE_REF)) {
+  const parsedUrl = new URL(url);
+  if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== `${EXPECTED_SUPABASE_REF}.supabase.co`) {
     throw new Error("Refusing to audit an unexpected Supabase project.");
   }
   return createClient(url, key, {
@@ -66,6 +67,9 @@ async function listAllSupabaseUsers() {
 }
 
 async function main() {
+  if (!process.env.PIN_HASH_SECRET?.trim()) {
+    throw new Error("PIN_HASH_SECRET is required for a production guardian PIN audit.");
+  }
   const activeCenters = await prisma.center.findMany({
     where: { status: { equals: "active", mode: "insensitive" } },
     select: {

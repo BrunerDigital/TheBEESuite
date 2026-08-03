@@ -432,6 +432,19 @@ test("password reset links stay HTTPS on every public host", () => {
     buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
     "http://localhost:3000/reset-password",
   );
+
+  const mutableEnv = process.env as Record<string, string | undefined>;
+  const originalNodeEnv = mutableEnv.NODE_ENV;
+  try {
+    mutableEnv.NODE_ENV = "production";
+    assert.equal(
+      buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
+      "https://thebeesuite.io/reset-password",
+    );
+  } finally {
+    if (originalNodeEnv === undefined) delete mutableEnv.NODE_ENV;
+    else mutableEnv.NODE_ENV = originalNodeEnv;
+  }
 });
 
 test("public parent links never expose Vercel deployment hosts", () => {

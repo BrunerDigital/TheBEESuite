@@ -116,7 +116,14 @@ function securePasswordResetUrl(value: string) {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
     const isLoopback = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
-    if (url.protocol === "http:" && !isLoopback) url.protocol = "https:";
+    if (isLoopback && process.env.NODE_ENV === "production") {
+      const canonical = new URL(CANONICAL_APP_BASE_URL);
+      url.protocol = canonical.protocol;
+      url.hostname = canonical.hostname;
+      url.port = canonical.port;
+    } else if (url.protocol === "http:" && !isLoopback) {
+      url.protocol = "https:";
+    }
     return url.toString();
   } catch {
     return value;

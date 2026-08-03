@@ -53,7 +53,7 @@ async function POSTHandler(request: NextRequest) {
   const accountId = readStripeConnectedAccountId(center.customFields);
   if (!accountId) {
     return NextResponse.json(
-      { ok: false, error: "Start this school's Stripe payout onboarding before choosing its bank account." },
+      { ok: false, error: "Start this school's secure payout onboarding before choosing its bank account." },
       { status: 409 },
     );
   }
@@ -99,7 +99,7 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!link.ok || !link.url) {
     return NextResponse.json(
-      { ok: false, configured: link.configured, error: link.error || "Stripe payout settings could not be opened." },
+      { ok: false, configured: link.configured, error: link.error || "Secure payout settings could not be opened." },
       { status: link.configured ? 502 : 503 },
     );
   }

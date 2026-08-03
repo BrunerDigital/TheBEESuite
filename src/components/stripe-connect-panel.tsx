@@ -256,21 +256,21 @@ export function StripeConnectPanel({
       });
       const json = await response.json();
       if (!response.ok || !json.ok || !json.url) {
-        throw new Error(json.error || "Stripe payout settings could not be opened.");
+        throw new Error(json.error || "Secure payout settings could not be opened.");
       }
       if (json.centerId !== center.id) {
-        throw new Error("Stripe payout setup returned the wrong school. Close the window and try again.");
+        throw new Error("Payout setup returned the wrong school. Close the window and try again.");
       }
       stripeWindow.location.replace(json.url as string);
       setMessage(
         json.mode === "onboarding"
-          ? `A fresh one-time Stripe onboarding session opened for ${center.name}. Enter this school's exact routing and account numbers, or select Skip for now and return later.`
-          : `A fresh account-specific Stripe session opened for ${center.name}. Enter or confirm this location's payout bank, then return here and select Check.`,
+          ? `A fresh one-time payout onboarding session opened for ${center.name}. Enter this school's exact routing and account numbers, or select Skip for now and return later.`
+          : `A fresh account-specific payout session opened for ${center.name}. Enter or confirm this location's payout bank, then return here and select Check.`,
       );
     } catch (error) {
       stripeWindow.close();
       payoutWindowRef.current = null;
-      setMessage(error instanceof Error ? error.message : "Stripe payout settings could not be opened.");
+      setMessage(error instanceof Error ? error.message : "Secure payout settings could not be opened.");
     } finally {
       setBusyCenterId(null);
     }
@@ -349,7 +349,7 @@ export function StripeConnectPanel({
     }
     const softwarePayment = searchParams.get("softwarePayment");
     if (softwarePayment === "success") {
-      const timer = window.setTimeout(() => setMessage("Software payment method authorized. Stripe is confirming it as the school's default method."), 0);
+      const timer = window.setTimeout(() => setMessage("Software payment method authorized. The payment processor is confirming it as the school's default method."), 0);
       return () => window.clearTimeout(timer);
     }
     if (softwarePayment === "cancelled") {
@@ -470,7 +470,7 @@ export function StripeConnectPanel({
             <DialogHeader>
               <DialogTitle>{setupDialogTitle}</DialogTitle>
               <DialogDescription>
-                Review the selected school and its designated Stripe Connect account before the secure handoff.
+                Review the selected school and its designated connected payout account before the secure handoff.
               </DialogDescription>
             </DialogHeader>
             {setupForm ? (
@@ -546,7 +546,7 @@ export function StripeConnectPanel({
                     Cancel
                   </Button>
                   <Button type="submit" disabled={setupBusy}>
-                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue to Stripe Requirements" : "Save Bee Suite Profile"}
+                    {setupBusy ? "Saving..." : stripeConfigured ? "Continue Secure Payout Setup" : "Save Bee Suite Profile"}
                     <ArrowUpRight data-icon="inline-end" />
                   </Button>
                 </DialogFooter>

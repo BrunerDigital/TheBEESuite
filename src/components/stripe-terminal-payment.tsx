@@ -224,9 +224,9 @@ export function StripeTerminalPayment({
       <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && status !== "processing" && setOpen(false)}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>In-person Stripe Terminal payment</DialogTitle>
+            <DialogTitle>The BEE Suite in-person card payment</DialogTitle>
             <DialogDescription>
-              The parent pays on a certified reader. Card details are encrypted by Stripe hardware and never enter The BEE Suite.
+              The parent pays on a certified reader. Card details are encrypted by the payment hardware and never enter The BEE Suite.
             </DialogDescription>
           </DialogHeader>
 

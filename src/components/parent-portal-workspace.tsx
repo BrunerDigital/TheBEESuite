@@ -354,7 +354,7 @@ function pendingPaymentMessage(payment: PendingInvoicePayment) {
   if (label === "Debit/credit card") {
     return "A card checkout is already pending for this invoice. Complete or expire it before starting another checkout.";
   }
-  return `${label} payment is processing. Bank payments can take a few business days to settle; the invoice will update when Stripe confirms the funds.`;
+  return `${label} payment is processing. Bank payments can take a few business days to settle; the invoice will update when the payment processor confirms the funds.`;
 }
 
 function paymentFields(payment: Payment) {

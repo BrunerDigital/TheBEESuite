@@ -200,6 +200,11 @@ test("Stripe checkout creates direct connected-account sessions for school custo
     assert.equal(stripeAccount, "acct_school");
     assert.match(body, /customer=cus_connected/);
     assert.match(body, /payment_intent_data%5Bapplication_fee_amount%5D=3/);
+    assert.match(body, /branding_settings%5Bdisplay_name%5D=The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
+    assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
+    assert.match(body, /branding_settings%5Blogo%5D%5Burl%5D=https%3A%2F%2Fthebeesuite\.io/);
+    assert.match(body, /custom_text%5Bsubmit%5D%5Bmessage%5D=This\+secure\+payment\+step\+is\+connected\+to\+The\+BEE\+Suite/);
     assert.doesNotMatch(body, /transfer_data/);
   } finally {
     globalThis.fetch = originalFetch;
@@ -354,7 +359,11 @@ test("Stripe checkout can be constrained to card-only entry", async () => {
     assert.match(body, /payment_method_types%5B0%5D=card/);
     assert.match(body, /metadata%5BcollectionMode%5D=director_card_terminal/);
     assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
+    assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
+    assert.match(body, /branding_settings%5Bborder_style%5D=rounded/);
     assert.match(body, /branding_settings%5Blogo%5D%5Btype%5D=url/);
+    assert.match(body, /branding_settings%5Bicon%5D%5Btype%5D=url/);
     assert.match(body, /custom_text%5Bsubmit%5D%5Bmessage%5D=The\+BEE\+Suite\+secure\+tuition\+payment/);
     assert.match(body, /payment_intent_data%5Bdescription%5D=The\+BEE\+Suite\+tuition\+payment\+for\+Johnson\+Family/);
     assert.match(body, /line_items%5B0%5D%5Bprice_data%5D%5Bproduct_data%5D%5Bdescription%5D=The\+BEE\+Suite\+tuition\+payment\+for\+Johnson\+Family/);
@@ -779,6 +788,10 @@ test("Stripe setup checkout can require instant bank verification", async () => 
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bverification_method%5D=instant/);
     assert.match(body, /payment_method_options%5Bus_bank_account%5D%5Bfinancial_connections%5D%5Bpermissions%5D%5B0%5D=payment_method/);
     assert.match(body, /branding_settings%5Bdisplay_name%5D=Sarasota\+via\+The\+BEE\+Suite/);
+    assert.match(body, /branding_settings%5Bbackground_color%5D=%23111827/);
+    assert.match(body, /branding_settings%5Bbutton_color%5D=%23f4c430/i);
+    assert.match(body, /branding_settings%5Bborder_style%5D=rounded/);
+    assert.match(body, /branding_settings%5Blogo%5D%5Btype%5D=url/);
     assert.match(body, /branding_settings%5Bicon%5D%5Btype%5D=url/);
     assert.match(body, /custom_text%5Bsubmit%5D%5Bmessage%5D=The\+BEE\+Suite\+secure\+bank\+verification/);
     assert.match(body, /setup_intent_data%5Bdescription%5D=The\+BEE\+Suite\+payment\+profile\+setup\+for\+Johnson\+Family/);

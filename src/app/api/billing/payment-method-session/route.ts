@@ -235,7 +235,7 @@ async function POSTHandler(request: NextRequest) {
     const paymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
     if ((connectedAccountId || paymentMethodConnectedAccountId) && connectedAccountId !== paymentMethodConnectedAccountId) {
       return NextResponse.json(
-        { ok: false, error: "The saved payment method belongs to a different Stripe connected account. Replace it for this school before enabling autopay." },
+        { ok: false, error: "The saved payment method belongs to a different school payout account. Replace it for this school before enabling autopay." },
         { status: 409 },
       );
     }

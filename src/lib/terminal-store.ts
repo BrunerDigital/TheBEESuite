@@ -1,5 +1,9 @@
 import { UserRole } from "@prisma/client";
-import { getStripeSecretKey, type IntegrationSendResult } from "@/lib/integrations";
+import {
+  addStripeCheckoutBrandingParams,
+  getStripeSecretKey,
+  type IntegrationSendResult,
+} from "@/lib/integrations";
 import {
   invalidPaymentRedirectUrl,
   isSecurePaymentUrl,
@@ -222,6 +226,11 @@ export async function createTerminalStoreCheckoutSession({
     "shipping_address_collection[allowed_countries][0]": "US",
     "phone_number_collection[enabled]": "true",
     "invoice_creation[enabled]": "true",
+  });
+  addStripeCheckoutBrandingParams(body, {
+    displayName: "The BEE Suite Equipment Store",
+    submitMessage: "Review your BEE Suite equipment order, shipping details, and total before submitting payment.",
+    afterSubmitMessage: "You will return to The BEE Suite after your equipment order is submitted.",
   });
 
   if (isEmail(purchaserEmail)) body.set("customer_email", purchaserEmail!);

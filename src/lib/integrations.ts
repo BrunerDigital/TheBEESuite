@@ -51,6 +51,14 @@ export type StripeCheckoutBranding = {
   setupDescription?: string | null;
 };
 
+const BEE_SUITE_CHECKOUT_DISPLAY_NAME = "The BEE Suite";
+const BEE_SUITE_CHECKOUT_LOGO_URL = "https://thebeesuite.io/brand/the-bee-suite/app-icon-dark.png";
+const BEE_SUITE_CHECKOUT_ICON_URL = "https://thebeesuite.io/brand/the-bee-suite/favicon-dark.png";
+const BEE_SUITE_CHECKOUT_BACKGROUND_COLOR = "#111827";
+const BEE_SUITE_CHECKOUT_BUTTON_COLOR = "#f4c430";
+const BEE_SUITE_CHECKOUT_SUBMIT_MESSAGE = "This secure payment step is connected to The BEE Suite. The BEE Suite does not store full card or bank details.";
+const BEE_SUITE_CHECKOUT_AFTER_SUBMIT_MESSAGE = "You will return to The BEE Suite after this secure step is complete.";
+
 export type StripeSetupIntentSnapshot = {
   id: string;
   customerId?: string | null;
@@ -341,29 +349,29 @@ function stripeCheckoutHttpsUrl(value: unknown) {
   }
 }
 
-function addStripeCheckoutBrandingParams(body: URLSearchParams, branding?: StripeCheckoutBranding | null) {
-  if (!branding) return;
+export function addStripeCheckoutBrandingParams(body: URLSearchParams, branding?: StripeCheckoutBranding | null) {
+  const displayName = stripeCheckoutText(branding?.displayName, 80) || BEE_SUITE_CHECKOUT_DISPLAY_NAME;
+  body.set("branding_settings[display_name]", displayName);
+  body.set("branding_settings[background_color]", BEE_SUITE_CHECKOUT_BACKGROUND_COLOR);
+  body.set("branding_settings[button_color]", BEE_SUITE_CHECKOUT_BUTTON_COLOR);
+  body.set("branding_settings[border_style]", "rounded");
+  body.set("branding_settings[font_family]", "source_sans_pro");
 
-  const displayName = stripeCheckoutText(branding.displayName, 80);
-  if (displayName) {
-    body.set("branding_settings[display_name]", displayName);
-    body.set("branding_settings[font_family]", "source_sans_pro");
-  }
-
-  const logoUrl = stripeCheckoutHttpsUrl(branding.logoUrl);
-  const iconUrl = stripeCheckoutHttpsUrl(branding.iconUrl);
+  const logoUrl = stripeCheckoutHttpsUrl(branding?.logoUrl) || BEE_SUITE_CHECKOUT_LOGO_URL;
+  const iconUrl = stripeCheckoutHttpsUrl(branding?.iconUrl) || BEE_SUITE_CHECKOUT_ICON_URL;
   if (logoUrl) {
     body.set("branding_settings[logo][type]", "url");
     body.set("branding_settings[logo][url]", logoUrl);
-  } else if (iconUrl) {
+  }
+  if (iconUrl) {
     body.set("branding_settings[icon][type]", "url");
     body.set("branding_settings[icon][url]", iconUrl);
   }
 
-  const submitMessage = stripeCheckoutText(branding.submitMessage, 255);
+  const submitMessage = stripeCheckoutText(branding?.submitMessage, 255) || BEE_SUITE_CHECKOUT_SUBMIT_MESSAGE;
   if (submitMessage) body.set("custom_text[submit][message]", submitMessage);
 
-  const afterSubmitMessage = stripeCheckoutText(branding.afterSubmitMessage, 255);
+  const afterSubmitMessage = stripeCheckoutText(branding?.afterSubmitMessage, 255) || BEE_SUITE_CHECKOUT_AFTER_SUBMIT_MESSAGE;
   if (afterSubmitMessage) body.set("custom_text[after_submit][message]", afterSubmitMessage);
 }
 

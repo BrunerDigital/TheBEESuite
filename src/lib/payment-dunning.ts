@@ -166,7 +166,7 @@ export function paymentDunningCopy(input: {
   const nextStep = input.nextAttemptAt
     ? ` If this is not resolved, the next reminder is scheduled for ${input.nextAttemptAt.toISOString().slice(0, 10)}.`
     : " This is the final automated reminder in the retry sequence.";
-  const failure = input.failureMessage ? ` Stripe reported: ${input.failureMessage}` : "";
+  const failure = input.failureMessage ? ` Payment processor reported: ${input.failureMessage}` : "";
 
   return {
     staffTitle: `Failed payment follow-up: ${input.familyName}`,

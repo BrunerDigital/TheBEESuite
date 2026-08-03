@@ -102,6 +102,29 @@ test("production payer invitation waves are corporate-scoped, explicit, and API-
   assert.doesNotMatch(source, /sendEmail|ensureParentPortalLoginForGuardian/);
 });
 
+test("all-location imported parent waves require direct source identity and explicit live authorization", () => {
+  const source = readFileSync(new URL("../scripts/send-imported-parent-invitation-wave.ts", import.meta.url), "utf8");
+  assert.match(source, /--confirm-all-imported-locations/);
+  assert.match(source, /--acknowledge-director-confirmation-waived/);
+  assert.match(source, /--repair-interrupted-preparation-flags/);
+  assert.match(source, /organization: \{ tenant: \{ slug: "kid-city-usa" \} \}/);
+  assert.match(source, /verifiedParentPayer/);
+  assert.match(source, /exactAuthorizedPickup/);
+  assert.match(source, /verified_guardian_source_id_required/);
+  assert.match(source, /verified_family_source_id_required/);
+  assert.match(source, /active_verified_child_required/);
+  assert.match(source, /cross_center_email/);
+  assert.match(source, /conflicting_guardian_identity/);
+  assert.match(source, /parentPortalAccessDisabled/);
+  assert.match(source, /already_invited/);
+  assert.match(source, /prior_delivery_requires_manual_review/);
+  assert.match(source, /ensureParentPortalLoginForGuardian/);
+  assert.match(source, /recordEmailDeliveryAttempt/);
+  assert.match(source, /parentPortalInvitationSentFields/);
+  assert.match(source, /verifySupabasePassword/);
+  assert.match(source, /directorConfirmationWaivedByUser: true/);
+});
+
 test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {
   const source = readFileSync(new URL("../scripts/prepare-tyler-parent-portal-accounts.ts", import.meta.url), "utf8");
   assert.match(source, /CENTER_LOCATION_ID = "Kid City USA - TX \| Tyler"/);

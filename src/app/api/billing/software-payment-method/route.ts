@@ -77,9 +77,10 @@ async function POSTHandler(request: NextRequest) {
       preferredMethod: paymentMethodCategory,
     },
     checkoutBranding: {
-      displayName: center.crmLocationId || center.name,
+      displayName: `${center.crmLocationId || center.name} via The BEE Suite`,
+      submitMessage: "Authorize this school payment method for The BEE Suite software fees. This is separate from the school's payout destination.",
       setupDescription: "Authorize a payment method for the school's recurring BEE Suite software fee.",
-      afterSubmitMessage: "Your school software payment method has been saved.",
+      afterSubmitMessage: "Your school software payment method has been saved. You will return to The BEE Suite.",
     },
     tenantId: user.tenantId,
   });

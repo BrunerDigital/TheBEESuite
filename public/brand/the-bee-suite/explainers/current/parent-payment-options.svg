@@ -53,9 +53,10 @@
       <rect x="72" y="552" width="456" height="204" rx="24" fill="rgba(255,255,255,.075)" stroke="rgba(255,255,255,.16)"/>
       <circle data-layout-item="true" cx="118" cy="600" r="25" fill="url(#gold)"/>
       <text x="118" y="609" text-anchor="middle" fill="#15100a" font-size="25" font-weight="900">4</text>
-      <text data-layout-item="true" x="168" y="608" fill="#fff" font-size="24" font-weight="900">Continue to Stripe</text>
+      <text data-layout-item="true" x="168" y="608" fill="#fff" font-size="24" font-weight="900">Secure handoff</text>
       <text data-layout-item="true" x="104" y="660" fill="#cbd5e1" font-size="21" font-weight="500">Enter card or bank details only on the</text>
-<text data-layout-item="true" x="104" y="688" fill="#cbd5e1" font-size="21" font-weight="500">secure Stripe screen.</text>
+<text data-layout-item="true" x="104" y="688" fill="#cbd5e1" font-size="21" font-weight="500">secure processor screen opened from The</text>
+<text data-layout-item="true" x="104" y="716" fill="#cbd5e1" font-size="21" font-weight="500">BEE Suite.</text>
     </g>
 
     <g data-safe-box="true" data-safe-x="586" data-safe-y="568" data-safe-width="420" data-safe-height="172">

@@ -299,7 +299,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
 
     const attempts = paymentsByInvoiceId.get(invoice.id) ?? [];
     if (attempts.some((payment) => payment.status === PaymentStatus.PAID)) {
-      results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a paid Stripe payment." });
+      results.push({ ...baseResult, status: "skipped", reason: "Invoice already has a completed online payment." });
       continue;
     }
     if (attempts.some((payment) => isActiveStripeCheckoutPayment(payment) || isActiveStripeAutopayPayment(payment))) {
@@ -333,7 +333,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         ...baseResult,
         status: "skipped",
         reason: collectionMode === "stored_method"
-          ? "Family does not have a selected payment method saved in Stripe."
+          ? "Family does not have a selected payment method saved yet."
           : "Autopay is not enabled with a saved payment method.",
       });
       continue;
@@ -359,7 +359,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         results.push({
           ...baseResult,
           status: "would_charge",
-          reason: "Account credit would pay this invoice in full; Stripe would not be charged.",
+          reason: "Account credit would pay this invoice in full; no processor payment is needed.",
         });
         continue;
       }
@@ -409,7 +409,7 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         accountCreditAppliedCents: application.accountCreditAppliedCents ?? invoice.totalCents,
         stripeChargePrincipalCents: 0,
         status: "paid",
-        reason: "Invoice paid from account credit; Stripe was not charged.",
+        reason: "Invoice paid from account credit; no processor payment was submitted.",
       });
       continue;
     }
@@ -701,14 +701,14 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
         : "failed";
     const resultReason = appliedImmediately
       ? creditAllocation.accountCreditAppliedCents > 0
-        ? "Account credit was applied first; Stripe charged only the remaining balance."
+        ? "Account credit was applied first; only the remaining balance was submitted for payment."
         : "Payment confirmed and the Bee Suite ledger was updated."
       : accepted && intentStatus === "processing"
         ? creditAllocation.accountCreditAppliedCents > 0
           ? "Account credit is reserved for this invoice; the remaining bank payment is processing."
-          : "Bank payment is processing; the ledger will update when Stripe confirms settlement."
+          : "Bank payment is processing; the ledger will update when the payment processor confirms settlement."
         : immediateApplicationReason
-          ? `Payment succeeded in Stripe but could not be applied automatically: ${immediateApplicationReason}.`
+          ? `Payment succeeded with the processor but could not be applied automatically: ${immediateApplicationReason}.`
           : intent.error || `${collectionLabel} could not be submitted.`;
 
     if (appliedImmediately || (accepted && intentStatus === "processing")) {

@@ -34,7 +34,7 @@ async function GETHandler(request: NextRequest) {
   const center = await prisma.center.findUnique({ where: { id: centerId }, select: { id: true, name: true, customFields: true } });
   if (!center) return NextResponse.json({ ok: false, error: "School not found." }, { status: 404 });
   const connectedAccountId = readStripeConnectedAccountId(center.customFields);
-  if (!connectedAccountId) return NextResponse.json({ ok: false, error: "This school has no connected Stripe account." }, { status: 400 });
+  if (!connectedAccountId) return NextResponse.json({ ok: false, error: "This school has no connected payout account." }, { status: 400 });
 
   const payments = await prisma.payment.findMany({
     where: {
@@ -52,7 +52,7 @@ async function GETHandler(request: NextRequest) {
     listStripePayouts({ connectedAccountId, createdGte: start, createdLte: end, tenantId: user.tenantId }),
   ]);
   if (!balance.ok || !payouts.ok) {
-    return NextResponse.json({ ok: false, error: balance.error || payouts.error || "Stripe reconciliation data could not be read." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: balance.error || payouts.error || "Payout reconciliation data could not be read." }, { status: 502 });
   }
   const report = buildStripePayoutReconciliation({
     localPayments: payments.map((payment) => {

@@ -867,7 +867,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       return setErrorMessage("Choose a family, child, and tuition plan before creating the tuition invoice.");
     }
     const confirmed = window.confirm(
-      `Create one due-now tuition invoice for ${selectedAssignmentChild.fullName}? This does not charge Stripe immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
+      `Create one due-now tuition invoice for ${selectedAssignmentChild.fullName}? This does not submit a payment immediately. If family autopay is enabled, the open invoice can be collected by the next autopay run.`,
     );
     if (!confirmed) return;
     submit({
@@ -884,7 +884,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function submitBatch() {
     const confirmed = window.confirm(
-      `Create batch invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus})? This does not charge Stripe immediately. Do not continue if recurring tuition already covers this billing period; due invoices may be collected later by autopay.`,
+      `Create batch invoices for ${selectedCenter ? centerLabel(selectedCenter) : "the selected school"} (${ageGroup === "all" ? "all age groups" : ageGroup}, ${enrollmentStatus})? This does not submit payments immediately. Do not continue if recurring tuition already covers this billing period; due invoices may be collected later by autopay.`,
     );
     if (!confirmed) return;
     submit({
@@ -1966,7 +1966,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <div className="text-sm font-medium">Issue a family refund</div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {canApproveRefunds
-                  ? "Executives can issue the approved total across eligible Stripe transactions. Payment references are optional and are used first for record keeping."
+                  ? "Executives can issue the approved total across eligible original payments. Payment references are optional and are used first for record keeping."
                   : "Enter the requested total and reason. Bee Suite will notify executives; no money moves until an executive approves the request and records an approval reason."}
               </p>
             </div>
@@ -2002,13 +2002,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                     <RotateCcw data-icon="inline-start" />
                     {canApproveRefunds ? "Issue Refund" : "Request Refund Approval"}
                   </Button>
-                  <Badge variant="outline">{money(visibleRefundableCents)} shown as Stripe-refundable</Badge>
+                  <Badge variant="outline">{money(visibleRefundableCents)} available through the original processor</Badge>
                 </div>
               </>
             ) : (
               <Alert>
                 <AlertCircle data-icon="inline-start" />
-                <AlertTitle>No refundable Stripe payments</AlertTitle>
+                <AlertTitle>No refundable online payments</AlertTitle>
                 <AlertDescription>This family has no completed processor payment with a remaining refundable amount.</AlertDescription>
               </Alert>
             )}

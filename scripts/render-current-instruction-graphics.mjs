@@ -50,7 +50,7 @@ const graphics = [
       ["1", "Open Billing", "Confirm the family, invoice, due date, balance, and amount."],
       ["2", "Choose payment", "Select Debit/Credit Card, Instant Bank, or One-Time Bank."],
       ["3", "Review total", "Check the exact total and any approved card recovery."],
-      ["4", "Continue to Stripe", "Enter card or bank details only on the secure Stripe screen."],
+      ["4", "Secure handoff", "Enter card or bank details only on the secure processor screen opened from The BEE Suite."],
       ["5", "Wait for status", "Bank payments may remain processing until settlement."],
       ["6", "Avoid duplicates", "Do not repay an invoice while its payment is processing."],
     ],
@@ -310,7 +310,16 @@ async function main() {
   await mkdir(outDir, { recursive: true });
   const icon = await readFile(iconPath);
   const iconDataUrl = `data:image/png;base64,${icon.toString("base64")}`;
-  for (const graphic of graphics) {
+  const requestedIds = new Set(process.argv.slice(2));
+  const selectedGraphics = requestedIds.size
+    ? graphics.filter((graphic) => requestedIds.has(graphic.id))
+    : graphics;
+  if (requestedIds.size && selectedGraphics.length !== requestedIds.size) {
+    const knownIds = new Set(graphics.map((graphic) => graphic.id));
+    const unknownIds = [...requestedIds].filter((id) => !knownIds.has(id));
+    throw new Error(`Unknown graphic id: ${unknownIds.join(", ")}`);
+  }
+  for (const graphic of selectedGraphics) {
     const svg = renderSvg(graphic, iconDataUrl).replace(/[ \t]+(?=\r?$)/gm, "");
     const svgPath = path.join(outDir, `${graphic.id}${exportSuffix}.svg`);
     const pngPath = path.join(outDir, `${graphic.id}${exportSuffix}.png`);

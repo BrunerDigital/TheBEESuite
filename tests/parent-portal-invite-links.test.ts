@@ -67,8 +67,27 @@ test("direct parent invitations preflight ProCare data and activate prepared acc
 test("payer portal preparation is explicit, audited, and cannot send invitations", () => {
   const source = readFileSync(new URL("../scripts/prepare-payer-portal-accounts.ts", import.meta.url), "utf8");
   assert.match(source, /--acknowledge-no-invites/);
-  assert.match(source, /prepareWithoutInvite:\s*!existingUser/);
+  assert.match(source, /prepareWithoutInvite:\s*!existingUser \|\| !existingAuthEmails\.has\(email\)/);
+  assert.match(source, /--include-authorized-pickups/);
+  assert.match(source, /--exclude-tx-tyler/);
+  assert.match(source, /pickupExternalIds\.has\(clean\(guardian\.externalId\)\)/);
+  assert.match(source, /Supabase Auth account exists without a matching app parent user/);
   assert.match(source, /parent_portal\.payer_account_prepared/);
   assert.match(source, /invitationSent:\s*false/);
   assert.doesNotMatch(source, /sendEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
+});
+
+test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {
+  const source = readFileSync(new URL("../scripts/prepare-tyler-parent-portal-accounts.ts", import.meta.url), "utf8");
+  assert.match(source, /CENTER_LOCATION_ID = "Kid City USA - TX \| Tyler"/);
+  assert.match(source, /IMPORT_SOURCE = "tyler_procare_cross_report_import_2026_07_31"/);
+  assert.match(source, /EXPECTED_ENROLLED_CHILDREN = 133/);
+  assert.match(source, /EXPECTED_ENROLLED_FAMILIES = 98/);
+  assert.match(source, /--confirm-tx-tyler/);
+  assert.match(source, /--acknowledge-no-invites/);
+  assert.match(source, /--recover-prepared-auth-orphan/);
+  assert.match(source, /--repair-interrupted-preparation-flags/);
+  assert.match(source, /prepareWithoutInvite: !account\.appUserExists \|\| !account\.authUserExists/);
+  assert.match(source, /invitationSent: false/);
+  assert.doesNotMatch(source, /sendEmail|inviteUserByEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
 });

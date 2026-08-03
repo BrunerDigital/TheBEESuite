@@ -7,16 +7,26 @@ import {
   retrieveStripePaymentMethod,
   retrieveStripeSetupIntent,
   setStripeCustomerDefaultPaymentMethod,
-  verifyStripeSignature,
 } from "@/lib/integrations";
-import { getTenantIntegrationCredentialEntries } from "@/lib/integration-credentials";
 import { paymentMethodSetupExpirationPatch } from "@/lib/payment-method-management";
 import { prisma } from "@/lib/prisma";
 import { markRegistrationPaymentChecklistPaid } from "@/lib/registration-packet";
 import { stripeConnectCustomFieldPatch, stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 import { stripeCustomerCustomFieldPatch } from "@/lib/stripe-customer-scope";
+import {
+  isStripeWebhookAccountEvent,
+  isStripeWebhookPaymentEvent,
+  isStripeWebhookSoftwareBillingEvent,
+  stripeWebhookObjectForRouting,
+} from "@/lib/stripe-webhook-event-types";
+import {
+  isStripeWebhookReceiptUniqueConflict,
+  reserveStripeWebhookDelivery,
+  stripeWebhookDedupeKey,
+} from "@/lib/stripe-webhook-receipts";
+import { matchStripeWebhookSecret } from "@/lib/stripe-webhook-readiness";
 
-import { withApiLogging } from "@/lib/request-response-logging";
+import { logOperationalError, withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
 type StripeCheckoutSessionCompleted = {
@@ -177,26 +187,7 @@ function metadataOf(value: { metadata?: unknown }) {
 }
 
 function accountEventType(type: string) {
-  return type === "account.updated" || type === "v2.core.account.updated" || type === "v2.core.account[requirements].updated";
-}
-
-async function matchStripeWebhookSecret(payload: string, signature: string | null) {
-  const secrets: Array<{ tenantId: string | null; secret: string }> = [];
-  const platformSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
-  if (platformSecret) secrets.push({ tenantId: null, secret: platformSecret });
-
-  const tenantSecrets = await getTenantIntegrationCredentialEntries("stripe", "STRIPE_WEBHOOK_SECRET").catch(() => []);
-  for (const credential of tenantSecrets) {
-    secrets.push({ tenantId: credential.tenantId, secret: credential.value });
-  }
-
-  for (const item of secrets) {
-    if (verifyStripeSignature({ payload, signature, secret: item.secret })) {
-      return { configured: true, matched: true, tenantId: item.tenantId };
-    }
-  }
-
-  return { configured: secrets.length > 0, matched: false, tenantId: null };
+  return isStripeWebhookAccountEvent(type);
 }
 
 function stripeObjectId(event: StripeWebhookEvent) {
@@ -204,11 +195,9 @@ function stripeObjectId(event: StripeWebhookEvent) {
 }
 
 function stripeDedupeKey(event: StripeWebhookEvent) {
-  const objectId = stripeObjectId(event);
-  if (event.type.startsWith("checkout.session.") && objectId) {
-    return `${event.type}:${objectId}`;
-  }
-  return event.id;
+  // Stripe event IDs identify deliveries. Object/type keys can incorrectly collapse
+  // two legitimate lifecycle events for the same Checkout Session.
+  return stripeWebhookDedupeKey(event.id);
 }
 
 function compactEventPayload(event: StripeWebhookEvent): Prisma.InputJsonObject {
@@ -228,15 +217,58 @@ async function recordStripeWebhookEvent(
   event: StripeWebhookEvent,
   status = "processed",
 ) {
-  await tx.stripeWebhookEvent.create({
+  const result = await tx.stripeWebhookEvent.updateMany({
+    where: { eventId: event.id },
+    data: { status, error: null, processedAt: new Date() },
+  });
+  if (result.count !== 1) throw new Error("Stripe webhook receipt was not reserved before processing.");
+}
+
+async function reserveStripeWebhookEvent(event: StripeWebhookEvent) {
+  return reserveStripeWebhookDelivery({
+    insert: async () => {
+      await prisma.stripeWebhookEvent.create({
+        data: {
+          eventId: event.id,
+          dedupeKey: stripeDedupeKey(event),
+          type: event.type,
+          objectId: stripeObjectId(event),
+          livemode: event.livemode ?? null,
+          status: "received",
+          payload: compactEventPayload(event),
+          processedAt: null,
+        },
+      });
+    },
+    eventExists: async () => Boolean(await prisma.stripeWebhookEvent.findUnique({
+      where: { eventId: event.id },
+      select: { id: true },
+    })),
+  });
+}
+
+function safeReceiptReason(reason: unknown, fallback: string) {
+  const value = clean(reason).toLowerCase().replace(/[^a-z0-9_.-]+/g, "_").slice(0, 120);
+  return value || fallback;
+}
+
+async function finalizeStripeWebhookReceipt(event: StripeWebhookEvent, status: string, reason?: unknown) {
+  await prisma.stripeWebhookEvent.update({
+    where: { eventId: event.id },
     data: {
-      eventId: event.id,
-      dedupeKey: stripeDedupeKey(event),
-      type: event.type,
-      objectId: stripeObjectId(event),
-      livemode: event.livemode ?? null,
       status,
-      payload: compactEventPayload(event),
+      error: reason ? safeReceiptReason(reason, status) : null,
+      processedAt: new Date(),
+    },
+  });
+}
+
+async function finalizeUnfinishedStripeWebhookReceipt(event: StripeWebhookEvent, status: string, reason?: unknown) {
+  await prisma.stripeWebhookEvent.updateMany({
+    where: { eventId: event.id, status: "received" },
+    data: {
+      status,
+      error: reason ? safeReceiptReason(reason, status) : null,
       processedAt: new Date(),
     },
   });
@@ -299,7 +331,7 @@ async function handleTerminalStoreCheckoutEvent(event: StripeWebhookEvent, sessi
 }
 
 function isDuplicateWebhookEvent(error: unknown) {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  return isStripeWebhookReceiptUniqueConflict(error);
 }
 
 async function findPaymentForStripeObject(
@@ -688,7 +720,7 @@ async function applyRegistrationPaymentCompletion(
 async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTenantId?: string | null) {
   const accountId = event.data.object.id;
   if (!accountId || !accountId.startsWith("acct_")) {
-    return NextResponse.json({ ok: true, ignored: true });
+    return NextResponse.json({ ok: true, ignored: true, reason: "invalid_connected_account_object" });
   }
 
   const centers = await prisma.center.findMany({
@@ -760,13 +792,20 @@ async function handleConnectedAccountEvent(event: StripeWebhookEvent, matchedTen
 }
 
 async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeCheckoutSessionCompleted) {
+  if (session.metadata?.setupFlow === "school_software_payment_method") {
+    return NextResponse.json({ ok: true, ignored: true, reason: "school_software_payment_method_setup_expired" });
+  }
+
   if (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method") {
+    const billingAccountId = session.metadata?.billingAccountId;
+    if (!billingAccountId) {
+      return NextResponse.json({ ok: false, error: "Missing billing account metadata." }, { status: 400 });
+    }
     try {
       await prisma.$transaction(async (tx) => {
         await recordStripeWebhookEvent(tx, event);
-        if (!session.metadata?.billingAccountId) return;
         const account = await tx.billingAccount.findUnique({
-          where: { id: session.metadata.billingAccountId },
+          where: { id: billingAccountId },
           select: { customFields: true },
         });
         const expirationPatch = paymentMethodSetupExpirationPatch({
@@ -775,7 +814,7 @@ async function handleCheckoutExpired(event: StripeWebhookEvent, session: StripeC
           stripeEventId: event.id,
         });
         await tx.billingAccount.update({
-          where: { id: session.metadata.billingAccountId },
+          where: { id: billingAccountId },
           data: {
             autopayPlaceholder: expirationPatch.autopayPlaceholder,
             customFields: expirationPatch.customFields as Prisma.InputJsonObject,
@@ -1541,25 +1580,12 @@ async function writeBillingAccountSystemAudit(billingAccountId: string, stripeEv
   });
 }
 
-async function POSTHandler(request: NextRequest) {
-  const payload = await request.text();
-  const signature = request.headers.get("stripe-signature");
-  const signatureMatch = await matchStripeWebhookSecret(payload, signature);
-  if (!signatureMatch.configured) {
-    return NextResponse.json({ ok: false, error: "Payment processor webhook secret is not configured." }, { status: 503 });
-  }
-
-  if (!signatureMatch.matched) {
-    return NextResponse.json({ ok: false, error: "Invalid payment processor signature." }, { status: 400 });
-  }
-
-  const event = JSON.parse(payload) as StripeWebhookEvent;
-
+async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTenantId: string | null) {
   if (accountEventType(event.type)) {
-    return handleConnectedAccountEvent(event, signatureMatch.tenantId);
+    return handleConnectedAccountEvent(event, matchedTenantId);
   }
 
-  if (event.type.startsWith("customer.subscription.") || ["invoice.paid", "invoice.payment_failed", "invoice.payment_action_required"].includes(event.type)) {
+  if (isStripeWebhookSoftwareBillingEvent(event.type)) {
     const object = jsonObject(event.data.object);
     const metadata = jsonObject(object.metadata);
     const subscriptionDetails = jsonObject(object.subscription_details);
@@ -1571,7 +1597,7 @@ async function POSTHandler(request: NextRequest) {
       : customerId
         ? await prisma.center.findFirst({ where: { customFields: { path: ["stripeSoftwareCustomerId"], equals: customerId } }, select: { id: true, customFields: true } })
         : null;
-    if (!center) return NextResponse.json({ ok: true, ignored: true });
+    if (!center) return NextResponse.json({ ok: true, ignored: true, reason: "software_billing_center_not_found" });
     const fields = jsonObject(center.customFields);
     const items = jsonObject(object.items);
     const firstItem = Array.isArray(items.data) ? jsonObject(items.data[0]) : {};
@@ -1602,16 +1628,7 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  if (![
-    "checkout.session.completed",
-    "checkout.session.async_payment_succeeded",
-    "checkout.session.async_payment_failed",
-    "checkout.session.expired",
-    "payment_intent.succeeded",
-    "payment_intent.payment_failed",
-    "charge.refunded",
-    "charge.dispute.created",
-  ].includes(event.type)) {
+  if (!isStripeWebhookPaymentEvent(event.type)) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
@@ -1633,10 +1650,10 @@ async function POSTHandler(request: NextRequest) {
 
   const session = event.data.object as StripeCheckoutSessionCompleted;
   if (event.type === "checkout.session.completed" && session.metadata?.setupFlow === "school_software_payment_method") {
-    return handleSchoolSoftwarePaymentMethodCompleted(event, session, signatureMatch.tenantId);
+    return handleSchoolSoftwarePaymentMethodCompleted(event, session, matchedTenantId);
   }
   if (event.type === "checkout.session.completed" && (session.mode === "setup" || session.metadata?.setupFlow === "billing_account_payment_method")) {
-    return handlePaymentMethodSetupCompleted(event, session, signatureMatch.tenantId);
+    return handlePaymentMethodSetupCompleted(event, session, matchedTenantId);
   }
 
   if (session.metadata?.source === "terminal_store") {
@@ -1878,4 +1895,72 @@ async function POSTHandler(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-export const POST = withApiLogging("POST", POSTHandler);
+async function POSTHandler(request: NextRequest) {
+  // Stripe signs the exact request bytes. This must remain the first and only
+  // request-body consumption before signature verification and JSON parsing.
+  const payload = await request.text();
+  const signature = request.headers.get("stripe-signature");
+  const signatureMatch = await matchStripeWebhookSecret(payload, signature);
+  if (!signatureMatch.configured) {
+    return NextResponse.json({ ok: false, error: "Payment processor webhook secret is not configured." }, { status: 503 });
+  }
+  if (!signatureMatch.matched) {
+    return NextResponse.json({ ok: false, error: "Invalid payment processor signature." }, { status: 400 });
+  }
+
+  let event: StripeWebhookEvent;
+  try {
+    const parsed = jsonObject(JSON.parse(payload));
+    event = {
+      ...parsed,
+      data: {
+        ...jsonObject(parsed.data),
+        object: stripeWebhookObjectForRouting(parsed),
+      },
+    } as StripeWebhookEvent;
+  } catch {
+    return NextResponse.json({ ok: false, error: "Malformed authenticated webhook payload." }, { status: 400 });
+  }
+  if (!event || typeof event.id !== "string" || !event.id.startsWith("evt_") || typeof event.type !== "string") {
+    return NextResponse.json({ ok: false, error: "Malformed authenticated webhook event." }, { status: 400 });
+  }
+
+  let reservation: "received" | "duplicate";
+  try {
+    reservation = await reserveStripeWebhookEvent(event);
+  } catch (error) {
+    logOperationalError("stripe_webhook.receipt_failed", error, { eventId: event.id, eventType: event.type });
+    return NextResponse.json({ ok: false, error: "Webhook receipt could not be stored." }, { status: 503 });
+  }
+  if (reservation === "duplicate") {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
+
+  try {
+    const response = await dispatchAuthenticatedEvent(event, signatureMatch.tenantId);
+    const result = await response.clone().json().catch(() => ({})) as Record<string, unknown>;
+    if (response.status < 200 || response.status >= 300) {
+      const reason = safeReceiptReason(result.error || result.reason, `authenticated_handler_http_${response.status}`);
+      await finalizeStripeWebhookReceipt(event, "manual_review", reason);
+      return NextResponse.json({ ok: true, received: true, manualReview: true, reason }, { status: 202 });
+    }
+
+    const status = result.ignored === true ? "ignored" : result.pending === true ? "pending" : "processed";
+    const reason = result.ignored === true ? result.reason || "handler_ignored" : undefined;
+    await finalizeUnfinishedStripeWebhookReceipt(event, status, reason);
+    return response;
+  } catch (error) {
+    logOperationalError("stripe_webhook.processing_failed_after_receipt", error, { eventId: event.id, eventType: event.type });
+    try {
+      await finalizeStripeWebhookReceipt(event, "manual_review", "processing_failed_after_durable_receipt");
+    } catch (receiptError) {
+      logOperationalError("stripe_webhook.receipt_status_update_failed", receiptError, { eventId: event.id, eventType: event.type });
+    }
+    return NextResponse.json(
+      { ok: true, received: true, manualReview: true, reason: "processing_failed_after_durable_receipt" },
+      { status: 202 },
+    );
+  }
+}
+
+export const POST = withApiLogging("POST", POSTHandler, { omitRequestBody: true });

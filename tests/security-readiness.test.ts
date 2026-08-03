@@ -90,9 +90,11 @@ test("client code does not reference server secrets through NEXT_PUBLIC variable
 
 test("Stripe webhook boundary verifies signatures and payment forms do not collect raw PAN", async () => {
   const webhook = await readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8");
+  const readiness = await readFile("src/lib/stripe-webhook-readiness.ts", "utf8");
   const paymentForm = await readFile("src/components/payment-method-request-form.tsx", "utf8");
   assert.match(webhook, /stripe-signature/);
-  assert.match(webhook, /verifyStripeSignature/);
+  assert.match(webhook, /matchStripeWebhookSecret/);
+  assert.match(readiness, /verifyStripeSignature/);
   assert.doesNotMatch(paymentForm, /name=["'](?:cardNumber|cvc|routingNumber|accountNumber)["']/i);
 });
 

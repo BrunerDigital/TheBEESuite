@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { evaluateParentInvitationReadiness } from "@/lib/parent-invitation-readiness";
+import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import {
   ensureParentPortalLoginForGuardian,
   parentPortalAccessDisabled,
@@ -12,6 +13,8 @@ import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
 
 const APPLY = process.argv.includes("--apply");
 const ACKNOWLEDGED_NO_INVITES = process.argv.includes("--acknowledge-no-invites");
+const INCLUDE_AUTHORIZED_PICKUPS = process.argv.includes("--include-authorized-pickups");
+const EXCLUDE_TX_TYLER = process.argv.includes("--exclude-tx-tyler");
 const ACTION = "parent_portal.payer_account_prepared";
 
 function clean(value: string | null | undefined) {
@@ -46,6 +49,9 @@ async function loadGuardians() {
               externalId: true,
             },
           },
+          pickups: {
+            select: { sourceSystem: true, externalId: true },
+          },
         },
       },
     },
@@ -69,10 +75,12 @@ async function main() {
   if (APPLY && !ACKNOWLEDGED_NO_INVITES) {
     throw new Error("Apply mode requires --acknowledge-no-invites.");
   }
+  if (APPLY && INCLUDE_AUTHORIZED_PICKUPS && !EXCLUDE_TX_TYLER) {
+    throw new Error("Pickup-inclusive apply mode requires --exclude-tx-tyler.");
+  }
 
   const startedAt = new Date();
   const guardians = await loadGuardians();
-  const payerGuardians = guardians.filter((guardian) => guardian.isBillingContact);
   const centers = await prisma.center.findMany({
     select: {
       id: true,
@@ -83,6 +91,26 @@ async function main() {
     },
   });
   const centerById = new Map(centers.map((center) => [center.id, center]));
+  const payerGuardians = guardians.filter((guardian) => {
+    const center = guardian.family.centerId ? centerById.get(guardian.family.centerId) : null;
+    if (EXCLUDE_TX_TYLER && center?.crmLocationId === "Kid City USA - TX | Tyler") return false;
+    if (!guardian.family.children.some((child) => isActiveProcareEnrollmentStatus(child.enrollmentStatus))) return false;
+    if (clean(guardian.family.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.family.externalId)) return false;
+    if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.externalId)) return false;
+    if (guardian.family.children
+      .filter((child) => isActiveProcareEnrollmentStatus(child.enrollmentStatus))
+      .some((child) => clean(child.sourceSystem).toLowerCase() !== "procare" || !clean(child.externalId))) return false;
+    const pickupExternalIds = new Set(guardian.family.pickups
+      .filter((pickup) => clean(pickup.sourceSystem).toLowerCase() === "procare" && clean(pickup.externalId))
+      .map((pickup) => clean(pickup.externalId)));
+    const exactAuthorizedPickup = (
+      INCLUDE_AUTHORIZED_PICKUPS
+      && clean(guardian.sourceSystem).toLowerCase() === "procare"
+      && Boolean(clean(guardian.externalId))
+      && pickupExternalIds.has(clean(guardian.externalId))
+    );
+    return guardian.isBillingContact || exactAuthorizedPickup;
+  });
   const familyIds = [...new Set(guardians.map((guardian) => guardian.familyId))];
   const importBatches = await prisma.procareImportBatch.findMany({
     where: { rows: { some: { createdFamilyId: { in: familyIds } } } },
@@ -144,6 +172,21 @@ async function main() {
     },
   });
   const existingUserByEmail = new Map(existingUsers.map((user) => [normalizedEmail(user.email), user]));
+  const candidateGuardianIds = new Set(payerGuardians.map((guardian) => guardian.id));
+  const { url, key } = getSupabaseAuthConfig("service");
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const existingAuthEmails = new Set<string>();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw error;
+    for (const authUser of data.users) {
+      const authEmail = normalizedEmail(authUser.email);
+      if (authEmail) existingAuthEmails.add(authEmail);
+    }
+    if (data.users.length < 1000) break;
+  }
 
   const readinessByGuardianId = new Map<string, ReturnType<typeof evaluateParentInvitationReadiness>>();
   const readinessFor = (guardian: GuardianRecord) => {
@@ -210,11 +253,18 @@ async function main() {
       ...(matchingGuardians.every((guardian) => !parentPortalAccessDisabled(guardian.customFields))
         ? []
         : ["A matching guardian has parent portal access disabled."]),
+      ...(matchingGuardians.every((guardian) => guardian.family.centerId === payer.family.centerId)
+        ? []
+        : ["A matching guardian email belongs to another school."]),
+      ...(matchingGuardians.every((guardian) => candidateGuardianIds.has(guardian.id) || Boolean(guardian.userId))
+        ? []
+        : ["A matching unlinked guardian is outside the payer or authorized-pickup scope."]),
       ...(matchingGuardians.every((guardian) => readinessFor(guardian).ok)
         ? []
         : ["Every guardian record that would be linked must pass readiness."]),
       ...(user && user.tenantId !== tenantId ? ["Existing app user belongs to another tenant."] : []),
       ...(user && user.role !== UserRole.PARENT_GUARDIAN ? ["Existing app user has a non-parent role."] : []),
+      ...(existingAuthEmails.has(email) && !user ? ["Supabase Auth account exists without a matching app parent user."] : []),
     ];
     if (blockers.length) {
       for (const blocker of new Set(blockers)) {
@@ -305,7 +355,7 @@ async function main() {
         guardianId: payer.id,
         linkedBy: "system:payer-account-preparation",
         linkedReason: "payer_account_prepared_without_invite",
-        prepareWithoutInvite: !existingUser,
+        prepareWithoutInvite: !existingUser || !existingAuthEmails.has(email),
       });
       if (!result.ok) {
         failures[result.reason] = (failures[result.reason] ?? 0) + 1;
@@ -359,10 +409,6 @@ async function main() {
       },
     }),
   ]);
-  const { url, key } = getSupabaseAuthConfig("service");
-  const supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
   const authEmails = new Set<string>();
   for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });

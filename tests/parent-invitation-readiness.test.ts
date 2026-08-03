@@ -189,6 +189,21 @@ test("missing child, phone, and ProCare identities block before account or email
   assert.match(result.blockers.join(" "), /verified ProCare person ID/);
 });
 
+test("a ProCare family blocks when any active child lacks verified source identity", () => {
+  const input = readyInput();
+  input.family.children.push({
+    id: "child_2",
+    fullName: "Casey Rivera",
+    enrollmentStatus: "enrolled",
+    sourceSystem: null,
+    externalId: null,
+  });
+
+  const result = evaluateParentInvitationReadiness(input);
+  assert.equal(result.ok, false);
+  assert.match(result.blockers.join(" "), /Every active child must retain a verified ProCare child ID/);
+});
+
 test("non-ProCare families still require safe parent contact and active child links", () => {
   const input = readyInput();
   input.guardian.sourceSystem = null;

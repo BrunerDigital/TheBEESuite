@@ -47,6 +47,7 @@ import type { FteReportPrefill, FteReportRow } from "@/components/fte-report-for
 import { AuthLikePage } from "@/components/module-page";
 import { AssetHubWorkspace } from "@/components/asset-hub-workspace";
 import { ParentPortalWorkspace } from "@/components/parent-portal-workspace";
+import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
 import {
   SchoolSetupCommandCenter,
   type SchoolSetupCommandCenterData,
@@ -80,6 +81,7 @@ import { getKidCityFteSnapshot } from "@/lib/fte-reports";
 import { getCenterInquiryEmbedCode, getKidCityLocationInquiryEmbedCode } from "@/lib/inquiry-embed";
 import { parseGuardianChangeRequestNote } from "@/lib/guardian-change-requests";
 import { parentPortalFamilyScopeWhere } from "@/lib/portal-guardrails";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { AD_INTEGRATION_PROVIDERS, buildIntegrationSetupViews, getIntegrationRuntimeStatus, hasRequiredMarketingAccountConfig, MARKETING_INTEGRATION_PROVIDERS, SOCIAL_INTEGRATION_PROVIDERS } from "@/lib/integration-setup";
 import { integrationScopeForUser } from "@/lib/integration-scope";
 import { expandCalendarEventOccurrences } from "@/lib/calendar-events";
@@ -1841,6 +1843,12 @@ async function renderLivePage(
   }
 
   if (slug === "parent-portal") {
+    const parentFamilyScope = user.role === UserRole.PARENT_GUARDIAN
+      ? await getParentPortalFamilyScope(user.id)
+      : null;
+    if (parentFamilyScope && !parentFamilyScope.ok && parentFamilyScope.reason === "multiple_linked_families") {
+      return <ParentPortalAccessBlocked />;
+    }
     const requestedParentFamilyId = firstSearchParam(searchParams.familyId) || null;
     const requestedLedgerPage = boundedPage(searchParams.ledgerPage);
     const linkedParentFamilies = user.role === UserRole.PARENT_GUARDIAN

@@ -12,6 +12,7 @@ import {
   productPurchaseTotals,
 } from "@/lib/product-billing";
 import { prisma } from "@/lib/prisma";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { withApiLogging } from "@/lib/request-response-logging";
 import { studentUniformShirtVariantFromProduct } from "@/lib/uniform-products";
 
@@ -29,6 +30,10 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parent accounts can purchase parent portal products." }, { status: 403 });
   }
+  const familyScope = await getParentPortalFamilyScope(user.id);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before purchases can continue." }, { status: 409 });
+  }
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const productId = clean(body.productId);
@@ -40,6 +45,7 @@ async function POSTHandler(request: NextRequest) {
   const [family, product] = await Promise.all([
     prisma.family.findFirst({
       where: {
+        id: familyScope.familyId,
         guardians: { some: { userId: user.id } },
         children: { some: currentlyEnrolledChildWhere() },
       },

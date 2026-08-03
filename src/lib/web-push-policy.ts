@@ -76,3 +76,7 @@ export function safeWebPushPlatform(value: unknown) {
   const platform = typeof value === "string" ? value.trim().toLowerCase() : "";
   return ["ios", "android", "desktop", "web"].includes(platform) ? platform : "web";
 }
+
+export function webPushSubscriptionShouldDeactivate(status: number | null) {
+  return status === 400 || status === 404 || status === 410;
+}

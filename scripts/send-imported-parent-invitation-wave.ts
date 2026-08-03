@@ -348,6 +348,9 @@ async function buildPlan({
     if (validEmail(normalizedEmail)) {
       if (!matches.length) reasons.add("matching_guardian_missing");
       if (matches.some((guardian) => guardian.family.centerId !== centerId)) reasons.add("cross_center_email");
+      if (new Set(matches.filter((guardian) => guardian.family.centerId === centerId).map((guardian) => guardian.familyId)).size > 1) {
+        reasons.add("same_center_multiple_families");
+      }
       if (scope !== "miss_honeys" && matches.some((guardian) => !identityCompatible(reference, guardian))) {
         reasons.add("conflicting_guardian_identity");
       }

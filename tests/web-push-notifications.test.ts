@@ -6,7 +6,17 @@ import {
   webPushBody,
   webPushHref,
   webPushPreferenceType,
+  webPushSubscriptionShouldDeactivate,
 } from "@/lib/web-push-policy";
+
+test("permanently rejected web push subscriptions are deactivated", () => {
+  assert.equal(webPushSubscriptionShouldDeactivate(400), true);
+  assert.equal(webPushSubscriptionShouldDeactivate(404), true);
+  assert.equal(webPushSubscriptionShouldDeactivate(410), true);
+  assert.equal(webPushSubscriptionShouldDeactivate(429), false);
+  assert.equal(webPushSubscriptionShouldDeactivate(503), false);
+  assert.equal(webPushSubscriptionShouldDeactivate(null), false);
+});
 
 test("stored notification types map to fail-closed app alert preferences", () => {
   const examples = new Map([

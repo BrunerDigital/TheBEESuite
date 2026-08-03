@@ -29,6 +29,13 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+export function hasConflictingGuardianFamilyLinks(
+  targetFamilyId: string,
+  matches: Array<{ familyId: string }>,
+) {
+  return matches.some((match) => match.familyId !== targetFamilyId);
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -160,6 +167,22 @@ export async function ensureParentPortalLoginForGuardian({
     : null;
   if (!guardian.family.centerId || !center) return { ok: false, status: 400, reason: "center_not_found" };
 
+  const tenantCenters = await prisma.center.findMany({
+    where: { organization: { tenantId: center.organization.tenantId } },
+    select: { id: true },
+  });
+  const tenantCenterIds = tenantCenters.map((item) => item.id);
+  const matchingGuardians = await prisma.guardian.findMany({
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      family: { centerId: { in: tenantCenterIds } },
+    },
+    select: { id: true, familyId: true, userId: true, customFields: true },
+  });
+  if (hasConflictingGuardianFamilyLinks(guardian.family.id, matchingGuardians)) {
+    return { ok: false, status: 409, reason: "guardian_email_multiple_families" };
+  }
+
   const existingUser = await prisma.user.findUnique({
     where: { email },
     select: { id: true, tenantId: true, role: true, isActive: true },
@@ -205,18 +228,6 @@ export async function ensureParentPortalLoginForGuardian({
     select: { id: true },
   });
 
-  const tenantCenters = await prisma.center.findMany({
-    where: { organization: { tenantId: center.organization.tenantId } },
-    select: { id: true },
-  });
-  const tenantCenterIds = tenantCenters.map((item) => item.id);
-  const matchingGuardians = await prisma.guardian.findMany({
-    where: {
-      email: { equals: email, mode: "insensitive" },
-      family: { centerId: { in: tenantCenterIds } },
-    },
-    select: { id: true, customFields: true },
-  });
   const linkableGuardians = matchingGuardians.filter((item) => !parentPortalAccessDisabled(item.customFields));
 
   await Promise.all(linkableGuardians.map((item) => prisma.guardian.update({

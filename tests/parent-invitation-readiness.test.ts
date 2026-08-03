@@ -61,7 +61,7 @@ function readyInput(): ParentInvitationReadinessInput {
   };
 }
 
-test("complete ProCare family and four-report import passes invitation preflight", () => {
+test("a safe family relationship passes invitation preflight and retains import diagnostics", () => {
   const result = evaluateParentInvitationReadiness(readyInput());
   assert.deepEqual(result, { ok: true, blockers: [], importBatchId: "batch_1" });
 });
@@ -104,7 +104,7 @@ test("reviewed rendered ProCare package passes with complete source evidence and
   assert.equal(evaluateParentInvitationReadiness(input).ok, true);
 });
 
-test("rendered ProCare package fails closed when source evidence is incomplete", () => {
+test("incomplete rendered ProCare evidence does not block an otherwise safe invitation", () => {
   const input = readyInput();
   input.relevantImportBatch = {
     id: "batch-rendered-incomplete",
@@ -128,11 +128,10 @@ test("rendered ProCare package fails closed when source evidence is incomplete",
   };
 
   const result = evaluateParentInvitationReadiness(input);
-  assert.equal(result.ok, false);
-  assert.match(result.blockers.join(" "), /not fully reviewed|not all present/i);
+  assert.deepEqual(result, { ok: true, blockers: [], importBatchId: "batch-rendered-incomplete" });
 });
 
-test("incomplete or warning-bearing ProCare batches fail closed", () => {
+test("warning-bearing ProCare batches remain school setup signals rather than invitation blockers", () => {
   const input = readyInput();
   input.relevantImportBatch = {
     id: "batch_bad",
@@ -151,12 +150,7 @@ test("incomplete or warning-bearing ProCare batches fail closed", () => {
   };
 
   const result = evaluateParentInvitationReadiness(input);
-  assert.equal(result.ok, false);
-  assert.match(result.blockers.join(" "), /not complete and error-free/);
-  assert.match(result.blockers.join(" "), /errors, unresolved warnings, or disposed/);
-  assert.match(result.blockers.join(" "), /source-file inventory/);
-  assert.match(result.blockers.join(" "), /not fully reviewed|not all present/);
-  assert.match(result.blockers.join(" "), /relationship coverage warnings/);
+  assert.deepEqual(result, { ok: true, blockers: [], importBatchId: "batch_bad" });
 });
 
 test("conflicting guardian identities sharing an email are blocked", () => {
@@ -176,7 +170,7 @@ test("conflicting guardian identities sharing an email are blocked", () => {
   assert.match(result.blockers.join(" "), /conflicting identities/);
 });
 
-test("missing child, phone, and ProCare identities block before account or email changes", () => {
+test("missing child and phone block before account or email changes", () => {
   const input = readyInput();
   input.guardian.phone = "12";
   input.guardian.externalId = null;
@@ -186,10 +180,9 @@ test("missing child, phone, and ProCare identities block before account or email
   assert.equal(result.ok, false);
   assert.match(result.blockers.join(" "), /phone number/);
   assert.match(result.blockers.join(" "), /no linked child/);
-  assert.match(result.blockers.join(" "), /verified ProCare person ID/);
 });
 
-test("a ProCare family blocks when any active child lacks verified source identity", () => {
+test("a linked active child does not need ProCare provenance to receive portal access", () => {
   const input = readyInput();
   input.family.children.push({
     id: "child_2",
@@ -200,8 +193,8 @@ test("a ProCare family blocks when any active child lacks verified source identi
   });
 
   const result = evaluateParentInvitationReadiness(input);
-  assert.equal(result.ok, false);
-  assert.match(result.blockers.join(" "), /Every active child must retain a verified ProCare child ID/);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.blockers, []);
 });
 
 test("non-ProCare families still require safe parent contact and active child links", () => {

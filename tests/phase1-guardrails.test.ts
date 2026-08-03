@@ -428,14 +428,15 @@ test("password reset links stay HTTPS on every public host", () => {
     "https://pilot.example.com/reset-password?token_hash=hash_123&type=recovery",
   );
 
-  assert.equal(
-    buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
-    "http://localhost:3000/reset-password",
-  );
-
   const mutableEnv = process.env as Record<string, string | undefined>;
   const originalNodeEnv = mutableEnv.NODE_ENV;
   try {
+    mutableEnv.NODE_ENV = "test";
+    assert.equal(
+      buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),
+      "http://localhost:3000/reset-password",
+    );
+
     mutableEnv.NODE_ENV = "production";
     assert.equal(
       buildPasswordResetRedirectUrl({ appBaseUrl: "http://localhost:3000" }),

@@ -8,6 +8,9 @@ test("billing activation is restricted to live Stripe-ready schools with confirm
   assert.match(source, /readiness\.status === "ready" && payoutBankConfirmed/);
   assert.match(source, /currentInspection\.eligible/);
   assert.match(source, /connected-account binding changed after review/);
+  assert.match(source, /verifyStripeConnectAccountBinding\(accountId, retrieved\.account\.id\)/);
+  assert.match(source, /const freshCenter = await prisma\.center\.findUnique/);
+  assert.match(source, /connected-account binding changed during activation/);
   assert.match(source, /confirm-fingerprint/);
 });
 

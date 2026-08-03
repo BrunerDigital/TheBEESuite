@@ -10,6 +10,7 @@ import {
 } from "@/lib/integrations";
 import { prisma } from "@/lib/prisma";
 import { stripeBillingApprovalCustomFieldPatch } from "@/lib/stripe-billing-approval";
+import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 import {
   stripeConnectCustomFieldPatch,
   stripeConnectReadinessFromSnapshot,
@@ -98,6 +99,18 @@ async function inspectCenter(center: CenterRow) {
       readiness: null,
       payoutBankConfirmed: false,
       reason: retrieved.error || "stripe_account_unreachable",
+    };
+  }
+
+  const binding = verifyStripeConnectAccountBinding(accountId, retrieved.account.id);
+  if (!binding.ok) {
+    return {
+      eligible: false as const,
+      center,
+      accountId,
+      readiness: null,
+      payoutBankConfirmed: false,
+      reason: binding.error,
     };
   }
 
@@ -219,8 +232,22 @@ async function main() {
     const row = eligible.find((item) => item.center.id === planned.centerId);
     invariant(row?.accountId && row.readiness, `Eligible school disappeared: ${planned.school}`);
 
-    // Recheck Stripe immediately before each mutation so capability drift fails closed.
-    const currentInspection = await inspectCenter(row.center);
+    // Re-read the center and recheck its exact Stripe binding immediately before each mutation.
+    const freshCenter = await prisma.center.findUnique({
+      where: { id: planned.centerId },
+      select: {
+        id: true,
+        name: true,
+        crmLocationId: true,
+        locationId: true,
+        status: true,
+        customFields: true,
+        organization: { select: { tenantId: true } },
+        _count: { select: { tuitionPlans: true } },
+      },
+    });
+    invariant(freshCenter && isActivePublicSchoolCandidate(freshCenter), `${planned.school} is no longer an active public school.`);
+    const currentInspection = await inspectCenter(freshCenter);
     invariant(currentInspection.eligible && currentInspection.accountId && currentInspection.readiness, `${planned.school} is no longer Stripe-ready with a confirmed payout bank.`);
     invariant(currentInspection.accountId === row.accountId, `${planned.school} connected-account binding changed after review.`);
 
@@ -232,6 +259,7 @@ async function main() {
       invariant(current, `${planned.school} no longer exists.`);
       invariant(current.organization.tenantId === row.center.organization.tenantId, `${planned.school} tenant changed after review.`);
       const fields = jsonObject(current.customFields);
+      invariant(readStripeConnectedAccountId(fields) === currentInspection.accountId, `${planned.school} connected-account binding changed during activation.`);
       const wasActivated = fields.livePaymentsEnabled === true &&
         fields.tuitionBillingEnabled === true &&
         fields.refundsEnabled === true &&

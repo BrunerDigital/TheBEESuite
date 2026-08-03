@@ -77,10 +77,6 @@ function number(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function isProcareRecord(value: ImportedRecord) {
-  return clean(value.sourceSystem).toLowerCase() === "procare";
-}
-
 function reportDetectionComplete(datasetCoverage: Record<string, unknown>) {
   const detection = record(datasetCoverage.reportDetection);
   return REQUIRED_PROCARE_REPORTS.every((reportName) => {
@@ -241,11 +237,6 @@ export function evaluateParentInvitationReadiness(
 ): ParentInvitationReadiness {
   const blockers: string[] = [];
   const guardianEmail = clean(input.guardian.email).toLowerCase();
-  const isProcareFamily = (
-    isProcareRecord(input.family)
-    || isProcareRecord(input.guardian)
-    || input.family.children.some(isProcareRecord)
-  );
 
   if (!input.family.centerId) {
     blockers.push("The family is not linked to a school.");
@@ -270,29 +261,15 @@ export function evaluateParentInvitationReadiness(
     blockers.push("This email is attached to guardian records with conflicting identities. Resolve the duplicate before inviting.");
   }
 
-  if (!isProcareFamily) {
-    return { ok: blockers.length === 0, blockers, importBatchId: null };
-  }
-
-  if (!isProcareRecord(input.family) || !clean(input.family.externalId)) {
-    blockers.push("The ProCare family is missing its verified account ID.");
-  }
-  if (!isProcareRecord(input.guardian) || !clean(input.guardian.externalId)) {
-    blockers.push("The guardian is not linked to a verified ProCare person ID.");
-  }
-  const activeChildren = input.family.children.filter((child) => (
-    isActiveProcareEnrollmentStatus(child.enrollmentStatus)
-  ));
-  if (activeChildren.some((child) => !isProcareRecord(child) || !clean(child.externalId))) {
-    blockers.push("Every active child must retain a verified ProCare child ID.");
-  }
-  const importedChildren = input.family.children.filter(isProcareRecord);
-  if (!importedChildren.length || importedChildren.some((child) => !clean(child.externalId))) {
-    blockers.push("Every imported child must retain a verified ProCare child ID.");
-  }
-
-  const batch = input.relevantImportBatch;
-  const batchReadiness = evaluateProcareInvitationBatchReadiness(batch ?? null);
-  blockers.push(...batchReadiness.blockers);
-  return { ok: blockers.length === 0, blockers, importBatchId: batchReadiness.importBatchId };
+  // Import provenance is useful for school setup and reconciliation, but it is
+  // not required to safely authorize a guardian against the records currently
+  // stored in The BEE Suite. Invitation access is therefore based on the
+  // internal family relationship and concrete identity-conflict checks above.
+  // Keep the batch ID as diagnostic context without turning batch completeness
+  // into an access gate.
+  return {
+    ok: blockers.length === 0,
+    blockers,
+    importBatchId: input.relevantImportBatch?.id ?? null,
+  };
 }

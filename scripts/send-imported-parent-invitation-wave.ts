@@ -7,7 +7,6 @@ import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { defaultGuardianPinFromPhone, defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
-import { evaluateProcareInvitationBatchReadiness } from "@/lib/parent-invitation-readiness";
 import {
   buildParentLoginSetupUrl,
   buildParentPortalInvitationHtml,
@@ -240,21 +239,9 @@ function verifiedParentPayer(guardian: Pick<GuardianRecord, "isBillingContact" |
   return guardian.isBillingContact || exactAuthorizedPickup(guardian);
 }
 
-function hasOnlyActiveVerifiedChildren(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
-  const activeChildren = guardian.family.children.filter((child) => (
-    isActiveProcareEnrollmentStatus(child.enrollmentStatus)
-  ));
-  return activeChildren.length > 0 && activeChildren.every((child) => (
-    clean(child.sourceSystem).toLowerCase() === "procare"
-    && Boolean(clean(child.externalId))
-  ));
-}
-
-function hasActiveVerifiedChild(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
+function hasActiveChild(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
   return guardian.family.children.some((child) => (
     isActiveProcareEnrollmentStatus(child.enrollmentStatus)
-    && clean(child.sourceSystem).toLowerCase() === "procare"
-    && Boolean(clean(child.externalId))
   ));
 }
 
@@ -311,9 +298,8 @@ async function buildPlan({
   const guardians = await loadGuardianRecords(centers.map((center) => center.id));
   const directRecords = guardians.filter(verifiedParentPayer);
   const scopedDirectRecords = directRecords;
-  const familyIds = [...new Set(scopedDirectRecords.map((guardian) => guardian.familyId))];
   const candidateEmails = [...new Set(scopedDirectRecords.map((guardian) => email(guardian.email)).filter(validEmail))];
-  const [matchingGuardians, users, authUsers, deliveries, importBatches] = await Promise.all([
+  const [matchingGuardians, users, authUsers, deliveries] = await Promise.all([
     loadMatchingGuardians(candidateEmails),
     prisma.user.findMany({
       where: { email: { in: candidateEmails } },
@@ -324,30 +310,9 @@ async function buildPlan({
       where: { centerId: { in: centers.map((center) => center.id) }, purpose: "parent_invitation_email" },
       select: { centerId: true, status: true, payload: true, lastError: true },
     }),
-    prisma.procareImportBatch.findMany({
-      where: { rows: { some: { createdFamilyId: { in: familyIds } } } },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        status: true,
-        summary: true,
-        rows: {
-          where: { createdFamilyId: { in: familyIds } },
-          select: { createdFamilyId: true },
-        },
-      },
-    }),
   ]);
   const matchingByEmail = groupByKey(matchingGuardians, (guardian) => email(guardian.email));
   const userByEmail = new Map(users.map((user) => [email(user.email), user]));
-  const latestBatchByFamilyId = new Map<string, (typeof importBatches)[number]>();
-  for (const batch of importBatches) {
-    for (const row of batch.rows) {
-      if (row.createdFamilyId && !latestBatchByFamilyId.has(row.createdFamilyId)) {
-        latestBatchByFamilyId.set(row.createdFamilyId, batch);
-      }
-    }
-  }
   const deliveriesByEmail = new Map<string, typeof deliveries>();
   for (const delivery of deliveries) {
     for (const recipient of recipientsFromPayload(delivery.payload)) {
@@ -374,26 +339,10 @@ async function buildPlan({
     if (!center) reasons.add("center_not_active_or_targeted");
     if (!validEmail(normalizedEmail)) reasons.add("valid_email_required");
     for (const guardian of group) {
-      if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.externalId)) reasons.add("verified_guardian_source_id_required");
-      if (clean(guardian.family.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.family.externalId)) reasons.add("verified_family_source_id_required");
-      const activeChildEvidenceReady = useDirectProfileEvidence
-        ? hasActiveVerifiedChild(guardian)
-        : hasOnlyActiveVerifiedChildren(guardian);
-      if (!activeChildEvidenceReady) {
-        reasons.add(useDirectProfileEvidence ? "active_verified_child_required" : "all_active_children_verified_required");
-      }
+      if (!hasActiveChild(guardian)) reasons.add("active_child_required");
       if (parentPortalAccessDisabled(guardian.customFields)) reasons.add("parent_portal_disabled");
     }
     if (!group.some((guardian) => phoneReady(guardian.phone))) reasons.add("phone_with_four_digits_required");
-    if (!useDirectProfileEvidence) {
-      for (const familyId of new Set(group.map((guardian) => guardian.familyId))) {
-        const batch = latestBatchByFamilyId.get(familyId);
-        const readiness = evaluateProcareInvitationBatchReadiness(
-          batch ? { id: batch.id, status: batch.status, summary: batch.summary } : null,
-        );
-        if (!readiness.ok) reasons.add("reviewed_import_batch_required");
-      }
-    }
 
     const matches = matchingByEmail.get(normalizedEmail) ?? [];
     if (validEmail(normalizedEmail)) {
@@ -403,12 +352,6 @@ async function buildPlan({
         reasons.add("conflicting_guardian_identity");
       }
       if (matches.some((guardian) => !verifiedParentPayer(guardian))) reasons.add("matching_guardian_outside_verified_parent_payer_scope");
-      if (matches.some((guardian) => (
-        clean(guardian.sourceSystem).toLowerCase() !== "procare"
-        || !clean(guardian.externalId)
-        || clean(guardian.family.sourceSystem).toLowerCase() !== "procare"
-        || !clean(guardian.family.externalId)
-      ))) reasons.add("matching_guardian_source_identity_unverified");
       if (matches.some((guardian) => parentPortalAccessDisabled(guardian.customFields))) reasons.add("matching_guardian_portal_disabled");
     }
 
@@ -482,10 +425,7 @@ async function buildPlan({
       alreadyInvited: centerGroups.filter((group) => group.status === "already_invited").length,
       alreadyInvitedOutsideCurrentReadiness: centerGroups.filter((group) => (
         group.status === "already_invited"
-        && group.reasons.some((reason) => [
-          "all_active_children_verified_required",
-          "reviewed_import_batch_required",
-        ].includes(reason))
+        && group.reasons.includes("active_child_required")
       )).length,
       eligibleInvitations: centerGroups.filter((group) => group.status === "eligible").length,
       interruptedPreparationRepairs: centerGroups.filter((group) => group.status === "interrupted").length,
@@ -501,9 +441,7 @@ async function buildPlan({
     summary: {
       scope: scope === "miss_honeys"
         ? "All Miss Honey's locations with imported ProCare family data; trial-setup invitation and director-confirmation gates explicitly authorized by the user"
-        : useDirectProfileEvidence
-          ? "All active Kid City locations with direct ProCare guardian, family, and active-child profile evidence; import-review and director-confirmation gates explicitly waived by the user"
-          : "All active Kid City locations with imported ProCare family data; director confirmation waived by explicit user authorization",
+        : "All active Kid City locations with current parent/payer relationships and active child records; director confirmation waived by explicit user authorization",
       directProfileEvidenceAuthorizedByUser: useDirectProfileEvidence,
       targetLocations: schools.length,
       sendableNow: eligible.length,
@@ -511,10 +449,7 @@ async function buildPlan({
       blockedUniqueProfiles: groupResults.filter((group) => group.status === "blocked").length,
       alreadyInvitedOutsideCurrentReadiness: groupResults.filter((group) => (
         group.status === "already_invited"
-        && group.reasons.some((reason) => [
-          "all_active_children_verified_required",
-          "reviewed_import_batch_required",
-        ].includes(reason))
+        && group.reasons.includes("active_child_required")
       )).length,
       schools,
     },

@@ -77,6 +77,22 @@ test("payer portal preparation is explicit, audited, and cannot send invitations
   assert.doesNotMatch(source, /sendEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
 });
 
+test("production payer invitation waves are corporate-scoped, explicit, and API-guarded", () => {
+  const source = readFileSync(new URL("../scripts/send-kidcity-parent-invitation-wave.ts", import.meta.url), "utf8");
+  assert.match(source, /--apply/);
+  assert.match(source, /--confirm-production-send/);
+  assert.match(source, /TARGET_LOCATIONS = \["Beach Blvd", "Oakleaf", "Canton NC"\]/);
+  assert.match(source, /rolloutSchoolEmailCandidates/);
+  assert.match(source, /centerMatches\.length !== 1/);
+  assert.match(source, /isBillingContact:\s*true/);
+  assert.match(source, /preparedWithoutInvite/);
+  assert.match(source, /prior_delivery_pending_retry/);
+  assert.match(source, /\/api\/parent\/invitations/);
+  assert.match(source, /verifySupabasePassword\(email\(guardian\.email\), DEFAULT_PARENT_INITIAL_PASSWORD\)/);
+  assert.match(source, /Critical stop/);
+  assert.doesNotMatch(source, /sendEmail|ensureParentPortalLoginForGuardian/);
+});
+
 test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {
   const source = readFileSync(new URL("../scripts/prepare-tyler-parent-portal-accounts.ts", import.meta.url), "utf8");
   assert.match(source, /CENTER_LOCATION_ID = "Kid City USA - TX \| Tyler"/);

@@ -103,6 +103,35 @@ export function nextIntegrationRetryAt(attempts: number, now = new Date()) {
   return new Date(now.getTime() + RETRY_DELAYS_MINUTES[index] * 60_000);
 }
 
+export async function claimIntegrationDeliveryForRetry({
+  id,
+  attempts,
+  now = new Date(),
+}: {
+  id: string;
+  attempts: number;
+  now?: Date;
+}) {
+  const nextAttempts = attempts + 1;
+  const claimed = await prisma.integrationDelivery.updateMany({
+    where: {
+      id,
+      status: "pending",
+      attempts,
+      providerMessageId: null,
+      OR: [
+        { nextAttemptAt: null },
+        { nextAttemptAt: { lte: now } },
+      ],
+    },
+    data: {
+      attempts: nextAttempts,
+      nextAttemptAt: nextIntegrationRetryAt(nextAttempts, now),
+    },
+  });
+  return { claimed: claimed.count === 1, attempts: nextAttempts };
+}
+
 export function computeIntegrationDeliveryState({
   result,
   attempts,
@@ -401,12 +430,35 @@ export async function retryPendingIntegrationDeliveries({
       continue;
     }
 
-    const nextAttempts = delivery.attempts + 1;
+    const claim = await claimIntegrationDeliveryForRetry({
+      id: delivery.id,
+      attempts: delivery.attempts,
+      now,
+    });
+    if (!claim.claimed) {
+      results.push({
+        id: delivery.id,
+        provider: delivery.provider,
+        purpose: delivery.purpose,
+        status: "claimed_elsewhere",
+      });
+      continue;
+    }
+
+    const nextAttempts = claim.attempts;
     const payload = {
       ...asRecord(delivery.payload),
       tenantId: delivery.tenantId,
     };
-    const result = await sendDelivery(delivery.provider, delivery.purpose, payload);
+    let result: Awaited<ReturnType<typeof sendDelivery>>;
+    try {
+      result = await sendDelivery(delivery.provider, delivery.purpose, payload);
+    } catch (error) {
+      result = {
+        ok: false,
+        error: error instanceof Error ? error.message : "Integration retry failed before returning a provider result.",
+      };
+    }
     const state = computeIntegrationDeliveryState({
       result,
       attempts: nextAttempts,
@@ -417,11 +469,10 @@ export async function retryPendingIntegrationDeliveries({
       state.deliveredAt = null;
     }
 
-    await prisma.integrationDelivery.update({
-      where: { id: delivery.id },
+    const updated = await prisma.integrationDelivery.updateMany({
+      where: { id: delivery.id, status: "pending", attempts: nextAttempts },
       data: {
         ...("id" in result && result.id ? { providerMessageId: result.id } : {}),
-        attempts: nextAttempts,
         status: state.status,
         lastResult: result as Prisma.InputJsonObject,
         lastError: result.error ?? null,
@@ -429,6 +480,9 @@ export async function retryPendingIntegrationDeliveries({
         deliveredAt: state.deliveredAt,
       },
     });
+    if (updated.count !== 1) {
+      throw new Error(`Integration delivery ${delivery.id} changed after its retry claim.`);
+    }
 
     results.push({
       id: delivery.id,

@@ -529,8 +529,8 @@ function assertPostRepair(state: State, before?: State) {
   invariant(state.boundary.childrenTotal === before.boundary.childrenTotal - 2, "Child inventory changed outside the reviewed duplicate/create plan.");
   invariant(state.boundary.centerChildren === before.boundary.centerChildren - 3, "Centennial child visibility changed outside the reviewed plan.");
   invariant(state.boundary.guardiansTotal === before.boundary.guardiansTotal - 6, "Guardian inventory changed outside the reviewed merge plan.");
-  invariant(state.boundary.pickupsTotal === before.boundary.pickupsTotal - 6, "Pickup inventory changed outside the reviewed merge plan.");
-  invariant(state.boundary.emergencyContactsTotal === before.boundary.emergencyContactsTotal - 6, "Emergency-contact inventory changed outside the reviewed merge plan.");
+  invariant(state.boundary.pickupsTotal === before.boundary.pickupsTotal, "Pickup inventory changed during family consolidation.");
+  invariant(state.boundary.emergencyContactsTotal === before.boundary.emergencyContactsTotal, "Emergency-contact inventory changed during family consolidation.");
   for (const key of ["billingAccountsTotal", "invoicesTotal", "paymentsTotal", "ledgerEntriesTotal", "messagesTotal", "usersTotal", "accessGrantsTotal"] as const) {
     invariant(state.boundary[key] === before.boundary[key], `${key} changed unexpectedly.`);
   }
@@ -713,10 +713,6 @@ async function main() {
     await mergeGuardian({ tx, keepId: IDS.guardians.nebroNumericAlina, removeId: IDS.guardians.nebroRenderedAlina, familyId: IDS.families.nebroNamed, fullName: "Alina Gebre", relation: "Mother", externalId: "210749", repairedAt });
     await mergeGuardian({ tx, keepId: IDS.guardians.nebroNumericDawit, removeId: IDS.guardians.nebroRenderedDawit, familyId: IDS.families.nebroNamed, fullName: "Dawit Nebro", externalId: "210750", repairedAt });
     await Promise.all([
-      tx.authorizedPickup.deleteMany({ where: { familyId: IDS.families.nebroNamed } }),
-      tx.emergencyContact.deleteMany({ where: { familyId: IDS.families.nebroNamed } }),
-    ]);
-    await Promise.all([
       tx.authorizedPickup.updateMany({ where: { familyId: IDS.families.nebroNumeric }, data: { familyId: IDS.families.nebroNamed } }),
       tx.emergencyContact.updateMany({ where: { familyId: IDS.families.nebroNumeric }, data: { familyId: IDS.families.nebroNamed } }),
       tx.child.updateMany({ where: { familyId: IDS.families.nebroNumeric }, data: { familyId: IDS.families.nebroNamed } }),
@@ -759,8 +755,8 @@ async function main() {
     await mergeGuardian({ tx, keepId: IDS.guardians.lacasseRenderedDavid, removeId: IDS.guardians.lacasseNumericDavid, familyId: IDS.families.lacasseNamed, fullName: "David Lacasse", externalId: "210687", repairedAt });
     await mergeGuardian({ tx, keepId: IDS.guardians.lacasseRenderedDavid, removeId: IDS.guardians.lacasseNumericDavidExtra, familyId: IDS.families.lacasseNamed, fullName: "David Lacasse", externalId: "210687", repairedAt });
     await Promise.all([
-      tx.authorizedPickup.deleteMany({ where: { familyId: IDS.families.lacasseNumeric } }),
-      tx.emergencyContact.deleteMany({ where: { familyId: IDS.families.lacasseNumeric } }),
+      tx.authorizedPickup.updateMany({ where: { familyId: IDS.families.lacasseNumeric }, data: { familyId: IDS.families.lacasseNamed } }),
+      tx.emergencyContact.updateMany({ where: { familyId: IDS.families.lacasseNumeric }, data: { familyId: IDS.families.lacasseNamed } }),
     ]);
     await tx.family.update({ where: { id: IDS.families.lacasseNamed }, data: { name: "Lacasse Family", externalId: "34250", address: lacasseNamed.address ?? lacasseNumeric.address, billingEmail: lacasseNamed.billingEmail ?? lacasseNumeric.billingEmail, customFields: repairFields([lacasseNumeric.customFields, lacasseNamed.customFields], { source: REPAIR_SOURCE, mergedFamilyId: IDS.families.lacasseNumeric, procareAccountKey: "LACASSE", repairedAt }) } });
     await tx.family.update({ where: { id: IDS.families.lacasseNumeric }, data: { centerId: null, name: "[Archived] Leonardo Lacasse", externalId: "archived:34250:37715", customFields: repairFields([lacasseNumeric.customFields], { source: REPAIR_SOURCE, mergedIntoFamilyId: IDS.families.lacasseNamed, retainedWithdrawnChildId: IDS.children.leonardo, repairedAt }) } });
@@ -773,10 +769,6 @@ async function main() {
     await tx.child.update({ where: { id: IDS.children.noah }, data: { familyId: IDS.families.wattonNamed, classroomId: dragonflies.id, ageGroup: dragonflies.name, enrollmentStatus: "enrolled", customFields: repairFields([noahBefore.customFields], { source: REPAIR_SOURCE, sourceReportStatus: "Enrolled", repairedAt }) } });
     await mergeGuardian({ tx, keepId: IDS.guardians.wattonNumericHollyanne, removeId: IDS.guardians.wattonRenderedHollyanne, familyId: IDS.families.wattonNamed, fullName: "Hollyanne Watton", externalId: "233354", repairedAt });
     await mergeGuardian({ tx, keepId: IDS.guardians.wattonNumericGabriel, removeId: IDS.guardians.wattonRenderedGabriel, familyId: IDS.families.wattonNamed, fullName: "Gabriel Watton", externalId: "233355", repairedAt });
-    await Promise.all([
-      tx.authorizedPickup.deleteMany({ where: { familyId: IDS.families.wattonNamed } }),
-      tx.emergencyContact.deleteMany({ where: { familyId: IDS.families.wattonNamed } }),
-    ]);
     await Promise.all([
       tx.authorizedPickup.updateMany({ where: { familyId: IDS.families.wattonNumeric }, data: { familyId: IDS.families.wattonNamed } }),
       tx.emergencyContact.updateMany({ where: { familyId: IDS.families.wattonNumeric }, data: { familyId: IDS.families.wattonNamed } }),

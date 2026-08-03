@@ -28,3 +28,14 @@ test("Centennial family repair keeps the two source-backed pre-registered childr
   assert.match(source, /pendingChildrenIntentionallyRetained: \["Averly Wisdom", "Callen Gnacinski"\]/);
   assert.match(source, /Only Averly Wisdom and Callen Gnacinski should remain pending/);
 });
+
+test("Centennial family consolidation preserves every pickup and emergency contact", () => {
+  assert.doesNotMatch(source, /authorizedPickup\.deleteMany/);
+  assert.doesNotMatch(source, /emergencyContact\.deleteMany/);
+  assert.match(source, /pickupsTotal === before\.boundary\.pickupsTotal/);
+  assert.match(source, /emergencyContactsTotal === before\.boundary\.emergencyContactsTotal/);
+  for (const duplicateFamily of ["nebroNumeric", "lacasseNumeric", "wattonNumeric"]) {
+    assert.match(source, new RegExp(`authorizedPickup\\.updateMany\\(\\{ where: \\{ familyId: IDS\\.families\\.${duplicateFamily}`));
+    assert.match(source, new RegExp(`emergencyContact\\.updateMany\\(\\{ where: \\{ familyId: IDS\\.families\\.${duplicateFamily}`));
+  }
+});

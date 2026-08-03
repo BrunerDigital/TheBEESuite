@@ -10,7 +10,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { getSupabaseAuthConfig } from "@/lib/supabase-auth";
 
-const CENTER_LOCATION_ID = "TX | Tyler";
+const CENTER_LOCATION_ID = "Kid City USA - TX | Tyler";
 const CENTER_NAME = "Kid City USA - Tyler";
 const IMPORT_SOURCE = "tyler_procare_cross_report_import_2026_07_31";
 const IMPORT_FILENAME = "Tyler ProCare cross-report export (10 files)";
@@ -208,7 +208,7 @@ async function main() {
 
     const matchingGuardians = allGuardians.filter((guardian) => normalizedEmail(guardian.email) === email);
     if (matchingGuardians.some((guardian) => guardian.family.centerId !== center.id)) {
-      reasons.push("Email is also attached to a guardian outside TX | Tyler.");
+      reasons.push("Email is also attached to a guardian outside Kid City USA - TX | Tyler.");
     }
     if (matchingGuardians.some((guardian) => parentPortalAccessDisabled(guardian.customFields))) {
       reasons.push("A matching guardian record has parent portal access disabled.");
@@ -519,7 +519,7 @@ async function main() {
   invariant(invitationAudits === 0 && invitationDeliveries === 0, "Invitation activity was detected during preparation.");
   invariant(anyInvitationAudits === 0 && anyInvitationDeliveries === 0, "A prepared Tyler account has invitation history.");
   invariant(preparationAuditGuardianCount === EXPECTED_ENROLLED_FAMILIES, "Not every prepared Tyler account has an audit record.");
-  invariant(afterOutsideLinked === beforeOutsideLinked, "A guardian outside TX | Tyler was changed.");
+  invariant(afterOutsideLinked === beforeOutsideLinked, "A guardian outside Kid City USA - TX | Tyler was changed.");
 
   console.log(JSON.stringify({
     applied: {

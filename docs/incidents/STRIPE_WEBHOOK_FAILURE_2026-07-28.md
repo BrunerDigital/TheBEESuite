@@ -2,9 +2,9 @@
 
 Status: **diagnosis and local patch prepared; no production data, secret, Stripe setting, deployment, or event delivery was changed or replayed.**
 
-Incident window: `2026-07-28T12:18:41Z` onward  
-Platform account: `acct_1T84IEGk8ncxY2N9`  
-Route: `POST /api/billing/stripe-webhook`  
+Incident window: `2026-07-28T12:18:41Z` onward
+Platform account: `acct_1T84IEGk8ncxY2N9`
+Route: `POST /api/billing/stripe-webhook`
 Live URL: `https://thebeesuite.io/api/billing/stripe-webhook`
 
 ## Executive conclusion

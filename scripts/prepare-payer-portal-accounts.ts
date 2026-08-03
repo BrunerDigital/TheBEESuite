@@ -93,7 +93,7 @@ async function main() {
   const centerById = new Map(centers.map((center) => [center.id, center]));
   const payerGuardians = guardians.filter((guardian) => {
     const center = guardian.family.centerId ? centerById.get(guardian.family.centerId) : null;
-    if (EXCLUDE_TX_TYLER && center?.crmLocationId === "TX | Tyler") return false;
+    if (EXCLUDE_TX_TYLER && center?.crmLocationId === "Kid City USA - TX | Tyler") return false;
     if (!guardian.family.children.some((child) => isActiveProcareEnrollmentStatus(child.enrollmentStatus))) return false;
     if (clean(guardian.family.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.family.externalId)) return false;
     if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.externalId)) return false;

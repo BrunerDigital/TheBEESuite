@@ -126,7 +126,7 @@ async function main() {
   }
 
   const schoolRows = centers
-    .filter((center) => center.crmLocationId !== "TX | Tyler" && !`${center.name} ${center.crmLocationId}`.toLowerCase().includes("demo"))
+    .filter((center) => center.crmLocationId !== "Kid City USA - TX | Tyler" && !`${center.name} ${center.crmLocationId}`.toLowerCase().includes("demo"))
     .map((center) => {
       const currentFamilies = families.filter((family) => (
         family.centerId === center.id

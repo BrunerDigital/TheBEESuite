@@ -93,7 +93,7 @@ export function TerminalStore({ items, centers, defaultCenterId }: Props) {
               <CardContent>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <div className="text-xs text-muted-foreground">Stripe list</div>
+                    <div className="text-xs text-muted-foreground">Manufacturer list</div>
                     <div className="text-sm text-muted-foreground line-through">{money(item.stripeBasePriceCents)}</div>
                     <div className="mt-2 text-xs text-muted-foreground">Bee Suite price</div>
                     <div className="text-2xl font-semibold tracking-tight">{money(item.priceCents)}</div>
@@ -167,7 +167,7 @@ export function TerminalStore({ items, centers, defaultCenterId }: Props) {
 
             <div className="rounded-lg border bg-background/40 p-3 text-sm">
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Stripe list subtotal</span>
+                <span className="text-muted-foreground">Manufacturer list subtotal</span>
                 <span className="tabular-nums">{money(baseTotalCents)}</span>
               </div>
               <div className="mt-2 flex justify-between gap-3">

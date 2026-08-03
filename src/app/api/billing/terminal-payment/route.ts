@@ -106,7 +106,7 @@ async function authorizedCenter(centerId: string): Promise<AuthorizedCenterResul
   if (!connectedAccountId) {
     return {
       response: NextResponse.json(
-        { ok: false, error: "This school needs a Stripe connected payout account before a card reader can be registered." },
+        { ok: false, error: "This school needs a connected payout account before a card reader can be registered." },
         { status: 400 },
       ),
     };
@@ -120,7 +120,7 @@ async function verifyConnectedAccount(tenantId: string, connectedAccountId: stri
     return {
       ok: false as const,
       response: NextResponse.json(
-        { ok: false, error: accountStatus.error || "Stripe payout status could not be confirmed." },
+        { ok: false, error: accountStatus.error || "Payout status could not be confirmed." },
         { status: accountStatus.configured ? 502 : 503 },
       ),
     };
@@ -130,7 +130,7 @@ async function verifyConnectedAccount(tenantId: string, connectedAccountId: stri
     return {
       ok: false as const,
       response: NextResponse.json(
-        { ok: false, error: readiness.blockingReason || "This school's Stripe account is not ready to accept card-present payments." },
+        { ok: false, error: readiness.blockingReason || "This school's connected payment account is not ready to accept card-present payments." },
         { status: 400 },
       ),
     };
@@ -213,7 +213,7 @@ async function registerReader(body: Record<string, unknown>) {
     });
     if (!location.ok || !location.location?.id) {
       return NextResponse.json(
-        { ok: false, error: location.error || "The school's Stripe Terminal location could not be created." },
+        { ok: false, error: location.error || "The school's card-reader location could not be created." },
         { status: location.configured ? 502 : 503 },
       );
     }
@@ -277,10 +277,10 @@ async function processPayment(body: Record<string, unknown>) {
 
   const locationId = terminalLocationId(context.center.customFields);
   if (!locationId) {
-    return NextResponse.json({ ok: false, error: "Register a Stripe Terminal reader for this school first." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Register a card reader for this school first." }, { status: 400 });
   }
   if (!readerId.startsWith("tmr_")) {
-    return NextResponse.json({ ok: false, error: "Choose a registered Stripe Terminal reader." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Choose a registered card reader." }, { status: 400 });
   }
   const reader = await retrieveStripeTerminalReader({
     readerId,
@@ -532,7 +532,7 @@ async function paymentStatus(body: Record<string, unknown>) {
   const fields = jsonRecord(payment.customFields);
   const paymentIntentId = clean(fields.stripePaymentIntentId);
   if (!paymentIntentId.startsWith("pi_")) {
-    return NextResponse.json({ ok: false, error: "The payment is missing its Stripe PaymentIntent." }, { status: 409 });
+    return NextResponse.json({ ok: false, error: "The payment is missing its processor confirmation reference." }, { status: 409 });
   }
   if (payment.status === PaymentStatus.PAID) {
     return NextResponse.json({ ok: true, status: "succeeded", paymentId: payment.id });
@@ -576,7 +576,7 @@ async function paymentStatus(body: Record<string, unknown>) {
         }));
     if (!application.applied && application.reason !== "payment_already_applied") {
       return NextResponse.json(
-        { ok: false, status: "review", error: `Stripe succeeded, but the billing ledger needs review (${application.reason || "not_applied"}).` },
+        { ok: false, status: "review", error: `The processor confirmed payment, but the billing ledger needs review (${application.reason || "not_applied"}).` },
         { status: 409 },
       );
     }

@@ -106,7 +106,7 @@ async function loadFamilyRefundPlan(
     return {
       ok: false as const,
       status: 400,
-      error: `Stripe can return ${moneyLabel(refundPlan.availableCents)} across this family's completed payments. Use a family credit or manual reimbursement for the remaining ${moneyLabel(input.amountCents - refundPlan.availableCents)}.`,
+      error: `The original payment processor can return ${moneyLabel(refundPlan.availableCents)} across this family's completed payments. Use a family credit or manual reimbursement for the remaining ${moneyLabel(input.amountCents - refundPlan.availableCents)}.`,
       availableCents: refundPlan.availableCents,
     };
   }
@@ -264,7 +264,7 @@ export async function issueFamilyRefund(
     allocations,
     partial: totalCents < input.amountCents,
     warning: totalCents < input.amountCents
-      ? `${moneyLabel(totalCents)} was sent before Stripe stopped the remaining allocation.`
+      ? `${moneyLabel(totalCents)} was sent before the payment processor stopped the remaining allocation.`
       : null,
   };
 }

@@ -110,6 +110,7 @@ test("all-location imported parent waves require direct source identity and expl
   assert.match(source, /--acknowledge-director-confirmation-waived/);
   assert.match(source, /--repair-interrupted-preparation-flags/);
   assert.match(source, /--retry-unconfigured-provider-skips/);
+  assert.match(source, /--use-direct-import-profile-evidence-authorized-by-user/);
   assert.match(source, /"kid-city-usa"/);
   assert.match(source, /miss-honeys-learning-center/);
   assert.match(source, /trial_setup/);
@@ -127,6 +128,8 @@ test("all-location imported parent waves require direct source identity and expl
   assert.match(source, /verified_family_source_id_required/);
   assert.match(source, /all_active_children_verified_required/);
   assert.match(source, /reviewed_import_batch_required/);
+  assert.match(source, /directProfileEvidenceAuthorizedByUser/);
+  assert.match(source, /active_verified_child_required/);
   assert.match(source, /cross_center_email/);
   assert.match(source, /conflicting_guardian_identity/);
   assert.match(source, /parentPortalAccessDisabled/);
@@ -154,4 +157,31 @@ test("Tyler portal preparation is school-scoped, source-locked, and cannot send 
   assert.match(source, /prepareWithoutInvite: !account\.appUserExists \|\| !account\.authUserExists/);
   assert.match(source, /invitationSent: false/);
   assert.doesNotMatch(source, /sendEmail|inviteUserByEmail|issueParentPortalSetupLink|recordEmailDeliveryAttempt/);
+});
+
+test("Longmont PDF balance and parent access reconciliation is source-locked and payment-preserving", () => {
+  const source = readFileSync(new URL("../scripts/reconcile-longmont-pdf-parent-access.ts", import.meta.url), "utf8");
+  assert.match(source, /--confirm-longmont-pdf-reconciliation/);
+  assert.match(source, /--confirm-preserve-payments-and-invoices/);
+  assert.match(source, /--confirm-reset-invited-parent-passwords/);
+  assert.match(source, /ac04f12c3c011041d2ea60a6fe33bbaf36c564906a10d49b3eb35a746a974b78/);
+  assert.match(source, /EXPECTED_PDF_ROWS = 135/);
+  assert.match(source, /EXPECTED_MATCHED_FAMILIES = 115/);
+  assert.match(source, /paymentsMutated: false/);
+  assert.match(source, /invoicesMutated: false/);
+  assert.match(source, /longmont_pdf_password_verified/);
+  assert.match(source, /verifySupabasePassword/);
+  assert.match(source, /EXPECTED_NEW_INVITES = 7/);
+});
+
+test("Granbury timeout retry is single-delivery scoped and explicitly authorized", () => {
+  const source = readFileSync(new URL("../scripts/retry-granbury-parent-invite-timeout.ts", import.meta.url), "utf8");
+  assert.match(source, /--confirm-granbury-parent-invite-timeout-retry/);
+  assert.match(source, /status: "pending"/);
+  assert.match(source, /providerMessageId: null/);
+  assert.match(source, /Expected one scoped Granbury timeout delivery/);
+  assert.match(source, /disableClickTracking: true/);
+  assert.match(source, /verifySupabasePassword/);
+  assert.match(source, /parent_portal\.guardian_invitation_timeout_retry_accepted/);
+  assert.match(source, /deliveryRecordReused: true/);
 });

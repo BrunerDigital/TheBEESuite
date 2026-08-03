@@ -4,7 +4,7 @@ import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
-import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
+import { defaultGuardianPinFromPhone, defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { evaluateProcareInvitationBatchReadiness } from "@/lib/parent-invitation-readiness";
@@ -21,6 +21,7 @@ import {
   parentPortalInvitationSentFields,
 } from "@/lib/parent-portal-logins";
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
+import { verifyGuardianPin } from "@/lib/kiosk";
 import { prisma } from "@/lib/prisma";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSupabaseAuthConfig, verifySupabasePassword } from "@/lib/supabase-auth";
@@ -32,6 +33,7 @@ const CONFIRM_MISS_HONEYS_FLAG = "--confirm-miss-honeys-locations";
 const WAIVE_DIRECTOR_FLAG = "--acknowledge-director-confirmation-waived";
 const REPAIR_FLAG = "--repair-interrupted-preparation-flags";
 const RETRY_UNCONFIGURED_PROVIDER_FLAG = "--retry-unconfigured-provider-skips";
+const DIRECT_PROFILE_EVIDENCE_FLAG = "--use-direct-import-profile-evidence-authorized-by-user";
 const DEFAULT_BASE_URL = "https://thebeesuite.io";
 const CORPORATE_ACTOR_EMAIL = "corpschools@kidcityusa.com";
 
@@ -44,6 +46,7 @@ type Args = {
   directorConfirmationWaived: boolean;
   repairInterruptedPreparation: boolean;
   retryUnconfiguredProviderSkips: boolean;
+  useDirectProfileEvidence: boolean;
   scope: WaveScope;
 };
 
@@ -62,6 +65,7 @@ type CandidateGroup = {
   authUserExists: boolean;
   preparedWithoutInvite: boolean;
   retryUnconfiguredProviderSkip: boolean;
+  directProfileEvidenceAuthorizedByUser: boolean;
 };
 
 function clean(value: unknown) {
@@ -113,6 +117,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     directorConfirmationWaived: false,
     repairInterruptedPreparation: false,
     retryUnconfiguredProviderSkips: false,
+    useDirectProfileEvidence: false,
     scope: "kid_city",
   };
   for (const arg of argv) {
@@ -129,6 +134,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     else if (arg === WAIVE_DIRECTOR_FLAG) args.directorConfirmationWaived = true;
     else if (arg === REPAIR_FLAG) args.repairInterruptedPreparation = true;
     else if (arg === RETRY_UNCONFIGURED_PROVIDER_FLAG) args.retryUnconfiguredProviderSkips = true;
+    else if (arg === DIRECT_PROFILE_EVIDENCE_FLAG) args.useDirectProfileEvidence = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
   if (args.apply && (
@@ -244,6 +250,14 @@ function hasOnlyActiveVerifiedChildren(guardian: Pick<GuardianRecord, "family"> 
   ));
 }
 
+function hasActiveVerifiedChild(guardian: Pick<GuardianRecord, "family"> | MatchingGuardian) {
+  return guardian.family.children.some((child) => (
+    isActiveProcareEnrollmentStatus(child.enrollmentStatus)
+    && clean(child.sourceSystem).toLowerCase() === "procare"
+    && Boolean(clean(child.externalId))
+  ));
+}
+
 function identityCompatible(reference: GuardianRecord, candidate: MatchingGuardian) {
   if (reference.id === candidate.id) return true;
   const referenceExternalId = clean(reference.externalId);
@@ -282,7 +296,11 @@ function groupByKey<T>(items: T[], keyFor: (item: T) => string) {
   return groups;
 }
 
-async function buildPlan({ retryUnconfiguredProviderSkips = false, scope = "kid_city" as WaveScope } = {}) {
+async function buildPlan({
+  retryUnconfiguredProviderSkips = false,
+  scope = "kid_city" as WaveScope,
+  useDirectProfileEvidence = false,
+} = {}) {
   const allCenters = await loadTargetCenters(scope);
   const centers = allCenters.filter((center) => !isNonProductionCenter(center));
   if (!centers.length) throw new Error("No imported centers were found for the requested invitation scope.");
@@ -358,16 +376,23 @@ async function buildPlan({ retryUnconfiguredProviderSkips = false, scope = "kid_
     for (const guardian of group) {
       if (clean(guardian.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.externalId)) reasons.add("verified_guardian_source_id_required");
       if (clean(guardian.family.sourceSystem).toLowerCase() !== "procare" || !clean(guardian.family.externalId)) reasons.add("verified_family_source_id_required");
-      if (!hasOnlyActiveVerifiedChildren(guardian)) reasons.add("all_active_children_verified_required");
+      const activeChildEvidenceReady = useDirectProfileEvidence
+        ? hasActiveVerifiedChild(guardian)
+        : hasOnlyActiveVerifiedChildren(guardian);
+      if (!activeChildEvidenceReady) {
+        reasons.add(useDirectProfileEvidence ? "active_verified_child_required" : "all_active_children_verified_required");
+      }
       if (parentPortalAccessDisabled(guardian.customFields)) reasons.add("parent_portal_disabled");
     }
     if (!group.some((guardian) => phoneReady(guardian.phone))) reasons.add("phone_with_four_digits_required");
-    for (const familyId of new Set(group.map((guardian) => guardian.familyId))) {
-      const batch = latestBatchByFamilyId.get(familyId);
-      const readiness = evaluateProcareInvitationBatchReadiness(
-        batch ? { id: batch.id, status: batch.status, summary: batch.summary } : null,
-      );
-      if (!readiness.ok) reasons.add("reviewed_import_batch_required");
+    if (!useDirectProfileEvidence) {
+      for (const familyId of new Set(group.map((guardian) => guardian.familyId))) {
+        const batch = latestBatchByFamilyId.get(familyId);
+        const readiness = evaluateProcareInvitationBatchReadiness(
+          batch ? { id: batch.id, status: batch.status, summary: batch.summary } : null,
+        );
+        if (!readiness.ok) reasons.add("reviewed_import_batch_required");
+      }
     }
 
     const matches = matchingByEmail.get(normalizedEmail) ?? [];
@@ -427,6 +452,7 @@ async function buildPlan({ retryUnconfiguredProviderSkips = false, scope = "kid_
       authUserExists: Boolean(authUser),
       preparedWithoutInvite,
       retryUnconfiguredProviderSkip: unconfiguredProviderSkips.length > 0,
+      directProfileEvidenceAuthorizedByUser: useDirectProfileEvidence,
     };
     const reasonList = [...reasons].sort();
     if (!reasonList.length) {
@@ -475,7 +501,10 @@ async function buildPlan({ retryUnconfiguredProviderSkips = false, scope = "kid_
     summary: {
       scope: scope === "miss_honeys"
         ? "All Miss Honey's locations with imported ProCare family data; trial-setup invitation and director-confirmation gates explicitly authorized by the user"
-        : "All active Kid City locations with imported ProCare family data; director confirmation waived by explicit user authorization",
+        : useDirectProfileEvidence
+          ? "All active Kid City locations with direct ProCare guardian, family, and active-child profile evidence; import-review and director-confirmation gates explicitly waived by the user"
+          : "All active Kid City locations with imported ProCare family data; director confirmation waived by explicit user authorization",
+      directProfileEvidenceAuthorizedByUser: useDirectProfileEvidence,
       targetLocations: schools.length,
       sendableNow: eligible.length,
       sendableAfterInterruptedRepair: interrupted.length,
@@ -555,11 +584,21 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
   });
   if (!guardian) throw new Error("guardian_missing_after_provision");
   let kioskPinDefaultedFromPhone = false;
+  let kioskPinVerifiedFromPhone = false;
   if (!guardian.checkInPinHash) {
     const pinData = defaultGuardianPinUpdate({ guardianId: guardian.id, phone: guardian.phone, setById: actorUserId });
     if (!pinData) throw new Error("default_kiosk_pin_unavailable");
-    await prisma.guardian.update({ where: { id: guardian.id }, data: pinData });
+    const updatedGuardian = await prisma.guardian.update({
+      where: { id: guardian.id },
+      data: pinData,
+      select: { checkInPinHash: true },
+    });
+    const expectedPin = defaultGuardianPinFromPhone(guardian.phone);
+    if (!expectedPin || !verifyGuardianPin(guardian.id, expectedPin, updatedGuardian.checkInPinHash)) {
+      throw new Error("default_kiosk_pin_verification_failed");
+    }
     kioskPinDefaultedFromPhone = true;
+    kioskPinVerifiedFromPhone = true;
   }
 
   const branding = resolveWorkspaceBranding({
@@ -627,6 +666,9 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
       authorizedImportedWave: true,
       directorConfirmationWaivedByUser: true,
       retryUnconfiguredProviderSkip: candidate.retryUnconfiguredProviderSkip,
+      directProfileEvidenceAuthorizedByUser: candidate.directProfileEvidenceAuthorizedByUser,
+      kioskPinDefaultedFromPhone,
+      kioskPinVerifiedFromPhone,
     },
   });
 
@@ -654,6 +696,7 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
       initialPasswordIssued,
       preparationRequired,
       kioskPinDefaultedFromPhone,
+      kioskPinVerifiedFromPhone,
       emailBrand: branding.kind,
       emailAcceptedByProvider: emailResult.ok,
       authorizedActorUserId: actorUserId,
@@ -661,6 +704,7 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
       directorConfirmationWaivedByUser: true,
       billingCutoverApproved,
       retryUnconfiguredProviderSkip: candidate.retryUnconfiguredProviderSkip,
+      directProfileEvidenceAuthorizedByUser: candidate.directProfileEvidenceAuthorizedByUser,
     },
   });
   if (!emailResult.ok) return { accepted: false, initialPasswordIssued };
@@ -759,6 +803,7 @@ async function main() {
   const planOptions = {
     retryUnconfiguredProviderSkips: args.retryUnconfiguredProviderSkips,
     scope: args.scope,
+    useDirectProfileEvidence: args.useDirectProfileEvidence,
   };
   let plan = await buildPlan(planOptions);
   console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry-run", ...plan.summary }, null, 2));

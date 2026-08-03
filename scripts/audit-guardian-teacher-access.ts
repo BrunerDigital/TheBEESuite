@@ -7,6 +7,8 @@ import { defaultGuardianPinFromPhone } from "../src/lib/guardian-kiosk-pin";
 import { hashGuardianPin } from "../src/lib/kiosk";
 import { buildTeacherLoginEmail } from "../src/lib/teacher-login";
 
+const EXPECTED_SUPABASE_REF = "nqjrlktoewiueiwrubas";
+
 type CenterSummary = {
   center: string;
   sourceSystem: string | null;
@@ -43,6 +45,9 @@ function getSupabaseAdminClient() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY;
   if (!url || !key) throw new Error("Supabase admin configuration is missing.");
+  if (!url.includes(EXPECTED_SUPABASE_REF)) {
+    throw new Error("Refusing to audit an unexpected Supabase project.");
+  }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });

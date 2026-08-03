@@ -16,6 +16,9 @@ const teachersOnly = process.argv.includes("--teachers-only");
 const verifyOnly = process.argv.includes("--verify-only");
 const acknowledgeProduction = process.argv.includes(`--ack-production=${EXPECTED_SUPABASE_REF}`);
 const acknowledgeExceptions = process.argv.includes("--ack-safe-exceptions");
+const acknowledgedPlanFingerprint = process.argv
+  .find((argument) => argument.startsWith("--ack-plan="))
+  ?.slice("--ack-plan=".length) || "";
 
 type OperationalCenter = {
   id: string;
@@ -844,6 +847,9 @@ async function main() {
   if (guardiansOnly && teachersOnly) throw new Error("Choose only one staged operation mode.");
   if (verifyOnly && apply) throw new Error("Verification-only mode cannot apply changes.");
   if (verifyOnly && !teachersOnly) throw new Error("Verification-only mode requires --teachers-only.");
+  if (apply && guardiansOnly === teachersOnly) {
+    throw new Error("Apply requires exactly one staged mode: --guardians-only or --teachers-only.");
+  }
   if (apply && (!acknowledgeProduction || !acknowledgeExceptions)) {
     throw new Error("Apply requires --ack-production=nqjrlktoewiueiwrubas and --ack-safe-exceptions.");
   }
@@ -853,6 +859,10 @@ async function main() {
   if (plan.teacherExceptions.unsafeIdentity) {
     console.log(JSON.stringify(summary, null, 2));
     throw new Error("Unsafe teacher identity exceptions remain; refusing the batch.");
+  }
+  if (apply && acknowledgedPlanFingerprint !== plan.fingerprint) {
+    console.log(JSON.stringify(summary, null, 2));
+    throw new Error(`Apply requires --ack-plan=${plan.fingerprint} from the current reviewed dry-run.`);
   }
   if (verifyOnly) {
     const teacherPassword = getTeacherBatchPassword();

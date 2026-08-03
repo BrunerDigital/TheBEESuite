@@ -12,6 +12,8 @@ test("guardian and teacher access execution stays production-gated and credentia
   assert.match(source, /--ack-safe-exceptions/);
   assert.match(source, /--guardians-only/);
   assert.match(source, /--teachers-only/);
+  assert.match(source, /--ack-plan=\$\{plan\.fingerprint\}/);
+  assert.match(source, /Apply requires exactly one staged mode/);
   assert.match(source, /BEE_SUITE_TEACHER_BATCH_PASSWORD/);
   assert.match(source, /Refusing to operate against an unexpected Supabase project/);
   assert.doesNotMatch(source, /const TEACHER_PASSWORD\s*=\s*["']/);
@@ -26,4 +28,5 @@ test("the access audit is read-only", () => {
 
   assert.doesNotMatch(source, /prisma\.[a-zA-Z]+\.(?:create|delete|update|upsert)\s*\(/);
   assert.doesNotMatch(source, /auth\.admin\.(?:createUser|deleteUser|updateUserById)\s*\(/);
+  assert.match(source, /Refusing to audit an unexpected Supabase project/);
 });

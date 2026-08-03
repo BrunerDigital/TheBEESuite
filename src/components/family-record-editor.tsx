@@ -1750,7 +1750,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
           </div>
           <Button
-            disabled={isPending || !selectedFamily || !childName.trim() || !dateOfBirth}
+            disabled={isPending || !selectedFamily || !childName.trim() || (!selectedChild && !dateOfBirth)}
             onClick={() => postRecord({
               entity: "child",
               id: selectedChild?.id,

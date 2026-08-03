@@ -35,6 +35,7 @@ import {
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
+import { isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { canSaveTuitionPlanAmount } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -878,7 +879,7 @@ async function POSTHandler(request: NextRequest) {
       const guard = classroomFamilyGuard(centerId, classroom.centerId);
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    const existingChild = id ? await prisma.child.findUnique({ where: { id }, select: { familyId: true, customFields: true } }) : null;
+    const existingChild = id ? await prisma.child.findUnique({ where: { id }, select: { familyId: true, dateOfBirth: true, customFields: true } }) : null;
     const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
     const existingCustomFields = jsonObject(existingChild?.customFields);
     const customFields = ["full_time", "part_time"].includes(careScheduleType)
@@ -886,14 +887,15 @@ async function POSTHandler(request: NextRequest) {
       : Object.keys(existingCustomFields).length
         ? existingCustomFields as Prisma.InputJsonObject
         : undefined;
+    const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
     const data = {
       familyId,
-      classroomId,
+      classroomId: isCurrentlyEnrolledStatus(enrollmentStatus) ? classroomId : null,
       fullName: clean(body.name),
       preferredName: clean(body.preferredName) || null,
-      dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? new Date("2021-01-01T12:00:00.000Z"),
+      dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? existingChild?.dateOfBirth ?? new Date("2021-01-01T12:00:00.000Z"),
       ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
-      enrollmentStatus: clean(body.enrollmentStatus) || clean(body.status) || "enrolled",
+      enrollmentStatus,
       startDate: parseDate(body.startDate),
       schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
       photoVideoPermission: Boolean(body.photoVideoPermission),

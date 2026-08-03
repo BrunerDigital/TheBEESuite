@@ -26,6 +26,15 @@ test("parent billing balance stays on the family copay after the agency pays", (
   }), 2_500);
 });
 
+test("a posted agency payment without a separate receivable stays credited to the family balance", () => {
+  assert.equal(parentVisibleBillingBalanceCents({
+    accountBalanceCents: 10_000,
+    agencyLedgerEntries: [
+      { type: "agency_payment", sourceSystem: "subsidy_agency", amountCents: -40_000 },
+    ],
+  }), 10_000);
+});
+
 test("parent billing visibility recognizes explicit agency sources and hides agency payments", () => {
   assert.equal(isAgencyOnlyLedgerEntry({ type: "credit", sourceSystem: "subsidy_agency" }), true);
   assert.equal(isAgencyOnlyLedgerEntry({ type: "payment", sourceSystem: "stripe" }), false);

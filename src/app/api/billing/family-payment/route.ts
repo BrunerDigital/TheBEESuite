@@ -169,6 +169,31 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Parents must confirm payment through secure checkout." }, { status: 400 });
   }
 
+  const draftStripePayments = await prisma.payment.findMany({
+    where: {
+      billingAccountId: billingAccount.id,
+      provider: "stripe",
+      status: PaymentStatus.DRAFT,
+    },
+    select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
+  });
+  const activeInvoicePayment = parentCheckout
+    ? draftStripePayments.find((item) => {
+        const fields = jsonRecord(item.customFields);
+        return isActiveStripeCheckoutPayment(item) && Boolean(fields.invoiceId);
+      })
+    : null;
+  if (activeInvoicePayment) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "An invoice checkout is already processing. Complete or cancel it before paying the family balance.",
+        paymentId: activeInvoicePayment.id,
+      },
+      { status: 409 },
+    );
+  }
+
   const requestedAmountCents = parseAmountCents(body);
   const agencyLedgerEntries = parentCheckout
     ? await prisma.ledgerEntry.findMany({
@@ -554,14 +579,6 @@ async function POSTHandler(request: NextRequest) {
     });
   }
 
-  const draftStripePayments = await prisma.payment.findMany({
-    where: {
-      billingAccountId: billingAccount.id,
-      provider: "stripe",
-      status: PaymentStatus.DRAFT,
-    },
-    select: { id: true, amountCents: true, customFields: true, externalIdPlaceholder: true, provider: true, status: true },
-  });
   const activeFamilyPayment = draftStripePayments.find((item) => {
     const fields = jsonRecord(item.customFields);
     return isActiveStripeCheckoutPayment(item) && fields.paymentScope === "family_balance";

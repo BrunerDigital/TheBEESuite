@@ -17,6 +17,7 @@ test("the parent portal places authoritative account activity ahead of invoice h
   assert.match(source, /Invoice records are listed without agency subsidy amounts\./);
   assert.match(source, /Only your family responsibility is included\./);
   assert.doesNotMatch(source, /balanceAfterCents/);
+  assert.doesNotMatch(source, /latestAccountLedgerEntry\.amountCents|money\(entry\.amountCents\)/);
 });
 
 test("parent invoice data and checkout do not expose or charge agency responsibility", () => {
@@ -36,8 +37,12 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);
   assert.match(route, /parentPaymentAmountCents\(/);
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
+  assert.match(route, /activeInvoicePayment/);
+  assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
+  assert.match(workspace, /payProductInvoice/);
+  assert.match(workspace, /Pay Product by Card/);
 });
 
 test("director billing keeps agency amounts and payment controls", () => {

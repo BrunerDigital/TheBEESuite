@@ -86,6 +86,7 @@ type Invoice = {
   status: string;
   dueDate: string | Date;
   purposeLabel?: string | null;
+  productCheckoutAvailable?: boolean;
   pendingPayment?: PendingInvoicePayment | null;
 };
 
@@ -103,7 +104,6 @@ type LedgerEntry = {
   id: string;
   type: string;
   description: string;
-  amountCents: number;
   effectiveAt: string | Date;
 };
 
@@ -736,6 +736,35 @@ export function ParentPortalWorkspace({
     payFamilyBalance(paymentMethodCategory);
   }
 
+  function payProductInvoice(invoiceId: string, paymentMethodCategory: "card" | "link_bank") {
+    if (checkoutBlocked) {
+      return showError(checkoutReadiness.blockingReason || "Parent payments are not ready for this school yet.");
+    }
+    const invoice = invoices.find((item) => item.id === invoiceId);
+    if (!invoice?.productCheckoutAvailable || invoice.status !== "OPEN") {
+      return showError("This product invoice is not available for checkout.");
+    }
+    if (invoice.pendingPayment) {
+      return showError(pendingPaymentMessage(invoice.pendingPayment));
+    }
+    startTransition(async () => {
+      const response = await fetch("/api/billing/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId,
+          paymentMethodCategory,
+          returnPath: "/parent-portal",
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
+      if (!response.ok || !json?.url) {
+        return showError(json?.error || "Product checkout could not be opened.");
+      }
+      window.location.href = json.url;
+    });
+  }
+
   function selectUniformColor(color: "Black" | "Yellow") {
     setUniformColor(color);
     const firstSize = uniformProducts.find((product) => product.color === color && product.purchaseOption === uniformPurchaseOption)?.size
@@ -1321,7 +1350,7 @@ export function ParentPortalWorkspace({
                   <>
                     <div className="mt-1 truncate font-medium">{latestAccountLedgerEntry.description}</div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {money(latestAccountLedgerEntry.amountCents)} · {formatDate(latestAccountLedgerEntry.effectiveAt)}
+                      {formatDate(latestAccountLedgerEntry.effectiveAt)}
                     </div>
                   </>
                 ) : (
@@ -1348,9 +1377,6 @@ export function ParentPortalWorkspace({
                     <div>
                       <div className="font-medium">{entry.description}</div>
                       <div className="text-xs text-muted-foreground">{entry.type.replaceAll("_", " ")} · {formatDate(entry.effectiveAt)}</div>
-                    </div>
-                    <div className="text-right font-medium">
-                      {money(entry.amountCents)}
                     </div>
                   </div>
                 ))}
@@ -1654,6 +1680,18 @@ export function ParentPortalWorkspace({
                   <Badge variant={invoiceHasPendingPayment ? "secondary" : invoice.status === "OPEN" ? "outline" : "default"}>
                     {invoiceHasPendingPayment ? "PROCESSING" : invoice.status}
                   </Badge>
+                  {invoice.productCheckoutAvailable && invoice.status === "OPEN" && !invoiceHasPendingPayment ? (
+                    <div className="flex basis-full flex-wrap gap-2 sm:justify-end">
+                      <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payProductInvoice(invoice.id, "card")}>
+                        <CreditCard data-icon="inline-start" />
+                        Pay Product by Card
+                      </Button>
+                      <Button className="w-full sm:w-auto" disabled={isPending || checkoutBlocked} onClick={() => payProductInvoice(invoice.id, "link_bank")} variant="outline">
+                        <Building2 data-icon="inline-start" />
+                        Pay Product by Bank
+                      </Button>
+                    </div>
+                  ) : null}
                   {invoice.pendingPayment ? (
                     <div className="basis-full rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
                       {pendingPaymentMessage(invoice.pendingPayment)}

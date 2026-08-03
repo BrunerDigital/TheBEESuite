@@ -28,7 +28,7 @@ export function parentVisibleBillingBalanceCents(input: {
     .filter(isAgencyOnlyLedgerEntry)
     .reduce((total, entry) => total + entry.amountCents, 0);
 
-  return input.accountBalanceCents - agencyBalanceCents;
+  return input.accountBalanceCents - Math.max(0, agencyBalanceCents);
 }
 
 export function parentPaymentAmountCents(input: {

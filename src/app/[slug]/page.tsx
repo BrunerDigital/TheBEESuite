@@ -1957,14 +1957,14 @@ async function renderLivePage(
             orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
             skip: (requestedLedgerPage - 1) * PARENT_LEDGER_PAGE_SIZE,
             take: PARENT_LEDGER_PAGE_SIZE + 1,
-            select: { id: true, type: true, description: true, amountCents: true, effectiveAt: true },
+            select: { id: true, type: true, description: true, effectiveAt: true },
           },
         },
       }),
       prisma.ledgerEntry.findFirst({
         where: { billingAccount: { familyId }, AND: [parentVisibleLedgerWhere] },
         orderBy: [{ effectiveAt: "desc" }, { id: "desc" }],
-        select: { id: true, type: true, description: true, amountCents: true, effectiveAt: true },
+        select: { id: true, type: true, description: true, effectiveAt: true },
       }),
       prisma.ledgerEntry.findMany({
         where: { billingAccount: { familyId }, AND: [agencyOnlyLedgerWhere] },
@@ -2162,12 +2162,16 @@ async function renderLivePage(
     }
     const parentInvoices = invoices.map((invoice) => {
       const invoiceFields = asRecord(invoice.customFields);
+      const productCheckoutAvailable = stringField(invoiceFields.checkoutPurpose) === "product_purchase"
+        || stringField(invoiceFields.receiptKind) === "product"
+        || stringField(invoiceFields.chargeSource) === "product";
       return {
         id: invoice.id,
         number: invoice.number,
         status: invoice.status,
         dueDate: invoice.dueDate,
         purposeLabel: invoicePurposeLabel(invoiceFields),
+        productCheckoutAvailable,
         pendingPayment: pendingPaymentByInvoiceId.get(invoice.id) ?? null,
       };
     });

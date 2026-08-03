@@ -2,7 +2,7 @@ import "./load-env";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
 import { resolveWorkspaceBranding } from "@/lib/brand-assets";
 import { defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
@@ -456,6 +456,7 @@ async function applyBalances(
   let createdAccounts = 0;
   let updatedAccounts = 0;
   let createdLedgerEntries = 0;
+  let alreadyApplied = 0;
 
   await prisma.$transaction(async (tx) => {
     for (const item of balancePlan) {
@@ -474,6 +475,20 @@ async function applyBalances(
       invariant((current?._count.invoices ?? 0) === (item.family.billingAccount?.invoices.length ?? 0), `Family ${item.family.id} invoice state changed during reconciliation.`);
       const previousBalanceCents = current?.balanceCents ?? 0;
       const sourceKeys = item.rows.map((row) => row.key).sort();
+      const ledgerExternalId = `longmont-pdf-balance:2026-08-09:${item.family.id}`;
+      const existingLedger = await tx.ledgerEntry.findUnique({
+        where: { sourceSystem_externalId: { sourceSystem: "procare", externalId: ledgerExternalId } },
+        select: { id: true, billingAccountId: true, balanceAfterCents: true },
+      });
+      if (existingLedger) {
+        invariant(current, `Existing reconciliation ledger has no current billing account for ${item.family.id}.`);
+        invariant(existingLedger.billingAccountId === current.id, `Existing reconciliation ledger entry belongs to another account for ${item.family.id}.`);
+        invariant(existingLedger.balanceAfterCents === item.desiredCents, `Existing reconciliation ledger balance differs for ${item.family.id}.`);
+        invariant(current.balanceCents === item.desiredCents, `Family ${item.family.id} changed after its Longmont reconciliation; refusing to overwrite later activity.`);
+        alreadyApplied += 1;
+        continue;
+      }
+
       const account = await tx.billingAccount.upsert({
         where: { familyId: item.family.id },
         update: {
@@ -517,63 +532,67 @@ async function applyBalances(
       if (current) updatedAccounts += 1;
       else createdAccounts += 1;
 
-      const ledgerExternalId = `longmont-pdf-balance:2026-08-09:${item.family.id}`;
-      const existingLedger = await tx.ledgerEntry.findUnique({
-        where: { sourceSystem_externalId: { sourceSystem: "procare", externalId: ledgerExternalId } },
-        select: { id: true, billingAccountId: true, balanceAfterCents: true },
-      });
-      if (existingLedger) {
-        invariant(existingLedger.billingAccountId === account.id, `Existing reconciliation ledger entry belongs to another account for ${item.family.id}.`);
-        invariant(existingLedger.balanceAfterCents === item.desiredCents, `Existing reconciliation ledger balance differs for ${item.family.id}.`);
-      } else {
-        await tx.ledgerEntry.create({
-          data: {
-            billingAccountId: account.id,
-            type: "procare_balance_reconciliation",
-            description: "Longmont ProCare balance reconciled from account summary PDF",
-            amountCents: item.desiredCents - previousBalanceCents,
-            balanceAfterCents: item.desiredCents,
-            effectiveAt: appliedAt,
-            sourceSystem: "procare",
-            externalId: ledgerExternalId,
-            metadata: {
-              centerId: CENTER_ID,
-              sourcePdfSha256: SOURCE_PDF_SHA256,
-              sourcePlanSha256: EXPECTED_PLAN_SHA256,
-              sourceAsOf: "2026-08-09",
-              sourceAccountKeys: sourceKeys,
-              previousBalanceCents,
-              reconciledBalanceCents: item.desiredCents,
-              paymentsMutated: false,
-              invoicesMutated: false,
-            },
-          },
-        });
-        await tx.auditLog.create({
-          data: {
-            tenantId: state.center.organization.tenantId,
+      await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: account.id,
+          type: "procare_balance_reconciliation",
+          description: "Longmont ProCare balance reconciled from account summary PDF",
+          amountCents: item.desiredCents - previousBalanceCents,
+          balanceAfterCents: item.desiredCents,
+          effectiveAt: appliedAt,
+          sourceSystem: "procare",
+          externalId: ledgerExternalId,
+          metadata: {
             centerId: CENTER_ID,
-            userId: null,
-            action: "billing.longmont_pdf_balance_reconciled",
-            resource: "Family",
-            resourceId: item.family.id,
-            metadata: {
-              authorizedActorUserId: actorUserId,
-              sourcePdfSha256: SOURCE_PDF_SHA256,
-              sourcePlanSha256: EXPECTED_PLAN_SHA256,
-              sourceAsOf: "2026-08-09",
-              sourceAccountKeys: sourceKeys,
-              previousBalanceCents,
-              reconciledBalanceCents: item.desiredCents,
-              paymentsMutated: false,
-              invoicesMutated: false,
-            },
+            sourcePdfSha256: SOURCE_PDF_SHA256,
+            sourcePlanSha256: EXPECTED_PLAN_SHA256,
+            sourceAsOf: "2026-08-09",
+            sourceAccountKeys: sourceKeys,
+            previousBalanceCents,
+            reconciledBalanceCents: item.desiredCents,
+            paymentsMutated: false,
+            invoicesMutated: false,
           },
-        });
-        createdLedgerEntries += 1;
-      }
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: state.center.organization.tenantId,
+          centerId: CENTER_ID,
+          userId: null,
+          action: "billing.longmont_pdf_balance_reconciled",
+          resource: "Family",
+          resourceId: item.family.id,
+          metadata: {
+            authorizedActorUserId: actorUserId,
+            sourcePdfSha256: SOURCE_PDF_SHA256,
+            sourcePlanSha256: EXPECTED_PLAN_SHA256,
+            sourceAsOf: "2026-08-09",
+            sourceAccountKeys: sourceKeys,
+            previousBalanceCents,
+            reconciledBalanceCents: item.desiredCents,
+            paymentsMutated: false,
+            invoicesMutated: false,
+          },
+        },
+      });
+      createdLedgerEntries += 1;
     }
-  }, { maxWait: 10_000, timeout: 180_000 });
+
+    const transactionalVerified = await tx.billingAccount.findMany({
+      where: { familyId: { in: balancePlan.map((item) => item.family.id) } },
+      select: { familyId: true, balanceCents: true, _count: { select: { payments: true, invoices: true } } },
+    });
+    const expectedByFamily = new Map(balancePlan.map((item) => [item.family.id, item.desiredCents]));
+    invariant(transactionalVerified.length === EXPECTED_MATCHED_FAMILIES, "Not every matched Longmont family has a billing account before reconciliation commit.");
+    invariant(transactionalVerified.every((account) => account.balanceCents === expectedByFamily.get(account.familyId)), "A reconciled Longmont balance changed before commit.");
+    invariant(transactionalVerified.reduce((sum, account) => sum + account._count.payments, 0) === paymentCountBefore, "Longmont payments changed before reconciliation commit.");
+    invariant(transactionalVerified.reduce((sum, account) => sum + account._count.invoices, 0) === invoiceCountBefore, "Longmont invoices changed before reconciliation commit.");
+  }, {
+    maxWait: 10_000,
+    timeout: 180_000,
+    isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  });
 
   const verified = await prisma.billingAccount.findMany({
     where: { familyId: { in: balancePlan.map((item) => item.family.id) } },
@@ -584,7 +603,7 @@ async function applyBalances(
   invariant(verified.every((account) => account.balanceCents === expectedByFamily.get(account.familyId)), "A reconciled Longmont balance does not match the PDF plan.");
   invariant(verified.reduce((sum, account) => sum + account._count.payments, 0) === paymentCountBefore, "Longmont payments changed during reconciliation.");
   invariant(verified.reduce((sum, account) => sum + account._count.invoices, 0) === invoiceCountBefore, "Longmont invoices changed during reconciliation.");
-  return { createdAccounts, updatedAccounts, createdLedgerEntries, paymentCountBefore, invoiceCountBefore };
+  return { createdAccounts, updatedAccounts, createdLedgerEntries, alreadyApplied, paymentCountBefore, invoiceCountBefore };
 }
 
 async function resetAndVerifyExistingAccess(

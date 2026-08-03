@@ -161,6 +161,7 @@ test("Tyler portal preparation is school-scoped, source-locked, and cannot send 
 
 test("Longmont PDF balance and parent access reconciliation is source-locked and payment-preserving", () => {
   const source = readFileSync(new URL("../scripts/reconcile-longmont-pdf-parent-access.ts", import.meta.url), "utf8");
+  const balanceApply = source.slice(source.indexOf("async function applyBalances"), source.indexOf("async function resetAndVerifyExistingAccess"));
   assert.match(source, /--confirm-longmont-pdf-reconciliation/);
   assert.match(source, /--confirm-preserve-payments-and-invoices/);
   assert.match(source, /--confirm-reset-invited-parent-passwords/);
@@ -172,6 +173,10 @@ test("Longmont PDF balance and parent access reconciliation is source-locked and
   assert.match(source, /longmont_pdf_password_verified/);
   assert.match(source, /verifySupabasePassword/);
   assert.match(source, /EXPECTED_NEW_INVITES = 7/);
+  assert.match(balanceApply, /Prisma\.TransactionIsolationLevel\.Serializable/);
+  assert.match(balanceApply, /changed after its Longmont reconciliation; refusing to overwrite later activity/);
+  assert.match(balanceApply, /changed before reconciliation commit/);
+  assert.ok(balanceApply.indexOf("const existingLedger") < balanceApply.indexOf("tx.billingAccount.upsert"));
 });
 
 test("Granbury timeout retry is single-delivery scoped and explicitly authorized", () => {
@@ -180,6 +185,8 @@ test("Granbury timeout retry is single-delivery scoped and explicitly authorized
   assert.match(source, /status: "pending"/);
   assert.match(source, /providerMessageId: null/);
   assert.match(source, /Expected one scoped Granbury timeout delivery/);
+  assert.match(source, /claimIntegrationDeliveryForRetry/);
+  assert.ok(source.indexOf("claimIntegrationDeliveryForRetry({") < source.indexOf("result = await sendEmail"));
   assert.match(source, /disableClickTracking: true/);
   assert.match(source, /verifySupabasePassword/);
   assert.match(source, /parent_portal\.guardian_invitation_timeout_retry_accepted/);

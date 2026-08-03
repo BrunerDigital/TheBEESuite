@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   computeIntegrationDeliveryState,
@@ -53,4 +54,13 @@ test("integration retry delay backs off and caps at the largest configured delay
   assert.equal(nextIntegrationRetryAt(1, now).toISOString(), "2026-06-02T14:05:00.000Z");
   assert.equal(nextIntegrationRetryAt(2, now).toISOString(), "2026-06-02T14:15:00.000Z");
   assert.equal(nextIntegrationRetryAt(99, now).toISOString(), "2026-06-03T02:00:00.000Z");
+});
+
+test("integration retries atomically claim a due delivery before sending", () => {
+  const source = readFileSync(new URL("../src/lib/integration-deliveries.ts", import.meta.url), "utf8");
+  const retrySource = source.slice(source.indexOf("export async function retryPendingIntegrationDeliveries"));
+  assert.match(source, /claimIntegrationDeliveryForRetry[\s\S]*integrationDelivery\.updateMany/);
+  assert.match(source, /status: "pending"[\s\S]*attempts[\s\S]*nextAttemptAt/);
+  assert.ok(retrySource.indexOf("claimIntegrationDeliveryForRetry") < retrySource.indexOf("sendDelivery("));
+  assert.match(retrySource, /status: "claimed_elsewhere"/);
 });

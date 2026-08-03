@@ -1,6 +1,7 @@
 import "./load-env";
 import { Prisma } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
+import { claimIntegrationDeliveryForRetry, computeIntegrationDeliveryState } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
 import { DEFAULT_PARENT_INITIAL_PASSWORD } from "@/lib/parent-portal-invitations";
 import { parentPortalInvitationSentFields } from "@/lib/parent-portal-logins";
@@ -25,6 +26,32 @@ function record(value: unknown): Record<string, unknown> {
 
 function strings(value: unknown) {
   return Array.isArray(value) ? value.map(clean).filter(Boolean) : [];
+}
+
+async function recordFailedClaim({
+  deliveryId,
+  attempts,
+  maxAttempts,
+  error,
+}: {
+  deliveryId: string;
+  attempts: number;
+  maxAttempts: number;
+  error: string;
+}) {
+  const result = { ok: false, error };
+  const state = computeIntegrationDeliveryState({ result, attempts, maxAttempts });
+  const updated = await prisma.integrationDelivery.updateMany({
+    where: { id: deliveryId, status: "pending", attempts },
+    data: {
+      status: state.status,
+      lastResult: result as Prisma.InputJsonObject,
+      lastError: error,
+      nextAttemptAt: state.nextAttemptAt,
+      deliveredAt: state.deliveredAt,
+    },
+  });
+  if (updated.count !== 1) throw new Error("The Granbury delivery changed after its retry claim failed.");
 }
 
 async function main() {
@@ -70,19 +97,46 @@ async function main() {
   }, null, 2));
   if (!apply) return;
 
-  const result = await sendEmail({
-    to: recipients,
-    subject: clean(payload.subject),
-    text: clean(payload.text),
-    html: clean(payload.html) || undefined,
-    replyTo: clean(payload.replyTo) || undefined,
-    fromName: clean(payload.fromName) || "The BEE Suite",
-    disableClickTracking: true,
-    categories: ["parent_invitation_email"],
-    customArgs: { guardianId, familyId, centerId: CENTER_ID, authorizedImportedWave: "true" },
-    tenantId: delivery.tenantId,
+  const claim = await claimIntegrationDeliveryForRetry({
+    id: delivery.id,
+    attempts: delivery.attempts,
   });
-  if (!result.ok) throw new Error(`The scoped SendGrid retry was not accepted: ${result.error ?? "unknown_error"}`);
+  if (!claim.claimed) throw new Error("The scoped Granbury delivery was claimed by another retry worker.");
+
+  let result: Awaited<ReturnType<typeof sendEmail>>;
+  try {
+    result = await sendEmail({
+      to: recipients,
+      subject: clean(payload.subject),
+      text: clean(payload.text),
+      html: clean(payload.html) || undefined,
+      replyTo: clean(payload.replyTo) || undefined,
+      fromName: clean(payload.fromName) || "The BEE Suite",
+      disableClickTracking: true,
+      categories: ["parent_invitation_email"],
+      customArgs: { guardianId, familyId, centerId: CENTER_ID, authorizedImportedWave: "true" },
+      tenantId: delivery.tenantId,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The scoped SendGrid retry threw an unknown error.";
+    await recordFailedClaim({
+      deliveryId: delivery.id,
+      attempts: claim.attempts,
+      maxAttempts: delivery.maxAttempts,
+      error: message,
+    });
+    throw error;
+  }
+  if (!result.ok) {
+    const error = result.error ?? "unknown_error";
+    await recordFailedClaim({
+      deliveryId: delivery.id,
+      attempts: claim.attempts,
+      maxAttempts: delivery.maxAttempts,
+      error,
+    });
+    throw new Error(`The scoped SendGrid retry was not accepted: ${error}`);
+  }
 
   const matchingGuardians = await prisma.guardian.findMany({
     where: {
@@ -95,11 +149,15 @@ async function main() {
     throw new Error("The scoped recipient no longer resolves to the expected Granbury guardian.");
   }
 
-  await prisma.$transaction([
-    prisma.integrationDelivery.update({
-      where: { id: delivery.id },
+  await prisma.$transaction(async (tx) => {
+    const deliveryUpdate = await tx.integrationDelivery.updateMany({
+      where: {
+        id: delivery.id,
+        status: "pending",
+        attempts: claim.attempts,
+        providerMessageId: null,
+      },
       data: {
-        attempts: delivery.attempts + 1,
         status: "accepted",
         providerMessageId: result.id ?? null,
         lastResult: result as Prisma.InputJsonObject,
@@ -107,12 +165,15 @@ async function main() {
         nextAttemptAt: null,
         deliveredAt: null,
       },
-    }),
-    ...matchingGuardians.map((guardian) => prisma.guardian.update({
-      where: { id: guardian.id },
-      data: { customFields: parentPortalInvitationSentFields(guardian.customFields) },
-    })),
-  ]);
+    });
+    if (deliveryUpdate.count !== 1) throw new Error("The Granbury delivery changed after provider acceptance.");
+    for (const guardian of matchingGuardians) {
+      await tx.guardian.update({
+        where: { id: guardian.id },
+        data: { customFields: parentPortalInvitationSentFields(guardian.customFields) },
+      });
+    }
+  });
 
   const loginWorks = await verifySupabasePassword(recipients[0], DEFAULT_PARENT_INITIAL_PASSWORD);
   if (!loginWorks) throw new Error("The scoped Granbury parent password verification failed after SendGrid acceptance.");

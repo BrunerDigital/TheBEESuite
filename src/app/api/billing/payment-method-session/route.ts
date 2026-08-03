@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -65,8 +66,16 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
   }
 
-  if (!canManageBilling(user) && !isParentGuardian(user)) {
+  const userCanManageBilling = canManageBilling(user);
+  const userIsParentGuardian = isParentGuardian(user);
+  if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
+  }
+  const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
+    ? await getParentPortalFamilyScope(user.id)
+    : null;
+  if (parentFamilyScope && !parentFamilyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before payment settings can be changed." }, { status: 409 });
   }
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
@@ -158,6 +167,9 @@ async function POSTHandler(request: NextRequest) {
 
   if (!billingAccount) {
     return NextResponse.json({ ok: false, error: "Billing account not found." }, { status: 404 });
+  }
+  if (parentFamilyScope?.ok && billingAccount.family.id !== parentFamilyScope.familyId) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
   }
 
   const currentFields = jsonObject(billingAccount.customFields);

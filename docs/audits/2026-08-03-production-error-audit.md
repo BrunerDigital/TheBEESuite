@@ -8,7 +8,7 @@ Scope: production runtime errors from 2026-08-03 00:00–24:00 ET, school-suppor
 - [x] Parent setup, kiosk credential management, product purchase, and payment checkout use the same unambiguous-family guard.
 - [x] Parent provisioning rejects an email already mapped to a different family in the tenant before any Auth or application-user mutation.
 - [x] Bulk parent-invitation preflight blocks same-school emails mapped to multiple families, including privileged wave scopes.
-- [x] Permanently rejected web-push subscriptions (HTTP 400, 404, or 410) are deactivated so they do not generate recurring delivery failures.
+- [x] Expired web-push subscriptions (HTTP 404/410) are deactivated immediately; repeated HTTP 400 failures deactivate only after five failures so one payload/configuration error cannot disable a healthy device.
 - [x] Focused family isolation and push tests pass.
 - [x] Full lint, TypeScript, 807-test suite, and Next.js production build pass in an isolated worktree.
 
@@ -25,7 +25,7 @@ Scope: production runtime errors from 2026-08-03 00:00–24:00 ET, school-suppor
 ## Runtime errors and configuration
 
 - [x] Two transient Prisma P1001 connection failures were isolated; later health and database reads succeeded. No destructive database action was taken.
-- [x] Web-push HTTP 400 recurrence is fixed by deactivating permanently invalid subscriptions.
+- [x] Web-push HTTP 400 recurrence is bounded by a five-failure threshold while expired endpoints are removed immediately.
 - [ ] Supabase Auth password-reset requests returned project-wide HTTP 429 responses. Production requires custom SMTP and an Auth email rate limit sized for the rollout; the built-in provider is intentionally limited and unsuitable for this traffic.
 - [ ] Four FTE emails were transmitted on Monday with a stale 2026-06-22 reporting week. The current Friday-only application route created no delivery records and had no matching request at send time. Disable the legacy/external sender or automation that still has SendGrid access.
 - [ ] The `web-push` dependency emits Node `url.parse()` deprecation warnings. Plan a focused dependency upgrade after confirming browser/push compatibility; do not use a broad automated dependency fix.

@@ -77,6 +77,6 @@ export function safeWebPushPlatform(value: unknown) {
   return ["ios", "android", "desktop", "web"].includes(platform) ? platform : "web";
 }
 
-export function webPushSubscriptionShouldDeactivate(status: number | null) {
-  return status === 400 || status === 404 || status === 410;
+export function webPushSubscriptionShouldDeactivate(status: number | null, consecutiveFailures = 1) {
+  return status === 404 || status === 410 || (status === 400 && consecutiveFailures >= 5);
 }

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { resolveParentPortalFamilyScope } from "../src/lib/parent-portal-family-scope";
 
@@ -22,4 +23,17 @@ test("parent portal runtime scope fails closed across families", () => {
     reason: "multiple_linked_families",
     familyIds: ["family_1", "family_2"],
   });
+});
+
+test("every parent setup and billing mutation enforces unambiguous family scope", () => {
+  for (const path of [
+    "src/app/api/parent/setup/route.ts",
+    "src/app/api/parent/kiosk-credential/route.ts",
+    "src/app/api/parent/products/purchase/route.ts",
+    "src/app/api/billing/checkout-session/route.ts",
+    "src/app/api/billing/family-payment/route.ts",
+    "src/app/api/billing/payment-method-session/route.ts",
+  ]) {
+    assert.match(readFileSync(path, "utf8"), /getParentPortalFamilyScope\(user\.id\)/, path);
+  }
 });

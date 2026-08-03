@@ -348,7 +348,7 @@ async function dispatchCandidate(
     const status = errorStatus(error);
     const attempts = candidate.attempts + 1;
     const code = errorCode(error);
-    const deactivateSubscription = webPushSubscriptionShouldDeactivate(status);
+    const deactivateSubscription = webPushSubscriptionShouldDeactivate(status, subscription.failureCount + 1);
     const terminal = deactivateSubscription || attempts >= MAX_DELIVERY_ATTEMPTS;
     const failedAt = terminal ? new Date() : null;
 

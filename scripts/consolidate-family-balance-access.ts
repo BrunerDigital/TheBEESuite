@@ -143,7 +143,7 @@ async function consolidate() {
       await tx.guardian.create({ data: { familyId: IDS.lutesFamily, fullName: "Levi Lutes", email: LUTES_CONTACTS[1].email, phone: LUTES_CONTACTS[1].phone, relation: "Father", sourceSystem: "procare", externalId: "210702", customFields: mergedFields(null, "populate_lutes_contact") } });
     }
 
-    if (mitchellShellBilling) {
+    if (mitchellShellBilling?.familyId === IDS.mitchellShell) {
       invariant(mitchellShell.centerId === IDS.cordera && mitchellShell.externalId === "MITCHELL", "Mitchell shell identity drifted.");
       invariant(mitchellShell._count.children === 0 && mitchellShell._count.guardians === 0, "Mitchell shell gained related people.");
       invariant(mitchellShellBilling.balanceCents === 9_500 && mitchellShellBilling._count.invoices === 0 && mitchellShellBilling._count.payments === 0 && mitchellShellBilling._count.ledgerEntries === 1, "Mitchell balance shell drifted.");

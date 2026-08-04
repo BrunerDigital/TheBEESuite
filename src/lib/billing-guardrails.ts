@@ -102,8 +102,8 @@ export function checkoutApplicationGuard(input: {
   paymentAmountCents: number;
   accountCreditAppliedCents?: number;
 }) {
-  if (input.invoiceStatus === PaymentStatus.PAID) {
-    return { ok: false as const, reason: "invoice_already_paid" };
+  if (input.invoiceStatus !== PaymentStatus.OPEN) {
+    return { ok: false as const, reason: "invoice_not_open" };
   }
   if (input.paymentStatus === PaymentStatus.PAID) {
     return { ok: false as const, reason: "payment_already_applied" };

@@ -31,9 +31,13 @@ test("invoice voiding blocks paid, adjusted, pending, and provider-managed invoi
 });
 
 test("director invoice voiding stays school-scoped, audited, and explicit in the workbench", async () => {
-  const [route, workbench] = await Promise.all([
+  const [route, workbench, checkout, paymentRequestCheckout, webhook, guardrails] = await Promise.all([
     readFile("src/app/api/billing/invoices/route.ts", "utf8"),
     readFile("src/components/billing-workbench.tsx", "utf8"),
+    readFile("src/app/api/billing/checkout-session/route.ts", "utf8"),
+    readFile("src/app/api/billing/payment-method-request/checkout/route.ts", "utf8"),
+    readFile("src/app/api/billing/stripe-webhook/route.ts", "utf8"),
+    readFile("src/lib/billing-guardrails.ts", "utf8"),
   ]);
   assert.match(route, /canManageBilling\(user\)/);
   assert.match(route, /canAccessCenter\(user, centerId\)/);
@@ -43,4 +47,8 @@ test("director invoice voiding stays school-scoped, audited, and explicit in the
   assert.match(workbench, /mode: "void"/);
   assert.match(workbench, /Void Invoice/);
   assert.match(workbench, /No family charge \/ CCDF \/ voucher-funded \(\$0\.00\)/);
+  assert.match(checkout, /invoice\.status !== PaymentStatus\.OPEN/);
+  assert.match(paymentRequestCheckout, /invoice\.status !== PaymentStatus\.OPEN/);
+  assert.doesNotMatch(webhook, /status: \{ not: PaymentStatus\.PAID \}/);
+  assert.match(guardrails, /invoiceStatus !== PaymentStatus\.OPEN/);
 });

@@ -2,11 +2,27 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildApiLogPayload,
+  classifyOperationalAnomaly,
   logOperationalError,
   redactForOperationalLog,
   redactHeadersForOperationalLog,
   redactSearchParams,
 } from "../src/lib/request-response-logging";
+
+test("operational anomalies classify Prisma, Auth, and push failures without messages", () => {
+  assert.deepEqual(classifyOperationalAnomaly("prisma.query", { code: "P1001" }), {
+    anomaly: "database_unreachable",
+    severity: "critical",
+  });
+  assert.deepEqual(classifyOperationalAnomaly("auth.password_reset", null, { status: 429 }), {
+    anomaly: "auth_rate_limited",
+    severity: "warning",
+  });
+  assert.deepEqual(classifyOperationalAnomaly("web_push.delivery_failed", null, { responseStatus: 410 }), {
+    anomaly: "push_delivery_rejected",
+    severity: "warning",
+  });
+});
 
 test("operational log redaction removes nested PII and keeps safe status fields", () => {
   const redacted = redactForOperationalLog({
@@ -228,10 +244,14 @@ test("operational error logs redact messages and metadata", () => {
     context: string;
     message: string;
     metadata: Record<string, unknown>;
+    anomaly: string;
+    severity: string;
   };
   assert.equal(payload.event, "operational.error");
   assert.equal(payload.context, "auth.login.failed");
   assert.equal(payload.message, "[REDACTED]");
+  assert.equal(payload.anomaly, "application_error");
+  assert.equal(payload.severity, "critical");
   assert.deepEqual(payload.metadata, {
     email: "[REDACTED]",
     status: 503,

@@ -23,6 +23,7 @@ export type IntegrationDeliveryPurpose =
   | "daily_report_email"
   | "signature_request_email"
   | "onboarding_email"
+  | "account_setup_email"
   | "fte_reminder_email"
   | "notification_email"
   | "communication_sms"
@@ -82,6 +83,7 @@ type RecordEmailDeliveryInput = {
     | "daily_report_email"
     | "signature_request_email"
     | "onboarding_email"
+    | "account_setup_email"
     | "fte_reminder_email"
     | "notification_email"
   >;

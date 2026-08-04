@@ -1022,6 +1022,9 @@ export type DeveloperDashboardPageData = {
     tuitionProcessedCents: number;
     beeSuiteFeesCents: number;
     schoolNetCents: number;
+    unresolvedClientErrors24h: number;
+    failedPushDeliveries24h: number;
+    rejectedPushSubscriptions24h: number;
   };
   softwareSubscriptions: DeveloperSubscriptionSchool[];
   integrations: Array<{
@@ -1223,6 +1226,15 @@ export function DeveloperDashboardPage({ data }: { data: DeveloperDashboardPageD
         <StatCard label="BEE Suite share" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.beeSuiteFeesCents / 100)} detail="Platform fees retained" />
         <StatCard label="School net" value={new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(data.stats.schoolNetCents / 100)} detail="After BEE Suite split" />
       </section>
+
+      <Card className="glass-panel border-amber-500/35">
+        <CardHeader><CardTitle>Privacy-Safe Reliability Alerts</CardTitle><CardDescription>Counts contain no parent, child, family, message, or credential data. Structured server anomalies are emitted as database_unreachable, auth_rate_limited, push_delivery_rejected, provider_delivery_failure, or application_error.</CardDescription></CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <StatCard label="Client exceptions (24h)" value={data.stats.unresolvedClientErrors24h} detail="Unresolved, deduplicated reports" />
+          <StatCard label="Push failures (24h)" value={data.stats.failedPushDeliveries24h} detail="Failed delivery attempts" />
+          <StatCard label="Rejected push endpoints (24h)" value={data.stats.rejectedPushSubscriptions24h} detail="HTTP 400, 404, or 410" />
+        </CardContent>
+      </Card>
 
       <DeveloperSubscriptionConsole schools={data.softwareSubscriptions} />
 
@@ -4825,6 +4837,13 @@ export type FamilyProfilesPageData = {
     submittedBy: string;
     createdAt: Date | string;
   }>;
+  ambiguousFamilyLinks: Array<{
+    userId: string;
+    loginEmail: string;
+    visibleFamilies: Array<{ id: string; name: string; centerName: string }>;
+    totalFamilyCount: number;
+    includesOtherLocations: boolean;
+  }>;
   stats: {
     total: number;
     allFamilyTotal: number;
@@ -4871,6 +4890,32 @@ export function FamilyProfilesPage({ data }: { data: FamilyProfilesPageData }) {
         allFamilyCount={data.stats.allFamilyTotal}
         ageGroups={data.ageGroups}
       />
+      <Card className="glass-panel border-amber-500/35">
+        <CardHeader>
+          <CardTitle>Parent Family-Link Review</CardTitle>
+          <CardDescription>
+            Parent logins linked to more than one family are held for director review. Do not merge or unlink records until identity and guardianship are confirmed; families outside your school remain hidden.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader><TableRow><TableHead>Parent login</TableHead><TableHead>Visible family records</TableHead><TableHead>Scope</TableHead><TableHead>Review</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {data.ambiguousFamilyLinks.map((row) => (
+                  <TableRow key={row.userId}>
+                    <TableCell className="font-medium">{row.loginEmail}</TableCell>
+                    <TableCell>{row.visibleFamilies.map((family) => `${family.name} (${family.centerName})`).join("; ")}</TableCell>
+                    <TableCell><Badge variant="secondary">{row.totalFamilyCount} linked families</Badge>{row.includesOtherLocations ? <div className="mt-1 text-xs text-muted-foreground">Includes another location; details hidden.</div> : null}</TableCell>
+                    <TableCell className="space-x-2">{row.visibleFamilies.map((family) => <Link key={family.id} className={buttonVariants({ variant: "outline", size: "sm" })} href={`/family-detail?familyId=${encodeURIComponent(family.id)}`}>Open {family.name}</Link>)}</TableCell>
+                  </TableRow>
+                ))}
+                {!data.ambiguousFamilyLinks.length ? <TableRow><TableCell colSpan={4} className="text-muted-foreground">No ambiguous parent-to-family links are visible for this school.</TableCell></TableRow> : null}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
       <Card className="glass-panel">
         <CardHeader>
           <CardTitle>Guardian Self-Service Change Requests</CardTitle>

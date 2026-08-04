@@ -9,6 +9,7 @@ import {
   verifySupabasePassword,
 } from "@/lib/supabase-auth";
 import { sendEmail } from "@/lib/integrations";
+import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 
 const prisma = new PrismaClient();
@@ -718,6 +719,18 @@ async function main() {
             userId: entry.user.id,
           },
           disableClickTracking: true,
+        });
+        await recordEmailDeliveryAttempt({
+          tenantId: workspace.tenant.id,
+          centerId: entry.center.id,
+          dedupeKey: `school-dashboard-password-setup:${entry.user.id}`,
+          purpose: "account_setup_email",
+          to: [email],
+          subject: `Set up your ${TENANT_NAME} dashboard password`,
+          text: "Secure one-time school dashboard password setup link.",
+          result: delivery,
+          maxAttempts: 1,
+          metadata: { userId: entry.user.id, source: SOURCE },
         });
         if (!delivery.ok) {
           throw new Error(`${email}: ${delivery.error || "SendGrid password setup delivery failed."}`);

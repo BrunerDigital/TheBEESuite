@@ -1649,7 +1649,7 @@ async function renderLivePage(
       },
       _count: { select: { documents: true, messages: true, pickups: true, emergencyContacts: true } },
     } satisfies Prisma.FamilyInclude;
-    const [families, allFamilies, total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentStatusRows, intakeCenters, requestNotes] = await Promise.all([
+    const [families, allFamilies, total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentStatusRows, intakeCenters, requestNotes, parentUsers] = await Promise.all([
       prisma.family.findMany({
         where: currentFamilyWhere,
         orderBy: { createdAt: "desc" },
@@ -1685,6 +1685,20 @@ async function renderLivePage(
         include: {
           family: { select: { id: true, name: true, centerId: true } },
           user: { select: { name: true, email: true } },
+        },
+      }),
+      prisma.user.findMany({
+        where: {
+          tenantId: user.tenantId,
+          role: UserRole.PARENT_GUARDIAN,
+          guardians: { some: { family: { centerId: scopedCenterIds } } },
+        },
+        select: {
+          id: true,
+          email: true,
+          guardians: {
+            select: { family: { select: { id: true, name: true, centerId: true } } },
+          },
         },
       }),
     ]);
@@ -1772,6 +1786,23 @@ async function renderLivePage(
       intakeCenters.flatMap((center) => center.classrooms.map((classroom) => classroom.ageGroup)),
     );
     const enrollmentLifecycle = summarizeEnrollmentLifecycleCounts(enrollmentStatusRows, children);
+    const visibleCenterIdSet = new Set(centers.map((center) => center.id));
+    const ambiguousFamilyLinks = parentUsers.flatMap((parent) => {
+      const familiesById = new Map(parent.guardians.map((guardian) => [guardian.family.id, guardian.family]));
+      if (familiesById.size <= 1) return [];
+      const linkedFamilies = Array.from(familiesById.values());
+      return [{
+        userId: parent.id,
+        loginEmail: parent.email,
+        totalFamilyCount: linkedFamilies.length,
+        includesOtherLocations: linkedFamilies.some((family) => !family.centerId || !visibleCenterIdSet.has(family.centerId)),
+        visibleFamilies: linkedFamilies.flatMap((family) => family.centerId && visibleCenterIdSet.has(family.centerId) ? [{
+          id: family.id,
+          name: family.name,
+          centerName: centerNameById.get(family.centerId) ?? "Visible school",
+        }] : []),
+      }];
+    });
 
     return (
       <FamilyProfilesPage
@@ -1783,6 +1814,7 @@ async function renderLivePage(
           intakeCenters,
           ageGroups: familyAgeGroups,
           guardianChangeRequests,
+          ambiguousFamilyLinks,
           stats: { total, allFamilyTotal, withCustodyNotes, children, guardians, closedFamilies, enrollmentLifecycle },
         }}
       />
@@ -4394,6 +4426,9 @@ async function renderLivePage(
       platformUsers,
       softwareCenters,
       monthlyPayments,
+      unresolvedClientErrors24h,
+      failedPushDeliveries24h,
+      rejectedPushSubscriptions24h,
     ] = await Promise.all([
       prisma.auditLog.count({ where: auditWhere }),
       prisma.auditLog.count({ where: { ...auditWhere, action: { startsWith: "operations." } } }),
@@ -4474,6 +4509,9 @@ async function renderLivePage(
       prisma.user.groupBy({ where: { tenantId: user.tenantId }, by: ["isActive"], _count: { _all: true } }),
       prisma.center.findMany({ where: { organization: { tenantId: user.tenantId }, status: { notIn: ["closed", "archived"] } }, orderBy: { name: "asc" }, select: { id: true, name: true, customFields: true } }),
       prisma.payment.findMany({ where: { status: PaymentStatus.PAID, paidAt: { gte: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, billingAccount: { family: { centerId: { in: centers.map((item) => item.id) } } } }, select: { amountCents: true, customFields: true } }),
+      prisma.clientErrorReport.count({ where: { tenantId: user.tenantId, resolvedAt: null, lastSeenAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, ...(tenantWide ? {} : { centerId: scopedCenterIds }) } }),
+      prisma.webPushDelivery.count({ where: { status: "failed", lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
+      prisma.webPushDelivery.count({ where: { responseStatus: { in: [400, 404, 410] }, lastAttemptAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }, subscription: { tenantId: user.tenantId } } }),
     ]);
 
     const unitAmountCents = getKidCitySoftwareFeeUnitAmountCents();
@@ -4522,6 +4560,9 @@ async function renderLivePage(
             tuitionProcessedCents: paymentTotals.processed,
             beeSuiteFeesCents: paymentTotals.fees,
             schoolNetCents: Math.max(0, paymentTotals.processed - paymentTotals.fees),
+            unresolvedClientErrors24h,
+            failedPushDeliveries24h,
+            rejectedPushSubscriptions24h,
           },
           softwareSubscriptions,
           integrations,

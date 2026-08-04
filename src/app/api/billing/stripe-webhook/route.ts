@@ -1237,7 +1237,7 @@ async function handlePaymentIntentSucceeded(event: StripeWebhookEvent, paymentIn
 
       const paidAt = new Date();
       const invoiceClaim = await tx.invoice.updateMany({
-        where: { id: invoiceId, status: { not: PaymentStatus.PAID } },
+        where: { id: invoiceId, status: PaymentStatus.OPEN },
         data: {
           status: PaymentStatus.PAID,
           customFields: {
@@ -1791,7 +1791,7 @@ async function dispatchAuthenticatedEvent(event: StripeWebhookEvent, matchedTena
       }
 
       const invoiceClaim = await tx.invoice.updateMany({
-        where: { id: invoiceId, status: { not: PaymentStatus.PAID } },
+        where: { id: invoiceId, status: PaymentStatus.OPEN },
         data: { status: PaymentStatus.PAID },
       });
       if (invoiceClaim.count !== 1) {

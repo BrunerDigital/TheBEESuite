@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ArrowUpRight, BadgeDollarSign, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
+import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Send } from "lucide-react";
 import { ContextBadge, EntityHeader, SummaryMetric, initialsFromName } from "@/components/entity-context";
 import { useSchoolTimeZone } from "@/components/school-time-zone-context";
 import { formatZonedDateTime } from "@/lib/zoned-date-time";
@@ -337,6 +337,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [paymentDescription, setPaymentDescription] = useState("Tuition payment");
   const [invoiceEditorId, setInvoiceEditorId] = useState("");
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
+  const [invoiceVoidReason, setInvoiceVoidReason] = useState("");
   const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
   const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
   const [assignmentCadence, setAssignmentCadence] = useState(initialAssignment?.cadence === "four_week" ? "four_week" : "weekly");
@@ -1035,6 +1036,41 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
+  function submitInvoiceVoid() {
+    if (!selectedFamily || !selectedEditableInvoice) return;
+    const reason = invoiceVoidReason.trim();
+    if (reason.length < 5) return setErrorMessage("Enter a reason for voiding this invoice.");
+    const confirmed = window.confirm(
+      `Void invoice ${selectedEditableInvoice.number} for ${money(selectedEditableInvoice.totalCents)}? This removes the charge from ${selectedFamily.name}'s balance and keeps an audit record.`,
+    );
+    if (!confirmed) return;
+
+    startTransition(async () => {
+      setStatusMessage("");
+      setErrorMessage("");
+      const response = await fetch("/api/billing/invoices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "void",
+          invoiceId: selectedEditableInvoice.id,
+          familyId: selectedFamily.id,
+          reason,
+        }),
+      });
+      const json = await response.json().catch(() => null) as { error?: string; reversedCents?: number } | null;
+      if (!response.ok) {
+        setErrorMessage(json?.error || "Invoice could not be voided.");
+        return;
+      }
+      setInvoiceVoidReason("");
+      setInvoiceEditorId("");
+      setInvoiceEditDraft(null);
+      setStatusMessage(`Invoice voided. ${money(json?.reversedCents ?? selectedEditableInvoice.totalCents)} was removed from the family balance.`);
+      router.refresh();
+    });
+  }
+
   function handleAssignmentChildChange(value: string | null) {
     if (!value) return;
     applyFamilyTuitionContext(selectedFamily, locationTuitionPlans, value);
@@ -1131,10 +1167,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     }
     const planAmountCents = dollarsToCents(planAmountDollars);
     if (planFundingType === "family" && planAmountCents <= 0) {
-      return setErrorMessage("Family-paid tuition must be greater than $0. Choose CCDF / voucher-funded to save a $0.00 rate.");
+      return setErrorMessage("Family-paid tuition must be greater than $0. Choose No family charge to save a $0.00 rate.");
     }
     if (planFundingType === "voucher" && planAmountCents !== 0) {
-      return setErrorMessage("CCDF / voucher-funded tuition must be saved at $0.00 family responsibility.");
+      return setErrorMessage("No-family-charge tuition must be saved at $0.00 family responsibility.");
     }
     startTransition(async () => {
       setStatusMessage("");
@@ -1160,7 +1196,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       }
       setStatusMessage(
         planFundingType === "voucher"
-          ? `$0.00 CCDF / voucher rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
+          ? `$0.00 no-family-charge rate ${planEditorId === "new" ? "created" : "updated"}. Assign it to the intended child under Recurring.`
           : `Weekly tuition rate ${planEditorId === "new" ? "created" : "updated"}.`,
       );
       if (json?.record?.id) {
@@ -1596,7 +1632,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="family">Family-paid</SelectItem>
-                  <SelectItem value="voucher">CCDF / voucher-funded</SelectItem>
+                  <SelectItem value="voucher">No family charge / CCDF / voucher-funded ($0.00)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1609,6 +1645,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 onChange={(event) => setPlanAmountDollars(event.target.value)}
                 placeholder="250.00"
               />
+              {planFundingType === "voucher" ? <p className="text-xs text-muted-foreground">Directors can use this for any intentional $0.00 rate. It will not create family invoices or autopay attempts.</p> : null}
             </div>
             <DisplayValue label="Cadence" value="Weekly" detail="Standard billing cycle" />
             <div className="flex items-end">
@@ -1682,6 +1719,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                         if (!value) return;
                         setInvoiceEditorId(value);
                         setInvoiceEditDraft(null);
+                        setInvoiceVoidReason("");
                       }}
                     >
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1716,6 +1754,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   <FilePenLine data-icon="inline-start" />
                   Save Invoice Changes
                 </Button>
+                <div className="space-y-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <div>
+                    <Label htmlFor="invoice-void-reason">Void invoice</Label>
+                    <p className="text-xs text-muted-foreground">Removes this unpaid charge from the family balance while preserving the invoice, ledger reversal, and audit history.</p>
+                  </div>
+                  <Textarea
+                    id="invoice-void-reason"
+                    value={invoiceVoidReason}
+                    onChange={(event) => setInvoiceVoidReason(event.target.value)}
+                    placeholder="Reason this invoice should be voided"
+                  />
+                  <Button type="button" variant="destructive" disabled={isPending || invoiceVoidReason.trim().length < 5} onClick={submitInvoiceVoid}>
+                    <Ban data-icon="inline-start" />
+                    Void Invoice
+                  </Button>
+                </div>
               </>
             ) : (
               <Alert>

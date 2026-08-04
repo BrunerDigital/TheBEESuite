@@ -180,8 +180,8 @@ async function POSTHandler(request: NextRequest) {
       { status: 409 },
     );
   }
-  if (invoice.status === PaymentStatus.PAID) {
-    return NextResponse.json({ ok: false, error: "This invoice is already paid." }, { status: 400 });
+  if (invoice.status !== PaymentStatus.OPEN) {
+    return NextResponse.json({ ok: false, error: "This invoice is no longer open for payment." }, { status: 409 });
   }
   if (invoice.totalCents <= 0) {
     return NextResponse.json({ ok: false, error: "Invoice total must be greater than zero." }, { status: 400 });

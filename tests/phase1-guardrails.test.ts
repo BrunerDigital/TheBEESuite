@@ -151,7 +151,15 @@ test("billing guard applies a checkout payment only once per invoice", () => {
     paymentStatus: PaymentStatus.DRAFT,
     paymentBillingAccountId: "acct_1",
     paymentAmountCents: 12500,
-  }), { ok: false, reason: "invoice_already_paid" });
+  }), { ok: false, reason: "invoice_not_open" });
+  assert.deepEqual(checkoutApplicationGuard({
+    invoiceStatus: PaymentStatus.VOID,
+    invoiceBillingAccountId: "account-1",
+    invoiceTotalCents: 100,
+    paymentStatus: PaymentStatus.DRAFT,
+    paymentBillingAccountId: "account-1",
+    paymentAmountCents: 100,
+  }), { ok: false, reason: "invoice_not_open" });
 
   assert.deepEqual(checkoutApplicationGuard({
     invoiceStatus: PaymentStatus.OPEN,

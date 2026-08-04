@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma";
 import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
 import { refundSubmissionMode } from "@/lib/refund-approval";
 import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
+import { invoiceLedgerBalanceCents, invoiceVoidBlocker } from "@/lib/invoice-void";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -906,6 +907,129 @@ async function updateInvoice(user: CurrentBillingUser, body: Record<string, unkn
   return NextResponse.json({ ok: true, updated: true, ...result });
 }
 
+async function voidInvoice(user: CurrentBillingUser, body: Record<string, unknown>) {
+  const invoiceId = clean(body.invoiceId) || clean(body.id);
+  const reason = clean(body.reason).slice(0, 500);
+  if (!invoiceId) return NextResponse.json({ ok: false, error: "Invoice is required." }, { status: 400 });
+  if (reason.length < 5) {
+    return NextResponse.json({ ok: false, error: "Enter a reason for voiding this invoice." }, { status: 400 });
+  }
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      ledgerEntries: { select: { amountCents: true, paymentId: true } },
+      billingAccount: {
+        select: {
+          id: true,
+          family: { select: { id: true, name: true, centerId: true } },
+          payments: { where: { status: PaymentStatus.DRAFT }, select: { status: true, provider: true, customFields: true } },
+        },
+      },
+    },
+  });
+  if (!invoice) return NextResponse.json({ ok: false, error: "Invoice not found." }, { status: 404 });
+
+  const requestedFamilyId = clean(body.familyId);
+  if (requestedFamilyId && requestedFamilyId !== invoice.billingAccount.family.id) {
+    return NextResponse.json({ ok: false, error: "Invoice does not belong to the selected family." }, { status: 403 });
+  }
+  const centerId = invoice.billingAccount.family.centerId;
+  if (!centerId || !canAccessCenter(user, centerId)) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this invoice." }, { status: 403 });
+  }
+  const initialBlocker = invoiceVoidBlocker({ ...invoice, payments: invoice.billingAccount.payments });
+  if (initialBlocker) return NextResponse.json({ ok: false, error: initialBlocker }, { status: 409 });
+
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.invoice.findUniqueOrThrow({
+      where: { id: invoice.id },
+      include: {
+        ledgerEntries: { select: { amountCents: true, paymentId: true } },
+        billingAccount: {
+          select: {
+            id: true,
+            payments: { where: { status: PaymentStatus.DRAFT }, select: { status: true, provider: true, customFields: true } },
+          },
+        },
+      },
+    });
+    const blocker = invoiceVoidBlocker({ ...current, payments: current.billingAccount.payments });
+    if (blocker) throw new Error(`INVOICE_VOID_BLOCKED:${blocker}`);
+
+    const voidedAt = new Date();
+    const updated = await tx.invoice.updateMany({
+      where: { id: current.id, status: PaymentStatus.OPEN },
+      data: {
+        status: PaymentStatus.VOID,
+        customFields: {
+          ...jsonObject(current.customFields),
+          voidedAt: voidedAt.toISOString(),
+          voidedByUserId: user.id,
+          voidedByEmail: user.email,
+          voidReason: reason,
+        },
+      },
+    });
+    if (updated.count !== 1) throw new Error("INVOICE_VOID_BLOCKED:Invoice changed before it could be voided. Refresh and try again.");
+
+    const reversalCents = invoiceLedgerBalanceCents(current.ledgerEntries);
+    const account = await tx.billingAccount.update({
+      where: { id: current.billingAccount.id },
+      data: { balanceCents: { decrement: reversalCents } },
+      select: { balanceCents: true },
+    });
+    const ledgerEntry = await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: current.billingAccount.id,
+        invoiceId: current.id,
+        type: "invoice_void",
+        description: `Voided ${current.number}: ${reason}`,
+        amountCents: -reversalCents,
+        balanceAfterCents: account.balanceCents,
+        sourceSystem: "bee_suite_manual",
+        externalId: `invoice-void:${current.id}`,
+        metadata: {
+          voidedBy: user.email,
+          reason,
+          previousStatus: PaymentStatus.OPEN,
+          updatedStatus: PaymentStatus.VOID,
+        },
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        tenantId: user.tenantId,
+        centerId,
+        userId: user.id,
+        action: "billing.invoice.voided",
+        resource: "Invoice",
+        resourceId: current.id,
+        metadata: {
+          familyId: invoice.billingAccount.family.id,
+          invoiceNumber: current.number,
+          amountCents: reversalCents,
+          reason,
+          ledgerEntryId: ledgerEntry.id,
+        },
+      },
+    });
+    return {
+      invoice: { id: current.id, number: current.number, status: PaymentStatus.VOID, totalCents: current.totalCents },
+      reversedCents: reversalCents,
+      balanceAfterCents: account.balanceCents,
+      ledgerEntryId: ledgerEntry.id,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "";
+    if (message.startsWith("INVOICE_VOID_BLOCKED:")) return { error: message.slice("INVOICE_VOID_BLOCKED:".length) } as const;
+    throw error;
+  });
+
+  if ("error" in result) return NextResponse.json({ ok: false, error: result.error }, { status: 409 });
+  return NextResponse.json({ ok: true, voided: true, ...result });
+}
+
 function moneyLabel(cents: number) {
   return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(cents / 100);
 }
@@ -944,6 +1068,7 @@ async function PATCHHandler(request: NextRequest) {
   }
 
   const body = jsonObject(await request.json().catch(() => ({})));
+  if (clean(body.mode) === "void") return voidInvoice(user, body);
   return updateInvoice(user, body);
 }
 

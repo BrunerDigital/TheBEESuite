@@ -4,8 +4,10 @@ import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
   defaultRecurringBillingPeriod,
+  firstUncoveredTuitionBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   isVoucherFundedTuitionAmount,
+  laterWeeklyBillingPeriod,
   normalizeBillingCadence,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
@@ -103,7 +105,18 @@ async function POSTHandler(request: NextRequest) {
     ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
     : WEEKLY_TUITION_AUTOBILL_CADENCE;
   const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
-  const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  const previousCadence = normalizeBillingCadence(existingFields.tuitionBillingCadence ?? existingFields.tuitionPlanCadence);
+  const existingInvoices = previousCadence === cadence ? [] : await prisma.invoice.findMany({
+    where: { billingAccount: { familyId }, status: { not: "VOID" } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { customFields: true },
+  });
+  const requestedStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
+  const firstUncoveredPeriod = firstUncoveredTuitionBillingPeriod({ invoices: existingInvoices, childId, fallbackDate: new Date() });
+  const billingStartPeriod = previousCadence === cadence
+    ? requestedStartPeriod
+    : laterWeeklyBillingPeriod(requestedStartPeriod, firstUncoveredPeriod);
   const updatedAt = new Date().toISOString();
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
   const tuitionCredits = normalizeTuitionCredits(body.tuitionCredits);

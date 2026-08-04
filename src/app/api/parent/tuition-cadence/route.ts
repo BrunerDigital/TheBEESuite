@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import {
-  defaultRecurringBillingPeriod,
+  firstUncoveredTuitionBillingPeriod,
   FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   normalizeBillingCadence,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
@@ -46,9 +46,15 @@ async function POSTHandler(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "The school must first enable a positive weekly tuition assignment for this child." }, { status: 409 });
   }
   const previousCadence = normalizeBillingCadence(fields.tuitionBillingCadence ?? fields.tuitionPlanCadence);
+  const existingInvoices = previousCadence === cadence ? [] : await prisma.invoice.findMany({
+    where: { billingAccount: { familyId: scope.familyId }, status: { not: "VOID" } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { customFields: true },
+  });
   const startsPeriod = previousCadence === cadence && typeof fields.tuitionBillingStartsPeriod === "string"
     ? fields.tuitionBillingStartsPeriod
-    : defaultRecurringBillingPeriod(null, new Date(), cadence);
+    : firstUncoveredTuitionBillingPeriod({ invoices: existingInvoices, childId, fallbackDate: new Date() });
   const updatedAt = new Date().toISOString();
   const updatedFields = {
     ...fields,

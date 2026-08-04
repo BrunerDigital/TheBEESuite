@@ -15,6 +15,7 @@ test("director and parent four-week choices remain scoped and do not create open
   assert.match(parentRoute, /getParentPortalFamilyScope\(user\.id\)/);
   assert.match(parentRoute, /familyId: scope\.familyId/);
   assert.match(parentRoute, /tuitionBillingEnabled !== true/);
+  assert.match(parentRoute, /firstUncoveredTuitionBillingPeriod/);
   assert.doesNotMatch(parentRoute, /balanceCents/);
   assert.match(scheduler, /amountCents \* invoiceWeekCount/);
   assert.match(scheduler, /coverageStartsPeriod/);

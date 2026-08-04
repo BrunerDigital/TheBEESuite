@@ -216,6 +216,44 @@ export function tuitionInvoiceWeekCount(cadence: unknown) {
   return normalizeBillingCadence(cadence) === FOUR_WEEK_TUITION_AUTOBILL_CADENCE ? 4 : 1;
 }
 
+export function addWeeksToBillingPeriod(period: string, weeks: number) {
+  const start = recurringDueDateForPeriod(period, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  start.setUTCDate(start.getUTCDate() + (Math.max(0, Math.trunc(weeks)) * 7));
+  return isoWeekBillingPeriod(start);
+}
+
+export function laterWeeklyBillingPeriod(left: string, right: string) {
+  return recurringDueDateForPeriod(left, 1, WEEKLY_TUITION_AUTOBILL_CADENCE) >= recurringDueDateForPeriod(right, 1, WEEKLY_TUITION_AUTOBILL_CADENCE)
+    ? left
+    : right;
+}
+
+export function firstUncoveredTuitionBillingPeriod(input: {
+  invoices: Array<{ customFields: unknown }>;
+  childId: string;
+  fallbackDate: Date;
+}) {
+  let firstUncovered = nextWeeklyBillingPeriod(input.fallbackDate);
+  let firstUncoveredDate = recurringDueDateForPeriod(firstUncovered, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  for (const invoice of input.invoices) {
+    const fields = invoice.customFields && typeof invoice.customFields === "object" && !Array.isArray(invoice.customFields)
+      ? invoice.customFields as Record<string, unknown>
+      : {};
+    if (clean(fields.chargeSource) !== "tuitionPlan" || clean(fields.childId) !== input.childId) continue;
+    const period = normalizeWeeklyBillingPeriod(fields.billingPeriod, input.fallbackDate);
+    const weekCount = typeof fields.invoiceWeekCount === "number" && Number.isFinite(fields.invoiceWeekCount)
+      ? Math.max(1, Math.trunc(fields.invoiceWeekCount))
+      : tuitionInvoiceWeekCount(fields.billingCadence);
+    const candidate = addWeeksToBillingPeriod(period, weekCount);
+    const candidateDate = recurringDueDateForPeriod(candidate, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+    if (candidateDate > firstUncoveredDate) {
+      firstUncovered = candidate;
+      firstUncoveredDate = candidateDate;
+    }
+  }
+  return firstUncovered;
+}
+
 export function weeklyTuitionChargeDateForPeriod(period: string) {
   const followingWeekMonday = recurringDueDateForPeriod(period, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
   const chargeDate = new Date(followingWeekMonday);

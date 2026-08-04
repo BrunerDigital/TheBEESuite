@@ -118,6 +118,22 @@ const REVIEWED_SOURCES = {
     accountSha: "b07d8bdb377d874f742c50fb098c910a1977de41172fdf07e15184c4f169ec55",
     relationshipSha: "9d0701e22cb33bb931a4c8097e65669b5fc2731a7c537b382b24356748177181",
   },
+  cordera: {
+    centerId: "cmp4ew5yx00046alw8i1yf63m",
+    centerName: "Kid City USA - Cordera (Colorado Springs)",
+    locationId: "Kid City USA - CO | Colorado Springs - Cordera",
+    exportDate: "2026-08-04",
+    accountSha: "273887ee6f390072965bdb820e7138e81194cbba7e4d297e66f110b6dcd56bac",
+    relationshipSha: "3681a25a9d78ab41726e8745f953045b89d55cf0df3e8c81eaac1a41eb4ec550",
+  },
+  canton: {
+    centerId: "cmp4ewg4a004i6alwl5c6i3w4",
+    centerName: "Kid City USA - Canton",
+    locationId: "Kid City USA - NC | Canton",
+    exportDate: "2026-08-04",
+    accountSha: "bbf262b5a6b62534ffdcda208fd7c4d52ade7009aec36fa9bf7c2a6920c304f4",
+    relationshipSha: "f79e737321f310dcff233e189dce1eaaeb9d15e32b98b227f8500ae63778f7e5",
+  },
 } as const satisfies Record<string, ReviewedSource>;
 
 type ReviewedSchoolKey = keyof typeof REVIEWED_SOURCES;

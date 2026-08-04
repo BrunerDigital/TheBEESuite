@@ -923,7 +923,9 @@ async function previewImportRows({
     const classroomName = procareClassroomName(rawData);
     if (classroomName) classroomsReferenced.add(`${targetCenter.id}:${classroomName}`);
     const previewEnrollmentStatusValue = value(rawData, ["child status", "status", "enrollment status", "student status"]);
-    if (childName && previewEnrollmentStatusValue && normalizeProcareEnrollmentStatus(previewEnrollmentStatusValue) === "enrolled" && !classroomName) {
+    const previewEnrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
+    const previewEnrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(previewEnrollmentStatusValue, previewEnrollmentEndDate);
+    if (childName && previewEnrollmentStatusValue && previewEnrollmentStatus === "enrolled" && !classroomName) {
       const message = "An enrolled child is missing a classroom assignment.";
       warnings.push({ rowNumber, message });
       rowResults.push({ rowNumber, status: "warning", entity: "family_child", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Assign a classroom", familyName: familyName || undefined, childName, message });

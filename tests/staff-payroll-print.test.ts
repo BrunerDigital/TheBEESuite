@@ -149,7 +149,7 @@ test("payroll print CSS excludes the center summary and collapses non-print layo
   assert.doesNotMatch(source, /body:has\(\.staff-payroll-print-area\) \* \{\s*visibility: hidden/);
 });
 
-test("submitted payroll reports include a summary for every active employee", async () => {
+test("submitted payroll reports include every employee shown for the pay period", async () => {
   const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
   const sendSummary = source.slice(source.indexOf("function sendPayrollSummary"), source.indexOf("function saveTeacher"));
   assert.match(sendSummary, /employeeSummaries: rows\.map/);
@@ -176,11 +176,11 @@ test("print reports remove hidden dashboard layout instead of leaving blank page
   assert.doesNotMatch(source, /\.bee-print-report-active \{[\s\S]*position: absolute !important/);
 });
 
-test("payroll rows exclude previous employees", async () => {
+test("payroll rows include previous employees only when they worked in the selected period", async () => {
   const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
   const payrollRows = source.slice(source.indexOf("const staffHoursRows"), source.indexOf("const staffHoursTotalMinutes"));
-  assert.match(payrollRows, /filterPayrollStaffByCenter\(activeStaff, payrollCenterId\)/);
-  assert.doesNotMatch(payrollRows, /return allTeacherRows/);
+  assert.match(payrollRows, /filterPayrollStaffByCenter\(allTeacherRows, payrollCenterId\)/);
+  assert.match(payrollRows, /\.filter\(\(row\) => row\.active \|\| row\.shiftRows\.length > 0\)/);
 });
 
 test("executive payroll school filter scopes time card rows", () => {
@@ -197,7 +197,7 @@ test("executive payroll school filter scopes time card rows", () => {
 test("executive payroll school filter scopes screen, print, and submitted summaries", async () => {
   const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
   assert.match(source, /payroll-school-filter/);
-  assert.match(source, /filterPayrollStaffByCenter\(activeStaff, payrollCenterId\)/);
+  assert.match(source, /filterPayrollStaffByCenter\(allTeacherRows, payrollCenterId\)/);
   assert.match(source, /const centerSummaries = payrollCenters\.map/);
   assert.match(source, /payrollCenters\.length.*selected school/);
 });

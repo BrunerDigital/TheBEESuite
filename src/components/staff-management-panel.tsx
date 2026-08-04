@@ -470,7 +470,7 @@ export function StaffManagementPanel({
   const visibleOutsidePayPeriodClockEditRowCount = visibleClockEditRows.length - payPeriodClockEditRows.length;
   const hiddenClockEditRowCount = clockEditRows.length - visibleClockEditRows.length;
   const staffHoursRows = useMemo(() => {
-    return filterPayrollStaffByCenter(activeStaff, payrollCenterId)
+    return filterPayrollStaffByCenter(allTeacherRows, payrollCenterId)
       .map((teacher) => {
         const timeZone = readCenterLocationTimeZone(centerById.get(teacher.centerId));
         const payrollStart = zonedDateInputToUtc(payrollStartDate, timeZone);
@@ -520,8 +520,9 @@ export function StaffManagementPanel({
           estimatedGrossPayCents,
         };
       })
+      .filter((row) => row.active || row.shiftRows.length > 0)
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
-  }, [activeStaff, centerById, centerNameById, payrollCenterId, payrollEndDate, payrollStartDate, summaryNow]);
+  }, [allTeacherRows, centerById, centerNameById, payrollCenterId, payrollEndDate, payrollStartDate, summaryNow]);
   const payrollCenters = payrollCenterId === "all"
     ? centers
     : centers.filter((center) => center.id === payrollCenterId);

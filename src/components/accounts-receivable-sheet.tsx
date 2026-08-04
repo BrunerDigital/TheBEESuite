@@ -75,8 +75,8 @@ export function AccountsReceivableSheet({ executive = false }: { executive?: boo
               <SheetTitle>{executive ? "Executive account balances" : "School account balances"}</SheetTitle>
               <SheetDescription>
                 {executive
-                  ? "Every family account across your visible schools, with families who owe listed first."
-                  : "Every family account in your school, with families who owe listed first."}
+                  ? "Current family accounts across your visible schools, with families who owe listed first."
+                  : "Current family accounts in your school, with families who owe listed first."}
               </SheetDescription>
             </div>
             <Button

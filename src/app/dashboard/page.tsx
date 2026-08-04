@@ -240,9 +240,7 @@ export default async function DashboardPage() {
     }),
     prisma.billingAccount.aggregate({
       where: {
-        family: {
-          centerId: scopedCenterFilter,
-        },
+        family: currentFamilyWhere,
       },
       _sum: {
         balanceCents: true,
@@ -387,14 +385,14 @@ export default async function DashboardPage() {
     }),
     canViewAccountBalances(user) && !canSeeExecutiveMetrics
       ? prisma.family.findMany({
-          where: { centerId: scopedCenterFilter },
+          where: currentFamilyWhere,
           orderBy: { name: "asc" },
           select: accountsReceivableFamilySelect,
         })
       : Promise.resolve([]),
     canViewAccountBalances(user) && canSeeExecutiveMetrics
       ? prisma.family.findMany({
-          where: { centerId: scopedCenterFilter },
+          where: currentFamilyWhere,
           select: accountsReceivableSummaryFamilySelect,
         })
       : Promise.resolve([]),

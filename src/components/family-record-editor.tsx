@@ -912,9 +912,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         ? `Enable autopay for ${selectedFamily?.name ?? "this family"}? The one selected saved method will pay open invoices on or after their due date; weekly invoices are created separately and amounts may vary.`
         : action === "disable_autopay"
           ? `Disable autopay for ${selectedFamily?.name ?? "this family"}? Saved payment information will remain available for deliberate one-time payments.`
-          : paymentMethodCategory === "card"
-            ? `Save or replace the family card for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. Card payments include a separate 2.9% processing fee when charged.`
-            : `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay.`;
+          : `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. The school absorbs Stripe processing costs.`;
       const confirmed = window.confirm(message);
       if (!confirmed) return;
     }
@@ -928,7 +926,6 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           billingAccountId: selectedBillingAccount.id,
           action,
           paymentMethodCategory,
-          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
           returnPath: "/family-detail",
         }),
       });

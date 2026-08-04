@@ -395,9 +395,9 @@ export function StripeConnectPanel({
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
             <div className="font-medium">Parent processing fee</div>
-            <div className="text-2xl font-semibold">2.9%</div>
+            <div className="text-2xl font-semibold">$0</div>
             <div className="mt-1 text-xs text-muted-foreground">
-              Added only to the eligible parent card payment; no fixed component or gross-up
+              All Stripe processing costs are absorbed by the school
             </div>
           </div>
         </div>
@@ -660,7 +660,7 @@ export function StripeConnectPanel({
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: card checkout adds exactly 2.9% to the eligible parent payment. The separate 1.5% BEE Suite application fee is deducted from school proceeds. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: the parent&apos;s Stripe charge equals the eligible parent-responsible amount. Stripe processing costs and the separate 1% BEE Suite application fee reduce school proceeds. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
       </CardContent>
     </Card>

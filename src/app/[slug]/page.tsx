@@ -2200,6 +2200,8 @@ async function renderLivePage(
         stripePaymentIntentId: summary.stripePaymentIntentId,
         stripePaymentIntentStatus: summary.stripePaymentIntentStatus,
         stripePaymentStatus: summary.stripePaymentStatus,
+        checkoutTotalCents: summary.checkoutTotalCents,
+        feeDisclosureVersion: summary.feeDisclosureVersion,
       });
     }
     const parentInvoices = invoices.map((invoice) => {

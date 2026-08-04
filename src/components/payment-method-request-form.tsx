@@ -54,13 +54,6 @@ export function PaymentMethodRequestForm({
   }
 
   function startSetup(paymentMethodCategory: "link_bank" | "card") {
-    if (paymentMethodCategory === "card") {
-      const accepted = window.confirm(
-        "Saving this debit/credit card does not enable autopay. Card payments include a separate 2.9% processing fee when charged. Continue?",
-      );
-      if (!accepted) return;
-    }
-
     startTransition(async () => {
       setErrorMessage("");
       try {
@@ -70,7 +63,6 @@ export function PaymentMethodRequestForm({
           body: JSON.stringify({
             token,
             paymentMethodCategory,
-            processingRecoveryAccepted: paymentMethodCategory === "card",
           }),
         });
         const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;

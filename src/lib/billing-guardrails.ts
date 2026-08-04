@@ -22,6 +22,15 @@ function numberField(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function numberLikeField(value: unknown) {
+  const direct = numberField(value);
+  if (direct !== null) return direct;
+  const text = stringField(value);
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function activeStripeCheckoutPaymentSummary(payment: {
   id: string;
   amountCents?: number | null;
@@ -42,6 +51,8 @@ export function activeStripeCheckoutPaymentSummary(payment: {
     stripePaymentIntentId: stringField(fields.stripePaymentIntentId),
     stripePaymentIntentStatus: stringField(fields.stripePaymentIntentStatus),
     stripePaymentStatus: stringField(fields.stripePaymentStatus),
+    checkoutTotalCents: numberLikeField(fields.checkoutTotalCents),
+    feeDisclosureVersion: stringField(fields.feeDisclosureVersion),
   };
 }
 

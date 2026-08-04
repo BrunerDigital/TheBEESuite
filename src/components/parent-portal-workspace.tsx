@@ -400,10 +400,6 @@ function scheduleSummary(value: unknown) {
   return String(value);
 }
 
-function estimatedCardProcessingFee(cents: number) {
-  return Math.max(0, Math.round(Math.max(0, cents) * 0.029));
-}
-
 function localDateKey(value: string | Date | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
@@ -700,10 +696,6 @@ export function ParentPortalWorkspace({
     if (balanceCents <= 0) {
       return showError("There is no family balance to pay.");
     }
-    const processingFee = paymentMethodCategory === "card" ? estimatedCardProcessingFee(balanceCents) : 0;
-    if (processingFee > 0 && !window.confirm(
-      `This card payment includes a ${money(processingFee)} processing fee (2.9%). Your total card charge will be ${money(balanceCents + processingFee)}. Continue to secure checkout?`,
-    )) return;
     startTransition(async () => {
       const method = paymentMethodCategory === "card"
         ? "card_checkout"
@@ -790,10 +782,6 @@ export function ParentPortalWorkspace({
     if (!selectedUniformProduct) {
       return showError("Choose an available uniform shirt color and size.");
     }
-    const processingFee = paymentMethodCategory === "card" ? estimatedCardProcessingFee(uniformOrderTotalCents) : 0;
-    if (processingFee > 0 && !window.confirm(
-      `This card purchase includes a ${money(processingFee)} processing fee (2.9%). Your total card charge will be ${money(uniformOrderTotalCents + processingFee)}. Continue to secure checkout?`,
-    )) return;
     startTransition(async () => {
       const purchaseResponse = await fetch("/api/parent/products/purchase", {
         method: "POST",
@@ -834,12 +822,6 @@ export function ParentPortalWorkspace({
   function managePaymentMethod(action: "setup" | "portal" | "enable_autopay" | "disable_autopay", paymentMethodCategory: "ach" | "card" | "link_bank" | "default" = "default") {
     if (!family) return showError("A family profile is required before saving payment methods.");
     if (action !== "setup" && !billingAccount) return showError("Save a payment method before managing autopay settings.");
-    if (action === "setup" && paymentMethodCategory === "card") {
-      const accepted = window.confirm(
-        "Saving this card does not enable autopay. Card payments include a separate 2.9% processing fee when charged. Continue?",
-      );
-      if (!accepted) return;
-    }
     if (action === "enable_autopay" && !window.confirm(
       "Enable autopay? The one selected saved method will pay open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
     )) return;
@@ -852,7 +834,6 @@ export function ParentPortalWorkspace({
           familyId: family.id,
           action,
           paymentMethodCategory,
-          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
           returnPath: "/parent-portal",
         }),
       });
@@ -1508,7 +1489,7 @@ export function ParentPortalWorkspace({
                 <div className="mt-2 text-xs text-muted-foreground">
                   {paymentProcessingRecoverySummary({
                     achRecovery: 0,
-                    cardRecovery: estimatedCardProcessingFee(balanceCents),
+                    cardRecovery: 0,
                     formatMoney: money,
                   })}
                 </div>

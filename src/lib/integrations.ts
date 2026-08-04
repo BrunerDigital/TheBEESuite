@@ -235,17 +235,17 @@ export function getStripeApplicationFeeBps() {
 }
 
 export function getStripeApplicationFeeAmount(amountCents: number) {
-  const percentageFee = Math.round(amountCents * (getStripeApplicationFeeBps() / 10_000));
-  const fixedFee = nonNegativeIntEnv("STRIPE_APPLICATION_FEE_FIXED_CENTS");
-  const fee = percentageFee + fixedFee;
-  return Math.max(0, Math.min(fee, amountCents));
+  // Legacy application-fee overrides are ignored. The complete BEE Suite fee
+  // is the platform-wide 1% payment-operations fee calculated below.
+  void amountCents;
+  return 0;
 }
 
 export function getStripePaymentOperationsFeeAmount(amountCents: number, waived = false) {
-  // Platform-wide policy: every location funds the 1.5% BEE Suite portion
+  // Platform-wide policy: every location funds the 1% BEE Suite portion
   // from school proceeds. Legacy waiver and fee override settings are ignored.
   void waived;
-  return Math.max(0, Math.round(Math.max(0, amountCents) * 0.015));
+  return Math.max(0, Math.round(Math.max(0, amountCents) * 0.01));
 }
 
 export function getStripeParentSurchargeBps() {
@@ -368,11 +368,11 @@ function isInvalidPaymentMethodTypeError(json: unknown) {
 }
 
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
-  // Approved policy: card-paying parents fund exactly 2.9% of their eligible
-  // parent-responsible payment. Do not include Stripe's fixed component and do
-  // not gross up. Bank payment methods have no parent processing fee.
-  if (paymentMethodCategory !== "card") return 0;
-  return Math.max(0, Math.round(Math.max(0, amountCents) * 0.029));
+  // Approved platform-wide policy: schools absorb every Stripe processor fee.
+  // Parent charges must equal the eligible parent-responsible principal.
+  void amountCents;
+  void paymentMethodCategory;
+  return 0;
 }
 
 export function shouldWaiveStripePaymentOperationsFee({

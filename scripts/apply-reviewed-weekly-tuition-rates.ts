@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { Prisma } from "@prisma/client";
+import { isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import {
   listStripeConnectedAccountPayoutBanks,
   readStripeConnectedAccountId,
@@ -14,6 +15,7 @@ import {
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
+import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { verifyStripeConnectAccountBinding } from "@/lib/stripe-connect-setup";
 import { stripeConnectReadinessFromSnapshot } from "@/lib/stripe-connect-readiness";
 
@@ -21,6 +23,7 @@ const APPLY = "--apply";
 const CONFIRM = "--confirm-reviewed-weekly-tuition-rates";
 const FP = "--confirm-fingerprint=";
 const INPUT = "--input=";
+const STARTS = "--starts-period=";
 
 type Reconciliation = { details?: Array<{ school?: string; childId?: string; ageGroup?: string; status?: string; recommendedWeeklyCents?: number; sourceAsOf?: string; sourceFile?: string }> };
 type Rate = { school: string; childId: string; ageGroup: string; amountCents: number; sourceAsOf: string; sourceFile: string };
@@ -28,6 +31,7 @@ type Rate = { school: string; childId: string; ageGroup: string; amountCents: nu
 function invariant(value: unknown, message: string): asserts value { if (!value) throw new Error(message); }
 function object(value: Prisma.JsonValue | null | undefined) { return value && typeof value === "object" && !Array.isArray(value) ? value as Prisma.JsonObject : {}; }
 function inputObject(value: Prisma.JsonObject) { return value as Prisma.InputJsonObject; }
+function string(value: unknown) { return typeof value === "string" ? value.trim() : ""; }
 function arg(prefix: string) { return process.argv.find((value) => value.startsWith(prefix))?.slice(prefix.length).trim(); }
 function fingerprint(rates: Rate[], startsPeriod: string) { return createHash("sha256").update(JSON.stringify({ startsPeriod, rates: rates.slice().sort((a,b)=>a.childId.localeCompare(b.childId)) })).digest("hex"); }
 
@@ -59,7 +63,10 @@ async function main() {
   const inputPath = arg(INPUT); invariant(inputPath, `${INPUT}<path> is required.`);
   const apply = process.argv.includes(APPLY); const confirmed = process.argv.includes(CONFIRM); const expected = arg(FP);
   invariant(!apply || confirmed, `Apply mode requires ${CONFIRM}.`); invariant(!apply || expected, `Apply mode requires ${FP}<value>.`);
-  const rates = loadRates(inputPath); const startsPeriod = nextWeeklyBillingPeriod(new Date()); const currentFingerprint = fingerprint(rates, startsPeriod);
+  const rates = loadRates(inputPath); const startsPeriod = arg(STARTS) || nextWeeklyBillingPeriod(new Date());
+  invariant(/^\d{4}-W\d{2}$/.test(startsPeriod), `${STARTS} must be an ISO weekly period.`);
+  invariant(!apply || arg(STARTS), `Apply mode requires ${STARTS}<period> so retries remain stable.`);
+  const currentFingerprint = fingerprint(rates, startsPeriod);
   invariant(!apply || expected === currentFingerprint, "Reviewed rate set or effective period changed; rerun the dry run.");
   const children = await prisma.child.findMany({ where: { id: { in: rates.map((row) => row.childId) } }, select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true, family: { select: { id: true, centerId: true } } } });
   invariant(children.length === rates.length, "One or more reviewed children no longer exist.");
@@ -71,26 +78,32 @@ async function main() {
   for (const rate of rates) {
     const child = childById.get(rate.childId)!; const center = centerByName.get(rate.school)!;
     invariant(child.family.centerId === center.id, `${child.fullName} moved to another school.`);
-    invariant(/active|enrolled|currently enrolled/i.test(child.enrollmentStatus), `${child.fullName} is no longer actively enrolled.`);
+    invariant(isCurrentlyEnrolledStatus(child.enrollmentStatus), `${child.fullName} is no longer actively enrolled.`);
     invariant(child.ageGroup === rate.ageGroup, `${child.fullName} age group changed after review.`);
     const fields = object(child.customFields);
-    invariant(fields.tuitionBillingEnabled !== true, `${child.fullName} already has an enabled assignment; stop and reconcile it.`);
+    const evidence = object(fields.tuitionRateEvidence as Prisma.JsonValue | undefined);
+    const matchingAssignment = fields.tuitionBillingEnabled === true && fields.tuitionPlanAmountCents === rate.amountCents && fields.tuitionBillingStartsPeriod === startsPeriod && string(evidence.manifestFingerprint) === currentFingerprint;
+    invariant(fields.tuitionBillingEnabled !== true || matchingAssignment, `${child.fullName} already has a different enabled assignment; stop and reconcile it.`);
     const centerFields = object(center.customFields);
-    invariant(centerFields.stripeBillingApproved === true && centerFields.livePaymentsEnabled === true && centerFields.tuitionBillingEnabled === true, `${center.name} billing approval is not active.`);
+    invariant(stripeSchoolBillingApproval({ customFields: centerFields, centerName: center.name }).approved && centerFields.livePaymentsEnabled === true && centerFields.tuitionBillingEnabled === true, `${center.name} billing approval is not active.`);
   }
   const plan = schoolNames.map((school) => ({ school, children: rates.filter((row) => row.school === school).length, uniqueRates: new Set(rates.filter((row) => row.school === school).map((row) => row.amountCents)).size }));
   if (!apply) { console.log(JSON.stringify({ ok: true, apply: false, startsPeriod, fingerprint: currentFingerprint, exactChildren: rates.length, schools: plan, boundaries: { createsInvoices: false, createsCharges: false, changesPayments: false, changesRefunds: false } }, null, 2)); return; }
-  let assigned = 0, plansCreated = 0;
+  let assigned = 0, alreadyAssigned = 0, plansCreated = 0;
   for (const school of schoolNames) {
     const center = centerByName.get(school)!; const accountId = await verifySchoolStripe(center); const schoolRates = rates.filter((row) => row.school === school);
+    let schoolAlreadyAssigned = 0;
     const result = await prisma.$transaction(async (tx) => {
       const freshCenter = await tx.center.findUnique({ where: { id: center.id }, select: { customFields: true } }); invariant(freshCenter, `${school} disappeared.`);
       invariant(readStripeConnectedAccountId(freshCenter.customFields) === accountId, `${school} Stripe binding changed during cutover.`);
       let created = 0;
       for (const rate of schoolRates) {
         const fresh = await tx.child.findUnique({ where: { id: rate.childId }, select: { fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true, family: { select: { centerId: true } } } }); invariant(fresh, `Child ${rate.childId} disappeared.`);
-        invariant(fresh.family.centerId === center.id && fresh.ageGroup === rate.ageGroup && /active|enrolled|currently enrolled/i.test(fresh.enrollmentStatus), `${fresh.fullName} eligibility changed during cutover.`);
-        const fields = object(fresh.customFields); invariant(fields.tuitionBillingEnabled !== true, `${fresh.fullName} gained an assignment during cutover.`);
+        invariant(fresh.family.centerId === center.id && fresh.ageGroup === rate.ageGroup && isCurrentlyEnrolledStatus(fresh.enrollmentStatus), `${fresh.fullName} eligibility changed during cutover.`);
+        const fields = object(fresh.customFields); const evidence = object(fields.tuitionRateEvidence as Prisma.JsonValue | undefined);
+        const matchingAssignment = fields.tuitionBillingEnabled === true && fields.tuitionPlanAmountCents === rate.amountCents && fields.tuitionBillingStartsPeriod === startsPeriod && string(evidence.manifestFingerprint) === currentFingerprint;
+        invariant(fields.tuitionBillingEnabled !== true || matchingAssignment, `${fresh.fullName} gained a different assignment during cutover.`);
+        if (matchingAssignment) { schoolAlreadyAssigned++; continue; }
         let tuitionPlan = await tx.tuitionPlan.findFirst({ where: { centerId: center.id, ageGroup: rate.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: rate.amountCents }, orderBy: { id: "asc" } });
         if (!tuitionPlan) { tuitionPlan = await tx.tuitionPlan.create({ data: { centerId: center.id, ageGroup: rate.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: rate.amountCents, name: `ProCare ${rate.ageGroup} Weekly $${(rate.amountCents / 100).toFixed(2)}` } }); created++; }
         const updatedAt = new Date().toISOString();
@@ -99,9 +112,9 @@ async function main() {
       }
       return created;
     }, { maxWait: 10_000, timeout: 60_000 });
-    assigned += schoolRates.length; plansCreated += result;
+    alreadyAssigned += schoolAlreadyAssigned; assigned += schoolRates.length - schoolAlreadyAssigned; plansCreated += result;
   }
-  console.log(JSON.stringify({ ok: true, apply: true, startsPeriod, fingerprint: currentFingerprint, assigned, plansCreated, boundaries: { invoicesCreated: 0, chargesCreated: 0, paymentsChanged: 0, refundsChanged: 0 } }, null, 2));
+  console.log(JSON.stringify({ ok: true, apply: true, startsPeriod, fingerprint: currentFingerprint, assigned, alreadyAssigned, plansCreated, boundaries: { invoicesCreated: 0, chargesCreated: 0, paymentsChanged: 0, refundsChanged: 0 } }, null, 2));
 }
 
 if (pathToFileURL(process.argv[1]).href === import.meta.url) main().catch(async (error) => { console.error(error); await prisma.$disconnect(); process.exitCode = 1; }).finally(() => prisma.$disconnect());

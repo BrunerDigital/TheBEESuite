@@ -7,6 +7,8 @@ const source = readFileSync(new URL("../scripts/apply-reviewed-weekly-tuition-ra
 test("reviewed cutover accepts only exact weekly contract evidence and a fingerprinted next period", () => {
   assert.match(source, /status === "Exact weekly contract"/);
   assert.match(source, /nextWeeklyBillingPeriod\(new Date\(\)\)/);
+  assert.match(source, /const STARTS = "--starts-period="/);
+  assert.match(source, /Apply mode requires \$\{STARTS\}/);
   assert.match(source, /confirm-fingerprint/);
   assert.match(source, /Duplicate child IDs/);
 });
@@ -14,7 +16,10 @@ test("reviewed cutover accepts only exact weekly contract evidence and a fingerp
 test("reviewed cutover fails closed on school, child, and Stripe drift", () => {
   assert.match(source, /moved to another school/);
   assert.match(source, /age group changed after review/);
-  assert.match(source, /already has an enabled assignment/);
+  assert.match(source, /isCurrentlyEnrolledStatus/);
+  assert.match(source, /stripeSchoolBillingApproval\(\{ customFields: centerFields, centerName: center\.name \}\)\.approved/);
+  assert.match(source, /matchingAssignment/);
+  assert.match(source, /already has a different enabled assignment/);
   assert.match(source, /verifyStripeConnectAccountBinding/);
   assert.match(source, /Stripe binding changed during cutover/);
 });

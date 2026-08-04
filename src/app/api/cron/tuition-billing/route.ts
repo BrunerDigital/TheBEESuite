@@ -13,6 +13,7 @@ import {
   weeklyTuitionChargeDateForPeriod,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
+import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -127,6 +128,11 @@ async function GETHandler(request: NextRequest) {
         const plan = plansById.get(entry.planId);
         const description = clean(entry.fields.tuitionBillingDescription) || plan?.name || clean(entry.fields.tuitionPlanName) || "Tuition";
         const amountCents = plan?.amountCents ?? entry.snapshotAmountCents;
+        const tuitionCredits = normalizeTuitionCredits(entry.fields.tuitionCredits);
+        const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
+        if (tuitionCreditsTotalCents >= amountCents) {
+          throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
+        }
         const dueDate = entry.cadence === "weekly"
           ? weeklyTuitionChargeDateForPeriod(entry.billingPeriod)
           : recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
@@ -143,7 +149,7 @@ async function GETHandler(request: NextRequest) {
           familyId: entry.child.familyId,
           dueDate,
           description: lineDescription,
-          items: [{ description: lineDescription, amountCents }],
+          items: tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, credits: tuitionCredits }),
           customFields: {
             mode: "recurring",
             billingPeriod: entry.billingPeriod,
@@ -156,6 +162,10 @@ async function GETHandler(request: NextRequest) {
             sourceId: entry.planId,
             tuitionPlanName: (plan?.name ?? clean(entry.fields.tuitionPlanName)) || null,
             tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
+            grossTuitionCents: amountCents,
+            tuitionCredits,
+            tuitionCreditsTotalCents,
+            netTuitionCents: amountCents - tuitionCreditsTotalCents,
             dedupeKey,
           },
         });

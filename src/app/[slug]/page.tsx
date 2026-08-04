@@ -309,12 +309,18 @@ function stringArrayField(value: unknown) {
 function tuitionAssignmentFromCustomFields(customFields: unknown) {
   const fields = recordFromJson(customFields);
   const planId = stringField(fields.tuitionPlanId);
+  const grossAmountCents = numberField(fields.tuitionPlanAmountCents);
+  const netAmountCents = numberField(fields.tuitionNetAmountCents) ?? grossAmountCents;
   return {
     enabled: fields.tuitionBillingEnabled === true,
     tuitionPlanId: planId,
     tuitionPlanName: stringField(fields.tuitionPlanName),
     cadence: stringField(fields.tuitionBillingCadence) || stringField(fields.tuitionPlanCadence),
-    amountCents: numberField(fields.tuitionPlanAmountCents),
+    amountCents: netAmountCents,
+    grossAmountCents,
+    credits: Array.isArray(fields.tuitionCredits) ? fields.tuitionCredits : [],
+    creditsTotalCents: numberField(fields.tuitionCreditsTotalCents) ?? 0,
+    netAmountCents,
     billingDay: numberField(fields.tuitionBillingDay),
     startsPeriod: stringField(fields.tuitionBillingStartsPeriod),
     description: stringField(fields.tuitionBillingDescription),

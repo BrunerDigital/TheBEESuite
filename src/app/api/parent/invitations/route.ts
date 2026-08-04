@@ -43,6 +43,72 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
+async function GETHandler(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "Parent invitation status is not available for this role." }, { status: 403 });
+  }
+  const guardianId = clean(request.nextUrl.searchParams.get("guardianId"));
+  if (!guardianId) return NextResponse.json({ ok: false, error: "Guardian ID is required." }, { status: 400 });
+
+  const guardian = await prisma.guardian.findUnique({
+    where: { id: guardianId },
+    select: { id: true, email: true, userId: true, family: { select: { centerId: true } } },
+  });
+  if (!guardian?.family.centerId || (!canAccessAllCenters(user) && !canAccessCenter(user, guardian.family.centerId))) {
+    return NextResponse.json({ ok: false, error: "Guardian not found for this school scope." }, { status: 404 });
+  }
+  const email = normalizeEmail(guardian.email);
+  if (!email) return NextResponse.json({ ok: true, status: "missing_email", linked: Boolean(guardian.userId) });
+
+  const [delivery, setupToken] = await Promise.all([
+    prisma.integrationDelivery.findFirst({
+      where: {
+        centerId: guardian.family.centerId,
+        purpose: "parent_invitation_email",
+        OR: [
+          { payload: { path: ["metadata", "guardianId"], equals: guardian.id } },
+          { payload: { path: ["guardianId"], equals: guardian.id } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, createdAt: true, deliveredAt: true, lastError: true },
+    }),
+    prisma.parentPortalSetupToken.findFirst({
+      where: { guardianId: guardian.id },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, deliveryStatus: true, expiresAt: true, createdAt: true },
+    }),
+  ]);
+
+  const deliveryStatus = clean(delivery?.status).toLowerCase();
+  const tokenExpired = Boolean(setupToken && (setupToken.status === "expired" || setupToken.expiresAt <= new Date()));
+  const status = deliveryStatus === "delivered"
+    ? "delivered"
+    : deliveryStatus === "failed"
+      ? "failed"
+      : tokenExpired
+        ? "expired"
+        : deliveryStatus === "accepted"
+          ? "accepted"
+          : delivery
+            ? "invited"
+            : guardian.userId
+              ? "linked"
+              : "not_invited";
+
+  return NextResponse.json({
+    ok: true,
+    status,
+    linked: Boolean(guardian.userId),
+    invitedAt: delivery?.createdAt ?? setupToken?.createdAt ?? null,
+    deliveredAt: delivery?.deliveredAt ?? null,
+    deliveryStatus: deliveryStatus || null,
+    setupStatus: setupToken?.status ?? null,
+  });
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -423,3 +489,4 @@ async function POSTHandler(request: NextRequest) {
 }
 
 export const POST = withApiLogging("POST", POSTHandler);
+export const GET = withApiLogging("GET", GETHandler);

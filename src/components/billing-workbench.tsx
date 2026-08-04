@@ -504,7 +504,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
     if (action === "setup" && paymentMethodCategory === "card") {
       const accepted = window.confirm(
-        "Saving this card does not enable autopay. Card payments may include the approved processing recovery when the card is charged. Continue?",
+        "Saving this card does not enable autopay. Card payments include a separate 2.9% processing fee when charged. Continue?",
       );
       if (!accepted) return;
     }
@@ -560,7 +560,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     const invoiceId = effectivePaymentTarget.startsWith("invoice:") ? selectedPaymentInvoice?.id ?? "" : "";
     const processingRecoveryAccepted = method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
     if (processingRecoveryAccepted && !cardRecoveryAccepted) {
-      return setErrorMessage("Confirm the approved card processing recovery disclosure before charging a saved card.");
+      return setErrorMessage("Confirm the 2.9% card processing fee disclosure before charging a saved card.");
     }
     setPaymentReviewMethod(null);
 
@@ -650,7 +650,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       router.refresh();
     });
   }
-
+  const paymentReviewRequiresCardRecovery =
+    paymentReviewMethod === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
   function togglePaymentRequestEmail(email: string) {
     setPaymentRequestEmailSelections((current) => {
       const currentForFamily = current[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails;
@@ -1156,8 +1157,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     });
   }
 
-  const paymentReviewRequiresCardRecovery =
-    paymentReviewMethod === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
 
   return (
     <>
@@ -1182,6 +1181,17 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SummaryMetric label="Payment target" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
               <SummaryMetric label="Amount to submit" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
             </div>
+            {paymentReviewRequiresCardRecovery ? (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm leading-5">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={cardRecoveryAccepted}
+                  onChange={(event) => setCardRecoveryAccepted(event.target.checked)}
+                />
+                <span>I confirm this saved-card charge includes a separate 2.9% processing fee calculated on the eligible family payment.</span>
+              </label>
+            ) : null}
             <div className="rounded-lg border bg-background/45 p-3">
               <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">The BEE Suite route</div>
               <div className="mt-2 text-sm font-medium">{paymentRouteSummary(paymentReviewMethod)}</div>
@@ -1194,19 +1204,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <ContextBadge label="Saved method" value={selectedPaymentMethod?.paymentMethodLabel ?? "None"} />
               <ContextBadge label="Autopay" value={selectedAutopayStatus} variant={selectedAutopayStatus === "enabled" ? "default" : "outline"} />
             </div>
-            {paymentReviewRequiresCardRecovery ? (
-              <label className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm leading-5">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={cardRecoveryAccepted}
-                  onChange={(event) => setCardRecoveryAccepted(event.target.checked)}
-                />
-                <span>
-                  I confirm this saved-card charge may include the approved card processing recovery and should be recorded before charging this family.
-                </span>
-              </label>
-            ) : null}
           </div>
         ) : null}
         <DialogFooter>

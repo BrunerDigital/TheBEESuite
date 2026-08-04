@@ -1,15 +1,15 @@
-export const PAYMENT_PROCESSING_RECOVERY_LABEL = "Payment processing recovery";
+export const PAYMENT_PROCESSING_RECOVERY_LABEL = "Card processing fee";
 
 export const PAYMENT_PROCESSING_RECOVERY_VERSION = "payment-processing-recovery-2026-06-09";
 
 export const PAYMENT_PROCESSING_RECOVERY_DISCLOSURE =
-  "ACH bank and instant bank payments do not include a parent-paid processing recovery. If this school allows card payments, a separate payment processing recovery line may be added before checkout to recover third-party processor and card-network costs. The exact amount is shown before payment, is separate from tuition, and is disabled wherever school policy, card-network rules, or applicable law do not allow it.";
+  "Debit and credit card payments include a separate 2.9% processing fee calculated only on the parent's eligible payment amount. Bank payments do not include this fee. The exact total is shown before checkout.";
 
 export const PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE =
-  "Legal/accounting gate: keep live parent-paid processing recovery disabled until the school or payout owner approves written policy, state-specific rules, card-network/acquirer notice, debit/prepaid handling, refunds, disputes, and accounting classification.";
+  "The parent card fee is exactly 2.9%, with no fixed component or gross-up. The separate 1.5% BEE Suite application fee is deducted from school proceeds and is never added to the parent's obligation.";
 
 export const PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION =
-  "Separate payment processing recovery disclosed before checkout where approved by school policy, card-network rules, and applicable law.";
+  "Separate 2.9% card processing fee disclosed before checkout.";
 
 export function paymentProcessingRecoverySummary({
   cardRecovery,
@@ -19,5 +19,5 @@ export function paymentProcessingRecoverySummary({
   cardRecovery: number;
   formatMoney: (cents: number) => string;
 }) {
-  return `ACH and instant bank have no parent processing recovery; estimated card processing recovery ${formatMoney(cardRecovery)}. Exact totals are shown on the secure payment review screen before submission.`;
+  return `ACH and instant bank have no parent processing fee; estimated card processing fee ${formatMoney(cardRecovery)}. Exact totals are shown before submission.`;
 }

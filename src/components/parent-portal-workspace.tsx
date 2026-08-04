@@ -224,6 +224,7 @@ type Props = {
     };
   } | null;
   checkoutReadiness?: StripeCheckoutReadiness;
+  parentBalanceReviewRequired?: boolean;
   invoices: Invoice[];
   payments?: Payment[];
   ledgerEntries?: LedgerEntry[];
@@ -399,9 +400,8 @@ function scheduleSummary(value: unknown) {
   return String(value);
 }
 
-function estimatedAchRecovery(cents: number) {
-  void cents;
-  return 0;
+function estimatedCardProcessingFee(cents: number) {
+  return Math.max(0, Math.round(Math.max(0, cents) * 0.029));
 }
 
 function localDateKey(value: string | Date | null | undefined) {
@@ -420,14 +420,11 @@ function dateTimestamp(value: string | Date | null | undefined) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-function estimatedCardRecovery(cents: number) {
-  return Math.max(0, Math.ceil((cents + 30) / (1 - 0.029) - cents));
-}
-
 export function ParentPortalWorkspace({
   family,
   billingAccount,
   checkoutReadiness = fallbackCheckoutReadiness,
+  parentBalanceReviewRequired = false,
   invoices,
   payments = [],
   ledgerEntries = [],
@@ -697,18 +694,16 @@ export function ParentPortalWorkspace({
     if (!family || !billingAccount) {
       return showError("Your family billing account is not available yet.");
     }
+    if (parentBalanceReviewRequired) {
+      return showError("Your school must separate the agency and family portions before this balance can be paid.");
+    }
     if (balanceCents <= 0) {
       return showError("There is no family balance to pay.");
     }
-    const recoveryAmount = paymentMethodCategory === "card"
-      ? estimatedCardRecovery(balanceCents)
-      : estimatedAchRecovery(balanceCents);
-    if (recoveryAmount > 0) {
-      const accepted = window.confirm(
-        `${paymentMethodCategory === "card" ? "Debit/credit card" : paymentMethodCategory === "link_bank" ? "Instant bank" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
-      );
-      if (!accepted) return;
-    }
+    const processingFee = paymentMethodCategory === "card" ? estimatedCardProcessingFee(balanceCents) : 0;
+    if (processingFee > 0 && !window.confirm(
+      `This card payment includes a ${money(processingFee)} processing fee (2.9%). Your total card charge will be ${money(balanceCents + processingFee)}. Continue to secure checkout?`,
+    )) return;
     startTransition(async () => {
       const method = paymentMethodCategory === "card"
         ? "card_checkout"
@@ -795,15 +790,10 @@ export function ParentPortalWorkspace({
     if (!selectedUniformProduct) {
       return showError("Choose an available uniform shirt color and size.");
     }
-    const recoveryAmount = paymentMethodCategory === "card"
-      ? estimatedCardRecovery(uniformOrderTotalCents)
-      : estimatedAchRecovery(uniformOrderTotalCents);
-    if (recoveryAmount > 0) {
-      const accepted = window.confirm(
-        `${paymentMethodCategory === "card" ? "Debit/credit card" : paymentMethodCategory === "link_bank" ? "Instant bank" : "Bank"} payment includes a ${money(recoveryAmount)} processing recovery. Continue to secure checkout?`,
-      );
-      if (!accepted) return;
-    }
+    const processingFee = paymentMethodCategory === "card" ? estimatedCardProcessingFee(uniformOrderTotalCents) : 0;
+    if (processingFee > 0 && !window.confirm(
+      `This card purchase includes a ${money(processingFee)} processing fee (2.9%). Your total card charge will be ${money(uniformOrderTotalCents + processingFee)}. Continue to secure checkout?`,
+    )) return;
     startTransition(async () => {
       const purchaseResponse = await fetch("/api/parent/products/purchase", {
         method: "POST",
@@ -846,7 +836,7 @@ export function ParentPortalWorkspace({
     if (action !== "setup" && !billingAccount) return showError("Save a payment method before managing autopay settings.");
     if (action === "setup" && paymentMethodCategory === "card") {
       const accepted = window.confirm(
-        "Saving this card does not enable autopay. Card payments may include the approved processing recovery when the card is charged. Continue?",
+        "Saving this card does not enable autopay. Card payments include a separate 2.9% processing fee when charged. Continue?",
       );
       if (!accepted) return;
     }
@@ -1341,8 +1331,12 @@ export function ParentPortalWorkspace({
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Balance due</div>
-                <div className="mt-1 text-2xl font-semibold">{money(balanceCents)}</div>
-                <div className="mt-1 text-xs text-muted-foreground">Only your family responsibility is included.</div>
+                <div className="mt-1 text-2xl font-semibold">{parentBalanceReviewRequired ? "Under review" : money(balanceCents)}</div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {parentBalanceReviewRequired
+                    ? "Payment is blocked until the school separates agency and family responsibility."
+                    : "Only your family responsibility is included."}
+                </div>
               </div>
               <div className="rounded-xl border bg-background/40 p-4">
                 <div className="text-xs text-muted-foreground">Latest account activity</div>
@@ -1513,8 +1507,8 @@ export function ParentPortalWorkspace({
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">
                   {paymentProcessingRecoverySummary({
-                    achRecovery: estimatedAchRecovery(balanceCents),
-                    cardRecovery: estimatedCardRecovery(balanceCents),
+                    achRecovery: 0,
+                    cardRecovery: estimatedCardProcessingFee(balanceCents),
                     formatMoney: money,
                   })}
                 </div>

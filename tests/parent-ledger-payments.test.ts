@@ -36,12 +36,15 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(route, /const userIsParentGuardian = isParentGuardian\(user\)/);
   assert.match(route, /guardians:\s*\{ select:\s*\{ userId: true \} \}/);
   assert.match(route, /parentPaymentAmountCents\(/);
+  assert.match(route, /parentBalanceNeedsResponsibilityReview\(/);
+  assert.match(route, /parent_balance_responsibility_review_required/);
   assert.match(route, /source = parentCheckout \? "parent_portal"/);
   assert.match(route, /activeInvoicePayment/);
   assert.match(route, /invoice checkout is already processing/);
   assert.match(invoiceCheckoutRoute, /userIsParentGuardian && !userCanManageBilling && !productCheckoutBranding/);
   assert.match(invoiceCheckoutRoute, /pay the family balance shown there/);
   assert.match(workspace, /payProductInvoice/);
+  assert.match(workspace, /parentBalanceReviewRequired \? "Under review"/);
   assert.match(workspace, /Pay Product by Card/);
 });
 

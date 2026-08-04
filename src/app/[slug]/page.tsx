@@ -141,6 +141,7 @@ import { paymentMethodManagementSummary } from "@/lib/payment-method-management"
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
   parentVisibleBillingBalanceCents,
 } from "@/lib/parent-billing-visibility";
 import { invoicePurposeLabel } from "@/lib/product-billing";
@@ -1933,6 +1934,7 @@ async function renderLivePage(
               enrollmentStatus: true,
               startDate: true,
               schedule: true,
+              customFields: true,
               photoVideoPermission: true,
               fieldTripPermission: true,
               classroom: { select: { name: true, ageGroup: true } },
@@ -2231,6 +2233,17 @@ async function renderLivePage(
           agencyLedgerEntries,
         })
       : 0;
+    const parentBalanceReviewRequired = billingAccount
+      ? parentBalanceNeedsResponsibilityReview({
+          accountBalanceCents: billingAccount.balanceCents,
+          agencyLedgerEntries,
+          responsibilityEvidence: [
+            billingAccount.customFields,
+            family?.customFields,
+            ...(family?.children.map((child) => child.customFields) ?? []),
+          ],
+        })
+      : false;
 
     return (
       <ParentPortalWorkspace
@@ -2247,6 +2260,7 @@ async function renderLivePage(
         } : null}
         invoices={parentInvoices}
         checkoutReadiness={parentCheckoutReadiness}
+        parentBalanceReviewRequired={parentBalanceReviewRequired}
         payments={billingAccount?.payments ?? []}
         latestLedgerEntry={latestLedgerEntry}
         ledgerEntries={billingAccount?.ledgerEntries.slice(0, PARENT_LEDGER_PAGE_SIZE) ?? []}

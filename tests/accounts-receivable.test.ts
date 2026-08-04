@@ -53,7 +53,7 @@ const families: AccountsReceivableFamilyRow[] = [
   },
 ];
 
-test("school account snapshot includes every family and puts balances owed first", () => {
+test("school account snapshot puts the supplied current families with balances owed first", () => {
   const snapshot = buildAccountsReceivableSnapshot(
     families,
     { kokomo: "Kid City USA - Kokomo" },
@@ -159,12 +159,14 @@ test("dashboard and main shell use the same protected school-balance surface", (
 
   assert.match(route, /Authentication required/);
   assert.match(route, /canViewAccountBalances\(user\)/);
-  assert.match(route, /visibleFamilyWhere\(activeCenterIds\)/);
+  assert.match(route, /visibleFamilyWhere\(activeCenterIds\)[\s\S]*children: \{ some: currentlyEnrolledChildWhere\(\) \}/);
   assert.match(route, /private, no-store/);
   assert.match(shell, /canViewAccountBalances\(currentUser\)[\s\S]*AccountsReceivableSheet executive=/);
   assert.match(dashboardPage, /accountsReceivableFamilySelect/);
   assert.match(dashboardPage, /accountsReceivableSummaryFamilySelect/);
+  assert.equal((dashboardPage.match(/where: currentFamilyWhere,/g) ?? []).length >= 2, true);
   assert.match(dashboard, /dashboard-director-account-balances/);
   assert.match(dashboard, /dashboard-billing-account-balances/);
   assert.match(dashboard, /dashboard-\$\{lens\}-executive-account-balances/);
+  assert.match(dashboard, /Current family accounts, with balances owed listed first/);
 });

@@ -7,6 +7,7 @@ import {
 } from "@/lib/accounts-receivable";
 import { getCurrentUser } from "@/lib/auth";
 import { visibleFamilyWhere } from "@/lib/corporate-view-scope";
+import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { withApiLogging } from "@/lib/request-response-logging";
 
@@ -34,7 +35,10 @@ async function GETHandler() {
   });
   const activeCenterIds = centers.map((center) => center.id);
   const families = await prisma.family.findMany({
-    where: visibleFamilyWhere(activeCenterIds),
+    where: {
+      ...visibleFamilyWhere(activeCenterIds),
+      children: { some: currentlyEnrolledChildWhere() },
+    },
     orderBy: { name: "asc" },
     select: accountsReceivableFamilySelect,
   });

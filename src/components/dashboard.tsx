@@ -1643,7 +1643,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                           className="glass-panel"
                           title={live.accountsReceivable ? "School account balances" : "Accounts receivable by school"}
                           description={live.accountsReceivable
-                            ? "Every family account, with balances owed listed first"
+                            ? "Current family accounts, with balances owed listed first"
                             : "Family balances across every school visible to this executive login"}
                         >
                           {live.accountsReceivable ? (
@@ -1893,7 +1893,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
                   id="dashboard-billing-account-balances"
                   className="glass-panel"
                   title="School account balances"
-                  description="Every family account, with balances owed listed first"
+                  description="Current family accounts, with balances owed listed first"
                 >
                   <AccountsReceivablePanel snapshot={live.accountsReceivable} />
                 </CollapsibleCard>

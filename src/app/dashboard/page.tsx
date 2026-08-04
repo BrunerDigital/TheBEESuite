@@ -387,14 +387,14 @@ export default async function DashboardPage() {
     }),
     canViewAccountBalances(user) && !canSeeExecutiveMetrics
       ? prisma.family.findMany({
-          where: { centerId: scopedCenterFilter },
+          where: currentFamilyWhere,
           orderBy: { name: "asc" },
           select: accountsReceivableFamilySelect,
         })
       : Promise.resolve([]),
     canViewAccountBalances(user) && canSeeExecutiveMetrics
       ? prisma.family.findMany({
-          where: { centerId: scopedCenterFilter },
+          where: currentFamilyWhere,
           select: accountsReceivableSummaryFamilySelect,
         })
       : Promise.resolve([]),

@@ -60,6 +60,7 @@ type Props = {
   schedules: ScheduleRecord[];
   timeClockSummaryGeneratedAt: string;
   canManageCompensation: boolean;
+  canFilterPayrollByCenter: boolean;
 };
 
 const backgroundStatuses = [
@@ -355,6 +356,13 @@ export function buildPayrollDayRows(input: {
   return rows;
 }
 
+export function filterPayrollStaffByCenter<T extends { centerId: string }>(
+  staff: readonly T[],
+  centerId: string,
+) {
+  return centerId === "all" ? [...staff] : staff.filter((teacher) => teacher.centerId === centerId);
+}
+
 export function StaffManagementPanel({
   centers,
   classrooms,
@@ -363,6 +371,7 @@ export function StaffManagementPanel({
   schedules,
   timeClockSummaryGeneratedAt,
   canManageCompensation,
+  canFilterPayrollByCenter,
 }: Props) {
   const router = useRouter();
   const activeStaff = useMemo(() => staff.filter((teacher) => teacher.user.isActive), [staff]);
@@ -416,6 +425,7 @@ export function StaffManagementPanel({
   const defaultPayrollTimeZone = readCenterLocationTimeZone(centers[0]);
   const [payrollStartDate, setPayrollStartDate] = useState(() => defaultPayrollStartDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
   const [payrollEndDate, setPayrollEndDate] = useState(() => defaultPayrollEndDate(timeClockSummaryGeneratedAt, defaultPayrollTimeZone));
+  const [payrollCenterId, setPayrollCenterId] = useState("all");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -460,7 +470,7 @@ export function StaffManagementPanel({
   const visibleOutsidePayPeriodClockEditRowCount = visibleClockEditRows.length - payPeriodClockEditRows.length;
   const hiddenClockEditRowCount = clockEditRows.length - visibleClockEditRows.length;
   const staffHoursRows = useMemo(() => {
-    return activeStaff
+    return filterPayrollStaffByCenter(activeStaff, payrollCenterId)
       .map((teacher) => {
         const timeZone = readCenterLocationTimeZone(centerById.get(teacher.centerId));
         const payrollStart = zonedDateInputToUtc(payrollStartDate, timeZone);
@@ -511,7 +521,10 @@ export function StaffManagementPanel({
         };
       })
       .sort((left, right) => left.centerName.localeCompare(right.centerName) || left.name.localeCompare(right.name));
-  }, [activeStaff, centerById, centerNameById, payrollEndDate, payrollStartDate, summaryNow]);
+  }, [activeStaff, centerById, centerNameById, payrollCenterId, payrollEndDate, payrollStartDate, summaryNow]);
+  const payrollCenters = payrollCenterId === "all"
+    ? centers
+    : centers.filter((center) => center.id === payrollCenterId);
   const staffHoursTotalMinutes = staffHoursRows.reduce((sum, row) => sum + row.summary.totalMinutes, 0);
   const staffHoursRegularMinutes = staffHoursRows.reduce((sum, row) => sum + row.regularMinutes, 0);
   const staffHoursOvertimeMinutes = staffHoursRows.reduce((sum, row) => sum + row.overtimeMinutes, 0);
@@ -831,7 +844,7 @@ export function StaffManagementPanel({
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
-      const centerSummaries = centers.map((center) => {
+      const centerSummaries = payrollCenters.map((center) => {
         const rows = staffHoursRows.filter((row) => row.centerId === center.id);
         return {
           centerId: center.id,
@@ -1528,7 +1541,7 @@ export function StaffManagementPanel({
               </div>
             </div>
 
-            <div className="grid gap-3 rounded-lg border bg-card/40 p-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto] md:items-end">
+            <div className={`grid gap-3 rounded-lg border bg-card/40 p-3 md:items-end ${canFilterPayrollByCenter ? "md:grid-cols-[minmax(0,1fr)_minmax(12rem,0.7fr)_10rem_10rem_auto_auto]" : "md:grid-cols-[minmax(0,1fr)_10rem_10rem_auto_auto]"}`}>
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <FileSpreadsheet className="size-4" />
@@ -1538,6 +1551,22 @@ export function StaffManagementPanel({
                   Regular and OT columns are decimal hours. OT is calculated after 40.00 hours in each Monday-Sunday payroll week.
                 </p>
               </div>
+              {canFilterPayrollByCenter ? (
+                <div className="space-y-1">
+                  <Label htmlFor="payroll-school-filter">School</Label>
+                  <select
+                    id="payroll-school-filter"
+                    className={nativeSelectClassName}
+                    value={payrollCenterId}
+                    onChange={(event) => setPayrollCenterId(event.target.value)}
+                  >
+                    <option value="all">All visible schools</option>
+                    {centers.map((center) => (
+                      <option key={center.id} value={center.id}>{center.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="space-y-1">
                 <Label>Start</Label>
                 <Input type="date" value={payrollStartDate} disabled={clockEditsDirty} onChange={(event) => changePayrollStartDate(event.target.value)} />
@@ -1629,7 +1658,7 @@ export function StaffManagementPanel({
                 </div>
                 <div className="text-right text-xs">
                   <div>The BEE Suite</div>
-                  <div>{centers.length} visible center{centers.length === 1 ? "" : "s"}</div>
+                  <div>{payrollCenters.length} selected school{payrollCenters.length === 1 ? "" : "s"}</div>
                   <div>Payroll hours shown as decimals</div>
                 </div>
               </header>

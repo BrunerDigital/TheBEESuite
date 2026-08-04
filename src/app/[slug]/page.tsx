@@ -5386,6 +5386,7 @@ async function renderLivePage(
           staff: activeStaff,
           previousStaff,
           canManageCompensation: canManageStaffCompensation(user),
+          canFilterPayrollByCenter: new Set<UserRole>([UserRole.PLATFORM_OWNER, UserRole.BRAND_ADMIN, UserRole.REGIONAL_MANAGER, UserRole.READ_ONLY_AUDITOR]).has(user.role),
           stats: { total, activeUsers, expiringCerts, backgroundPending, onboardingActionNeeded: staffChecklist.summary.actionNeeded },
           staffChecklist,
         }}

@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { ParentPortalSetupForm } from "@/components/parent-portal-setup-form";
+import { ParentPortalAccessBlocked } from "@/components/parent-portal-access-blocked";
 import { getCurrentUser, isParentGuardian, requiresPasswordResetGate } from "@/lib/auth";
+import { resolveParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +37,10 @@ export default async function ParentPortalSetupPage() {
       },
     },
   });
+  const familyScope = resolveParentPortalFamilyScope(guardians);
+  if (!familyScope.ok && familyScope.reason === "multiple_linked_families") {
+    return <AppShell currentUser={user}><ParentPortalAccessBlocked /></AppShell>;
+  }
   const centerIds = Array.from(new Set(guardians.map((guardian) => guardian.family.centerId).filter((value): value is string => Boolean(value))));
   const centers = centerIds.length
     ? await prisma.center.findMany({

@@ -10,6 +10,7 @@ import {
   webPushBody,
   webPushHref,
   webPushPreferenceType,
+  webPushSubscriptionShouldDeactivate,
   type WebPushPreferenceType,
 } from "@/lib/web-push-policy";
 
@@ -347,8 +348,8 @@ async function dispatchCandidate(
     const status = errorStatus(error);
     const attempts = candidate.attempts + 1;
     const code = errorCode(error);
-    const endpointGone = status === 404 || status === 410;
-    const terminal = endpointGone || attempts >= MAX_DELIVERY_ATTEMPTS || status === 400;
+    const deactivateSubscription = webPushSubscriptionShouldDeactivate(status, subscription.failureCount + 1);
+    const terminal = deactivateSubscription || attempts >= MAX_DELIVERY_ATTEMPTS;
     const failedAt = terminal ? new Date() : null;
 
     await prisma.$transaction([
@@ -366,7 +367,7 @@ async function dispatchCandidate(
       prisma.webPushSubscription.update({
         where: { id: subscription.id },
         data: {
-          isActive: endpointGone ? false : subscription.isActive,
+          isActive: deactivateSubscription ? false : subscription.isActive,
           lastFailureAt: new Date(),
           failureCount: { increment: 1 },
         },
@@ -377,7 +378,7 @@ async function dispatchCandidate(
       status: status ?? 0,
       attempts,
       terminal,
-      endpointGone,
+      deactivateSubscription,
     });
     return terminal ? "failed" as const : "retry" as const;
   }

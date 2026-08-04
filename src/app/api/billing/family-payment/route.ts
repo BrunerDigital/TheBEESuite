@@ -45,6 +45,7 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { stripeCustomerCustomFieldPatch, stripeCustomerIdForAccount } from "@/lib/stripe-customer-scope";
 import { applySucceededStripeFamilyBalancePayment } from "@/lib/stripe-payment-application";
 import { getSecurePaymentAppBaseUrl } from "@/lib/payment-redirect-security";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 
 export const runtime = "nodejs";
 
@@ -128,6 +129,12 @@ async function POSTHandler(request: NextRequest) {
   if (!userCanManageBilling && !userIsParentGuardian) {
     return NextResponse.json({ ok: false, error: "Billing access is not allowed for this role." }, { status: 403 });
   }
+  const parentFamilyScope = userIsParentGuardian && !userCanManageBilling
+    ? await getParentPortalFamilyScope(user.id)
+    : null;
+  if (parentFamilyScope && !parentFamilyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before payment can continue." }, { status: 409 });
+  }
 
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const billingAccountId = clean(body.billingAccountId);
@@ -155,6 +162,9 @@ async function POSTHandler(request: NextRequest) {
   });
   if (!billingAccount) {
     return NextResponse.json({ ok: false, error: "Billing account not found." }, { status: 404 });
+  }
+  if (parentFamilyScope?.ok && billingAccount.family.id !== parentFamilyScope.familyId) {
+    return NextResponse.json({ ok: false, error: "You do not have access to this family." }, { status: 403 });
   }
   const centerId = billingAccount.family.centerId;
   const accessGuard = canAccessFamilyRecord({

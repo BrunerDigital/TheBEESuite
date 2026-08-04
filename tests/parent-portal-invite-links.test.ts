@@ -131,6 +131,7 @@ test("all-location imported parent waves require concrete relationship safety an
   assert.match(source, /directProfileEvidenceAuthorizedByUser/);
   assert.match(source, /active_child_required/);
   assert.match(source, /cross_center_email/);
+  assert.match(source, /same_center_multiple_families/);
   assert.match(source, /conflicting_guardian_identity/);
   assert.match(source, /parentPortalAccessDisabled/);
   assert.match(source, /already_invited/);

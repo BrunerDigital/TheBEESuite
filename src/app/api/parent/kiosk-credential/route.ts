@@ -6,6 +6,7 @@ import { hashGuardianPin, normalizePin } from "@/lib/kiosk";
 import { notifyOperationsRecordChange } from "@/lib/operations-notifications";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, requestIp, retryAfterSeconds } from "@/lib/rate-limit";
+import { getParentPortalFamilyScope } from "@/lib/parent-portal-family-scope";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -31,9 +32,13 @@ async function GETHandler() {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
+  const familyScope = await getParentPortalFamilyScope(user.id);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
+  }
 
   const guardians = await prisma.guardian.findMany({
-    where: { userId: user.id },
+    where: { userId: user.id, familyId: familyScope.familyId },
     orderBy: { fullName: "asc" },
     include: {
       family: { select: { id: true, name: true, centerId: true } },
@@ -66,6 +71,10 @@ async function POSTHandler(request: NextRequest) {
   if (!isParentGuardian(user)) {
     return NextResponse.json({ ok: false, error: "Only linked parents and guardians can manage kiosk credentials here." }, { status: 403 });
   }
+  const familyScope = await getParentPortalFamilyScope(user.id);
+  if (!familyScope.ok) {
+    return NextResponse.json({ ok: false, error: "Your family link needs review before kiosk credentials can be managed." }, { status: 409 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const guardianId = clean(body.guardianId);
@@ -86,7 +95,7 @@ async function POSTHandler(request: NextRequest) {
   }
 
   const guardian = await prisma.guardian.findFirst({
-    where: { id: guardianId, userId: user.id },
+    where: { id: guardianId, userId: user.id, familyId: familyScope.familyId },
     include: {
       family: { select: { id: true, name: true, centerId: true } },
     },

@@ -92,27 +92,27 @@ async function main() {
   let assigned = 0, alreadyAssigned = 0, plansCreated = 0;
   for (const school of schoolNames) {
     const center = centerByName.get(school)!; const accountId = await verifySchoolStripe(center); const schoolRates = rates.filter((row) => row.school === school);
-    let schoolAlreadyAssigned = 0;
-    const result = await prisma.$transaction(async (tx) => {
-      const freshCenter = await tx.center.findUnique({ where: { id: center.id }, select: { customFields: true } }); invariant(freshCenter, `${school} disappeared.`);
-      invariant(readStripeConnectedAccountId(freshCenter.customFields) === accountId, `${school} Stripe binding changed during cutover.`);
-      let created = 0;
-      for (const rate of schoolRates) {
+    for (const rate of schoolRates) {
+      const result = await prisma.$transaction(async (tx) => {
+        const freshCenter = await tx.center.findUnique({ where: { id: center.id }, select: { customFields: true } }); invariant(freshCenter, `${school} disappeared.`);
+        invariant(readStripeConnectedAccountId(freshCenter.customFields) === accountId, `${school} Stripe binding changed during cutover.`);
         const fresh = await tx.child.findUnique({ where: { id: rate.childId }, select: { fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true, family: { select: { centerId: true } } } }); invariant(fresh, `Child ${rate.childId} disappeared.`);
         invariant(fresh.family.centerId === center.id && fresh.ageGroup === rate.ageGroup && isCurrentlyEnrolledStatus(fresh.enrollmentStatus), `${fresh.fullName} eligibility changed during cutover.`);
         const fields = object(fresh.customFields); const evidence = object(fields.tuitionRateEvidence as Prisma.JsonValue | undefined);
         const matchingAssignment = fields.tuitionBillingEnabled === true && fields.tuitionPlanAmountCents === rate.amountCents && fields.tuitionBillingStartsPeriod === startsPeriod && string(evidence.manifestFingerprint) === currentFingerprint;
         invariant(fields.tuitionBillingEnabled !== true || matchingAssignment, `${fresh.fullName} gained a different assignment during cutover.`);
-        if (matchingAssignment) { schoolAlreadyAssigned++; continue; }
+        if (matchingAssignment) return { assigned: false, planCreated: false };
         let tuitionPlan = await tx.tuitionPlan.findFirst({ where: { centerId: center.id, ageGroup: rate.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: rate.amountCents }, orderBy: { id: "asc" } });
-        if (!tuitionPlan) { tuitionPlan = await tx.tuitionPlan.create({ data: { centerId: center.id, ageGroup: rate.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: rate.amountCents, name: `ProCare ${rate.ageGroup} Weekly $${(rate.amountCents / 100).toFixed(2)}` } }); created++; }
+        let planCreated = false;
+        if (!tuitionPlan) { tuitionPlan = await tx.tuitionPlan.create({ data: { centerId: center.id, ageGroup: rate.ageGroup, cadence: WEEKLY_TUITION_AUTOBILL_CADENCE, amountCents: rate.amountCents, name: `ProCare ${rate.ageGroup} Weekly $${(rate.amountCents / 100).toFixed(2)}` } }); planCreated = true; }
         const updatedAt = new Date().toISOString();
         await tx.child.update({ where: { id: rate.childId }, data: { customFields: inputObject({ ...fields, tuitionBillingEnabled: true, tuitionPlanId: tuitionPlan.id, tuitionPlanName: tuitionPlan.name, tuitionPlanAgeGroup: tuitionPlan.ageGroup, tuitionPlanCadence: WEEKLY_TUITION_AUTOBILL_CADENCE, tuitionBillingCadence: WEEKLY_TUITION_AUTOBILL_CADENCE, tuitionPlanAmountCents: rate.amountCents, tuitionFundingType: "family", tuitionAutobillEligible: true, tuitionBillingDay: WEEKLY_TUITION_AUTOBILL_DAY, tuitionBillingStartsPeriod: startsPeriod, tuitionBillingDescription: tuitionPlan.name, tuitionBillingUpdatedAt: updatedAt, tuitionBillingUpdatedBy: "Brenden Bruner - reviewed ProCare weekly tuition cutover 2026-08-03", tuitionRateEvidence: { source: "procare_contract_billing", sourceAsOf: rate.sourceAsOf, sourceFile: rate.sourceFile, manifestFingerprint: currentFingerprint } }) } });
         await tx.auditLog.create({ data: { tenantId: center.organization.tenantId, centerId: center.id, action: "billing.tuition_assignment.procare_activated", resource: "Child", resourceId: rate.childId, metadata: { amountCents: rate.amountCents, planId: tuitionPlan.id, startsPeriod, sourceAsOf: rate.sourceAsOf, manifestFingerprint: currentFingerprint } } });
-      }
-      return created;
-    }, { maxWait: 10_000, timeout: 60_000 });
-    alreadyAssigned += schoolAlreadyAssigned; assigned += schoolRates.length - schoolAlreadyAssigned; plansCreated += result;
+        return { assigned: true, planCreated };
+      }, { maxWait: 10_000, timeout: 15_000 });
+      if (result.assigned) assigned++; else alreadyAssigned++;
+      if (result.planCreated) plansCreated++;
+    }
   }
   console.log(JSON.stringify({ ok: true, apply: true, startsPeriod, fingerprint: currentFingerprint, assigned, alreadyAssigned, plansCreated, boundaries: { invoicesCreated: 0, chargesCreated: 0, paymentsChanged: 0, refundsChanged: 0 } }, null, 2));
 }

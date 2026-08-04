@@ -25,6 +25,8 @@ test("reviewed cutover fails closed on school, child, and Stripe drift", () => {
 });
 
 test("reviewed cutover creates plans and assignments without financial activity", () => {
+  assert.match(source, /for \(const rate of schoolRates\) \{\s+const result = await prisma\.\$transaction/);
+  assert.match(source, /return \{ assigned: false, planCreated: false \}/);
   assert.match(source, /tuitionPlan\.create/);
   assert.match(source, /tuitionBillingEnabled: true/);
   assert.match(source, /tuitionAutobillEligible: true/);

@@ -127,6 +127,7 @@ test("ProCare imports require the exact completed review before commit", () => {
   assert.match(route, /This import page is out of date/);
   assert.match(panel, /request timed out before completing/);
   assert.match(route, /buildProcareMultiReportRows/);
+  assert.match(route, /previewEnrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate/);
 });
 
 test("ProCare multi-report rows distinguish guardians from pickup contacts and preserve separate allergies", async () => {

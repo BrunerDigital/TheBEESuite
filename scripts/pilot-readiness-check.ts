@@ -8,6 +8,7 @@ import {
   procareSourceFingerprintCollisionCenterIds,
 } from "@/lib/parent-invitation-readiness";
 import { parentPortalAccessDisabled } from "@/lib/parent-portal-logins";
+import { isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
 import { prisma } from "@/lib/prisma";
 import { isActiveProcareEnrollmentStatus } from "@/lib/procare-import-fields";
 import { databaseUrlEnvNames, hasDatabaseConfig, hasStripeBillingConfig, hasSupabaseAuthConfig } from "@/lib/readiness-guardrails";
@@ -191,6 +192,10 @@ export function selectSchoolIds(candidates: SchoolSelectorCandidate[], selectors
     selected.add(matches[0].id);
   }
   return [...selected];
+}
+
+export function needsCurrentClassroomAssignment(child: { enrollmentStatus: string; classroomId: string | null }) {
+  return isCurrentlyEnrolledStatus(child.enrollmentStatus) && !child.classroomId;
 }
 
 export function buildModuleGates(input: {
@@ -543,7 +548,7 @@ async function main() {
     if (!centerId) continue;
     childCountByCenter.set(centerId, (childCountByCenter.get(centerId) ?? 0) + 1);
     if (isActiveProcareEnrollmentStatus(child.enrollmentStatus)) activeFamilyIds.add(child.familyId);
-    if (!child.classroomId) {
+    if (needsCurrentClassroomAssignment(child)) {
       childrenWithoutClassroomByCenter.set(centerId, (childrenWithoutClassroomByCenter.get(centerId) ?? 0) + 1);
     }
   }
@@ -631,7 +636,7 @@ async function main() {
     if (staffCount === 0) setupGaps.push("no staff/teacher profiles");
     if (familyCount === 0) setupGaps.push("no imported families");
     if (childCount === 0) setupGaps.push("no imported children");
-    if (childrenWithoutClassroomCount > 0) setupGaps.push(`${childrenWithoutClassroomCount} child(ren) without classroom assignment`);
+    if (childrenWithoutClassroomCount > 0) setupGaps.push(`${childrenWithoutClassroomCount} currently enrolled child(ren) without classroom assignment`);
     if (guardianCount === 0) setupGaps.push("no guardian records");
     if (directorAccessCount === 0) setupGaps.push("no center director/billing access grant");
 

@@ -11,6 +11,7 @@ import {
   buildProcareCorrelationReview,
   PROCARE_FIELD_OPTIONS,
   normalizeProcareEnrollmentStatus,
+  normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
   procareChildFullName,
   procareChildPreferredName,
@@ -922,7 +923,9 @@ async function previewImportRows({
     const classroomName = procareClassroomName(rawData);
     if (classroomName) classroomsReferenced.add(`${targetCenter.id}:${classroomName}`);
     const previewEnrollmentStatusValue = value(rawData, ["child status", "status", "enrollment status", "student status"]);
-    if (childName && previewEnrollmentStatusValue && normalizeProcareEnrollmentStatus(previewEnrollmentStatusValue) === "enrolled" && !classroomName) {
+    const previewEnrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
+    const previewEnrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(previewEnrollmentStatusValue, previewEnrollmentEndDate);
+    if (childName && previewEnrollmentStatusValue && previewEnrollmentStatus === "enrolled" && !classroomName) {
       const message = "An enrolled child is missing a classroom assignment.";
       warnings.push({ rowNumber, message });
       rowResults.push({ rowNumber, status: "warning", entity: "family_child", center: targetCenter.crmLocationId ?? targetCenter.name, action: "Assign a classroom", familyName: familyName || undefined, childName, message });
@@ -2387,7 +2390,8 @@ async function POSTHandler(request: NextRequest) {
       const ageGroup = procareAgeGroup(rawData, "Unassigned");
       const enrollmentStatusValue = value(rawData, enrollmentStatusAliases);
       const enrollmentStatusProvided = Boolean(enrollmentStatusValue);
-      const enrollmentStatus = normalizeProcareEnrollmentStatus(enrollmentStatusValue, "review_needed");
+      const enrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
+      const enrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(enrollmentStatusValue, enrollmentEndDate);
       const familyDisplayName = familyName || (accountExternalId ? `${accountExternalId} Household` : childName || email);
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
@@ -2582,7 +2586,7 @@ async function POSTHandler(request: NextRequest) {
           childLastName: value(rawData, ["last name", "child last name", "student last name"]),
           gender: value(rawData, ["gender", "sex"]),
           enrollmentStatus,
-          enrollmentEndDate: value(rawData, ["end date", "withdrawal date", "termination date"]),
+          enrollmentEndDate,
         });
         const fallbackChildren = childExternalId
           ? []

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildModuleGates, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
+import { buildModuleGates, needsCurrentClassroomAssignment, parsePilotReadinessArgs, readinessStatus, selectSchoolIds } from "../scripts/pilot-readiness-check";
 
 test("pilot readiness args enable machine-readable rollout reports", () => {
   assert.deepEqual(parsePilotReadinessArgs([]), {
@@ -28,6 +28,14 @@ test("pilot readiness args enable machine-readable rollout reports", () => {
     modules: ["setup"],
     outputPath: "tmp/readiness.json",
   });
+});
+
+test("classroom readiness applies only to currently enrolled children", () => {
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: null }), true);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "active", classroomId: null }), true);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "waitlisted", classroomId: null }), false);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "withdrawn", classroomId: null }), false);
+  assert.equal(needsCurrentClassroomAssignment({ enrollmentStatus: "enrolled", classroomId: "room-1" }), false);
 });
 
 test("pilot readiness args support exact school selection and separate module gates", () => {

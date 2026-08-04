@@ -9,16 +9,16 @@ import {
   paymentProcessingRecoverySummary,
 } from "../src/lib/payment-disclosures";
 
-test("payment disclosure separates the parent 2.9 percent card fee from the school-paid BEE Suite fee", () => {
-  assert.match(PAYMENT_PROCESSING_RECOVERY_LABEL, /card processing fee/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /2\.9%/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /parent's eligible payment amount/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION, /2\.9% card processing fee/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE, /1\.5% BEE Suite application fee is deducted from school proceeds/i);
-  assert.equal(PAYMENT_PROCESSING_RECOVERY_VERSION, "payment-processing-recovery-2026-06-09");
+test("payment disclosure states that schools absorb Stripe costs and the 1 percent BEE Suite fee", () => {
+  assert.match(PAYMENT_PROCESSING_RECOVERY_LABEL, /school-paid processing/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /schools absorb Stripe processing costs/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /no added processing, convenience, service, platform, or application fee/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION, /no payment-processing fee/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE, /1% BEE Suite application fee reduce school proceeds/i);
+  assert.equal(PAYMENT_PROCESSING_RECOVERY_VERSION, "school-paid-processing-2026-08-04-v1");
 });
 
-test("payment summary discloses the parent card fee", () => {
+test("payment summary confirms that the parent has no processing fee", () => {
   const summary = paymentProcessingRecoverySummary({
     achRecovery: 250,
     cardRecovery: 610,
@@ -27,7 +27,7 @@ test("payment summary discloses the parent card fee", () => {
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing fee; estimated card processing fee $6.10. Exact totals are shown before submission.",
+    "The school absorbs Stripe processing costs; no processing fee is added to the parent's payment.",
   );
 });
 
@@ -40,6 +40,6 @@ test("payment recovery summary does not change when ACH recovery is zero", () =>
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing fee; estimated card processing fee $6.10. Exact totals are shown before submission.",
+    "The school absorbs Stripe processing costs; no processing fee is added to the parent's payment.",
   );
 });

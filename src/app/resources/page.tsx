@@ -115,7 +115,7 @@ const guides: ResourceGuide[] = [
       "Choose Save Debit/Credit Card to save a card, or Verify Bank Instantly to save a bank.",
       "For an open invoice, choose Debit/Credit Card, Instant Bank, or One-Time Bank.",
       "Enter card or bank details only inside the secure payment processor screen opened from The BEE Suite.",
-      "Review the exact authorized total before submitting; card payments include a separate 2.9% processing fee, while bank payments do not.",
+      "Review the exact authorized total before submitting; the school absorbs Stripe processing costs and no processing fee is added to the parent payment.",
       "Wait for the confirmation and current status. Do not repeat a pending bank payment or setup attempt.",
     ],
     visual: [

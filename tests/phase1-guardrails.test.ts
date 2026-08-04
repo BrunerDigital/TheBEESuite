@@ -209,6 +209,8 @@ test("active Stripe checkout summary identifies ACH processing state", () => {
     stripePaymentIntentId: "pi_123",
     stripePaymentIntentStatus: "processing",
     stripePaymentStatus: null,
+    checkoutTotalCents: null,
+    feeDisclosureVersion: null,
   });
   assert.match(activeStripeCheckoutPaymentMessage(payment), /bank payment is already processing/i);
 });
@@ -656,6 +658,34 @@ test("Stripe checkout draft replacement rules supersede recoverable open drafts"
     pendingPayment: { amountCents: 25_000, paymentMethodCategory: "link_bank" },
     requestedPaymentMethodCategory: "link_bank",
     expectedAmountCents: 25_000,
+  }), null);
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: openSession,
+    pendingPayment: {
+      amountCents: 25_000,
+      checkoutTotalCents: 25_725,
+      feeDisclosureVersion: "parent-paid-card-processing-legacy",
+      paymentMethodCategory: "card",
+    },
+    requestedPaymentMethodCategory: "card",
+    expectedAmountCents: 25_000,
+    expectedCheckoutTotalCents: 25_000,
+    expectedFeeDisclosureVersion: "school-paid-processing-2026-08-04-v1",
+  }), "superseded_fee_policy");
+
+  assert.equal(stripeCheckoutDraftReplacementReason({
+    session: openSession,
+    pendingPayment: {
+      amountCents: 25_000,
+      checkoutTotalCents: 25_000,
+      feeDisclosureVersion: "school-paid-processing-2026-08-04-v1",
+      paymentMethodCategory: "card",
+    },
+    requestedPaymentMethodCategory: "card",
+    expectedAmountCents: 25_000,
+    expectedCheckoutTotalCents: 25_000,
+    expectedFeeDisclosureVersion: "school-paid-processing-2026-08-04-v1",
   }), null);
 
   assert.equal(stripeCheckoutDraftReplacementReason({

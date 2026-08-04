@@ -4,7 +4,9 @@ import { writeAuditLog } from "@/lib/audit";
 import { canManageBilling, canAccessCenter, getCurrentUser } from "@/lib/auth";
 import {
   defaultRecurringBillingPeriod,
+  FOUR_WEEK_TUITION_AUTOBILL_CADENCE,
   isVoucherFundedTuitionAmount,
+  normalizeBillingCadence,
   WEEKLY_TUITION_AUTOBILL_CADENCE,
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
@@ -96,7 +98,10 @@ async function POSTHandler(request: NextRequest) {
   if (plan.centerId !== access.centerId) {
     return NextResponse.json({ ok: false, error: "Tuition plan belongs to a different school." }, { status: 403 });
   }
-  const cadence = WEEKLY_TUITION_AUTOBILL_CADENCE;
+  const requestedCadence = normalizeBillingCadence(body.billingCadence);
+  const cadence = requestedCadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE
+    ? FOUR_WEEK_TUITION_AUTOBILL_CADENCE
+    : WEEKLY_TUITION_AUTOBILL_CADENCE;
   const billingDay = WEEKLY_TUITION_AUTOBILL_DAY;
   const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
   const updatedAt = new Date().toISOString();

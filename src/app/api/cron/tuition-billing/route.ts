@@ -8,6 +8,7 @@ import {
   normalizeRecurringBillingDay,
   recurringDueDateForPeriod,
   shouldCreateRecurringTuitionInvoice,
+  tuitionInvoiceWeekCount,
   utcBillingWeekday,
   WEEKLY_TUITION_AUTOBILL_DAY,
   weeklyTuitionChargeDateForPeriod,
@@ -94,12 +95,12 @@ async function GETHandler(request: NextRequest) {
     const plan = plansById.get(entry.planId);
     if (!plan || plan.centerId !== entry.child.family.centerId) return [];
     const cadence = normalizeBillingCadence(entry.fields.tuitionBillingCadence ?? plan?.cadence ?? entry.fields.tuitionPlanCadence);
-    const billingPeriod = cadence === "weekly" ? weeklyBillingPeriod : monthlyBillingPeriod;
+    const billingPeriod = cadence === "weekly" || cadence === "four_week" ? weeklyBillingPeriod : monthlyBillingPeriod;
     const startsPeriod = defaultRecurringBillingPeriod(clean(entry.fields.tuitionBillingStartsPeriod) || billingPeriod, safeAsOf, cadence);
-    const billingDay = cadence === "weekly"
+    const billingDay = cadence === "weekly" || cadence === "four_week"
       ? WEEKLY_TUITION_AUTOBILL_DAY
       : normalizeRecurringBillingDay(entry.fields.tuitionBillingDay, cadence);
-    const currentDay = cadence === "weekly" ? currentWeeklyDay : currentMonthlyDay;
+    const currentDay = cadence === "weekly" || cadence === "four_week" ? currentWeeklyDay : currentMonthlyDay;
     if (!shouldCreateRecurringTuitionInvoice({
       enabled: true,
       planId: entry.planId,
@@ -108,6 +109,7 @@ async function GETHandler(request: NextRequest) {
       billingPeriod,
       billingDay,
       currentDay,
+      cadence,
     })) return [];
     return [{ ...entry, cadence, billingPeriod, billingDay }];
   });
@@ -133,7 +135,8 @@ async function GETHandler(request: NextRequest) {
         if (tuitionCreditsTotalCents >= amountCents) {
           throw new Error(`Weekly credits must be less than tuition for child ${entry.child.id}.`);
         }
-        const dueDate = entry.cadence === "weekly"
+        const invoiceWeekCount = tuitionInvoiceWeekCount(entry.cadence);
+        const dueDate = entry.cadence === "weekly" || entry.cadence === "four_week"
           ? weeklyTuitionChargeDateForPeriod(entry.billingPeriod)
           : recurringDueDateForPeriod(entry.billingPeriod, entry.billingDay, entry.cadence);
         const dedupeKey = billingDedupeKey({
@@ -144,12 +147,14 @@ async function GETHandler(request: NextRequest) {
           batchTarget: "recurring-child",
           childIds: [entry.child.id],
         });
-        const lineDescription = `${description} - ${entry.child.fullName}`;
+        const lineDescription = `${description} - ${entry.child.fullName}${invoiceWeekCount === 4 ? " (4 weeks ahead)" : ""}`;
+        const invoiceItems = tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, credits: tuitionCredits })
+          .map((item) => ({ ...item, amountCents: item.amountCents * invoiceWeekCount }));
         const invoice = await createBillingInvoiceForFamily(tx, {
           familyId: entry.child.familyId,
           dueDate,
           description: lineDescription,
-          items: tuitionInvoiceItems({ description: lineDescription, grossAmountCents: amountCents, credits: tuitionCredits }),
+          items: invoiceItems,
           customFields: {
             mode: "recurring",
             billingPeriod: entry.billingPeriod,
@@ -162,10 +167,12 @@ async function GETHandler(request: NextRequest) {
             sourceId: entry.planId,
             tuitionPlanName: (plan?.name ?? clean(entry.fields.tuitionPlanName)) || null,
             tuitionPlanCadence: (plan?.cadence ?? clean(entry.fields.tuitionPlanCadence)) || entry.cadence,
-            grossTuitionCents: amountCents,
+            invoiceWeekCount,
+            coverageStartsPeriod: entry.billingPeriod,
+            grossTuitionCents: amountCents * invoiceWeekCount,
             tuitionCredits,
-            tuitionCreditsTotalCents,
-            netTuitionCents: amountCents - tuitionCreditsTotalCents,
+            tuitionCreditsTotalCents: tuitionCreditsTotalCents * invoiceWeekCount,
+            netTuitionCents: (amountCents - tuitionCreditsTotalCents) * invoiceWeekCount,
             dedupeKey,
           },
         });

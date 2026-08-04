@@ -20,6 +20,7 @@ import {
   recurringDueDateForPeriod,
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
+  tuitionInvoiceWeekCount,
   utcBillingWeekday,
   weeklyTuitionChargeDateForPeriod,
   planFamilyRefundAllocations,
@@ -187,6 +188,42 @@ test("recurring tuition eligibility waits for start period and billing day", () 
     billingDay: 15,
     currentDay: 15,
   }), false);
+});
+
+test("four-week tuition bills four weeks ahead only on its anchored cycle", () => {
+  assert.equal(normalizeBillingCadence("Every 4 weeks"), "four_week");
+  assert.equal(defaultRecurringBillingPeriod(null, new Date("2026-06-19T12:00:00.000Z"), "four_week"), "2026-W26");
+  assert.equal(tuitionInvoiceWeekCount("four_week"), 4);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W26",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), true);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W27",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), false);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W30",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), true);
 });
 
 

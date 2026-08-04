@@ -168,11 +168,11 @@ function currentWeeklyPeriod(date = new Date()) {
 }
 
 function currentPeriodForCadence(cadence: string) {
-  return cadence === "weekly" ? currentWeeklyPeriod() : currentBillingPeriod();
+  return cadence === "weekly" || cadence === "four_week" ? currentWeeklyPeriod() : currentBillingPeriod();
 }
 
 function periodMatchesCadence(value: string, cadence: string) {
-  return cadence === "weekly" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
+  return cadence === "weekly" || cadence === "four_week" ? /^\d{4}-W\d{2}$/i.test(value) : /^\d{4}-\d{2}$/.test(value);
 }
 
 function money(cents: number) {
@@ -339,6 +339,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [invoiceEditDraft, setInvoiceEditDraft] = useState<InvoiceEditDraft | null>(null);
   const [assignmentChildId, setAssignmentChildId] = useState(initialAssignmentChild?.id ?? "");
   const [assignmentEnabled, setAssignmentEnabled] = useState(initialAssignment?.enabled === false ? "false" : "true");
+  const [assignmentCadence, setAssignmentCadence] = useState(initialAssignment?.cadence === "four_week" ? "four_week" : "weekly");
   const [assignmentTuitionPlanId, setAssignmentTuitionPlanId] = useState(initialAssignedPlan?.id ?? "");
   const [assignmentStartPeriod, setAssignmentStartPeriod] = useState(initialAssignment?.startsPeriod ?? "");
   const [assignmentDescription, setAssignmentDescription] = useState(initialAssignment?.description ?? initialAssignment?.tuitionPlanName ?? "");
@@ -394,7 +395,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     effectiveAssignmentPlan?.amountCents === 0
     || (effectiveAssignmentPlanId === planEditorId && planFundingType === "voucher")
   );
-  const effectiveAssignmentCadence = "weekly";
+  const effectiveAssignmentCadence = assignmentCadence;
   const effectiveAssignmentBillingDay = "5";
   const effectiveAssignmentStartPeriod = assignmentStartPeriod || selectedAssignment?.startsPeriod || currentPeriodForCadence(effectiveAssignmentCadence);
   const effectiveAssignmentDescription = assignmentDescription || selectedAssignment?.description || selectedAssignment?.tuitionPlanName || "";
@@ -776,11 +777,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
     setAssignmentChildId(child?.id ?? "");
     setAssignmentEnabled(assignment?.enabled === false ? "false" : "true");
+    setAssignmentCadence(assignment?.cadence === "four_week" ? "four_week" : "weekly");
     setAssignmentTuitionPlanId(assignedPlan?.id ?? "");
     setAssignmentStartPeriod(
-      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, "weekly")
+      assignment?.startsPeriod && periodMatchesCadence(assignment.startsPeriod, assignment?.cadence ?? "weekly")
         ? assignment.startsPeriod
-        : currentPeriodForCadence("weekly"),
+        : currentPeriodForCadence(assignment?.cadence ?? "weekly"),
     );
     setAssignmentDescription(assignment?.description ?? assignment?.tuitionPlanName ?? "");
     setAssignmentCredits(tuitionCreditInputs(assignment?.credits ?? []));
@@ -1073,6 +1075,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           childId: selectedAssignmentChild.id,
           enabled: assignmentEnabled === "true",
           tuitionPlanId: effectiveAssignmentPlanId,
+          billingCadence: effectiveAssignmentCadence,
           billingDay: effectiveAssignmentBillingDay,
           billingStartPeriod: effectiveAssignmentStartPeriod,
           description: effectiveAssignmentDescription,
@@ -1088,7 +1091,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         assignmentIsVoucherFunded
           ? `$0.00 CCDF or voucher-funded tuition saved for ${selectedAssignmentChild.fullName}. No family invoice or autopay is scheduled.`
           : assignmentEnabled === "true"
-          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. Thursday invoice creation is scheduled for the following week.`
+          ? `Recurring tuition enabled for ${selectedAssignmentChild.fullName} at ${money(effectiveAssignmentNetCents)} net per week. ${effectiveAssignmentCadence === "four_week" ? `Each invoice will be ${money(effectiveAssignmentNetCents * 4)} and cover four weeks ahead.` : "Thursday invoice creation is scheduled for the following week."}`
           : `Recurring tuition disabled for ${selectedAssignmentChild.fullName}.`,
       );
     });
@@ -1827,6 +1830,20 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1">
+                <Label>Billing cycle</Label>
+                <Select value={effectiveAssignmentCadence} onValueChange={(value) => {
+                  if (!value) return;
+                  setAssignmentCadence(value);
+                  setAssignmentStartPeriod(currentWeeklyPeriod());
+                }} disabled={assignmentIsVoucherFunded}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="weekly">Weekly · 1 week ahead</SelectItem>
+                    <SelectItem value="four_week">Every 4 weeks · 4 weeks ahead</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <DisplayValue
                 label="Weekly invoice creation"
                 value={assignmentIsVoucherFunded ? "Not scheduled" : "Thursday"}
@@ -1883,8 +1900,8 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <DisplayValue label="Gross weekly tuition" value={money(effectiveAssignmentGrossCents)} />
                 <DisplayValue label="Weekly credits" value={`−${money(effectiveAssignmentCreditsTotalCents)}`} />
                 <DisplayValue
-                  label="Net weekly invoice"
-                  value={money(Math.max(0, effectiveAssignmentNetCents))}
+                  label={effectiveAssignmentCadence === "four_week" ? "Every-4-weeks invoice" : "Net weekly invoice"}
+                  value={money(Math.max(0, effectiveAssignmentNetCents) * (effectiveAssignmentCadence === "four_week" ? 4 : 1))}
                   detail={effectiveAssignmentCreditsTotalCents >= effectiveAssignmentGrossCents && !assignmentIsVoucherFunded
                     ? "Credits must be less than gross tuition"
                     : "Amount added to the family ledger"}
@@ -1900,13 +1917,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <CalendarClock data-icon="inline-start" />
                 Save Tuition Assignment
               </Button>
-              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded} onClick={submitAssignmentChargeNow} variant="outline">
+              <Button disabled={isPending || !selectedFamily || !selectedAssignmentChild || !effectiveAssignmentPlanId || assignmentIsVoucherFunded || effectiveAssignmentCadence === "four_week"} onClick={submitAssignmentChargeNow} variant="outline">
                 <ReceiptText data-icon="inline-start" />
-                Create Invoice Now
+                {effectiveAssignmentCadence === "four_week" ? "First Invoice Scheduled" : "Create Invoice Now"}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Positive tuition assignments create a Thursday invoice for the following week. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments stay visible on the child but never create a family invoice or autopay attempt. Create invoice now is available only for positive family tuition.
+              Weekly billing creates one week-ahead invoices. Every-4-weeks billing creates one invoice equal to four net weekly rates and covers the next four service weeks. The opening balance remains unchanged; enter an opening balance only when the family already owes money. This does not enable family autopay. Explicit $0.00 CCDF or voucher-funded assignments never create a family invoice or autopay attempt.
             </p>
           </TabsContent>
 

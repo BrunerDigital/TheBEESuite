@@ -2138,6 +2138,10 @@ async function renderLivePage(
     const parentPortalFamily = family
       ? {
           ...family,
+          children: family.children.map((child) => ({
+            ...child,
+            tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
+          })),
           guardians: family.guardians.map((guardian) => {
             const safeGuardian = { ...guardian };
             delete (safeGuardian as { checkInPinHash?: string | null }).checkInPinHash;

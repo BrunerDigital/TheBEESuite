@@ -66,6 +66,12 @@ type Child = {
   photoVideoPermission?: boolean;
   fieldTripPermission?: boolean;
   classroom?: { name: string; ageGroup: string } | null;
+  tuitionAssignment?: {
+    enabled: boolean;
+    cadence: string | null;
+    amountCents: number | null;
+    tuitionPlanName: string | null;
+  } | null;
 };
 
 type PendingInvoicePayment = {
@@ -479,7 +485,27 @@ export function ParentPortalWorkspace({
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
   const [uniformQuantity, setUniformQuantity] = useState(1);
   const [selectedUpdateDayKey, setSelectedUpdateDayKey] = useState("");
+  const [tuitionCadenceDrafts, setTuitionCadenceDrafts] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
+
+  function saveTuitionCadence(child: Child) {
+    const billingCadence = tuitionCadenceDrafts[child.id] ?? (child.tuitionAssignment?.cadence === "four_week" ? "four_week" : "weekly");
+    startTransition(async () => {
+      setStatus("");
+      setError("");
+      const response = await fetch("/api/parent/tuition-cadence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ childId: child.id, billingCadence }),
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) return setError(result?.error || "Billing cycle could not be saved.");
+      setStatus(billingCadence === "four_week"
+        ? `${child.fullName}'s tuition will be invoiced every four weeks for the four weeks ahead.`
+        : `${child.fullName}'s tuition will be invoiced one week at a time.`);
+      router.refresh();
+    });
+  }
 
   const openInvoices = useMemo(() => invoices.filter((invoice) => invoice.status === "OPEN"), [invoices]);
   const balanceCents = billingAccount?.balanceCents ?? 0;
@@ -1341,6 +1367,39 @@ export function ParentPortalWorkspace({
                 <div className="mt-1 font-medium capitalize">{autopayStatus}</div>
               </div>
             </div>
+            {family.children.some((child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0) ? (
+              <div className="rounded-xl border bg-background/40 p-4">
+                <div className="font-medium">Tuition billing cycle</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Your weekly rate stays the same. Choose weekly invoices or one invoice every four weeks that covers the next four weeks. This choice does not create an opening balance or turn on autopay.
+                </p>
+                <div className="mt-3 space-y-3">
+                  {family.children.filter((child) => child.tuitionAssignment?.enabled && (child.tuitionAssignment.amountCents ?? 0) > 0).map((child) => {
+                    const cadence = tuitionCadenceDrafts[child.id] ?? (child.tuitionAssignment?.cadence === "four_week" ? "four_week" : "weekly");
+                    const weeklyAmount = child.tuitionAssignment?.amountCents ?? 0;
+                    return (
+                      <div key={child.id} className="grid gap-3 rounded-lg bg-background/35 p-3 sm:grid-cols-[1fr_minmax(15rem,auto)_auto] sm:items-end">
+                        <div>
+                          <div className="text-sm font-medium">{child.fullName}</div>
+                          <div className="text-xs text-muted-foreground">{money(weeklyAmount)}/week · {child.tuitionAssignment?.tuitionPlanName ?? "Tuition"}</div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Billing cycle</Label>
+                          <Select value={cadence} onValueChange={(value) => value && setTuitionCadenceDrafts((current) => ({ ...current, [child.id]: value }))}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="weekly">Weekly · {money(weeklyAmount)}</SelectItem>
+                              <SelectItem value="four_week">Every 4 weeks · {money(weeklyAmount * 4)}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button disabled={isPending} onClick={() => saveTuitionCadence(child)} variant="outline">Save cycle</Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
             <div className="rounded-xl border bg-background/40 p-4">
               <div className="mb-3">
                 <div className="font-medium">Account ledger</div>

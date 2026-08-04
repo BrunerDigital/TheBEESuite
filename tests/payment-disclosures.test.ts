@@ -9,19 +9,16 @@ import {
   paymentProcessingRecoverySummary,
 } from "../src/lib/payment-disclosures";
 
-test("payment recovery disclosure names ACH preference and card processing recovery", () => {
-  assert.match(PAYMENT_PROCESSING_RECOVERY_LABEL, /processing recovery/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /ACH bank and instant bank payments do not include/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /separate payment processing recovery line/i);
-  assert.doesNotMatch(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /convenience fee/i);
-  assert.doesNotMatch(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /surcharge/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /shown before payment/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION, /applicable law/i);
-  assert.match(PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE, /state-specific rules/i);
+test("payment disclosure separates the parent 2.9 percent card fee from the school-paid BEE Suite fee", () => {
+  assert.match(PAYMENT_PROCESSING_RECOVERY_LABEL, /card processing fee/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /2\.9%/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /parent's eligible payment amount/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION, /2\.9% card processing fee/i);
+  assert.match(PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE, /1\.5% BEE Suite application fee is deducted from school proceeds/i);
   assert.equal(PAYMENT_PROCESSING_RECOVERY_VERSION, "payment-processing-recovery-2026-06-09");
 });
 
-test("payment recovery summary states bank payments are parent-fee-free", () => {
+test("payment summary discloses the parent card fee", () => {
   const summary = paymentProcessingRecoverySummary({
     achRecovery: 250,
     cardRecovery: 610,
@@ -30,7 +27,7 @@ test("payment recovery summary states bank payments are parent-fee-free", () => 
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown on the secure payment review screen before submission.",
+    "ACH and instant bank have no parent processing fee; estimated card processing fee $6.10. Exact totals are shown before submission.",
   );
 });
 
@@ -43,6 +40,6 @@ test("payment recovery summary does not change when ACH recovery is zero", () =>
 
   assert.equal(
     summary,
-    "ACH and instant bank have no parent processing recovery; estimated card processing recovery $6.10. Exact totals are shown on the secure payment review screen before submission.",
+    "ACH and instant bank have no parent processing fee; estimated card processing fee $6.10. Exact totals are shown before submission.",
   );
 });

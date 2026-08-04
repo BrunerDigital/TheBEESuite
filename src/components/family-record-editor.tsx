@@ -913,7 +913,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         : action === "disable_autopay"
           ? `Disable autopay for ${selectedFamily?.name ?? "this family"}? Saved payment information will remain available for deliberate one-time payments.`
           : paymentMethodCategory === "card"
-            ? `Save or replace the family card for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. Card charges may include the approved processing recovery.`
+            ? `Save or replace the family card for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay. Card payments include a separate 2.9% processing fee when charged.`
             : `Save or replace the family payment method for ${selectedFamily?.name ?? "this family"} at ${selectedCenterLabel}? This does not enable autopay.`;
       const confirmed = window.confirm(message);
       if (!confirmed) return;

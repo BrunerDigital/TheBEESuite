@@ -211,32 +211,6 @@ function boolEnv(name: string, fallback = false) {
   return value === "true" || value === "1";
 }
 
-function listEnv(name: string, fallback: string[] = []) {
-  const value = process.env[name];
-  if (!value) return fallback;
-  return value
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function normalizeKey(value?: string | null) {
-  return clean(value).toLowerCase();
-}
-
-function feeFromParts(amountCents: number, bps: number, fixedCents: number, maxCents = 0) {
-  const percentageFee = Math.round(Math.max(0, amountCents) * (Math.min(Math.max(0, bps), 10_000) / 10_000));
-  const fee = Math.max(0, percentageFee + Math.max(0, fixedCents));
-  return maxCents > 0 ? Math.min(fee, maxCents) : fee;
-}
-
-function grossedUpFee(amountCents: number, bps: number, fixedCents: number, maxCents = 0) {
-  const safeAmountCents = Math.max(0, amountCents);
-  const rate = Math.min(Math.max(0, bps), 9_900) / 10_000;
-  const fee = Math.ceil((safeAmountCents + Math.max(0, fixedCents)) / (1 - rate) - safeAmountCents);
-  return maxCents > 0 ? Math.min(Math.max(0, fee), maxCents) : Math.max(0, fee);
-}
-
 function stripeHeaders(apiKey: string, contentType: "json" | "form", apiVersion = STRIPE_API_VERSION) {
   return {
     Authorization: `Bearer ${apiKey}`,
@@ -268,16 +242,10 @@ export function getStripeApplicationFeeAmount(amountCents: number) {
 }
 
 export function getStripePaymentOperationsFeeAmount(amountCents: number, waived = false) {
-  if (waived) return 0;
-  return Math.min(
-    feeFromParts(
-      amountCents,
-      basisPointsEnv("STRIPE_PAYMENT_OPS_FEE_BPS", 150),
-      nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_FIXED_CENTS"),
-      nonNegativeIntEnv("STRIPE_PAYMENT_OPS_FEE_MAX_CENTS"),
-    ),
-    Math.max(0, amountCents),
-  );
+  // Platform-wide policy: every location funds the 1.5% BEE Suite portion
+  // from school proceeds. Legacy waiver and fee override settings are ignored.
+  void waived;
+  return Math.max(0, Math.round(Math.max(0, amountCents) * 0.015));
 }
 
 export function getStripeParentSurchargeBps() {
@@ -400,21 +368,11 @@ function isInvalidPaymentMethodTypeError(json: unknown) {
 }
 
 export function getStripeProcessingRecoveryAmount(amountCents: number, paymentMethodCategory: StripePaymentMethodCategory) {
-  if (!isStripeParentProcessingRecoveryApproved()) return 0;
-
-  if (paymentMethodCategory === "ach" || paymentMethodCategory === "link_bank") return 0;
-
-  if (paymentMethodCategory === "card") {
-    const bps = basisPointsEnv("STRIPE_CARD_PROCESSING_RECOVERY_BPS", 290);
-    const fixedCents = nonNegativeIntEnv("STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS", 30);
-    const maxCents = nonNegativeIntEnv("STRIPE_CARD_PROCESSING_RECOVERY_MAX_CENTS");
-    if (boolEnv("STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP", true)) {
-      return grossedUpFee(amountCents, bps, fixedCents, maxCents);
-    }
-    return feeFromParts(amountCents, bps, fixedCents, maxCents);
-  }
-
-  return getStripeParentSurchargeAmount(amountCents);
+  // Approved policy: card-paying parents fund exactly 2.9% of their eligible
+  // parent-responsible payment. Do not include Stripe's fixed component and do
+  // not gross up. Bank payment methods have no parent processing fee.
+  if (paymentMethodCategory !== "card") return 0;
+  return Math.max(0, Math.round(Math.max(0, amountCents) * 0.029));
 }
 
 export function shouldWaiveStripePaymentOperationsFee({
@@ -428,20 +386,11 @@ export function shouldWaiveStripePaymentOperationsFee({
   brandSlug?: string | null;
   brandName?: string | null;
 }) {
-  const waivedTenantSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS");
-  const waivedBrandSlugs = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS");
-  const waivedNames = listEnv("STRIPE_PAYMENT_OPS_FEE_WAIVED_NAMES");
-  const tenantSlugKey = normalizeKey(tenantSlug);
-  const brandSlugKey = normalizeKey(brandSlug);
-  const tenantNameKey = normalizeKey(tenantName);
-  const brandNameKey = normalizeKey(brandName);
-
-  return Boolean(
-    (tenantSlugKey && waivedTenantSlugs.includes(tenantSlugKey)) ||
-    (brandSlugKey && waivedBrandSlugs.includes(brandSlugKey)) ||
-    (tenantNameKey && waivedNames.includes(tenantNameKey)) ||
-    (brandNameKey && waivedNames.includes(brandNameKey))
-  );
+  void tenantSlug;
+  void tenantName;
+  void brandSlug;
+  void brandName;
+  return false;
 }
 
 export function getStripeCheckoutAmounts(invoiceAmountCents: number, policy: StripeCheckoutFeePolicy = {}) {

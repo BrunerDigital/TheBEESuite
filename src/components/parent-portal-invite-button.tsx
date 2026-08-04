@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AlertCircle, BookOpenText, CheckCircle2, Copy, Send } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -15,12 +15,38 @@ type Props = {
 };
 
 type ManualEmailCopy = { clipboardText: string };
+type InviteStatus = "loading" | "missing_email" | "not_invited" | "linked" | "invited" | "accepted" | "delivered" | "expired" | "failed";
+
+const inviteStatusLabel: Record<InviteStatus, string> = {
+  loading: "Checking",
+  missing_email: "Missing email",
+  not_invited: "Not invited",
+  linked: "Linked",
+  invited: "Invited",
+  accepted: "Provider accepted",
+  delivered: "Delivered",
+  expired: "Expired",
+  failed: "Failed",
+};
 
 export function ParentPortalInviteButton({ guardianId, guardianName, email, linked }: Props) {
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualCopy, setManualCopy] = useState<ManualEmailCopy | null>(null);
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus>(email ? "loading" : "missing_email");
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!email) return;
+    let active = true;
+    fetch(`/api/parent/invitations?guardianId=${encodeURIComponent(guardianId)}`)
+      .then(async (response) => ({ response, json: await response.json().catch(() => null) as { status?: InviteStatus } | null }))
+      .then(({ response, json }) => {
+        if (active && response.ok && json?.status) setInviteStatus(json.status);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [email, guardianId]);
 
   function submit(messageType: "invitation" | "guide") {
     startTransition(async () => {
@@ -47,6 +73,7 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
           ? "The provider accepted the welcome email. It includes the login email and first-login password, ProCare transition and tuition guidance when applicable, family check, kiosk PIN, browser-install steps, and secure payment setup."
           : "The provider accepted the welcome reminder. The parent's current password was preserved; the email includes ProCare transition and tuition guidance when applicable, a forgot-password option, browser-install steps, and secure payment setup.",
       );
+      setInviteStatus("accepted");
     });
   }
 
@@ -69,7 +96,12 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
             <CardTitle className="text-base">{guardianName}</CardTitle>
             <CardDescription>{email || "No guardian email on file"}</CardDescription>
           </div>
-          <Badge variant={linked ? "default" : "outline"}>{linked ? "Linked" : "Not linked"}</Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant={linked ? "default" : "outline"}>{linked ? "Linked" : "Not linked"}</Badge>
+            <Badge variant={inviteStatus === "failed" || inviteStatus === "expired" || inviteStatus === "missing_email" ? "destructive" : "secondary"}>
+              {inviteStatusLabel[inviteStatus]}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

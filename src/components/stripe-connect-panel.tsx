@@ -76,15 +76,6 @@ function payoutBankLabel(center: StripeConnectCenter) {
   return maskedAccount(center) === "Not connected" ? "Not connected" : "Choose bank for this school";
 }
 
-function percentFromBps(bps: number) {
-  return `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 2)}%`;
-}
-
-function centsLabel(cents: number) {
-  if (!cents) return "";
-  return ` + ${new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100)}`;
-}
-
 function setupErrorsFromResponse(value: unknown): Partial<Record<keyof StripeConnectSetupDetails, string>> {
   return Object.fromEntries(
     Object.entries(fields(value))
@@ -96,9 +87,6 @@ export function StripeConnectPanel({
   centers,
   stripeConfigured,
   webhookConfigured,
-  parentProcessingRecoveryApproved,
-  parentSurchargeBps,
-  parentSurchargeFixedCents,
 }: StripeConnectPanelProps) {
   const searchParams = useSearchParams();
   const [busyCenterId, setBusyCenterId] = useState<string | null>(null);
@@ -406,14 +394,10 @@ export function StripeConnectPanel({
             </CardDescription>
           </div>
           <div className="rounded-xl border bg-background/50 p-3 text-sm">
-            <div className="font-medium">Parent card recovery</div>
-            <div className="text-2xl font-semibold">
-              {parentProcessingRecoveryApproved ? `${percentFromBps(parentSurchargeBps)}${centsLabel(parentSurchargeFixedCents)}` : "Review required"}
-            </div>
+            <div className="font-medium">Parent processing fee</div>
+            <div className="text-2xl font-semibold">2.9%</div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {parentProcessingRecoveryApproved
-                ? "Only added above tuition for approved higher-cost methods"
-                : "Parent-paid recovery stays at $0 until legal/accounting approval is enabled"}
+              Added only to the eligible parent card payment; no fixed component or gross-up
             </div>
           </div>
         </div>
@@ -676,14 +660,8 @@ export function StripeConnectPanel({
           </span>
         </div>
         <div className="rounded-xl border bg-background/40 p-4 text-sm leading-6 text-muted-foreground">
-          Fee behavior: the tuition invoice remains the family ledger amount. ACH is the default low-cost payment path. Any configured parent card processing recovery is added as a separate payment line item and included in the processor application fee so the school payout is not reduced by parent-selected card costs. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
+          Fee behavior: card checkout adds exactly 2.9% to the eligible parent payment. The separate 1.5% BEE Suite application fee is deducted from school proceeds. {PAYMENT_PROCESSING_RECOVERY_DISCLOSURE} {PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE}
         </div>
-        {!parentProcessingRecoveryApproved ? (
-          <div className="flex gap-3 rounded-xl border border-amber-300/40 bg-amber-50 p-4 text-sm leading-6 text-slate-800">
-            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-amber-600" />
-            Parent-paid processing recovery is currently blocked by the legal/accounting approval gate. Set `STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED=true` only after the approved policy, disclosures, refund/dispute treatment, and state/card-network review are complete.
-          </div>
-        ) : null}
       </CardContent>
     </Card>
   );

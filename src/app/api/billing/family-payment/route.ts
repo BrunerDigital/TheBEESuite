@@ -34,6 +34,7 @@ import {
 import {
   AGENCY_LEDGER_ENTRY_TYPES,
   AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
   parentPaymentAmountCents,
 } from "@/lib/parent-billing-visibility";
 import { canAccessFamilyRecord } from "@/lib/portal-guardrails";
@@ -155,7 +156,9 @@ async function POSTHandler(request: NextRequest) {
           name: true,
           billingEmail: true,
           centerId: true,
+          customFields: true,
           guardians: { select: { userId: true } },
+          children: { select: { customFields: true } },
         },
       },
     },
@@ -217,6 +220,24 @@ async function POSTHandler(request: NextRequest) {
         select: { type: true, sourceSystem: true, amountCents: true },
       })
     : [];
+  if (parentCheckout && parentBalanceNeedsResponsibilityReview({
+    accountBalanceCents: billingAccount.balanceCents,
+    agencyLedgerEntries,
+    responsibilityEvidence: [
+      billingAccount.customFields,
+      billingAccount.family.customFields,
+      ...billingAccount.family.children.map((child) => child.customFields),
+    ],
+  })) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "This balance includes subsidy information that has not been separated into agency and family responsibility. Payment is blocked until the school reviews it.",
+        code: "parent_balance_responsibility_review_required",
+      },
+      { status: 409 },
+    );
+  }
   const amountCents = parentCheckout
     ? parentPaymentAmountCents({
         accountBalanceCents: billingAccount.balanceCents,

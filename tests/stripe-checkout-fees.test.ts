@@ -52,7 +52,7 @@ test("tuition checkout defaults retain the school-paid 1.5 percent BEE Suite fea
   assert.equal(amounts.applicationFeeAmountCents, 1_500);
 });
 
-test("card checkout adds parent-paid card recovery in addition to the school-paid tuition feature fee", () => {
+test("card checkout adds exactly 2.9 percent while the school pays the 1.5 percent BEE Suite fee", () => {
   for (const key of managedEnvKeys) delete process.env[key];
   process.env.STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED = "true";
   process.env.STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP = "false";
@@ -61,9 +61,9 @@ test("card checkout adds parent-paid card recovery in addition to the school-pai
 
   assert.equal(amounts.invoiceAmountCents, 100_000);
   assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_500);
-  assert.equal(amounts.parentProcessingRecoveryAmountCents, 2_930);
-  assert.equal(amounts.checkoutTotalCents, 102_930);
-  assert.equal(amounts.applicationFeeAmountCents, 4_430);
+  assert.equal(amounts.parentProcessingRecoveryAmountCents, 2_900);
+  assert.equal(amounts.checkoutTotalCents, 102_900);
+  assert.equal(amounts.applicationFeeAmountCents, 4_400);
 });
 
 test("instant bank checkout ignores legacy link-bank recovery defaults", () => {
@@ -80,7 +80,7 @@ test("instant bank checkout ignores legacy link-bank recovery defaults", () => {
   assert.equal(amounts.applicationFeeAmountCents, 1_500);
 });
 
-test("ACH and instant bank ignore legacy ACH, link-bank, and default parent recovery settings", () => {
+test("all payment methods ignore legacy parent recovery settings", () => {
   for (const key of managedEnvKeys) delete process.env[key];
   process.env.STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED = "true";
   process.env.STRIPE_PARENT_SURCHARGE_BPS = "390";
@@ -97,26 +97,42 @@ test("ACH and instant bank ignore legacy ACH, link-bank, and default parent reco
 
   assert.equal(achAmounts.parentProcessingRecoveryAmountCents, 0);
   assert.equal(instantBankAmounts.parentProcessingRecoveryAmountCents, 0);
-  assert.equal(defaultAmounts.parentProcessingRecoveryAmountCents, 3_930);
+  assert.equal(defaultAmounts.parentProcessingRecoveryAmountCents, 0);
 });
 
-test("parent-paid processing recovery remains blocked until legal approval gate is enabled", () => {
+test("the reported 45.60 gross-up scenario becomes a flat 2.9 percent fee without fixed charge or gross-up", () => {
   for (const key of managedEnvKeys) delete process.env[key];
   process.env.STRIPE_CARD_PROCESSING_RECOVERY_BPS = "290";
   process.env.STRIPE_CARD_PROCESSING_RECOVERY_FIXED_CENTS = "30";
 
-  const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
+  process.env.STRIPE_PARENT_PROCESSING_RECOVERY_APPROVED = "true";
+  process.env.STRIPE_CARD_PROCESSING_RECOVERY_GROSS_UP = "true";
+  const amounts = getStripeCheckoutAmounts(154_224, { paymentMethodCategory: "card" });
 
-  assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
-  assert.equal(amounts.checkoutTotalCents, 100_000);
-  assert.equal(amounts.applicationFeeAmountCents, 1_500);
+  assert.equal(amounts.parentProcessingRecoveryAmountCents, 4_472);
+  assert.equal(amounts.checkoutTotalCents, 158_696);
+  assert.equal(amounts.applicationFeeAmountCents, 6_785);
 });
 
-test("Kid City is not waived unless a waiver env var explicitly includes it", () => {
+test("no tenant location brand or caller can waive the platform-wide fee policy", () => {
   for (const key of managedEnvKeys) delete process.env[key];
-
-  assert.equal(shouldWaiveStripePaymentOperationsFee({ tenantSlug: "kid-city-usa", tenantName: "Kid City USA" }), false);
-
+  process.env.STRIPE_PAYMENT_OPS_FEE_BPS = "0";
   process.env.STRIPE_PAYMENT_OPS_FEE_WAIVED_TENANT_SLUGS = "kid-city-usa";
-  assert.equal(shouldWaiveStripePaymentOperationsFee({ tenantSlug: "kid-city-usa", tenantName: "Kid City USA" }), true);
+  process.env.STRIPE_PAYMENT_OPS_FEE_WAIVED_BRAND_SLUGS = "miss-honeys";
+
+  for (const scope of [
+    { tenantSlug: "kid-city-usa", tenantName: "Kid City USA" },
+    { tenantSlug: "miss-honeys", brandSlug: "miss-honeys", brandName: "Miss Honey's" },
+    { tenantSlug: "another-tenant", tenantName: "Another Tenant" },
+  ]) {
+    assert.equal(shouldWaiveStripePaymentOperationsFee(scope), false);
+    const card = getStripeCheckoutAmounts(100_000, {
+      paymentMethodCategory: "card",
+      waiveBeeSuitePaymentOperationsFee: true,
+    });
+    assert.equal(card.parentProcessingRecoveryAmountCents, 2_900);
+    assert.equal(card.beeSuitePaymentOperationsFeeAmountCents, 1_500);
+    assert.equal(card.checkoutTotalCents, 102_900);
+    assert.equal(card.applicationFeeAmountCents, 4_400);
+  }
 });

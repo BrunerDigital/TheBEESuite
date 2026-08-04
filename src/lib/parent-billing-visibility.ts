@@ -15,6 +15,35 @@ type AgencyLedgerEntry = {
   amountCents: number;
 };
 
+const SUBSIDY_MARKER = /subsid|voucher|ccdf|copay|co-pay|familyresponsibility|agencyresponsibility|fundingtype|\belc\b/i;
+const SUBSIDY_KEY_MARKER = /subsid|voucher|ccdf|copay|co-pay|agencyresponsibility|agencyportion|\belc\b/i;
+
+export function hasSubsidyResponsibilityEvidence(...values: unknown[]) {
+  const visit = (value: unknown): boolean => {
+    if (typeof value === "string") return SUBSIDY_MARKER.test(value);
+    if (Array.isArray(value)) return value.some(visit);
+    if (!value || typeof value !== "object") return false;
+    return Object.entries(value as Record<string, unknown>).some(([key, item]) => {
+      if (visit(item)) return true;
+      if (!SUBSIDY_KEY_MARKER.test(key)) return false;
+      if (typeof item === "number") return item > 0;
+      if (typeof item === "boolean") return item;
+      return item != null && String(item).trim() !== "" && !/^(?:0|false|none|family|private|private_pay)$/i.test(String(item).trim());
+    });
+  };
+  return values.some(visit);
+}
+
+export function parentBalanceNeedsResponsibilityReview(input: {
+  accountBalanceCents: number;
+  agencyLedgerEntries: AgencyLedgerEntry[];
+  responsibilityEvidence: unknown[];
+}) {
+  return input.accountBalanceCents > 0
+    && hasSubsidyResponsibilityEvidence(...input.responsibilityEvidence)
+    && !input.agencyLedgerEntries.some(isAgencyOnlyLedgerEntry);
+}
+
 export function isAgencyOnlyLedgerEntry(entry: Pick<AgencyLedgerEntry, "type" | "sourceSystem">) {
   return AGENCY_LEDGER_ENTRY_TYPES.includes(entry.type.trim().toLowerCase())
     || entry.sourceSystem?.trim().toLowerCase() === AGENCY_LEDGER_SOURCE_SYSTEM;

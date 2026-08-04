@@ -338,7 +338,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
   const [paymentRequestEmailSelections, setPaymentRequestEmailSelections] = useState<Record<string, string[]>>({});
   const [paymentReviewMethod, setPaymentReviewMethod] = useState<DirectorPaymentMethod | null>(null);
-  const [cardRecoveryAccepted, setCardRecoveryAccepted] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const filteredFamilies = useMemo(
@@ -492,7 +491,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     }
     setStatusMessage("");
     setErrorMessage("");
-    setCardRecoveryAccepted(false);
     setPaymentReviewMethod(method);
   }
 
@@ -502,12 +500,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       "Enable autopay for this family? The BEE Suite will use the one selected saved method for open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
     )) return;
     if (action === "disable_autopay" && !confirmBillingAction("disable autopay")) return;
-    if (action === "setup" && paymentMethodCategory === "card") {
-      const accepted = window.confirm(
-        "Saving this card does not enable autopay. Card payments include a separate 2.9% processing fee when charged. Continue?",
-      );
-      if (!accepted) return;
-    }
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
@@ -519,7 +511,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           familyId: selectedFamily.id,
           action,
           paymentMethodCategory,
-          processingRecoveryAccepted: action === "setup" && paymentMethodCategory === "card",
           returnPath: "/billing-invoices",
         }),
       });
@@ -558,10 +549,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     }
 
     const invoiceId = effectivePaymentTarget.startsWith("invoice:") ? selectedPaymentInvoice?.id ?? "" : "";
-    const processingRecoveryAccepted = method === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
-    if (processingRecoveryAccepted && !cardRecoveryAccepted) {
-      return setErrorMessage("Confirm the 2.9% card processing fee disclosure before charging a saved card.");
-    }
     setPaymentReviewMethod(null);
 
     startTransition(async () => {
@@ -579,7 +566,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             retryFailed: true,
             limit: 1,
             processStoredMethod: method === "saved_method",
-            cardProcessingRecoveryAccepted: processingRecoveryAccepted,
           }),
         });
         const json = await response.json().catch(() => null) as {
@@ -633,7 +619,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           description: paymentDescription,
           collectionMode: method === "card_checkout" ? "director_card_terminal" : method === "instant_bank_checkout" ? "director_instant_bank_checkout" : "director_ach_checkout",
           source: "director_dashboard",
-          processingRecoveryAccepted,
           returnPath: "/billing-invoices",
         }),
       });
@@ -650,8 +635,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       router.refresh();
     });
   }
-  const paymentReviewRequiresCardRecovery =
-    paymentReviewMethod === "saved_method" && selectedPaymentMethod?.paymentMethodType === "card";
   function togglePaymentRequestEmail(email: string) {
     setPaymentRequestEmailSelections((current) => {
       const currentForFamily = current[effectiveFamilyId] ?? selectedPaymentRequestAvailableEmails;
@@ -1163,14 +1146,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     <Dialog open={Boolean(paymentReviewMethod)} onOpenChange={(open) => {
       if (!open && !isPending) {
         setPaymentReviewMethod(null);
-        setCardRecoveryAccepted(false);
       }
     }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{paymentReviewMethod ? paymentMethodLabel(paymentReviewMethod) : "Review payment"}</DialogTitle>
           <DialogDescription>
-            Confirm the family, target, Bee Suite payment route, and fee disclosure before submitting the payment.
+            Confirm the family, target, Bee Suite payment route, and exact parent-responsible amount before submitting the payment.
           </DialogDescription>
         </DialogHeader>
         {paymentReviewMethod ? (
@@ -1181,17 +1163,6 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
               <SummaryMetric label="Payment target" value={directorPaymentTargetLabel} detail={selectedPaymentInvoice ? `Due ${formatShortDate(selectedPaymentInvoice.dueDate)}` : "Family balance payment"} />
               <SummaryMetric label="Amount to submit" value={money(directorPaymentAmountCents)} detail={effectivePaymentTarget === "custom" ? paymentDescription : selectedPaymentInvoice?.number ?? "Balance"} />
             </div>
-            {paymentReviewRequiresCardRecovery ? (
-              <label className="flex items-start gap-2 rounded-lg border border-amber-400/40 bg-amber-400/10 p-3 text-sm leading-5">
-                <input
-                  type="checkbox"
-                  className="mt-1 size-4"
-                  checked={cardRecoveryAccepted}
-                  onChange={(event) => setCardRecoveryAccepted(event.target.checked)}
-                />
-                <span>I confirm this saved-card charge includes a separate 2.9% processing fee calculated on the eligible family payment.</span>
-              </label>
-            ) : null}
             <div className="rounded-lg border bg-background/45 p-3">
               <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">The BEE Suite route</div>
               <div className="mt-2 text-sm font-medium">{paymentRouteSummary(paymentReviewMethod)}</div>
@@ -1209,13 +1180,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         <DialogFooter>
           <Button type="button" variant="outline" disabled={isPending} onClick={() => {
             setPaymentReviewMethod(null);
-            setCardRecoveryAccepted(false);
           }}>
             Cancel
           </Button>
           <Button
             type="button"
-            disabled={isPending || !paymentReviewMethod || (paymentReviewRequiresCardRecovery && !cardRecoveryAccepted)}
+            disabled={isPending || !paymentReviewMethod}
             onClick={() => paymentReviewMethod && processParentPayment(paymentReviewMethod)}
           >
             {paymentReviewMethod ? paymentMethodLabel(paymentReviewMethod) : "Submit payment"}

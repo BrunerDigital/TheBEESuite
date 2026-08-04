@@ -1,17 +1,18 @@
-export const PAYMENT_PROCESSING_RECOVERY_LABEL = "Card processing fee";
+export const PAYMENT_PROCESSING_RECOVERY_LABEL = "School-paid processing";
 
 export const PAYMENT_PROCESSING_RECOVERY_VERSION = "payment-processing-recovery-2026-06-09";
 
 export const PAYMENT_PROCESSING_RECOVERY_DISCLOSURE =
-  "Debit and credit card payments include a separate 2.9% processing fee calculated only on the parent's eligible payment amount. Bank payments do not include this fee. The exact total is shown before checkout.";
+  "Schools absorb Stripe processing costs. Parents are charged only the eligible parent-responsible amount, with no added processing, convenience, service, platform, or application fee.";
 
 export const PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE =
-  "The parent card fee is exactly 2.9%, with no fixed component or gross-up. The separate 1.5% BEE Suite application fee is deducted from school proceeds and is never added to the parent's obligation.";
+  "All Stripe processor fees and the separate 1% BEE Suite application fee reduce school proceeds and are never added to the parent's obligation.";
 
 export const PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION =
-  "Separate 2.9% card processing fee disclosed before checkout.";
+  "No payment-processing fee is added to the parent's eligible amount.";
 
 export function paymentProcessingRecoverySummary({
+  achRecovery,
   cardRecovery,
   formatMoney,
 }: {
@@ -19,5 +20,8 @@ export function paymentProcessingRecoverySummary({
   cardRecovery: number;
   formatMoney: (cents: number) => string;
 }) {
-  return `ACH and instant bank have no parent processing fee; estimated card processing fee ${formatMoney(cardRecovery)}. Exact totals are shown before submission.`;
+  void achRecovery;
+  void cardRecovery;
+  void formatMoney;
+  return "The school absorbs Stripe processing costs; no processing fee is added to the parent's payment.";
 }

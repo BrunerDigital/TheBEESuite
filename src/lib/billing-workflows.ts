@@ -3,6 +3,7 @@ function clean(value: unknown) {
 }
 
 export const WEEKLY_TUITION_AUTOBILL_CADENCE = "weekly" as const;
+export const FOUR_WEEK_TUITION_AUTOBILL_CADENCE = "four_week" as const;
 export const WEEKLY_TUITION_AUTOBILL_DAY = 4;
 
 export function parseCurrencyCents(value: unknown) {
@@ -111,7 +112,14 @@ export function normalizeBillingPeriod(value: unknown, fallbackDate: Date) {
 }
 
 export function normalizeBillingCadence(value: unknown) {
-  return clean(value).toLowerCase().startsWith("week") ? "weekly" : "monthly";
+  const normalized = clean(value).toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (["four_week", "four_weeks", "4_week", "4_weeks", "every_4_weeks"].includes(normalized)) return FOUR_WEEK_TUITION_AUTOBILL_CADENCE;
+  return normalized.startsWith("week") ? WEEKLY_TUITION_AUTOBILL_CADENCE : "monthly";
+}
+
+export function isWeekBasedTuitionCadence(value: unknown) {
+  const cadence = normalizeBillingCadence(value);
+  return cadence === WEEKLY_TUITION_AUTOBILL_CADENCE || cadence === FOUR_WEEK_TUITION_AUTOBILL_CADENCE;
 }
 
 function utcDateOnly(date: Date) {
@@ -146,14 +154,14 @@ export function nextWeeklyBillingPeriod(date: Date) {
 }
 
 export function normalizeRecurringBillingPeriod(value: unknown, fallbackDate: Date, cadence: unknown) {
-  return normalizeBillingCadence(cadence) === "weekly"
+  return isWeekBasedTuitionCadence(cadence)
     ? normalizeWeeklyBillingPeriod(value, fallbackDate)
     : normalizeBillingPeriod(value, fallbackDate);
 }
 
 export function defaultRecurringBillingPeriod(value: unknown, fallbackDate: Date, cadence: unknown) {
   if (clean(value)) return normalizeRecurringBillingPeriod(value, fallbackDate, cadence);
-  return normalizeBillingCadence(cadence) === "weekly"
+  return isWeekBasedTuitionCadence(cadence)
     ? nextWeeklyBillingPeriod(fallbackDate)
     : normalizeBillingPeriod(value, fallbackDate);
 }
@@ -175,7 +183,7 @@ export function normalizeWeeklyBillingDay(value: unknown) {
 }
 
 export function normalizeRecurringBillingDay(value: unknown, cadence: unknown) {
-  return normalizeBillingCadence(cadence) === "weekly" ? normalizeWeeklyBillingDay(value) : normalizeBillingDay(value);
+  return isWeekBasedTuitionCadence(cadence) ? normalizeWeeklyBillingDay(value) : normalizeBillingDay(value);
 }
 
 export function utcBillingWeekday(date: Date) {
@@ -183,7 +191,7 @@ export function utcBillingWeekday(date: Date) {
 }
 
 export function recurringDueDateForPeriod(period: string, billingDay: number, cadence: unknown) {
-  if (normalizeBillingCadence(cadence) !== "weekly") {
+  if (!isWeekBasedTuitionCadence(cadence)) {
     return new Date(`${period}-${String(normalizeBillingDay(billingDay)).padStart(2, "0")}T12:00:00.000Z`);
   }
 
@@ -196,6 +204,54 @@ export function recurringDueDateForPeriod(period: string, billingDay: number, ca
   const dueDate = new Date(weekOneMonday);
   dueDate.setUTCDate(weekOneMonday.getUTCDate() + ((week - 1) * 7) + normalizeWeeklyBillingDay(billingDay) - 1);
   return dueDate;
+}
+
+export function weeksBetweenBillingPeriods(startPeriod: string, billingPeriod: string) {
+  const start = recurringDueDateForPeriod(startPeriod, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  const current = recurringDueDateForPeriod(billingPeriod, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  return Math.round((current.getTime() - start.getTime()) / (7 * 86_400_000));
+}
+
+export function tuitionInvoiceWeekCount(cadence: unknown) {
+  return normalizeBillingCadence(cadence) === FOUR_WEEK_TUITION_AUTOBILL_CADENCE ? 4 : 1;
+}
+
+export function addWeeksToBillingPeriod(period: string, weeks: number) {
+  const start = recurringDueDateForPeriod(period, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  start.setUTCDate(start.getUTCDate() + (Math.max(0, Math.trunc(weeks)) * 7));
+  return isoWeekBillingPeriod(start);
+}
+
+export function laterWeeklyBillingPeriod(left: string, right: string) {
+  return recurringDueDateForPeriod(left, 1, WEEKLY_TUITION_AUTOBILL_CADENCE) >= recurringDueDateForPeriod(right, 1, WEEKLY_TUITION_AUTOBILL_CADENCE)
+    ? left
+    : right;
+}
+
+export function firstUncoveredTuitionBillingPeriod(input: {
+  invoices: Array<{ customFields: unknown }>;
+  childId: string;
+  fallbackDate: Date;
+}) {
+  let firstUncovered = nextWeeklyBillingPeriod(input.fallbackDate);
+  let firstUncoveredDate = recurringDueDateForPeriod(firstUncovered, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+  for (const invoice of input.invoices) {
+    const fields = invoice.customFields && typeof invoice.customFields === "object" && !Array.isArray(invoice.customFields)
+      ? invoice.customFields as Record<string, unknown>
+      : {};
+    if (clean(fields.chargeSource) !== "tuitionPlan" || clean(fields.childId) !== input.childId) continue;
+    const period = normalizeWeeklyBillingPeriod(fields.billingPeriod, input.fallbackDate);
+    const weekCount = typeof fields.invoiceWeekCount === "number" && Number.isFinite(fields.invoiceWeekCount)
+      ? Math.max(1, Math.trunc(fields.invoiceWeekCount))
+      : tuitionInvoiceWeekCount(fields.billingCadence);
+    const candidate = addWeeksToBillingPeriod(period, weekCount);
+    const candidateDate = recurringDueDateForPeriod(candidate, 1, WEEKLY_TUITION_AUTOBILL_CADENCE);
+    if (candidateDate > firstUncoveredDate) {
+      firstUncovered = candidate;
+      firstUncoveredDate = candidateDate;
+    }
+  }
+  return firstUncovered;
 }
 
 export function weeklyTuitionChargeDateForPeriod(period: string) {
@@ -213,9 +269,13 @@ export function shouldCreateRecurringTuitionInvoice(input: {
   billingPeriod: string;
   billingDay: number;
   currentDay: number;
+  cadence?: unknown;
 }) {
   if (!input.enabled || !input.planId || input.amountCents <= 0) return false;
   if (input.startsPeriod && input.startsPeriod > input.billingPeriod) return false;
+  if (normalizeBillingCadence(input.cadence) === FOUR_WEEK_TUITION_AUTOBILL_CADENCE) {
+    if (!input.startsPeriod || weeksBetweenBillingPeriods(input.startsPeriod, input.billingPeriod) % 4 !== 0) return false;
+  }
   return input.billingDay <= input.currentDay;
 }
 

@@ -8,6 +8,7 @@ import {
   subsidyVoucherLedgerLines,
   billingDedupeKey,
   defaultRecurringBillingPeriod,
+  firstUncoveredTuitionBillingPeriod,
   isoWeekBillingPeriod,
   nextWeeklyBillingPeriod,
   normalizeAgencyPaymentMetadata,
@@ -20,6 +21,7 @@ import {
   recurringDueDateForPeriod,
   parseCurrencyCents,
   shouldCreateRecurringTuitionInvoice,
+  tuitionInvoiceWeekCount,
   utcBillingWeekday,
   weeklyTuitionChargeDateForPeriod,
   planFamilyRefundAllocations,
@@ -187,6 +189,61 @@ test("recurring tuition eligibility waits for start period and billing day", () 
     billingDay: 15,
     currentDay: 15,
   }), false);
+});
+
+test("four-week tuition bills four weeks ahead only on its anchored cycle", () => {
+  assert.equal(normalizeBillingCadence("Every 4 weeks"), "four_week");
+  assert.equal(defaultRecurringBillingPeriod(null, new Date("2026-06-19T12:00:00.000Z"), "four_week"), "2026-W26");
+  assert.equal(tuitionInvoiceWeekCount("four_week"), 4);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W26",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), true);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W27",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), false);
+  assert.equal(shouldCreateRecurringTuitionInvoice({
+    enabled: true,
+    planId: "plan_1",
+    amountCents: 25000,
+    startsPeriod: "2026-W26",
+    billingPeriod: "2026-W30",
+    billingDay: 4,
+    currentDay: 4,
+    cadence: "four_week",
+  }), true);
+});
+
+test("cadence changes start after existing invoice coverage", () => {
+  const fallbackDate = new Date("2026-06-19T12:00:00.000Z");
+  assert.equal(firstUncoveredTuitionBillingPeriod({
+    childId: "child_1",
+    fallbackDate,
+    invoices: [{ customFields: { chargeSource: "tuitionPlan", childId: "child_1", billingPeriod: "2026-W26", billingCadence: "weekly" } }],
+  }), "2026-W27");
+  assert.equal(firstUncoveredTuitionBillingPeriod({
+    childId: "child_1",
+    fallbackDate,
+    invoices: [{ customFields: { chargeSource: "tuitionPlan", childId: "child_1", billingPeriod: "2026-W26", billingCadence: "four_week", invoiceWeekCount: 4 } }],
+  }), "2026-W30");
+  assert.equal(firstUncoveredTuitionBillingPeriod({
+    childId: "child_1",
+    fallbackDate,
+    invoices: [{ customFields: { chargeSource: "tuitionPlan", childId: "another_child", billingPeriod: "2026-W40", invoiceWeekCount: 4 } }],
+  }), "2026-W26");
 });
 
 

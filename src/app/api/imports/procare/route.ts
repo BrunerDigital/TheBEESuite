@@ -11,6 +11,7 @@ import {
   buildProcareCorrelationReview,
   PROCARE_FIELD_OPTIONS,
   normalizeProcareEnrollmentStatus,
+  normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
   procareChildFullName,
   procareChildPreferredName,
@@ -2387,7 +2388,8 @@ async function POSTHandler(request: NextRequest) {
       const ageGroup = procareAgeGroup(rawData, "Unassigned");
       const enrollmentStatusValue = value(rawData, enrollmentStatusAliases);
       const enrollmentStatusProvided = Boolean(enrollmentStatusValue);
-      const enrollmentStatus = normalizeProcareEnrollmentStatus(enrollmentStatusValue, "review_needed");
+      const enrollmentEndDate = value(rawData, ["end date", "withdrawal date", "termination date"]);
+      const enrollmentStatus = normalizeProcareEnrollmentStatusWithEndDate(enrollmentStatusValue, enrollmentEndDate);
       const familyDisplayName = familyName || (accountExternalId ? `${accountExternalId} Household` : childName || email);
       if (!familyName && !childName && !email) throw new Error("Missing family, child, or email fields.");
 
@@ -2582,7 +2584,7 @@ async function POSTHandler(request: NextRequest) {
           childLastName: value(rawData, ["last name", "child last name", "student last name"]),
           gender: value(rawData, ["gender", "sex"]),
           enrollmentStatus,
-          enrollmentEndDate: value(rawData, ["end date", "withdrawal date", "termination date"]),
+          enrollmentEndDate,
         });
         const fallbackChildren = childExternalId
           ? []

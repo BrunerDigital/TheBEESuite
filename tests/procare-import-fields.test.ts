@@ -7,6 +7,7 @@ import {
   buildProcareCorrelationReview,
   isActiveProcareEnrollmentStatus,
   normalizeProcareEnrollmentStatus,
+  normalizeProcareEnrollmentStatusWithEndDate,
   procareAgeGroup,
   procareChildFullName,
   procareChildPreferredName,
@@ -22,6 +23,14 @@ test("ProCare import fields ignore placeholder values from exported reports", ()
   assert.equal(procareClassroomName({ "primary classroom": "Honey Bees (Twos)" }), "Honey Bees (Twos)");
   assert.equal(procareAgeGroup({ "age group": "-------", classroom: "-------" }), "Unassigned");
   assert.equal(procareClassroomName({ classroom: "Unknown", room: "Toddler 1" }), "Toddler 1");
+});
+
+test("past ProCare enrollment end dates close imported enrollment while the active sentinel stays current", () => {
+  const now = new Date("2026-08-04T12:00:00.000Z");
+  assert.equal(normalizeProcareEnrollmentStatusWithEndDate("Enrolled", "5/22/2025", now), "withdrawn");
+  assert.equal(normalizeProcareEnrollmentStatusWithEndDate("Enrolled", "12/31/2070", now), "enrolled");
+  assert.equal(normalizeProcareEnrollmentStatusWithEndDate("Summer Break", "", now), "summer_break");
+  assert.equal(normalizeProcareEnrollmentStatusWithEndDate("Enrolled", "2/31/2025", now), "enrolled");
 });
 
 test("ProCare child display names can be built from split name columns", () => {

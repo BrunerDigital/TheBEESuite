@@ -264,6 +264,29 @@ export function normalizeProcareEnrollmentStatus(input: string, fallback = "enro
   return value.replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || fallback;
 }
 
+export function normalizeProcareEnrollmentStatusWithEndDate(
+  input: string,
+  endDateInput: string,
+  now = new Date(),
+) {
+  const normalized = normalizeProcareEnrollmentStatus(input, "review_needed");
+  const endDate = cleanProcareImportValue(endDateInput);
+  const match = endDate.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return normalized;
+
+  const [, month, day, year] = match;
+  const numericYear = Number(year);
+  if (numericYear >= 2070) return normalized;
+
+  const numericMonth = Number(month);
+  const numericDay = Number(day);
+  const enrollmentEnd = new Date(Date.UTC(numericYear, numericMonth - 1, numericDay, 23, 59, 59, 999));
+  const valid = enrollmentEnd.getUTCFullYear() === numericYear
+    && enrollmentEnd.getUTCMonth() === numericMonth - 1
+    && enrollmentEnd.getUTCDate() === numericDay;
+  return !valid || enrollmentEnd >= now ? normalized : "withdrawn";
+}
+
 export function isActiveProcareEnrollmentStatus(input: string) {
   return ["enrolled", "pending", "waitlisted", "tour_scheduled", "summer_break"].includes(normalizeProcareEnrollmentStatus(input));
 }

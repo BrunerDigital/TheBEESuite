@@ -18,6 +18,7 @@ import { productInvoiceFieldsForProduct, productPurchaseTotals } from "@/lib/pro
 import { prisma } from "@/lib/prisma";
 import { issueFamilyRefund, validateFamilyRefundAvailability } from "@/lib/family-refunds";
 import { refundSubmissionMode } from "@/lib/refund-approval";
+import { normalizeTuitionCredits, totalTuitionCreditsCents, tuitionInvoiceItems } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -82,7 +83,7 @@ async function assertFamilyAccess(user: CurrentBillingUser, familyId: string) {
       id: true,
       centerId: true,
       name: true,
-      children: { select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true } },
+      children: { select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true } },
     },
   });
   if (!family) return { ok: false as const, status: 404, error: "Family not found." };
@@ -179,13 +180,23 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
     childIds: child ? [child.id] : undefined,
   });
   const itemDescription = child ? `${charge.description} - ${child.fullName}` : charge.description;
+  const tuitionCredits = charge.chargeSource === "tuitionPlan" && child
+    ? normalizeTuitionCredits(jsonObject(child.customFields).tuitionCredits)
+    : [];
+  const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
+  if (tuitionCreditsTotalCents >= charge.amountCents) {
+    return NextResponse.json({ ok: false, error: "Weekly credits must be less than the gross weekly tuition rate." }, { status: 400 });
+  }
+  const invoiceItems = charge.chargeSource === "tuitionPlan" && child
+    ? tuitionInvoiceItems({ description: itemDescription, grossAmountCents: charge.amountCents, credits: tuitionCredits })
+    : [{ description: itemDescription, amountCents: charge.amountCents, productId: charge.productId }];
 
   const result = await prisma.$transaction((tx) =>
     createBillingInvoiceForFamily(tx, {
       familyId: familyAccess.family.id,
       dueDate,
       description: itemDescription,
-      items: [{ description: itemDescription, amountCents: charge.amountCents, productId: charge.productId }],
+      items: invoiceItems,
       customFields: {
         mode: "single",
         chargeSource: charge.chargeSource,
@@ -195,6 +206,12 @@ async function createSingleInvoice(user: CurrentBillingUser, body: Record<string
         billingPeriod,
         centerId: familyAccess.centerId,
         childId: child?.id ?? null,
+        ...(charge.chargeSource === "tuitionPlan" && child ? {
+          grossTuitionCents: charge.amountCents,
+          tuitionCredits,
+          tuitionCreditsTotalCents,
+          netTuitionCents: charge.amountCents - tuitionCreditsTotalCents,
+        } : {}),
         dedupeKey,
       },
     }),

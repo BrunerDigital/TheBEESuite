@@ -364,6 +364,8 @@ async function POSTHandler(request: NextRequest) {
       scope: "invoice",
       requestedPaymentMethodCategory,
       expectedAmountCents: invoice.totalCents,
+      expectedCheckoutTotalCents: invoice.totalCents,
+      expectedFeeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
     });
     if (!blocker.blocked && blocker.url) {
       return NextResponse.json({

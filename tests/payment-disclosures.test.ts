@@ -15,7 +15,7 @@ test("payment disclosure states that schools absorb Stripe costs and the 1 perce
   assert.match(PAYMENT_PROCESSING_RECOVERY_DISCLOSURE, /no added processing, convenience, service, platform, or application fee/i);
   assert.match(PAYMENT_PROCESSING_RECOVERY_CHECKOUT_DESCRIPTION, /no payment-processing fee/i);
   assert.match(PAYMENT_PROCESSING_RECOVERY_REVIEW_NOTE, /1% BEE Suite application fee reduce school proceeds/i);
-  assert.equal(PAYMENT_PROCESSING_RECOVERY_VERSION, "payment-processing-recovery-2026-06-09");
+  assert.equal(PAYMENT_PROCESSING_RECOVERY_VERSION, "school-paid-processing-2026-08-04-v1");
 });
 
 test("payment summary confirms that the parent has no processing fee", () => {

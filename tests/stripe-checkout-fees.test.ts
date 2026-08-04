@@ -136,3 +136,14 @@ test("no tenant location brand or caller can waive the platform-wide fee policy"
     assert.equal(card.applicationFeeAmountCents, 1_000);
   }
 });
+
+test("legacy application fee settings cannot stack on top of the one percent BEE Suite fee", () => {
+  for (const key of managedEnvKeys) delete process.env[key];
+  process.env.STRIPE_APPLICATION_FEE_BPS = "100";
+  process.env.STRIPE_APPLICATION_FEE_FIXED_CENTS = "25";
+
+  const amounts = getStripeCheckoutAmounts(100_000, { paymentMethodCategory: "card" });
+  assert.equal(amounts.parentProcessingRecoveryAmountCents, 0);
+  assert.equal(amounts.beeSuitePaymentOperationsFeeAmountCents, 1_000);
+  assert.equal(amounts.applicationFeeAmountCents, 1_000);
+});

@@ -235,10 +235,10 @@ export function getStripeApplicationFeeBps() {
 }
 
 export function getStripeApplicationFeeAmount(amountCents: number) {
-  const percentageFee = Math.round(amountCents * (getStripeApplicationFeeBps() / 10_000));
-  const fixedFee = nonNegativeIntEnv("STRIPE_APPLICATION_FEE_FIXED_CENTS");
-  const fee = percentageFee + fixedFee;
-  return Math.max(0, Math.min(fee, amountCents));
+  // Legacy application-fee overrides are ignored. The complete BEE Suite fee
+  // is the platform-wide 1% payment-operations fee calculated below.
+  void amountCents;
+  return 0;
 }
 
 export function getStripePaymentOperationsFeeAmount(amountCents: number, waived = false) {

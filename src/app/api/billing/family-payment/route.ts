@@ -622,6 +622,8 @@ async function POSTHandler(request: NextRequest) {
       scope: "family_balance",
       requestedPaymentMethodCategory: checkoutCategory(method),
       expectedAmountCents: amountCents,
+      expectedCheckoutTotalCents: amounts.checkoutTotalCents,
+      expectedFeeDisclosureVersion: PAYMENT_PROCESSING_RECOVERY_VERSION,
     });
     if (!blocker.blocked && blocker.url) {
       return NextResponse.json({

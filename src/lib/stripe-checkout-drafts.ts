@@ -50,15 +50,21 @@ export function stripeCheckoutDraftReplacementReason({
   pendingPayment,
   requestedPaymentMethodCategory,
   expectedAmountCents,
+  expectedCheckoutTotalCents,
+  expectedFeeDisclosureVersion,
 }: {
   session: StripeCheckoutSessionSnapshot;
   pendingPayment: {
     amountCents?: number | null;
     paymentMethodCategory?: string | null;
     requestedPaymentMethodCategory?: string | null;
+    checkoutTotalCents?: number | null;
+    feeDisclosureVersion?: string | null;
   };
   requestedPaymentMethodCategory?: StripePaymentMethodCategory | null;
   expectedAmountCents?: number | null;
+  expectedCheckoutTotalCents?: number | null;
+  expectedFeeDisclosureVersion?: string | null;
 }) {
   if (!isOpenUnpaidDraftSession(session)) return null;
   if (
@@ -68,6 +74,19 @@ export function stripeCheckoutDraftReplacementReason({
     pendingPayment.amountCents !== expectedAmountCents
   ) {
     return "superseded_amount" as const;
+  }
+  if (
+    typeof expectedCheckoutTotalCents === "number" &&
+    Number.isFinite(expectedCheckoutTotalCents) &&
+    pendingPayment.checkoutTotalCents !== expectedCheckoutTotalCents
+  ) {
+    return "superseded_fee_policy" as const;
+  }
+  if (
+    expectedFeeDisclosureVersion &&
+    pendingPayment.feeDisclosureVersion !== expectedFeeDisclosureVersion
+  ) {
+    return "superseded_fee_policy" as const;
   }
 
   const requestedCategory = normalizeCheckoutCategory(requestedPaymentMethodCategory);
@@ -117,6 +136,8 @@ export async function resolveStripeCheckoutDraftBlocker({
   scope = "invoice",
   requestedPaymentMethodCategory,
   expectedAmountCents,
+  expectedCheckoutTotalCents,
+  expectedFeeDisclosureVersion,
   now = new Date(),
 }: {
   payment: StripeCheckoutDraftPayment;
@@ -125,6 +146,8 @@ export async function resolveStripeCheckoutDraftBlocker({
   scope?: "invoice" | "family_balance";
   requestedPaymentMethodCategory?: StripePaymentMethodCategory | null;
   expectedAmountCents?: number | null;
+  expectedCheckoutTotalCents?: number | null;
+  expectedFeeDisclosureVersion?: string | null;
   now?: Date;
 }) {
   const pendingPayment = activeStripeCheckoutPaymentSummary(payment);
@@ -154,6 +177,8 @@ export async function resolveStripeCheckoutDraftBlocker({
     pendingPayment,
     requestedPaymentMethodCategory,
     expectedAmountCents,
+    expectedCheckoutTotalCents,
+    expectedFeeDisclosureVersion,
   });
   if (clearReason === "stale_open" || replacementReason) {
     const expired = await expireStripeCheckoutSession({ sessionId, connectedAccountId, tenantId });
@@ -177,6 +202,7 @@ export async function resolveStripeCheckoutDraftBlocker({
     finalClearReason === "expired" ||
     finalClearReason === "stale_open" ||
     finalClearReason === "superseded_amount" ||
+    finalClearReason === "superseded_fee_policy" ||
     finalClearReason === "superseded_payment_method"
   ) {
     await prisma.payment.update({

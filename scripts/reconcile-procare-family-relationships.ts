@@ -110,6 +110,14 @@ const REVIEWED_SOURCES = {
     accountSha: "7c7742b0a4a360977b0d84ba85ab1a343a9eba508d5ec093afebbeadcee2b20e",
     relationshipSha: "e21993bbc66ca81028e7d1b15622dd43d01ea3c38dea4c8d3a962435e6a98fc1",
   },
+  petersburg: {
+    centerId: "cmp4ewf8500446alwfm6uywyl",
+    centerName: "Kid City USA - Petersburg",
+    locationId: "Kid City USA - IN | Petersburg",
+    exportDate: "2026-08-04",
+    accountSha: "b07d8bdb377d874f742c50fb098c910a1977de41172fdf07e15184c4f169ec55",
+    relationshipSha: "9d0701e22cb33bb931a4c8097e65669b5fc2731a7c537b382b24356748177181",
+  },
 } as const satisfies Record<string, ReviewedSource>;
 
 type ReviewedSchoolKey = keyof typeof REVIEWED_SOURCES;

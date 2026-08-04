@@ -104,6 +104,11 @@ export type AiCommandCenterData = {
 
 type MessageMode = "family" | "broadcast";
 
+type AiChangePlan = {
+  proposalId: string;
+  entries: Array<{ action: string; targets: Array<{ id: string; label: string }>; patch: Record<string, unknown> }>;
+};
+
 function formatDate(value: Date | string, timeZone: string) {
   return formatZonedTimestamp(value, timeZone, "Recently");
 }
@@ -148,6 +153,8 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
   const [messageSubject, setMessageSubject] = useState("Update from the school");
   const [messageBody, setMessageBody] = useState("");
   const [commandText, setCommandText] = useState("What needs my attention today?");
+  const [commandResponse, setCommandResponse] = useState("");
+  const [pendingChangePlan, setPendingChangePlan] = useState<AiChangePlan | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [queueFilter, setQueueFilter] = useState("pending_review");
@@ -201,17 +208,49 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
   function runDirectorCommand() {
     const command = commandText.trim();
     if (!command) {
-      setErrorMessage("Tell Mr. Bee what you want to review or prepare.");
+      setErrorMessage("Tell Mr. Bee what you want to review, correct, or update.");
       return;
     }
-    if (/message|announce|family|parent/i.test(command)) {
+    startTransition(async () => {
       clearNotices();
-      setMessageBody(command);
-      setStatusMessage("Your request is ready in the message drafting studio below. Choose the audience and generate reviewable options.");
-      document.getElementById("ai-action-studio")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    generateSummary();
+      setCommandResponse("");
+      setPendingChangePlan(null);
+      try {
+        const json = await jsonRequest<{ ok: boolean; message: string; model: string; changes: Array<{ action: string; recordId: string; changedFields: string[] }>; requiresConfirmation?: boolean; proposalId?: string; plan?: AiChangePlan["entries"] }>("/api/ai/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "run_data_command", centerId, command, operationId: crypto.randomUUID() }),
+        });
+        setCommandResponse(json.message);
+        if (json.requiresConfirmation && json.proposalId && json.plan) {
+          setPendingChangePlan({ proposalId: json.proposalId, entries: json.plan });
+          setStatusMessage("Review the exact scope below. No data has changed yet.");
+        } else {
+          setStatusMessage("Mr. Bee completed the request without changing data.");
+        }
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "Mr. Bee could not complete the command.");
+      }
+    });
+  }
+
+  function resolveChangePlan(decision: "confirm" | "cancel") {
+    if (!pendingChangePlan) return;
+    startTransition(async () => {
+      clearNotices();
+      try {
+        const json = await jsonRequest<{ ok: boolean; message: string; changes?: Array<{ action: string; recordId: string }> }>("/api/ai/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "resolve_data_command_plan", proposalId: pendingChangePlan.proposalId, decision }),
+        });
+        setCommandResponse(json.message);
+        setPendingChangePlan(null);
+        setStatusMessage(decision === "confirm" ? `${json.changes?.length ?? 0} confirmed change${json.changes?.length === 1 ? "" : "s"} completed and audited.` : "Change plan cancelled. No data was changed.");
+      } catch (error) {
+        setErrorMessage(error instanceof Error ? error.message : "The AI change plan could not be resolved.");
+      }
+    });
   }
 
   function draftLeadFollowUp() {
@@ -347,7 +386,7 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
             </div>
             <div className="w-full lg:w-72">
               <Label className="sr-only">School scope</Label>
-              <Select value={centerId} onValueChange={(value) => value && setCenterId(value)}>
+              <Select value={centerId} onValueChange={(value) => { if (value) { setCenterId(value); setPendingChangePlan(null); } }}>
                 <SelectTrigger className="h-11 w-full border-zinc-700 bg-zinc-900 text-white">
                   <SelectValue placeholder="Choose school" />
                 </SelectTrigger>
@@ -366,15 +405,46 @@ export function AiCommandCenter({ data }: { data: AiCommandCenterData }) {
                 <Input aria-label="Director command" value={commandText} onChange={(event) => setCommandText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runDirectorCommand(); }} className="h-11 border-0 bg-transparent px-0 text-base text-white shadow-none placeholder:text-zinc-500 focus-visible:ring-0" placeholder="Ask for a summary, plan, follow-up, or message…" />
               </div>
               <Button onClick={runDirectorCommand} disabled={isPending} className="h-11 bg-amber-400 px-6 text-black hover:bg-amber-300">
-                <Send data-icon="inline-start" /> Run command
+                <Send data-icon="inline-start" /> Review command
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-800 pt-3">
-              {["Daily operating brief", "Enrollment follow-up plan", "Draft a family update", "Billing exceptions"].map((command) => (
+              {["What needs my attention today?", "Update the Smith family's open invoice to $…", "Move Jordan Lee to enrolled in…", "Correct this school's main phone to…"].map((command) => (
                 <button key={command} type="button" onClick={() => setCommandText(command)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition hover:border-amber-400/60 hover:text-amber-300">{command}</button>
               ))}
             </div>
           </div>
+          {commandResponse ? (
+            <div className="mt-4 rounded-2xl border border-zinc-700 bg-zinc-900/80 p-4 text-sm leading-6 text-zinc-200" aria-live="polite">
+              <div className="mb-1 flex items-center gap-2 font-medium text-amber-300"><Bot className="size-4" /> Mr. Bee</div>
+              <p className="whitespace-pre-wrap">{commandResponse}</p>
+            </div>
+          ) : null}
+          {pendingChangePlan ? (
+            <div className="mt-4 rounded-2xl border border-amber-400/60 bg-amber-400/5 p-4" aria-live="polite">
+              <div className="flex items-start gap-3">
+                <ShieldCheck className="mt-0.5 size-5 shrink-0 text-amber-300" />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-amber-200">Confirm the exact changes</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-400">Nothing will be changed until you confirm. Review every target and new value.</p>
+                  <div className="mt-3 space-y-3">
+                    {pendingChangePlan.entries.map((entry, index) => (
+                      <div key={`${entry.action}-${index}`} className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-3">
+                        <div className="text-sm font-medium text-white">{entry.action.replaceAll("_", " ")}</div>
+                        <div className="mt-1 text-xs text-zinc-400">{entry.targets.length} record{entry.targets.length === 1 ? "" : "s"}: {entry.targets.slice(0, 8).map((target) => target.label).join(", ")}{entry.targets.length > 8 ? `, and ${entry.targets.length - 8} more` : ""}</div>
+                        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-black/40 p-2 text-xs text-zinc-300">{JSON.stringify(entry.patch, null, 2)}</pre>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button onClick={() => resolveChangePlan("confirm")} disabled={isPending} className="bg-amber-400 text-black hover:bg-amber-300"><CheckCircle2 data-icon="inline-start" /> Confirm and apply</Button>
+                    <Button onClick={() => resolveChangePlan("cancel")} disabled={isPending} variant="outline" className="border-zinc-600 text-zinc-200"><XCircle data-icon="inline-start" /> Cancel</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <p className="mt-3 text-xs leading-5 text-zinc-500">AI actions use the selected school and the same director-level boundaries as the dashboard, including profile, enrollment, and open-invoice changes. Access, invitations, PINs, payment submission/refunds, payouts, autopay, messages, deletes, and provider settings remain blocked.</p>
         </div>
       </section>
 

@@ -5,6 +5,8 @@ export type BillingInvoiceLineItem = {
   description: string;
   amountCents: number;
   productId?: string | null;
+  ledgerType?: string;
+  creditCategory?: string;
 };
 
 function clean(value: unknown) {
@@ -76,19 +78,45 @@ export async function createBillingInvoiceForFamily(
     data: { balanceCents: { increment: totalCents } },
   });
 
-  await tx.ledgerEntry.create({
-    data: {
-      billingAccountId: billingAccount.id,
-      invoiceId: invoice.id,
-      type: "invoice",
-      description: input.description,
-      amountCents: totalCents,
-      balanceAfterCents: updatedAccount.balanceCents,
-      sourceSystem: "bee_suite",
-      externalId: `invoice:${invoice.id}`,
-      metadata: metadataJson(input.customFields),
-    },
-  });
+  const itemizedLedger = input.items.some((item) => item.ledgerType || item.creditCategory);
+  if (itemizedLedger) {
+    let runningBalance = updatedAccount.balanceCents - totalCents;
+    for (const [index, item] of input.items.entries()) {
+      runningBalance += item.amountCents;
+      await tx.ledgerEntry.create({
+        data: {
+          billingAccountId: billingAccount.id,
+          invoiceId: invoice.id,
+          type: item.ledgerType || "invoice",
+          description: item.description,
+          amountCents: item.amountCents,
+          balanceAfterCents: runningBalance,
+          sourceSystem: "bee_suite",
+          externalId: `invoice:${invoice.id}:item:${index}`,
+          metadata: metadataJson({
+            ...input.customFields,
+            invoiceTotalCents: totalCents,
+            lineItemIndex: index,
+            creditCategory: item.creditCategory ?? null,
+          }),
+        },
+      });
+    }
+  } else {
+    await tx.ledgerEntry.create({
+      data: {
+        billingAccountId: billingAccount.id,
+        invoiceId: invoice.id,
+        type: "invoice",
+        description: input.description,
+        amountCents: totalCents,
+        balanceAfterCents: updatedAccount.balanceCents,
+        sourceSystem: "bee_suite",
+        externalId: `invoice:${invoice.id}`,
+        metadata: metadataJson(input.customFields),
+      },
+    });
+  }
 
   return { invoice, created: true as const, totalCents };
 }

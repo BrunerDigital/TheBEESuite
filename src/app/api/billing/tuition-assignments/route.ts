@@ -9,6 +9,7 @@ import {
   WEEKLY_TUITION_AUTOBILL_DAY,
 } from "@/lib/billing-workflows";
 import { prisma } from "@/lib/prisma";
+import { normalizeTuitionCredits, totalTuitionCreditsCents } from "@/lib/tuition-credits";
 
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
@@ -100,6 +101,14 @@ async function POSTHandler(request: NextRequest) {
   const billingStartPeriod = defaultRecurringBillingPeriod(body.billingStartPeriod, new Date(), cadence);
   const updatedAt = new Date().toISOString();
   const voucherFunded = isVoucherFundedTuitionAmount(plan.amountCents);
+  const tuitionCredits = normalizeTuitionCredits(body.tuitionCredits);
+  const tuitionCreditsTotalCents = totalTuitionCreditsCents(tuitionCredits);
+  if (voucherFunded && tuitionCreditsTotalCents > 0) {
+    return NextResponse.json({ ok: false, error: "Credits cannot be added to a $0 voucher-funded tuition assignment." }, { status: 400 });
+  }
+  if (!voucherFunded && tuitionCreditsTotalCents >= plan.amountCents) {
+    return NextResponse.json({ ok: false, error: "Weekly credits must be less than the gross weekly tuition rate." }, { status: 400 });
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedChild = await tx.child.update({
@@ -114,6 +123,9 @@ async function POSTHandler(request: NextRequest) {
           tuitionPlanCadence: cadence,
           tuitionBillingCadence: cadence,
           tuitionPlanAmountCents: plan.amountCents,
+          tuitionCredits,
+          tuitionCreditsTotalCents,
+          tuitionNetAmountCents: plan.amountCents - tuitionCreditsTotalCents,
           tuitionFundingType: voucherFunded ? "voucher" : "family",
           tuitionAutobillEligible: !voucherFunded,
           tuitionBillingDay: billingDay,
@@ -181,6 +193,9 @@ async function POSTHandler(request: NextRequest) {
       childId,
       tuitionPlanId: plan.id,
       amountCents: plan.amountCents,
+      tuitionCredits,
+      tuitionCreditsTotalCents,
+      tuitionNetAmountCents: plan.amountCents - tuitionCreditsTotalCents,
       fundingType: voucherFunded ? "voucher" : "family",
       invoicesScheduled: !voucherFunded,
       cadence,

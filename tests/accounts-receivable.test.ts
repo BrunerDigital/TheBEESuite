@@ -156,6 +156,7 @@ test("dashboard and main shell use the same protected school-balance surface", (
   const shell = readFileSync("src/components/app-shell.tsx", "utf8");
   const dashboardPage = readFileSync("src/app/dashboard/page.tsx", "utf8");
   const dashboard = readFileSync("src/components/dashboard.tsx", "utf8");
+  const sheet = readFileSync("src/components/accounts-receivable-sheet.tsx", "utf8");
 
   assert.match(route, /Authentication required/);
   assert.match(route, /canViewAccountBalances\(user\)/);
@@ -164,9 +165,11 @@ test("dashboard and main shell use the same protected school-balance surface", (
   assert.match(shell, /canViewAccountBalances\(currentUser\)[\s\S]*AccountsReceivableSheet executive=/);
   assert.match(dashboardPage, /accountsReceivableFamilySelect/);
   assert.match(dashboardPage, /accountsReceivableSummaryFamilySelect/);
-  assert.equal((dashboardPage.match(/where: currentFamilyWhere,/g) ?? []).length >= 2, true);
+  assert.equal((dashboardPage.match(/(?:where: |family: )currentFamilyWhere,/g) ?? []).length >= 3, true);
   assert.match(dashboard, /dashboard-director-account-balances/);
   assert.match(dashboard, /dashboard-billing-account-balances/);
   assert.match(dashboard, /dashboard-\$\{lens\}-executive-account-balances/);
   assert.match(dashboard, /Current family accounts, with balances owed listed first/);
+  assert.match(sheet, /Current family accounts across your visible schools/);
+  assert.match(sheet, /Current family accounts in your school/);
 });

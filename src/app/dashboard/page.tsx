@@ -240,9 +240,7 @@ export default async function DashboardPage() {
     }),
     prisma.billingAccount.aggregate({
       where: {
-        family: {
-          centerId: scopedCenterFilter,
-        },
+        family: currentFamilyWhere,
       },
       _sum: {
         balanceCents: true,

@@ -36,6 +36,11 @@ import {
   applySucceededStripeInvoicePayment,
 } from "@/lib/stripe-payment-application";
 import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
+import {
+  AGENCY_LEDGER_ENTRY_TYPES,
+  AGENCY_LEDGER_SOURCE_SYSTEM,
+  parentBalanceNeedsResponsibilityReview,
+} from "@/lib/parent-billing-visibility";
 
 export type AutopayRunResultStatus = "would_charge" | "paid" | "processing" | "failed" | "skipped";
 
@@ -172,12 +177,23 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
           balanceCents: true,
           autopayPlaceholder: true,
           customFields: true,
+          ledgerEntries: {
+            where: {
+              OR: [
+                { type: { in: [...AGENCY_LEDGER_ENTRY_TYPES] } },
+                { sourceSystem: AGENCY_LEDGER_SOURCE_SYSTEM },
+              ],
+            },
+            select: { type: true, sourceSystem: true, amountCents: true },
+          },
           family: {
             select: {
               id: true,
               name: true,
               billingEmail: true,
               centerId: true,
+              customFields: true,
+              children: { select: { customFields: true } },
             },
           },
         },
@@ -318,6 +334,23 @@ export async function processAutopayInvoices(input: ProcessAutopayInput = {}): P
     const billingApproval = stripeSchoolBillingApproval({ customFields: center.customFields, centerName: center.name });
     if (!billingApproval.approved) {
       results.push({ ...baseResult, status: "skipped", reason: billingApproval.blockingReason });
+      continue;
+    }
+
+    if (parentBalanceNeedsResponsibilityReview({
+      accountBalanceCents: invoice.billingAccount.balanceCents,
+      agencyLedgerEntries: invoice.billingAccount.ledgerEntries,
+      responsibilityEvidence: [
+        invoice.billingAccount.customFields,
+        family.customFields,
+        ...family.children.map((child) => child.customFields),
+      ],
+    })) {
+      results.push({
+        ...baseResult,
+        status: "skipped",
+        reason: "Automated payment is blocked until the school separates agency and family responsibility.",
+      });
       continue;
     }
 

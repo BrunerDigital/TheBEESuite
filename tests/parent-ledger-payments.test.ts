@@ -48,6 +48,18 @@ test("parent invoice data and checkout do not expose or charge agency responsibi
   assert.match(workspace, /Pay Product by Card/);
 });
 
+test("automated payment processing blocks unresolved subsidy responsibility before applying credit or charging Stripe", () => {
+  const source = readFileSync("src/lib/autopay-processing.ts", "utf8");
+  const holdIndex = source.indexOf("parentBalanceNeedsResponsibilityReview({");
+  const creditIndex = source.indexOf("allocateAccountCreditToInvoice({", holdIndex);
+  const stripeIndex = source.indexOf("createStripeOffSessionPaymentIntent", holdIndex);
+
+  assert.ok(holdIndex > 0);
+  assert.ok(creditIndex > holdIndex);
+  assert.ok(stripeIndex > holdIndex);
+  assert.match(source, /Automated payment is blocked until the school separates agency and family responsibility/);
+});
+
 test("director billing keeps agency amounts and payment controls", () => {
   const workbench = readFileSync("src/components/billing-workbench.tsx", "utf8");
   const operations = readFileSync("src/components/live-ops-pages.tsx", "utf8");

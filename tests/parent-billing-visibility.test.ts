@@ -11,6 +11,9 @@ import {
 
 test("subsidy evidence without a separated agency ledger fails closed", () => {
   assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "voucher" }), true);
+  assert.equal(hasSubsidyResponsibilityEvidence({ tuitionFundingType: "family" }), false);
+  assert.equal(hasSubsidyResponsibilityEvidence({ agencyResponsibilityCents: 0 }), false);
+  assert.equal(hasSubsidyResponsibilityEvidence({ agencyResponsibilityCents: 12_000 }), true);
   assert.equal(parentBalanceNeedsResponsibilityReview({
     accountBalanceCents: 157_241,
     agencyLedgerEntries: [],

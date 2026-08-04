@@ -57,6 +57,39 @@ type ApiLoggingOptions = {
   omitRequestBody?: boolean;
 };
 
+export type OperationalAnomaly =
+  | "database_unreachable"
+  | "auth_rate_limited"
+  | "push_delivery_rejected"
+  | "provider_delivery_failure"
+  | "application_error";
+
+export function classifyOperationalAnomaly(
+  context: string,
+  error: unknown,
+  metadata: Record<string, unknown> = {},
+): { anomaly: OperationalAnomaly; severity: "warning" | "critical" } {
+  const errorRecord = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const metadataStatus = Number(metadata.status ?? metadata.responseStatus);
+  const status = Number.isInteger(metadataStatus) ? metadataStatus : statusFromError(error);
+  const code = String(errorRecord.code ?? metadata.errorCode ?? "").toUpperCase();
+  const normalizedContext = context.toLowerCase();
+
+  if (code === "P1001" || normalizedContext.includes("prisma") || normalizedContext.includes("database")) {
+    return { anomaly: "database_unreachable", severity: "critical" };
+  }
+  if (status === 429 && (normalizedContext.includes("auth") || normalizedContext.includes("password"))) {
+    return { anomaly: "auth_rate_limited", severity: "warning" };
+  }
+  if (normalizedContext.includes("push") && status >= 400) {
+    return { anomaly: "push_delivery_rejected", severity: status >= 500 ? "critical" : "warning" };
+  }
+  if ((normalizedContext.includes("sendgrid") || normalizedContext.includes("twilio") || normalizedContext.includes("provider")) && status >= 400) {
+    return { anomaly: "provider_delivery_failure", severity: status >= 500 ? "critical" : "warning" };
+  }
+  return { anomaly: "application_error", severity: status >= 500 ? "critical" : "warning" };
+}
+
 type LogPayload = {
   event: "api.request";
   requestId: string;
@@ -264,9 +297,12 @@ function logErrorPayload(payload: Omit<LogPayload, "response">, error: unknown, 
 export function logOperationalError(context: string, error: unknown, metadata: Record<string, unknown> = {}) {
   if (process.env.OPERATIONAL_ERROR_LOGGING === "off") return;
 
+  const classification = classifyOperationalAnomaly(context, error, metadata);
   console.error(
     JSON.stringify({
       event: "operational.error",
+      anomaly: classification.anomaly,
+      severity: classification.severity,
       context: compactString(context),
       errorType: error instanceof Error ? error.name : typeof error,
       status: statusFromError(error),
@@ -326,6 +362,7 @@ export function withApiLogging<T extends ApiRouteHandler>(method: string, handle
       if (request) logPayload(await buildApiLogPayload(request, method, response, startedAt, options));
       return response;
     } catch (error) {
+      logOperationalError("api.request.unhandled", error, { status: statusFromError(error) });
       if (request) {
         const url = new URL(request.url);
         const basePayload: Omit<LogPayload, "response"> = {

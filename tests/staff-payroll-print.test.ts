@@ -7,6 +7,7 @@ import {
   clockEditRowsFromSavedEvents,
   clockEditRowsForEditor,
   filterClockEditRowsByPayPeriod,
+  filterPayrollStaffByCenter,
 } from "@/components/staff-management-panel";
 import { formatZonedTimestamp, zonedDateInputToUtc, zonedDateKey, zonedDateTimeLocalToUtc, zonedDateTimeLocalValue } from "@/lib/zoned-date-time";
 
@@ -178,8 +179,27 @@ test("print reports remove hidden dashboard layout instead of leaving blank page
 test("payroll rows exclude previous employees", async () => {
   const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
   const payrollRows = source.slice(source.indexOf("const staffHoursRows"), source.indexOf("const staffHoursTotalMinutes"));
-  assert.match(payrollRows, /return activeStaff/);
+  assert.match(payrollRows, /filterPayrollStaffByCenter\(activeStaff, payrollCenterId\)/);
   assert.doesNotMatch(payrollRows, /return allTeacherRows/);
+});
+
+test("executive payroll school filter scopes time card rows", () => {
+  const staff = [
+    { id: "one", centerId: "school-a" },
+    { id: "two", centerId: "school-b" },
+  ];
+
+  assert.deepEqual(filterPayrollStaffByCenter(staff, "all").map((row) => row.id), ["one", "two"]);
+  assert.deepEqual(filterPayrollStaffByCenter(staff, "school-b").map((row) => row.id), ["two"]);
+  assert.deepEqual(filterPayrollStaffByCenter(staff, "not-authorized").map((row) => row.id), []);
+});
+
+test("executive payroll school filter scopes screen, print, and submitted summaries", async () => {
+  const source = await readFile("src/components/staff-management-panel.tsx", "utf8");
+  assert.match(source, /payroll-school-filter/);
+  assert.match(source, /filterPayrollStaffByCenter\(activeStaff, payrollCenterId\)/);
+  assert.match(source, /const centerSummaries = payrollCenters\.map/);
+  assert.match(source, /payrollCenters\.length.*selected school/);
 });
 
 test("manual payroll edits cannot be lost by switching staff before saving", async () => {

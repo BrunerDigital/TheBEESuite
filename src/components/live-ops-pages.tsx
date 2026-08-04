@@ -3508,6 +3508,7 @@ export type StaffPageData = {
     certifications: Array<{ id: string; name: string; status: string; expiresAt: Date | string | null }>;
   }>;
   canManageCompensation: boolean;
+  canFilterPayrollByCenter: boolean;
   stats: {
     total: number;
     activeUsers: number;
@@ -3628,6 +3629,7 @@ export function StaffPage({ data }: { data: StaffPageData }) {
           schedules={data.schedules}
           timeClockSummaryGeneratedAt={data.timeClockSummaryGeneratedAt}
           canManageCompensation={data.canManageCompensation}
+          canFilterPayrollByCenter={data.canFilterPayrollByCenter}
         />
       <Card className="glass-panel">
         <CardHeader>

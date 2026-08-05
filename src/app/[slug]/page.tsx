@@ -3051,6 +3051,7 @@ async function renderLivePage(
       billingFamilies,
       billingProducts,
       tuitionPlans,
+      billingClassrooms,
       billingStripeConfigured,
       billingStripeWebhookConfigured,
     ] = await Promise.all([
@@ -3166,7 +3167,16 @@ async function renderLivePage(
           children: {
             where: currentlyEnrolledChildWhere(),
             orderBy: { fullName: "asc" },
-            select: { id: true, fullName: true, ageGroup: true, enrollmentStatus: true, customFields: true },
+            select: {
+              id: true,
+              fullName: true,
+              ageGroup: true,
+              enrollmentStatus: true,
+              classroomId: true,
+              startDate: true,
+              schedule: true,
+              customFields: true,
+            },
           },
         },
       }),
@@ -3175,6 +3185,11 @@ async function renderLivePage(
         where: { centerId: scopedCenterIds },
         orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
         take: 500,
+      }),
+      prisma.classroom.findMany({
+        where: { centerId: scopedCenterIds },
+        orderBy: [{ centerId: "asc" }, { ageGroup: "asc" }, { name: "asc" }],
+        select: { id: true, centerId: true, name: true, ageGroup: true },
       }),
       getStripeSecretKey({ tenantId: user.tenantId }).then(Boolean),
       getStripeWebhookSecret({ tenantId: user.tenantId }).then(Boolean),
@@ -3257,6 +3272,12 @@ async function renderLivePage(
     const requestedBillingCenterId = firstSearchParam(searchParams.centerId) || "";
     const requestedBillingChildId = firstSearchParam(searchParams.childId) || "";
     const requestedBillingSearch = firstSearchParam(searchParams.q) || "";
+    const billingClassroomsByCenter = new Map<string, Array<{ id: string; name: string; ageGroup: string }>>();
+    for (const classroom of billingClassrooms) {
+      const current = billingClassroomsByCenter.get(classroom.centerId) ?? [];
+      current.push({ id: classroom.id, name: classroom.name, ageGroup: classroom.ageGroup });
+      billingClassroomsByCenter.set(classroom.centerId, current);
+    }
 
     return (
       <BillingInvoicesPage
@@ -3322,6 +3343,9 @@ async function renderLivePage(
                 fullName: child.fullName,
                 ageGroup: child.ageGroup,
                 enrollmentStatus: child.enrollmentStatus,
+                classroomId: child.classroomId,
+                startDate: child.startDate,
+                careScheduleType: childScheduleClassification({ schedule: child.schedule, customFields: child.customFields }),
                 tuitionAssignment: tuitionAssignmentFromCustomFields(child.customFields),
               })),
             })),
@@ -3329,6 +3353,7 @@ async function renderLivePage(
               id: center.id,
               name: center.name,
               crmLocationId: center.crmLocationId,
+              classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
               checkoutReadiness: stripeCheckoutReadiness({
                 customFields: center.customFields,

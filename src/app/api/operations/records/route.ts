@@ -879,39 +879,71 @@ async function POSTHandler(request: NextRequest) {
       const guard = classroomFamilyGuard(centerId, classroom.centerId);
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    const existingChild = id ? await prisma.child.findUnique({ where: { id }, select: { familyId: true, dateOfBirth: true, customFields: true } }) : null;
-    const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
-    const existingCustomFields = jsonObject(existingChild?.customFields);
-    const customFields = ["full_time", "part_time"].includes(careScheduleType)
-      ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
-      : Object.keys(existingCustomFields).length
-        ? existingCustomFields as Prisma.InputJsonObject
-        : undefined;
-    const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
-    const data = {
-      familyId,
-      classroomId: isCurrentlyEnrolledStatus(enrollmentStatus) ? classroomId : null,
-      fullName: clean(body.name),
-      preferredName: clean(body.preferredName) || null,
-      dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? existingChild?.dateOfBirth ?? new Date("2021-01-01T12:00:00.000Z"),
-      ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
-      enrollmentStatus,
-      startDate: parseDate(body.startDate),
-      schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
-      photoVideoPermission: Boolean(body.photoVideoPermission),
-      fieldTripPermission: Boolean(body.fieldTripPermission),
-      napNotes: clean(body.napNotes) || null,
-      feedingNotes: clean(body.feedingNotes) || null,
-      pottyNotes: clean(body.pottyNotes) || null,
-      developmentalNotes: clean(body.body) || null,
-      customFields,
-    };
-    if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
+    const existingChild = id ? await prisma.child.findUnique({
+      where: { id },
+      select: { familyId: true, dateOfBirth: true, customFields: true, enrollmentStatus: true },
+    }) : null;
     if (id) {
       const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existingChild?.familyId, scopeLabel: "family" });
       if (!guard.ok) return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status });
     }
-    result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+    const enrollmentContextOnly = clean(body.updateScope) === "enrollment_context";
+    if (enrollmentContextOnly) {
+      if (!id || !existingChild) return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
+      const ageGroup = clean(body.ageGroup);
+      if (!ageGroup) return NextResponse.json({ ok: false, error: "Program or age group is required." }, { status: 400 });
+      if (isCurrentlyEnrolledStatus(existingChild.enrollmentStatus) && !classroomId) {
+        return NextResponse.json({ ok: false, error: "A classroom is required for a currently enrolled child." }, { status: 400 });
+      }
+      const careScheduleType = clean(body.careScheduleType).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const customFields = { ...jsonObject(existingChild.customFields) };
+      if (careScheduleType === "full_time" || careScheduleType === "part_time") {
+        customFields.careScheduleType = careScheduleType;
+        customFields.fteScheduleType = careScheduleType;
+      } else {
+        delete customFields.careScheduleType;
+        delete customFields.fteScheduleType;
+      }
+      result = await prisma.child.update({
+        where: { id },
+        data: {
+          classroomId,
+          ageGroup,
+          startDate: parseDate(body.startDate),
+          customFields: customFields as Prisma.InputJsonObject,
+        },
+      });
+      auditMetadata.updateScope = "enrollment_context";
+    } else {
+      const careScheduleType = clean(body.careScheduleType || body.fteScheduleType || body.fullTimePartTime).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+      const existingCustomFields = jsonObject(existingChild?.customFields);
+      const customFields = ["full_time", "part_time"].includes(careScheduleType)
+        ? { ...existingCustomFields, careScheduleType, fteScheduleType: careScheduleType } as Prisma.InputJsonObject
+        : Object.keys(existingCustomFields).length
+          ? existingCustomFields as Prisma.InputJsonObject
+          : undefined;
+      const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
+      const data = {
+        familyId,
+        classroomId: isCurrentlyEnrolledStatus(enrollmentStatus) ? classroomId : null,
+        fullName: clean(body.name),
+        preferredName: clean(body.preferredName) || null,
+        dateOfBirth: parseDate(body.dateOfBirth || body.expiresAt) ?? existingChild?.dateOfBirth ?? new Date("2021-01-01T12:00:00.000Z"),
+        ageGroup: clean(body.ageGroup) || clean(body.type) || "Preschool",
+        enrollmentStatus,
+        startDate: parseDate(body.startDate),
+        schedule: clean(body.schedule) ? { notes: clean(body.schedule) } : undefined,
+        photoVideoPermission: Boolean(body.photoVideoPermission),
+        fieldTripPermission: Boolean(body.fieldTripPermission),
+        napNotes: clean(body.napNotes) || null,
+        feedingNotes: clean(body.feedingNotes) || null,
+        pottyNotes: clean(body.pottyNotes) || null,
+        developmentalNotes: clean(body.body) || null,
+        customFields,
+      };
+      if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
+      result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+    }
   } else if (entity === "childMerge") {
     const primaryChildId = clean(body.primaryChildId) || clean(body.childId);
     const duplicateChildId = clean(body.duplicateChildId) || clean(body.relatedId);

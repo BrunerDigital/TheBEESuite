@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, scope: input.scope, accepted: 0, failed: 0, providerSuppressed: preflight.suppressed, remainingSendableNow: plan.eligible.length });
     }
     const actorUserIdByCenter = await loadActorUserIds(plan, input.scope);
-    const result = await sendWave({ ...plan, eligible: batch }, actorUserIdByCenter);
+    const result = await sendWave({ ...plan, eligible: batch }, actorUserIdByCenter, { concurrency: 3 });
     const postPlan = await buildPlan({ scope: input.scope, useDirectProfileEvidence: true });
     return NextResponse.json({
       ok: result.totals.failed === 0,

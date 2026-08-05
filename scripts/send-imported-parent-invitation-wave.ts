@@ -652,7 +652,9 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
 export async function sendWave(
   plan: Awaited<ReturnType<typeof buildPlan>>,
   actorUserIdByCenter: Map<string, string>,
+  { concurrency = 1 }: { concurrency?: number } = {},
 ) {
+  const boundedConcurrency = Math.min(Math.max(Math.floor(concurrency), 1), 3);
   const resultByCenter = new Map<string, { accepted: number; failed: number; initialPasswordVerified: number; existingAccountInvites: number }>();
   let consecutiveFailures = 0;
   for (const center of plan.centers) {
@@ -661,25 +663,34 @@ export async function sendWave(
     const candidates = plan.eligible.filter((candidate) => candidate.centerId === center.id);
     const result = { accepted: 0, failed: 0, initialPasswordVerified: 0, existingAccountInvites: 0 };
     resultByCenter.set(center.id, result);
-    for (const candidate of candidates) {
-      try {
-        const sent = await sendCandidate({ candidate, center, actorUserId });
-        if (sent.accepted) {
-          result.accepted += 1;
-          if (sent.initialPasswordIssued) result.initialPasswordVerified += 1;
-          else result.existingAccountInvites += 1;
-          consecutiveFailures = 0;
+    for (let offset = 0; offset < candidates.length; offset += boundedConcurrency) {
+      const outcomes = await Promise.all(candidates.slice(offset, offset + boundedConcurrency).map(async (candidate) => {
+        try {
+          return { sent: await sendCandidate({ candidate, center, actorUserId }), error: null };
+        } catch (error) {
+          return { sent: null, error };
+        }
+      }));
+      for (const outcome of outcomes) {
+        if (outcome.sent) {
+          const sent = outcome.sent;
+          if (sent.accepted) {
+            result.accepted += 1;
+            if (sent.initialPasswordIssued) result.initialPasswordVerified += 1;
+            else result.existingAccountInvites += 1;
+            consecutiveFailures = 0;
+          } else {
+            result.failed += 1;
+            consecutiveFailures += 1;
+          }
         } else {
+          const message = outcome.error instanceof Error ? outcome.error.message : "unknown_error";
+          if (message.startsWith("critical_")) throw outcome.error;
           result.failed += 1;
           consecutiveFailures += 1;
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "unknown_error";
-        if (message.startsWith("critical_")) throw error;
-        result.failed += 1;
-        consecutiveFailures += 1;
+        if (consecutiveFailures >= 3) throw new Error("Critical stop: three consecutive invitation failures.");
       }
-      if (consecutiveFailures >= 3) throw new Error("Critical stop: three consecutive invitation failures.");
     }
     console.log(JSON.stringify({
       progress: { location: center.crmLocationId ?? center.name, planned: candidates.length, ...result },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildRenderedProcareReportRowsFromFiles,
+  parseRenderedProcareBalanceRows,
   preparedRenderedProcareDatasetCoverage,
 } from "@/lib/procare-rendered-report-import";
 
@@ -183,4 +184,44 @@ test("prepared rendered CSVs retain their reviewed source coverage manifest", ()
   ].join("\n");
 
   assert.deepEqual(preparedRenderedProcareDatasetCoverage(prepared), manifest);
+});
+
+test("rendered balance reports retain every account row, hidden state, and signed cents", () => {
+  const source = Buffer.from([
+    row({ 1: "Account Balance Summary - All Accounts (Primary & Agency)", 10: "[*ALLEN] Allen, Euricka - Hidden", 11: "2,934.60" }),
+    row({ 10: "[BROWN] Brown, Jordan", 11: "(125.25)" }),
+    row({ 10: "[ZERO] Zero, Family", 11: "0.00" }),
+  ].join("\n"));
+
+  assert.deepEqual(parseRenderedProcareBalanceRows(source), [
+    { accountKey: "ALLEN", payerName: "Allen, Euricka", hidden: true, balanceCents: 293460 },
+    { accountKey: "BROWN", payerName: "Brown, Jordan", hidden: false, balanceCents: -12525 },
+    { accountKey: "ZERO", payerName: "Zero, Family", hidden: false, balanceCents: 0 },
+  ]);
+});
+
+test("rendered imports disambiguate shared truncated account keys by payer name", () => {
+  const files = new Map<string, Buffer>([
+    ["accounts.csv", Buffer.from([
+      row({ 3: "Account Information Sheet", 6: "[BROWN]", 9: "Brown, Carson", 15: "Brown, Avery", 18: "DOB: 1/2/2022" }),
+      row({ 3: "Account Information Sheet", 6: "[BROWN]", 9: "Mckenzie, Bernadette", 15: "Mckenzie, Casey", 18: "DOB: 2/3/2022" }),
+    ].join("\n"))],
+    ["relationships.csv", Buffer.from([
+      row({ 2: "Child Registration Information", 5: "Brown, Avery", 6: "DOB: 1/2/2022", 15: "Brown, Carson", 16: "Parent" }),
+      row({ 2: "Child Registration Information", 5: "Mckenzie, Casey", 6: "DOB: 2/3/2022", 15: "Mckenzie, Bernadette", 16: "Parent" }),
+    ].join("\n"))],
+    ["balances.csv", Buffer.from([
+      row({ 1: "Account Balance Summary", 10: "[BROWN] Brown, Carson", 11: "1,262.00" }),
+      row({ 1: "Account Balance Summary", 10: "[BROWN] Brown, Carson", 11: "1,262.00" }),
+      row({ 1: "Account Balance Summary", 10: "[BROWN] Mckenzie, Bernadette", 11: "7,517.15" }),
+    ].join("\n"))],
+  ]);
+
+  const result = buildRenderedProcareReportRowsFromFiles(files);
+  assert.ok(result);
+  assert.deepEqual(result.records.map((record) => [record["family name"], record.balance]), [
+    ["Carson Brown Family", "1262.00"],
+    ["Bernadette Mckenzie Family", "7517.15"],
+  ]);
+  assert.equal(result.datasetCoverage.sourceRows.balances, 2);
 });

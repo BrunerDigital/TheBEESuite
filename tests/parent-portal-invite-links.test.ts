@@ -158,6 +158,9 @@ test("temporary production invitation runner is token-gated and provider-preflig
   assert.match(source, /recipient_email/);
   assert.match(source, /senderReady/);
   assert.match(source, /signedEventWebhook\.verificationKeyDeployed/);
+  assert.match(source, /user\/webhooks\/event\/settings\/all/);
+  assert.match(source, /settings\/signed\/\$\{encodeURIComponent\(webhookId\)\}/);
+  assert.match(source, /SendGrid did not return an Event Webhook ID/);
   assert.match(source, /acknowledgePriorInactive/);
   assert.match(source, /buildPlan\(\{ scope: input\.scope, useDirectProfileEvidence: true \}\)/);
   assert.doesNotMatch(source, /console\.log\([^\n]*(authorization|token)/i);

@@ -31,16 +31,23 @@ function operationAuthorized(request: NextRequest) {
 async function sendGridRequest(path: string, init?: RequestInit) {
   const apiKey = clean(process.env.SENDGRID_API_KEY);
   if (!apiKey) throw new Error("SendGrid is not configured in the production runtime.");
-  const response = await fetch(`https://api.sendgrid.com${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(20_000),
-  });
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    response = await fetch(`https://api.sendgrid.com${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        ...(init?.body ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (response.status !== 429 || attempt === 3) break;
+    const retryAfterSeconds = Math.min(Math.max(Number(response.headers.get("retry-after")) || 1, 1), 10);
+    await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1_000));
+  }
+  if (!response) throw new Error(`SendGrid ${path} did not return a response.`);
   const text = await response.text();
   if (!response.ok) throw new Error(`SendGrid ${path} returned ${response.status}.`);
   let data: unknown = null;
@@ -136,43 +143,42 @@ async function configureSignedEventWebhook() {
 }
 
 const SUPPRESSION_PATHS = {
-  bounce: "/v3/suppression/bounces/",
-  block: "/v3/suppression/blocks/",
-  invalid: "/v3/suppression/invalid_emails/",
-  spamReport: "/v3/suppression/spam_reports/",
-  globalUnsubscribe: "/v3/asm/suppressions/global/",
+  bounce: "/v3/suppression/bounces",
+  block: "/v3/suppression/blocks",
+  invalid: "/v3/suppression/invalid_emails",
+  spamReport: "/v3/suppression/spam_reports",
+  globalUnsubscribe: "/v3/suppression/unsubscribes",
 } as const;
 
-async function suppressionReasons(email: string) {
-  const apiKey = clean(process.env.SENDGRID_API_KEY);
-  if (!apiKey) throw new Error("SendGrid is not configured in the production runtime.");
-  const reasons: string[] = [];
-  for (const [reason, path] of Object.entries(SUPPRESSION_PATHS)) {
-    const response = await fetch(`https://api.sendgrid.com${path}${encodeURIComponent(email)}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (response.status === 404) continue;
-    if (!response.ok) throw new Error(`SendGrid suppression preflight returned ${response.status}.`);
-    if (reason === "globalUnsubscribe") {
-      const body = await response.json() as { recipient_email?: unknown };
-      if (!clean(body.recipient_email)) continue;
+async function suppressedEmails(path: string) {
+  const emails = new Set<string>();
+  const pageSize = 500;
+  for (let offset = 0; offset < 50_000; offset += pageSize) {
+    const separator = path.includes("?") ? "&" : "?";
+    const page = await sendGridRequest(`${path}${separator}limit=${pageSize}&offset=${offset}`);
+    if (!Array.isArray(page)) throw new Error(`SendGrid ${path} returned an invalid suppression list.`);
+    for (const entry of page) {
+      if (!entry || typeof entry !== "object") continue;
+      const email = clean((entry as { email?: unknown }).email).toLowerCase();
+      if (email) emails.add(email);
     }
-    reasons.push(reason);
+    if (page.length < pageSize) return emails;
   }
-  return reasons;
+  throw new Error(`SendGrid ${path} suppression list exceeded the safe pagination limit.`);
 }
 
 async function preflightCandidates<T extends { email: string }>(candidates: T[]) {
+  const suppressed = new Set<string>();
+  for (const path of Object.values(SUPPRESSION_PATHS)) {
+    for (const email of await suppressedEmails(path)) suppressed.add(email);
+  }
   const ready: T[] = [];
-  let suppressed = 0;
+  let suppressedCount = 0;
   for (const candidate of candidates) {
-    const reasons = await suppressionReasons(candidate.email);
-    if (reasons.length) suppressed += 1;
+    if (suppressed.has(candidate.email.toLowerCase())) suppressedCount += 1;
     else ready.push(candidate);
   }
-  return { ready, suppressed };
+  return { ready, suppressed: suppressedCount };
 }
 
 async function requestBody(request: NextRequest) {

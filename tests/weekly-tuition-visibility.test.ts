@@ -18,6 +18,11 @@ test("weekly tuition uses the child assignment across family, enrollment, billin
   assert.match(billing, /applyFamilyTuitionContext\(nextFamily, locationTuitionPlans\)/);
   assert.match(billing, /setAssignmentTuitionPlanId\(assignedPlan\?\.id \?\? ""\)/);
   assert.match(billing, /Tuition rate setup\{selectedFamily \? ` · \$\{selectedFamily\.name\}` : ""\}/);
+  assert.match(billing, /const \[billingAction, setBillingAction\] = useState\("recurring"\)/);
+  assert.match(billing, /<Tabs value=\{billingAction\} onValueChange=\{setBillingAction\}>/);
+  assert.match(billing, /Set each child’s weekly tuition/);
+  assert.match(billing, /Whole family \(one-time charge only\)/);
+  assert.match(billing, /the family ledger receives the combined total while each child keeps an individual rate/);
   assert.doesNotMatch(billing, /assignment\?\.tuitionPlanId \|\| locationTuitionPlans\[0\]/);
   assert.match(billing, /typeof selectedAssignment\.amountCents === "number"/);
   assert.match(familyEditor, /typeof selectedChild\.tuitionAssignment\.amountCents === "number"/);

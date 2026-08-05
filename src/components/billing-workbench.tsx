@@ -352,6 +352,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [planAgeGroup, setPlanAgeGroup] = useState(initialAssignedPlan?.ageGroup ?? initialAssignmentChild?.ageGroup ?? defaultAgeGroupOptions[0]);
   const [planAmountDollars, setPlanAmountDollars] = useState(initialAssignedPlan ? String(initialAssignedPlan.amountCents / 100) : "");
   const [planFundingType, setPlanFundingType] = useState<TuitionFundingType>(initialAssignedPlan?.amountCents === 0 ? "voucher" : "family");
+  const [billingAction, setBillingAction] = useState("recurring");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [manualPaymentEmailCopies, setManualPaymentEmailCopies] = useState<Array<{ clipboardText: string }>>([]);
@@ -1204,7 +1205,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         setTuitionPlanId(json.record.id);
         setAssignmentTuitionPlanId(json.record.id);
       }
+      setBillingAction("recurring");
       router.refresh();
+    });
+  }
+
+  function showChildTuitionSetup() {
+    setBillingAction("recurring");
+    requestAnimationFrame(() => {
+      document.getElementById("child-tuition-setup")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -1656,12 +1665,25 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
           </div>
         </div>
 
-        <Tabs defaultValue="single">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
+          <div>
+            <div className="text-sm font-medium">Set each child’s weekly tuition</div>
+            <p className="text-xs text-muted-foreground">
+              Choose one child at a time. Their saved rates stay visible separately and combine into the family weekly total and ledger.
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={showChildTuitionSetup}>
+            <CalendarClock data-icon="inline-start" />
+            Open child tuition
+          </Button>
+        </div>
+
+        <Tabs value={billingAction} onValueChange={setBillingAction}>
           <TabsList className="flex h-auto flex-wrap justify-start">
+            <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Child tuition</TabsTrigger>
             <TabsTrigger value="single"><ReceiptText data-icon="inline-start" />Family charge</TabsTrigger>
             <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
-            <TabsTrigger value="recurring"><CalendarClock data-icon="inline-start" />Recurring</TabsTrigger>
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency payment</TabsTrigger>
@@ -1691,7 +1713,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
                 <Select value={childId} onValueChange={(value) => value && setChildId(value)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Whole family</SelectItem>
+                    <SelectItem value="none">Whole family (one-time charge only)</SelectItem>
                     {selectedChildren.map((child) => (
                       <SelectItem key={child.id} value={child.id}>{child.fullName}</SelectItem>
                     ))}
@@ -1844,7 +1866,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             </p>
           </TabsContent>
 
-          <TabsContent value="recurring" className="space-y-4 rounded-lg border bg-background/35 p-4">
+          <TabsContent id="child-tuition-setup" value="recurring" className="scroll-mt-4 space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Weekly tuition by child</div>
+              <p className="text-xs text-muted-foreground">
+                Select a child, choose that child’s rate, and save. Repeat for each sibling; the family ledger receives the combined total while each child keeps an individual rate.
+              </p>
+            </div>
             <div className="grid gap-3 md:grid-cols-5">
               <div className="space-y-1">
                 <Label>Child</Label>

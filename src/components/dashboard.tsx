@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardWidgetConfigurator } from "@/components/dashboard-widget-configurator";
 import { DashboardSnapshotControls } from "@/components/dashboard-snapshot-controls";
+import { EnrollmentStatusShortcut } from "@/components/enrollment-status-shortcut";
 import { InquiryEmbedCard } from "@/components/inquiry-embed-card";
 import { RegistrationShareCard } from "@/components/registration-share-card";
 import { RefundApprovalQueue, type ExecutiveRefundRequest } from "@/components/refund-approval-queue";
@@ -1098,6 +1099,7 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
   const isBillingDashboard = visibleLenses.length === 1 && visibleLenses.includes("billing");
   const isParentDashboard = visibleLenses.length === 1 && visibleLenses.includes("parent");
   const isPickupDashboard = visibleLenses.length === 1 && visibleLenses.includes("pickup");
+  const isDirectorDashboard = visibleLenses.includes("director");
   const commandCenterDescription = isTeacherDashboard
     ? "Classroom attendance, daily reports, incident notes, family messages, and ratio awareness for your assigned room."
     : isBillingDashboard
@@ -1502,6 +1504,8 @@ export function ExecutiveDashboard({ live }: { live?: LiveDashboardData }) {
           ) : null}
         </div>
       </section>
+
+      {isDirectorDashboard ? <EnrollmentStatusShortcut /> : null}
 
       {configuredWidgets.length ? (
         <DashboardWidgetConfigurator

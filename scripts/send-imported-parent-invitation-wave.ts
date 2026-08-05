@@ -1,9 +1,8 @@
-import "./load-env";
 import { createHash } from "node:crypto";
 import { createClient, type User as SupabaseUser } from "@supabase/supabase-js";
 import { UserRole } from "@prisma/client";
 import { writeSystemAuditLog } from "@/lib/audit";
-import { resolveWorkspaceBranding } from "@/lib/brand-assets";
+import { BEE_SUITE_BRANDING } from "@/lib/brand-assets";
 import { defaultGuardianPinFromPhone, defaultGuardianPinUpdate } from "@/lib/guardian-kiosk-pin";
 import { recordEmailDeliveryAttempt } from "@/lib/integration-deliveries";
 import { sendEmail } from "@/lib/integrations";
@@ -33,10 +32,11 @@ const WAIVE_DIRECTOR_FLAG = "--acknowledge-director-confirmation-waived";
 const REPAIR_FLAG = "--repair-interrupted-preparation-flags";
 const RETRY_UNCONFIGURED_PROVIDER_FLAG = "--retry-unconfigured-provider-skips";
 const DIRECT_PROFILE_EVIDENCE_FLAG = "--use-direct-import-profile-evidence-authorized-by-user";
+const ACKNOWLEDGE_PRIOR_INACTIVE_FLAG = "--acknowledge-prior-invited-inactive-profiles-excluded";
 const DEFAULT_BASE_URL = "https://thebeesuite.io";
 const CORPORATE_ACTOR_EMAIL = "corpschools@kidcityusa.com";
 
-type WaveScope = "kid_city" | "miss_honeys";
+export type WaveScope = "kid_city" | "miss_honeys";
 
 type Args = {
   apply: boolean;
@@ -46,6 +46,7 @@ type Args = {
   repairInterruptedPreparation: boolean;
   retryUnconfiguredProviderSkips: boolean;
   useDirectProfileEvidence: boolean;
+  acknowledgePriorInvitedInactiveProfilesExcluded: boolean;
   scope: WaveScope;
 };
 
@@ -117,6 +118,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     repairInterruptedPreparation: false,
     retryUnconfiguredProviderSkips: false,
     useDirectProfileEvidence: false,
+    acknowledgePriorInvitedInactiveProfilesExcluded: false,
     scope: "kid_city",
   };
   for (const arg of argv) {
@@ -134,6 +136,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     else if (arg === REPAIR_FLAG) args.repairInterruptedPreparation = true;
     else if (arg === RETRY_UNCONFIGURED_PROVIDER_FLAG) args.retryUnconfiguredProviderSkips = true;
     else if (arg === DIRECT_PROFILE_EVIDENCE_FLAG) args.useDirectProfileEvidence = true;
+    else if (arg === ACKNOWLEDGE_PRIOR_INACTIVE_FLAG) args.acknowledgePriorInvitedInactiveProfilesExcluded = true;
     else throw new Error(`Unknown option: ${arg}`);
   }
   if (args.apply && (
@@ -283,7 +286,7 @@ function groupByKey<T>(items: T[], keyFor: (item: T) => string) {
   return groups;
 }
 
-async function buildPlan({
+export async function buildPlan({
   retryUnconfiguredProviderSkips = false,
   scope = "kid_city" as WaveScope,
   useDirectProfileEvidence = false,
@@ -539,14 +542,7 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
     kioskPinVerifiedFromPhone = true;
   }
 
-  const branding = resolveWorkspaceBranding({
-    tenantName: center.organization.tenant.name,
-    tenantSlug: center.organization.tenant.slug,
-    brandName: center.organization.brand?.name,
-    brandSlug: center.organization.brand?.slug,
-    organizationName: center.organization.name,
-    email: center.email,
-  });
+  const branding = BEE_SUITE_BRANDING;
   const centerLabel = center.crmLocationId ?? center.name;
   const transitioningFromProcare = clean(guardian.family.sourceSystem).toLowerCase() === "procare"
     || guardian.family.children.some((child) => clean(child.sourceSystem).toLowerCase() === "procare");
@@ -653,7 +649,7 @@ async function sendCandidate({ candidate, center, actorUserId }: { candidate: Ca
   return { accepted: true, initialPasswordIssued };
 }
 
-async function sendWave(
+export async function sendWave(
   plan: Awaited<ReturnType<typeof buildPlan>>,
   actorUserIdByCenter: Map<string, string>,
 ) {
@@ -704,7 +700,7 @@ async function sendWave(
   };
 }
 
-async function loadActorUserIds(plan: Awaited<ReturnType<typeof buildPlan>>, scope: WaveScope) {
+export async function loadActorUserIds(plan: Awaited<ReturnType<typeof buildPlan>>, scope: WaveScope) {
   if (scope === "kid_city") {
     const corporateActor = await prisma.user.findUnique({
       where: { email: CORPORATE_ACTOR_EMAIL },
@@ -736,8 +732,8 @@ async function loadActorUserIds(plan: Awaited<ReturnType<typeof buildPlan>>, sco
   return actorUserIdByCenter;
 }
 
-async function main() {
-  const args = parseArgs();
+export async function runCli(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
   const planOptions = {
     retryUnconfiguredProviderSkips: args.retryUnconfiguredProviderSkips,
     scope: args.scope,
@@ -746,8 +742,8 @@ async function main() {
   let plan = await buildPlan(planOptions);
   console.log(JSON.stringify({ mode: args.apply ? "apply" : "dry-run", ...plan.summary }, null, 2));
   if (!args.apply) return;
-  if (plan.summary.alreadyInvitedOutsideCurrentReadiness) {
-    throw new Error("Previously invited imported parent profiles require manual readiness review before another live wave.");
+  if (plan.summary.alreadyInvitedOutsideCurrentReadiness && !args.acknowledgePriorInvitedInactiveProfilesExcluded) {
+    throw new Error(`Previously invited imported parent profiles require manual readiness review before another live wave. Pass ${ACKNOWLEDGE_PRIOR_INACTIVE_FLAG} only after confirming they remain excluded.`);
   }
 
   const platformSendGridConfigured = Boolean(
@@ -779,10 +775,3 @@ async function main() {
     throw new Error("The imported parent invitation wave did not complete cleanly.");
   }
 }
-
-void main()
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  })
-  .finally(() => prisma.$disconnect());

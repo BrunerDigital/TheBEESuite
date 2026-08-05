@@ -5,11 +5,12 @@ import {
   buildParentPortalInvitationHtml,
   buildParentPortalInvitationText,
 } from "../src/lib/parent-portal-invitations";
+import { BEE_SUITE_BRANDING } from "../src/lib/brand-assets";
 
 const root = process.cwd();
 const outputHtml = join(root, "output", "playwright", "parent-portal-invite-preview.html");
 const outputText = join(root, "output", "playwright", "parent-portal-invite-preview.txt");
-const logoPath = join(root, "public", "brand", "kid-city-usa", "logo-horizontal.png");
+const logoPath = join(root, "public", "brand", "the-bee-suite", "app-icon-dark.png");
 const logoSrc = `data:image/png;base64,${readFileSync(logoPath).toString("base64")}`;
 const invitation = {
   guardianName: "Taylor Parent",
@@ -24,10 +25,10 @@ mkdirSync(dirname(outputHtml), { recursive: true });
 writeFileSync(outputHtml, buildParentPortalInvitationHtml({
   ...invitation,
   branding: {
-    name: "Kid City USA",
-    tagline: "Where Kids Can BEE Kids",
+    name: BEE_SUITE_BRANDING.name,
+    tagline: BEE_SUITE_BRANDING.tagline,
     logoSrc,
-    logoAlt: "Kid City USA logo",
+    logoAlt: BEE_SUITE_BRANDING.logoAlt,
   },
 }), "utf8");
 writeFileSync(outputText, `${buildParentPortalInvitationText(invitation)}\n`, "utf8");

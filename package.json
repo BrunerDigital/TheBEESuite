@@ -60,7 +60,7 @@
     "kidcity:audit-rollout-access": "tsx -r tsconfig-paths/register scripts/audit-kidcity-rollout-access.ts",
     "kidcity:audit-parent-portals": "tsx -r tsconfig-paths/register scripts/audit-imported-parent-portal-candidates.ts",
     "kidcity:send-parent-invites": "tsx -r tsconfig-paths/register scripts/send-kidcity-parent-invitation-wave.ts",
-    "kidcity:send-imported-parent-invites": "tsx -r tsconfig-paths/register scripts/send-imported-parent-invitation-wave.ts",
+    "kidcity:send-imported-parent-invites": "tsx -r tsconfig-paths/register scripts/run-send-imported-parent-invitation-wave.ts",
     "kidcity:reconcile-centennial-balances": "tsx -r tsconfig-paths/register scripts/reconcile-centennial-photo-balances.ts",
     "kidcity:reconcile-cordera-balances": "tsx -r tsconfig-paths/register scripts/reconcile-cordera-pdf-balances.ts",
     "kidcity:reconcile-longmont-parent-access": "tsx -r tsconfig-paths/register scripts/reconcile-longmont-pdf-parent-access.ts",

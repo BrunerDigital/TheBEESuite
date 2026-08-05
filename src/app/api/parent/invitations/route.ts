@@ -29,6 +29,8 @@ import { stripeSchoolBillingApproval } from "@/lib/stripe-billing-approval";
 import { withApiLogging } from "@/lib/request-response-logging";
 export const runtime = "nodejs";
 
+const MAX_STATUS_BATCH_SIZE = 200;
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -43,45 +45,15 @@ function record(value: unknown): Record<string, unknown> {
     : {};
 }
 
-async function GETHandler(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
-  if (!canManageOperations(user)) {
-    return NextResponse.json({ ok: false, error: "Parent invitation status is not available for this role." }, { status: 403 });
-  }
-  const guardianId = clean(request.nextUrl.searchParams.get("guardianId"));
-  if (!guardianId) return NextResponse.json({ ok: false, error: "Guardian ID is required." }, { status: 400 });
-
-  const guardian = await prisma.guardian.findUnique({
-    where: { id: guardianId },
-    select: { id: true, email: true, userId: true, family: { select: { centerId: true } } },
-  });
-  if (!guardian?.family.centerId || (!canAccessAllCenters(user) && !canAccessCenter(user, guardian.family.centerId))) {
-    return NextResponse.json({ ok: false, error: "Guardian not found for this school scope." }, { status: 404 });
-  }
-  const email = normalizeEmail(guardian.email);
-  if (!email) return NextResponse.json({ ok: true, status: "missing_email", linked: Boolean(guardian.userId) });
-
-  const [delivery, setupToken] = await Promise.all([
-    prisma.integrationDelivery.findFirst({
-      where: {
-        centerId: guardian.family.centerId,
-        purpose: "parent_invitation_email",
-        OR: [
-          { payload: { path: ["metadata", "guardianId"], equals: guardian.id } },
-          { payload: { path: ["guardianId"], equals: guardian.id } },
-        ],
-      },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, createdAt: true, deliveredAt: true, lastError: true },
-    }),
-    prisma.parentPortalSetupToken.findFirst({
-      where: { guardianId: guardian.id },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, deliveryStatus: true, expiresAt: true, createdAt: true },
-    }),
-  ]);
-
+function invitationStatus({
+  delivery,
+  setupToken,
+  linked,
+}: {
+  delivery: { status: string; createdAt: Date; deliveredAt: Date | null } | undefined;
+  setupToken: { status: string; expiresAt: Date; createdAt: Date } | undefined;
+  linked: boolean;
+}) {
   const deliveryStatus = clean(delivery?.status).toLowerCase();
   const tokenExpired = Boolean(setupToken && (setupToken.status === "expired" || setupToken.expiresAt <= new Date()));
   const status = deliveryStatus === "delivered"
@@ -94,19 +66,103 @@ async function GETHandler(request: NextRequest) {
           ? "accepted"
           : delivery
             ? "invited"
-            : guardian.userId
+            : linked
               ? "linked"
               : "not_invited";
 
-  return NextResponse.json({
-    ok: true,
+  return {
     status,
-    linked: Boolean(guardian.userId),
+    linked,
     invitedAt: delivery?.createdAt ?? setupToken?.createdAt ?? null,
     deliveredAt: delivery?.deliveredAt ?? null,
     deliveryStatus: deliveryStatus || null,
     setupStatus: setupToken?.status ?? null,
+  };
+}
+
+async function GETHandler(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  if (!canManageOperations(user)) {
+    return NextResponse.json({ ok: false, error: "Parent invitation status is not available for this role." }, { status: 403 });
+  }
+  const guardianId = clean(request.nextUrl.searchParams.get("guardianId"));
+  const guardianIds = [...new Set(
+    clean(request.nextUrl.searchParams.get("guardianIds"))
+      .split(",")
+      .map(clean)
+      .filter(Boolean),
+  )];
+  const requestedGuardianIds = guardianIds.length ? guardianIds : guardianId ? [guardianId] : [];
+  if (!requestedGuardianIds.length) {
+    return NextResponse.json({ ok: false, error: "Guardian ID is required." }, { status: 400 });
+  }
+  if (requestedGuardianIds.length > MAX_STATUS_BATCH_SIZE) {
+    return NextResponse.json(
+      { ok: false, error: `No more than ${MAX_STATUS_BATCH_SIZE} guardian statuses may be requested at once.` },
+      { status: 400 },
+    );
+  }
+
+  const guardians = await prisma.guardian.findMany({
+    where: { id: { in: requestedGuardianIds } },
+    select: { id: true, email: true, userId: true, family: { select: { centerId: true } } },
   });
+  const visibleGuardians = guardians.filter((guardian) =>
+    guardian.family.centerId && user.centerIds.includes(guardian.family.centerId),
+  );
+  if (!guardianIds.length && visibleGuardians.length !== 1) {
+    return NextResponse.json({ ok: false, error: "Guardian not found for this school scope." }, { status: 404 });
+  }
+
+  const statusGuardians = visibleGuardians.filter((guardian) => normalizeEmail(guardian.email));
+  const [deliveries, setupTokens] = statusGuardians.length ? await Promise.all([
+    prisma.integrationDelivery.findMany({
+      where: {
+        centerId: { in: [...new Set(statusGuardians.map((guardian) => guardian.family.centerId).filter(Boolean))] as string[] },
+        purpose: "parent_invitation_email",
+        OR: statusGuardians.flatMap((guardian) => [
+          { payload: { path: ["metadata", "guardianId"], equals: guardian.id } },
+          { payload: { path: ["guardianId"], equals: guardian.id } },
+        ]),
+      },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, createdAt: true, deliveredAt: true, payload: true },
+    }),
+    prisma.parentPortalSetupToken.findMany({
+      where: { guardianId: { in: statusGuardians.map((guardian) => guardian.id) } },
+      orderBy: { createdAt: "desc" },
+      select: { guardianId: true, status: true, expiresAt: true, createdAt: true },
+    }),
+  ]) : [[], []];
+
+  const deliveryByGuardianId = new Map<string, (typeof deliveries)[number]>();
+  for (const delivery of deliveries) {
+    const payload = record(delivery.payload);
+    const metadata = record(payload.metadata);
+    const deliveryGuardianId = clean(metadata.guardianId) || clean(payload.guardianId);
+    if (deliveryGuardianId && !deliveryByGuardianId.has(deliveryGuardianId)) {
+      deliveryByGuardianId.set(deliveryGuardianId, delivery);
+    }
+  }
+  const setupTokenByGuardianId = new Map<string, (typeof setupTokens)[number]>();
+  for (const setupToken of setupTokens) {
+    if (!setupTokenByGuardianId.has(setupToken.guardianId)) setupTokenByGuardianId.set(setupToken.guardianId, setupToken);
+  }
+
+  const statuses = Object.fromEntries(visibleGuardians.map((guardian) => {
+    if (!normalizeEmail(guardian.email)) {
+      return [guardian.id, { status: "missing_email", linked: Boolean(guardian.userId) }];
+    }
+    return [guardian.id, invitationStatus({
+      delivery: deliveryByGuardianId.get(guardian.id),
+      setupToken: setupTokenByGuardianId.get(guardian.id),
+      linked: Boolean(guardian.userId),
+    })];
+  }));
+
+  if (guardianIds.length) return NextResponse.json({ ok: true, statuses });
+  return NextResponse.json({ ok: true, ...statuses[guardianId] });
 }
 
 async function POSTHandler(request: NextRequest) {

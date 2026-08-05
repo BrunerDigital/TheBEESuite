@@ -16,6 +16,53 @@ type Props = {
 
 type ManualEmailCopy = { clipboardText: string };
 type InviteStatus = "loading" | "missing_email" | "not_invited" | "linked" | "invited" | "accepted" | "delivered" | "expired" | "failed";
+type InviteStatusPayload = { status?: InviteStatus };
+
+const MAX_STATUS_BATCH_SIZE = 200;
+const pendingStatusRequests = new Map<string, Array<{
+  resolve: (payload: InviteStatusPayload | undefined) => void;
+  reject: (error: unknown) => void;
+}>>();
+let statusBatchScheduled = false;
+
+async function flushStatusBatch() {
+  statusBatchScheduled = false;
+  const requests = new Map(pendingStatusRequests);
+  pendingStatusRequests.clear();
+  const guardianIds = [...requests.keys()];
+
+  try {
+    const statuses: Record<string, InviteStatusPayload> = {};
+    for (let index = 0; index < guardianIds.length; index += MAX_STATUS_BATCH_SIZE) {
+      const batch = guardianIds.slice(index, index + MAX_STATUS_BATCH_SIZE);
+      const params = new URLSearchParams({ guardianIds: batch.join(",") });
+      const response = await fetch(`/api/parent/invitations?${params.toString()}`);
+      const json = await response.json().catch(() => null) as { statuses?: Record<string, InviteStatusPayload> } | null;
+      if (!response.ok) throw new Error("Parent invitation statuses could not be loaded.");
+      Object.assign(statuses, json?.statuses ?? {});
+    }
+    for (const [guardianId, waiters] of requests) {
+      for (const waiter of waiters) waiter.resolve(statuses[guardianId]);
+    }
+  } catch (error) {
+    for (const waiters of requests.values()) {
+      for (const waiter of waiters) waiter.reject(error);
+    }
+  }
+}
+
+function loadInviteStatus(guardianId: string) {
+  return new Promise<InviteStatusPayload | undefined>((resolve, reject) => {
+    pendingStatusRequests.set(guardianId, [
+      ...(pendingStatusRequests.get(guardianId) ?? []),
+      { resolve, reject },
+    ]);
+    if (!statusBatchScheduled) {
+      statusBatchScheduled = true;
+      window.setTimeout(() => void flushStatusBatch(), 0);
+    }
+  });
+}
 
 const inviteStatusLabel: Record<InviteStatus, string> = {
   loading: "Checking",
@@ -39,10 +86,9 @@ export function ParentPortalInviteButton({ guardianId, guardianName, email, link
   useEffect(() => {
     if (!email) return;
     let active = true;
-    fetch(`/api/parent/invitations?guardianId=${encodeURIComponent(guardianId)}`)
-      .then(async (response) => ({ response, json: await response.json().catch(() => null) as { status?: InviteStatus } | null }))
-      .then(({ response, json }) => {
-        if (active && response.ok && json?.status) setInviteStatus(json.status);
+    loadInviteStatus(guardianId)
+      .then((payload) => {
+        if (active && payload?.status) setInviteStatus(payload.status);
       })
       .catch(() => undefined);
     return () => { active = false; };

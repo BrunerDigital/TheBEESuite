@@ -10,7 +10,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const EXPECTED_OPERATION_TOKEN_HASH = "9d6ea4511a581c89074d1528a15a3168c2791062c21b336a46357d5cb08e4ad8";
+const EXPECTED_OPERATION_TOKEN_HASH = "63c209bd789af9642d517e72affd5933523b9edd90078b235d7a758248404822";
 const CANONICAL_EVENT_WEBHOOK_URL = "https://thebeesuite.io/api/sendgrid/events";
 const MAX_BATCH_SIZE = 25;
 

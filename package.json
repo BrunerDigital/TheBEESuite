@@ -63,6 +63,7 @@
     "kidcity:send-imported-parent-invites": "tsx -r tsconfig-paths/register scripts/run-send-imported-parent-invitation-wave.ts",
     "kidcity:reconcile-centennial-balances": "tsx -r tsconfig-paths/register scripts/reconcile-centennial-photo-balances.ts",
     "kidcity:reconcile-cordera-balances": "tsx -r tsconfig-paths/register scripts/reconcile-cordera-pdf-balances.ts",
+    "kidcity:reconcile-oakleaf-balances": "tsx -r tsconfig-paths/register scripts/reconcile-oakleaf-procare-balances.ts",
     "kidcity:reconcile-longmont-parent-access": "tsx -r tsconfig-paths/register scripts/reconcile-longmont-pdf-parent-access.ts",
     "kidcity:reconcile-procare-guardian-contacts": "tsx -r tsconfig-paths/register scripts/reconcile-procare-guardian-contacts.ts",
     "kidcity:retry-granbury-parent-invite": "tsx -r tsconfig-paths/register scripts/retry-granbury-parent-invite-timeout.ts",

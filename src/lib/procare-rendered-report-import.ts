@@ -21,6 +21,12 @@ type FlatChild = {
   childId: string; personId: string; childName: string; childDob: string; gender: string;
   classroom: string; classroomId: string; status: string; statusDate: string;
 };
+export type RenderedProcareBalanceRow = {
+  accountKey: string;
+  payerName: string;
+  hidden: boolean;
+  balanceCents: number;
+};
 
 const SIGNATURES = {
   account: /FD_AccountInformation\d+\.rpt|Account Information Sheet/i,
@@ -105,6 +111,7 @@ function stableId(...parts: string[]) {
   return createHash("sha256").update(parts.map((part) => part.trim().toLowerCase()).join("\0")).digest("hex").slice(0, 24);
 }
 function childKey(name: string, dob: string) { return `${normalizedName(name)}\0${dob}`; }
+function balanceIdentity(accountId: string, payerName: string) { return `${accountId}\0${normalizedName(payerName)}`; }
 
 function accountChildren(rows: Row[]) {
   const accounts = new Map<string, Pick<AccountChild, "accountName" | "payerName" | "payerAddress" | "payerContact">>();
@@ -236,14 +243,53 @@ function statuses(rows: Row[]) {
   return result;
 }
 
-function balances(rows: Row[]) {
-  const result = new Map<string, string>();
+function renderedBalanceRows(rows: Row[]) {
+  const result: RenderedProcareBalanceRow[] = [];
   for (const row of rows) {
-    const id = accountKey(cell(row, 10));
-    const balance = cell(row, 11).replace(/,/g, "");
-    if (id && /^-?\d+(?:\.\d{1,2})?$/.test(balance)) result.set(id, balance);
+    const accountLabel = cell(row, 10);
+    const accountKeyValue = accountKey(accountLabel);
+    if (!accountKeyValue) continue;
+    const rawBalance = cell(row, 11).trim();
+    const negative = /^\(.*\)$/.test(rawBalance);
+    const normalizedBalance = rawBalance.replace(/[,$()\s]/g, "");
+    if (!/^[-+]?\d+(?:\.\d{1,2})?$/.test(normalizedBalance)) continue;
+    const decimal = Number(normalizedBalance);
+    if (!Number.isFinite(decimal)) continue;
+    const balanceCents = Math.round(decimal * 100) * (negative ? -1 : 1);
+    const payerName = accountLabel
+      .replace(/^\s*\[\*?[A-Z0-9_-]+\*?\]\s*/i, "")
+      .replace(/\s+-\s+Hidden\s*$/i, "")
+      .trim();
+    result.push({
+      accountKey: accountKeyValue,
+      payerName,
+      hidden: /\s+-\s+Hidden\s*$/i.test(accountLabel),
+      balanceCents,
+    });
   }
   return result;
+}
+
+export function parseRenderedProcareBalanceRows(buffer: Buffer): RenderedProcareBalanceRow[] {
+  const rows = parseCsv(decode(buffer));
+  const signature = rows.slice(0, 3).flat().join(" ");
+  if (!SIGNATURES.balance.test(signature)) {
+    throw new Error("The reviewed file is not a rendered ProCare Account Balance Summary.");
+  }
+
+  return renderedBalanceRows(rows);
+}
+
+function balanceForAccount(
+  balanceByAccount: Map<string, RenderedProcareBalanceRow[]>,
+  accountId: string,
+  payerName: string,
+) {
+  const candidates = balanceByAccount.get(accountId) ?? [];
+  const exactPayer = candidates.filter((candidate) => normalizedName(displayName(candidate.payerName)) === normalizedName(displayName(payerName)));
+  const scoped = exactPayer.length ? exactPayer : candidates.length === 1 ? candidates : [];
+  const amounts = [...new Set(scoped.map((candidate) => candidate.balanceCents))];
+  return amounts.length === 1 ? (amounts[0] / 100).toFixed(2) : "";
 }
 
 export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buffer>) {
@@ -252,7 +298,7 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
   const registrationByChild = new Map<string, Registration>();
   const flatChildByIdentity = new Map<string, FlatChild>();
   const statusesByName = new Map<string, Array<{ status: string; startDate: string }>>();
-  const balanceByAccount = new Map<string, string>();
+  const balanceByAccount = new Map<string, RenderedProcareBalanceRow[]>();
   let detected = false;
 
   for (const [sourceName, buffer] of entries) {
@@ -292,7 +338,15 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
       inventory.push({ sourceName, reportKind: "rendered_enrollment_status", rows: rows.length, matchedHeaderAliases: 3 });
     } else if (SIGNATURES.balance.test(signature)) {
       detected = true;
-      for (const [key, value] of balances(rows)) balanceByAccount.set(key, value);
+      for (const item of renderedBalanceRows(rows)) {
+        const existing = balanceByAccount.get(item.accountKey) ?? [];
+        const duplicate = existing.some((candidate) => (
+          normalizedName(candidate.payerName) === normalizedName(item.payerName)
+          && candidate.hidden === item.hidden
+          && candidate.balanceCents === item.balanceCents
+        ));
+        if (!duplicate) balanceByAccount.set(item.accountKey, [...existing, item]);
+      }
       inventory.push({ sourceName, reportKind: "rendered_balance", rows: rows.length, matchedHeaderAliases: 2 });
     } else if (SIGNATURES.classroom.test(signature)) {
       detected = true;
@@ -374,9 +428,10 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
     if (!exactMatches.length) {
       record["import warning"] = "This child matched an account by unique name because the account report did not provide the same DOB. Confirm the account before import.";
     }
-    if (!usedBalances.has(match.accountId) && balanceByAccount.has(match.accountId)) {
-      record.balance = balanceByAccount.get(match.accountId) ?? "";
-      usedBalances.add(match.accountId);
+    const matchBalanceIdentity = balanceIdentity(match.accountId, match.payerName);
+    if (!usedBalances.has(matchBalanceIdentity) && balanceByAccount.has(match.accountId)) {
+      record.balance = balanceForAccount(balanceByAccount, match.accountId, match.payerName);
+      usedBalances.add(matchBalanceIdentity);
     }
     records.push(record);
   }
@@ -404,9 +459,10 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
       "guardian phone": phoneIn(child.payerContact),
       "import warning": child.childDob ? "Registration detail was not found for this account child; review guardian relationships before import." : "Registration detail and date of birth were not found for this account child.",
     };
-    if (!usedBalances.has(child.accountId) && balanceByAccount.has(child.accountId)) {
-      record.balance = balanceByAccount.get(child.accountId) ?? "";
-      usedBalances.add(child.accountId);
+    const childBalanceIdentity = balanceIdentity(child.accountId, child.payerName);
+    if (!usedBalances.has(childBalanceIdentity) && balanceByAccount.has(child.accountId)) {
+      record.balance = balanceForAccount(balanceByAccount, child.accountId, child.payerName);
+      usedBalances.add(childBalanceIdentity);
     }
     records.push(record);
   }
@@ -414,7 +470,7 @@ export function buildRenderedProcareReportRowsFromFiles(entries: Map<string, Buf
   const coverage = {
     version: "rendered-procare-report-v1",
     sourceInventory: inventory,
-    sourceRows: { accountChildren: children.length, registrations: registrationByChild.size, flatChildren: flatChildByIdentity.size, enrollmentStatusNames: statusesByName.size, balances: balanceByAccount.size },
+    sourceRows: { accountChildren: children.length, registrations: registrationByChild.size, flatChildren: flatChildByIdentity.size, enrollmentStatusNames: statusesByName.size, balances: [...balanceByAccount.values()].reduce((sum, items) => sum + items.length, 0) },
     rawSourceRows: Object.fromEntries(inventory.map((item) => [item.sourceName, item.rows])),
     duplicateSourceRowsRemoved: {},
     normalizedRows: {

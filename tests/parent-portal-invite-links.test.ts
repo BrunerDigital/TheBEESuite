@@ -111,6 +111,7 @@ test("all-location imported parent waves require concrete relationship safety an
   assert.match(source, /--repair-interrupted-preparation-flags/);
   assert.match(source, /--retry-unconfigured-provider-skips/);
   assert.match(source, /--use-direct-import-profile-evidence-authorized-by-user/);
+  assert.match(source, /--acknowledge-prior-invited-inactive-profiles-excluded/);
   assert.match(source, /"kid-city-usa"/);
   assert.match(source, /miss-honeys-learning-center/);
   assert.match(source, /trial_setup/);
@@ -143,6 +144,23 @@ test("all-location imported parent waves require concrete relationship safety an
   assert.match(source, /parentPortalInvitationSentFields/);
   assert.match(source, /verifySupabasePassword/);
   assert.match(source, /directorConfirmationWaivedByUser: true/);
+  assert.match(source, /const branding = BEE_SUITE_BRANDING/);
+  assert.match(source, /fromName: branding\.name/);
+});
+
+test("temporary production invitation runner is token-gated and provider-preflighted", () => {
+  const source = readFileSync(new URL("../src/app/api/operations/parent-invitation-wave/route.ts", import.meta.url), "utf8");
+  assert.match(source, /timingSafeEqual/);
+  assert.match(source, /EXPECTED_OPERATION_TOKEN_HASH/);
+  assert.match(source, /MAX_BATCH_SIZE = 25/);
+  assert.match(source, /suppressionReasons/);
+  assert.match(source, /reason === "globalUnsubscribe"/);
+  assert.match(source, /recipient_email/);
+  assert.match(source, /senderReady/);
+  assert.match(source, /signedEventWebhook\.verificationKeyDeployed/);
+  assert.match(source, /acknowledgePriorInactive/);
+  assert.match(source, /buildPlan\(\{ scope: input\.scope, useDirectProfileEvidence: true \}\)/);
+  assert.doesNotMatch(source, /console\.log\([^\n]*(authorization|token)/i);
 });
 
 test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {

@@ -148,25 +148,6 @@ test("all-location imported parent waves require concrete relationship safety an
   assert.match(source, /fromName: branding\.name/);
 });
 
-test("temporary production invitation runner is token-gated and provider-preflighted", () => {
-  const source = readFileSync(new URL("../src/app/api/operations/parent-invitation-wave/route.ts", import.meta.url), "utf8");
-  assert.match(source, /timingSafeEqual/);
-  assert.match(source, /EXPECTED_OPERATION_TOKEN_HASH/);
-  assert.match(source, /MAX_BATCH_SIZE = 25/);
-  assert.match(source, /suppressedEmails/);
-  assert.match(source, /suppression\/unsubscribes/);
-  assert.match(source, /limit=\$\{pageSize\}&offset=\$\{offset\}/);
-  assert.match(source, /response\.status !== 429/);
-  assert.match(source, /senderReady/);
-  assert.match(source, /signedEventWebhook\.verificationKeyDeployed/);
-  assert.match(source, /user\/webhooks\/event\/settings\/all/);
-  assert.match(source, /settings\/signed\/\$\{encodeURIComponent\(webhookId\)\}/);
-  assert.match(source, /SendGrid did not return an Event Webhook ID/);
-  assert.match(source, /acknowledgePriorInactive/);
-  assert.match(source, /buildPlan\(\{ scope: input\.scope, useDirectProfileEvidence: true \}\)/);
-  assert.doesNotMatch(source, /console\.log\([^\n]*(authorization|token)/i);
-});
-
 test("Tyler portal preparation is school-scoped, source-locked, and cannot send invitations", () => {
   const source = readFileSync(new URL("../scripts/prepare-tyler-parent-portal-accounts.ts", import.meta.url), "utf8");
   assert.match(source, /CENTER_LOCATION_ID = "Kid City USA - TX \| Tyler"/);

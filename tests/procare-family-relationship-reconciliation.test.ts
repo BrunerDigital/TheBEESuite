@@ -1,10 +1,75 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildProcareAccountContactDataset,
   buildProcareRelationshipDataset,
+  buildProcareRelationshipPersonDataset,
+  missingProcareGuardianContactFields,
   procareRelationshipGuardian,
   resolveProcareChildAccount,
 } from "@/lib/procare-family-relationship-reconciliation";
+
+test("guardian contact enrichment fills only missing Procare phone and email fields", () => {
+  assert.deepEqual(
+    missingProcareGuardianContactFields(
+      { email: "Parent@Example.com", phone: "(555) 111-2222" },
+      { email: null, phone: "" },
+    ),
+    { email: "parent@example.com", phone: "(555) 111-2222" },
+  );
+  assert.deepEqual(
+    missingProcareGuardianContactFields(
+      { email: "new@example.com", phone: "555-999-0000" },
+      { email: "kept@example.com", phone: "555-333-4444" },
+    ),
+    {},
+  );
+});
+
+test("account contact parsing keeps exact account, payer, and person identifiers", () => {
+  const dataset = buildProcareAccountContactDataset(csv(
+    ["Account ID", "Account Key", "Person ID", "Person Type", "Full Name", "Email", "Phone 1"],
+    [
+      ["A-10", "SMITH", "P-1", "Payer", "Smith, Jordan", "Jordan@Example.com", "555-100-2000"],
+      ["A-10", "SMITH", "C-1", "Child", "Smith, Avery", "", ""],
+    ],
+  ));
+  assert.deepEqual(dataset.inventory, { accountRows: 2, accounts: 1, payers: 1 });
+  assert.deepEqual(dataset.accounts.get("A-10"), {
+    accountId: "A-10",
+    accountKey: "SMITH",
+    payers: [{
+      personId: "P-1",
+      personType: "Payer",
+      fullName: "Jordan Smith",
+      email: "jordan@example.com",
+      phone: "555-100-2000",
+      relation: "Unknown",
+      livesWith: false,
+      emergency: false,
+      authorizedPickup: false,
+    }],
+  });
+});
+
+test("relationship person parsing supports alternate Procare relationship columns", () => {
+  const dataset = buildProcareRelationshipPersonDataset(csv(
+    ["Child ID", "Relationship Person ID", "Relationship Full Name", "Relationship Type", "Lives With", "Emergency Contact", "Pickup Allowed"],
+    [["C-1", "P-1", "Smith, Jordan", "Mom", "Yes", "Yes", "Yes"]],
+  ));
+  assert.equal(dataset.inventory.people, 1);
+  assert.deepEqual(dataset.people[0], {
+    personId: "P-1",
+    personType: "Relationship",
+    fullName: "Jordan Smith",
+    email: "",
+    phone: "",
+    relation: "Mom",
+    livesWith: true,
+    emergency: true,
+    authorizedPickup: true,
+  });
+});
 
 function csv(headers: string[], rows: string[][]) {
   const escape = (value: string) => /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;

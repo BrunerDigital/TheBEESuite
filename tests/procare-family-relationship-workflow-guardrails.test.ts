@@ -38,6 +38,12 @@ test("the guarded workflow cannot move children or delete relationship records",
   assert.doesNotMatch(workflow, /tx\.(guardian|emergencyContact|authorizedPickup)\.delete/);
 });
 
+test("existing guardians receive fill-only contact enrichment", () => {
+  assert.match(workflow, /missingProcareGuardianContactFields\(person, current\)/);
+  assert.match(workflow, /contactEnrichmentOnly/);
+  assert.doesNotMatch(workflow, /data\.(email|phone)\s*=\s*person\.(email|phone)/);
+});
+
 test("each account is compare-and-set revalidated inside its transaction", () => {
   assert.match(workflow, /freshCenter[\s\S]*?freshCenter\.status === "active"/);
   assert.match(workflow, /freshFamily && familyStateHash\(freshFamily\) === account\.expectedFamilyStateHash/);

@@ -14,10 +14,34 @@ export type ProcareSourcePerson = {
   authorizedPickup: boolean;
 };
 
+export function missingProcareGuardianContactFields(
+  source: Pick<ProcareSourcePerson, "email" | "phone">,
+  current: { email: string | null; phone: string | null },
+) {
+  const updates: { email?: string; phone?: string } = {};
+  if (!current.email?.trim() && source.email.trim()) updates.email = source.email.trim().toLowerCase();
+  if (!current.phone?.trim() && source.phone.trim()) updates.phone = source.phone.trim();
+  return updates;
+}
+
 export type ProcareAccountSource = {
   accountId: string;
   accountKey: string;
   payers: ProcareSourcePerson[];
+};
+
+export type ProcareAccountContactDataset = {
+  accounts: Map<string, ProcareAccountSource>;
+  inventory: {
+    accountRows: number;
+    accounts: number;
+    payers: number;
+  };
+};
+
+export type ProcareRelationshipPersonDataset = {
+  people: ProcareSourcePerson[];
+  inventory: { relationshipRows: number; people: number };
 };
 
 export type ProcareAccountResolution = {
@@ -242,14 +266,9 @@ const AUTHORITATIVE_RELATIONSHIP_COLUMNS = [
   "Authorized Pickup",
 ] as const;
 
-export function buildProcareRelationshipDataset(accountBuffer: Buffer, relationshipBuffer: Buffer): ProcareRelationshipDataset {
+function parseProcareAccountDataset(accountBuffer: Buffer) {
   const accountCsv = parseCsv(accountBuffer, "Account Information");
-  const relationshipCsv = parseCsv(relationshipBuffer, "Child Relationships");
   assertColumns(accountCsv.headers, "Account Information", ["Account ID", "Person ID", "Person Type", "Full Name"]);
-  assertColumns(relationshipCsv.headers, "Child Relationships", ["Child ID", "Person ID", "Person Type", "Full Name", "Relationship Type", "Lives With", "Emergency", "Authorized Pickup"]);
-  const missingAccountColumns = missingColumns(accountCsv.headers, [...AUTHORITATIVE_ACCOUNT_COLUMNS]);
-  const missingRelationshipColumns = missingColumns(relationshipCsv.headers, [...AUTHORITATIVE_RELATIONSHIP_COLUMNS]);
-
   const accountRowsById = new Map<string, ProcareCsvRow[]>();
   for (const row of accountCsv.records) {
     const accountId = value(row, "Account ID");
@@ -275,6 +294,57 @@ export function buildProcareRelationshipDataset(accountBuffer: Buffer, relations
     }
     accounts.set(accountId, { accountId, accountKey: accountKeys[0] ?? "", payers });
   }
+
+  return { accountCsv, accounts, payerAccountsByPerson, childAccountsByPerson };
+}
+
+export function buildProcareAccountContactDataset(accountBuffer: Buffer): ProcareAccountContactDataset {
+  const { accountCsv, accounts } = parseProcareAccountDataset(accountBuffer);
+  return {
+    accounts,
+    inventory: {
+      accountRows: accountCsv.records.length,
+      accounts: accounts.size,
+      payers: [...accounts.values()].reduce((total, account) => total + account.payers.length, 0),
+    },
+  };
+}
+
+export function buildProcareRelationshipPersonDataset(relationshipBuffer: Buffer): ProcareRelationshipPersonDataset {
+  const relationshipCsv = parseCsv(relationshipBuffer, "Child Relationships");
+  const hasStandardPersonId = missingColumns(relationshipCsv.headers, ["Person ID"]).length === 0;
+  const hasAlternatePersonId = missingColumns(relationshipCsv.headers, ["Relationship Person ID"]).length === 0;
+  if (!hasStandardPersonId && !hasAlternatePersonId) throw new Error("Child Relationships is missing Person ID or Relationship Person ID.");
+  assertColumns(relationshipCsv.headers, "Child Relationships", ["Relationship Type"]);
+  const people: ProcareSourcePerson[] = [];
+  for (const row of relationshipCsv.records) {
+    if (hasStandardPersonId && /^child$/i.test(value(row, "Person Type"))) continue;
+    const personId = value(row, "Person ID", "Relationship Person ID");
+    const rawName = value(row, "Full Name", "Relationship Full Name");
+    if (!personId || !rawName) continue;
+    const [last, ...first] = rawName.split(",").map((part) => part.trim());
+    const fullName = first.length ? `${first.join(" ")} ${last}`.replace(/\s+/g, " ").trim() : rawName.replace(/\s+/g, " ").trim();
+    people.push({
+      personId,
+      personType: value(row, "Person Type") || "Relationship",
+      fullName,
+      email: value(row, "Email", "Relationship Email").toLowerCase(),
+      phone: firstPhone(row) || value(row, "Relationship Phone"),
+      relation: value(row, "Relationship Type") || "Unknown",
+      livesWith: checked(value(row, "Lives With")),
+      emergency: checked(value(row, "Emergency", "Emergency Contact")),
+      authorizedPickup: checked(value(row, "Authorized Pickup", "Pickup Allowed")),
+    });
+  }
+  return { people, inventory: { relationshipRows: relationshipCsv.records.length, people: people.length } };
+}
+
+export function buildProcareRelationshipDataset(accountBuffer: Buffer, relationshipBuffer: Buffer): ProcareRelationshipDataset {
+  const { accountCsv, accounts, payerAccountsByPerson, childAccountsByPerson } = parseProcareAccountDataset(accountBuffer);
+  const relationshipCsv = parseCsv(relationshipBuffer, "Child Relationships");
+  assertColumns(relationshipCsv.headers, "Child Relationships", ["Child ID", "Person ID", "Person Type", "Full Name", "Relationship Type", "Lives With", "Emergency", "Authorized Pickup"]);
+  const missingAccountColumns = missingColumns(accountCsv.headers, [...AUTHORITATIVE_ACCOUNT_COLUMNS]);
+  const missingRelationshipColumns = missingColumns(relationshipCsv.headers, [...AUTHORITATIVE_RELATIONSHIP_COLUMNS]);
 
   const relationshipRowsByChild = new Map<string, ProcareCsvRow[]>();
   for (const row of relationshipCsv.records) {

@@ -5,6 +5,7 @@ import path from "node:path";
 import { Prisma } from "@prisma/client";
 import {
   buildProcareRelationshipDataset,
+  missingProcareGuardianContactFields,
   normalizedDate,
   procareRelationshipGuardian,
   type ProcareAccountSource,
@@ -684,10 +685,10 @@ async function buildPlan(input: {
     const usedGuardianIds = new Set<string>();
     for (const [externalId, person] of desired.guardians) {
       let existing = existingGuardians.get(externalId) ?? [];
+      let contactEnrichmentOnly = false;
       if (!existing.length) {
         const sameName = target.guardians.filter((candidate) => (
-          candidate.sourceSystem === "procare"
-          && !usedGuardianIds.has(candidate.id)
+          !usedGuardianIds.has(candidate.id)
           && normalizedIdentityName(candidate.fullName) === normalizedIdentityName(person.fullName)
         ));
         existing = sameName.filter((candidate) => (
@@ -698,16 +699,7 @@ async function buildPlan(input: {
           increment(accountHeld, "guardian_name_only_match_requires_review");
           continue;
         }
-        const protectedMatch = target.guardians.some((candidate) => (
-          candidate.sourceSystem !== "procare"
-          && normalizedIdentityName(candidate.fullName) === normalizedIdentityName(person.fullName)
-          && (Boolean(person.email && candidate.email && candidate.email.toLowerCase() === person.email.toLowerCase())
-            || Boolean(normalizedPhone(person.phone) && normalizedPhone(candidate.phone) === normalizedPhone(person.phone)))
-        ));
-        if (protectedMatch) {
-          increment(accountHeld, "non_procare_guardian_identity_match_preserved");
-          continue;
-        }
+        contactEnrichmentOnly = existing[0]?.sourceSystem !== "procare";
       }
       if (existing.length > 1) { increment(accountHeld, "duplicate_guardian_external_id"); continue; }
       const current = existing[0];
@@ -727,6 +719,11 @@ async function buildPlan(input: {
       }
       usedGuardianIds.add(current.id);
       const data: Prisma.GuardianUncheckedUpdateInput = {};
+      Object.assign(data, missingProcareGuardianContactFields(person, current));
+      if (contactEnrichmentOnly) {
+        if (Object.keys(data).length) guardianUpdates.push({ id: current.id, data });
+        continue;
+      }
       const relation = person.relation || current.relation || "Guardian";
       if (current.relation !== relation) data.relation = relation;
       if (current.isBillingContact !== person.billingContact) data.isBillingContact = person.billingContact;

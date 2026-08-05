@@ -54,36 +54,51 @@ async function sendGridRequest(path: string, init?: RequestInit) {
   return data;
 }
 
+type EventWebhookSettings = Record<string, unknown> & {
+  id?: unknown;
+  url?: unknown;
+  public_key?: unknown;
+};
+
+async function eventWebhooks() {
+  const result = await sendGridRequest("/v3/user/webhooks/event/settings/all") as { webhooks?: EventWebhookSettings[] };
+  return Array.isArray(result.webhooks) ? result.webhooks : [];
+}
+
+function canonicalEventWebhook(webhooks: EventWebhookSettings[]) {
+  return webhooks.find((webhook) => clean(webhook.url) === CANONICAL_EVENT_WEBHOOK_URL) ?? null;
+}
+
 async function providerStatus() {
-  const [eventSettings, signedSettings, domains, verifiedSenders, clickTracking] = await Promise.all([
-    sendGridRequest("/v3/user/webhooks/event/settings"),
-    sendGridRequest("/v3/user/webhooks/event/settings/signed"),
+  const [webhooks, domains, verifiedSenders, clickTracking] = await Promise.all([
+    eventWebhooks(),
     sendGridRequest("/v3/whitelabel/domains?limit=200"),
     sendGridRequest("/v3/verified_senders"),
     sendGridRequest("/v3/tracking_settings/click"),
-  ]) as [Record<string, unknown>, Record<string, unknown>, Array<Record<string, unknown>>, { results?: Array<Record<string, unknown>> }, Record<string, unknown>];
+  ]) as [EventWebhookSettings[], Array<Record<string, unknown>>, { results?: Array<Record<string, unknown>> }, Record<string, unknown>];
+  const eventSettings = canonicalEventWebhook(webhooks);
   const fromEmail = clean(process.env.SENDGRID_FROM_EMAIL).toLowerCase();
   const fromDomain = fromEmail.split("@")[1] ?? "";
   const authenticatedDomain = domains.some((domain) => clean(domain.domain).toLowerCase() === fromDomain && domain.valid === true);
   const verifiedSender = (verifiedSenders.results ?? []).some((sender) => clean(sender.from_email).toLowerCase() === fromEmail && sender.verified === true);
-  const webhookUrl = clean(eventSettings.url);
+  const webhookUrl = clean(eventSettings?.url);
   return {
     fromDomain,
     senderReady: authenticatedDomain || verifiedSender,
     authenticatedDomain,
     verifiedSender,
     eventWebhook: {
-      enabled: eventSettings.enabled === true,
+      enabled: eventSettings?.enabled === true,
       canonicalUrl: webhookUrl === CANONICAL_EVENT_WEBHOOK_URL,
-      delivered: eventSettings.delivered === true,
-      bounce: eventSettings.bounce === true,
-      deferred: eventSettings.deferred === true,
-      dropped: eventSettings.dropped === true,
-      spamReport: eventSettings.spam_report === true,
+      delivered: eventSettings?.delivered === true,
+      bounce: eventSettings?.bounce === true,
+      deferred: eventSettings?.deferred === true,
+      dropped: eventSettings?.dropped === true,
+      spamReport: eventSettings?.spam_report === true,
     },
     signedEventWebhook: {
-      enabled: signedSettings.enabled === true,
-      hasPublicKey: Boolean(clean(signedSettings.public_key)),
+      enabled: Boolean(clean(eventSettings?.public_key)),
+      hasPublicKey: Boolean(clean(eventSettings?.public_key)),
       verificationKeyDeployed: Boolean(clean(process.env.SENDGRID_EVENT_WEBHOOK_VERIFICATION_KEY)),
     },
     globalClickTracking: clickTracking.enabled === true,
@@ -91,8 +106,12 @@ async function providerStatus() {
 }
 
 async function configureSignedEventWebhook() {
-  await sendGridRequest("/v3/user/webhooks/event/settings", {
-    method: "PATCH",
+  const current = canonicalEventWebhook(await eventWebhooks());
+  const currentId = clean(current?.id);
+  const settings = await sendGridRequest(currentId
+    ? `/v3/user/webhooks/event/settings/${encodeURIComponent(currentId)}`
+    : "/v3/user/webhooks/event/settings", {
+    method: currentId ? "PATCH" : "POST",
     body: JSON.stringify({
       enabled: true,
       url: CANONICAL_EVENT_WEBHOOK_URL,
@@ -104,12 +123,13 @@ async function configureSignedEventWebhook() {
       spam_report: true,
       group_resubscribe: false,
     }),
-  });
-  await sendGridRequest("/v3/user/webhooks/event/settings/signed", {
+  }) as EventWebhookSettings;
+  const webhookId = currentId || clean(settings.id);
+  if (!webhookId) throw new Error("SendGrid did not return an Event Webhook ID.");
+  const signed = await sendGridRequest(`/v3/user/webhooks/event/settings/signed/${encodeURIComponent(webhookId)}`, {
     method: "PATCH",
     body: JSON.stringify({ enabled: true }),
-  });
-  const signed = await sendGridRequest("/v3/user/webhooks/event/settings/signed") as Record<string, unknown>;
+  }) as Record<string, unknown>;
   const publicKey = clean(signed.public_key);
   if (!publicKey) throw new Error("SendGrid did not return an Event Webhook verification key.");
   return { publicKey, status: await providerStatus() };

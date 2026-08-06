@@ -149,7 +149,7 @@ import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfileP
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { isReportKind } from "@/lib/reporting-analytics-shared";
-import { loginHrefForNextPath } from "@/lib/login-routing";
+import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
 import { canAccessModule } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
@@ -3348,8 +3348,6 @@ async function renderLivePage(
               crmLocationId: center.crmLocationId,
               classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
-              isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
-              classrooms: billingClassroomsByCenter.get(center.id) ?? [],
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
               checkoutReadiness: stripeCheckoutReadiness({
                 customFields: center.customFields,
@@ -6010,7 +6008,7 @@ export async function renderAuthenticatedModulePage(
   }
 
   if (!canAccessModule(user, slug) || !canAccessModule(user, effectiveSlug)) {
-    notFound();
+    redirect(homePathForRole(user.role));
   }
 
   const allowedViews = (entries: ReadonlyArray<readonly [string, string]>) => entries.filter(([, moduleSlug]) => canAccessModule(user, moduleSlug)).map(([view]) => view);

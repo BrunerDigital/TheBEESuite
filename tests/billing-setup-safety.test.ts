@@ -13,7 +13,10 @@ test("saving tuition or a payment method never implicitly enables autopay", () =
   assert.doesNotMatch(publicPaymentMethodRoute, /enableAutopay:\s*"true"/);
   assert.match(paymentMethodRoute, /action === "enable_autopay"/);
   assert.match(paymentMethodRoute, /action === "disable_autopay"/);
-  assert.match(webhook, /setupMode === "enable" \? true : setupMode === "disabled" \? false : previouslyEnabled/);
+  assert.match(webhook, /const enableAutopayFromSetup = setupMode === "enable"/);
+  assert.match(webhook, /const disableAutopayFromSetup = setupMode === "disabled"/);
+  assert.match(webhook, /const autopayPatch = enableAutopayFromSetup \|\| disableAutopayFromSetup/);
+  assert.match(webhook, /autopayEnabled: autopayPatch.autopayEnabled,/);
 });
 
 test("director billing labels distinguish invoice creation from charging", () => {

@@ -60,6 +60,10 @@ function appendRawQuery(path: string, key: string, rawValue: string) {
   return `${base}${separator}${encodeURIComponent(key)}=${rawValue}${hash ? `#${hash}` : ""}`;
 }
 
+function autopayRequirement(code: string, message: string): { code: string; message: string } {
+  return { code, message };
+}
+
 async function POSTHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
@@ -238,16 +242,37 @@ async function POSTHandler(request: NextRequest) {
       autopayPlaceholder: billingAccount.autopayPlaceholder,
       customFields: currentFields,
     });
-    if (!paymentMethod.hasStripeCustomer || !paymentMethod.hasSavedPaymentMethod) {
+    const requirements = [];
+    if (!paymentMethod.hasStripeCustomer) {
+      requirements.push(autopayRequirement("missing_stripe_customer", "Add or verify a family payment method first."));
+    }
+    if (!paymentMethod.hasSavedPaymentMethod) {
+      requirements.push(autopayRequirement("missing_saved_payment_method", "Save a payment method on file before enabling autopay."));
+    }
+    if (paymentMethod.autopayStatus === "pending") {
+      requirements.push(autopayRequirement("bank_verification_pending", "Bank verification is still pending for this payment method. Complete verification before enabling autopay."));
+    }
+    if (requirements.length) {
       return NextResponse.json(
-        { ok: false, error: "Save and verify one family payment method before enabling autopay." },
+        {
+          ok: false,
+          error: "Save and verify one family payment method before enabling autopay.",
+          autopayEnableRequirements: requirements,
+        },
         { status: 400 },
       );
     }
     const paymentMethodConnectedAccountId = clean(currentFields.stripeDefaultPaymentMethodConnectedAccountId);
     if ((connectedAccountId || paymentMethodConnectedAccountId) && connectedAccountId !== paymentMethodConnectedAccountId) {
       return NextResponse.json(
-        { ok: false, error: "The saved payment method belongs to a different school payout account. Replace it for this school before enabling autopay." },
+        {
+          ok: false,
+          error: "The saved payment method belongs to a different school payout account. Replace it for this school before enabling autopay.",
+          autopayEnableRequirements: [autopayRequirement(
+            "wrong_payout_account",
+            "The saved payment method is linked to another school payout account. Replace it for this school before enabling autopay.",
+          )],
+        },
         { status: 409 },
       );
     }

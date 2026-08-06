@@ -42,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
 import {
@@ -486,6 +487,7 @@ export function ParentPortalWorkspace({
   const [accountDeletionRequest, setAccountDeletionRequest] = useState<AccountDeletionRequestSummary | null>(initialAccountDeletionRequest);
   const [accountDeletionDetails, setAccountDeletionDetails] = useState("");
   const [retentionNoticeAccepted, setRetentionNoticeAccepted] = useState(false);
+  const [autopayEnableRequirements, setAutopayEnableRequirements] = useState<string[]>([]);
   const [uniformColor, setUniformColor] = useState<"Black" | "Yellow">(uniformProducts[0]?.color ?? "Black");
   const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
@@ -529,6 +531,27 @@ export function ParentPortalWorkspace({
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
   const autopayStatus = autopayStatusOverride ?? paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const autopayCanEnable = paymentMethodManagement?.hasStripeCustomer === true && paymentMethodManagement?.hasSavedPaymentMethod === true;
+  const autopayLocalRequirements = useMemo(() => {
+    const requirements: string[] = [];
+    if (!autopayCanEnable) {
+      requirements.push("Save and verify one family payment method before enabling autopay.");
+    }
+    if (autopayStatus === "pending") {
+      requirements.push("Bank verification is pending. Complete verification for your payment method before enabling autopay.");
+    }
+    return requirements;
+  }, [autopayCanEnable, autopayStatus]);
+  const autopayRequirements = useMemo(() => {
+    const values = [...autopayEnableRequirements, ...autopayLocalRequirements];
+    const seen = new Set<string>();
+    return values.filter((requirement) => {
+      const text = requirement.trim();
+      if (!text || seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
+  }, [autopayEnableRequirements, autopayLocalRequirements]);
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const currentGuardian = useMemo(() => {
     if (!family) return null;
@@ -859,6 +882,7 @@ export function ParentPortalWorkspace({
     )) return;
     startTransition(async () => {
       setAutopayConfirmation("");
+      setAutopayEnableRequirements([]);
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -870,8 +894,19 @@ export function ParentPortalWorkspace({
           returnPath: "/parent-portal",
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
-      if (!response.ok) return showError(json?.error || "Payment method management is not configured yet.");
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        url?: string;
+        autopayEnableRequirements?: Array<{ code: string; message: string }>;
+      } | null;
+      if (!response.ok) {
+        if (action === "enable_autopay" && json?.autopayEnableRequirements?.length) {
+          setAutopayEnableRequirements(json.autopayEnableRequirements.map((requirement) => requirement.message));
+        } else {
+          setAutopayEnableRequirements([]);
+        }
+        return showError(json?.error || "Payment method management is not configured yet.");
+      }
       if (json?.url) {
         window.location.href = json.url;
         return;
@@ -888,6 +923,16 @@ export function ParentPortalWorkspace({
       showStatus(confirmation);
       router.refresh();
     });
+  }
+
+  function toggleAutopay(enabled: boolean) {
+    if (!family) return;
+    if (enabled === (autopayStatus === "enabled")) return;
+    if (enabled && !autopayCanEnable) {
+      setAutopayEnableRequirements(autopayLocalRequirements);
+      return;
+    }
+    managePaymentMethod(enabled ? "enable_autopay" : "disable_autopay");
   }
 
   function updatePreference(key: keyof NotificationPreferences, checked: boolean) {
@@ -1491,52 +1536,33 @@ export function ParentPortalWorkspace({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 font-medium">
-                    Payment Methods And Autopay
+                    Payment Methods and Autopay
                     <InfoTip label="About payment methods and autopay">
                       Saving a debit/credit card or bank account does not enable autopay. Enable it separately, or make a one-time payment on an open invoice below.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
-                      : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "Bank verification is pending."
-                        : "No saved payment method yet."}
+                    {autopayStatus === "enabled"
+                      ? "Autopay is enabled and will charge eligible open tuition invoices automatically."
+                      : paymentMethodManagement?.hasSavedPaymentMethod
+                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
+                        : paymentMethodManagement?.autopayStatus === "pending"
+                          ? "Bank verification is pending."
+                          : "No saved payment method yet."}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
-                    <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Saved Card" : "Save Card"}
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
-                    <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
-                    onClick={() => managePaymentMethod("portal")}
-                    variant="outline"
-                  >
-                    Manage Payment Method
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || autopayStatus === "enabled" || !paymentMethodManagement?.hasSavedPaymentMethod}
-                    onClick={() => managePaymentMethod("enable_autopay")}
-                    variant="outline"
-                  >
-                    Enable Autopay
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || autopayStatus === "disabled" || !billingAccount}
-                    onClick={() => managePaymentMethod("disable_autopay")}
-                    variant="outline"
-                  >
-                    Disable Autopay
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="parent-autopay-toggle" className="text-xs text-muted-foreground">Autopay</Label>
+                  <Switch
+                    id="parent-autopay-toggle"
+                    checked={autopayStatus === "enabled"}
+                    onCheckedChange={toggleAutopay}
+                    disabled={isPending || !family || autopayStatus === "pending"}
+                    aria-label="Enable or disable autopay"
+                  />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {autopayStatus === "enabled" ? "On" : "Off"}
+                  </span>
                 </div>
               </div>
               {autopayConfirmation ? (
@@ -1546,7 +1572,36 @@ export function ParentPortalWorkspace({
                   <AlertDescription>{autopayConfirmation}</AlertDescription>
                 </Alert>
               ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                  <CreditCard data-icon="inline-start" />
+                  {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Saved Card" : "Save Card"}
+                </Button>
+                <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                  <Building2 data-icon="inline-start" />
+                  {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
+                </Button>
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
+                  onClick={() => managePaymentMethod("portal")}
+                  variant="outline"
+                >
+                  Manage Payment Method
+                </Button>
+              </div>
             </div>
+            {autopayRequirements.length ? (
+              <Alert className="mt-3">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Autopay requirements</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  {autopayRequirements.map((requirement) => (
+                    <p key={requirement}>{requirement}</p>
+                  ))}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {nextOpenInvoice ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

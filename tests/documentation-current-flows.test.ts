@@ -170,7 +170,7 @@ test("role SOPs cover the August 6 UI and workflow baseline", () => {
   assert.match(teacher, /https:\/\/thebeesuite\.io\/teachers/);
   assert.match(executive, /school filter/);
   assert.match(manual, /Current Application Navigation/);
-  assert.match(inviteUi, /Import history is diagnostic when present but is not required/);
+  assert.match(inviteUi, /Import\s+history is diagnostic when present but is not required/);
 
   const parentFacing = [billing, parent, readFileSync("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md", "utf8")].join("\n");
   assert.doesNotMatch(parentFacing, /card processing recovery|card recovery/i);

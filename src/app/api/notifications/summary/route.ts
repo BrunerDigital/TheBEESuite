@@ -13,10 +13,26 @@ function centerIdFilter(centerIds: string[]) {
   return centerIds.length ? { in: centerIds } : { in: ["__no_visible_centers__"] };
 }
 
-async function GETHandler() {
+async function GETHandler(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ ok: false, error: "Authentication required." }, { status: 401 });
+  }
+
+  const now = new Date();
+  const tenantWide = canAccessAllCenters(user);
+  const notificationUserWhere: Prisma.NotificationWhereInput = {
+    AND: [
+      activeNotificationWhere(now),
+      tenantWide ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: user.id },
+    ],
+  };
+
+  if (request.nextUrl.searchParams.get("mode") === "count") {
+    const unread = await prisma.notification.count({
+      where: { readAt: null, ...notificationUserWhere },
+    });
+    return NextResponse.json({ ok: true, unread });
   }
 
   const centers = await prisma.center.findMany({
@@ -26,18 +42,10 @@ async function GETHandler() {
   const centerIds = centers.map((center) => center.id);
   const scopedCenterIds = centerIdFilter(centerIds);
   const leadWhere: Prisma.LeadWhereInput = { centerId: scopedCenterIds, status: { notIn: ["closed", "merged"] } };
-  const now = new Date();
-  const tenantWide = canAccessAllCenters(user);
   const canViewEnrollment = canAccessModule(user, "crm-leads");
   const canViewTours = canAccessModule(user, "tours");
   const canViewFteReports = canAccessModule(user, "fte-reports");
   const canViewIncidents = canAccessModule(user, "incident-reports");
-  const notificationUserWhere: Prisma.NotificationWhereInput = {
-    AND: [
-      activeNotificationWhere(now),
-      tenantWide ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: user.id },
-    ],
-  };
   const fteDueState = canViewFteReports ? getFteDueState(now) : null;
   const sevenDays = new Date(now);
   sevenDays.setDate(now.getDate() + 7);

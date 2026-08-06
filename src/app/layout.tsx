@@ -6,6 +6,7 @@ import { SubmissionFeedback } from "@/components/submission-feedback";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CANONICAL_APP_BASE_URL } from "@/lib/public-app-url";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const browserIcon = "/brand/the-bee-suite/browser-icon.png";
@@ -82,6 +83,7 @@ export default function RootLayout({
         <PwaInstallManager />
         <SubmissionFeedback />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

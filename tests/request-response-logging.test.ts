@@ -166,6 +166,32 @@ test("large or unsupported bodies are summarized instead of read", async () => {
   });
 });
 
+test("success logging can skip body sampling without changing request duration", async () => {
+  const request = new Request("https://app.test/api/dashboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "open" }),
+  });
+  const response = Response.json({ ok: true, status: "ready" });
+
+  const payload = await buildApiLogPayload(
+    request,
+    "POST",
+    response,
+    1_000,
+    { omitRequestBody: true, omitResponseBody: true },
+    1_025,
+  );
+
+  assert.equal(payload.durationMs, 25);
+  assert.equal("value" in payload.request.body, false);
+  assert.deepEqual(payload.response.body, {
+    omitted: "not_sampled",
+    contentType: "application/json",
+    contentLength: null,
+  });
+});
+
 test("SendGrid webhook logs redact signatures, recipients, ids, and provider failure text", async () => {
   const request = new Request("https://app.test/api/sendgrid/events", {
     method: "POST",

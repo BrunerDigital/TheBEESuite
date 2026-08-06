@@ -49,7 +49,7 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function sync(refreshPage: boolean) {
+    async function sync() {
       if (document.visibilityState !== "visible") return;
       setState("syncing");
       try {
@@ -71,23 +71,22 @@ export function LiveRefreshStatus({ role }: { role?: string }) {
 
         setLastSyncedAt(new Date());
         setState("idle");
-        if (refreshPage) router.refresh();
       } catch {
         if (!cancelled) setState("offline");
       }
     }
 
     const interval = window.setInterval(() => {
-      void sync(true);
+      void sync();
     }, intervalMs);
     const onFocus = () => {
-      void sync(true);
+      void sync();
     };
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void sync(true);
+      if (document.visibilityState === "visible") void sync();
     };
 
-    void sync(false);
+    void sync();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibilityChange);
 

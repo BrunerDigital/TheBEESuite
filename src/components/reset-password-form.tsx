@@ -11,42 +11,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
+import {
+  MISSING_PASSWORD_RECOVERY_LINK_MESSAGE,
+  passwordRecoveryUrlWithoutSecrets,
+  resolvePasswordRecoveryLink,
+  type PasswordRecoveryCredential,
+} from "@/lib/password-recovery-url";
 
 type ResetResponse = {
   ok?: boolean;
   error?: string;
   message?: string;
 };
-
-type ResetCredential = {
-  accessToken?: string;
-  tokenHash?: string;
-};
-
-function readRecoveryTokenFromHash(): ResetCredential {
-  if (typeof window === "undefined") return {};
-  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-  const params = new URLSearchParams(hash);
-  const type = params.get("type");
-  const accessToken = params.get("access_token");
-  return type === "recovery" && accessToken ? { accessToken } : {};
-}
-
-function readRecoveryCredential(searchParams: URLSearchParams): ResetCredential {
-  const type = searchParams.get("type");
-  const tokenHash = searchParams.get("token_hash") || searchParams.get("tokenHash");
-  if (type === "recovery" && tokenHash) return { tokenHash };
-  return readRecoveryTokenFromHash();
-}
-
-function removeRecoveryCredentialFromUrl() {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  url.searchParams.delete("token_hash");
-  url.searchParams.delete("tokenHash");
-  url.searchParams.delete("type");
-  window.history.replaceState(null, "", `${url.pathname}${url.search}`);
-}
 
 function safeNextPath(value: string | null) {
   return safeLoginNextPath(value, "/dashboard");
@@ -55,26 +31,48 @@ function safeNextPath(value: string | null) {
 export function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const search = searchParams.toString();
   const forceReset = searchParams.get("force") === "1";
   const next = safeNextPath(searchParams.get("next"));
   const parentPortalFlow = next === "/parent-portal" || next.startsWith("/parent-portal/");
   const parentSetupFlow = next === "/parent-portal/setup";
-  const credentialRef = useRef<ResetCredential>({});
+  const freshResetHref = `/forgot-password?next=${encodeURIComponent(next)}`;
+  const credentialRef = useRef<PasswordRecoveryCredential>({});
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [linkStatus, setLinkStatus] = useState<"checking" | "ready" | "invalid">(forceReset ? "ready" : "checking");
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     if (forceReset) return;
-    const credential = readRecoveryCredential(new URLSearchParams(searchParams.toString()));
-    if (credential.accessToken || credential.tokenHash) {
-      credentialRef.current = credential;
-      removeRecoveryCredentialFromUrl();
+
+    const resolution = resolvePasswordRecoveryLink(search, window.location.hash);
+    let active = true;
+    if (resolution.status === "ready") {
+      credentialRef.current = resolution.credential;
+      queueMicrotask(() => {
+        if (active) setLinkStatus("ready");
+      });
+    } else {
+      credentialRef.current = {};
+      queueMicrotask(() => {
+        if (!active) return;
+        setError(resolution.message);
+        setLinkStatus("invalid");
+      });
     }
-  }, [forceReset, searchParams]);
+
+    const cleanUrl = passwordRecoveryUrlWithoutSecrets(window.location.href);
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    if (cleanUrl !== currentUrl) window.history.replaceState(null, "", cleanUrl);
+
+    return () => {
+      active = false;
+    };
+  }, [forceReset, search]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -82,7 +80,8 @@ export function ResetPasswordForm() {
     setMessage("");
 
     if (!forceReset && !credentialRef.current.accessToken && !credentialRef.current.tokenHash) {
-      setError("This reset link is missing or expired. Request a fresh password reset link.");
+      setError(MISSING_PASSWORD_RECOVERY_LINK_MESSAGE);
+      setLinkStatus("invalid");
       return;
     }
 
@@ -151,7 +150,11 @@ export function ResetPasswordForm() {
             </div>
             <CardTitle className="mt-4 text-3xl">{parentPortalFlow ? "Set your parent portal password" : "Set a new password"}</CardTitle>
             <CardDescription>
-              {parentPortalFlow
+              {linkStatus === "invalid"
+                ? "Use the recovery link from the newest email. Older links stop working after another reset is requested."
+                : linkStatus === "checking"
+                  ? "Checking your secure reset link."
+                  : parentPortalFlow
                 ? "Use at least 8 characters. You will use this with the email from your invite."
                 : forceReset
                   ? "Enter your password, then choose something only you know."
@@ -163,7 +166,7 @@ export function ResetPasswordForm() {
               {error ? (
                 <Alert variant="destructive">
                   <AlertCircle />
-                  <AlertTitle>Password update failed</AlertTitle>
+                  <AlertTitle>{linkStatus === "invalid" ? "Reset link unavailable" : "Password update failed"}</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               ) : null}
@@ -174,7 +177,10 @@ export function ResetPasswordForm() {
                   <AlertDescription>{message}</AlertDescription>
                 </Alert>
               ) : null}
-              {forceReset ? (
+              {linkStatus === "checking" ? (
+                <p role="status" className="py-4 text-center text-sm text-slate-600">Checking reset link...</p>
+              ) : null}
+              {linkStatus === "ready" && forceReset ? (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="currentPassword">Current password</Label>
                   <Input
@@ -188,43 +194,51 @@ export function ResetPasswordForm() {
                   />
                 </div>
               ) : null}
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password">New password</Label>
-                <Input
-                  id="password"
-                  className="h-11"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="confirmPassword">Confirm password</Label>
-                <Input
-                  id="confirmPassword"
-                  className="h-11"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  required
-                />
-              </div>
-              <Button className="h-11" size="lg" type="submit" disabled={isPending}>
-                {isPending ? "Updating password..." : "Update password"}
-              </Button>
+              {linkStatus === "ready" ? (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="password">New password</Label>
+                    <Input
+                      id="password"
+                      className="h-11"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="confirmPassword">Confirm password</Label>
+                    <Input
+                      id="confirmPassword"
+                      className="h-11"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  <Button className="h-11" size="lg" type="submit" disabled={isPending}>
+                    {isPending ? "Updating password..." : "Update password"}
+                  </Button>
+                </>
+              ) : null}
             </form>
             {forceReset ? (
               <Link href={`${loginHrefForNextPath(next)}&reset=required`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline">
                 Back to login
               </Link>
+            ) : linkStatus === "invalid" ? (
+              <Button className="mt-5 h-11 w-full" size="lg" nativeButton={false} render={<Link href={freshResetHref} />}>
+                Request one fresh reset link
+              </Button>
             ) : (
               <Link
-                href={parentPortalFlow ? `/forgot-password?next=${encodeURIComponent(next)}` : "/forgot-password"}
+                href={freshResetHref}
                 className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-slate-950 hover:underline"
               >
                 Request a fresh reset link

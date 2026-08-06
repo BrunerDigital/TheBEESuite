@@ -1,6 +1,6 @@
 # Billing Admin SOP - The BEE Suite
 
-Last updated: July 31, 2026
+Last updated: August 6, 2026
 
 Audience: billing admins, school directors handling billing, accounting users, and launch support.
 
@@ -16,13 +16,29 @@ This SOP explains how billing users manage tuition, invoices, payment methods, A
 
 ![School-scoped Stripe Terminal payment](../../public/brand/the-bee-suite/explainers/current/terminal-payment-flow.png)
 
+## Current Billing UI And Rules
+
+Use the role-specific director/billing entry point at `https://thebeesuite.io/directors`. Open `Billing & Payments` -> `Billing & invoices`; use the `Payments` tab for transactions and reconciliation.
+
+- The selected child's recurring tuition assignment is the canonical future rate. The family header and family profile show the active per-child breakdown and family weekly total.
+- Weekly and four-week tuition cadences are supported where configured. Cadence changes anchor after already-billed coverage; verify the next service period before saving.
+- An explicit `$0.00` child assignment records a verified fully agency-funded rate and does not create a family tuition invoice.
+- Weekly tuition credits are itemized by child and service period. Apply and verify credits before deciding the remaining amount to collect.
+- Withdrawn and historical families do not appear in active receivables totals; use past-record review when historical balances need investigation.
+- `Create Invoice Now` creates a due-now invoice and does not charge a payment method.
+- Use the approved `Void invoice` action only for an eligible invoice with no succeeded payment. A voided invoice cannot open a new checkout. Preserve the invoice, payment, and ledger audit history.
+- The school absorbs Stripe processing costs. No processing fee is added to the parent's payment total. The platform fee and processor costs are school-side accounting items and must not be represented as a parent surcharge.
+- A secure saved method does not enable autopay. Autopay remains a separate, explicit family authorization.
+
+Wait for the saved success state or processor result before repeating an action. Full dashboard pages no longer auto-refresh in the background; reopen the specific billing record when a fresh verification is required.
+
 ## Billing Admin Responsibilities
 
 - Keep family billing accounts and ledger balances accurate.
 - Confirm tuition plans, fees, discounts, subsidy/copay rules, and due dates before invoicing.
 - Send secure payment setup links instead of collecting card or bank details manually.
 - Present card and bank choices accurately. Card is first in the current parent flow; bank options remain available when enabled.
-- Confirm card disclosures before card payment recovery is used.
+- Confirm parent checkout shows the invoice, payment method, and exact total. The school absorbs Stripe processing costs; no processing fee is added to the parent payment.
 - Reconcile payments after processor confirmation.
 - Escalate refunds, disputes, failed payments, duplicate charges, and policy questions.
 
@@ -36,7 +52,7 @@ Do not send live payment links until all items are complete:
 4. Tuition plans and open balances are reviewed against school records.
 5. ACH, instant-bank, card, autopay, refund, dispute, and failed-payment policies are approved.
 6. Parent-facing payment disclosures are approved.
-7. Card processing recovery is disabled unless approved by ownership, accounting, card-network/acquirer rules, and applicable law.
+7. Confirm the school-absorbed processor-cost policy is active and no parent processing surcharge is configured.
 8. A billing smoke test passes for the school.
 
 ## Daily Billing Review
@@ -146,7 +162,7 @@ Use this when a family needs to save ACH/bank or card details for future payment
 5. Send the secure payment request.
 6. Tell the parent to start from the branded The BEE Suite link.
 7. Explain that `Save Debit/Credit Card` is presented first and `Verify Bank Instantly` remains available for ACH verification.
-8. If card recovery is approved, tell the parent it is disclosed before submission and applies only to the selected card path.
+8. Tell the parent the exact total is shown before submission and no processing fee is added to their payment.
 9. Remind the parent that The BEE Suite does not store bank login credentials, full bank account numbers, or full card numbers.
 10. Explain that saving the method does not enable autopay. The family or authorized director must enable autopay separately.
 
@@ -168,19 +184,14 @@ Bank payment remains an available lower-cost option when the school enables it. 
 - `Instant Bank` lets a parent pay an invoice by logging into their bank through the secure processor handoff.
 - `One-Time Bank` or ACH may take a few business days to settle.
 - Pending bank payments should not be repeated unless the school confirms the first attempt failed or expired.
-- Bank payments help families avoid debit/credit card processing recovery when card recovery is enabled.
-
-Do not promise every ACH payment is always fee-free. Tell parents the exact total is shown before they submit payment.
+- Bank payments may settle differently from cards. Tell parents the exact total and payment status are shown before and after submission.
 
 ## Card Payment Guidance
 
-Use card payments only when the school allows them.
-
-1. Confirm card payment policy is approved.
-2. Confirm card processing recovery disclosure is approved if recovery is enabled.
-3. Tell the parent the card total is shown before checkout.
-4. If charging a saved card and recovery applies, confirm disclosure acceptance before charging.
-5. Do not manually enter or store card numbers in notes, messages, spreadsheets, or screenshots.
+1. Confirm card payments are enabled for the correct school.
+2. Confirm the invoice, credits, amount, selected method, and exact total.
+3. The school absorbs Stripe processing costs; do not add or describe a parent card-processing surcharge.
+4. Do not manually enter or store card numbers in notes, messages, spreadsheets, or screenshots.
 
 ## Run A Payment From Billing Admin
 
@@ -219,7 +230,7 @@ Use this only for an authorized school with a ready connected account and a cert
 3. Select an online reader registered to the current school.
 4. If needed, register the school's S700/S710 or WisePOS E using its pairing code and a clear reader label.
 5. Confirm the parent is physically present and can review and cancel from the reader.
-6. Review the account payment, any approved card recovery, and the total shown on the reader.
+6. Review the account payment and exact total shown on the reader. No processing fee is added to the parent payment.
 7. Ask the parent to tap, insert, or swipe on the Stripe reader.
 8. Wait for processor status and webhook reconciliation before treating the payment as recorded.
 

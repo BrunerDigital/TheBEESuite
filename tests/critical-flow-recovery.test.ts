@@ -29,6 +29,10 @@ test("login and password recovery preserve controlled input when services are un
   assert.match(reset, /value=\{password\}/);
   assert.match(reset, /value=\{confirmPassword\}/);
   assert.match(reset, /Your entries are still here/i);
+  assert.match(reset, /linkStatus === "ready"/);
+  assert.match(reset, /Reset link unavailable/);
+  assert.match(reset, /Request one fresh reset link/);
+  assert.match(forgot, /Use only the newest email/i);
 });
 
 test("payment return states cover expiry, cancellation, failure, retry, and confirmation", () => {

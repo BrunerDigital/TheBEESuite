@@ -49,7 +49,10 @@ export function ForgotPasswordForm({ initialNext = "" }: { initialNext?: string 
           return;
         }
 
-        setMessage(data?.message ?? "If that email is active, a password reset link will be sent shortly.");
+        setMessage(
+          data?.message ??
+            "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
+        );
       } catch {
         setError("We could not reach the password reset service. Check your connection and try again. Your email is still here.");
       }

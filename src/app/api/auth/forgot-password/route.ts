@@ -52,7 +52,8 @@ async function POSTHandler(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    message: "If that email is active, a password reset link will be sent shortly.",
+    message:
+      "If that email is active, a password reset link will be sent shortly. Use only the newest email because another request replaces older links.",
   });
 }
 

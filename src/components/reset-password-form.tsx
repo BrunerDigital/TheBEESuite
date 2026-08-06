@@ -12,10 +12,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginHrefForNextPath, safeLoginNextPath } from "@/lib/login-routing";
 import {
+  hasPasswordRecoveryContext,
   MISSING_PASSWORD_RECOVERY_LINK_MESSAGE,
   passwordRecoveryUrlWithoutSecrets,
   resolvePasswordRecoveryLink,
   type PasswordRecoveryCredential,
+  type PasswordRecoveryLinkResolution,
 } from "@/lib/password-recovery-url";
 
 type ResetResponse = {
@@ -38,6 +40,7 @@ export function ResetPasswordForm() {
   const parentSetupFlow = next === "/parent-portal/setup";
   const freshResetHref = `/forgot-password?next=${encodeURIComponent(next)}`;
   const credentialRef = useRef<PasswordRecoveryCredential>({});
+  const recoveryResolutionRef = useRef<PasswordRecoveryLinkResolution | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -49,7 +52,12 @@ export function ResetPasswordForm() {
   useEffect(() => {
     if (forceReset) return;
 
-    const resolution = resolvePasswordRecoveryLink(search, window.location.hash);
+    const hash = window.location.hash;
+    const resolution =
+      hasPasswordRecoveryContext(search, hash) || !recoveryResolutionRef.current
+        ? resolvePasswordRecoveryLink(search, hash)
+        : recoveryResolutionRef.current;
+    recoveryResolutionRef.current = resolution;
     let active = true;
     if (resolution.status === "ready") {
       credentialRef.current = resolution.credential;

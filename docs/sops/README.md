@@ -6,7 +6,7 @@ Use these SOPs when training a school team or sending role-specific instructions
 
 For the owner/director transition announcement, use `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` with the curated packet in `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`.
 
-Latest sendable packet: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`. This stable path contains the refreshed Markdown copies, bundled visuals, matching PDFs, and a one-page index. Rebuilds replace this packet instead of creating another dated version.
+Generated sendable packet: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`. Rebuild this stable packet after any source SOP, public resource, UI label, route, or workflow change. Do not distribute a generated PDF whose revision date predates its source SOP.
 
 ## Current UI Route Map
 

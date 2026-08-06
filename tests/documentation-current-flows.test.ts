@@ -22,7 +22,7 @@ const currentGuides = [
 test("current guides are dated July 29 or later and exclude superseded workflow copy", () => {
   for (const path of currentGuides) {
     const content = readFileSync(path, "utf8");
-    assert.match(content, /(?:July (?:29|30|31)|August (?:1|2)), 2026/, path);
+    assert.match(content, /(?:July (?:29|30|31)|August (?:1|2|3|4|5|6)), 2026/, path);
     assert.doesNotMatch(content, /creates? (?:a |the )?Friday invoice/i, path);
     assert.doesNotMatch(content, /bank payment is the preferred payment method/i, path);
     assert.doesNotMatch(content, /create your password.*setup link/i, path);
@@ -55,6 +55,11 @@ test("public resources describe current parent, tuition, FTE, and launch flows",
   const resources = readFileSync("src/app/resources/page.tsx", "utf8");
 
   assert.match(resources, /school-issued first-login password/);
+  assert.match(resources, /id: "director-parent-invites"/);
+  assert.match(resources, /Add Family, Parent \+ Child/);
+  assert.match(resources, /Accepted means the email provider accepted it/);
+  assert.match(resources, /does not require a ProCare import batch/);
+  assert.match(resources, /School Operations > Enrollment status/);
   assert.match(resources, /presents card first/);
   assert.match(resources, /Thursday schedule/);
   assert.match(resources, /Friday at 12 PM Eastern/);
@@ -139,4 +144,34 @@ test("public guide sources do not point at versioned visual directories or publi
   assert.doesNotMatch(publicGuideSources, /sop-graphics\/2026-/);
   assert.doesNotMatch(publicGuideSources, /explainers\/[^"')\s]*2026-/);
   assert.doesNotMatch(publicGuideSources, /BusyBees/i);
+});
+
+test("role SOPs cover the August 6 UI and workflow baseline", () => {
+  const director = readFileSync("docs/sops/DIRECTOR_SOP.md", "utf8");
+  const billing = readFileSync("docs/sops/BILLING_ADMIN_SOP.md", "utf8");
+  const parent = readFileSync("docs/sops/PARENT_PORTAL_SOP.md", "utf8");
+  const teacher = readFileSync("docs/sops/TEACHER_SOP.md", "utf8");
+  const executive = readFileSync("docs/sops/EXECUTIVE_ADMIN_SOP.md", "utf8");
+  const manual = readFileSync("docs/sops/SCHOOL_SYSTEM_OPERATING_MANUAL.md", "utf8");
+  const inviteUi = readFileSync("src/components/parent-portal-invite-button.tsx", "utf8");
+
+  for (const [name, content] of Object.entries({ director, billing, parent, teacher, executive, manual })) {
+    assert.match(content, /August 6, 2026/, name);
+  }
+
+  assert.match(director, /Add Family, Parent \+ Child/);
+  assert.match(director, /Accepted.*Delivered/s);
+  assert.match(director, /ProCare batch.*not required/s);
+  assert.match(director, /Enrollment Status Summary/);
+  assert.match(director, /four-week tuition cadence/i);
+  assert.match(billing, /Void invoice/i);
+  assert.match(billing, /school absorbs Stripe processing costs/i);
+  assert.match(parent, /current password is preserved/i);
+  assert.match(teacher, /https:\/\/thebeesuite\.io\/teachers/);
+  assert.match(executive, /school filter/);
+  assert.match(manual, /Current Application Navigation/);
+  assert.match(inviteUi, /Import history is diagnostic when present but is not required/);
+
+  const parentFacing = [billing, parent, readFileSync("docs/sops/PARENT_ACH_PAYMENT_GUIDE.md", "utf8")].join("\n");
+  assert.doesNotMatch(parentFacing, /card processing recovery|card recovery/i);
 });

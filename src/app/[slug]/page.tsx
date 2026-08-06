@@ -2532,6 +2532,7 @@ async function renderLivePage(
             select: {
               name: true,
               email: true,
+              role: true,
             },
           },
           assignedTo: {
@@ -2718,6 +2719,7 @@ async function renderLivePage(
       : defaultMessageTemplates;
     type MessageThread = {
       key: string;
+      familyId: string | null;
       familyName: string;
       centerLabel: string | null;
       assignedTo: { name: string; email: string } | null;
@@ -2731,15 +2733,17 @@ async function renderLivePage(
         channel: string;
         priority: string;
         createdAt: Date | string;
-        sender: { name: string; email: string } | null;
+        sender: { name: string; email: string; role?: string } | null;
+        isFromFamily: boolean;
         attachments?: Awaited<ReturnType<typeof signMessageAttachmentsFromMetadata>>;
         replyHref?: string | null;
       }>;
     };
-    const threadMap = signedMessages.reduce((map, message) => {
+    const threadMap = visibleMessages.reduce((map, message) => {
       const key = message.threadKey ?? (message.familyId ? `family:${message.familyId}` : `internal:${message.id}`);
       const existing = map.get(key) ?? {
         key,
+        familyId: message.familyId,
         familyName: message.family?.name ?? "Internal thread",
         centerLabel: message.family?.centerId ? centerLabelById.get(message.family.centerId) ?? null : null,
         assignedTo: message.assignedTo ?? null,
@@ -2762,6 +2766,7 @@ async function renderLivePage(
         priority: message.priority,
         createdAt: message.createdAt,
         sender: message.sender,
+        isFromFamily: message.sender?.role === UserRole.PARENT_GUARDIAN || message.sender?.role === UserRole.AUTHORIZED_PICKUP,
         attachments: message.attachments,
         replyHref: message.replyHref,
       });
@@ -2772,7 +2777,7 @@ async function renderLivePage(
         ...thread,
         messages: thread.messages
           .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
-          .slice(-5),
+          .slice(-50),
       }))
       .sort((left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime())
       .slice(0, 20);
@@ -2808,6 +2813,7 @@ async function renderLivePage(
                 subject: requestedReplySubject || null,
               }
             : null,
+          initialThreadKey: requestedReplyFamilyId ? `family:${requestedReplyFamilyId}` : null,
           segmentOptions: {
             centers: centers.map((center) => ({
               id: center.id,

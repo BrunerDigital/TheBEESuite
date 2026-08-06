@@ -149,17 +149,16 @@ import { defaultProfilePhotoUrlForRole, readProfilePhotoStorageKey, readProfileP
 import { prisma } from "@/lib/prisma";
 import { buildAnalyticsReportData, normalizeReportFilters } from "@/lib/reporting-analytics";
 import { isReportKind } from "@/lib/reporting-analytics-shared";
-import { loginHrefForNextPath } from "@/lib/login-routing";
+import { homePathForRole, loginHrefForNextPath } from "@/lib/login-routing";
 import { canAccessModule } from "@/lib/rbac";
 import { assetKind, canManageAssetHub, CORPORATE_ASSET_TYPE, readAssetMetadata } from "@/lib/asset-hub";
 import { deriveDirectorLaunchAutoCompletedIds } from "@/lib/setup-checklist-auto";
 import { readCompletedSetupChecklistIds } from "@/lib/setup-checklists";
 import { stripeCheckoutReadiness, stripeConnectReadinessFromFields } from "@/lib/stripe-connect-readiness";
 import { terminalStoreCatalog } from "@/lib/terminal-store";
-import { STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES, studentUniformProductOptions } from "@/lib/uniform-products";
 import { readSchoolEin } from "@/lib/school-tax-id";
 import { buildRequiredDocumentChecklist, summarizeRequiredDocumentChecklist } from "@/lib/required-document-checklist";
-import { canUseKidCityCorporateBilling } from "@/lib/brand-assets";
+import { canUseKidCityCorporateBilling, isMissHoneysBrandText } from "@/lib/brand-assets";
 import {
   asRecord,
   buildRegistrationReviewPreview,
@@ -1965,7 +1964,7 @@ async function renderLivePage(
     const parentVisibleLedgerWhere: Prisma.LedgerEntryWhereInput = {
       NOT: agencyOnlyLedgerWhere,
     };
-    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter, uniformProducts] = await Promise.all([
+    const [billingAccount, latestLedgerEntry, agencyLedgerEntries, invoices, dailyReports, incidents, messages, documents, media, announcements, familyCenter] = await Promise.all([
       prisma.billingAccount.findUnique({
         where: { familyId },
         select: {
@@ -2101,11 +2100,6 @@ async function renderLivePage(
             },
           })
         : Promise.resolve(null),
-      prisma.product.findMany({
-        where: { type: { in: [...STUDENT_UNIFORM_SHIRT_PRODUCT_TYPES] } },
-        orderBy: [{ name: "asc" }],
-        select: { id: true, name: true, type: true, amountCents: true },
-      }),
     ]);
 
     const [signedDocuments, signedMedia, signedMessages] = await Promise.all([
@@ -2256,7 +2250,6 @@ async function renderLivePage(
           ],
         })
       : false;
-
     return (
       <ParentPortalWorkspace
         key={parentReplyToMessageId || "parent-portal"}
@@ -2288,7 +2281,7 @@ async function renderLivePage(
         documents={signedDocuments}
         media={signedMedia}
         announcements={announcements}
-        uniformProducts={studentUniformProductOptions(uniformProducts)}
+        uniformProducts={[]}
         currentGuardianId={linkedGuardian?.id ?? null}
         kioskCredentials={kioskCredentials}
         notificationPreferences={notificationPreferences}
@@ -3354,6 +3347,7 @@ async function renderLivePage(
               name: center.name,
               crmLocationId: center.crmLocationId,
               classrooms: billingClassroomsByCenter.get(center.id) ?? [],
+              isMissHoneysLearningCenter: isMissHoneysBrandText(center.name),
               dashboardOptions: dashboardOptionsFromCustomFields(center.customFields),
               checkoutReadiness: stripeCheckoutReadiness({
                 customFields: center.customFields,
@@ -6014,7 +6008,7 @@ export async function renderAuthenticatedModulePage(
   }
 
   if (!canAccessModule(user, slug) || !canAccessModule(user, effectiveSlug)) {
-    notFound();
+    redirect(homePathForRole(user.role));
   }
 
   const allowedViews = (entries: ReadonlyArray<readonly [string, string]>) => entries.filter(([, moduleSlug]) => canAccessModule(user, moduleSlug)).map(([view]) => view);

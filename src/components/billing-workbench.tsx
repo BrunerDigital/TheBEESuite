@@ -20,7 +20,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions, type DashboardOptions } from "@/lib/dashboard-options";
-import { STUDENT_UNIFORM_SHIRT_BASE_NAME, STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE, STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS, STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT } from "@/lib/uniform-products";
+import {
+  STUDENT_UNIFORM_SHIRT_BASE_NAME,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_PRODUCT_TYPE,
+  STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE,
+  STUDENT_UNIFORM_SHIRT_SINGLE_PRICE_CENTS,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_PRICE_CENTS,
+  STUDENT_UNIFORM_SHIRT_BUNDLE_COUNT,
+} from "@/lib/uniform-products";
 import type { StripeCheckoutReadiness } from "@/lib/stripe-connect-readiness";
 import { StripeTerminalPayment } from "@/components/stripe-terminal-payment";
 import { TUITION_CREDIT_CATEGORIES, type TuitionCreditCategory } from "@/lib/tuition-credits";
@@ -108,6 +115,7 @@ export type BillingWorkbenchCenter = {
   crmLocationId: string | null;
   classrooms: Array<{ id: string; name: string; ageGroup: string }>;
   dashboardOptions?: DashboardOptions;
+  isMissHoneysLearningCenter?: boolean;
   checkoutReadiness?: Pick<
     StripeCheckoutReadiness,
     "accountId" | "label" | "canAcceptParentPayments" | "blockingReason" | "stripeConfigured" | "webhookConfigured"
@@ -181,6 +189,10 @@ function periodMatchesCadence(value: string, cadence: string) {
 
 function money(cents: number) {
   return new Intl.NumberFormat("en", { style: "currency", currency: "USD" }).format(cents / 100);
+}
+
+function isUniformShirtProduct(product: BillingWorkbenchProduct) {
+  return product.type === STUDENT_UNIFORM_SHIRT_PRODUCT_TYPE || product.type === STUDENT_UNIFORM_SHIRT_BUNDLE_PRODUCT_TYPE;
 }
 
 function dollarsToCents(value: string) {
@@ -396,7 +408,13 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const selectedCenterClassrooms = selectedCenter?.classrooms ?? [];
   const selectedCheckoutReadiness = selectedCenter?.checkoutReadiness ?? null;
   const selectedPlan = locationTuitionPlans.find((plan) => plan.id === tuitionPlanId) ?? null;
-  const selectedProduct = products.find((product) => product.id === productId) ?? null;
+  const selectedProducts = selectedCenter?.isMissHoneysLearningCenter
+    ? products.filter((product) => !isUniformShirtProduct(product))
+    : products;
+  const firstSelectedProductId = selectedProducts[0]?.id ?? "";
+  const effectiveChargeSource = chargeSource === "product" && selectedProducts.length === 0 ? "tuitionPlan" : chargeSource;
+  const effectiveProductId = selectedProducts.find((product) => product.id === productId)?.id ?? firstSelectedProductId;
+  const selectedProduct = selectedProducts.find((product) => product.id === effectiveProductId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
   const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
     ? assignmentChildId
@@ -761,12 +779,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function chargePayload() {
     return {
-      chargeSource,
-      tuitionPlanId: chargeSource === "tuitionPlan" ? tuitionPlanId : undefined,
-      productId: chargeSource === "product" ? productId : undefined,
-      quantity: chargeSource === "product" ? productQuantity : undefined,
+      chargeSource: effectiveChargeSource,
+      tuitionPlanId: effectiveChargeSource === "tuitionPlan" ? tuitionPlanId : undefined,
+      productId: effectiveChargeSource === "product" ? effectiveProductId : undefined,
+      quantity: effectiveChargeSource === "product" ? productQuantity : undefined,
       description,
-      amountDollars: chargeSource === "custom" ? amountDollars : undefined,
+      amountDollars: effectiveChargeSource === "custom" ? amountDollars : undefined,
     };
   }
 
@@ -1769,15 +1787,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
-              chargeSource={chargeSource}
+              chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
               setTuitionPlanId={handleTuitionPlanChange}
-              productId={productId}
+              productId={effectiveProductId}
               setProductId={setProductId}
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
-              products={products}
+              products={selectedProducts}
               tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
@@ -1881,15 +1899,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="batch" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
-              chargeSource={chargeSource}
+              chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
               setTuitionPlanId={handleTuitionPlanChange}
-              productId={productId}
+              productId={effectiveProductId}
               setProductId={setProductId}
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
-              products={products}
+              products={selectedProducts}
               tuitionPlans={locationTuitionPlans}
               amountDollars={amountDollars}
               setAmountDollars={setAmountDollars}
@@ -2380,7 +2398,7 @@ function ChargeFields({
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="tuitionPlan">Tuition plan</SelectItem>
-            <SelectItem value="product">Uniform shirt / product</SelectItem>
+            {products.length ? <SelectItem value="product">Uniform shirt / product</SelectItem> : null}
             <SelectItem value="custom">Custom charge</SelectItem>
           </SelectContent>
         </Select>

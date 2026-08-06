@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -26,3 +27,5 @@ jobs:
 
       - name: Run production validation gate
         run: npm run cloud:validate
+
+# manual trigger for required validate status

@@ -4,6 +4,7 @@ import { getCurrentUser, isParentGuardian } from "@/lib/auth";
 import { writeAuditLog } from "@/lib/audit";
 import { createBillingInvoiceForFamily } from "@/lib/billing-invoices";
 import { normalizeBillingPeriod } from "@/lib/billing-workflows";
+import { isMissHoneysBrandText } from "@/lib/brand-assets";
 import { currentlyEnrolledChildWhere } from "@/lib/enrollment-status";
 import {
   normalizeProductPurchaseQuantity,
@@ -54,6 +55,11 @@ async function POSTHandler(request: NextRequest) {
         id: true,
         name: true,
         centerId: true,
+        center: {
+          select: {
+            name: true,
+          },
+        },
         guardians: {
           where: { userId: user.id },
           select: { id: true, userId: true },
@@ -76,6 +82,12 @@ async function POSTHandler(request: NextRequest) {
   const variant = studentUniformShirtVariantFromProduct(product);
   if (!variant) {
     return NextResponse.json({ ok: false, error: "This product is not available for parent portal purchase." }, { status: 400 });
+  }
+  if (isMissHoneysBrandText(family.center?.name)) {
+    return NextResponse.json({
+      ok: false,
+      error: "Uniform shirt purchases are not available for this center.",
+    }, { status: 403 });
   }
   if (product.amountCents <= 0) {
     return NextResponse.json({ ok: false, error: "Product price must be greater than zero." }, { status: 400 });

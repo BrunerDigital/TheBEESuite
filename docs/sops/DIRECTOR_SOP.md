@@ -1,6 +1,6 @@
 # Director SOP - The BEE Suite
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: center directors, assistant directors, and school operators responsible for daily use of The BEE Suite.
 
@@ -22,6 +22,60 @@ Use `SCHOOL_SYSTEM_OPERATING_MANUAL.md` for the full launch map and `BILLING_ADM
 
 This SOP explains how directors should use The BEE Suite for the workflows that affect live school operations: families, children, classrooms, teachers, attendance, parent portal access, billing, documents, incidents, communications, and support escalation.
 
+## Current Director UI And User Flows
+
+Use the role-specific director entry point: `https://thebeesuite.io/directors`. After sign-in, confirm the school shown in the header before opening or changing a record.
+
+The current sidebar and workspace tabs are:
+
+- `Dashboard` for the role-aware daily command center, notifications, and the prominent `Enrollment Status Summary` shortcut.
+- `School Operations` with `Enrollment status`, `Classrooms`, `Attendance`, `Daily reports`, and `Incidents`.
+- `Families & Communication` with `Families`, `Children`, `Messages`, and `Media review`.
+- `Staff & Access` with `Teachers` and `Team permissions` when the role allows it.
+- `Billing & Payments` with `Billing & invoices` and `Payments`.
+- `Records & Compliance` with `Forms`, `Documents`, and `Compliance`.
+- `Enrollment CRM` with `Leads`, `Pipeline`, `Tours`, and `Waitlist`.
+- `Insights & Reputation` with `Enrollment status`, `Analytics`, and `Reputation`.
+- `Settings & Setup` with role-allowed settings, integrations, school setup, notifications, and branding.
+
+### Enrollment Status Summary
+
+Open `View enrollment status` from the director dashboard or School Operations, or open `Insights & Reputation` -> `Enrollment status`. The report is school-scoped and groups the current roster by classroom and age. Search the live view, then use CSV, PDF, or print as needed. Withdrawn and historical children stay out of active totals; use `Show Past & Other` from the family workspace when a historical record must be reviewed.
+
+### Add A New Enrollment And Invite The Parent
+
+1. Open `Families & Communication` -> `Families` -> `Add Family, Parent + Child`.
+2. Confirm `School / center`. Enter the family, primary guardian, and child. Leave `Prior balance owed at cutover` blank or `0` unless a verified pre-BEE Suite debt exists.
+3. Enter the guardian's personal email and phone. Choose the child's correct enrollment status, start date, and classroom when known.
+4. Select `Save Family, Parent + Child`, then reopen the saved family.
+5. Confirm the sticky context header, guardian relationship, email, phone, linked children, active or pending enrollment, classroom, custody/pickup notes, and permissions.
+6. Scroll to `Parent Portal Access`, find the exact guardian, and select `Send Parent App Invite`.
+7. Read the result and status. `Accepted` means the email provider accepted the message; `Delivered` is confirmed delivery. `Failed` or `Expired` requires follow-up.
+8. If `Copy Invitation for Manual Email` appears, send that copy only from the approved school email account to the guardian email shown on the card.
+9. After the account is linked, `Send Parent Feature Guide & FAQ` may be used.
+
+Invitations are authorized from the records currently stored in The BEE Suite. A ProCare batch is useful diagnostic history but is not required for a manually entered or safely reconciled family. The invite is blocked when the family is not linked to a school, the guardian email is invalid, the phone has fewer than four digits, no child is linked, no child has an active or pending enrollment, or the same email has conflicting guardian identities.
+
+`Resend Parent App Invite` preserves an existing parent's current password and sends a reminder with the `Forgot password` option. Never create a second family or guardian account merely because the parent missed the first email.
+
+### Current Family And Billing Rules
+
+- The selected child's recurring tuition assignment is the canonical future rate. The family view shows the active per-child breakdown and family weekly total.
+- Use an explicit `$0.00` child assignment for a verified fully agency-funded rate; it creates no family tuition invoice.
+- Four-week tuition cadence is available where configured. Review the service period and already-billed coverage before changing cadence.
+- `Create Invoice Now` creates an invoice; it does not immediately charge a payment method.
+- Void only an eligible unpaid invoice through the approved void action. Do not delete ledger history or void an invoice with a succeeded payment.
+- Withdrawn and historical families are excluded from active balance summaries but remain available for past-record review.
+- The school absorbs Stripe processing costs; no processing fee is added to the parent's payment total.
+
+### Confirmed AI Changes
+
+AI Command may prepare a school-scoped data change only when the current user has permission. Review the preview, school, record, and exact proposed values, then explicitly confirm before the mutation runs. AI never makes final custody, safety, medical, licensing, payment-policy, or legal decisions.
+
+### Loading And Refresh Behavior
+
+The app no longer reloads full dashboard pages automatically in the background. Notification badges use a lightweight refresh. If a save or send action is still pending, wait for its result and do not repeatedly click it. Reopen or refresh the specific record when confirmation is required.
+
 ## Before You Start
 
 Confirm these items before staff or parents are trained:
@@ -32,7 +86,7 @@ Confirm these items before staff or parents are trained:
 - Family profiles have the correct guardians, children, emails, phone numbers, custody notes, allergies, medical notes, and authorized pickups.
 - Open balances and invoices have been reviewed before parent payments are enabled.
 - Stripe payout onboarding is complete for the school before parents are asked to pay online.
-- Parent-paid processing recovery is not enabled unless ownership has approved the disclosure and policy.
+- The school absorbs Stripe processing costs; no processing fee is added to the parent's payment total.
 
 ## Daily Opening Routine
 

@@ -77,6 +77,7 @@ import {
   type ChildLocationTrackerClassroom,
 } from "@/components/child-location-tracker-panel";
 import { DashboardOptionsSettingsPanel } from "@/components/dashboard-options-settings-panel";
+import { EnrollmentStatusShortcut } from "@/components/enrollment-status-shortcut";
 import { ExecutiveAdminConsole } from "@/components/executive-admin-console";
 import {
   ExecutiveMarketingPortfolio,
@@ -1688,6 +1689,7 @@ export type CenterDashboardData = {
   centerName: string;
   place: string;
   schoolEin: string | null;
+  canViewEnrollmentStatus: boolean;
   fteCenters: FteReportCenterOption[];
   ftePrefills: FteReportPrefill[];
   fteReports: FteReportRow[];
@@ -1739,6 +1741,7 @@ export function CenterDashboardPage({ data }: { data: CenterDashboardData }) {
           </Link>
         </div>
       </section>
+      {data.canViewEnrollmentStatus ? <EnrollmentStatusShortcut centerId={data.centerId} /> : null}
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Leads" value={data.stats.leads.toLocaleString()} />
         <StatCard label="High intent" value={data.stats.highIntentLeads.toLocaleString()} />
@@ -2747,6 +2750,7 @@ export type ClassroomDashboardData = {
   ageGroups: string[];
   canManageClassroomSetup: boolean;
   canMoveChildren: boolean;
+  canViewEnrollmentStatus: boolean;
   demoMode?: boolean;
 };
 
@@ -2779,6 +2783,9 @@ export function ClassroomDashboardPage({ data }: { data: ClassroomDashboardData 
           Live classroom capacity, roster, teacher assignment, daily report, and incident snapshot.
         </p>
       </section>
+      {data.canViewEnrollmentStatus ? (
+        <EnrollmentStatusShortcut centerId={data.centers.length === 1 ? data.centers[0]?.id : null} />
+      ) : null}
       {data.demoMode ? <DemoDataNotice section="classroom operations" /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Classrooms" value={data.classrooms.length} />

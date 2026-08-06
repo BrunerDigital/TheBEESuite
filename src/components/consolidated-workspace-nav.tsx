@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardCheck,
+  ClipboardList,
   CreditCard,
   FileText,
   HeartHandshake,
@@ -48,10 +49,11 @@ const workspaceConfig = {
   },
   operations: {
     title: "School Operations",
-    description: "Run the school day from one workspace—classrooms, live attendance, daily reports, and incident follow-up.",
+    description: "Run the school day from one workspace—enrollment status, classrooms, live attendance, daily reports, and incident follow-up.",
     note: "Daily operations workspace",
-    columns: "sm:grid-cols-2 xl:grid-cols-4",
+    columns: "sm:grid-cols-2 xl:grid-cols-5",
     views: [
+      ["enrollment", "Enrollment status", "Current roster and exports", "/analytics?report=enrollment_status", ClipboardList],
       ["classrooms", "Classrooms", "Rooms, ratios, and activity", "/classroom-dashboard", Activity],
       ["attendance", "Attendance", "Check-in and live status", "/classroom-dashboard?view=attendance", ClipboardCheck],
       ["reports", "Daily reports", "Care notes and family updates", "/classroom-dashboard?view=reports", BookOpen],
@@ -95,8 +97,9 @@ const workspaceConfig = {
     title: "Insights & Reputation",
     description: "Understand school performance and turn family feedback into clear, actionable reputation work.",
     note: "Performance workspace",
-    columns: "sm:grid-cols-2",
+    columns: "sm:grid-cols-3",
     views: [
+      ["enrollment", "Enrollment status", "Current roster and exports", "/analytics?report=enrollment_status", ClipboardList],
       ["analytics", "Analytics", "Trends and operating metrics", "/analytics", BarChart3],
       ["reputation", "Reputation", "Reviews and family sentiment", "/analytics?view=reputation", Star],
     ],

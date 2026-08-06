@@ -4836,6 +4836,7 @@ async function renderLivePage(
           centerName: center?.crmLocationId ?? center?.name ?? "No center assigned",
           place: [center?.city, center?.state].filter(Boolean).join(", "),
           schoolEin: center ? readSchoolEin(center.customFields) : null,
+          canViewEnrollmentStatus: canAccessModule(user, "analytics"),
           inquiryEmbed: center
             ? {
                 title: `${formatCenterName(center)} inquiry form embed`,
@@ -5019,6 +5020,7 @@ async function renderLivePage(
           ageGroups: classroomAgeGroups,
           canManageClassroomSetup: canManageOperations(user),
           canMoveChildren: canManageClassroomTasks(user),
+          canViewEnrollmentStatus: canAccessModule(user, "analytics"),
           demoMode,
         }}
       />
@@ -5988,7 +5990,11 @@ export async function renderAuthenticatedModulePage(
   const familiesView = slug === "family-detail" && ["children", "messages", "media"].includes(requestedView ?? "") ? requestedView! : "families";
   const billingView = slug === "billing-invoices" && requestedView === "payments" ? "payments" : "billing";
   const recordsView = slug === "forms" && ["documents", "compliance"].includes(requestedView ?? "") ? requestedView! : "forms";
-  const insightsView = slug === "analytics" && requestedView === "reputation" ? "reputation" : "analytics";
+  const insightsView = slug === "analytics" && firstSearchParam(resolvedSearchParams.report) === "enrollment_status"
+    ? "enrollment"
+    : slug === "analytics" && requestedView === "reputation"
+      ? "reputation"
+      : "analytics";
   const staffView = slug === "staff" && requestedView === "permissions" ? "permissions" : "teachers";
   const settingsView = slug === "billing-settings" && ["integrations", "setup", "notifications", "branding"].includes(requestedView ?? "") ? requestedView! : "settings";
   const effectiveSlug = slug === "crm-leads"
@@ -6017,11 +6023,11 @@ export async function renderAuthenticatedModulePage(
     return <AppShell currentUser={user}>
       {slug === "crm-leads" ? <ConsolidatedWorkspaceNav workspace="enrollment" activeView={enrollmentView} /> : null}
       {slug === "campaigns" ? <ConsolidatedWorkspaceNav workspace="growth" activeView={growthView} /> : null}
-      {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["classrooms", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}
+      {slug === "classroom-dashboard" ? <ConsolidatedWorkspaceNav workspace="operations" activeView={operationsView} allowedViews={allowedViews([["enrollment", "analytics"], ["classrooms", "classroom-dashboard"], ["attendance", "attendance"], ["reports", "daily-reports"], ["incidents", "incident-reports"]])} /> : null}
       {slug === "family-detail" ? <ConsolidatedWorkspaceNav workspace="families" activeView={familiesView} allowedViews={allowedViews([["families", "family-detail"], ["children", "child-profile"], ["messages", "messages"], ["media", "parent-media-review"]])} /> : null}
       {slug === "billing-invoices" ? <ConsolidatedWorkspaceNav workspace="billing" activeView={billingView} allowedViews={allowedViews([["billing", "billing-invoices"], ["payments", "payments"]])} /> : null}
       {slug === "forms" ? <ConsolidatedWorkspaceNav workspace="records" activeView={recordsView} allowedViews={allowedViews([["forms", "forms"], ["documents", "documents"], ["compliance", "compliance"]])} /> : null}
-      {slug === "analytics" ? <ConsolidatedWorkspaceNav workspace="insights" activeView={insightsView} allowedViews={allowedViews([["analytics", "analytics"], ["reputation", "reputation"]])} /> : null}
+      {slug === "analytics" ? <ConsolidatedWorkspaceNav workspace="insights" activeView={insightsView} allowedViews={allowedViews([["enrollment", "analytics"], ["analytics", "analytics"], ["reputation", "reputation"]])} /> : null}
       {slug === "staff" ? <ConsolidatedWorkspaceNav workspace="staff" activeView={staffView} allowedViews={allowedViews([["teachers", "staff"], ["permissions", "team-permissions"]])} /> : null}
       {slug === "billing-settings" ? <ConsolidatedWorkspaceNav workspace="settings" activeView={settingsView} allowedViews={allowedViews([["settings", "billing-settings"], ["integrations", "integrations"], ["setup", "school-setup"], ["notifications", "notifications"], ["branding", "white-label"]])} /> : null}
       {livePage}

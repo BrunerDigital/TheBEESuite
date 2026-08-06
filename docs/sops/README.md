@@ -1,12 +1,39 @@
 # The BEE Suite Role SOP Library
 
-Last updated: August 2, 2026
+Last updated: August 6, 2026
 
 Use these SOPs when training a school team or sending role-specific instructions before a launch, pilot, parent portal rollout, billing rollout, or kiosk rollout.
 
 For the owner/director transition announcement, use `SCHOOL_TRANSITION_SETUP_AND_CUTOVER_SOP.md` with the curated packet in `output/pdf/SCHOOL_TRANSITION_EMAIL_PACKET_CURRENT/`.
 
 Latest sendable packet: `output/pdf/TEAM_SHARE_GUIDES_CURRENT/`. This stable path contains the refreshed Markdown copies, bundled visuals, matching PDFs, and a one-page index. Rebuilds replace this packet instead of creating another dated version.
+
+## Current UI Route Map
+
+| User | Entry point | Default workspace |
+| --- | --- | --- |
+| Director, assistant director, billing admin | `https://thebeesuite.io/directors` | `/dashboard` |
+| Teacher | `https://thebeesuite.io/teachers` | `/teacher-portal` |
+| Parent or authorized pickup | `https://thebeesuite.io/parents` | `/parent-portal` |
+| Executive, regional, auditor | `https://thebeesuite.io/executives` | `/dashboard` |
+
+Current consolidated workspaces:
+
+- `School Operations`: Enrollment status, Classrooms, Attendance, Daily reports, Incidents.
+- `Families & Communication`: Families, Children, Messages, Media review.
+- `Staff & Access`: Teachers, Team permissions.
+- `Billing & Payments`: Billing & invoices, Payments.
+- `Records & Compliance`: Forms, Documents, Compliance.
+- `Enrollment CRM`: Leads, Pipeline, Tours, Waitlist.
+- `Campaigns & Automations`: Campaigns, Automations.
+- `Insights & Reputation`: Enrollment status, Analytics, Reputation.
+- `Settings & Setup`: Settings, Integrations, School setup, Notifications, White-label.
+
+## Documentation Baseline - August 6, 2026
+
+The role SOPs incorporate the current new-enrollment/parent-invitation flow, parent delivery statuses and manual fallback, ambiguous-family fail-closed behavior, active-versus-past enrollment visibility, Enrollment Status Summary exports, per-child tuition and family rollups, zero-dollar agency-funded assignments, four-week tuition cadence, invoice void rules, withdrawn-family balance filtering, school-absorbed Stripe processing costs, school-filtered payroll review, confirmed AI changes, and performance-safe manual record verification.
+
+When the UI, permissions, labels, routes, or workflow guardrails change, update the affected role SOP, this index, and `src/app/resources/page.tsx` in the same pull request. Do not describe a feature as live merely because code exists; the named school still requires the applicable launch gate.
 
 ## Send-Out Order
 
@@ -63,7 +90,7 @@ Before the guides are sent broadly, the school should confirm:
 - Directors can log in and see the correct school.
 - Teachers can log in and see the correct classroom rosters.
 - Parent guardian emails are accurate on family profiles.
-- Parent portal login is available from `https://thebeesuite.io/parents` and `https://thebeesuite.io/login`.
+- Parent portal login is available from `https://thebeesuite.io/parents`; role-specific staff entry points are `/directors`, `/teachers`, and `/executives`.
 - Parent invitations use the verified guardian email, secure parent URL, and school-issued first-login password. Parents may change the password later; staff must never ask for it to be sent back.
 - Kiosk PIN or QR credentials are ready before lobby check-in is used.
 - Stripe payout and checkout readiness are complete before parents are asked to pay online.

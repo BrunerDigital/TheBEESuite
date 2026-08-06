@@ -114,7 +114,7 @@ Do not approve live parent payments for a school until every item below is compl
 4. Tuition plans, fees, discounts, subsidy rules, ledger balances, and open invoices are validated.
 5. Parent card and bank payment choices are approved; the current flow presents card before available bank options.
 6. Saved card, saved bank, one-time bank, and autopay disclosures match approved school policy.
-7. Parent processing recovery disclosure is approved before card recovery is enabled.
+7. The school-absorbed Stripe processing-cost policy is confirmed and no parent processing surcharge is configured.
 8. Refund, dispute, failed payment, duplicate payment, and support procedures are assigned.
 9. A low-risk billing smoke test has passed.
 10. Directors and billing users know who owns parent billing questions.

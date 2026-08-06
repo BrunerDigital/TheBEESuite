@@ -39,6 +39,31 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: workspaceRoot,
   },
+  async redirects() {
+    return [
+      {
+        source: "/parent-portal/login",
+        destination: "/parents",
+        permanent: true,
+      },
+      {
+        source: "/parent-portal/setup",
+        destination: "/parents/setup",
+        permanent: true,
+      },
+      {
+        source: "/parent-portal/:path*",
+        destination: "/parents",
+        permanent: true,
+      },
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.thebeesuite.io" }],
+        destination: "https://thebeesuite.io/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

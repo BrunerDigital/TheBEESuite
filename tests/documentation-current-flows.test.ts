@@ -160,8 +160,8 @@ test("role SOPs cover the August 6 UI and workflow baseline", () => {
   }
 
   assert.match(director, /Add Family, Parent \+ Child/);
-  assert.match(director, /Accepted.*Delivered/s);
-  assert.match(director, /ProCare batch.*not required/s);
+  assert.match(director, /Accepted[\s\S]*Delivered/);
+  assert.match(director, /ProCare batch[\s\S]*not required/);
   assert.match(director, /Enrollment Status Summary/);
   assert.match(director, /four-week tuition cadence/i);
   assert.match(billing, /Void invoice/i);

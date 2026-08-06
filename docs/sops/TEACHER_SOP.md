@@ -1,6 +1,6 @@
 # Teacher SOP - The BEE Suite
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: teachers and classroom staff using The BEE Suite for attendance, daily reports, media, incidents, messages, and staff kiosk workflows.
 
@@ -24,6 +24,16 @@ Use `KIOSK_AND_AUTHORIZED_PICKUP_GUIDE.md` for staff kiosk clock-in/out details.
 
 This SOP explains what teachers should do in The BEE Suite each day and when they should stop and ask a director for help.
 
+## Current Teacher UI And User Flows
+
+Use `https://thebeesuite.io/teachers` for the role-specific teacher sign-in. After login, the teacher opens the mobile-first `Teacher Portal`; office-capable views may also show `School Operations` when permitted.
+
+On mobile, the bottom navigation provides `Home`, `Classroom`, `Messages`, and `Docs`. The classroom workspace covers the assigned roster, attendance, daily reports, incidents, media, and messages. Teachers must not use director-only family, billing, access, or setup workflows.
+
+The app does not automatically reload full pages in the background. After saving attendance, a daily report, media, or an incident, wait for the saved state. If an offline queue appears, keep the app open, restore connection, use the available retry/sync action once, and verify completion before repeating anything.
+
+Daily reports and parent-facing updates may include approved photos and reports throughout the school day. Confirm the correct child, classroom, media permission, and parent-facing wording before submission. Never include another child's name or private information.
+
 ## Before You Start
 
 Have these ready:
@@ -38,7 +48,7 @@ Use only the first-login password issued directly by the school. Change it when 
 
 ## Login
 
-1. Go to `https://thebeesuite.io/login`.
+1. Go to `https://thebeesuite.io/teachers`.
 2. Enter your username or work email.
 3. Enter your password.
 4. Reset your password if the app asks you to.

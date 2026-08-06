@@ -337,7 +337,7 @@ const guides: ResourceGuide[] = [
     icon: CreditCard,
     steps: [
       "Review school-scoped tuition plans, assigned child rates, discounts, balances, credits, failed payments, and upcoming autopay runs.",
-      "Confirm the Thursday schedule will create the following week's tuition invoice once and use the assigned child's canonical billing rate.",
+      "Confirm weekly or four-week cadence, the next unbilled service period, and the assigned child's canonical rate before invoices are created.",
       "Confirm family payment methods belong to the correct account; the parent flow presents card first while secure bank choices remain available.",
       "For an in-person card payment, use the school's connected Terminal location and network reader only while the parent is present.",
       "Reconcile invoices, Stripe events, ledger entries, and payout destination. Document exceptions, reversals, credits, and parent conversations.",

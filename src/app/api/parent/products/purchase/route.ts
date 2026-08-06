@@ -47,7 +47,6 @@ async function POSTHandler(request: NextRequest) {
     prisma.family.findFirst({
       where: {
         id: familyScope.familyId,
-        guardians: { some: { userId: user.id } },
         children: { some: currentlyEnrolledChildWhere() },
       },
       orderBy: { createdAt: "desc" },
@@ -55,16 +54,6 @@ async function POSTHandler(request: NextRequest) {
         id: true,
         name: true,
         centerId: true,
-        center: {
-          select: {
-            name: true,
-          },
-        },
-        guardians: {
-          where: { userId: user.id },
-          select: { id: true, userId: true },
-          take: 1,
-        },
       },
     }),
     prisma.product.findUnique({
@@ -83,7 +72,11 @@ async function POSTHandler(request: NextRequest) {
   if (!variant) {
     return NextResponse.json({ ok: false, error: "This product is not available for parent portal purchase." }, { status: 400 });
   }
-  if (isMissHoneysBrandText(family.center?.name)) {
+  const familyCenter = family.centerId ? await prisma.center.findUnique({
+    where: { id: family.centerId },
+    select: { name: true },
+  }) : null;
+  if (isMissHoneysBrandText(familyCenter?.name)) {
     return NextResponse.json({
       ok: false,
       error: "Uniform shirt purchases are not available for this center.",
@@ -116,7 +109,7 @@ async function POSTHandler(request: NextRequest) {
         familyId: family.id,
         purchaseId,
         purchaserUserId: user.id,
-        currentGuardianId: family.guardians[0]?.id ?? null,
+        currentGuardianId: familyScope.guardianIds[0] ?? null,
         dedupeKey: `parent-product:${purchaseId}`,
         ...productInvoiceFieldsForProduct(product, totals.selectedQuantity),
       },

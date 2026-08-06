@@ -1,6 +1,6 @@
 # Parent Portal SOP - The BEE Suite
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite parent portal.
 
@@ -27,6 +27,21 @@ Use `PARENT_PORTAL_INSTALL_GUIDE.md` to install the parent portal safely on a ph
 ## Purpose
 
 The BEE Suite parent portal gives families one place to view child updates, messages, documents, balances, payments, photos, incident acknowledgements, and family requests shared by the school.
+
+## Current Invitation, Setup, And Access Flow
+
+1. Open the secure invitation from the school or go to `https://thebeesuite.io/parents`.
+2. Sign in with the exact personal guardian email stored by the school. A new account uses the first-login password in the invitation; an existing account keeps its current password.
+3. On the setup screen, confirm the displayed school, family, guardian name, phone, and linked children before continuing.
+4. Confirm or change the 4 digit kiosk PIN. When the school did not set one, the initial PIN is based on the last four digits of the guardian phone.
+5. Select `Finish setup and open portal`.
+6. Use the portal sections provided for the family: overview, children, daily reports, activities, photos/media, messages, documents/forms, incidents, billing/payment methods, and settings. A section appears only when the role and school configuration allow it.
+
+If an invitation is resent, the parent's current password is preserved. Use `Forgot password` if needed; do not create another family or child. Stop and contact the school if no family appears, a child is missing, the wrong family appears, or the same email may belong to conflicting guardian identities.
+
+Invitation labels mean: `Invited` was generated, `Accepted` was accepted by the email provider, `Delivered` has confirmed delivery, `Expired` needs a new invitation or reset, and `Failed` needs school follow-up.
+
+Current payment policy: the school absorbs Stripe processing costs, and no processing fee is added to a parent payment. Always review the invoice, service period, credits, due date, payment method, and exact total before submitting.
 
 ## Login
 
@@ -83,7 +98,7 @@ Only school-approved media should appear in the parent portal.
 4. Card setup or payment opens Stripe's secure card form.
 5. Instant Bank asks you to connect and verify a bank account through the secure processor.
 6. One-Time Bank may collect bank details for that payment without making it the default saved card.
-7. Review the exact checkout total and any approved card processing recovery before submitting.
+7. Review the exact checkout total before submitting; the school absorbs Stripe processing costs and no processing fee is added to the parent payment.
 8. Complete checkout and wait for the confirmation screen.
 
 ACH payments can take time to fully settle. If a payment is pending, do not submit the same payment repeatedly unless the school tells you to retry.

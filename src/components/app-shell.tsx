@@ -128,6 +128,8 @@ function BrandMark({ branding }: { branding?: WorkspaceBranding }) {
 
 function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   const [summary, setSummary] = useState<NotificationSummary | null>(null);
+  const [unread, setUnread] = useState(0);
+  const mountedRef = useRef(true);
   const canViewEnrollment = canAccessShellModule(currentUser, "crm-leads");
   const canViewTasks = canViewEnrollment;
   const canViewFteReports = canAccessShellModule(currentUser, "fte-reports");
@@ -141,32 +143,42 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
     }
   }, []);
 
-  const loadSummary = useCallback(() => {
-    let mounted = true;
-    fetch("/api/notifications/summary")
+  const loadUnreadCount = useCallback(() => {
+    fetch("/api/notifications/summary?mode=count", { cache: "no-store" })
       .then((response) => response.json())
       .then((json) => {
-        if (mounted && json?.ok) {
+        if (mountedRef.current && json?.ok && typeof json.unread === "number") {
+          setUnread(json.unread);
+          syncAppBadge(json.unread);
+        }
+      })
+      .catch(() => undefined);
+  }, [syncAppBadge]);
+
+  const loadSummary = useCallback(() => {
+    fetch("/api/notifications/summary", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((json) => {
+        if (mountedRef.current && json?.ok) {
           const nextSummary = json as NotificationSummary;
           setSummary(nextSummary);
+          setUnread(nextSummary.stats.unread);
           syncAppBadge(nextSummary.stats.unread);
         }
       })
       .catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
   }, [syncAppBadge]);
 
   useEffect(() => {
-    const cleanup = loadSummary();
+    mountedRef.current = true;
+    void loadUnreadCount();
     return () => {
-      cleanup();
+      mountedRef.current = false;
     };
-  }, [loadSummary]);
+  }, [loadUnreadCount]);
 
   useEffect(() => {
-    const refresh = () => void loadSummary();
+    const refresh = () => void loadUnreadCount();
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
@@ -187,7 +199,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       navigator.serviceWorker?.removeEventListener("message", refreshFromServiceWorker);
     };
-  }, [loadSummary]);
+  }, [loadUnreadCount]);
 
   async function markMineRead() {
     await fetch("/api/notifications/summary", {
@@ -195,10 +207,9 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark_all_read" }),
     }).catch(() => undefined);
-    loadSummary();
+    void loadSummary();
   }
 
-  const unread = summary?.stats.unread ?? 0;
   const notificationScopeText = canViewEnrollment && canViewFteReports
     ? "New inquiries, tasks, FTE, tours, and review alerts"
     : canViewEnrollment
@@ -224,7 +235,9 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
   ].slice(0, 6);
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => {
+      if (open) void loadSummary();
+    }}>
       <DropdownMenuTrigger render={<Button variant="outline" size="icon" aria-label="Notifications" className="relative" />}>
         <Bell />
         {unread ? (
@@ -294,7 +307,9 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
               </p>
             </Link>
           ))}
-          {!items.length ? (
+          {!summary ? (
+            <div className="p-4 text-sm text-muted-foreground">Loading notification details…</div>
+          ) : !items.length ? (
             <div className="p-4 text-sm text-muted-foreground">No urgent notifications are queued for your scope.</div>
           ) : null}
         </div>

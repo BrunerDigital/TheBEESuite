@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { after } from "next/server";
 
 const REDACTED = "[REDACTED]";
 const MAX_BODY_BYTES = 16 * 1024;
@@ -50,11 +51,12 @@ type RedactionOptions = {
 };
 
 type BodySample =
-  | { omitted: "empty" | "unsupported_content_type" | "too_large" | "unknown_size" | "unreadable" | "sensitive_route"; contentType?: string; contentLength?: number | null }
+  | { omitted: "empty" | "unsupported_content_type" | "too_large" | "unknown_size" | "unreadable" | "sensitive_route" | "not_sampled"; contentType?: string; contentLength?: number | null }
   | { contentType: string; value: unknown };
 
 type ApiLoggingOptions = {
   omitRequestBody?: boolean;
+  omitResponseBody?: boolean;
 };
 
 export type OperationalAnomaly =
@@ -320,12 +322,31 @@ function omittedRequestBody(request: Request): BodySample {
   };
 }
 
+function omittedResponseBody(response: Response): BodySample {
+  return {
+    omitted: "not_sampled",
+    contentType: contentType(response.headers) ?? undefined,
+    contentLength: contentLength(response.headers),
+  };
+}
+
+function scheduleAfterResponse(callback: () => Promise<void>) {
+  try {
+    after(callback);
+  } catch {
+    // Route handlers are also called directly by focused tests and scripts,
+    // where Next.js does not create a request scope for after().
+    queueMicrotask(() => void callback());
+  }
+}
+
 export async function buildApiLogPayload(
   request: Request,
   method: string,
   response: Response,
   startedAt: number,
   options: ApiLoggingOptions = {},
+  completedAt = Date.now(),
 ): Promise<LogPayload> {
   const url = new URL(request.url);
   return {
@@ -344,9 +365,11 @@ export async function buildApiLogPayload(
       status: response.status,
       contentType: contentType(response.headers),
       contentLength: contentLength(response.headers),
-      body: await sampleBody(response, { allowUnknownSize: true }),
+      body: options.omitResponseBody
+        ? omittedResponseBody(response)
+        : await sampleBody(response, { allowUnknownSize: true }),
     },
-    durationMs: Date.now() - startedAt,
+    durationMs: completedAt - startedAt,
     userAgentHash: hashForLog(request.headers.get("user-agent")),
     ipHash: hashForLog(request.headers.get("x-forwarded-for")?.split(",")[0] ?? request.headers.get("x-real-ip")),
   };
@@ -359,7 +382,24 @@ export function withApiLogging<T extends ApiRouteHandler>(method: string, handle
 
     try {
       const response = await handler(...args);
-      if (request) logPayload(await buildApiLogPayload(request, method, response, startedAt, options));
+      const completedAt = Date.now();
+      if (request) {
+        scheduleAfterResponse(async () => {
+          try {
+            const payload = await buildApiLogPayload(
+              request,
+              method,
+              response,
+              startedAt,
+              { ...options, omitRequestBody: true, omitResponseBody: true },
+              completedAt,
+            );
+            logPayload(payload);
+          } catch (error) {
+            logOperationalError("api.request.logging_failed", error);
+          }
+        });
+      }
       return response;
     } catch (error) {
       logOperationalError("api.request.unhandled", error, { status: statusFromError(error) });

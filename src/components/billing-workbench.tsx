@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, BadgeDollarSign, Ban, Banknote, Building2, CalendarClock, CheckCircle2, Copy, CreditCard, FilePenLine, Mail, MinusCircle, Play, ReceiptText, RotateCcw, Rows3, Save, Send } from "lucide-react";
@@ -412,15 +412,9 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
     ? products.filter((product) => !isUniformShirtProduct(product))
     : products;
   const firstSelectedProductId = selectedProducts[0]?.id ?? "";
-  const selectedProduct = selectedProducts.find((product) => product.id === productId) ?? null;
-  useEffect(() => {
-    if (chargeSource === "product" && !selectedProduct) {
-      setChargeSource("tuitionPlan");
-    }
-    if (!selectedProduct && productId !== firstSelectedProductId) {
-      setProductId(firstSelectedProductId);
-    }
-  }, [chargeSource, firstSelectedProductId, productId, selectedProduct, setChargeSource, setProductId]);
+  const effectiveChargeSource = chargeSource === "product" && selectedProducts.length === 0 ? "tuitionPlan" : chargeSource;
+  const effectiveProductId = selectedProducts.find((product) => product.id === productId)?.id ?? firstSelectedProductId;
+  const selectedProduct = selectedProducts.find((product) => product.id === effectiveProductId) ?? null;
   const selectedChildren = selectedFamily?.children ?? [];
   const effectiveAssignmentChildId = assignmentChildId && selectedChildren.some((child) => child.id === assignmentChildId)
     ? assignmentChildId
@@ -785,12 +779,12 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
   function chargePayload() {
     return {
-      chargeSource,
-      tuitionPlanId: chargeSource === "tuitionPlan" ? tuitionPlanId : undefined,
-      productId: chargeSource === "product" ? productId : undefined,
-      quantity: chargeSource === "product" ? productQuantity : undefined,
+      chargeSource: effectiveChargeSource,
+      tuitionPlanId: effectiveChargeSource === "tuitionPlan" ? tuitionPlanId : undefined,
+      productId: effectiveChargeSource === "product" ? effectiveProductId : undefined,
+      quantity: effectiveChargeSource === "product" ? productQuantity : undefined,
       description,
-      amountDollars: chargeSource === "custom" ? amountDollars : undefined,
+      amountDollars: effectiveChargeSource === "custom" ? amountDollars : undefined,
     };
   }
 
@@ -1793,11 +1787,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="single" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
-              chargeSource={chargeSource}
+              chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
               setTuitionPlanId={handleTuitionPlanChange}
-              productId={productId}
+              productId={effectiveProductId}
               setProductId={setProductId}
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}
@@ -1905,11 +1899,11 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
 
           <TabsContent value="batch" className="space-y-4 rounded-lg border bg-background/35 p-4">
             <ChargeFields
-              chargeSource={chargeSource}
+              chargeSource={effectiveChargeSource}
               setChargeSource={setChargeSource}
               tuitionPlanId={tuitionPlanId}
               setTuitionPlanId={handleTuitionPlanChange}
-              productId={productId}
+              productId={effectiveProductId}
               setProductId={setProductId}
               productQuantity={productQuantity}
               setProductQuantity={setProductQuantity}

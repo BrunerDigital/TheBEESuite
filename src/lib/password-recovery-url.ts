@@ -56,6 +56,12 @@ function recoveryError(query: URLSearchParams, fragment: URLSearchParams) {
   return { error, errorCode, description };
 }
 
+export function hasPasswordRecoveryContext(search: string, hash: string) {
+  const query = paramsFrom(search);
+  const fragment = paramsFrom(hash);
+  return RECOVERY_QUERY_KEYS.some((key) => query.has(key) || fragment.has(key));
+}
+
 export function resolvePasswordRecoveryLink(search: string, hash: string): PasswordRecoveryLinkResolution {
   const query = paramsFrom(search);
   const fragment = paramsFrom(hash);

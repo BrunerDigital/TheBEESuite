@@ -2,11 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   EXPIRED_PASSWORD_RECOVERY_LINK_MESSAGE,
+  hasPasswordRecoveryContext,
   MISSING_PASSWORD_RECOVERY_LINK_MESSAGE,
   passwordRecoveryUrlWithoutSecrets,
   resolvePasswordRecoveryLink,
   UNVERIFIED_PASSWORD_RECOVERY_LINK_MESSAGE,
 } from "@/lib/password-recovery-url";
+
+test("password recovery context distinguishes sanitized routing from provider state", () => {
+  assert.equal(hasPasswordRecoveryContext("?next=%2Fdashboard", ""), false);
+  assert.equal(hasPasswordRecoveryContext("?error_code=otp_expired&next=%2Fdashboard", ""), true);
+  assert.equal(hasPasswordRecoveryContext("?next=%2Fdashboard", "#access_token=access_123&type=recovery"), true);
+});
 
 test("password recovery accepts BEE-generated token hashes", () => {
   assert.deepEqual(

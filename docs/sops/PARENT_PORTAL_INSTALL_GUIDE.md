@@ -1,6 +1,6 @@
 # Parent Step-By-Step Guide: Install The BEE Suite Parent Portal
 
-Last updated: July 29, 2026
+Last updated: August 6, 2026
 
 Audience: parents and guardians whose school uses The BEE Suite.
 
@@ -25,6 +25,14 @@ The iPhone view is the primary parent training screen. The iPad and desktop capt
 ![Parent portal overview on iPad](../../public/brand/the-bee-suite/screenshots/current/parent-ipad-overview-light.png)
 
 ![Parent portal overview on desktop](../../public/brand/the-bee-suite/screenshots/current/parent-desktop-overview-light.png)
+
+## Current Invitation And Installation Notes
+
+- New parents receive a secure `Start Parent Setup` link. The setup screen shows the connected school, family, and children before the parent confirms details and the 4 digit kiosk PIN.
+- A resent invitation preserves the parent's current password. Use `Forgot password` when needed.
+- The installed name may appear as `BEE Parents` or `BEE Suite Parent Portal`, depending on device and browser.
+- The installed home-screen app and `https://thebeesuite.io/parents` use the same guardian login and family access.
+- Stop and contact the school if the wrong family appears, a child is missing, or the guardian email is incorrect. Do not create a duplicate account.
 
 ## Start Here
 

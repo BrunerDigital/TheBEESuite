@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   notificationCenterHrefForRole,
   storedNotificationHref,
+  storedNotificationHrefForRole,
 } from "@/lib/notification-links";
 
 test("parent photo notifications open the parent portal photos section", () => {
@@ -10,6 +11,13 @@ test("parent photo notifications open the parent portal photos section", () => {
     type: "photos",
     body: "Bailey has a new classroom photo in the parent portal.",
   }), "/parent-portal#photos");
+});
+
+test("all parent notifications stay inside valid parent portal destinations", () => {
+  assert.equal(storedNotificationHrefForRole({ type: "message_received", body: "New message" }, "PARENT_GUARDIAN"), "/parent-portal#messages");
+  assert.equal(storedNotificationHrefForRole({ type: "document_due", body: "Document due" }, "PARENT_GUARDIAN"), "/parent-portal#documents");
+  assert.equal(storedNotificationHrefForRole({ type: "account_alert", body: "Account alert" }, "AUTHORIZED_PICKUP"), "/parent-portal");
+  assert.equal(storedNotificationHrefForRole({ type: "account_alert", body: "Account alert" }, "CENTER_DIRECTOR"), "/notifications");
 });
 
 test("parent-facing users do not link to the blocked notification center", () => {

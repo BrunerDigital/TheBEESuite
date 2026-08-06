@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ClipboardList,
   CreditCard,
+  Eye,
+  EyeOff,
   FileCheck2,
   FileText,
   KeyRound,
@@ -477,6 +479,10 @@ export function ParentPortalWorkspace({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [autopayConfirmation, setAutopayConfirmation] = useState("");
+  const [autopayStatusOverride, setAutopayStatusOverride] = useState<"enabled" | "disabled" | null>(null);
   const [accountDeletionRequest, setAccountDeletionRequest] = useState<AccountDeletionRequestSummary | null>(initialAccountDeletionRequest);
   const [accountDeletionDetails, setAccountDeletionDetails] = useState("");
   const [retentionNoticeAccepted, setRetentionNoticeAccepted] = useState(false);
@@ -522,7 +528,7 @@ export function ParentPortalWorkspace({
   const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
-  const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const autopayStatus = autopayStatusOverride ?? paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const currentGuardian = useMemo(() => {
     if (!family) return null;
@@ -852,6 +858,7 @@ export function ParentPortalWorkspace({
       "Enable autopay? The one selected saved method will pay open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
     )) return;
     startTransition(async () => {
+      setAutopayConfirmation("");
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -869,7 +876,16 @@ export function ParentPortalWorkspace({
         window.location.href = json.url;
         return;
       }
-      showStatus(action === "enable_autopay" ? "Autopay enabled." : action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated. Autopay was not changed.");
+      const confirmation = action === "enable_autopay"
+        ? "Autopay is enabled. The saved method will be used for eligible open invoices on or after their due date."
+        : action === "disable_autopay"
+          ? "Autopay is disabled. Your saved payment method remains available for one-time payments."
+          : "Payment method settings updated. Autopay was not changed.";
+      if (action === "enable_autopay" || action === "disable_autopay") {
+        setAutopayStatusOverride(action === "enable_autopay" ? "enabled" : "disabled");
+      }
+      setAutopayConfirmation(confirmation);
+      showStatus(confirmation);
       router.refresh();
     });
   }
@@ -893,6 +909,7 @@ export function ParentPortalWorkspace({
   }
 
   function updateProfilePassword() {
+    setPasswordConfirmation("");
     if (!currentPassword || !newPassword) return showError("Enter your current password and a new password.");
     if (newPassword.length < 8) return showError("New password must be at least 8 characters.");
     if (newPassword !== confirmPassword) return showError("New passwords do not match.");
@@ -908,7 +925,9 @@ export function ParentPortalWorkspace({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      showStatus("Password updated.");
+      const confirmation = "Password changed successfully. Use your new password the next time you sign in.";
+      setPasswordConfirmation(confirmation);
+      showStatus(confirmation);
       router.refresh();
     });
   }
@@ -1520,6 +1539,13 @@ export function ParentPortalWorkspace({
                   </Button>
                 </div>
               </div>
+              {autopayConfirmation ? (
+                <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle2 />
+                  <AlertTitle>Autopay status confirmed</AlertTitle>
+                  <AlertDescription>{autopayConfirmation}</AlertDescription>
+                </Alert>
+              ) : null}
             </div>
             {nextOpenInvoice ? (
               <div className="rounded-xl border bg-primary/10 p-4">
@@ -1990,6 +2016,19 @@ export function ParentPortalWorkspace({
               This is the personal guardian email on file with the school.
             </p>
           </div>
+          {passwordConfirmation ? (
+            <Alert className="border-emerald-500/30 bg-emerald-500/10">
+              <CheckCircle2 />
+              <AlertTitle>Password changed</AlertTitle>
+              <AlertDescription>{passwordConfirmation}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowPasswords((visible) => !visible)}>
+              {showPasswords ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+              {showPasswords ? "Hide passwords" : "Show passwords"}
+            </Button>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="profile-current-password">Current password</Label>
@@ -1997,7 +2036,7 @@ export function ParentPortalWorkspace({
                 id="profile-current-password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="current-password"
               />
             </div>
@@ -2007,7 +2046,7 @@ export function ParentPortalWorkspace({
                 id="profile-new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="new-password"
                 minLength={8}
               />
@@ -2018,7 +2057,7 @@ export function ParentPortalWorkspace({
                 id="profile-confirm-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="new-password"
                 minLength={8}
               />

@@ -81,6 +81,8 @@ export type BillingReportRow = {
   paymentCount: number;
 };
 
+export type BillingReportInterval = "daily" | "weekly" | "monthly";
+
 export type MessageAnalyticsReportRow = {
   centerId: string;
   centerLabel: string;
@@ -125,6 +127,8 @@ export type AnalyticsReportData = {
   funnelStages: FunnelStageReportRow[];
   attendanceTrends: AttendanceTrendReportRow[];
   billing: BillingReportRow[];
+  weeklyBilling: BillingReportRow[];
+  weeklyPayments: BillingReportRow[];
   messages: MessageAnalyticsReportRow[];
   staffHours: StaffHoursReportRow[];
   totals: {
@@ -213,6 +217,22 @@ function centerIdFilter(centerIds: string[]) {
 
 function centerLabel(center: { name: string; crmLocationId: string | null }) {
   return center.crmLocationId ?? center.name;
+}
+
+function weeklyPeriodKey(value: Date | string, timeZone: string) {
+  const localDateKey = zonedDateKey(value, timeZone);
+  const localDate = new Date(`${localDateKey}T12:00:00.000Z`);
+  const weekday = localDate.getUTCDay();
+  localDate.setUTCDate(localDate.getUTCDate() + (weekday === 0 ? -6 : 1 - weekday));
+  const weekStart = localDate.toISOString().slice(0, 10);
+  localDate.setUTCDate(localDate.getUTCDate() + 6);
+  return `${weekStart} to ${localDate.toISOString().slice(0, 10)}`;
+}
+
+function billingPeriodKey(value: Date | string, interval: BillingReportInterval, timeZone: string) {
+  if (interval === "weekly") return weeklyPeriodKey(value, timeZone);
+  const localDateKey = zonedDateKey(value, timeZone);
+  return interval === "daily" ? localDateKey : localDateKey.slice(0, 7);
 }
 
 function periodKey(value: Date | string, daily: boolean) {
@@ -486,11 +506,11 @@ function buildAttendanceReports({
   return Array.from(rows.values()).sort((a, b) => `${b.date}:${b.centerLabel}`.localeCompare(`${a.date}:${a.centerLabel}`));
 }
 
-function buildBillingReports({
+export function buildBillingReports({
   invoices,
   payments,
   centerById,
-  daily,
+  interval,
   now,
 }: {
   invoices: Array<{
@@ -507,18 +527,19 @@ function buildBillingReports({
     billingAccount: { family: { centerId: string | null } };
   }>;
   centerById: Map<string, ReportCenterOption>;
-  daily: boolean;
+  interval: BillingReportInterval;
   now: Date;
 }) {
   const rows = new Map<string, BillingReportRow>();
   const ensureRow = (dateValue: Date, centerId: string | null) => {
     const safeCenterId = centerId ?? noVisibleCenterId;
-    const key = `${periodKey(dateValue, daily)}:${safeCenterId}`;
     const center = centerById.get(safeCenterId);
+    const period = billingPeriodKey(dateValue, interval, center?.timezone ?? "UTC");
+    const key = `${period}:${safeCenterId}`;
     const existing = rows.get(key);
     if (existing) return existing;
     const row = {
-      period: periodKey(dateValue, daily),
+      period,
       centerId: safeCenterId,
       centerLabel: center?.label ?? "Unknown center",
       invoiceCents: 0,
@@ -835,7 +856,10 @@ export async function buildAnalyticsReportData(
   const enrollmentStatus = buildEnrollmentStatusReportRows(enrollmentChildren, centerById, endDate);
   const { leadSources, funnelStages } = buildLeadReports(leads, centerById);
   const attendanceTrends = buildAttendanceReports({ attendanceRecords, checkLogs, centerById, daily });
-  const billing = buildBillingReports({ invoices, payments, centerById, daily, now });
+  const billing = buildBillingReports({ invoices, payments, centerById, interval: daily ? "daily" : "monthly", now });
+  const weeklyBillingAndPayments = buildBillingReports({ invoices, payments, centerById, interval: "weekly", now });
+  const weeklyBilling = weeklyBillingAndPayments.filter((row) => row.invoiceCount > 0);
+  const weeklyPayments = weeklyBillingAndPayments.filter((row) => row.paymentCount > 0);
   const messageRows = buildMessageReports(messages, centerById);
   const staffHours = buildStaffHoursReports(staffProfiles, { startDate, endDate, now });
   const enrolledCount = leads.filter((lead) => lead.stage === EnrollmentStage.ENROLLED).length;
@@ -859,6 +883,8 @@ export async function buildAnalyticsReportData(
     funnelStages,
     attendanceTrends,
     billing,
+    weeklyBilling,
+    weeklyPayments,
     messages: messageRows,
     staffHours,
     totals: {
@@ -955,6 +981,34 @@ export function rowsForReportKind(data: AnalyticsReportData, kind: ReportKind) {
         money(row.openCents),
         money(row.overdueCents),
         row.paymentCount,
+      ]),
+    };
+  }
+  if (kind === "weekly_billing") {
+    return {
+      title: "Weekly Billing Report",
+      traceability,
+      headers: ["Week", "Center", "Invoices", "Billed", "Open AR", "Overdue AR"],
+      rows: data.weeklyBilling.map((row) => [
+        row.period,
+        row.centerLabel,
+        row.invoiceCount,
+        money(row.invoiceCents),
+        money(row.openCents),
+        money(row.overdueCents),
+      ]),
+    };
+  }
+  if (kind === "weekly_payments") {
+    return {
+      title: "Weekly Payment Report",
+      traceability,
+      headers: ["Week", "Center", "Payments", "Paid"],
+      rows: data.weeklyPayments.map((row) => [
+        row.period,
+        row.centerLabel,
+        row.paymentCount,
+        money(row.paidCents),
       ]),
     };
   }

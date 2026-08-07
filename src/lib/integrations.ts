@@ -547,8 +547,9 @@ export async function sendEmail({
   const tenantFrom = clean(tenantCredentials.SENDGRID_FROM_EMAIL);
   const platformApiKey = clean(process.env.SENDGRID_API_KEY);
   const platformFrom = clean(process.env.SENDGRID_FROM_EMAIL);
-  const apiKey = tenantApiKey || platformApiKey;
-  const from = tenantFrom || platformFrom;
+  const forcePlatformCredentials = process.env.SENDGRID_FORCE_PLATFORM_CREDENTIALS === "true";
+  const apiKey = forcePlatformCredentials ? platformApiKey : tenantApiKey || platformApiKey;
+  const from = forcePlatformCredentials ? platformFrom : tenantFrom || platformFrom;
   const recipients = uniqueEmails(to);
 
   if (!apiKey || !from || !recipients.length) {
@@ -605,7 +606,8 @@ export async function sendEmail({
   try {
     response = await sendWith(apiKey, from);
     const canRetryWithPlatformCredentials =
-      (response.status === 401 || response.status === 403)
+      !forcePlatformCredentials
+      && (response.status === 401 || response.status === 403)
       && process.env.SENDGRID_ALLOW_PLATFORM_FALLBACK === "true"
       && Boolean(tenantApiKey)
       && Boolean(platformApiKey)

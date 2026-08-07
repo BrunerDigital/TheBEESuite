@@ -357,6 +357,10 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
   const [checkNumber, setCheckNumber] = useState("");
   const [checkPaidAt, setCheckPaidAt] = useState(todayDate());
   const [checkNotes, setCheckNotes] = useState("");
+  const [cashAmountDollars, setCashAmountDollars] = useState("");
+  const [cashPaidAt, setCashPaidAt] = useState(todayDate());
+  const [cashReference, setCashReference] = useState("");
+  const [cashNotes, setCashNotes] = useState("");
   const [refundPaymentIds, setRefundPaymentIds] = useState<string[]>([]);
   const [refundAmountDollars, setRefundAmountDollars] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -896,6 +900,15 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
         router.refresh();
         return;
       }
+      if (payload.mode === "manualCashPayment") {
+        const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
+        setStatusMessage(`${total} cash payment posted to the family ledger.`);
+        setCashAmountDollars("");
+        setCashReference("");
+        setCashNotes("");
+        router.refresh();
+        return;
+      }
       if (payload.mode === "refundPayment") {
         const total = typeof json?.totalCents === "number" ? money(json.totalCents) : money(0);
         setStatusMessage(
@@ -1017,6 +1030,22 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
       paidAt: checkPaidAt,
       description: `Check payment #${checkNumber.trim()}`,
       notes: checkNotes,
+    });
+  }
+
+  function submitManualCashPayment() {
+    if (!selectedFamily) return setErrorMessage("Choose a family before posting a cash payment.");
+    const amountCents = dollarsToCents(cashAmountDollars);
+    if (amountCents <= 0) return setErrorMessage("Enter a cash amount greater than zero.");
+    if (!confirmBillingAction(`post ${money(amountCents)} received in cash`)) return;
+    submit({
+      mode: "manualCashPayment",
+      familyId: selectedFamily.id,
+      amountCents,
+      paidAt: cashPaidAt,
+      reference: cashReference.trim(),
+      description: "Cash payment",
+      notes: cashNotes.trim(),
     });
   }
 
@@ -1780,6 +1809,7 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <TabsTrigger value="edit"><FilePenLine data-icon="inline-start" />Edit invoice</TabsTrigger>
             <TabsTrigger value="batch"><Rows3 data-icon="inline-start" />Batch tuition</TabsTrigger>
             <TabsTrigger value="check"><Banknote data-icon="inline-start" />Check payment</TabsTrigger>
+            <TabsTrigger value="cash"><Banknote data-icon="inline-start" />Cash payment</TabsTrigger>
             <TabsTrigger value="refund"><RotateCcw data-icon="inline-start" />Refund</TabsTrigger>
             <TabsTrigger value="agency"><BadgeDollarSign data-icon="inline-start" />Agency payment</TabsTrigger>
             <TabsTrigger value="adjustment"><MinusCircle data-icon="inline-start" />Credit / adjustment</TabsTrigger>
@@ -2268,6 +2298,35 @@ export function BillingWorkbench({ families, centers, products, tuitionPlans, cu
             <Button disabled={isPending || !selectedFamily || !checkAmountDollars || !checkNumber.trim()} onClick={submitManualCheckPayment}>
               <Banknote data-icon="inline-start" />
               Post Check Payment
+            </Button>
+          </TabsContent>
+
+          <TabsContent value="cash" className="space-y-4 rounded-lg border bg-background/35 p-4">
+            <div>
+              <div className="text-sm font-medium">Record a payment received in cash</div>
+              <p className="mt-1 text-xs text-muted-foreground">This posts a completed cash payment, immediately reduces the selected family balance, and adds an auditable ledger credit.</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label>Amount</Label>
+                <Input inputMode="decimal" value={cashAmountDollars} onChange={(event) => setCashAmountDollars(event.target.value)} placeholder="250.00" />
+              </div>
+              <div className="space-y-1">
+                <Label>Receipt / reference <span className="font-normal text-muted-foreground">(optional)</span></Label>
+                <Input value={cashReference} onChange={(event) => setCashReference(event.target.value)} placeholder="Front desk receipt 1042" />
+              </div>
+              <div className="space-y-1">
+                <Label>Received date</Label>
+                <Input type="date" value={cashPaidAt} onChange={(event) => setCashPaidAt(event.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Notes</Label>
+              <Textarea value={cashNotes} onChange={(event) => setCashNotes(event.target.value)} placeholder="Optional payer, receipt, drawer, or deposit notes" />
+            </div>
+            <Button disabled={isPending || !selectedFamily || dollarsToCents(cashAmountDollars) <= 0} onClick={submitManualCashPayment}>
+              <Banknote data-icon="inline-start" />
+              Post Cash Payment
             </Button>
           </TabsContent>
 

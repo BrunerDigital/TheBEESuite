@@ -3,6 +3,8 @@
 Updated: July 20, 2026  
 Authoritative continuation record: use this file for all readiness follow-up. The 17 workstream audits remain evidence sources; their recommendations are consolidated here and must not be executed as separate duplicate backlogs.
 
+Current supplement: `docs/CURRENT_MASTER_RECOMMENDATION_SUPPLEMENT_2026-08-04.md` records the August 4 coverage pass against `origin/main` at `1f57c386`, including post-July-24 billing, parent, ProCare, reliability, invoice, and AI work. It supplements this master gate structure without authorizing any held module or wider-wave activation.
+
 ## Controlling decision and safety boundary
 
 - **Kokomo may continue normal production use.** Do not interrupt it merely because newer rollout controls expose historical gaps.

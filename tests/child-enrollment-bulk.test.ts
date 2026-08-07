@@ -26,7 +26,14 @@ test("bulk enrollment changes deduplicate children and require a classroom for e
 
   assert.deepEqual(
     buildBulkEnrollmentChange({ childIds: ["child-1"], enrollmentStatus: "enrolled" }),
-    { ok: false, error: "Choose a classroom before moving children to enrolled." },
+    { ok: false, error: "Choose a classroom before marking this child enrolled. Billing and active rosters require a classroom assignment." },
+  );
+});
+
+test("bulk enrollment keeps pending children valid without a classroom", () => {
+  assert.deepEqual(
+    buildBulkEnrollmentChange({ childIds: ["child-1"], enrollmentStatus: "pending" }),
+    { ok: true, value: { childIds: ["child-1"], enrollmentStatus: "pending", classroomId: null } },
   );
 });
 
@@ -64,7 +71,8 @@ test("bulk enrollment updates stay school-scoped, audited, and invalidate dashbo
   assert.match(operationsRoute, /canAccessCenter\(user, child\.family\.centerId\)/);
   assert.match(operationsRoute, /selectedCenterId\) => selectedCenterId !== classroom\.centerId/);
   assert.match(operationsRoute, /operations\.child_status\.bulk_updated/);
-  assert.match(operationsRoute, /revalidatePath\("\/", "layout"\)/);
+  assert.match(operationsRoute, /revalidatePath\("\/billing-invoices"\)/);
+  assert.match(operationsRoute, /revalidatePath\("\/api\/dashboard\/accounts-receivable"\)/);
 });
 
 test("existing children with a missing DOB can be withdrawn without changing the placeholder DOB", () => {

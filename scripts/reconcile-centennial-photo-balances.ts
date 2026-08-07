@@ -19,7 +19,7 @@ const IDENTITY_CSV_PATH = resolve(
   "docs/procare-exports/CO - Centennial - Miss Honeys/raw/CO - Centennial - Miss Honeys - Account Balance Summary.csv",
 );
 const EXPECTED_SOURCE_ROWS = 18;
-const EXPECTED_SOURCE_TOTAL_CENTS = 620_510;
+const EXPECTED_SOURCE_TOTAL_CENTS = 659_210;
 
 type SourceRow = {
   key: string;
@@ -39,7 +39,7 @@ const SOURCE_PLAN_PATH = resolve(
   process.cwd(),
   "docs/procare-exports/CO - Centennial - Miss Honeys/raw/centennial-balance-plan.json",
 );
-const SOURCE_PLAN_SHA256 = "2b1abe4ac1149b702f76374ba5e4caef6cdd6037616545aaaa4997db54b8ea83";
+const SOURCE_PLAN_SHA256 = "b4f5b77e53c6d16d2043b4b54c597a16bcc3eadf865e391af6e8cfe21d66e88f";
 
 function readSourceRows() {
   const raw = readFileSync(SOURCE_PLAN_PATH, "utf8");
@@ -594,7 +594,7 @@ async function applyPlan(state: LoadedState, plan: ReturnType<typeof buildPlan>)
     const verifiedPlan = buildPlan(verifiedState);
     invariant(verifiedPlan.targets.every((item) => item.family.billingAccount?.balanceCents === item.desiredCents), "A listed Centennial balance does not match the source report.");
     invariant(verifiedState.families.every((family) => verifiedPlan.targetFamilyIds.has(family.id) || (family.billingAccount?.balanceCents ?? 0) === 0), "A non-listed Centennial family still has a nonzero balance.");
-    invariant(verifiedState.families.reduce((sum, family) => sum + (family.billingAccount?.balanceCents ?? 0), 0) === EXPECTED_SOURCE_TOTAL_CENTS, "The Centennial total does not match $6,205.10.");
+    invariant(verifiedState.families.reduce((sum, family) => sum + (family.billingAccount?.balanceCents ?? 0), 0) === EXPECTED_SOURCE_TOTAL_CENTS, "The Centennial total does not match $6,592.10.");
     const verifiedHistory = historyIds(verifiedState);
     invariant(sameStrings(verifiedHistory.payments, preflightHistory.payments), "Centennial payments changed during reconciliation.");
     invariant(sameStrings(verifiedHistory.invoices, preflightHistory.invoices), "Centennial invoices changed during reconciliation.");

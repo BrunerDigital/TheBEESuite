@@ -910,17 +910,26 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
       const paymentMethodId = setupPaymentMethodId || previousPaymentMethodId;
       const replacedPaymentMethod = Boolean(paymentMethodId && paymentMethodId !== previousPaymentMethodId);
       const setupMode = clean(session.metadata?.autopaySetupMode);
-      const previouslyEnabled = currentFields.autopayEnabled === true || billingAccount.autopayPlaceholder === true;
-      const autopayEnabled = Boolean(paymentMethodId) && (
-        setupMode === "enable" ? true : setupMode === "disabled" ? false : previouslyEnabled
-      );
+      const enableAutopayFromSetup = setupMode === "enable";
+      const disableAutopayFromSetup = setupMode === "disabled";
+      const autopayPatch = enableAutopayFromSetup || disableAutopayFromSetup
+        ? {
+            autopayEnabled: enableAutopayFromSetup,
+            autopayStatus: enableAutopayFromSetup ? "enabled" : "disabled",
+            autopayPlaceholder: enableAutopayFromSetup,
+          }
+        : null;
       await tx.billingAccount.update({
         where: { id: billingAccountId },
         data: {
-          autopayPlaceholder: autopayEnabled,
+          ...(autopayPatch ? { autopayPlaceholder: autopayPatch.autopayPlaceholder } : {}),
           customFields: {
             ...currentFields,
             ...(customerId ? stripeCustomerCustomFieldPatch(currentFields, customerId, connectedAccountId) : {}),
+            ...(autopayPatch ? {
+              autopayEnabled: autopayPatch.autopayEnabled,
+              autopayStatus: autopayPatch.autopayStatus,
+            } : {}),
             stripeDefaultPaymentMethodId: paymentMethodId || null,
             stripeDefaultPaymentMethodConnectedAccountId: connectedAccountId || null,
             stripePaymentMethodType: paymentMethodDetails?.type ?? (replacedPaymentMethod ? null : clean(currentFields.stripePaymentMethodType) || null),
@@ -933,8 +942,6 @@ async function handlePaymentMethodSetupCompleted(event: StripeWebhookEvent, sess
             stripeSetupConnectedAccountId: connectedAccountId || null,
             stripeEventId: event.id,
             stripePaymentMethodSavedAt: new Date().toISOString(),
-            autopayEnabled,
-            autopayStatus: autopayEnabled ? "enabled" : "disabled",
             paymentMethodManagementStatus: paymentMethodId ? "payment_method_saved" : "setup_completed_missing_payment_method",
           },
         },

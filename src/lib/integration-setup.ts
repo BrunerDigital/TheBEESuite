@@ -401,7 +401,11 @@ export const INTEGRATION_SETUP_DEFINITIONS: IntegrationSetupDefinition[] = [
     detail: "Powers parent payments, webhook reconciliation, fee handling, refunds, and payout processor onboarding.",
     envRequirements: [
       { label: "Secret key", names: ["STRIPE_SECRET_KEY"] },
-      { label: "Webhook secret", names: ["STRIPE_WEBHOOK_SECRET"] },
+      {
+        label: "Webhook secret",
+        names: ["STRIPE_PLATFORM_WEBHOOK_SECRET", "STRIPE_WEBHOOK_SECRET"],
+        mode: "any",
+      },
     ],
     fields: [
       {

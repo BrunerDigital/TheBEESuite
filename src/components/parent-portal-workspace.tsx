@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ClipboardList,
   CreditCard,
+  Eye,
+  EyeOff,
   FileCheck2,
   FileText,
   KeyRound,
@@ -40,6 +42,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ParentKioskCredentialPanel } from "@/components/parent-kiosk-credential-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { GuardianKioskCredential } from "@/lib/kiosk-credentials";
 import {
@@ -363,6 +366,7 @@ function paymentProviderLabel(provider: string) {
   if (provider === "stripe") return "Online payment";
   if (provider === "stripe_terminal") return "In-person card payment";
   if (provider === "manual_check") return "Check payment";
+  if (provider === "manual_cash") return "Cash payment";
   return provider.replaceAll("_", " ");
 }
 
@@ -482,9 +486,14 @@ export function ParentPortalWorkspace({
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [autopayConfirmation, setAutopayConfirmation] = useState("");
+  const [autopayStatusOverride, setAutopayStatusOverride] = useState<"enabled" | "disabled" | null>(null);
   const [accountDeletionRequest, setAccountDeletionRequest] = useState<AccountDeletionRequestSummary | null>(initialAccountDeletionRequest);
   const [accountDeletionDetails, setAccountDeletionDetails] = useState("");
   const [retentionNoticeAccepted, setRetentionNoticeAccepted] = useState(false);
+  const [autopayEnableRequirements, setAutopayEnableRequirements] = useState<string[]>([]);
   const [uniformColor, setUniformColor] = useState<"Black" | "Yellow">(uniformProducts[0]?.color ?? "Black");
   const [uniformSize, setUniformSize] = useState(uniformProducts[0]?.size ?? "2T");
   const [uniformPurchaseOption, setUniformPurchaseOption] = useState<"single" | "bundle_5">(uniformProducts[0]?.purchaseOption ?? "single");
@@ -530,7 +539,28 @@ export function ParentPortalWorkspace({
   const latestAccountLedgerEntry = latestLedgerEntry ?? ledgerEntries[0] ?? null;
   const parentVisiblePayments = payments.filter(isParentVisiblePayment);
   const paymentMethodManagement = billingAccount?.paymentMethodManagement;
-  const autopayStatus = paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const autopayStatus = autopayStatusOverride ?? paymentMethodManagement?.autopayStatus ?? (billingAccount?.autopayPlaceholder ? "enabled" : "disabled");
+  const autopayCanEnable = paymentMethodManagement?.hasStripeCustomer === true && paymentMethodManagement?.hasSavedPaymentMethod === true;
+  const autopayLocalRequirements = useMemo(() => {
+    const requirements: string[] = [];
+    if (!autopayCanEnable) {
+      requirements.push("Save and verify one family payment method before enabling autopay.");
+    }
+    if (autopayStatus === "pending") {
+      requirements.push("Bank verification is pending. Complete verification for your payment method before enabling autopay.");
+    }
+    return requirements;
+  }, [autopayCanEnable, autopayStatus]);
+  const autopayRequirements = useMemo(() => {
+    const values = [...autopayEnableRequirements, ...autopayLocalRequirements];
+    const seen = new Set<string>();
+    return values.filter((requirement) => {
+      const text = requirement.trim();
+      if (!text || seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
+  }, [autopayEnableRequirements, autopayLocalRequirements]);
   const checkoutBlocked = !checkoutReadiness.canAcceptParentPayments;
   const currentGuardian = useMemo(() => {
     if (!family) return null;
@@ -861,6 +891,8 @@ export function ParentPortalWorkspace({
       "Enable autopay? The one selected saved method will pay open invoices on or after their due date. Weekly tuition invoices are created separately, and the amount charged is the unpaid invoice balance.",
     )) return;
     startTransition(async () => {
+      setAutopayConfirmation("");
+      setAutopayEnableRequirements([]);
       const response = await fetch("/api/billing/payment-method-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -872,15 +904,45 @@ export function ParentPortalWorkspace({
           returnPath: "/parent-portal",
         }),
       });
-      const json = await response.json().catch(() => null) as { error?: string; url?: string } | null;
-      if (!response.ok) return showError(json?.error || "Payment method management is not configured yet.");
+      const json = await response.json().catch(() => null) as {
+        error?: string;
+        url?: string;
+        autopayEnableRequirements?: Array<{ code: string; message: string }>;
+      } | null;
+      if (!response.ok) {
+        if (action === "enable_autopay" && json?.autopayEnableRequirements?.length) {
+          setAutopayEnableRequirements(json.autopayEnableRequirements.map((requirement) => requirement.message));
+        } else {
+          setAutopayEnableRequirements([]);
+        }
+        return showError(json?.error || "Payment method management is not configured yet.");
+      }
       if (json?.url) {
         window.location.href = json.url;
         return;
       }
-      showStatus(action === "enable_autopay" ? "Autopay enabled." : action === "disable_autopay" ? "Autopay disabled." : "Payment method settings updated. Autopay was not changed.");
+      const confirmation = action === "enable_autopay"
+        ? "Autopay is enabled. The saved method will be used for eligible open invoices on or after their due date."
+        : action === "disable_autopay"
+          ? "Autopay is disabled. Your saved payment method remains available for one-time payments."
+          : "Payment method settings updated. Autopay was not changed.";
+      if (action === "enable_autopay" || action === "disable_autopay") {
+        setAutopayStatusOverride(action === "enable_autopay" ? "enabled" : "disabled");
+      }
+      setAutopayConfirmation(confirmation);
+      showStatus(confirmation);
       router.refresh();
     });
+  }
+
+  function toggleAutopay(enabled: boolean) {
+    if (!family) return;
+    if (enabled === (autopayStatus === "enabled")) return;
+    if (enabled && !autopayCanEnable) {
+      setAutopayEnableRequirements(autopayLocalRequirements);
+      return;
+    }
+    managePaymentMethod(enabled ? "enable_autopay" : "disable_autopay");
   }
 
   function updatePreference(key: keyof NotificationPreferences, checked: boolean) {
@@ -902,6 +964,7 @@ export function ParentPortalWorkspace({
   }
 
   function updateProfilePassword() {
+    setPasswordConfirmation("");
     if (!currentPassword || !newPassword) return showError("Enter your current password and a new password.");
     if (newPassword.length < 8) return showError("New password must be at least 8 characters.");
     if (newPassword !== confirmPassword) return showError("New passwords do not match.");
@@ -917,7 +980,9 @@ export function ParentPortalWorkspace({
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      showStatus("Password updated.");
+      const confirmation = "Password changed successfully. Use your new password the next time you sign in.";
+      setPasswordConfirmation(confirmation);
+      showStatus(confirmation);
       router.refresh();
     });
   }
@@ -1481,55 +1546,72 @@ export function ParentPortalWorkspace({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2 font-medium">
-                    Payment Methods And Autopay
+                    Payment Methods and Autopay
                     <InfoTip label="About payment methods and autopay">
                       Saving a debit/credit card or bank account does not enable autopay. Enable it separately, or make a one-time payment on an open invoice below.
                     </InfoTip>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {paymentMethodManagement?.hasSavedPaymentMethod
-                      ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}. Autopay is optional and can be disabled here.`
-                      : paymentMethodManagement?.autopayStatus === "pending"
-                        ? "Bank verification is pending."
-                        : "No saved payment method yet."}
+                    {autopayStatus === "enabled"
+                      ? "Autopay is enabled and will charge eligible open tuition invoices automatically."
+                      : paymentMethodManagement?.hasSavedPaymentMethod
+                        ? `${paymentMethodManagement.paymentMethodLabel ?? "Payment method saved securely"}${paymentMethodManagement.lastUpdatedAt ? ` on ${formatDate(paymentMethodManagement.lastUpdatedAt)}` : ""}`
+                        : paymentMethodManagement?.autopayStatus === "pending"
+                          ? "Bank verification is pending."
+                          : "No saved payment method yet."}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
-                    <CreditCard data-icon="inline-start" />
-                    {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Saved Card" : "Save Card"}
-                  </Button>
-                  <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
-                    <Building2 data-icon="inline-start" />
-                    {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
-                    onClick={() => managePaymentMethod("portal")}
-                    variant="outline"
-                  >
-                    Manage Payment Method
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || autopayStatus === "enabled" || !paymentMethodManagement?.hasSavedPaymentMethod}
-                    onClick={() => managePaymentMethod("enable_autopay")}
-                    variant="outline"
-                  >
-                    Enable Autopay
-                  </Button>
-                  <Button
-                    className="w-full sm:w-auto"
-                    disabled={isPending || autopayStatus === "disabled" || !billingAccount}
-                    onClick={() => managePaymentMethod("disable_autopay")}
-                    variant="outline"
-                  >
-                    Disable Autopay
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="parent-autopay-toggle" className="text-xs text-muted-foreground">Autopay</Label>
+                  <Switch
+                    id="parent-autopay-toggle"
+                    checked={autopayStatus === "enabled"}
+                    onCheckedChange={toggleAutopay}
+                    disabled={isPending || !family || autopayStatus === "pending"}
+                    aria-label="Enable or disable autopay"
+                  />
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {autopayStatus === "enabled" ? "On" : "Off"}
+                  </span>
                 </div>
               </div>
+              {autopayConfirmation ? (
+                <Alert className="mt-4 border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle2 />
+                  <AlertTitle>Autopay status confirmed</AlertTitle>
+                  <AlertDescription>{autopayConfirmation}</AlertDescription>
+                </Alert>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "card")}>
+                  <CreditCard data-icon="inline-start" />
+                  {paymentMethodManagement?.hasSavedPaymentMethod ? "Replace Saved Card" : "Save Card"}
+                </Button>
+                <Button className="w-full sm:w-auto" disabled={isPending || !family} onClick={() => managePaymentMethod("setup", "link_bank")} variant="outline">
+                  <Building2 data-icon="inline-start" />
+                  {paymentMethodManagement?.autopayStatus === "pending" ? "Verify Bank Instantly" : paymentMethodManagement?.hasSavedPaymentMethod ? "Instant Bank Login" : "Set Up Instant Bank"}
+                </Button>
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={isPending || !paymentMethodManagement?.hasStripeCustomer}
+                  onClick={() => managePaymentMethod("portal")}
+                  variant="outline"
+                >
+                  Manage Payment Method
+                </Button>
+              </div>
             </div>
+            {autopayRequirements.length ? (
+              <Alert className="mt-3">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Autopay requirements</AlertTitle>
+                <AlertDescription className="space-y-1">
+                  {autopayRequirements.map((requirement) => (
+                    <p key={requirement}>{requirement}</p>
+                  ))}
+                </AlertDescription>
+              </Alert>
+            ) : null}
             {showFamilyPaymentPanel ? (
               <div className="rounded-xl border bg-primary/10 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2016,6 +2098,19 @@ export function ParentPortalWorkspace({
               This is the personal guardian email on file with the school.
             </p>
           </div>
+          {passwordConfirmation ? (
+            <Alert className="border-emerald-500/30 bg-emerald-500/10">
+              <CheckCircle2 />
+              <AlertTitle>Password changed</AlertTitle>
+              <AlertDescription>{passwordConfirmation}</AlertDescription>
+            </Alert>
+          ) : null}
+          <div className="flex justify-end">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowPasswords((visible) => !visible)}>
+              {showPasswords ? <EyeOff data-icon="inline-start" /> : <Eye data-icon="inline-start" />}
+              {showPasswords ? "Hide passwords" : "Show passwords"}
+            </Button>
+          </div>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="profile-current-password">Current password</Label>
@@ -2023,7 +2118,7 @@ export function ParentPortalWorkspace({
                 id="profile-current-password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="current-password"
               />
             </div>
@@ -2033,7 +2128,7 @@ export function ParentPortalWorkspace({
                 id="profile-new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="new-password"
                 minLength={8}
               />
@@ -2044,7 +2139,7 @@ export function ParentPortalWorkspace({
                 id="profile-confirm-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                type="password"
+                type={showPasswords ? "text" : "password"}
                 autoComplete="new-password"
                 minLength={8}
               />

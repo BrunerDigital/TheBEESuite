@@ -29,7 +29,6 @@ import {
   MessageSquare,
   PanelsTopLeft,
   PenTool,
-  Reply,
   ShieldCheck,
   Sparkles,
   Star,
@@ -114,6 +113,10 @@ import {
   type MessageStaffOption,
   type MessageTemplateOption,
 } from "@/components/message-reply-panel";
+import {
+  MessageConversationInbox,
+  type MessageConversationThread,
+} from "@/components/message-conversation-inbox";
 import {
   NotificationPreferencesPanel,
   type NotificationPreferenceRow,
@@ -2363,31 +2366,12 @@ export type MessagesPageData = {
     readAt: Date | string | null;
     createdAt: Date | string;
     family: { name: string; billingEmail: string | null; centerId: string | null } | null;
-    sender: { name: string; email: string } | null;
+    sender: { name: string; email: string; role?: string } | null;
     assignedTo?: { name: string; email: string } | null;
     attachments?: MessageAttachmentView[];
     replyHref?: string | null;
   }>;
-  threads: Array<{
-    key: string;
-    familyName: string;
-    centerLabel: string | null;
-    assignedTo: { name: string; email: string } | null;
-    unread: number;
-    priority: number;
-    lastMessageAt: Date | string;
-    messages: Array<{
-      id: string;
-      subject: string | null;
-      body: string;
-      channel: string;
-      priority: string;
-      createdAt: Date | string;
-      sender: { name: string; email: string } | null;
-      attachments?: MessageAttachmentView[];
-      replyHref?: string | null;
-    }>;
-  }>;
+  threads: MessageConversationThread[];
   stats: {
     total: number;
     unread: number;
@@ -2406,6 +2390,7 @@ export type MessagesPageData = {
   currentUserId: string;
   currentRole: string;
   replyDraft?: MessageReplyDraft | null;
+  initialThreadKey?: string | null;
   canManageRoleDefaults: boolean;
   demoMode?: boolean;
 };
@@ -2465,16 +2450,83 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         <StatCard label="Priority" value={data.stats.priority.toLocaleString()} />
         {!isParentMessagingView ? <StatCard label="Review queue" value={data.stats.aiReview.toLocaleString()} detail="Needs approval" /> : null}
       </div>
-      <MessageReplyPanel
-        key={data.replyDraft?.replyToMessageId ?? "new-message"}
-        familyOptions={data.familyOptions}
-        templates={data.templates}
-        mergeFields={data.mergeFields}
-        staffOptions={data.staffOptions}
-        segmentOptions={data.segmentOptions}
-        currentRole={data.currentRole}
-        replyDraft={data.replyDraft}
-      />
+      {isParentMessagingView ? (
+        <>
+          <MessageReplyPanel
+            key={data.replyDraft?.replyToMessageId ?? "new-message"}
+            familyOptions={data.familyOptions}
+            templates={data.templates}
+            mergeFields={data.mergeFields}
+            staffOptions={data.staffOptions}
+            segmentOptions={data.segmentOptions}
+            currentRole={data.currentRole}
+            replyDraft={data.replyDraft}
+          />
+          <Card className="glass-panel">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CardTitle>Message History</CardTitle>
+                <InfoTip label="About message history">Conversation history appears here when portal messages are linked to your family account.</InfoTip>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {data.threads.map((thread) => (
+                <div key={thread.key} className="rounded-lg border bg-background/60 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{thread.familyName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {thread.centerLabel ?? "All centers"} · last reply {formatDateTime(thread.lastMessageAt, thread)}
+                      </div>
+                    </div>
+                    <Badge variant={thread.unread ? "default" : "outline"}>{thread.unread} unread</Badge>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {thread.messages.map((message) => (
+                      <div key={message.id} className="rounded-md border bg-card/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>{message.sender?.name ?? "System"} · {message.channel}</span>
+                          <span>{formatDateTime(message.createdAt, message)}</span>
+                        </div>
+                        <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
+                        <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
+                        <MessageAttachmentLinks attachments={message.attachments} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {!data.threads.length ? <p className="text-sm text-muted-foreground">No message history is visible yet.</p> : null}
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <>
+          <MessageConversationInbox
+            threads={data.threads}
+            initialThreadKey={data.initialThreadKey}
+            initialReplyToMessageId={data.replyDraft?.replyToMessageId}
+            composer={{
+              familyOptions: data.familyOptions,
+              templates: data.templates,
+              mergeFields: data.mergeFields,
+              staffOptions: data.staffOptions,
+              segmentOptions: data.segmentOptions,
+              currentRole: data.currentRole,
+            }}
+          />
+          <MessageReplyPanel
+            key="new-message"
+            familyOptions={data.familyOptions}
+            templates={data.templates}
+            mergeFields={data.mergeFields}
+            staffOptions={data.staffOptions}
+            segmentOptions={data.segmentOptions}
+            currentRole={data.currentRole}
+            composerId="new-message-composer"
+          />
+        </>
+      )}
       <NotificationPreferencesPanel
         types={data.notificationPreferenceTypes}
         preferences={data.notificationPreferences}
@@ -2484,119 +2536,6 @@ export function MessagesPage({ data }: { data: MessagesPageData }) {
         currentRole={data.currentRole}
         canManageRoleDefaults={data.canManageRoleDefaults}
       />
-      <Card className="glass-panel">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CardTitle>{isParentMessagingView ? "Message History" : "Family Threads"}</CardTitle>
-            <InfoTip label="About message history">
-              {isParentMessagingView
-                ? "Conversation history appears here when portal messages are linked to your family account."
-                : "Threads group each family's reply history with owner and delivery-channel context."}
-            </InfoTip>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {data.threads.map((thread) => (
-            <div key={thread.key} className="rounded-lg border bg-background/60 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium">{thread.familyName}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {thread.centerLabel ?? "All centers"} · last reply {formatDateTime(thread.lastMessageAt, thread)}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant={thread.priority ? "destructive" : "outline"}>{thread.priority} priority</Badge>
-                  <Badge variant={thread.unread ? "default" : "outline"}>{thread.unread} unread</Badge>
-                  <Badge variant="outline">{thread.assignedTo?.name ?? "Unassigned"}</Badge>
-                </div>
-              </div>
-              <div className="mt-4 space-y-3">
-                {thread.messages.map((message) => (
-                  <div key={message.id} className="rounded-md border bg-card/70 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>{message.sender?.name ?? "System"} · {message.channel}</span>
-                      <span>{formatDateTime(message.createdAt, message)}</span>
-                    </div>
-                    <div className="mt-1 text-sm font-medium">{message.subject ?? "Untitled message"}</div>
-                    <div className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{message.body}</div>
-                    <MessageAttachmentLinks attachments={message.attachments} />
-                    {message.replyHref ? (
-                      <Link href={message.replyHref} className={buttonVariants({ variant: "outline", size: "sm", className: "mt-3" })}>
-                        <Reply data-icon="inline-start" />
-                        Reply in Bee Suite
-                      </Link>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {!data.threads.length ? (
-            <p className="text-sm text-muted-foreground">{isParentMessagingView ? "No message history is visible yet." : "No family threads are visible yet."}</p>
-          ) : null}
-        </CardContent>
-      </Card>
-      <Card className="glass-panel">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <CardTitle>Recent Conversations</CardTitle>
-            <InfoTip label="About recent conversations">Includes email, portal, classroom, and SMS records connected to this view.</InfoTip>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>When</TableHead>
-                <TableHead>Conversation</TableHead>
-                <TableHead>Channel</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Sentiment</TableHead>
-                <TableHead>Reply</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.messages.map((message) => (
-                <TableRow key={message.id}>
-                  <TableCell>{formatDateTime(message.createdAt, message)}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{message.subject ?? message.family?.name ?? "Untitled message"}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {message.family?.name ?? message.sender?.name ?? "System"}
-                      {message.assignedTo ? ` · assigned to ${message.assignedTo.name}` : ""}
-                    </div>
-                    <div className="mt-1 max-w-2xl whitespace-normal text-xs text-muted-foreground">{message.body}</div>
-                    <MessageAttachmentLinks attachments={message.attachments} />
-                  </TableCell>
-                  <TableCell>{message.channel}</TableCell>
-                  <TableCell>
-                    <Badge variant={message.priority === "high" || message.priority === "urgent" ? "destructive" : "outline"}>
-                      {message.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{message.sentiment ?? (message.readAt ? "Reviewed" : "Unread")}</TableCell>
-                  <TableCell>
-                    {message.replyHref ? (
-                      <Link href={message.replyHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
-                        <Reply data-icon="inline-start" />
-                        Reply
-                      </Link>
-                    ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!data.messages.length ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-muted-foreground">
-                    No messages are visible yet.
-                  </TableCell>
-                </TableRow>
-              ) : null}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -5048,6 +4987,12 @@ export type BillingInvoicesPageData = {
     tuitionPlans: BillingWorkbenchTuitionPlan[];
     currentRole: string;
   };
+  needsEnrollmentSetup: Array<{
+    familyId: string;
+    familyName: string;
+    centerId: string | null;
+    children: Array<{ id: string; fullName: string; enrollmentStatus: string }>;
+  }>;
   invoices: Array<{
     id: string;
     number: string;
@@ -5140,6 +5085,12 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
 
   function familyProfileHref(family: { id: string }) {
     return `/family-detail?familyId=${encodeURIComponent(family.id)}#family-editor`;
+  }
+
+  function enrollmentSetupHref(row: BillingInvoicesPageData["needsEnrollmentSetup"][number], childId: string) {
+    const params = new URLSearchParams({ familyId: row.familyId, childId });
+    if (row.centerId) params.set("centerId", row.centerId);
+    return `/family-detail?${params.toString()}#family-editor`;
   }
 
   return (
@@ -5239,6 +5190,47 @@ export function BillingInvoicesPage({ data }: { data: BillingInvoicesPageData })
               </Table>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+      <Card className="glass-panel" id="needs-enrollment-setup">
+        <CardHeader>
+          <CardTitle>Needs enrollment setup</CardTitle>
+          <CardDescription>
+            Current-status children without a classroom are shown here for correction. They remain non-chargeable and excluded from active Billing and Accounts Receivable totals.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {data.needsEnrollmentSetup.length ? (
+            <div className="overflow-hidden rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Family</TableHead>
+                    <TableHead>Child</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.needsEnrollmentSetup.flatMap((family) => family.children.map((child) => (
+                    <TableRow key={child.id}>
+                      <TableCell>{family.familyName}</TableCell>
+                      <TableCell>{child.fullName}</TableCell>
+                      <TableCell><Badge variant="outline">Needs classroom</Badge></TableCell>
+                      <TableCell>
+                        <Link href={enrollmentSetupHref(family, child.id)} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                          <ArrowRight data-icon="inline-start" />
+                          Complete enrollment
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No current-status child records are missing a classroom assignment.</p>
+          )}
         </CardContent>
       </Card>
       <BillingWorkbench

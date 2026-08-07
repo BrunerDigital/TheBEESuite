@@ -12,6 +12,9 @@ export const CLOSED_ENROLLMENT_STATUSES = [
   "terminated",
 ] as const;
 
+export const ENROLLED_CLASSROOM_REQUIRED_MESSAGE =
+  "Choose a classroom before marking this child enrolled. Billing and active rosters require a classroom assignment.";
+
 const currentlyEnrolledStatusSet = new Set<string>(CURRENTLY_ENROLLED_STATUSES);
 const enrollmentPipelineStatusSet = new Set<string>(ENROLLMENT_PIPELINE_STATUSES);
 const temporaryBreakStatusSet = new Set<string>(TEMPORARY_BREAK_STATUSES);
@@ -82,6 +85,16 @@ export function hasAssignedClassroom(classroomId: string | null | undefined) {
 
 export function isCurrentlyEnrolledChildRecord(child: CurrentEnrollmentChildRecord) {
   return isCurrentlyEnrolledStatus(child.enrollmentStatus) && hasAssignedClassroom(child.classroomId);
+}
+
+export function enrollmentClassroomValidationError(child: CurrentEnrollmentChildRecord) {
+  return isCurrentlyEnrolledStatus(child.enrollmentStatus) && !hasAssignedClassroom(child.classroomId)
+    ? ENROLLED_CLASSROOM_REQUIRED_MESSAGE
+    : null;
+}
+
+export function needsEnrollmentSetup(child: CurrentEnrollmentChildRecord) {
+  return enrollmentClassroomValidationError(child) !== null;
 }
 
 export function currentlyEnrolledChildWhere(): Prisma.ChildWhereInput {

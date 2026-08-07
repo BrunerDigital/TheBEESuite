@@ -69,5 +69,7 @@ export function hasSupabaseAuthConfig(env: EnvMap) {
 }
 
 export function hasStripeBillingConfig(env: EnvMap) {
-  return envPresent(env, "STRIPE_SECRET_KEY") && envPresent(env, "STRIPE_WEBHOOK_SECRET");
+  return envPresent(env, "STRIPE_SECRET_KEY") && (
+    envPresent(env, "STRIPE_PLATFORM_WEBHOOK_SECRET") || envPresent(env, "STRIPE_WEBHOOK_SECRET")
+  );
 }

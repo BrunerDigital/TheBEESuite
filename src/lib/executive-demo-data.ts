@@ -81,7 +81,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     readAt: null,
     createdAt: isoWithOffset(0, 8, 35),
     family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
-    sender: null,
+    sender: { name: "Elena Rivera", email: "parent@example.com", role: "PARENT_GUARDIAN" },
   },
   {
     id: "exec-demo-message-supplies",
@@ -94,7 +94,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     readAt: isoWithOffset(0, 10, 10),
     createdAt: isoWithOffset(0, 9, 45),
     family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
-    sender: { name: "Mr. Bee Draft Assistant", email: "mrbee@thebeesuite.io" },
+    sender: { name: "Mr. Bee Draft Assistant", email: "mrbee@thebeesuite.io", role: "CENTER_DIRECTOR" },
   },
   {
     id: "exec-demo-message-incident-ack",
@@ -108,7 +108,7 @@ export const executiveParentMessageDemoRows: MessagesPageData["messages"] = [
     readAt: null,
     createdAt: isoWithOffset(-1, 16, 20),
     family: { name: "Rivera Family", billingEmail: "parent@example.com", centerId: null },
-    sender: null,
+    sender: { name: "Little Harbor Director", email: "director@thebeesuite.io", role: "CENTER_DIRECTOR" },
   },
 ];
 

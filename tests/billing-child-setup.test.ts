@@ -6,6 +6,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   const billing = readFileSync(new URL("../src/components/billing-workbench.tsx", import.meta.url), "utf8");
   const page = readFileSync(new URL("../src/app/[slug]/page.tsx", import.meta.url), "utf8");
   const operations = readFileSync(new URL("../src/app/api/operations/records/route.ts", import.meta.url), "utf8");
+  const enrollmentStatus = readFileSync(new URL("../src/lib/enrollment-status.ts", import.meta.url), "utf8");
 
   assert.match(billing, /Program: \{child\.ageGroup \|\| "Not set"\}/);
   assert.match(billing, /Classroom: \{classroom\?\.name \?\? "Not assigned"\}/);
@@ -29,6 +30,7 @@ test("child tuition setup keeps sibling program, classroom, schedule, and rate s
   assert.match(operations, /const enrollmentContextOnly = clean\(body\.updateScope\) === "enrollment_context"/);
   assert.match(operations, /classroomFamilyGuard\(centerId, classroom\.centerId\)/);
   assert.match(operations, /scopedUpdateGuard\(\{ entity: "Child", expectedScopeId: familyId, actualScopeId: existingChild\?\.familyId/);
-  assert.match(operations, /A classroom is required for a currently enrolled child/);
+  assert.match(operations, /enrollmentClassroomValidationError/);
+  assert.match(enrollmentStatus, /Choose a classroom before marking this child enrolled\. Billing and active rosters require a classroom assignment\./);
   assert.match(operations, /auditMetadata\.updateScope = "enrollment_context"/);
 });

@@ -191,12 +191,14 @@ test("rendered balance reports retain every account row, hidden state, and signe
     row({ 1: "Account Balance Summary - All Accounts (Primary & Agency)", 10: "[*ALLEN] Allen, Euricka - Hidden", 11: "2,934.60" }),
     row({ 10: "[BROWN] Brown, Jordan", 11: "(125.25)" }),
     row({ 10: "[ZERO] Zero, Family", 11: "0.00" }),
+    row({ 9: "w", 10: "[NOBL] No, Balance", 11: "7.50" }),
   ].join("\n"));
 
   assert.deepEqual(parseRenderedProcareBalanceRows(source), [
     { accountKey: "ALLEN", payerName: "Allen, Euricka", hidden: true, balanceCents: 293460 },
     { accountKey: "BROWN", payerName: "Brown, Jordan", hidden: false, balanceCents: -12525 },
     { accountKey: "ZERO", payerName: "Zero, Family", hidden: false, balanceCents: 0 },
+    { accountKey: "NOBL", payerName: "No, Balance", hidden: true, balanceCents: 750 },
   ]);
 });
 

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { reportClientError } from "@/components/client-error-reporter";
+import Link from "next/link";
 import "./globals.css";
 
 export default function GlobalError({
@@ -25,6 +26,9 @@ export default function GlobalError({
             <p className="text-sm leading-6 text-slate-300">
               The issue has been logged. Please try again, or contact support if it continues.
             </p>
+            <Link href="/" className="inline-flex min-h-11 items-center justify-center rounded-md bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/20">
+              Go to The BEE Suite home
+            </Link>
             <button
               type="button"
               onClick={reset}

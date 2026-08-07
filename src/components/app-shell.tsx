@@ -50,7 +50,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { modules, navGroups } from "@/lib/demo-data";
-import { notificationCenterHrefForRole, storedNotificationHref } from "@/lib/notification-links";
+import { notificationCenterHrefForRole, storedNotificationHrefForRole } from "@/lib/notification-links";
 import { NOTIFICATIONS_CHANGED_EVENT } from "@/lib/notification-client-events";
 import { canAccessModule } from "@/lib/rbac";
 import { canUseKidCityCorporateBilling, type WorkspaceBranding } from "@/lib/brand-assets";
@@ -230,7 +230,7 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
       body: notification.body,
       type: notification.type,
       priority: notification.priority,
-      href: storedNotificationHref(notification),
+      href: storedNotificationHrefForRole(notification, currentUser?.role),
     })) ?? []),
   ].slice(0, 6);
 
@@ -314,9 +314,14 @@ function NotificationDropdown({ currentUser }: { currentUser?: ShellUser }) {
           ) : null}
         </div>
         <DropdownMenuSeparator />
-        <Link href={notificationCenterHref} className="block p-3 text-sm font-medium text-primary hover:bg-muted">
+        <DropdownMenuItem
+          className="p-0"
+          render={(
+            <Link href={notificationCenterHref} className="block w-full p-3 text-sm font-medium text-primary hover:bg-muted" />
+          )}
+        >
           {notificationCenterHref === "/parent-portal" ? "Open parent portal" : "Open notification center"}
-        </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -35,7 +35,11 @@ import {
   parentPortalAccessFields,
 } from "@/lib/parent-portal-logins";
 import { buildBulkEnrollmentChange } from "@/lib/child-enrollment-bulk";
-import { isCurrentlyEnrolledStatus } from "@/lib/enrollment-status";
+import {
+  enrollmentClassroomValidationError,
+  isCurrentlyEnrolledChildRecord,
+  isCurrentlyEnrolledStatus,
+} from "@/lib/enrollment-status";
 import { canSaveTuitionPlanAmount } from "@/lib/billing-workflows";
 
 import { withApiLogging } from "@/lib/request-response-logging";
@@ -360,6 +364,16 @@ async function POSTHandler(request: NextRequest) {
     }
 
     const previousStatuses = Object.fromEntries(children.map((child) => [child.id, child.enrollmentStatus]));
+    const reenrollments = children
+      .filter((child) => (
+        !isCurrentlyEnrolledChildRecord(child)
+        && isCurrentlyEnrolledChildRecord({
+          enrollmentStatus: change.value.enrollmentStatus,
+          classroomId: change.value.classroomId,
+        })
+        && child.family.centerId
+      ))
+      .map((child) => ({ familyId: child.family.id, childId: child.id, centerId: child.family.centerId! }));
     const updated = await prisma.child.updateMany({
       where: { id: { in: change.value.childIds } },
       data: {
@@ -380,7 +394,10 @@ async function POSTHandler(request: NextRequest) {
         updatedCount: updated.count,
       },
     })));
-    revalidatePath("/", "layout");
+    revalidatePath("/family-detail");
+    revalidatePath("/billing-invoices");
+    revalidatePath("/dashboard");
+    revalidatePath("/api/dashboard/accounts-receivable");
     return NextResponse.json({
       ok: true,
       entity,
@@ -388,6 +405,7 @@ async function POSTHandler(request: NextRequest) {
       updatedCount: updated.count,
       enrollmentStatus: change.value.enrollmentStatus,
       classroomId: change.value.classroomId,
+      reenrollments,
     });
   }
 
@@ -472,6 +490,7 @@ async function POSTHandler(request: NextRequest) {
   let result: unknown;
   let login: TeacherLoginCredentials | undefined;
   let centerId: string | null = user.primaryCenterId;
+  let reenrollmentContext: { familyId: string; childId: string; centerId: string } | null = null;
 
   if (entity === "classroom") {
     const requestedCenterId = clean(body.centerId) || clean(body.relatedId) || user.primaryCenterId;
@@ -881,7 +900,7 @@ async function POSTHandler(request: NextRequest) {
     }
     const existingChild = id ? await prisma.child.findUnique({
       where: { id },
-      select: { familyId: true, dateOfBirth: true, customFields: true, enrollmentStatus: true },
+      select: { familyId: true, dateOfBirth: true, customFields: true, enrollmentStatus: true, classroomId: true },
     }) : null;
     if (id) {
       const guard = scopedUpdateGuard({ entity: "Child", expectedScopeId: familyId, actualScopeId: existingChild?.familyId, scopeLabel: "family" });
@@ -892,9 +911,11 @@ async function POSTHandler(request: NextRequest) {
       if (!id || !existingChild) return NextResponse.json({ ok: false, error: "Child not found." }, { status: 404 });
       const ageGroup = clean(body.ageGroup);
       if (!ageGroup) return NextResponse.json({ ok: false, error: "Program or age group is required." }, { status: 400 });
-      if (isCurrentlyEnrolledStatus(existingChild.enrollmentStatus) && !classroomId) {
-        return NextResponse.json({ ok: false, error: "A classroom is required for a currently enrolled child." }, { status: 400 });
-      }
+      const classroomError = enrollmentClassroomValidationError({
+        enrollmentStatus: existingChild.enrollmentStatus,
+        classroomId,
+      });
+      if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const careScheduleType = clean(body.careScheduleType).toLowerCase().replace(/[^a-z0-9]+/g, "_");
       const customFields = { ...jsonObject(existingChild.customFields) };
       if (careScheduleType === "full_time" || careScheduleType === "part_time") {
@@ -923,6 +944,8 @@ async function POSTHandler(request: NextRequest) {
           ? existingCustomFields as Prisma.InputJsonObject
           : undefined;
       const enrollmentStatus = clean(body.enrollmentStatus) || clean(body.status) || "enrolled";
+      const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
+      if (classroomError) return NextResponse.json({ ok: false, error: classroomError }, { status: 400 });
       const data = {
         familyId,
         classroomId: isCurrentlyEnrolledStatus(enrollmentStatus) ? classroomId : null,
@@ -943,6 +966,17 @@ async function POSTHandler(request: NextRequest) {
       };
       if (!data.fullName) return NextResponse.json({ ok: false, error: "Child name is required." }, { status: 400 });
       result = id ? await prisma.child.update({ where: { id }, data }) : await prisma.child.create({ data });
+      const resultId = resultRecordId(result);
+      if (
+        existingChild
+        && resultId
+        && !isCurrentlyEnrolledChildRecord(existingChild)
+        && isCurrentlyEnrolledChildRecord({ enrollmentStatus, classroomId })
+        && centerId
+      ) {
+        reenrollmentContext = { familyId, childId: resultId, centerId };
+        auditMetadata.reenrolled = true;
+      }
     }
   } else if (entity === "childMerge") {
     const primaryChildId = clean(body.primaryChildId) || clean(body.childId);
@@ -1017,6 +1051,19 @@ async function POSTHandler(request: NextRequest) {
     }
 
     centerId = primaryAccess.centerId;
+    const mergedClassroomId = primary.classroomId ?? duplicate.classroomId ?? null;
+    const mergedEnrollmentStatus = primary.enrollmentStatus === "inactive" ? duplicate.enrollmentStatus : primary.enrollmentStatus;
+    const mergedClassroomError = enrollmentClassroomValidationError({
+      enrollmentStatus: mergedEnrollmentStatus,
+      classroomId: mergedClassroomId,
+    });
+    if (mergedClassroomError) return NextResponse.json({ ok: false, error: mergedClassroomError }, { status: 400 });
+    if (mergedClassroomId) {
+      const mergedClassroom = await prisma.classroom.findUnique({ where: { id: mergedClassroomId }, select: { centerId: true } });
+      if (!mergedClassroom || mergedClassroom.centerId !== centerId) {
+        return NextResponse.json({ ok: false, error: "The enrolled child's classroom must belong to the same school." }, { status: 400 });
+      }
+    }
     const mergedAt = new Date();
     result = await prisma.$transaction(async (tx) => {
       await Promise.all([
@@ -1035,9 +1082,9 @@ async function POSTHandler(request: NextRequest) {
         where: { id: primaryChildId },
         data: {
           preferredName: fillBlank(primary.preferredName, duplicate.preferredName),
-          classroomId: primary.classroomId ?? duplicate.classroomId ?? null,
+          classroomId: mergedClassroomId,
           ageGroup: primary.ageGroup || duplicate.ageGroup,
-          enrollmentStatus: primary.enrollmentStatus === "inactive" ? duplicate.enrollmentStatus : primary.enrollmentStatus,
+          enrollmentStatus: mergedEnrollmentStatus,
           startDate: primary.startDate ?? duplicate.startDate ?? null,
           ...(primary.schedule ? {} : duplicate.schedule ? { schedule: duplicate.schedule as Prisma.InputJsonValue } : {}),
           photoVideoPermission: primary.photoVideoPermission || duplicate.photoVideoPermission,
@@ -1063,6 +1110,14 @@ async function POSTHandler(request: NextRequest) {
       await tx.child.delete({ where: { id: duplicateChildId } });
       return { primaryChildId, duplicateChildId, child: mergedChild };
     });
+    if (
+      !isCurrentlyEnrolledChildRecord(primary)
+      && isCurrentlyEnrolledChildRecord({ enrollmentStatus: mergedEnrollmentStatus, classroomId: mergedClassroomId })
+      && centerId
+    ) {
+      reenrollmentContext = { familyId: primary.familyId, childId: primaryChildId, centerId };
+      auditMetadata.reenrolled = true;
+    }
     auditMetadata.primaryChildId = primaryChildId;
     auditMetadata.duplicateChildId = duplicateChildId;
     auditMetadata.mode = "merged";
@@ -1899,7 +1954,22 @@ async function POSTHandler(request: NextRequest) {
     metadata: auditMetadata as Prisma.InputJsonObject,
   });
 
-  return NextResponse.json({ ok: true, entity, mode, record: result, ...auditMetadata, ...(login ? { login } : {}) }, { status: id ? 200 : 201 });
+  if (entity === "child" || entity === "childMerge") {
+    revalidatePath("/family-detail");
+    revalidatePath("/billing-invoices");
+    revalidatePath("/dashboard");
+    revalidatePath("/api/dashboard/accounts-receivable");
+  }
+
+  return NextResponse.json({
+    ok: true,
+    entity,
+    mode,
+    record: result,
+    ...auditMetadata,
+    ...(reenrollmentContext ? { reenrollment: reenrollmentContext } : {}),
+    ...(login ? { login } : {}),
+  }, { status: id ? 200 : 201 });
 }
 
 async function DELETEHandler(request: NextRequest) {

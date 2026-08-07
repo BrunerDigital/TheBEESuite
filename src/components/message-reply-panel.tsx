@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Bot, CheckCircle2, MessageSquare, Paperclip, Send, Sparkles, X } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -102,6 +103,8 @@ export function MessageReplyPanel({
   segmentOptions,
   currentRole,
   replyDraft,
+  variant = "full",
+  composerId = "message-composer",
 }: {
   familyOptions: MessageFamilyOption[];
   templates: MessageTemplateOption[];
@@ -110,6 +113,8 @@ export function MessageReplyPanel({
   segmentOptions: MessageSegmentOptions;
   currentRole: string;
   replyDraft?: MessageReplyDraft | null;
+  variant?: "full" | "conversation";
+  composerId?: string;
 }) {
   const router = useRouter();
   const templateOptions = templates.length ? templates : [];
@@ -338,9 +343,113 @@ export function MessageReplyPanel({
       ? Boolean(selectedStaffRecipient && (message.trim() || attachmentFiles.length))
       : Boolean(familyId && (message.trim() || attachmentFiles.length));
 
+  if (variant === "conversation") {
+    return (
+      <section id={composerId} className="scroll-mt-28 border-t bg-card/90 p-3 sm:p-4" aria-label={`Reply to ${selectedFamily?.name ?? "family"}`}>
+        <div className="mx-auto max-w-4xl space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold">Reply to {selectedFamily?.name ?? "family"}</div>
+              <div className="text-xs text-muted-foreground">Your reply stays in this family conversation.</div>
+            </div>
+            <Badge variant="outline">School reply</Badge>
+          </div>
+          <div aria-live="polite">
+            {statusMessage ? (
+              <Alert>
+                <CheckCircle2 className="size-4" />
+                <AlertTitle>Sent</AlertTitle>
+                <AlertDescription>{statusMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+            {errorMessage ? (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Needs attention</AlertTitle>
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+          <Label htmlFor={`${composerId}-message`} className="sr-only">Message</Label>
+          <Textarea
+            id={`${composerId}-message`}
+            value={message}
+            onChange={(event) => setMessage(event.target.value)}
+            className="min-h-24 resize-y rounded-2xl"
+            placeholder={`Message ${selectedFamily?.name ?? "this family"}`}
+          />
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor={`${composerId}-attachments`} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Paperclip className="size-3.5" />
+                Add photos or files
+              </Label>
+              <Input
+                key={attachmentInputKey}
+                id={`${composerId}-attachments`}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                onChange={(event) => addAttachments(event.target.files)}
+              />
+            </div>
+            <Button disabled={isPending || !canSubmit} onClick={submit} className="rounded-full px-5">
+              <Send data-icon="inline-start" />
+              {isPending ? "Sending" : "Send reply"}
+            </Button>
+          </div>
+          {attachmentFiles.length ? (
+            <div className="flex flex-wrap gap-2">
+              {attachmentFiles.map((file, index) => (
+                <span key={`${file.name}-${file.size}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border bg-background/60 px-2.5 py-1 text-xs">
+                  <span className="truncate">{file.name || "attachment"}</span>
+                  <span className="shrink-0 text-muted-foreground">{formatFileSize(file.size)}</span>
+                  <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeAttachment(index)} title="Remove attachment">
+                    <X className="size-3" />
+                  </Button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input"
+                checked={sendEmailCopy}
+                onChange={(event) => setSendEmailCopy(event.target.checked)}
+              />
+              Email copy
+            </label>
+            {canSendSmsCopy ? (
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="size-4 rounded border-input"
+                  checked={sendSmsCopy}
+                  onChange={(event) => setSendSmsCopy(event.target.checked)}
+                />
+                SMS copy ({smsRecipientCount})
+              </label>
+            ) : null}
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                className="size-4 rounded border-input"
+                checked={sendPushCopy}
+                onChange={(event) => setSendPushCopy(event.target.checked)}
+              />
+              In-app notification
+            </label>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <Card className="glass-panel">
-      <CardHeader id="message-composer" className="scroll-mt-28">
+      <CardHeader id={composerId} className="scroll-mt-28">
         <CardTitle>Message Composer</CardTitle>
         <CardDescription>Family, classroom, broadcast, and director/teacher messages are stored in scoped threads.</CardDescription>
       </CardHeader>

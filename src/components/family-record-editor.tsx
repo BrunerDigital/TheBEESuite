@@ -23,6 +23,10 @@ import {
 } from "@/lib/family-dedupe";
 import { defaultAgeGroupOptions, mergeAgeGroupOptions } from "@/lib/dashboard-options";
 import { resolveDailyReportEmailRecipients } from "@/lib/daily-report-email-settings";
+import {
+  enrollmentClassroomValidationError,
+  isCurrentlyEnrolledStatus,
+} from "@/lib/enrollment-status";
 
 type ClassroomOption = { id: string; name: string; ageGroup: string };
 type CenterOption = { id: string; name: string; classrooms: ClassroomOption[] };
@@ -508,7 +512,13 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
 
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [postSaveBillingHref, setPostSaveBillingHref] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const childEnrollmentClassroomError = enrollmentClassroomValidationError({
+    enrollmentStatus,
+    classroomId: classroomId === "none" ? null : classroomId,
+  });
 
   const selectedCenter = centers.find((center) => center.id === familyCenterId);
   const classroomOptions = selectedCenter?.classrooms ?? [];
@@ -645,6 +655,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
   }
 
   function loadChild(child: ChildRecord | null) {
+    setPostSaveBillingHref(null);
     setSelectedChildId(child?.id ?? "");
     setChildName(child?.fullName ?? "");
     setPreferredName(child?.preferredName ?? "");
@@ -716,6 +727,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
     startTransition(async () => {
       setStatusMessage("");
       setErrorMessage("");
+      setPostSaveBillingHref(null);
       const response = await fetch("/api/operations/records", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -726,12 +738,21 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
         mode?: string;
         parentPortalLoginEnabled?: boolean;
         parentPortalLogin?: { status?: string; reason?: string };
+        reenrollment?: { familyId: string; centerId: string; childId: string };
       } | null;
       if (!response.ok) {
         setErrorMessage(json?.error || `${successLabel} could not be saved.`);
         return;
       }
       setStatusMessage(`${successLabel} ${json?.mode ?? "saved"}.${parentPortalStatusText(json)}`);
+      if (json?.reenrollment) {
+        const params = new URLSearchParams({
+          familyId: json.reenrollment.familyId,
+          centerId: json.reenrollment.centerId,
+          childId: json.reenrollment.childId,
+        });
+        setPostSaveBillingHref(`/billing-invoices?${params.toString()}#billing-workbench`);
+      }
       router.refresh();
     });
   }
@@ -1057,7 +1078,15 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
           <Alert>
             <CheckCircle2 className="size-4" />
             <AlertTitle>Saved</AlertTitle>
-            <AlertDescription>{statusMessage}</AlertDescription>
+            <AlertDescription className="flex flex-wrap items-center gap-3">
+              <span>{statusMessage}</span>
+              {postSaveBillingHref ? (
+                <Link href={postSaveBillingHref} className={buttonVariants({ variant: "outline", size: "sm" })}>
+                  <CreditCard data-icon="inline-start" />
+                  Open billing
+                </Link>
+              ) : null}
+            </AlertDescription>
           </Alert>
         ) : null}
         {errorMessage ? (
@@ -1714,6 +1743,11 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
                   ))}
                 </SelectContent>
               </Select>
+              {childEnrollmentClassroomError ? (
+                <p className="text-xs text-destructive">{childEnrollmentClassroomError}</p>
+              ) : isCurrentlyEnrolledStatus(enrollmentStatus) ? (
+                <p className="text-xs text-muted-foreground">Current enrollment is visible in Billing and active rosters after this classroom assignment is saved.</p>
+              ) : null}
             </div>
             <label className="flex items-center gap-2 rounded-lg border bg-background/40 px-3 py-2 text-sm">
               <input type="checkbox" checked={photoVideoPermission} onChange={(event) => setPhotoVideoPermission(event.target.checked)} />
@@ -1747,7 +1781,7 @@ export function FamilyRecordEditor({ families, centers, ageGroups: configuredAge
             </div>
           </div>
           <Button
-            disabled={isPending || !selectedFamily || !childName.trim() || (!selectedChild && !dateOfBirth)}
+            disabled={isPending || !selectedFamily || !childName.trim() || (!selectedChild && !dateOfBirth) || Boolean(childEnrollmentClassroomError)}
             onClick={() => postRecord({
               entity: "child",
               id: selectedChild?.id,

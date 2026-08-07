@@ -12,11 +12,11 @@ test("Centennial balance reconciliation is source-locked and payment-preserving"
   assert.match(source, /--confirm-preserve-payments-and-invoices/);
   assert.match(source, /6cca7fd70991391d719764b415afabd45cbba6064c8320e6efd99cef752ae1ac/);
   assert.match(source, /ce0078045997d86f4711a8956771934301f1540ec1120f3f34e2cc4b06c7bec4/);
-  assert.match(source, /2b1abe4ac1149b702f76374ba5e4caef6cdd6037616545aaaa4997db54b8ea83/);
+  assert.match(source, /b4f5b77e53c6d16d2043b4b54c597a16bcc3eadf865e391af6e8cfe21d66e88f/);
   assert.match(source, /centennial-balance-plan\.json/);
   assert.doesNotMatch(source, /const SOURCE_ROWS: SourceRow\[\] = \[/);
   assert.match(source, /EXPECTED_SOURCE_ROWS = 18/);
-  assert.match(source, /EXPECTED_SOURCE_TOTAL_CENTS = 620_510/);
+  assert.match(source, /EXPECTED_SOURCE_TOTAL_CENTS = 659_210/);
   assert.match(source, /Prisma\.TransactionIsolationLevel\.Serializable/);
   assert.match(source, /billing\.centennial_photo_balance_reconciled/);
   assert.match(source, /paymentsMutated: false/);

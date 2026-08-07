@@ -260,10 +260,12 @@ function renderedBalanceRows(rows: Row[]) {
       .replace(/^\s*\[\*?[A-Z0-9_-]+\*?\]\s*/i, "")
       .replace(/\s+-\s+Hidden\s*$/i, "")
       .trim();
+    const marker = cell(row, 9).toLowerCase().trim();
+    const hidden = marker === "w" || /\s+-\s+Hidden\s*$/i.test(accountLabel) || marker === "withdrawn" || marker === "p";
     result.push({
       accountKey: accountKeyValue,
       payerName,
-      hidden: /\s+-\s+Hidden\s*$/i.test(accountLabel),
+      hidden,
       balanceCents,
     });
   }

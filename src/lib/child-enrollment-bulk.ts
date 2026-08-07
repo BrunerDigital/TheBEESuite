@@ -1,4 +1,8 @@
-import { isCurrentlyEnrolledStatus, normalizedEnrollmentStatus } from "@/lib/enrollment-status";
+import {
+  enrollmentClassroomValidationError,
+  isCurrentlyEnrolledStatus,
+  normalizedEnrollmentStatus,
+} from "@/lib/enrollment-status";
 
 export const BULK_ENROLLMENT_STATUSES = [
   "enrolled",
@@ -40,9 +44,8 @@ export function buildBulkEnrollmentChange(input: {
   const classroomId = typeof input.classroomId === "string" && input.classroomId.trim()
     ? input.classroomId.trim()
     : null;
-  if (isCurrentlyEnrolledStatus(enrollmentStatus) && !classroomId) {
-    return { ok: false, error: "Choose a classroom before moving children to enrolled." };
-  }
+  const classroomError = enrollmentClassroomValidationError({ enrollmentStatus, classroomId });
+  if (classroomError) return { ok: false, error: classroomError };
 
   return {
     ok: true,

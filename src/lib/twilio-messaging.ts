@@ -134,6 +134,11 @@ export function formDataToRecord(form: FormData) {
   return record;
 }
 
+export async function parseTwilioWebhookParams(request: Request) {
+  const form = await request.formData().catch(() => null);
+  return form ? formDataToRecord(form) : null;
+}
+
 export function twimlResponse() {
   return new Response("<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response></Response>", {
     status: 200,

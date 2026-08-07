@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  formDataToRecord,
+  parseTwilioWebhookParams,
   twilioDeliveryStatus,
   twilioWebhookUrl,
   validateTwilioSignatureAgainstConfiguredTokens,
@@ -15,8 +15,10 @@ function clean(value: unknown) {
 }
 
 async function POSTHandler(request: NextRequest) {
-  const form = await request.formData();
-  const params = formDataToRecord(form);
+  const params = await parseTwilioWebhookParams(request);
+  if (!params) {
+    return NextResponse.json({ ok: false, error: "Invalid Twilio webhook payload." }, { status: 400 });
+  }
   const signatureMatch = await validateTwilioSignatureAgainstConfiguredTokens({
     signature: request.headers.get("x-twilio-signature"),
     url: twilioWebhookUrl(request),
